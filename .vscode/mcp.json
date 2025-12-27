@@ -1,0 +1,9 @@
+{
+    "servers": {
+        "souschef": {
+            "type": "stdio",
+            "command": "python",
+            "args": ["-m", "souschef.server"]
+        }
+    }
+}
