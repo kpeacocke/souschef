@@ -33,5 +33,9 @@
         "**/.venv": true,
         "**/node_modules": true,
         "**/*.egg-info": true
-    }
+    },
+    "cSpell.words": [
+        "charliermarsh",
+        "souschef"
+    ]
 }

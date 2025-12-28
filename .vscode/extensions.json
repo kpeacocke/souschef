@@ -5,6 +5,9 @@
         "charliermarsh.ruff",
         "GitHub.copilot",
         "GitHub.copilot-chat",
-        "editorconfig.editorconfig"
+        "editorconfig.editorconfig",
+        "ms-vscode-remote.remote-containers",
+        "redhat.vscode-yaml",
+        "Shopify.ruby-lsp"
     ]
 }

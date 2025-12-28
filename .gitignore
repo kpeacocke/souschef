@@ -47,6 +47,10 @@ ENV/
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# Dev Container
+.devcontainer/*
+!.devcontainer/devcontainer.json
+
 # macOS
 .DS_Store
 
