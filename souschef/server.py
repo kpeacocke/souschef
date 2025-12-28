@@ -1,26 +1,29 @@
+"""SousChef MCP Server - Chef to Ansible conversion assistant."""
+
 import os
-from zod import z
 
-from mcp import McpServer
-from mcp.transport.stdio import StdioTransport
+from mcp.server.fastmcp import FastMCP
 
-# Create a new server
-server = McpServer(
-    name="souschef",
-    version="0.0.1",
-    description="A server that helps convert Chef cookbooks to Ansible playbooks.",
-)
+# Create a new FastMCP server
+mcp = FastMCP("souschef")
 
-@server.tool()
-def list_directory(path: str = z.string(description="The path to the directory to list.")):
-    """Lists the contents of a directory."""
+
+@mcp.tool()
+def list_directory(path: str) -> list[str] | str:
+    """List the contents of a directory.
+
+    Args:
+        path: The path to the directory to list.
+
+    Returns:
+        A list of filenames in the directory, or an error message.
+
+    """
     try:
         return os.listdir(path)
     except FileNotFoundError:
         return f"Error: Directory not found at {path}"
+    except PermissionError:
+        return f"Error: Permission denied for {path}"
     except Exception as e:
         return f"An error occurred: {e}"
-
-if __name__ == "__main__":
-    # Start the server
-    McpServer.run_server(server, StdioTransport())

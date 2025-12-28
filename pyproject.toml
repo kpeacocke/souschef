@@ -8,4 +8,30 @@ dependencies = [
     "anthropic>=0.75.0",
     "mcp>=1.25.0",
     "python-dotenv>=1.2.1",
+    "zod>=0.8.0",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C90", "I", "N", "D", "UP", "B", "A", "C4", "T20", "SIM", "PTH", "ISC"]
+ignore = ["D100", "D104", "D105", "D107"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["S101"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --cov=souschef --cov-report=term-missing"
+testpaths = [
+    "tests",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.10",
 ]
