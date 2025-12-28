@@ -26,6 +26,11 @@ MANIFEST
 # mypy
 .mypy_cache/
 
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Virtualenv
 .venv/
 venv/
