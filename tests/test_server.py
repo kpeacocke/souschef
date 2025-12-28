@@ -3,7 +3,11 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from souschef.server import list_directory, read_file
+from souschef.server import (
+    list_directory,
+    read_cookbook_metadata,
+    read_file,
+)
 
 
 def test_list_directory_success():
@@ -134,3 +138,122 @@ def test_read_file_other_exception():
     with patch("souschef.server.Path", return_value=mock_path):
         result = read_file("test.txt")
         assert "An error occurred: Unexpected error" in result
+
+
+def test_read_cookbook_metadata_success():
+    """Test read_cookbook_metadata with valid metadata.rb."""
+    metadata_content = """
+name 'apache2'
+maintainer 'Chef Software, Inc.'
+version '8.0.0'
+description 'Installs and configures Apache'
+license 'Apache-2.0'
+depends 'logrotate'
+depends 'iptables'
+supports 'ubuntu'
+supports 'debian'
+    """
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.return_value = metadata_content
+
+        result = read_cookbook_metadata("/cookbook/metadata.rb")
+
+        assert "name: apache2" in result
+        assert "maintainer: Chef Software, Inc." in result
+        assert "version: 8.0.0" in result
+        assert "description: Installs and configures Apache" in result
+        assert "license: Apache-2.0" in result
+        assert "depends: logrotate, iptables" in result
+        assert "supports: ubuntu, debian" in result
+
+
+def test_read_cookbook_metadata_minimal():
+    """Test read_cookbook_metadata with minimal metadata."""
+    metadata_content = "name 'simple'"
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.return_value = metadata_content
+
+        result = read_cookbook_metadata("/cookbook/metadata.rb")
+
+        assert "name: simple" in result
+        assert "depends" not in result
+
+
+def test_read_cookbook_metadata_empty():
+    """Test read_cookbook_metadata with empty file."""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.return_value = ""
+
+        result = read_cookbook_metadata("/cookbook/metadata.rb")
+
+        assert "Warning: No metadata found" in result
+
+
+def test_read_cookbook_metadata_not_found():
+    """Test read_cookbook_metadata with non-existent file."""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.side_effect = FileNotFoundError()
+
+        result = read_cookbook_metadata("/nonexistent/metadata.rb")
+
+        assert "Error: File not found" in result
+
+
+def test_read_cookbook_metadata_is_directory():
+    """Test read_cookbook_metadata when path is a directory."""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.side_effect = IsADirectoryError()
+
+        result = read_cookbook_metadata("/some/directory")
+
+        assert "Error:" in result
+        assert "is a directory" in result
+
+
+def test_read_cookbook_metadata_permission_denied():
+    """Test read_cookbook_metadata with permission error."""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.side_effect = PermissionError()
+
+        result = read_cookbook_metadata("/forbidden/metadata.rb")
+
+        assert "Error: Permission denied" in result
+
+
+def test_read_cookbook_metadata_unicode_error():
+    """Test read_cookbook_metadata with unicode decode error."""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.side_effect = UnicodeDecodeError(
+            "utf-8", b"", 0, 1, "invalid"
+        )
+
+        result = read_cookbook_metadata("/binary/file")
+
+        assert "Error: Unable to decode" in result
+        assert "UTF-8" in result
+
+
+def test_read_cookbook_metadata_other_exception():
+    """Test read_cookbook_metadata with unexpected exception."""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.side_effect = Exception("Unexpected")
+
+        result = read_cookbook_metadata("/some/path/metadata.rb")
+
+        assert "An error occurred: Unexpected" in result
