@@ -31,6 +31,9 @@ MANIFEST
 .coverage
 htmlcov/
 
+# ruff
+.ruff_cache/
+
 # Virtualenv
 .venv/
 venv/
@@ -38,11 +41,11 @@ ENV/
 
 # VS Code
 .vscode/*
-!/.vscode/mcp.json
-!/.vscode/settings.json
-!/.vscode/tasks.json
-!/.vscode/launch.json
-!/.vscode/extensions.json
+!.vscode/mcp.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 
 # macOS
 .DS_Store
