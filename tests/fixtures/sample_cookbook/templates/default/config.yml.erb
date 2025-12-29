@@ -1,0 +1,25 @@
+# Application Configuration
+app_name: <%= @app_name %>
+version: <%= @version %>
+
+database:
+  host: <%= node['database']['host'] %>
+  port: <%= node['database']['port'] %>
+  name: <%= node['database']['name'] %>
+
+features:
+<% node['app']['features'].each do |feature| %>
+  - <%= feature %>
+<% end %>
+
+environments:
+<% if @environment == 'production' %>
+  debug: false
+  log_level: error
+<% elsif @environment == 'staging' %>
+  debug: true
+  log_level: warning
+<% else %>
+  debug: true
+  log_level: debug
+<% end %>

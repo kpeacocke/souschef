@@ -1,0 +1,21 @@
+# Nginx Configuration
+server {
+    listen <%= node['nginx']['port'] %>;
+    server_name <%= node['nginx']['server_name'] %>;
+
+    <% if node['nginx']['ssl_enabled'] %>
+    ssl on;
+    ssl_certificate <%= node['nginx']['ssl_cert'] %>;
+    ssl_certificate_key <%= node['nginx']['ssl_key'] %>;
+    <% end %>
+
+    location / {
+        proxy_pass http://<%= node['app']['backend_host'] %>:<%= node['app']['backend_port'] %>;
+        proxy_set_header Host $host;
+    }
+
+    <% unless node['nginx']['disable_logging'] %>
+    access_log /var/log/nginx/<%= node['nginx']['server_name'] %>.access.log;
+    error_log /var/log/nginx/<%= node['nginx']['server_name'] %>.error.log;
+    <% end %>
+}

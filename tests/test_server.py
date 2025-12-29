@@ -4,12 +4,15 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from souschef.server import (
+    _convert_erb_to_jinja2,
+    _extract_template_variables,
     convert_resource_to_task,
     list_cookbook_structure,
     list_directory,
     main,
     parse_attributes,
     parse_recipe,
+    parse_template,
     read_cookbook_metadata,
     read_file,
 )
@@ -715,3 +718,157 @@ def test_convert_with_exception():
 
         assert "An error occurred during conversion" in result
         assert "Test exception" in result
+
+
+# Template parsing tests
+
+
+def test_parse_template_success():
+    """Test that parse_template successfully parses ERB file."""
+    mock_path = MagicMock(spec=Path)
+    mock_path.__str__ = lambda self: "/path/to/template.erb"
+    erb_content = "Hello <%= @name %>!"
+    mock_path.read_text.return_value = erb_content
+
+    with patch("souschef.server.Path", return_value=mock_path):
+        result = parse_template("/path/to/template.erb")
+
+        assert "variables" in result
+        assert "jinja2_template" in result
+        assert "name" in result  # Should extract @name variable
+
+
+def test_parse_template_not_found():
+    """Test parse_template with non-existent file."""
+    mock_path = MagicMock(spec=Path)
+    mock_path.read_text.side_effect = FileNotFoundError
+
+    with patch("souschef.server.Path", return_value=mock_path):
+        result = parse_template("/nonexistent/template.erb")
+
+        assert "Error: File not found" in result
+
+
+def test_parse_template_permission_denied():
+    """Test parse_template with permission denied."""
+    mock_path = MagicMock(spec=Path)
+    mock_path.read_text.side_effect = PermissionError
+
+    with patch("souschef.server.Path", return_value=mock_path):
+        result = parse_template("/forbidden/template.erb")
+
+        assert "Error: Permission denied" in result
+
+
+def test_extract_template_variables_simple():
+    """Test extracting variables from simple ERB."""
+    content = "Hello <%= @name %>, your email is <%= @email %>!"
+    variables = _extract_template_variables(content)
+
+    assert "name" in variables
+    assert "email" in variables
+
+
+def test_extract_template_variables_node_attributes():
+    """Test extracting node attributes as variables."""
+    content = "<%= node['nginx']['port'] %> and <%= node[\"app\"][\"name\"] %>"
+    variables = _extract_template_variables(content)
+
+    assert "nginx']['port" in variables
+    assert 'app"]["name' in variables
+
+
+def test_extract_template_variables_conditionals():
+    """Test extracting variables from conditionals."""
+    content = "<% if enabled %><%= message %><% end %>"
+    variables = _extract_template_variables(content)
+
+    assert "enabled" in variables
+    assert "message" in variables
+
+
+def test_extract_template_variables_loops():
+    """Test extracting variables from each loops."""
+    content = "<% items.each do |item| %><%= item %><% end %>"
+    variables = _extract_template_variables(content)
+
+    assert "items" in variables
+    assert "item" in variables
+
+
+def test_convert_erb_to_jinja2_simple_output():
+    """Test converting simple ERB variable output."""
+    erb = "Hello <%= @name %>!"
+    jinja2 = _convert_erb_to_jinja2(erb)
+
+    assert "{{ name }}" in jinja2
+    assert "<%=" not in jinja2
+
+
+def test_convert_erb_to_jinja2_node_attributes():
+    """Test converting node attributes to Jinja2."""
+    erb = "Port: <%= node['nginx']['port'] %>"
+    jinja2 = _convert_erb_to_jinja2(erb)
+
+    assert "{{ nginx']['port }}" in jinja2
+
+
+def test_convert_erb_to_jinja2_if_statement():
+    """Test converting ERB if statements."""
+    erb = "<% if enabled %>Active<% end %>"
+    jinja2 = _convert_erb_to_jinja2(erb)
+
+    assert "{% if enabled %}" in jinja2
+    assert "{% endif %}" in jinja2
+    assert "<%"not in jinja2
+
+
+def test_convert_erb_to_jinja2_unless_statement():
+    """Test converting ERB unless to Jinja2 if not."""
+    erb = "<% unless disabled %>Active<% end %>"
+    jinja2 = _convert_erb_to_jinja2(erb)
+
+    assert "{% if not disabled %}" in jinja2
+    assert "{% endif %}" in jinja2
+
+
+def test_convert_erb_to_jinja2_elsif():
+    """Test converting ERB elsif to Jinja2 elif."""
+    erb = "<% if a %>A<% elsif b %>B<% else %>C<% end %>"
+    jinja2 = _convert_erb_to_jinja2(erb)
+
+    assert "{% if a %}" in jinja2
+    assert "{% elif b %}" in jinja2
+    assert "{% else %}" in jinja2
+    assert "{% endif %}" in jinja2
+
+
+def test_convert_erb_to_jinja2_each_loop():
+    """Test converting ERB each loop to Jinja2 for."""
+    erb = "<% items.each do |item| %><%= item %><% end %>"
+    jinja2 = _convert_erb_to_jinja2(erb)
+
+    assert "{% for item in items %}" in jinja2
+    assert "{{ item }}" in jinja2
+    assert "{% endfor %}" in jinja2
+
+
+def test_convert_erb_to_jinja2_nested_structures():
+    """Test converting nested if and for loops."""
+    erb = "<% if items %><% items.each do |i| %><%= i %><% end %><% end %>"
+    jinja2 = _convert_erb_to_jinja2(erb)
+
+    assert "{% if items %}" in jinja2
+    assert "{% for i in items %}" in jinja2
+    assert "{% endfor %}" in jinja2
+    assert "{% endif %}" in jinja2
+
+
+def test_convert_erb_to_jinja2_multiple_outputs():
+    """Test converting multiple variable outputs."""
+    erb = "<%= @name %> - <%= @email %> - <%= @role %>"
+    jinja2 = _convert_erb_to_jinja2(erb)
+
+    assert "{{ name }}" in jinja2
+    assert "{{ email }}" in jinja2
+    assert "{{ role }}" in jinja2

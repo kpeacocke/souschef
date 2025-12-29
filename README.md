@@ -16,12 +16,14 @@ An AI-powered MCP (Model Context Protocol) server that assists with analyzing an
 - **Action Mapping** - Automatically map Chef actions (install, start, create) to Ansible states
 - **Module Selection** - Intelligently select appropriate Ansible modules for each resource type
 - **YAML Generation** - Output valid Ansible task YAML ready for playbooks
+- **Template Parsing** - Parse ERB templates and convert to Jinja2 format with variable extraction
 
 ### Coming Soon
-- Template conversion (ERB → Jinja2)
 - Custom resource/LWRP parsing
-- Full playbook generation
+- Full playbook generation from recipes
 - Chef guards and notifications conversion
+- Complex attribute precedence handling
+- Chef search and data bags conversion
 
 ## Installation
 
@@ -155,6 +157,35 @@ list_cookbook_structure("/path/to/cookbook")
 # metadata/
 #   metadata.rb
 ```
+
+#### `parse_template(path: str)`
+Parse a Chef ERB template file and convert it to Jinja2 format.
+
+**Example:**
+```python
+parse_template("/path/to/cookbook/templates/default/nginx.conf.erb")
+# Returns JSON with:
+# {
+#   "original_file": "/path/to/cookbook/templates/default/nginx.conf.erb",
+#   "variables": [
+#     "nginx']['port",
+#     "nginx']['server_name",
+#     "nginx']['ssl_enabled"
+#   ],
+#   "jinja2_template": "server {\n  listen {{ nginx']['port }};\n  {% if nginx']['ssl_enabled %}\n  ssl on;\n  {% endif %}\n}"
+# }
+```
+
+**ERB to Jinja2 Conversion:**
+- Variable output: `<%= var %>` → `{{ var }}`
+- Instance variables: `<%= @var %>` → `{{ var }}`
+- Node attributes: `<%= node['attr'] %>` → `{{ attr }}`
+- Conditionals: `<% if cond %>` → `{% if cond %}`
+- Unless: `<% unless cond %>` → `{% if not cond %}`
+- Elsif: `<% elsif cond %>` → `{% elif cond %}`
+- Else: `<% else %>` → `{% else %}`
+- Loops: `<% arr.each do |item| %>` → `{% for item in arr %}`
+- End blocks: `<% end %>` → `{% endif %}` or `{% endfor %}`
 
 #### `convert_resource_to_task(resource_type: str, resource_name: str, action: str = "create", properties: str = "")`
 Convert a Chef resource to an Ansible task.

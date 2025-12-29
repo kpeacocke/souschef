@@ -10,6 +10,7 @@ from souschef.server import (
     list_directory,
     parse_attributes,
     parse_recipe,
+    parse_template,
     read_cookbook_metadata,
     read_file,
 )
@@ -328,3 +329,180 @@ def test_benchmark_conversion(benchmark):
 
     # Ensure it still works correctly
     assert "ansible.builtin.package" in result
+
+
+class TestTemplateParsingIntegration:
+    """Integration tests for ERB template parsing."""
+
+    def test_parse_simple_template(self):
+        """Test parsing a simple ERB template."""
+        template_path = (
+            SAMPLE_COOKBOOK / "templates" / "default" / "simple.txt.erb"
+        )
+        result = parse_template(str(template_path))
+
+        # Should return valid JSON
+        import json
+
+        data = json.loads(result)
+
+        assert "variables" in data
+        assert "jinja2_template" in data
+        assert "original_file" in data
+
+        # Should extract variables
+        assert "username" in data["variables"]
+        assert "email" in data["variables"]
+        assert "role" in data["variables"]
+        assert "premium" in data["variables"]
+
+        # Should convert to Jinja2
+        jinja2 = data["jinja2_template"]
+        assert "{{ username }}" in jinja2
+        assert "{{ email }}" in jinja2
+        assert "{% if premium %}" in jinja2
+        assert "{% endif %}" in jinja2
+
+    def test_parse_nginx_config_template(self):
+        """Test parsing nginx configuration ERB template."""
+        template_path = (
+            SAMPLE_COOKBOOK / "templates" / "default" / "nginx.conf.erb"
+        )
+        result = parse_template(str(template_path))
+
+        import json
+
+        data = json.loads(result)
+
+        # Should extract node attributes as variables
+        variables = data["variables"]
+        assert "nginx']['port" in variables
+        assert "nginx']['server_name" in variables
+        assert "nginx']['ssl_enabled" in variables
+
+        # Should convert conditionals
+        jinja2 = data["jinja2_template"]
+        assert "{% if " in jinja2
+        assert "{% endif %}" in jinja2
+        assert "{% if not " in jinja2  # unless converted to if not
+
+    def test_parse_config_yaml_template(self):
+        """Test parsing config YAML ERB template with loops."""
+        template_path = (
+            SAMPLE_COOKBOOK / "templates" / "default" / "config.yml.erb"
+        )
+        result = parse_template(str(template_path))
+
+        import json
+
+        data = json.loads(result)
+
+        # Should extract variables
+        variables = data["variables"]
+        assert "app_name" in variables
+        assert "version" in variables
+        assert "environment" in variables
+        assert "feature" in variables  # From loop iterator
+
+        # Should convert each loop to for
+        jinja2 = data["jinja2_template"]
+        assert "{% for feature in " in jinja2
+        assert "{% endfor %}" in jinja2
+
+        # Should convert elsif to elif
+        assert "{% elif " in jinja2
+
+    @pytest.mark.parametrize(
+        "template_name,expected_vars",
+        [
+            ("simple.txt.erb", ["username", "email", "role", "premium"]),
+            (
+                "nginx.conf.erb",
+                [
+                    "nginx']['port",
+                    "nginx']['server_name",
+                    "nginx']['ssl_enabled",
+                ],
+            ),
+            ("config.yml.erb", ["app_name", "version", "environment"]),
+        ],
+    )
+    def test_parse_templates_extract_variables(self, template_name, expected_vars):
+        """Test that all templates extract expected variables."""
+        template_path = SAMPLE_COOKBOOK / "templates" / "default" / template_name
+        result = parse_template(str(template_path))
+
+        import json
+
+        data = json.loads(result)
+        variables = data["variables"]
+
+        for var in expected_vars:
+            assert var in variables, f"Expected variable '{var}' not found"
+
+    @pytest.mark.parametrize(
+        "template_name,erb_pattern,jinja2_pattern",
+        [
+            ("simple.txt.erb", "<%=", "{{"),
+            ("nginx.conf.erb", "<% if", "{% if"),
+            ("nginx.conf.erb", "<% unless", "{% if not"),
+            ("config.yml.erb", ".each do", "{% for"),
+            ("config.yml.erb", "<% elsif", "{% elif"),
+        ],
+    )
+    def test_erb_to_jinja2_conversion(
+        self, template_name, erb_pattern, jinja2_pattern
+    ):
+        """Test ERB patterns are converted to Jinja2."""
+        template_path = SAMPLE_COOKBOOK / "templates" / "default" / template_name
+        result = parse_template(str(template_path))
+
+        import json
+
+        data = json.loads(result)
+        jinja2 = data["jinja2_template"]
+
+        # ERB pattern should be gone
+        assert erb_pattern not in jinja2 or erb_pattern.startswith(".each")
+
+        # Jinja2 pattern should be present
+        assert jinja2_pattern in jinja2
+
+    def test_template_not_found(self):
+        """Test parsing non-existent template."""
+        result = parse_template("/nonexistent/template.erb")
+
+        assert "Error: File not found" in result
+
+    def test_parse_template_preserves_content(self):
+        """Test that non-ERB content is preserved during conversion."""
+        template_path = (
+            SAMPLE_COOKBOOK / "templates" / "default" / "simple.txt.erb"
+        )
+        result = parse_template(str(template_path))
+
+        import json
+
+        data = json.loads(result)
+        jinja2 = data["jinja2_template"]
+
+        # Static content should be preserved
+        assert "Hello" in jinja2
+        assert "Your settings:" in jinja2
+        assert "Email:" in jinja2
+        assert "Role:" in jinja2
+        assert "Premium features enabled!" in jinja2
+
+
+def test_benchmark_template_parsing(benchmark):
+    """Benchmark ERB template parsing performance."""
+    template_path = SAMPLE_COOKBOOK / "templates" / "default" / "nginx.conf.erb"
+
+    result = benchmark(parse_template, str(template_path))
+
+    # Ensure it still works correctly
+    import json
+
+    data = json.loads(result)
+    assert "variables" in data
+    assert "jinja2_template" in data

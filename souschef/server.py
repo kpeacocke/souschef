@@ -45,6 +45,238 @@ ACTION_TO_STATE = {
     "reload": "reloaded",
 }
 
+# ERB to Jinja2 pattern mappings
+ERB_PATTERNS = {
+    # Variable output: <%= var %> -> {{ var }}
+    "output": (r"<%=\s*(.+?)\s*%>", r"{{ \1 }}"),
+    # Variable with node prefix: <%= node['attr'] %> -> {{ attr }}
+    "node_attr": (r"<%=\s*node\[(['\"])(.+?)\1\]\s*%>", r"{{ \2 }}"),
+    # If statements: <% if condition %> -> {% if condition %}
+    "if_start": (r"<%\s*if\s+(.+?)\s*%>", r"{% if \1 %}"),
+    # Unless (negated if): <% unless condition %> -> {% if not condition %}
+    "unless": (r"<%\s*unless\s+(.+?)\s*%>", r"{% if not \1 %}"),
+    # Else: <% else %> -> {% else %}
+    "else": (r"<%\s*else\s*%>", r"{% else %}"),
+    # Elsif: <% elsif condition %> -> {% elif condition %}
+    "elsif": (r"<%\s*elsif\s+(.+?)\s*%>", r"{% elif \1 %}"),
+    # End: <% end %> -> {% endif %}
+    "end": (r"<%\s*end\s*%>", r"{% endif %}"),
+    # Each loop: <% array.each do |item| %> -> {% for item in array %}
+    # Use [^%]+ to prevent matching across %> boundaries
+    "each": (r"<%\s*([^%]+?)\.each\s+do\s+\|(\w+)\|\s*%>", r"{% for \2 in \1 %}"),
+}
+
+
+@mcp.tool()
+def parse_template(path: str) -> str:
+    """Parse a Chef ERB template file and convert to Jinja2.
+
+    Args:
+        path: Path to the ERB template file.
+
+    Returns:
+        JSON string with extracted variables and Jinja2-converted template.
+
+    """
+    try:
+        file_path = Path(path)
+        content = file_path.read_text(encoding="utf-8")
+
+        # Extract variables
+        variables = _extract_template_variables(content)
+
+        # Convert ERB to Jinja2
+        jinja2_content = _convert_erb_to_jinja2(content)
+
+        result = {
+            "original_file": str(file_path),
+            "variables": sorted(variables),
+            "jinja2_template": jinja2_content,
+        }
+
+        import json
+
+        return json.dumps(result, indent=2)
+
+    except FileNotFoundError:
+        return f"Error: File not found at {path}"
+    except IsADirectoryError:
+        return f"Error: {path} is a directory, not a file"
+    except PermissionError:
+        return f"Error: Permission denied for {path}"
+    except UnicodeDecodeError:
+        return f"Error: Unable to decode {path} as UTF-8 text"
+    except Exception as e:
+        return f"An error occurred: {e}"
+
+
+def _extract_output_variables(content: str, variables: set[str]) -> None:
+    """Extract variables from <%= %> output tags.
+
+    Args:
+        content: Raw ERB template content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    output_vars = re.findall(r"<%=\s*(.+?)\s*%>", content)
+    for var in output_vars:
+        var = var.strip()
+        if var.startswith("node["):
+            attr_path = _extract_node_attribute_path(var)
+            if attr_path:
+                variables.add(attr_path)
+        elif var.startswith("@"):
+            # Instance variables: @var -> var
+            variables.add(var[1:])
+        else:
+            # Extract the base variable name
+            base_var = re.match(r"(\w+)", var)
+            if base_var:
+                variables.add(base_var.group(1))
+
+
+def _extract_node_attribute_path(node_ref: str) -> str:
+    """Extract attribute path from a node reference.
+
+    Args:
+        node_ref: Node reference like "node['attr']['subattr']".
+
+    Returns:
+        Cleaned attribute path like "attr']['subattr".
+
+    """
+    # Extract the full attribute path
+    attr_path = node_ref[5:]  # Remove 'node['
+    # Remove the leading quote if present
+    if attr_path and attr_path[0] in ("'", '"'):
+        attr_path = attr_path[1:]
+    # Remove the trailing ] and quote if present
+    if attr_path and (attr_path.endswith("']") or attr_path.endswith('"]')):
+        attr_path = attr_path[:-2]
+    elif attr_path and attr_path[-1] == "]":
+        attr_path = attr_path[:-1]
+    return attr_path
+
+
+def _extract_code_block_variables(content: str, variables: set[str]) -> None:
+    """Extract variables from <% %> code blocks.
+
+    Args:
+        content: Raw ERB template content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    code_blocks = re.findall(r"<%\s+(.+?)\s+%>", content)
+    for code in code_blocks:
+        # Handle node attributes in conditionals
+        if "node[" in code:
+            # Find all node attribute references in this code block
+            # Use greedy match to capture full nested path: node['a']['b']['c']
+            node_matches = re.finditer(r"node\[.+\]", code)
+            for match in node_matches:
+                attr_path = _extract_node_attribute_path(match.group())
+                if attr_path:
+                    variables.add(attr_path)
+
+        if code.startswith(("if ", "unless ", "elsif ")):
+            # Extract variables from conditions (non-node variables)
+            var_refs = re.findall(r"\b(\w+)", code)
+            for var in var_refs:
+                if var not in ["if", "unless", "elsif", "end", "do", "node"]:
+                    variables.add(var)
+        elif ".each" in code:
+            # Extract array variable and iterator
+            match = re.search(r"(\w+)\.each\s+do\s+\|(\w+)\|", code)
+            if match:
+                variables.add(match.group(1))  # Array variable
+                variables.add(match.group(2))  # Iterator variable
+
+
+def _extract_template_variables(content: str) -> set[str]:
+    """Extract all variables used in an ERB template.
+
+    Args:
+        content: Raw ERB template content.
+
+    Returns:
+        Set of variable names found in the template.
+
+    """
+    variables: set[str] = set()
+
+    # Extract from output tags
+    _extract_output_variables(content, variables)
+
+    # Extract from code blocks
+    _extract_code_block_variables(content, variables)
+
+    return variables
+
+
+def _convert_erb_to_jinja2(content: str) -> str:
+    """Convert ERB template syntax to Jinja2.
+
+    Args:
+        content: Raw ERB template content.
+
+    Returns:
+        Template content converted to Jinja2 syntax.
+
+    """
+    result = content
+
+    # Apply each conversion pattern in order
+    # Start with most specific patterns first
+
+    # Convert node attribute access: <%= node['attr'] %> -> {{ attr }}
+    result = re.sub(ERB_PATTERNS["node_attr"][0], ERB_PATTERNS["node_attr"][1], result)
+
+    # Convert each loops
+    result = re.sub(ERB_PATTERNS["each"][0], ERB_PATTERNS["each"][1], result)
+
+    # Convert conditionals
+    result = re.sub(ERB_PATTERNS["unless"][0], ERB_PATTERNS["unless"][1], result)
+    result = re.sub(ERB_PATTERNS["elsif"][0], ERB_PATTERNS["elsif"][1], result)
+    result = re.sub(ERB_PATTERNS["if_start"][0], ERB_PATTERNS["if_start"][1], result)
+    result = re.sub(ERB_PATTERNS["else"][0], ERB_PATTERNS["else"][1], result)
+
+    # Convert end statements - need to handle both endfor and endif
+    # First pass: replace all ends with temporary markers
+    result = re.sub(r"<%\s*end\s*%>", "<<<END_MARKER>>>", result)
+
+    # Second pass: replace markers from last to first
+    parts = result.split("<<<END_MARKER>>>")
+    final_result = ""
+
+    for i, part in enumerate(parts):
+        final_result += part
+
+        if i < len(parts) - 1:  # Not the last part
+            # Count control structures in the accumulated result
+            for_count = final_result.count("{% for ")
+            endfor_count = final_result.count("{% endfor %}")
+
+            # Find the last unclosed structure
+            last_if = final_result.rfind("{% if")
+            last_for = final_result.rfind("{% for")
+
+            if (for_count - endfor_count) > 0 and last_for > last_if:
+                final_result += "{% endfor %}"
+            else:
+                final_result += "{% endif %}"
+
+    result = final_result
+
+    # Convert variable output (do this last to not interfere with other patterns)
+    result = re.sub(ERB_PATTERNS["output"][0], ERB_PATTERNS["output"][1], result)
+
+    # Clean up instance variables: @var -> var
+    result = re.sub(r"\{\{\s*@(\w+)\s*\}\}", r"{{ \1 }}", result)
+    # Clean up @var in conditionals and other control structures
+    result = re.sub(r"@(\w+)", r"\1", result)
+
+    return result
+
 
 @mcp.tool()
 def list_directory(path: str) -> list[str] | str:
