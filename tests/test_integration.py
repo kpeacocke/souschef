@@ -637,4 +637,3 @@ def test_benchmark_custom_resource_parsing(benchmark):
     assert "properties" in data
     assert "actions" in data
     assert data["resource_name"] == "app_config"
-

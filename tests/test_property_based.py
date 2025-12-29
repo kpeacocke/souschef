@@ -410,4 +410,3 @@ def test_extract_property_with_defaults(default_val):
     config_prop = next((p for p in properties if p["name"] == "config"), None)
     assert config_prop is not None
     assert "default" in config_prop
-
