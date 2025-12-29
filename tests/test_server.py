@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from souschef.server import (
     list_cookbook_structure,
     list_directory,
+    main,
     parse_attributes,
     parse_recipe,
     read_cookbook_metadata,
@@ -575,3 +576,10 @@ def test_list_cookbook_structure_other_exception():
         result = list_cookbook_structure("/some/path")
 
         assert "An error occurred: Unexpected" in result
+
+
+def test_main():
+    """Test that main function calls mcp.run()."""
+    with patch("souschef.server.mcp") as mock_mcp:
+        main()
+        mock_mcp.run.assert_called_once()

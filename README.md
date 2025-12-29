@@ -36,7 +36,17 @@ An AI-powered MCP (Model Context Protocol) server that assists with analyzing an
    uv sync
    ```
 
-3. Run tests to verify installation:
+3. Run the server directly:
+   ```bash
+   uv run souschef
+   ```
+
+   Or run as a Python module:
+   ```bash
+   uv run python -m souschef.server
+   ```
+
+4. Run tests to verify installation:
    ```bash
    uv run pytest
    ```
@@ -177,11 +187,66 @@ uv run pytest
 # Run with coverage report
 uv run pytest --cov=souschef --cov-report=term-missing --cov-report=html
 
+# Run only unit tests (mocked)
+uv run pytest tests/test_server.py
+
+# Run only integration tests (real files)
+uv run pytest tests/test_integration.py
+
+# Run property-based tests
+uv run pytest tests/test_property_based.py
+
+# Run with benchmarks
+uv run pytest --benchmark-only
+
 # Run linting
 uv run ruff check .
 
 # Run formatting
 uv run ruff format .
+```
+
+### Test Types
+
+The project includes multiple types of tests:
+
+1. **Unit Tests** (`test_server.py`)
+   - Mock-based tests for individual functions
+   - Test error handling and edge cases
+   - Fast execution, isolated from filesystem
+
+2. **Integration Tests** (`test_integration.py`)
+   - Real file operations with test fixtures
+   - Validate parsing with actual Chef cookbook files
+   - Parameterized tests for various scenarios
+   - Performance benchmarks with pytest-benchmark
+
+3. **Property-Based Tests** (`test_property_based.py`)
+   - Uses Hypothesis for fuzz testing
+   - Generates random inputs to find edge cases
+   - Ensures functions handle any input gracefully
+
+4. **Test Fixtures**
+   - Sample Chef cookbook in `tests/fixtures/sample_cookbook/`
+   - Real-world metadata, recipes, and attributes
+   - Used for integration testing
+
+### Test Coverage
+
+The project maintains 99%+ test coverage. Run coverage with HTML report:
+
+```bash
+uv run pytest --cov=souschef --cov-report=html
+open htmlcov/index.html  # View detailed coverage report
+```
+
+### Mutation Testing
+
+To verify test quality with mutation testing:
+
+```bash
+uv run mutmut run
+uv run mutmut results
 ```
 
 ### VS Code Tasks
@@ -208,7 +273,7 @@ TBD
 
 ## Roadmap
 
-- [ ] Add server entry point and runner
+- [x] Add server entry point and runner
 - [ ] Implement Chef → Ansible resource conversion
 - [ ] Support template conversion (ERB → Jinja2)
 - [ ] Parse custom Chef resources/LWRPs

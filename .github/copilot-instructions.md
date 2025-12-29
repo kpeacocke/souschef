@@ -20,6 +20,40 @@ SousChef is an AI-powered MCP (Model Context Protocol) server that assists with 
 - **Error cases**: Always test both success and failure scenarios
 - **Mocking**: Use `unittest.mock` for external dependencies
 
+#### Multiple Test Types
+The project maintains three types of tests - ensure all are updated when adding features:
+
+1. **Unit Tests** (`tests/test_server.py`)
+   - Mock-based tests for individual functions
+   - Test error handling and edge cases
+   - Fast execution, isolated from filesystem
+   - Use `unittest.mock` to patch dependencies
+
+2. **Integration Tests** (`tests/test_integration.py`)
+   - Real file operations with test fixtures
+   - Test with actual Chef cookbook files from `tests/fixtures/`
+   - Use parameterized tests (`@pytest.mark.parametrize`) for multiple scenarios
+   - Include performance benchmarks for parsing functions
+
+3. **Property-Based Tests** (`tests/test_property_based.py`)
+   - Use Hypothesis for fuzz testing
+   - Generate random inputs to find edge cases
+   - Ensure functions handle any input gracefully
+   - Limit to 50 examples per test with `@settings(max_examples=50)`
+
+#### Test Fixtures
+- **Location**: `tests/fixtures/sample_cookbook/`
+- **Contents**: Real Chef cookbook structure (metadata.rb, recipes/, attributes/)
+- **Maintenance**: Update fixtures when adding new parsing capabilities
+- **Adding fixtures**: Create realistic Chef content that exercises new features
+
+#### Testing Best Practices
+- When adding a new tool, add all three test types (unit, integration, property-based)
+- Use `@pytest.mark.parametrize` for testing multiple inputs efficiently
+- Add benchmarks for performance-sensitive parsing functions
+- Update test fixtures when adding support for new Chef constructs
+- Ensure integration tests validate actual parsing accuracy, not just coverage
+
 ### Cross-Platform Compatibility
 - **File paths**: Use `pathlib.Path` instead of string concatenation for file paths
 - **Line endings**: Configured via `.gitattributes` (LF for all files)
@@ -47,10 +81,14 @@ Before suggesting code, ensure:
 2. ✅ Properly formatted (`ruff format`)
 3. ✅ All tests pass (`pytest`)
 4. ✅ Coverage maintained/improved (`pytest --cov`)
-5. ✅ Type hints are complete
-6. ✅ Docstrings are present and clear
-7. ✅ Error cases are handled
-8. ✅ Cross-platform compatible
+5. ✅ Unit tests added/updated in `test_server.py`
+6. ✅ Integration tests added/updated in `test_integration.py`
+7. ✅ Property-based tests added if applicable in `test_property_based.py`
+8. ✅ Test fixtures updated if new parsing features added
+9. ✅ Type hints are complete
+10. ✅ Docstrings are present and clear
+11. ✅ Error cases are handled
+12. ✅ Cross-platform compatible
 
 ## Preferred Patterns
 
@@ -93,6 +131,44 @@ def test_function_name_scenario():
 
         # Assert
         assert result == expected_result
+```
+
+### Parameterized Test Structure
+```python
+@pytest.mark.parametrize("input_value,expected_output", [
+    ("value1", "result1"),
+    ("value2", "result2"),
+    ("value3", "result3"),
+])
+def test_function_with_multiple_inputs(input_value, expected_output):
+    """Test function with various inputs."""
+    result = function_name(input_value)
+    assert result == expected_output
+```
+
+### Integration Test with Fixtures
+```python
+def test_parse_real_file():
+    """Test parsing a real Chef file."""
+    fixture_path = FIXTURES_DIR / "sample_cookbook" / "recipes" / "default.rb"
+    result = parse_recipe(str(fixture_path))
+
+    # Validate actual parsing results
+    assert "Resource 1:" in result
+    assert "Type: package" in result
+```
+
+### Property-Based Test Structure
+```python
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
+@given(st.text(min_size=1, max_size=100))
+@settings(max_examples=50)
+def test_handles_any_input(random_input):
+    """Test that function handles any string input."""
+    result = function_name(random_input)
+    assert isinstance(result, str)  # Should never crash
 ```
 
 ## Anti-Patterns to Avoid

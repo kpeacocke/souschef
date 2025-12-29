@@ -1,7 +1,7 @@
 [project]
 name = "souschef"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI-powered MCP server for Chef to Ansible conversion"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
@@ -10,6 +10,12 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "zod>=0.8.0",
 ]
+
+[project.scripts]
+souschef = "souschef.server:main"
+
+[tool.uv]
+package = true
 
 [tool.ruff]
 line-length = 88
@@ -21,6 +27,7 @@ ignore = ["D100", "D104", "D105", "D107"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["S101"]
+"souschef/server.py" = ["T201"]  # Allow print statements in main entry point
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -33,5 +40,8 @@ testpaths = [
 dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
+    "pytest-benchmark>=5.1.0",
+    "hypothesis>=6.125.0",
+    "mutmut>=3.4.0",
     "ruff>=0.14.10",
 ]

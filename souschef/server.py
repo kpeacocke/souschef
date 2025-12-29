@@ -412,3 +412,15 @@ def _format_cookbook_structure(structure: dict[str, list[str]]) -> str:
         result.append("")
 
     return "\n".join(result).rstrip()
+
+
+def main() -> None:
+    """Run the SousChef MCP server.
+
+    This is the main entry point for running the server.
+    """
+    mcp.run()
+
+
+if __name__ == "__main__":
+    main()
