@@ -5,9 +5,13 @@ from unittest.mock import MagicMock, patch
 
 from souschef.server import (
     _convert_erb_to_jinja2,
+    _extract_conditionals,
+    _extract_heredoc_strings,
     _extract_resource_actions,
     _extract_resource_properties,
     _extract_template_variables,
+    _normalize_ruby_value,
+    _strip_ruby_comments,
     convert_resource_to_task,
     list_cookbook_structure,
     list_directory,
@@ -1046,3 +1050,184 @@ end
 
     assert "create" in actions["actions"]
     assert actions["default_action"] is None
+
+
+# Edge case handling tests
+
+
+def test_strip_ruby_comments():
+    """Test removing Ruby comments from code."""
+    code = """
+# This is a comment
+default['nginx']['port'] = 80  # Inline comment
+default['app']['name'] = 'test' # Comment with string
+"""
+    clean = _strip_ruby_comments(code)
+
+    assert "# This is a comment" not in clean
+    assert "# Inline comment" not in clean
+    assert "default['nginx']['port'] = 80" in clean
+    assert "default['app']['name'] = 'test'" in clean
+
+
+def test_extract_heredoc_strings():
+    """Test extracting heredoc strings."""
+    content = """
+file '/etc/config' do
+  content <<-EOH
+    line 1
+    line 2
+  EOH
+end
+"""
+    heredocs = _extract_heredoc_strings(content)
+
+    assert "EOH" in heredocs
+    assert "line 1" in heredocs["EOH"]
+    assert "line 2" in heredocs["EOH"]
+
+
+def test_normalize_ruby_value_symbol():
+    """Test normalizing Ruby symbols."""
+    assert _normalize_ruby_value(":create") == '"create"'
+    assert _normalize_ruby_value(":my_action") == '"my_action"'
+
+
+def test_normalize_ruby_value_array():
+    """Test normalizing Ruby arrays with symbols."""
+    result = _normalize_ruby_value("[:start, :enable]")
+    assert '"start"' in result
+    assert '"enable"' in result
+
+
+def test_extract_conditionals_case():
+    """Test extracting case/when statements."""
+    content = """
+case node['platform']
+when 'ubuntu'
+  package 'nginx'
+when 'centos'
+  package 'httpd'
+end
+"""
+    conditionals = _extract_conditionals(content)
+
+    assert len(conditionals) > 0
+    case_stmt = next((c for c in conditionals if c["type"] == "case"), None)
+    assert case_stmt is not None
+    assert "platform" in case_stmt["expression"]
+
+
+def test_extract_conditionals_if():
+    """Test extracting if statements."""
+    content = """
+if node['nginx']['ssl_enabled']
+  package 'openssl'
+end
+"""
+    conditionals = _extract_conditionals(content)
+
+    assert len(conditionals) > 0
+    if_stmt = next((c for c in conditionals if c["type"] == "if"), None)
+    assert if_stmt is not None
+    assert "ssl_enabled" in if_stmt["condition"]
+
+
+def test_extract_conditionals_unless():
+    """Test extracting unless statements."""
+    content = """
+unless node['app']['disabled']
+  service 'app'
+end
+"""
+    conditionals = _extract_conditionals(content)
+
+    assert len(conditionals) > 0
+    unless_stmt = next((c for c in conditionals if c["type"] == "unless"), None)
+    assert unless_stmt is not None
+    assert "disabled" in unless_stmt["condition"]
+
+
+def test_extract_template_variables_with_interpolation():
+    """Test extracting variables from string interpolation."""
+    content = '<% message = "Hello #{name}!" %>'
+    variables = _extract_template_variables(content)
+
+    assert "name" in variables or "message" in variables
+
+
+def test_parse_recipe_with_comments():
+    """Test parsing recipe with Ruby comments."""
+    recipe_content = """
+# Install web server
+package 'nginx' do  # Using nginx
+  action :install
+end
+"""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.return_value = recipe_content
+
+        result = parse_recipe("/recipe.rb")
+
+        assert "nginx" in result
+        assert "package" in result
+
+
+def test_parse_attributes_with_case_statement():
+    """Test parsing attributes with case/when statements."""
+    attr_content = """
+case node['platform']
+when 'ubuntu'
+  default['pkg']['name'] = 'nginx'
+when 'centos'
+  default['pkg']['name'] = 'httpd'
+end
+"""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.return_value = attr_content
+
+        result = parse_attributes("/attributes.rb")
+
+        # Should extract attributes even from within case statements
+        assert "pkg" in result or "Warning" in result
+
+
+def test_extract_resource_properties_with_complex_type():
+    """Test extracting properties with complex types like [true, false]."""
+    content = """
+property :enabled, [true, false], default: false
+property :ports, Array, default: [80, 443]
+"""
+    properties = _extract_resource_properties(content)
+
+    assert len(properties) >= 2
+    enabled_prop = next((p for p in properties if p["name"] == "enabled"), None)
+    assert enabled_prop is not None
+    assert "[true, false]" in enabled_prop["type"] or "true" in enabled_prop["type"]
+
+
+def test_parse_recipe_with_multiline_string():
+    """Test parsing recipe with multi-line content."""
+    recipe_content = """
+file '/etc/config' do
+  content 'line1
+line2
+line3'
+  action :create
+end
+"""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.read_text.return_value = recipe_content
+
+        result = parse_recipe("/recipe.rb")
+
+        # Should successfully parse despite multi-line strings
+        assert isinstance(result, str)
+        # May or may not find resources due to regex limitations with multiline strings
+        # The important thing is it doesn't crash

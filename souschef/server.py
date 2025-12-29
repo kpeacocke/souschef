@@ -110,6 +110,36 @@ def parse_template(path: str) -> str:
         return f"An error occurred: {e}"
 
 
+def _strip_ruby_comments(content: str) -> str:
+    """Remove Ruby comments from code.
+
+    Args:
+        content: Ruby code content.
+
+    Returns:
+        Content with comments removed.
+
+    """
+    # Remove single-line comments but preserve strings
+    lines = []
+    for line in content.split("\n"):
+        # Skip if line is only a comment
+        if line.strip().startswith("#"):
+            continue
+        # Remove inline comments (simple approach - doesn't handle # in strings)
+        comment_pos = line.find("#")
+        if comment_pos > 0:
+            # Check if # is inside a string by counting quotes before it
+            before_comment = line[:comment_pos]
+            single_quotes = before_comment.count("'") - before_comment.count("\\'")
+            double_quotes = before_comment.count('"') - before_comment.count('\\"')
+            # If odd number of quotes, # is inside a string
+            if single_quotes % 2 == 0 and double_quotes % 2 == 0:
+                line = line[:comment_pos]
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _extract_output_variables(content: str, variables: set[str]) -> None:
     """Extract variables from <%= %> output tags.
 
@@ -158,7 +188,7 @@ def _extract_node_attribute_path(node_ref: str) -> str:
     return attr_path
 
 
-def _extract_code_block_variables(content: str, variables: set[str]) -> None:
+def _extract_code_block_variables(content: str, variables: set[str]) -> None:  # noqa: C901
     """Extract variables from <% %> code blocks.
 
     Args:
@@ -166,8 +196,16 @@ def _extract_code_block_variables(content: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    code_blocks = re.findall(r"<%\s+(.+?)\s+%>", content)
+    code_blocks = re.findall(r"<%\s+(.+?)\s+%>", content, re.DOTALL)
     for code in code_blocks:
+        # Handle Ruby string interpolation: "text #{var} more"
+        interpolated = re.findall(r"#\{([^}]+)\}", code)
+        for expr in interpolated:
+            # Extract variable name from expression
+            var_match = re.match(r"[\w.\[\]'\"]+", expr.strip())
+            if var_match:
+                variables.add(var_match.group())
+
         # Handle node attributes in conditionals
         if "node[" in code:
             # Find all node attribute references in this code block
@@ -278,6 +316,47 @@ def _convert_erb_to_jinja2(content: str) -> str:
     return result
 
 
+def _extract_heredoc_strings(content: str) -> dict[str, str]:
+    """Extract heredoc strings from Ruby code.
+
+    Args:
+        content: Ruby code content.
+
+    Returns:
+        Dictionary mapping heredoc markers to their content.
+
+    """
+    heredocs = {}
+    # Match heredoc patterns: <<-MARKER or <<MARKER
+    heredoc_pattern = r"<<-?(\w+)\s*\n(.*?)^\s*\1\s*$"
+    for match in re.finditer(heredoc_pattern, content, re.DOTALL | re.MULTILINE):
+        marker = match.group(1)
+        content_text = match.group(2)
+        heredocs[marker] = content_text
+    return heredocs
+
+
+def _normalize_ruby_value(value: str) -> str:
+    """Normalize Ruby value representation.
+
+    Args:
+        value: Raw Ruby value string.
+
+    Returns:
+        Normalized value string.
+
+    """
+    value = value.strip()
+    # Handle symbols: :symbol -> "symbol"
+    if value.startswith(":") and value[1:].replace("_", "").isalnum():
+        return f'"{value[1:]}"'
+    # Handle arrays: [:a, :b] -> ["a", "b"]
+    if value.startswith("[") and value.endswith("]"):
+        # Simple symbol array conversion
+        value = re.sub(r":([\w_]+)", r'"\1"', value)
+    return value
+
+
 def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
     """Extract property definitions from custom resource.
 
@@ -289,10 +368,16 @@ def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
 
     """
     properties = []
+    # Strip comments
+    clean_content = _strip_ruby_comments(content)
 
     # Match modern property syntax: property :name, Type, options
-    property_pattern = r"property\s+:(\w+),\s*([^,\n]+)(?:,\s*(.+?))?\s*(?:\n|$)"
-    for match in re.finditer(property_pattern, content, re.MULTILINE):
+    # Updated to handle multi-line definitions and complex types like [true, false]
+    property_pattern = (
+        r"property\s+:(\w+),\s*([^,\n\[]+(?:\[[^\]]+\])?)"
+        r",?\s*([^\n]*?)(?:\n|$)"
+    )
+    for match in re.finditer(property_pattern, clean_content, re.MULTILINE):
         prop_name = match.group(1)
         prop_type = match.group(2).strip()
         prop_options = match.group(3) if match.group(3) else ""
@@ -626,10 +711,17 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
 
     """
     resources = []
-    # Match Chef resource declarations like: package 'nginx' do ... end
-    pattern = r"(\w+)\s+['\"]([^'\"]+)['\"]\s+do(.*?)end"
+    # Strip comments first
+    clean_content = _strip_ruby_comments(content)
 
-    for match in re.finditer(pattern, content, re.DOTALL):
+    # Match Chef resource declarations with various patterns:
+    # 1. Standard: package 'nginx' do ... end
+    # 2. With parentheses: package('nginx') do ... end
+    # 3. Multi-line strings: package 'nginx' do\n  content <<-EOH\n  ...\n  EOH\nend
+    # Use a more robust pattern that handles nested blocks
+    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do(.*?)^end"
+
+    for match in re.finditer(pattern, clean_content, re.DOTALL | re.MULTILINE):
         resource_type = match.group(1)
         resource_name = match.group(2)
         resource_body = match.group(3)
@@ -657,6 +749,58 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
         resources.append(resource)
 
     return resources
+
+
+def _extract_conditionals(content: str) -> list[dict[str, str]]:
+    """Extract Ruby conditionals from recipe code.
+
+    Args:
+        content: Ruby code content.
+
+    Returns:
+        List of dictionaries with conditional information.
+
+    """
+    conditionals = []
+
+    # Match case/when statements
+    case_pattern = r"case\s+(.*?)\n(.*?)^end"
+    for match in re.finditer(case_pattern, content, re.DOTALL | re.MULTILINE):
+        case_expr = match.group(1).strip()
+        case_body = match.group(2)
+        when_clauses = re.findall(r"when\s+['\"]?([^'\"\n]+)['\"]?\s*\n", case_body)
+        conditionals.append(
+            {
+                "type": "case",
+                "expression": case_expr,
+                "branches": when_clauses,
+            }
+        )
+
+    # Match if/elsif/else statements
+    if_pattern = r"if\s+(.*?)(?:\n|$)"
+    for match in re.finditer(if_pattern, content):
+        condition = match.group(1).strip()
+        if condition and not condition.startswith(("elsif", "end")):
+            conditionals.append(
+                {
+                    "type": "if",
+                    "condition": condition,
+                }
+            )
+
+    # Match unless statements
+    unless_pattern = r"unless\s+(.*?)(?:\n|$)"
+    for match in re.finditer(unless_pattern, content):
+        condition = match.group(1).strip()
+        conditionals.append(
+            {
+                "type": "unless",
+                "condition": condition,
+            }
+        )
+
+    return conditionals
 
 
 def _format_resources(resources: list[dict[str, str]]) -> str:
@@ -728,11 +872,18 @@ def _extract_attributes(content: str) -> list[dict[str, str]]:
 
     """
     attributes = []
+    # Strip comments first
+    clean_content = _strip_ruby_comments(content)
+
     # Match attribute declarations like: default['nginx']['port'] = 80
     # Use non-capturing group (?:...) with + to match one or more brackets
-    pattern = r"(default|override|normal)((?:\[[^\]]+\])+)\s*=\s*(.+?)(?:\n|$)"
+    # Updated to handle multi-line values and heredocs
+    pattern = (
+        r"(default|override|normal)((?:\[[^\]]+\])+)\s*=\s*"
+        r"(.+?)(?=\n(?:default|override|normal|case|when|end|$)|$)"
+    )
 
-    for match in re.finditer(pattern, content):
+    for match in re.finditer(pattern, clean_content, re.DOTALL):
         precedence = match.group(1)
         # Extract the bracket part and clean it up
         brackets = match.group(2)
