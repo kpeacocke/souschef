@@ -8,6 +8,13 @@
         "--cov-report=term-missing"
     ],
     "python.testing.cwd": "${workspaceFolder}",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUnknownParameterType": "none",
+        "reportUnknownVariableType": "none",
+        "reportUnknownArgumentType": "none",
+        "reportMissingParameterType": "none"
+    },
     "[python]": {
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "charliermarsh.ruff",

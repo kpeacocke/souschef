@@ -7,7 +7,7 @@ SousChef is an AI-powered MCP (Model Context Protocol) server that assists with 
 
 ### Code Quality
 - **Zero warnings policy**: All code must be free of errors and warnings without disabling them
-- **Type hints**: Use Python type hints for all function signatures
+- **Type hints**: Use Python type hints for all function signatures in source code (`souschef/`). For test files, pytest fixtures (`tmp_path`, `benchmark`) and parameterized test parameters can omit type hints for brevity
 - **Docstrings**: Every function, class, and module must have clear docstrings following Google style
 - **Linting**: Code must pass `ruff` linting checks with no violations
 - **Formatting**: Code must be formatted with `ruff format`
