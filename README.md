@@ -61,6 +61,25 @@ An AI-powered MCP (Model Context Protocol) server that assists with analyzing an
 
 ## Usage
 
+### Conversion Examples
+
+The `examples/` directory contains complete Chef cookbooks demonstrating conversion capabilities:
+
+- **[web-server](examples/web-server/)** - Complete nginx web server setup with:
+  - Package installation, service management, templates
+  - Custom resources (nginx_vhost)
+  - Platform-specific logic (Debian/RHEL)
+  - SSL configuration, guards, notifications
+  - [Full conversion guide](examples/web-server/CONVERSION.md)
+
+- **[database](examples/database/)** - PostgreSQL database server with:
+  - Database and user management custom resources
+  - Complex configuration templates
+  - Backup automation with cron jobs
+  - Guard conditions and idempotency
+
+See [examples/README.md](examples/README.md) for detailed usage.
+
 ### As an MCP Server
 
 SousChef is designed to be used as an MCP server with AI assistants that support the Model Context Protocol.
