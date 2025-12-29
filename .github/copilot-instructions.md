@@ -87,10 +87,10 @@ def test_function_name_scenario():
     # Arrange
     with patch("module.dependency") as mock:
         mock.return_value = expected_value
-        
+
         # Act
         result = function_name(arg)
-        
+
         # Assert
         assert result == expected_result
 ```
@@ -103,6 +103,11 @@ def test_function_name_scenario():
 - ❌ Bare `except:` clauses
 - ❌ Missing docstrings
 - ❌ Hardcoded file paths
+
+## Documentation Maintenance
+- **README updates**: When adding new tools, features, or changing functionality, update README.md to reflect the changes
+- **Keep examples current**: Ensure usage examples in README match actual tool signatures and behavior
+- **Update roadmap**: Mark completed items and add new planned features to the roadmap section
 
 ## When in Doubt
 - Prioritize readability over cleverness
