@@ -5,12 +5,15 @@ from unittest.mock import MagicMock, patch
 
 from souschef.server import (
     _convert_erb_to_jinja2,
+    _extract_resource_actions,
+    _extract_resource_properties,
     _extract_template_variables,
     convert_resource_to_task,
     list_cookbook_structure,
     list_directory,
     main,
     parse_attributes,
+    parse_custom_resource,
     parse_recipe,
     parse_template,
     read_cookbook_metadata,
@@ -820,7 +823,7 @@ def test_convert_erb_to_jinja2_if_statement():
 
     assert "{% if enabled %}" in jinja2
     assert "{% endif %}" in jinja2
-    assert "<%"not in jinja2
+    assert "<%" not in jinja2
 
 
 def test_convert_erb_to_jinja2_unless_statement():
@@ -872,3 +875,174 @@ def test_convert_erb_to_jinja2_multiple_outputs():
     assert "{{ name }}" in jinja2
     assert "{{ email }}" in jinja2
     assert "{{ role }}" in jinja2
+
+
+# Custom resource parsing tests
+
+
+def test_parse_custom_resource_success():
+    """Test that parse_custom_resource successfully parses resource file."""
+    mock_path = MagicMock(spec=Path)
+    mock_path.__str__ = lambda self: "/path/to/resource.rb"
+    mock_path.stem = "app_config"
+    resource_content = """
+property :name, String, name_property: true
+property :port, Integer, default: 8080
+
+action :create do
+  log "Creating"
+end
+"""
+    mock_path.read_text.return_value = resource_content
+
+    with patch("souschef.server.Path", return_value=mock_path):
+        result = parse_custom_resource("/path/to/resource.rb")
+
+        assert "properties" in result
+        assert "actions" in result
+        assert "app_config" in result
+
+
+def test_parse_custom_resource_not_found():
+    """Test parse_custom_resource with non-existent file."""
+    mock_path = MagicMock(spec=Path)
+    mock_path.read_text.side_effect = FileNotFoundError
+
+    with patch("souschef.server.Path", return_value=mock_path):
+        result = parse_custom_resource("/nonexistent/resource.rb")
+
+        assert "Error: File not found" in result
+
+
+def test_parse_custom_resource_permission_denied():
+    """Test parse_custom_resource with permission denied."""
+    mock_path = MagicMock(spec=Path)
+    mock_path.read_text.side_effect = PermissionError
+
+    with patch("souschef.server.Path", return_value=mock_path):
+        result = parse_custom_resource("/forbidden/resource.rb")
+
+        assert "Error: Permission denied" in result
+
+
+def test_extract_resource_properties_modern():
+    """Test extracting modern property definitions."""
+    content = """
+property :name, String, name_property: true
+property :port, Integer, default: 8080
+property :enabled, [true, false], default: false
+property :password, String, required: true
+"""
+    properties = _extract_resource_properties(content)
+
+    assert len(properties) == 4
+
+    # Check name property
+    name_prop = next(p for p in properties if p["name"] == "name")
+    assert name_prop["type"] == "String"
+    assert name_prop.get("name_property") is True
+
+    # Check port property
+    port_prop = next(p for p in properties if p["name"] == "port")
+    assert port_prop["type"] == "Integer"
+    assert port_prop["default"] == "8080"
+
+    # Check password property
+    password_prop = next(p for p in properties if p["name"] == "password")
+    assert password_prop.get("required") is True
+
+
+def test_extract_resource_properties_lwrp():
+    """Test extracting LWRP attribute definitions."""
+    content = """
+attribute :db_name, kind_of: String, name_attribute: true
+attribute :port, kind_of: Integer, default: 5432
+attribute :username, kind_of: String, required: true
+"""
+    properties = _extract_resource_properties(content)
+
+    assert len(properties) == 3
+
+    # Check db_name attribute
+    db_prop = next(p for p in properties if p["name"] == "db_name")
+    assert db_prop["type"] == "String"
+    assert db_prop.get("name_property") is True
+
+    # Check port attribute
+    port_prop = next(p for p in properties if p["name"] == "port")
+    assert port_prop["type"] == "Integer"
+    assert port_prop["default"] == "5432"
+
+
+def test_extract_resource_actions_modern():
+    """Test extracting modern action blocks."""
+    content = """
+action :create do
+  log "Creating"
+end
+
+action :delete do
+  log "Deleting"
+end
+
+default_action :create
+"""
+    actions = _extract_resource_actions(content)
+
+    assert "create" in actions["actions"]
+    assert "delete" in actions["actions"]
+    assert actions["default_action"] == "create"
+
+
+def test_extract_resource_actions_lwrp():
+    """Test extracting LWRP actions declaration."""
+    content = """
+actions :create, :drop, :backup
+default_action :create
+"""
+    actions = _extract_resource_actions(content)
+
+    assert "create" in actions["actions"]
+    assert "drop" in actions["actions"]
+    assert "backup" in actions["actions"]
+    assert actions["default_action"] == "create"
+
+
+def test_extract_resource_actions_mixed():
+    """Test extracting mixed action styles."""
+    content = """
+actions :create, :delete
+
+action :update do
+  log "Updating"
+end
+
+default_action :create
+"""
+    actions = _extract_resource_actions(content)
+
+    assert "create" in actions["actions"]
+    assert "delete" in actions["actions"]
+    assert "update" in actions["actions"]
+    assert len(actions["actions"]) == 3
+
+
+def test_extract_resource_properties_empty():
+    """Test extracting from content with no properties."""
+    content = "# Just a comment"
+    properties = _extract_resource_properties(content)
+
+    assert properties == []
+
+
+def test_extract_resource_actions_no_default():
+    """Test extracting actions without default action."""
+    content = """
+action :create do
+  log "Creating"
+end
+"""
+    actions = _extract_resource_actions(content)
+
+    assert "create" in actions["actions"]
+    assert actions["default_action"] is None

@@ -8,6 +8,7 @@ An AI-powered MCP (Model Context Protocol) server that assists with analyzing an
 - **Parse Metadata** - Extract cookbook metadata (name, version, dependencies, etc.)
 - **Parse Recipes** - Analyze Chef resources, actions, and properties
 - **Parse Attributes** - Extract default, override, and normal attributes
+- **Parse Custom Resources** - Extract properties, attributes, and actions from custom resources and LWRPs
 - **List Cookbook Structure** - Display the directory structure of Chef cookbooks
 - **File Operations** - Read files and list directories
 
@@ -19,7 +20,6 @@ An AI-powered MCP (Model Context Protocol) server that assists with analyzing an
 - **Template Parsing** - Parse ERB templates and convert to Jinja2 format with variable extraction
 
 ### Coming Soon
-- Custom resource/LWRP parsing
 - Full playbook generation from recipes
 - Chef guards and notifications conversion
 - Complex attribute precedence handling
@@ -187,6 +187,55 @@ parse_template("/path/to/cookbook/templates/default/nginx.conf.erb")
 - Loops: `<% arr.each do |item| %>` → `{% for item in arr %}`
 - End blocks: `<% end %>` → `{% endif %}` or `{% endfor %}`
 
+#### `parse_custom_resource(path: str)`
+Parse a Chef custom resource or LWRP file and extract properties, attributes, and actions.
+
+**Example:**
+```python
+parse_custom_resource("/path/to/cookbook/resources/app_config.rb")
+# Returns JSON with:
+# {
+#   "resource_file": "/path/to/cookbook/resources/app_config.rb",
+#   "resource_name": "app_config",
+#   "resource_type": "custom_resource",  # or "lwrp"
+#   "properties": [
+#     {
+#       "name": "config_name",
+#       "type": "String",
+#       "name_property": true
+#     },
+#     {
+#       "name": "port",
+#       "type": "Integer",
+#       "default": "8080"
+#     },
+#     {
+#       "name": "ssl_enabled",
+#       "type": "[true, false]",
+#       "default": "false"
+#     }
+#   ],
+#   "actions": ["create", "delete"],
+#   "default_action": "create"
+# }
+```
+
+**Detected Resource Types:**
+- **Custom Resource** (modern) - Uses `property` keyword
+- **LWRP** (legacy) - Uses `attribute` keyword with `kind_of:`
+
+**Property/Attribute Fields:**
+- `name` - Property/attribute name
+- `type` - Type constraint (String, Integer, Boolean, Array, Hash, etc.)
+- `name_property` - Whether this is the resource's name property (true/false)
+- `default` - Default value if specified
+- `required` - Whether the property is required (true/false)
+
+**Action Extraction:**
+- Modern format: `action :name do ... end`
+- LWRP format: `actions :create, :delete, :update`
+- Supports both formats and mixed declarations
+
 #### `convert_resource_to_task(resource_type: str, resource_name: str, action: str = "create", properties: str = "")`
 Convert a Chef resource to an Ansible task.
 
@@ -353,8 +402,8 @@ TBD
 
 - [x] Add server entry point and runner
 - [x] Implement Chef → Ansible resource conversion (basic)
-- [ ] Support template conversion (ERB → Jinja2)
-- [ ] Parse custom Chef resources/LWRPs
+- [x] Support template conversion (ERB → Jinja2)
+- [x] Parse custom Chef resources/LWRPs
 - [ ] Generate complete Ansible playbooks from recipes
 - [ ] Handle Chef guards (only_if, not_if) and notifications
 - [ ] Support complex attribute precedence and merging

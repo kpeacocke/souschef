@@ -8,9 +8,12 @@ from hypothesis import strategies as st
 
 from souschef.server import (
     _convert_erb_to_jinja2,
+    _extract_resource_actions,
+    _extract_resource_properties,
     _extract_template_variables,
     list_directory,
     parse_attributes,
+    parse_custom_resource,
     parse_recipe,
     parse_template,
     read_file,
@@ -169,9 +172,7 @@ def test_convert_erb_to_jinja2_doesnt_crash(content):
 @settings(max_examples=50)
 def test_parse_template_handles_any_content(content):
     """Test that parse_template doesn't crash on any file content."""
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".erb", delete=False
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".erb", delete=False) as f:
         try:
             f.write(content)
             f.flush()
@@ -262,3 +263,151 @@ def test_erb_conditional_conversion(condition):
     assert "%}" in jinja2
     assert "if" in jinja2
     assert condition in jinja2
+
+
+# Custom resource property-based tests
+
+
+@given(st.text())
+@settings(max_examples=50)
+def test_parse_custom_resource_handles_any_content(content):
+    """Test that parse_custom_resource doesn't crash on any file content."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        try:
+            f.write(content)
+            f.flush()
+
+            result = parse_custom_resource(f.name)
+            # Should always return a string
+            assert isinstance(result, str)
+        finally:
+            Path(f.name).unlink(missing_ok=True)
+
+
+@given(
+    prop_name=st.text(
+        alphabet=st.characters(
+            whitelist_categories=("Lu", "Ll", "Nd"),
+            min_codepoint=65,
+            max_codepoint=122,
+        ),
+        min_size=1,
+        max_size=20,
+    ),
+    prop_type=st.sampled_from(["String", "Integer", "Boolean", "Array", "Hash"]),
+)
+@settings(max_examples=50)
+def test_extract_property_modern_syntax(prop_name, prop_type):
+    """Test extracting modern property definitions with random names."""
+    # Skip if property name starts with digit
+    if prop_name[0].isdigit():
+        prop_name = "p" + prop_name
+
+    content = f"property :{prop_name}, {prop_type}"
+    properties = _extract_resource_properties(content)
+
+    # Should extract at least one property
+    assert len(properties) >= 1
+    # Should contain the property name
+    assert any(p["name"] == prop_name for p in properties)
+
+
+@given(
+    attr_name=st.text(
+        alphabet=st.characters(
+            whitelist_categories=("Lu", "Ll", "Nd"),
+            min_codepoint=65,
+            max_codepoint=122,
+        ),
+        min_size=1,
+        max_size=20,
+    ),
+    attr_type=st.sampled_from(
+        ["String", "Integer", "TrueClass", "FalseClass", "Array"]
+    ),
+)
+@settings(max_examples=50)
+def test_extract_attribute_lwrp_syntax(attr_name, attr_type):
+    """Test extracting LWRP attribute definitions with random names."""
+    # Skip if attribute name starts with digit
+    if attr_name[0].isdigit():
+        attr_name = "a" + attr_name
+
+    content = f"attribute :{attr_name}, kind_of: {attr_type}"
+    properties = _extract_resource_properties(content)
+
+    # Should extract at least one property
+    assert len(properties) >= 1
+    # Should contain the attribute name
+    assert any(p["name"] == attr_name for p in properties)
+
+
+@given(
+    action_name=st.text(
+        alphabet=st.characters(
+            whitelist_categories=("Lu", "Ll"),
+            min_codepoint=97,
+            max_codepoint=122,
+        ),
+        min_size=1,
+        max_size=20,
+    )
+)
+@settings(max_examples=50)
+def test_extract_action_blocks(action_name):
+    """Test extracting action blocks with random action names."""
+    content = f"""
+action :{action_name} do
+  log "Action {action_name}"
+end
+"""
+    actions = _extract_resource_actions(content)
+
+    # Should extract the action
+    assert action_name in actions["actions"]
+
+
+@given(
+    action_list=st.lists(
+        st.text(
+            alphabet=st.characters(
+                whitelist_categories=("Lu", "Ll"),
+                min_codepoint=97,
+                max_codepoint=122,
+            ),
+            min_size=1,
+            max_size=15,
+        ),
+        min_size=1,
+        max_size=5,
+    )
+)
+@settings(max_examples=50)
+def test_extract_lwrp_actions_declaration(action_list):
+    """Test extracting LWRP actions declarations with random action names."""
+    # Create actions declaration string
+    actions_str = ", ".join(f":{action}" for action in action_list)
+    content = f"actions {actions_str}"
+
+    result = _extract_resource_actions(content)
+
+    # Should extract all actions
+    for action in action_list:
+        assert action in result["actions"]
+
+
+@given(
+    default_val=st.sampled_from(["8080", "true", "false", "'default'", "[]", "{}"]),
+)
+@settings(max_examples=50)
+def test_extract_property_with_defaults(default_val):
+    """Test extracting properties with various default values."""
+    content = f"property :config, String, default: {default_val}"
+    properties = _extract_resource_properties(content)
+
+    # Should extract the property with default
+    assert len(properties) >= 1
+    config_prop = next((p for p in properties if p["name"] == "config"), None)
+    assert config_prop is not None
+    assert "default" in config_prop
+

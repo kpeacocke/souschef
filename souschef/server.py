@@ -278,6 +278,170 @@ def _convert_erb_to_jinja2(content: str) -> str:
     return result
 
 
+def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
+    """Extract property definitions from custom resource.
+
+    Args:
+        content: Raw content of custom resource file.
+
+    Returns:
+        List of dictionaries containing property information.
+
+    """
+    properties = []
+
+    # Match modern property syntax: property :name, Type, options
+    property_pattern = r"property\s+:(\w+),\s*([^,\n]+)(?:,\s*(.+?))?\s*(?:\n|$)"
+    for match in re.finditer(property_pattern, content, re.MULTILINE):
+        prop_name = match.group(1)
+        prop_type = match.group(2).strip()
+        prop_options = match.group(3) if match.group(3) else ""
+
+        prop_info: dict[str, Any] = {
+            "name": prop_name,
+            "type": prop_type,
+        }
+
+        # Extract name_property
+        name_property_check = (
+            "name_property: true" in prop_options
+            or "name_attribute: true" in prop_options
+        )
+        if name_property_check:
+            prop_info["name_property"] = True
+
+        # Extract default value
+        default_match = re.search(r"default:\s*([^,\n]+)", prop_options)
+        if default_match:
+            prop_info["default"] = default_match.group(1).strip()
+
+        # Extract required
+        if "required: true" in prop_options:
+            prop_info["required"] = True
+
+        properties.append(prop_info)
+
+    # Match LWRP attribute syntax: attribute :name, kind_of: Type
+    attribute_pattern = r"attribute\s+:(\w+)(?:,\s*(.+?))?\s*(?:\n|$)"
+    for match in re.finditer(attribute_pattern, content, re.MULTILINE):
+        attr_name = match.group(1)
+        attr_options = match.group(2) if match.group(2) else ""
+
+        attr_info: dict[str, Any] = {
+            "name": attr_name,
+            "type": "Any",  # Default type
+        }
+
+        # Extract type from kind_of
+        kind_of_match = re.search(r"kind_of:\s*(\w+)", attr_options)
+        if kind_of_match:
+            attr_info["type"] = kind_of_match.group(1)
+
+        # Extract name_attribute
+        if "name_attribute: true" in attr_options:
+            attr_info["name_property"] = True
+
+        # Extract default value
+        default_match = re.search(r"default:\s*([^,\n]+)", attr_options)
+        if default_match:
+            attr_info["default"] = default_match.group(1).strip()
+
+        # Extract required
+        if "required: true" in attr_options:
+            attr_info["required"] = True
+
+        properties.append(attr_info)
+
+    return properties
+
+
+def _extract_resource_actions(content: str) -> dict[str, Any]:
+    """Extract action definitions from custom resource.
+
+    Args:
+        content: Raw content of custom resource file.
+
+    Returns:
+        Dictionary with actions list and default action.
+
+    """
+    result: dict[str, Any] = {
+        "actions": [],
+        "default_action": None,
+    }
+
+    # Extract modern action blocks: action :name do ... end
+    action_pattern = r"action\s+:(\w+)\s+do"
+    for match in re.finditer(action_pattern, content):
+        action_name = match.group(1)
+        if action_name not in result["actions"]:
+            result["actions"].append(action_name)
+
+    # Extract LWRP-style actions declaration: actions :create, :drop
+    actions_decl = re.search(r"actions\s+(.+?)(?:\n|$)", content)
+    if actions_decl:
+        action_symbols = re.findall(r":(\w+)", actions_decl.group(1))
+        for action in action_symbols:
+            if action not in result["actions"]:
+                result["actions"].append(action)
+
+    # Extract default action
+    default_match = re.search(r"default_action\s+:(\w+)", content)
+    if default_match:
+        result["default_action"] = default_match.group(1)
+
+    return result
+
+
+@mcp.tool()
+def parse_custom_resource(path: str) -> str:
+    """Parse a Chef custom resource or LWRP file.
+
+    Args:
+        path: Path to the custom resource (.rb) file.
+
+    Returns:
+        JSON string with extracted properties, actions, and metadata.
+
+    """
+    try:
+        file_path = Path(path)
+        content = file_path.read_text(encoding="utf-8")
+
+        # Determine resource type
+        resource_type = "custom_resource" if "property" in content else "lwrp"
+
+        # Extract properties/attributes
+        properties = _extract_resource_properties(content)
+
+        # Extract actions
+        actions_info = _extract_resource_actions(content)
+
+        result = {
+            "resource_file": str(file_path),
+            "resource_name": file_path.stem,
+            "resource_type": resource_type,
+            "properties": properties,
+            "actions": actions_info["actions"],
+            "default_action": actions_info["default_action"],
+        }
+
+        import json
+
+        return json.dumps(result, indent=2)
+
+    except FileNotFoundError:
+        return f"Error: File not found at {path}"
+    except IsADirectoryError:
+        return f"Error: {path} is a directory, not a file"
+    except PermissionError:
+        return f"Error: Permission denied for {path}"
+    except UnicodeDecodeError:
+        return f"Error: Unable to decode {path} as UTF-8 text"
+    except Exception as e:
+        return f"An error occurred: {e}"
+
+
 @mcp.tool()
 def list_directory(path: str) -> list[str] | str:
     """List the contents of a directory.

@@ -9,6 +9,7 @@ from souschef.server import (
     list_cookbook_structure,
     list_directory,
     parse_attributes,
+    parse_custom_resource,
     parse_recipe,
     parse_template,
     read_cookbook_metadata,
@@ -336,9 +337,7 @@ class TestTemplateParsingIntegration:
 
     def test_parse_simple_template(self):
         """Test parsing a simple ERB template."""
-        template_path = (
-            SAMPLE_COOKBOOK / "templates" / "default" / "simple.txt.erb"
-        )
+        template_path = SAMPLE_COOKBOOK / "templates" / "default" / "simple.txt.erb"
         result = parse_template(str(template_path))
 
         # Should return valid JSON
@@ -365,9 +364,7 @@ class TestTemplateParsingIntegration:
 
     def test_parse_nginx_config_template(self):
         """Test parsing nginx configuration ERB template."""
-        template_path = (
-            SAMPLE_COOKBOOK / "templates" / "default" / "nginx.conf.erb"
-        )
+        template_path = SAMPLE_COOKBOOK / "templates" / "default" / "nginx.conf.erb"
         result = parse_template(str(template_path))
 
         import json
@@ -388,9 +385,7 @@ class TestTemplateParsingIntegration:
 
     def test_parse_config_yaml_template(self):
         """Test parsing config YAML ERB template with loops."""
-        template_path = (
-            SAMPLE_COOKBOOK / "templates" / "default" / "config.yml.erb"
-        )
+        template_path = SAMPLE_COOKBOOK / "templates" / "default" / "config.yml.erb"
         result = parse_template(str(template_path))
 
         import json
@@ -450,9 +445,7 @@ class TestTemplateParsingIntegration:
             ("config.yml.erb", "<% elsif", "{% elif"),
         ],
     )
-    def test_erb_to_jinja2_conversion(
-        self, template_name, erb_pattern, jinja2_pattern
-    ):
+    def test_erb_to_jinja2_conversion(self, template_name, erb_pattern, jinja2_pattern):
         """Test ERB patterns are converted to Jinja2."""
         template_path = SAMPLE_COOKBOOK / "templates" / "default" / template_name
         result = parse_template(str(template_path))
@@ -476,9 +469,7 @@ class TestTemplateParsingIntegration:
 
     def test_parse_template_preserves_content(self):
         """Test that non-ERB content is preserved during conversion."""
-        template_path = (
-            SAMPLE_COOKBOOK / "templates" / "default" / "simple.txt.erb"
-        )
+        template_path = SAMPLE_COOKBOOK / "templates" / "default" / "simple.txt.erb"
         result = parse_template(str(template_path))
 
         import json
@@ -506,3 +497,144 @@ def test_benchmark_template_parsing(benchmark):
     data = json.loads(result)
     assert "variables" in data
     assert "jinja2_template" in data
+
+
+class TestCustomResourceParsing:
+    """Test parsing custom resources and LWRPs."""
+
+    @pytest.mark.parametrize(
+        "resource_file,expected_name,expected_type",
+        [
+            ("app_config.rb", "app_config", "custom_resource"),
+            ("database.rb", "database", "lwrp"),
+            ("simple.rb", "simple", "custom_resource"),
+        ],
+    )
+    def test_parse_custom_resource_types(
+        self, resource_file, expected_name, expected_type
+    ):
+        """Test parsing different custom resource types."""
+        resource_path = SAMPLE_COOKBOOK / "resources" / resource_file
+        result = parse_custom_resource(str(resource_path))
+
+        import json
+
+        data = json.loads(result)
+
+        assert data["resource_name"] == expected_name
+        assert data["resource_type"] == expected_type
+
+    def test_parse_app_config_resource(self):
+        """Test parsing app_config.rb with modern properties."""
+        resource_path = SAMPLE_COOKBOOK / "resources" / "app_config.rb"
+        result = parse_custom_resource(str(resource_path))
+
+        import json
+
+        data = json.loads(result)
+
+        # Check basic metadata
+        assert data["resource_name"] == "app_config"
+        assert data["resource_type"] == "custom_resource"
+        assert data["resource_file"] == str(resource_path)
+
+        # Check properties
+        properties = data["properties"]
+        assert len(properties) == 6
+
+        # Find specific properties
+        config_name = next(p for p in properties if p["name"] == "config_name")
+        assert config_name["type"] == "String"
+        assert config_name.get("name_property") is True
+
+        port = next(p for p in properties if p["name"] == "port")
+        assert port["type"] == "Integer"
+        assert port["default"] == "8080"
+
+        ssl_enabled = next(p for p in properties if p["name"] == "ssl_enabled")
+        assert ssl_enabled["default"] == "false"
+
+        # Check actions
+        assert "create" in data["actions"]
+        assert "delete" in data["actions"]
+        assert data["default_action"] == "create"
+
+    def test_parse_database_lwrp(self):
+        """Test parsing database.rb LWRP resource."""
+        resource_path = SAMPLE_COOKBOOK / "resources" / "database.rb"
+        result = parse_custom_resource(str(resource_path))
+
+        import json
+
+        data = json.loads(result)
+
+        # Check LWRP metadata
+        assert data["resource_name"] == "database"
+        assert data["resource_type"] == "lwrp"
+
+        # Check attributes (LWRP style)
+        properties = data["properties"]
+        assert len(properties) == 6
+
+        # Find specific attributes
+        db_name = next(p for p in properties if p["name"] == "db_name")
+        assert db_name["type"] == "String"
+        assert db_name.get("name_property") is True
+
+        port = next(p for p in properties if p["name"] == "port")
+        assert port["type"] == "Integer"
+        assert port["default"] == "5432"
+
+        username = next(p for p in properties if p["name"] == "username")
+        assert username.get("required") is True
+
+        # Check actions (LWRP actions declaration)
+        assert "create" in data["actions"]
+        assert "drop" in data["actions"]
+        assert "backup" in data["actions"]
+        assert data["default_action"] == "create"
+
+    def test_parse_simple_resource(self):
+        """Test parsing simple.rb minimal custom resource."""
+        resource_path = SAMPLE_COOKBOOK / "resources" / "simple.rb"
+        result = parse_custom_resource(str(resource_path))
+
+        import json
+
+        data = json.loads(result)
+
+        # Check basic structure
+        assert data["resource_name"] == "simple"
+        assert len(data["properties"]) == 2
+        assert len(data["actions"]) == 2
+        assert "enable" in data["actions"]
+        assert "disable" in data["actions"]
+
+    def test_parse_custom_resource_with_provider(self):
+        """Test that provider files exist for LWRPs."""
+        provider_path = SAMPLE_COOKBOOK / "providers" / "database.rb"
+
+        # Verify provider file exists
+        assert provider_path.exists()
+
+        # Read provider content
+        content = read_file(str(provider_path))
+        assert "action :create do" in content
+        assert "action :drop do" in content
+        assert "action :backup do" in content
+
+
+def test_benchmark_custom_resource_parsing(benchmark):
+    """Benchmark custom resource parsing performance."""
+    resource_path = SAMPLE_COOKBOOK / "resources" / "app_config.rb"
+
+    result = benchmark(parse_custom_resource, str(resource_path))
+
+    # Ensure it still works correctly
+    import json
+
+    data = json.loads(result)
+    assert "properties" in data
+    assert "actions" in data
+    assert data["resource_name"] == "app_config"
+
