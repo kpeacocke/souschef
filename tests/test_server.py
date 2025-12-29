@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from souschef.server import (
+    convert_resource_to_task,
     list_cookbook_structure,
     list_directory,
     main,
@@ -583,3 +584,134 @@ def test_main():
     with patch("souschef.server.mcp") as mock_mcp:
         main()
         mock_mcp.run.assert_called_once()
+
+
+def test_convert_package_to_task():
+    """Test converting a Chef package resource to Ansible task."""
+    result = convert_resource_to_task("package", "nginx", "install")
+
+    assert "name: Install package nginx" in result
+    assert "ansible.builtin.package:" in result
+    assert 'name: "nginx"' in result
+    assert 'state: "present"' in result
+
+
+def test_convert_service_to_task():
+    """Test converting a Chef service resource to Ansible task."""
+    result = convert_resource_to_task("service", "nginx", "start")
+
+    assert "name: Start service nginx" in result
+    assert "ansible.builtin.service:" in result
+    assert 'name: "nginx"' in result
+    assert "enabled: true" in result
+    assert 'state: "started"' in result
+
+
+def test_convert_file_to_task():
+    """Test converting a Chef file resource to Ansible task."""
+    result = convert_resource_to_task("file", "/etc/config.txt", "create")
+
+    assert "name: Create file /etc/config.txt" in result
+    assert "ansible.builtin.file:" in result
+    assert 'path: "/etc/config.txt"' in result
+    assert 'state: "file"' in result
+    assert 'mode: "0644"' in result
+
+
+def test_convert_directory_to_task():
+    """Test converting a Chef directory resource to Ansible task."""
+    result = convert_resource_to_task("directory", "/var/www", "create")
+
+    assert "name: Create directory /var/www" in result
+    assert "ansible.builtin.file:" in result
+    assert 'path: "/var/www"' in result
+    assert 'state: "directory"' in result
+    assert 'mode: "0755"' in result
+
+
+def test_convert_template_to_task():
+    """Test converting a Chef template resource to Ansible task."""
+    result = convert_resource_to_task("template", "nginx.conf.erb", "create")
+
+    assert "name: Create template nginx.conf.erb" in result
+    assert "ansible.builtin.template:" in result
+    assert 'src: "nginx.conf.erb"' in result
+    assert 'dest: "nginx.conf"' in result
+    assert 'mode: "0644"' in result
+
+
+def test_convert_execute_to_task():
+    """Test converting a Chef execute resource to Ansible task."""
+    result = convert_resource_to_task("execute", "systemctl daemon-reload", "run")
+
+    assert "name: Run execute systemctl daemon-reload" in result
+    assert "ansible.builtin.command:" in result
+    assert 'cmd: "systemctl daemon-reload"' in result
+    assert 'changed_when: "false"' in result
+
+
+def test_convert_user_to_task():
+    """Test converting a Chef user resource to Ansible task."""
+    result = convert_resource_to_task("user", "appuser", "create")
+
+    assert "name: Create user appuser" in result
+    assert "ansible.builtin.user:" in result
+    assert 'name: "appuser"' in result
+    assert 'state: "present"' in result
+
+
+def test_convert_group_to_task():
+    """Test converting a Chef group resource to Ansible task."""
+    result = convert_resource_to_task("group", "appgroup", "create")
+
+    assert "name: Create group appgroup" in result
+    assert "ansible.builtin.group:" in result
+    assert 'name: "appgroup"' in result
+    assert 'state: "present"' in result
+
+
+def test_convert_service_with_enable_action():
+    """Test converting service with enable action."""
+    result = convert_resource_to_task("service", "nginx", "enable")
+
+    assert "ansible.builtin.service:" in result
+    assert "enabled: true" in result
+    assert 'state: "started"' in result
+
+
+def test_convert_service_with_stop_action():
+    """Test converting service with stop action."""
+    result = convert_resource_to_task("service", "nginx", "stop")
+
+    assert "ansible.builtin.service:" in result
+    assert "enabled: false" in result
+    assert 'state: "stopped"' in result
+
+
+def test_convert_package_with_upgrade_action():
+    """Test converting package with upgrade action."""
+    result = convert_resource_to_task("package", "nginx", "upgrade")
+
+    assert "ansible.builtin.package:" in result
+    assert 'state: "latest"' in result
+
+
+def test_convert_unknown_resource_type():
+    """Test converting an unknown resource type."""
+    result = convert_resource_to_task("unknown_resource", "test", "create")
+
+    # Should not crash, but indicate unknown resource
+    assert isinstance(result, str)
+    assert "name: Create unknown_resource test" in result
+
+
+def test_convert_with_exception():
+    """Test that conversion handles exceptions gracefully."""
+    # This should trigger an error by passing invalid data types
+    with patch("souschef.server._convert_chef_resource_to_ansible") as mock_convert:
+        mock_convert.side_effect = Exception("Test exception")
+
+        result = convert_resource_to_task("package", "nginx", "install")
+
+        assert "An error occurred during conversion" in result
+        assert "Test exception" in result

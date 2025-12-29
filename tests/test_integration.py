@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from souschef.server import (
+    convert_resource_to_task,
     list_cookbook_structure,
     list_directory,
     parse_attributes,
@@ -228,3 +229,102 @@ def test_benchmark_parse_attributes(benchmark):
 
     # Ensure it still works correctly
     assert "nginx.port" in result
+
+
+class TestChefToAnsibleConversion:
+    """Test Chef to Ansible conversion with various resource types."""
+
+    @pytest.mark.parametrize(
+        "resource_type,resource_name,action,expected_module",
+        [
+            ("package", "nginx", "install", "ansible.builtin.package"),
+            ("service", "nginx", "start", "ansible.builtin.service"),
+            ("file", "/etc/config", "create", "ansible.builtin.file"),
+            ("directory", "/var/www", "create", "ansible.builtin.file"),
+            ("template", "app.conf.erb", "create", "ansible.builtin.template"),
+            ("execute", "systemctl daemon-reload", "run", "ansible.builtin.command"),
+            ("user", "appuser", "create", "ansible.builtin.user"),
+            ("group", "appgroup", "create", "ansible.builtin.group"),
+        ],
+    )
+    def test_convert_various_resources(
+        self, resource_type, resource_name, action, expected_module
+    ):
+        """Test conversion of various Chef resource types."""
+        result = convert_resource_to_task(resource_type, resource_name, action)
+
+        assert expected_module in result
+        assert resource_name in result
+        assert "name:" in result
+
+    def test_convert_package_preserves_action_semantics(self):
+        """Test that package actions map correctly to Ansible states."""
+        # Install → present
+        result = convert_resource_to_task("package", "nginx", "install")
+        assert 'state: "present"' in result
+
+        # Upgrade → latest
+        result = convert_resource_to_task("package", "nginx", "upgrade")
+        assert 'state: "latest"' in result
+
+        # Remove → absent
+        result = convert_resource_to_task("package", "nginx", "remove")
+        assert 'state: "absent"' in result
+
+    def test_convert_service_handles_multiple_actions(self):
+        """Test that service actions include both enabled and state."""
+        # Start should enable and start
+        result = convert_resource_to_task("service", "nginx", "start")
+        assert "enabled: true" in result
+        assert 'state: "started"' in result
+
+        # Stop should disable and stop
+        result = convert_resource_to_task("service", "nginx", "stop")
+        assert "enabled: false" in result
+        assert 'state: "stopped"' in result
+
+        # Restart
+        result = convert_resource_to_task("service", "nginx", "restart")
+        assert 'state: "restarted"' in result
+
+    def test_convert_template_strips_erb_extension(self):
+        """Test that .erb extension is removed from template dest."""
+        result = convert_resource_to_task("template", "nginx.conf.erb", "create")
+
+        assert 'src: "nginx.conf.erb"' in result
+        assert 'dest: "nginx.conf"' in result
+
+    def test_convert_directory_sets_correct_state(self):
+        """Test that directory resources set state to directory."""
+        result = convert_resource_to_task("directory", "/var/www/html", "create")
+
+        assert 'state: "directory"' in result
+        assert 'path: "/var/www/html"' in result
+
+    def test_convert_execute_adds_changed_when(self):
+        """Test that execute resources include changed_when for idempotency."""
+        result = convert_resource_to_task("execute", "echo test", "run")
+
+        assert "ansible.builtin.command:" in result
+        assert 'changed_when: "false"' in result
+
+    def test_conversion_produces_valid_yaml_structure(self):
+        """Test that converted tasks have valid YAML structure."""
+        result = convert_resource_to_task("package", "nginx", "install")
+
+        # Should start with task name
+        assert result.startswith("- name:")
+
+        # Should have module definition
+        assert "  ansible.builtin.package:" in result
+
+        # Should have indented parameters
+        assert '    name: "nginx"' in result or "    name:" in result
+
+
+def test_benchmark_conversion(benchmark):
+    """Benchmark Chef to Ansible conversion performance."""
+    result = benchmark(convert_resource_to_task, "package", "nginx", "install")
+
+    # Ensure it still works correctly
+    assert "ansible.builtin.package" in result

@@ -11,11 +11,17 @@ An AI-powered MCP (Model Context Protocol) server that assists with analyzing an
 - **List Cookbook Structure** - Display the directory structure of Chef cookbooks
 - **File Operations** - Read files and list directories
 
+### Chef to Ansible Conversion
+- **Convert Resources** - Transform Chef resources to Ansible tasks with proper module mapping
+- **Action Mapping** - Automatically map Chef actions (install, start, create) to Ansible states
+- **Module Selection** - Intelligently select appropriate Ansible modules for each resource type
+- **YAML Generation** - Output valid Ansible task YAML ready for playbooks
+
 ### Coming Soon
-- Chef to Ansible resource conversion
 - Template conversion (ERB → Jinja2)
 - Custom resource/LWRP parsing
 - Full playbook generation
+- Chef guards and notifications conversion
 
 ## Installation
 
@@ -150,6 +156,47 @@ list_cookbook_structure("/path/to/cookbook")
 #   metadata.rb
 ```
 
+#### `convert_resource_to_task(resource_type: str, resource_name: str, action: str = "create", properties: str = "")`
+Convert a Chef resource to an Ansible task.
+
+**Example:**
+```python
+convert_resource_to_task("package", "nginx", "install")
+# Returns:
+# - name: Install package nginx
+#   ansible.builtin.package:
+#     name: "nginx"
+#     state: "present"
+
+convert_resource_to_task("service", "nginx", "start")
+# Returns:
+# - name: Start service nginx
+#   ansible.builtin.service:
+#     name: "nginx"
+#     enabled: true
+#     state: "started"
+
+convert_resource_to_task("template", "/etc/nginx/nginx.conf.erb", "create")
+# Returns:
+# - name: Create template /etc/nginx/nginx.conf.erb
+#   ansible.builtin.template:
+#     src: "/etc/nginx/nginx.conf.erb"
+#     dest: "/etc/nginx/nginx.conf"
+#     mode: "0644"
+```
+
+**Supported Resource Types:**
+- `package` → `ansible.builtin.package`
+- `service` → `ansible.builtin.service`
+- `template` → `ansible.builtin.template`
+- `file` → `ansible.builtin.file`
+- `directory` → `ansible.builtin.file` (with state: directory)
+- `execute` → `ansible.builtin.command`
+- `bash` → `ansible.builtin.shell`
+- `user` → `ansible.builtin.user`
+- `group` → `ansible.builtin.group`
+- And more...
+
 ## Development
 
 ### Project Structure
@@ -274,10 +321,11 @@ TBD
 ## Roadmap
 
 - [x] Add server entry point and runner
-- [ ] Implement Chef → Ansible resource conversion
+- [x] Implement Chef → Ansible resource conversion (basic)
 - [ ] Support template conversion (ERB → Jinja2)
 - [ ] Parse custom Chef resources/LWRPs
-- [ ] Generate complete Ansible playbooks
-- [ ] Handle Chef guards and notifications
-- [ ] Support complex attribute precedence
+- [ ] Generate complete Ansible playbooks from recipes
+- [ ] Handle Chef guards (only_if, not_if) and notifications
+- [ ] Support complex attribute precedence and merging
 - [ ] Add conversion validation and testing
+- [ ] Handle Chef search and data bags
