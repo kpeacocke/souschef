@@ -1009,6 +1009,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
+    { name = "click" },
     { name = "mcp" },
     { name = "python-dotenv" },
     { name = "zod" },
@@ -1027,6 +1028,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.75.0" },
+    { name = "click", specifier = ">=8.1.0" },
     { name = "mcp", specifier = ">=1.25.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "zod", specifier = ">=0.8.0" },

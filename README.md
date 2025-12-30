@@ -61,6 +61,34 @@ An AI-powered MCP (Model Context Protocol) server that assists with analyzing an
 
 ## Usage
 
+### Command Line Interface
+
+SousChef provides a convenient CLI for local usage without needing an MCP client.
+
+See **[CLI.md](CLI.md)** for complete CLI documentation and examples.
+
+**Quick Start:**
+
+```bash
+# Install the CLI
+uv sync
+
+# Parse a Chef recipe
+souschef-cli recipe path/to/recipe.rb
+
+# Parse an ERB template and convert to Jinja2
+souschef-cli template path/to/template.erb
+
+# Convert a Chef resource to Ansible task
+souschef-cli convert package nginx --action install
+
+# Analyze an entire cookbook
+souschef-cli cookbook path/to/cookbook
+
+# Get help
+souschef-cli --help
+```
+
 ### Conversion Examples
 
 The `examples/` directory contains complete Chef cookbooks demonstrating conversion capabilities:

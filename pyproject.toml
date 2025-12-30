@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "anthropic>=0.75.0",
+    "click>=8.1.0",
     "mcp>=1.25.0",
     "python-dotenv>=1.2.1",
     "zod>=0.8.0",
@@ -13,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 souschef = "souschef.server:main"
+souschef-cli = "souschef.cli:main"
 
 [tool.uv]
 package = true
