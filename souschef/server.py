@@ -1,5 +1,6 @@
 """SousChef MCP Server - Chef to Ansible conversion assistant."""
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -1166,6 +1167,561 @@ def _format_ansible_task(task: dict[str, Any]) -> str:
                 result.append(f"  {key}: {json.dumps(value)}")
 
     return "\n".join(result)
+
+
+# InSpec parsing helper functions
+
+
+def _parse_inspec_control(content: str) -> list[dict[str, Any]]:  # noqa: C901
+    """Parse InSpec control blocks from content.
+
+    Args:
+        content: InSpec profile content.
+
+    Returns:
+        List of parsed control dictionaries with id, title, desc, impact, and tests.
+
+    """
+    controls = []
+    lines = content.split("\n")
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Look for control start
+        control_match = re.match(r"control\s+['\"]([^'\"]+)['\"]\s+do", line)
+        if control_match:
+            control_id = control_match.group(1)
+
+            # Find the matching end for this control by tracking nesting
+            nesting_level = 0
+            control_body_lines = []
+
+            i += 1  # Move past the control line
+            while i < len(lines):
+                current_line = lines[i]
+                stripped = current_line.strip()
+
+                # Count do/end for nesting
+                if re.search(r"\bdo\s*$", stripped):
+                    nesting_level += 1
+                elif stripped == "end":
+                    if nesting_level == 0:
+                        # This is the end of our control
+                        break
+                    else:
+                        nesting_level -= 1
+
+                control_body_lines.append(current_line)
+                i += 1
+
+            # Parse the control body
+            control_body = "\n".join(control_body_lines)
+
+            control_data: dict[str, Any] = {
+                "id": control_id,
+                "title": "",
+                "desc": "",
+                "impact": 1.0,
+                "tests": [],
+            }
+
+            # Extract title
+            title_match = re.search(r"title\s+['\"]([^'\"]+)['\"]", control_body)
+            if title_match:
+                control_data["title"] = title_match.group(1)
+
+            # Extract description
+            desc_match = re.search(r"desc\s+['\"]([^'\"]+)['\"]", control_body)
+            if desc_match:
+                control_data["desc"] = desc_match.group(1)
+
+            # Extract impact
+            impact_match = re.search(r"impact\s+([\d.]+)", control_body)
+            if impact_match:
+                control_data["impact"] = float(impact_match.group(1))
+
+            # Extract describe blocks
+            control_data["tests"] = _extract_inspec_describe_blocks(control_body)
+
+            controls.append(control_data)
+
+        i += 1
+
+    return controls
+
+
+def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:  # noqa: C901
+    """Extract InSpec describe blocks and their matchers.
+
+    Args:
+        content: Content to parse for describe blocks.
+
+    Returns:
+        List of test dictionaries with resource type, name, and expectations.
+
+    """
+    tests = []
+    lines = content.split("\n")
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Look for describe start
+        describe_match = re.match(
+            r"describe\s+(\w+)\(['\"]?([^'\")\n]+)['\"]?\)\s+do", line
+        )
+        if describe_match:
+            resource_type = describe_match.group(1)
+            resource_name = describe_match.group(2).strip()
+
+            # Find the matching end for this describe block
+            nesting_level = 0
+            describe_body_lines = []
+
+            i += 1  # Move past the describe line
+            while i < len(lines):
+                current_line = lines[i]
+                stripped = current_line.strip()
+
+                # Count do/end for nesting
+                if re.search(r"\bdo\s*$", stripped):
+                    nesting_level += 1
+                elif stripped == "end":
+                    if nesting_level == 0:
+                        # This is the end of our describe block
+                        break
+                    else:
+                        nesting_level -= 1
+
+                describe_body_lines.append(current_line)
+                i += 1
+
+            # Parse the describe body
+            describe_body = "\n".join(describe_body_lines)
+
+            test_data: dict[str, Any] = {
+                "resource_type": resource_type,
+                "resource_name": resource_name,
+                "expectations": [],
+            }
+
+            # Extract 'it { should ... }' blocks
+            it_pattern = re.compile(r"it\s+\{([^}]+)\}")
+            for it_match in it_pattern.finditer(describe_body):
+                expectation = it_match.group(1).strip()
+                test_data["expectations"].append(
+                    {
+                        "type": "should",
+                        "matcher": expectation,
+                    }
+                )
+
+            # Extract 'its(...) { should ... }' blocks
+            its_pattern = re.compile(r"its\(['\"]([^'\"]+)['\"]\)\s+\{([^}]+)\}")
+            for its_match in its_pattern.finditer(describe_body):
+                property_name = its_match.group(1)
+                expectation = its_match.group(2).strip()
+                test_data["expectations"].append(
+                    {
+                        "type": "its",
+                        "property": property_name,
+                        "matcher": expectation,
+                    }
+                )
+
+            if test_data["expectations"]:
+                tests.append(test_data)
+
+        i += 1
+
+    return tests
+
+
+def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:  # noqa: C901
+    """Convert InSpec control to Testinfra test.
+
+    Args:
+        control: Parsed InSpec control dictionary.
+
+    Returns:
+        Testinfra test code as string.
+
+    """
+    lines = []
+
+    # Add test function header
+    test_name = control["id"].replace("-", "_")
+    lines.append(f"def test_{test_name}(host):")
+
+    if control["desc"]:
+        lines.append(f'    """{control["desc"]}"""')
+
+    # Convert each describe block
+    for test in control["tests"]:
+        resource_type = test["resource_type"]
+        resource_name = test["resource_name"]
+
+        # Map InSpec resources to Testinfra
+        if resource_type == "package":
+            lines.append(f'    pkg = host.package("{resource_name}")')
+            for exp in test["expectations"]:
+                if "be_installed" in exp["matcher"]:
+                    lines.append("    assert pkg.is_installed")
+                elif exp["type"] == "its" and exp["property"] == "version":
+                    version_match = re.search(r"match\s+/([^/]+)/", exp["matcher"])
+                    if version_match:
+                        version = version_match.group(1)
+                        lines.append(f'    assert pkg.version.startswith("{version}")')
+
+        elif resource_type == "service":
+            lines.append(f'    svc = host.service("{resource_name}")')
+            for exp in test["expectations"]:
+                if "be_running" in exp["matcher"]:
+                    lines.append("    assert svc.is_running")
+                elif "be_enabled" in exp["matcher"]:
+                    lines.append("    assert svc.is_enabled")
+
+        elif resource_type == "file":
+            lines.append(f'    f = host.file("{resource_name}")')
+            for exp in test["expectations"]:
+                if "exist" in exp["matcher"]:
+                    lines.append("    assert f.exists")
+                elif exp["type"] == "its" and exp["property"] == "mode":
+                    mode_match = re.search(r"cmp\s+'([^']+)'", exp["matcher"])
+                    if mode_match:
+                        mode = mode_match.group(1)
+                        lines.append(f'    assert oct(f.mode) == "{mode}"')
+                elif exp["type"] == "its" and exp["property"] == "owner":
+                    owner_match = re.search(r"eq\s+['\"]([^'\"]+)['\"]", exp["matcher"])
+                    if owner_match:
+                        owner = owner_match.group(1)
+                        lines.append(f'    assert f.user == "{owner}"')
+
+        elif resource_type == "port":
+            lines.append(f'    port = host.socket("tcp://{resource_name}")')
+            for exp in test["expectations"]:
+                if "be_listening" in exp["matcher"]:
+                    lines.append("    assert port.is_listening")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:  # noqa: C901
+    """Convert InSpec control to Ansible assert task.
+
+    Args:
+        control: Parsed InSpec control dictionary.
+
+    Returns:
+        Ansible assert task in YAML format.
+
+    """
+    lines = []
+
+    lines.append(f"- name: Verify {control['title'] or control['id']}")
+    lines.append("  ansible.builtin.assert:")
+    lines.append("    that:")
+
+    for test in control["tests"]:
+        resource_type = test["resource_type"]
+        resource_name = test["resource_name"]
+
+        if resource_type == "package":
+            for exp in test["expectations"]:
+                if "be_installed" in exp["matcher"]:
+                    lines.append(
+                        f"      - ansible_facts.packages['{resource_name}'] is defined"
+                    )
+
+        elif resource_type == "service":
+            for exp in test["expectations"]:
+                if "be_running" in exp["matcher"]:
+                    lines.append(
+                        f"      - services['{resource_name}'].state == 'running'"
+                    )
+                elif "be_enabled" in exp["matcher"]:
+                    lines.append(
+                        f"      - services['{resource_name}'].status == 'enabled'"
+                    )
+
+        elif resource_type == "file":
+            for exp in test["expectations"]:
+                if "exist" in exp["matcher"]:
+                    lines.append("      - stat_result.stat.exists")
+
+    fail_msg = f"{control['desc'] or control['id']} validation failed"
+    lines.append(f'    fail_msg: "{fail_msg}"')
+
+    return "\n".join(lines)
+
+
+def _generate_inspec_from_resource(  # noqa: C901
+    resource_type: str, resource_name: str, properties: dict[str, Any]
+) -> str:
+    """Generate InSpec control from Chef resource.
+
+    Args:
+        resource_type: Type of Chef resource.
+        resource_name: Name of the resource.
+        properties: Resource properties.
+
+    Returns:
+        InSpec control code as string.
+
+    """
+    control_id = f"{resource_type}-{resource_name.replace('/', '-')}"
+
+    lines = []
+    lines.append(f"control '{control_id}' do")
+    lines.append(f"  title 'Verify {resource_type} {resource_name}'")
+    desc = f"Ensure {resource_type} {resource_name} is properly configured"
+    lines.append(f"  desc '{desc}'")
+    lines.append("  impact 1.0")
+    lines.append("")
+
+    if resource_type == "package":
+        lines.append(f"  describe package('{resource_name}') do")
+        lines.append("    it { should be_installed }")
+        if "version" in properties:
+            version = properties["version"]
+            lines.append(f"    its('version') {{ should match /{version}/ }}")
+        lines.append("  end")
+
+    elif resource_type == "service":
+        lines.append(f"  describe service('{resource_name}') do")
+        lines.append("    it { should be_running }")
+        lines.append("    it { should be_enabled }")
+        lines.append("  end")
+
+    elif resource_type in ("file", "template"):
+        lines.append(f"  describe file('{resource_name}') do")
+        lines.append("    it { should exist }")
+        if "mode" in properties:
+            lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
+        if "owner" in properties:
+            lines.append(f"    its('owner') {{ should eq '{properties['owner']}' }}")
+        if "group" in properties:
+            lines.append(f"    its('group') {{ should eq '{properties['group']}' }}")
+        lines.append("  end")
+
+    elif resource_type == "directory":
+        lines.append(f"  describe file('{resource_name}') do")
+        lines.append("    it { should exist }")
+        lines.append("    it { should be_directory }")
+        if "mode" in properties:
+            lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
+        lines.append("  end")
+
+    elif resource_type == "user":
+        lines.append(f"  describe user('{resource_name}') do")
+        lines.append("    it { should exist }")
+        if "shell" in properties:
+            lines.append(f"    its('shell') {{ should eq '{properties['shell']}' }}")
+        lines.append("  end")
+
+    elif resource_type == "group":
+        lines.append(f"  describe group('{resource_name}') do")
+        lines.append("    it { should exist }")
+        lines.append("  end")
+
+    lines.append("end")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def parse_inspec_profile(path: str) -> str:  # noqa: C901
+    """Parse an InSpec profile and extract controls.
+
+    Args:
+        path: Path to InSpec profile directory or control file (.rb).
+
+    Returns:
+        JSON string with parsed controls, or error message.
+
+    """
+    try:
+        profile_path = Path(path)
+
+        if not profile_path.exists():
+            return f"Error: Path does not exist: {path}"
+
+        controls = []
+
+        # If it's a directory, look for controls in controls/
+        if profile_path.is_dir():
+            controls_dir = profile_path / "controls"
+            if not controls_dir.exists():
+                return f"Error: No controls directory found in {path}"
+
+            # Parse all .rb files in controls/
+            for control_file in controls_dir.glob("*.rb"):
+                try:
+                    content = control_file.read_text()
+                    file_controls = _parse_inspec_control(content)
+                    for ctrl in file_controls:
+                        ctrl["file"] = str(control_file.relative_to(profile_path))
+                    controls.extend(file_controls)
+                except Exception as e:
+                    return f"Error reading {control_file}: {e}"
+
+        # If it's a file, parse it directly
+        elif profile_path.is_file():
+            try:
+                content = profile_path.read_text()
+                controls = _parse_inspec_control(content)
+                for ctrl in controls:
+                    ctrl["file"] = profile_path.name
+            except Exception as e:
+                return f"Error reading file: {e}"
+
+        else:
+            return f"Error: Invalid path type: {path}"
+
+        return json.dumps(
+            {
+                "profile_path": str(profile_path),
+                "controls_count": len(controls),
+                "controls": controls,
+            },
+            indent=2,
+        )
+
+    except Exception as e:
+        return f"An error occurred while parsing InSpec profile: {e}"
+
+
+@mcp.tool()
+def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -> str:
+    """Convert InSpec controls to Ansible test format.
+
+    Args:
+        inspec_path: Path to InSpec profile or control file.
+        output_format: Output format ('testinfra' or 'ansible_assert').
+
+    Returns:
+        Converted test code or error message.
+
+    """
+    try:
+        # First parse the InSpec profile
+        parse_result = parse_inspec_profile(inspec_path)
+
+        # Check if parsing failed
+        if parse_result.startswith("Error:"):
+            return parse_result
+
+        # Parse JSON result
+        profile_data = json.loads(parse_result)
+        controls = profile_data["controls"]
+
+        if not controls:
+            return "Error: No controls found in InSpec profile"
+
+        # Convert each control
+        converted_tests = []
+
+        if output_format == "testinfra":
+            converted_tests.append("import pytest")
+            converted_tests.append("")
+            converted_tests.append("")
+            for control in controls:
+                test_code = _convert_inspec_to_testinfra(control)
+                converted_tests.append(test_code)
+
+        elif output_format == "ansible_assert":
+            converted_tests.append("---")
+            converted_tests.append("# Validation tasks converted from InSpec")
+            converted_tests.append("")
+            for control in controls:
+                assert_code = _convert_inspec_to_ansible_assert(control)
+                converted_tests.append(assert_code)
+                converted_tests.append("")
+
+        else:
+            error_msg = (
+                f"Error: Unsupported format '{output_format}'. "
+                "Use 'testinfra' or 'ansible_assert'"
+            )
+            return error_msg
+
+        return "\n".join(converted_tests)
+
+    except Exception as e:
+        return f"An error occurred while converting InSpec: {e}"
+
+
+@mcp.tool()
+def generate_inspec_from_recipe(recipe_path: str) -> str:  # noqa: C901
+    """Generate InSpec controls from a Chef recipe.
+
+    Args:
+        recipe_path: Path to Chef recipe file.
+
+    Returns:
+        InSpec control code or error message.
+
+    """
+    try:
+        # First parse the recipe
+        recipe_result = parse_recipe(recipe_path)
+
+        if recipe_result.startswith("Error:"):
+            return recipe_result
+
+        # Extract resources from parsed output
+        resources = []
+        current_resource = {}
+
+        for line in recipe_result.split("\n"):
+            line = line.strip()
+
+            if line.startswith("Resource"):
+                if current_resource:
+                    resources.append(current_resource)
+                current_resource = {}
+            elif line.startswith("Type:"):
+                current_resource["type"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Name:"):
+                current_resource["name"] = line.split(":", 1)[1].strip()
+            elif line.startswith("Properties:"):
+                # Parse properties dict
+                props_str = line.split(":", 1)[1].strip()
+                try:
+                    current_resource["properties"] = eval(props_str)
+                except Exception:
+                    current_resource["properties"] = {}
+
+        if current_resource:
+            resources.append(current_resource)
+
+        if not resources:
+            return "Error: No resources found in recipe"
+
+        # Generate InSpec controls
+        controls = []
+        controls.append("# InSpec controls generated from Chef recipe")
+        controls.append(f"# Source: {recipe_path}")
+        controls.append("")
+
+        for resource in resources:
+            if "type" in resource and "name" in resource:
+                control_code = _generate_inspec_from_resource(
+                    resource["type"],
+                    resource["name"],
+                    resource.get("properties", {}),
+                )
+                controls.append(control_code)
+
+        return "\n".join(controls)
+
+    except Exception as e:
+        return f"An error occurred while generating InSpec controls: {e}"
 
 
 def main() -> None:

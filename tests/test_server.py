@@ -1,23 +1,32 @@
 """Tests for the SousChef MCP server."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from souschef.server import (
     _convert_erb_to_jinja2,
+    _convert_inspec_to_ansible_assert,
+    _convert_inspec_to_testinfra,
     _extract_conditionals,
     _extract_heredoc_strings,
+    _extract_inspec_describe_blocks,
     _extract_resource_actions,
     _extract_resource_properties,
     _extract_template_variables,
+    _generate_inspec_from_resource,
     _normalize_ruby_value,
+    _parse_inspec_control,
     _strip_ruby_comments,
+    convert_inspec_to_test,
     convert_resource_to_task,
+    generate_inspec_from_recipe,
     list_cookbook_structure,
     list_directory,
     main,
     parse_attributes,
     parse_custom_resource,
+    parse_inspec_profile,
     parse_recipe,
     parse_template,
     read_cookbook_metadata,
@@ -1231,3 +1240,411 @@ end
         assert isinstance(result, str)
         # May or may not find resources due to regex limitations with multiline strings
         # The important thing is it doesn't crash
+
+
+# InSpec parsing tests
+
+
+def test_parse_inspec_control_basic():
+    """Test parsing a basic InSpec control."""
+    content = """
+control 'nginx-1' do
+  title 'Verify nginx installation'
+  desc 'Ensure nginx is installed and running'
+  impact 1.0
+
+  describe package('nginx') do
+    it { should be_installed }
+  end
+
+  describe service('nginx') do
+    it { should be_running }
+    it { should be_enabled }
+  end
+end
+"""
+    controls = _parse_inspec_control(content)
+
+    assert len(controls) == 1
+    assert controls[0]["id"] == "nginx-1"
+    assert controls[0]["title"] == "Verify nginx installation"
+    assert controls[0]["desc"] == "Ensure nginx is installed and running"
+    assert controls[0]["impact"] == 1.0
+    assert len(controls[0]["tests"]) == 2
+
+
+def test_parse_inspec_control_multiple():
+    """Test parsing multiple InSpec controls."""
+    content = """
+control 'test-1' do
+  describe package('vim') do
+    it { should be_installed }
+  end
+end
+
+control 'test-2' do
+  describe service('sshd') do
+    it { should be_running }
+  end
+end
+"""
+    controls = _parse_inspec_control(content)
+
+    assert len(controls) == 2
+    assert controls[0]["id"] == "test-1"
+    assert controls[1]["id"] == "test-2"
+
+
+def test_extract_inspec_describe_blocks():
+    """Test extracting describe blocks from InSpec control."""
+    content = """
+describe package('nginx') do
+  it { should be_installed }
+  its('version') { should match /1.18/ }
+end
+
+describe file('/etc/nginx/nginx.conf') do
+  it { should exist }
+  its('mode') { should cmp '0644' }
+  its('owner') { should eq 'root' }
+end
+"""
+    tests = _extract_inspec_describe_blocks(content)
+
+    assert len(tests) == 2
+    assert tests[0]["resource_type"] == "package"
+    assert tests[0]["resource_name"] == "nginx"
+    assert len(tests[0]["expectations"]) == 2
+    assert tests[1]["resource_type"] == "file"
+    assert len(tests[1]["expectations"]) == 3
+
+
+def test_convert_inspec_to_testinfra_package():
+    """Test converting InSpec package test to Testinfra."""
+    control = {
+        "id": "nginx-pkg",
+        "title": "Nginx package",
+        "desc": "Check nginx package",
+        "tests": [
+            {
+                "resource_type": "package",
+                "resource_name": "nginx",
+                "expectations": [
+                    {"type": "should", "matcher": "should be_installed"},
+                ],
+            }
+        ],
+    }
+
+    result = _convert_inspec_to_testinfra(control)
+
+    assert "def test_nginx_pkg(host):" in result
+    assert 'host.package("nginx")' in result
+    assert "assert pkg.is_installed" in result
+
+
+def test_convert_inspec_to_testinfra_service():
+    """Test converting InSpec service test to Testinfra."""
+    control = {
+        "id": "nginx-svc",
+        "title": "Nginx service",
+        "desc": "Check nginx service",
+        "tests": [
+            {
+                "resource_type": "service",
+                "resource_name": "nginx",
+                "expectations": [
+                    {"type": "should", "matcher": "should be_running"},
+                    {"type": "should", "matcher": "should be_enabled"},
+                ],
+            }
+        ],
+    }
+
+    result = _convert_inspec_to_testinfra(control)
+
+    assert "def test_nginx_svc(host):" in result
+    assert 'host.service("nginx")' in result
+    assert "assert svc.is_running" in result
+    assert "assert svc.is_enabled" in result
+
+
+def test_convert_inspec_to_ansible_assert():
+    """Test converting InSpec to Ansible assert."""
+    control = {
+        "id": "test-1",
+        "title": "Test validation",
+        "desc": "Validate infrastructure",
+        "tests": [
+            {
+                "resource_type": "package",
+                "resource_name": "nginx",
+                "expectations": [
+                    {"type": "should", "matcher": "should be_installed"},
+                ],
+            }
+        ],
+    }
+
+    result = _convert_inspec_to_ansible_assert(control)
+
+    assert "ansible.builtin.assert:" in result
+    assert "that:" in result
+    assert "ansible_facts.packages['nginx']" in result
+
+
+def test_generate_inspec_from_resource_package():
+    """Test generating InSpec for package resource."""
+    result = _generate_inspec_from_resource("package", "nginx", {"version": "1.18.0"})
+
+    assert "control 'package-nginx'" in result
+    assert "describe package('nginx')" in result
+    assert "it { should be_installed }" in result
+    assert "its('version') { should match /1.18.0/ }" in result
+
+
+def test_generate_inspec_from_resource_service():
+    """Test generating InSpec for service resource."""
+    result = _generate_inspec_from_resource("service", "nginx", {})
+
+    assert "control 'service-nginx'" in result
+    assert "describe service('nginx')" in result
+    assert "it { should be_running }" in result
+    assert "it { should be_enabled }" in result
+
+
+def test_generate_inspec_from_resource_file():
+    """Test generating InSpec for file resource."""
+    result = _generate_inspec_from_resource(
+        "file", "/etc/config.conf", {"mode": "0644", "owner": "root"}
+    )
+
+    assert "control 'file--etc-config.conf'" in result
+    assert "describe file('/etc/config.conf')" in result
+    assert "it { should exist }" in result
+    assert "its('mode') { should cmp '0644' }" in result
+    assert "its('owner') { should eq 'root' }" in result
+
+
+def test_parse_inspec_profile_file():
+    """Test parsing an InSpec profile from a file."""
+    inspec_content = """
+control 'test-1' do
+  title 'Test control'
+  describe package('vim') do
+    it { should be_installed }
+  end
+end
+"""
+
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.exists.return_value = True
+        mock_instance.is_dir.return_value = False
+        mock_instance.is_file.return_value = True
+        mock_instance.read_text.return_value = inspec_content
+        mock_instance.name = "test.rb"
+
+        result = parse_inspec_profile("/path/to/test.rb")
+
+        assert "test-1" in result
+        assert "controls_count" in result
+
+
+def test_parse_inspec_profile_directory():
+    """Test parsing an InSpec profile from a directory."""
+    inspec_content = """
+control 'dir-test' do
+  describe package('nginx') do
+    it { should be_installed }
+  end
+end
+"""
+
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.exists.return_value = True
+        mock_instance.is_dir.return_value = True
+        mock_instance.is_file.return_value = False
+
+        # Mock controls directory
+        controls_dir = MagicMock()
+        mock_instance.__truediv__ = lambda self, other: controls_dir
+        controls_dir.exists.return_value = True
+
+        # Mock control file
+        control_file = MagicMock()
+        control_file.read_text.return_value = inspec_content
+        control_file.relative_to.return_value = Path("controls/test.rb")
+        controls_dir.glob.return_value = [control_file]
+
+        result = parse_inspec_profile("/path/to/profile")
+
+        assert "dir-test" in result or "controls_count" in result
+
+
+def test_parse_inspec_profile_not_found():
+    """Test parsing InSpec profile with non-existent path."""
+    with patch("souschef.server.Path") as mock_path:
+        mock_instance = MagicMock()
+        mock_path.return_value = mock_instance
+        mock_instance.exists.return_value = False
+
+        result = parse_inspec_profile("/nonexistent")
+
+        assert result.startswith("Error:")
+        assert "does not exist" in result
+
+
+def test_convert_inspec_to_test_testinfra():
+    """Test converting InSpec to Testinfra format."""
+    mock_parse_result = json.dumps(
+        {
+            "profile_path": "/path/to/test.rb",
+            "controls_count": 1,
+            "controls": [
+                {
+                    "id": "test-1",
+                    "title": "",
+                    "desc": "",
+                    "impact": 1.0,
+                    "tests": [
+                        {
+                            "resource_type": "package",
+                            "resource_name": "nginx",
+                            "expectations": [
+                                {"type": "should", "matcher": "should be_installed"}
+                            ],
+                        }
+                    ],
+                    "file": "test.rb",
+                }
+            ],
+        }
+    )
+
+    with patch("souschef.server.parse_inspec_profile") as mock_parse:
+        mock_parse.return_value = mock_parse_result
+
+        result = convert_inspec_to_test("/path/to/test.rb", "testinfra")
+
+        assert "import pytest" in result
+        assert "def test_test_1(host):" in result
+        assert "host.package" in result
+
+
+def test_convert_inspec_to_test_ansible_assert():
+    """Test converting InSpec to Ansible assert format."""
+    mock_parse_result = json.dumps(
+        {
+            "profile_path": "/path/to/test.rb",
+            "controls_count": 1,
+            "controls": [
+                {
+                    "id": "test-1",
+                    "title": "",
+                    "desc": "",
+                    "impact": 1.0,
+                    "tests": [
+                        {
+                            "resource_type": "package",
+                            "resource_name": "nginx",
+                            "expectations": [
+                                {"type": "should", "matcher": "should be_installed"}
+                            ],
+                        }
+                    ],
+                    "file": "test.rb",
+                }
+            ],
+        }
+    )
+
+    with patch("souschef.server.parse_inspec_profile") as mock_parse:
+        mock_parse.return_value = mock_parse_result
+
+        result = convert_inspec_to_test("/path/to/test.rb", "ansible_assert")
+
+        assert "---" in result
+        assert "ansible.builtin.assert:" in result
+        assert "that:" in result
+
+
+def test_convert_inspec_to_test_invalid_format():
+    """Test converting InSpec with invalid format."""
+    mock_parse_result = json.dumps(
+        {
+            "profile_path": "/path/to/test.rb",
+            "controls_count": 1,
+            "controls": [
+                {
+                    "id": "test",
+                    "title": "",
+                    "desc": "",
+                    "impact": 1.0,
+                    "tests": [
+                        {
+                            "resource_type": "package",
+                            "resource_name": "vim",
+                            "expectations": [
+                                {"type": "should", "matcher": "should be_installed"}
+                            ],
+                        }
+                    ],
+                    "file": "test.rb",
+                }
+            ],
+        }
+    )
+
+    with patch("souschef.server.parse_inspec_profile") as mock_parse:
+        mock_parse.return_value = mock_parse_result
+
+        result = convert_inspec_to_test("/path/to/test.rb", "invalid")
+
+        assert result.startswith("Error:")
+        assert "Unsupported format" in result
+
+
+def test_generate_inspec_from_recipe_success():
+    """Test generating InSpec from a Chef recipe."""
+    with patch("souschef.server.parse_recipe") as mock_parse:
+        mock_parse.return_value = """Resource 1:
+  Type: package
+  Name: nginx
+  Properties: {'version': '1.18.0'}
+
+Resource 2:
+  Type: service
+  Name: nginx
+  Properties: {}"""
+
+        result = generate_inspec_from_recipe("/path/to/recipe.rb")
+
+        assert "control 'package-nginx'" in result
+        assert "control 'service-nginx'" in result
+        assert "describe package('nginx')" in result
+        assert "describe service('nginx')" in result
+
+
+def test_generate_inspec_from_recipe_no_resources():
+    """Test generating InSpec from recipe with no resources."""
+    with patch("souschef.server.parse_recipe") as mock_parse:
+        mock_parse.return_value = "No resources found"
+
+        result = generate_inspec_from_recipe("/path/to/recipe.rb")
+
+        assert result.startswith("Error:")
+        assert "No resources found" in result
+
+
+def test_generate_inspec_from_recipe_error():
+    """Test generating InSpec when recipe parsing fails."""
+    with patch("souschef.server.parse_recipe") as mock_parse:
+        mock_parse.return_value = "Error: File not found"
+
+        result = generate_inspec_from_recipe("/path/to/recipe.rb")
+
+        assert result.startswith("Error:")
