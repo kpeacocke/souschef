@@ -56,6 +56,43 @@ souschef-cli attributes path/to/attributes.rb --format json
 
 **Output:** List of attributes with names and default values
 
+### Parse InSpec Profile
+Parse InSpec controls and extract test information.
+
+```bash
+souschef-cli inspec-parse path/to/inspec/profile/
+souschef-cli inspec-parse path/to/control.rb
+souschef-cli inspec-parse path/to/control.rb --format json
+```
+
+**Output:** JSON with parsed InSpec controls, describe blocks, and expectations
+
+### Convert InSpec to Tests
+Convert InSpec controls to Testinfra or Ansible assert format.
+
+```bash
+# Convert to Testinfra (default)
+souschef-cli inspec-convert path/to/control.rb
+souschef-cli inspec-convert path/to/inspec/profile/ --format testinfra
+
+# Convert to Ansible assert tasks
+souschef-cli inspec-convert path/to/control.rb --format ansible_assert
+```
+
+**Output:**
+- `testinfra`: Python pytest code with host fixtures
+- `ansible_assert`: YAML assert tasks for Ansible playbooks
+
+### Generate InSpec from Recipe
+Generate InSpec controls from Chef recipe resources.
+
+```bash
+souschef-cli inspec-generate path/to/recipe.rb
+souschef-cli inspec-generate path/to/recipe.rb --format json
+```
+
+**Output:** InSpec controls that validate the Chef recipe resources
+
 ### Parse Metadata
 Parse cookbook metadata.rb file.
 
@@ -150,7 +187,15 @@ souschef-cli convert service nginx --action start > tasks/service.yml
 
 # 5. Parse and convert templates
 souschef-cli template /path/to/nginx-cookbook/templates/default/nginx.conf.erb
-```
+# 6. Generate InSpec validation
+souschef-cli inspec-generate /path/to/nginx-cookbook/recipes/default.rb > validation/controls.rb
+
+# 7. Convert existing InSpec to tests
+souschef-cli inspec-convert validation/controls.rb --format testinfra > tests/test_nginx.py# 6. Generate InSpec validation
+souschef-cli inspec-generate /path/to/nginx-cookbook/recipes/default.rb > validation/controls.rb
+
+# 7. Convert existing InSpec to tests
+souschef-cli inspec-convert validation/controls.rb --format testinfra > tests/test_nginx.py```
 
 ### Advanced Usage
 
@@ -165,6 +210,14 @@ souschef-cli cookbook /cookbooks/nginx > nginx-analysis.txt
 for resource in package service template; do
   souschef-cli convert $resource nginx > ${resource}.yml
 done
+
+# InSpec workflow - Chef to Ansible to validation
+souschef-cli recipe nginx.rb --format json > chef-resources.json
+souschef-cli inspec-generate nginx.rb > validation.rb
+souschef-cli inspec-convert validation.rb --format testinfra > test_nginx.py
+
+# Parse and analyze InSpec profiles
+souschef-cli inspec-parse /profiles/baseline --format json | jq '.controls_count'
 ```
 
 ## Help

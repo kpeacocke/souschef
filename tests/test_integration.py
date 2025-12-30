@@ -5,11 +5,14 @@ from pathlib import Path
 import pytest
 
 from souschef.server import (
+    convert_inspec_to_test,
     convert_resource_to_task,
+    generate_inspec_from_recipe,
     list_cookbook_structure,
     list_directory,
     parse_attributes,
     parse_custom_resource,
+    parse_inspec_profile,
     parse_recipe,
     parse_template,
     read_cookbook_metadata,
@@ -19,6 +22,8 @@ from souschef.server import (
 # Path to test fixtures
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_COOKBOOK = FIXTURES_DIR / "sample_cookbook"
+SAMPLE_INSPEC_PROFILE = FIXTURES_DIR / "sample_inspec_profile"
+SIMPLE_CONTROL = FIXTURES_DIR / "simple_control.rb"
 
 
 class TestRealFileOperations:
@@ -637,3 +642,138 @@ def test_benchmark_custom_resource_parsing(benchmark):
     assert "properties" in data
     assert "actions" in data
     assert data["resource_name"] == "app_config"
+
+
+class TestInSpecIntegration:
+    """Integration tests for InSpec functionality with real fixtures."""
+
+    def test_parse_single_control_file(self):
+        """Test parsing a single InSpec control file."""
+        result = parse_inspec_profile(str(SIMPLE_CONTROL))
+
+        import json
+
+        data = json.loads(result)
+
+        assert data["controls_count"] == 1
+        assert len(data["controls"]) == 1
+
+        control = data["controls"][0]
+        assert control["id"] == "simple-test"
+        assert len(control["tests"]) == 1
+
+        test = control["tests"][0]
+        assert test["resource_type"] == "package"
+        assert test["resource_name"] == "vim"
+        assert len(test["expectations"]) == 1
+        assert test["expectations"][0]["matcher"] == "should be_installed"
+
+    def test_parse_inspec_profile_directory(self):
+        """Test parsing a complete InSpec profile directory."""
+        result = parse_inspec_profile(str(SAMPLE_INSPEC_PROFILE))
+
+        import json
+
+        data = json.loads(result)
+
+        assert (
+            data["controls_count"] == 5
+        )  # nginx-package, nginx-service, nginx-config, security-baseline, etc.
+        assert len(data["controls"]) == 5
+
+        # Verify nginx-package control
+        nginx_pkg = next(
+            (c for c in data["controls"] if c["id"] == "nginx-package"), None
+        )
+        assert nginx_pkg is not None
+        assert nginx_pkg["title"] == "NGINX Package Installation"
+        assert nginx_pkg["impact"] == 1.0
+        assert len(nginx_pkg["tests"]) == 1
+
+        test = nginx_pkg["tests"][0]
+        assert test["resource_type"] == "package"
+        assert test["resource_name"] == "nginx"
+        assert len(test["expectations"]) == 2  # should be_installed + version match
+
+    def test_convert_simple_control_to_testinfra(self):
+        """Test converting simple control to Testinfra format."""
+        result = convert_inspec_to_test(str(SIMPLE_CONTROL), "testinfra")
+
+        assert "import pytest" in result
+        assert "def test_simple_test(host):" in result
+        assert 'pkg = host.package("vim")' in result
+        assert "assert pkg.is_installed" in result
+
+    def test_convert_profile_to_testinfra(self):
+        """Test converting InSpec profile to Testinfra format."""
+        result = convert_inspec_to_test(str(SAMPLE_INSPEC_PROFILE), "testinfra")
+
+        assert "import pytest" in result
+
+        # Should have multiple test functions
+        assert "def test_nginx_package(host):" in result
+        assert "def test_nginx_service(host):" in result
+        assert "def test_nginx_config(host):" in result
+        assert "def test_security_baseline(host):" in result
+        assert "def test_system_resources(host):" in result
+
+        # Check specific assertions
+        assert 'pkg = host.package("nginx")' in result
+        assert 'svc = host.service("nginx")' in result
+        assert 'f = host.file("/etc/nginx/nginx.conf")' in result
+        assert "assert pkg.is_installed" in result
+        assert "assert svc.is_running" in result
+
+    def test_convert_profile_to_ansible_assert(self):
+        """Test converting InSpec profile to Ansible assert format."""
+        result = convert_inspec_to_test(str(SAMPLE_INSPEC_PROFILE), "ansible_assert")
+
+        assert "---" in result
+        assert "ansible.builtin.assert:" in result
+        assert "that:" in result
+        assert "fail_msg:" in result
+
+        # Should contain package checks
+        assert "ansible_facts.packages['nginx']" in result
+        # Should contain service checks
+        assert "services['nginx'].state == 'running'" in result
+
+    def test_generate_inspec_from_recipe(self):
+        """Test generating InSpec controls from Chef recipe."""
+        recipe_path = SAMPLE_COOKBOOK / "recipes" / "default.rb"
+        result = generate_inspec_from_recipe(str(recipe_path))
+
+        # Should generate controls for resources in the recipe
+        assert "control 'package-nginx'" in result
+        assert "control 'service-nginx'" in result
+        assert "control 'template--etc-nginx-nginx.conf'" in result
+        assert "control 'directory--var-www-html'" in result
+        assert "control 'file--var-www-html-index.html'" in result
+
+        # Check control structure
+        assert "describe package('nginx')" in result
+        assert "it { should be_installed }" in result
+        assert "describe service('nginx')" in result
+        assert "it { should be_running }" in result
+        assert "it { should be_enabled }" in result
+        assert "describe file('/etc/nginx/nginx.conf')" in result
+        assert "it { should exist }" in result
+
+    def test_benchmark_inspec_profile_parsing(self, benchmark):
+        """Benchmark InSpec profile parsing performance."""
+        result = benchmark(parse_inspec_profile, str(SAMPLE_INSPEC_PROFILE))
+
+        # Ensure it still works correctly
+        import json
+
+        data = json.loads(result)
+        assert data["controls_count"] == 5
+        assert len(data["controls"]) == 5
+
+    def test_benchmark_inspec_conversion(self, benchmark):
+        """Benchmark InSpec to Testinfra conversion performance."""
+        result = benchmark(convert_inspec_to_test, str(SIMPLE_CONTROL), "testinfra")
+
+        # Ensure it still works correctly
+        assert "import pytest" in result
+        assert "def test_simple_test(host):" in result

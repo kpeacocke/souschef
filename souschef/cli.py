@@ -11,11 +11,14 @@ from typing import NoReturn
 import click
 
 from souschef.server import (
+    convert_inspec_to_test,
     convert_resource_to_task,
+    generate_inspec_from_recipe,
     list_cookbook_structure,
     list_directory,
     parse_attributes,
     parse_custom_resource,
+    parse_inspec_profile,
     parse_recipe,
     parse_template,
     read_cookbook_metadata,
@@ -293,6 +296,58 @@ def cookbook(cookbook_path: str, output: str | None, dry_run: bool) -> None:  # 
     if output and not dry_run:
         click.echo(f"\n💾 Would save results to: {output}")
         click.echo("(Full conversion not yet implemented)")
+
+
+@cli.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+)
+def inspec_parse(path: str, output_format: str) -> None:
+    """Parse an InSpec profile or control file.
+
+    PATH: Path to InSpec profile directory or .rb control file
+    """
+    result = parse_inspec_profile(path)
+    _output_result(result, output_format)
+
+
+@cli.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["testinfra", "ansible_assert"]),
+    default="testinfra",
+    help="Output format for converted tests",
+)
+def inspec_convert(path: str, output_format: str) -> None:
+    """Convert InSpec controls to test format.
+
+    PATH: Path to InSpec profile directory or .rb control file
+    """
+    result = convert_inspec_to_test(path, output_format)
+    click.echo(result)
+
+
+@cli.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+)
+def inspec_generate(path: str, output_format: str) -> None:
+    """Generate InSpec controls from Chef recipe.
+
+    PATH: Path to Chef recipe (.rb) file
+    """
+    result = generate_inspec_from_recipe(path)
+    _output_result(result, output_format)
 
 
 def _output_result(result: str, output_format: str) -> None:

@@ -11,9 +11,13 @@ from souschef.server import (
     _extract_resource_actions,
     _extract_resource_properties,
     _extract_template_variables,
+    _parse_inspec_control,
+    convert_inspec_to_test,
+    generate_inspec_from_recipe,
     list_directory,
     parse_attributes,
     parse_custom_resource,
+    parse_inspec_profile,
     parse_recipe,
     parse_template,
     read_file,
@@ -410,3 +414,246 @@ def test_extract_property_with_defaults(default_val):
     config_prop = next((p for p in properties if p["name"] == "config"), None)
     assert config_prop is not None
     assert "default" in config_prop
+
+
+# InSpec Property-Based Tests
+
+
+@given(st.text())
+@settings(max_examples=50)
+def test_parse_inspec_profile_handles_any_content(content):
+    """Test that parse_inspec_profile doesn't crash on any file content."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        try:
+            f.write(content)
+            f.flush()
+
+            result = parse_inspec_profile(f.name)
+            # Should always return a string (JSON or error)
+            assert isinstance(result, str)
+        finally:
+            Path(f.name).unlink()
+
+
+@given(st.text(min_size=1, max_size=1000))
+@settings(max_examples=50)
+def test_parse_inspec_control_handles_any_content(content):
+    """Test that _parse_inspec_control handles any content without crashing."""
+    result = _parse_inspec_control(content)
+    # Should always return a list
+    assert isinstance(result, list)
+
+
+@given(
+    control_id=st.text(
+        min_size=1,
+        max_size=50,
+        alphabet=st.characters(min_codepoint=ord("a"), max_codepoint=ord("z"))
+        | st.characters(min_codepoint=ord("A"), max_codepoint=ord("Z"))
+        | st.characters(min_codepoint=ord("0"), max_codepoint=ord("9"))
+        | st.just("-")
+        | st.just("_"),
+    ),
+    resource_type=st.sampled_from(
+        ["package", "service", "file", "directory", "user", "group", "port"]
+    ),
+    resource_name=st.text(
+        min_size=1,
+        max_size=20,
+        alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/.-_",
+    ),
+)
+@settings(max_examples=50)
+def test_parse_valid_inspec_control(control_id, resource_type, resource_name):
+    """Test parsing well-formed InSpec controls with random data."""
+    content = f"""
+control '{control_id}' do
+  title 'Test control'
+  desc 'Test description'
+  impact 1.0
+
+  describe {resource_type}('{resource_name}') do
+    it {{ should be_installed }}
+  end
+end
+"""
+
+    controls = _parse_inspec_control(content)
+
+    # Should find exactly one control
+    assert len(controls) == 1
+
+    control = controls[0]
+    assert control["id"] == control_id
+    assert control["title"] == "Test control"
+    assert control["desc"] == "Test description"
+    assert control["impact"] == 1.0
+    assert len(control["tests"]) == 1
+
+    test = control["tests"][0]
+    assert test["resource_type"] == resource_type
+    assert test["resource_name"] == resource_name
+
+
+@given(st.text())
+@settings(max_examples=50)
+def test_convert_inspec_to_test_handles_any_content(content):
+    """Test that convert_inspec_to_test handles any file content without crashing."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        try:
+            f.write(content)
+            f.flush()
+
+            result_testinfra = convert_inspec_to_test(f.name, "testinfra")
+            result_ansible = convert_inspec_to_test(f.name, "ansible_assert")
+
+            # Should always return strings
+            assert isinstance(result_testinfra, str)
+            assert isinstance(result_ansible, str)
+        finally:
+            Path(f.name).unlink()
+
+
+@given(
+    format_type=st.sampled_from(["testinfra", "ansible_assert", "invalid_format"]),
+)
+@settings(max_examples=30)
+def test_convert_inspec_different_formats(format_type):
+    """Test InSpec conversion with different output formats."""
+    simple_control = """
+control 'test' do
+  describe package('test-pkg') do
+    it { should be_installed }
+  end
+end
+"""
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        try:
+            f.write(simple_control)
+            f.flush()
+
+            result = convert_inspec_to_test(f.name, format_type)
+
+            # Should always return a string
+            assert isinstance(result, str)
+
+            if format_type == "testinfra":
+                # Valid testinfra should contain pytest imports
+                if "Error:" not in result:
+                    assert "import pytest" in result
+            elif format_type == "ansible_assert":
+                # Valid ansible should contain YAML
+                if "Error:" not in result:
+                    assert "---" in result
+            else:
+                # Invalid format should return error
+                assert result.startswith("Error:")
+        finally:
+            Path(f.name).unlink()
+
+
+@given(st.text())
+@settings(max_examples=50)
+def test_generate_inspec_from_recipe_handles_any_content(content):
+    """Test that generate_inspec_from_recipe handles any recipe content."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        try:
+            f.write(content)
+            f.flush()
+
+            result = generate_inspec_from_recipe(f.name)
+
+            # Should always return a string
+            assert isinstance(result, str)
+        finally:
+            Path(f.name).unlink()
+
+
+@given(
+    resource_type=st.sampled_from(
+        ["package", "service", "file", "directory", "user", "group"]
+    ),
+    resource_name=st.text(
+        min_size=1,
+        max_size=20,
+        alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/.-_",
+    ),
+    action=st.sampled_from(
+        [":install", ":create", ":start", ":enable", "[:install]", "[:start, :enable]"]
+    ),
+)
+@settings(max_examples=50)
+def test_generate_inspec_from_valid_chef_resources(
+    resource_type, resource_name, action
+):
+    """Test generating InSpec from well-formed Chef resources."""
+    chef_content = f"""
+{resource_type} '{resource_name}' do
+  action {action}
+end
+"""
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        try:
+            f.write(chef_content)
+            f.flush()
+
+            result = generate_inspec_from_recipe(f.name)
+
+            # Should generate InSpec content
+            assert isinstance(result, str)
+
+            # If successful, should contain control structure
+            if "Error:" not in result:
+                assert (
+                    f"control '{resource_type}-" in result
+                    or f"control '{resource_type}--" in result
+                )
+                assert (
+                    f"describe {resource_type}(" in result or "describe file(" in result
+                )
+        finally:
+            Path(f.name).unlink()
+
+
+@given(
+    matchers=st.lists(
+        st.sampled_from(
+            [
+                "should be_installed",
+                "should be_running",
+                "should be_enabled",
+                "should exist",
+                "should be_file",
+                "should be_directory",
+            ]
+        ),
+        min_size=1,
+        max_size=5,
+    ),
+)
+@settings(max_examples=30)
+def test_inspec_multiple_expectations(matchers):
+    """Test InSpec parsing with multiple expectations."""
+    content = """
+control 'multi-test' do
+  describe package('test') do
+"""
+    for matcher in matchers:
+        content += f"    it {{ {matcher} }}\n"
+
+    content += """  end
+end
+"""
+
+    controls = _parse_inspec_control(content)
+
+    # Should parse successfully
+    assert len(controls) == 1
+    control = controls[0]
+    assert len(control["tests"]) == 1
+
+    test = control["tests"][0]
+    # Should capture all expectations
+    assert len(test["expectations"]) == len(matchers)

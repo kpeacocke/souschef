@@ -19,6 +19,13 @@ An AI-powered MCP (Model Context Protocol) server that assists with analyzing an
 - **YAML Generation** - Output valid Ansible task YAML ready for playbooks
 - **Template Parsing** - Parse ERB templates and convert to Jinja2 format with variable extraction
 
+### InSpec Integration & Validation
+- **Parse InSpec Profiles** - Extract controls, describe blocks, and test expectations from InSpec profiles
+- **Convert InSpec to Tests** - Transform InSpec controls to Testinfra (Python) or Ansible assert tasks
+- **Generate InSpec from Chef** - Create InSpec validation controls from Chef recipes automatically
+- **Validation Workflow** - Complete Chef → Ansible → InSpec validation pipeline
+- **Multi-format Support** - Handle single control files or complete InSpec profile directories
+
 ### Coming Soon
 - Full playbook generation from recipes
 - Chef guards and notifications conversion
@@ -82,6 +89,15 @@ souschef-cli template path/to/template.erb
 # Convert a Chef resource to Ansible task
 souschef-cli convert package nginx --action install
 
+# Parse InSpec profiles and controls
+souschef-cli inspec-parse path/to/inspec/profile/
+
+# Convert InSpec to Testinfra tests
+souschef-cli inspec-convert controls.rb --format testinfra
+
+# Generate InSpec validation from Chef recipe
+souschef-cli inspec-generate recipe.rb
+
 # Analyze an entire cookbook
 souschef-cli cookbook path/to/cookbook
 
@@ -107,6 +123,154 @@ The `examples/` directory contains complete Chef cookbooks demonstrating convers
   - Guard conditions and idempotency
 
 See [examples/README.md](examples/README.md) for detailed usage.
+
+### InSpec Validation Workflow
+
+SousChef provides complete integration with InSpec for validating your Chef to Ansible conversions, ensuring that your infrastructure automation maintains the same desired state regardless of the tool used.
+
+#### Complete Workflow Example
+
+```bash
+# 1. Start with a Chef recipe
+cat > nginx-recipe.rb << 'EOF'
+package 'nginx' do
+  action :install
+end
+
+service 'nginx' do
+  action [:enable, :start]
+end
+
+template '/etc/nginx/nginx.conf' do
+  source 'nginx.conf.erb'
+  owner 'root'
+  group 'root'
+  mode '0644'
+  action :create
+end
+EOF
+
+# 2. Convert Chef recipe to Ansible playbook (manual or automated)
+# ... your conversion process ...
+
+# 3. Generate InSpec validation controls from the original Chef recipe
+souschef-cli inspec-generate nginx-recipe.rb > validation-controls.rb
+
+# 4. Run InSpec validation against your infrastructure
+inspec exec validation-controls.rb -t ssh://your-server
+
+# 5. Convert InSpec controls to Testinfra for CI/CD integration
+souschef-cli inspec-convert validation-controls.rb --format testinfra > test_nginx.py
+
+# 6. Run tests with pytest
+pytest test_nginx.py --hosts='ssh://your-server'
+```
+
+#### Generated InSpec Controls
+
+From the Chef recipe above, SousChef generates:
+
+```ruby
+# InSpec controls generated from Chef recipe
+control 'package-nginx' do
+  title 'Verify package nginx'
+  desc 'Ensure package nginx is properly configured'
+  impact 1.0
+
+  describe package('nginx') do
+    it { should be_installed }
+  end
+end
+
+control 'service-nginx' do
+  title 'Verify service nginx'
+  desc 'Ensure service nginx is properly configured'
+  impact 1.0
+
+  describe service('nginx') do
+    it { should be_running }
+    it { should be_enabled }
+  end
+end
+
+control 'template--etc-nginx-nginx.conf' do
+  title 'Verify template /etc/nginx/nginx.conf'
+  desc 'Ensure template /etc/nginx/nginx.conf is properly configured'
+  impact 1.0
+
+  describe file('/etc/nginx/nginx.conf') do
+    it { should exist }
+    its('mode') { should cmp '0644' }
+    its('owner') { should eq 'root' }
+    its('group') { should eq 'root' }
+  end
+end
+```
+
+#### Testinfra Integration
+
+Convert to Python tests for CI/CD pipelines:
+
+```bash
+souschef-cli inspec-convert validation-controls.rb --format testinfra
+```
+
+```python
+import pytest
+
+def test_package_nginx(host):
+    """Ensure package nginx is properly configured"""
+    pkg = host.package("nginx")
+    assert pkg.is_installed
+
+def test_service_nginx(host):
+    """Ensure service nginx is properly configured"""
+    svc = host.service("nginx")
+    assert svc.is_running
+    assert svc.is_enabled
+
+def test_template_etc_nginx_nginx_conf(host):
+    """Ensure template /etc/nginx/nginx.conf is properly configured"""
+    f = host.file("/etc/nginx/nginx.conf")
+    assert f.exists
+    assert oct(f.mode) == "0644"
+    assert f.user == "root"
+    assert f.group == "root"
+```
+
+#### Ansible Assert Integration
+
+For Ansible playbook validation:
+
+```bash
+souschef-cli inspec-convert validation-controls.rb --format ansible_assert
+```
+
+```yaml
+---
+# Validation tasks converted from InSpec
+
+- name: Verify package nginx
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.packages['nginx'] is defined
+    fail_msg: "Ensure package nginx is properly configured validation failed"
+
+- name: Verify service nginx
+  ansible.builtin.assert:
+    that:
+      - services['nginx'].state == 'running'
+      - services['nginx'].status == 'enabled'
+    fail_msg: "Ensure service nginx is properly configured validation failed"
+```
+
+#### Benefits
+
+- **Consistency Validation** - Ensure Chef and Ansible produce identical infrastructure state
+- **AI Context Enhancement** - InSpec profiles help AI understand infrastructure intent
+- **Automated Testing** - Generate tests automatically from Chef recipes
+- **Multiple Test Formats** - Support for InSpec, Testinfra, and Ansible assert
+- **CI/CD Integration** - Easy integration with existing test pipelines
 
 ### As an MCP Server
 

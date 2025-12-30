@@ -1,0 +1,17 @@
+name: sample-nginx-profile
+title: Sample NGINX InSpec Profile
+maintainer: SousChef Test Team
+copyright: SousChef Test Team
+copyright_email: test@souschef.dev
+license: Apache-2.0
+summary: An InSpec Compliance Profile for testing NGINX
+version: 1.0.0
+description: |
+  Sample InSpec profile that validates NGINX installation and configuration.
+  Used for testing SousChef InSpec integration functionality.
+
+supports:
+  - platform-name: ubuntu
+  - platform-name: debian
+  - platform-name: centos
+  - platform-name: redhat
