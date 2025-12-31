@@ -1205,6 +1205,711 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
         return f"Error generating playbook: {e}"
 
 
+@mcp.tool()
+def convert_chef_search_to_inventory(search_query: str) -> str:
+    """Convert a Chef search query to Ansible inventory patterns and groups.
+
+    Args:
+        search_query: Chef search query (e.g., "role:web AND environment:production").
+
+    Returns:
+        JSON string with Ansible inventory patterns and group definitions.
+
+    """
+    try:
+        # Parse the Chef search query
+        search_info = _parse_chef_search_query(search_query)
+
+        # Convert to Ansible inventory patterns
+        inventory_config = _generate_ansible_inventory_from_search(search_info)
+
+        import json
+
+        return json.dumps(inventory_config, indent=2)
+
+    except Exception as e:
+        return f"Error converting Chef search: {e}"
+
+
+@mcp.tool()
+def generate_dynamic_inventory_script(search_queries: str) -> str:
+    """Generate a Python dynamic inventory script from Chef search queries.
+
+    Args:
+        search_queries: JSON string containing Chef search queries and group names.
+
+    Returns:
+        Complete Python script for Ansible dynamic inventory.
+
+    """
+    try:
+        import json
+
+        queries_data = json.loads(search_queries)
+
+        # Generate dynamic inventory script
+        script_content = _generate_inventory_script_content(queries_data)
+
+        return script_content
+
+    except json.JSONDecodeError:
+        return "Error: Invalid JSON format for search queries"
+    except Exception as e:
+        return f"Error generating dynamic inventory script: {e}"
+
+
+@mcp.tool()
+def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
+    """Analyze Chef recipes/cookbooks to extract search patterns for inventory planning.
+
+    Args:
+        recipe_or_cookbook_path: Path to Chef recipe file or cookbook directory.
+
+    Returns:
+        JSON string with discovered search patterns and recommended inventory structure.
+
+    """
+    try:
+        path_obj = Path(recipe_or_cookbook_path)
+
+        if path_obj.is_file():
+            # Single recipe file
+            search_patterns = _extract_search_patterns_from_file(path_obj)
+        elif path_obj.is_dir():
+            # Cookbook directory
+            search_patterns = _extract_search_patterns_from_cookbook(path_obj)
+        else:
+            return f"Error: Path {recipe_or_cookbook_path} does not exist"
+
+        # Generate inventory recommendations
+        recommendations = _generate_inventory_recommendations(search_patterns)
+
+        import json
+
+        return json.dumps(
+            {
+                "discovered_searches": search_patterns,
+                "inventory_recommendations": recommendations,
+            },
+            indent=2,
+        )
+
+    except Exception as e:
+        return f"Error analyzing Chef search patterns: {e}"
+
+
+def _parse_chef_search_query(query: str) -> dict[str, Any]:  # noqa: C901
+    """Parse a Chef search query into structured components.
+
+    Args:
+        query: Chef search query string.
+
+    Returns:
+        Dictionary with parsed query components.
+
+    """
+    import re
+
+    # Normalize the query
+    normalized_query = query.strip()
+
+    # Parse different types of search patterns
+    search_info = {
+        "original_query": query,
+        "index": "node",  # Default to node search
+        "conditions": [],
+        "logical_operators": [],
+        "complexity": "simple",
+    }
+
+    # Check if it specifies a different index (e.g., role:, environment:)
+    index_match = re.match(r"^(\w+):", normalized_query)
+    if index_match:
+        potential_index = index_match.group(1)
+        if potential_index in ["role", "environment", "tag", "platform"]:
+            search_info["index"] = "node"  # These are node attributes
+        else:
+            search_info["index"] = potential_index
+
+    # Split by logical operators
+    # Handle AND, OR, NOT operators
+    operator_pattern = r"\s+(AND|OR|NOT)\s+"
+    parts = re.split(operator_pattern, normalized_query, flags=re.IGNORECASE)
+
+    conditions = []
+    operators = []
+
+    for _i, part in enumerate(parts):
+        part = part.strip()
+        if part.upper() in ["AND", "OR", "NOT"]:
+            operators.append(part.upper())
+        elif part:  # Non-empty condition
+            condition = _parse_search_condition(part)
+            if condition:
+                conditions.append(condition)
+
+    search_info["conditions"] = conditions
+    search_info["logical_operators"] = operators
+
+    # Determine complexity
+    if len(conditions) > 1 or operators:
+        search_info["complexity"] = "complex"
+    elif any(cond.get("operator") in ["~", "!="] for cond in conditions):
+        search_info["complexity"] = "intermediate"
+
+    return search_info
+
+
+def _parse_search_condition(condition: str) -> dict[str, str]:
+    """Parse a single search condition.
+
+    Args:
+        condition: Single condition string.
+
+    Returns:
+        Dictionary with condition components.
+
+    """
+    import re
+
+    # Handle different condition patterns
+    patterns = [
+        # Wildcard search: role:web*
+        (r"^(\w+):([^:]*\*)$", "wildcard"),
+        # Regex search: role:~web.*
+        (r"^(\w+):~(.+)$", "regex"),
+        # Not equal: role:!web
+        (r"^(\w+):!(.+)$", "not_equal"),
+        # Range: memory:(>1024 AND <4096)
+        (r"^(\w+):\(([^)]+)\)$", "range"),
+        # Simple key:value
+        (r"^(\w+):(.+)$", "equal"),
+        # Tag search: tags:web
+        (r"^tags?:(.+)$", "tag"),
+    ]
+
+    for pattern, condition_type in patterns:
+        match = re.match(pattern, condition.strip())
+        if match:
+            if condition_type == "tag":
+                return {
+                    "type": condition_type,
+                    "key": "tags",
+                    "value": match.group(1),
+                    "operator": "contains",
+                }
+            elif condition_type in ["wildcard", "regex", "not_equal", "range"]:
+                return {
+                    "type": condition_type,
+                    "key": match.group(1),
+                    "value": match.group(2),
+                    "operator": condition_type,
+                }
+            else:  # equal
+                return {
+                    "type": condition_type,
+                    "key": match.group(1),
+                    "value": match.group(2),
+                    "operator": "equal",
+                }
+
+    # Fallback for unrecognized patterns
+    return {
+        "type": "unknown",
+        "key": "unknown",
+        "value": condition,
+        "operator": "equal",
+    }
+
+
+def _generate_ansible_inventory_from_search(
+    search_info: dict[str, Any],
+) -> dict[str, Any]:  # noqa: C901
+    """Generate Ansible inventory structure from parsed Chef search.
+
+    Args:
+        search_info: Parsed Chef search information.
+
+    Returns:
+        Dictionary with Ansible inventory configuration.
+
+    """
+    inventory_config = {
+        "inventory_type": "static",
+        "groups": {},
+        "host_patterns": [],
+        "variables": {},
+        "dynamic_script_needed": False,
+    }
+
+    # Determine if we need dynamic inventory
+    if (
+        search_info["complexity"] != "simple"
+        or len(search_info["conditions"]) > 1
+        or any(
+            cond.get("operator") in ["regex", "wildcard", "range"]
+            for cond in search_info["conditions"]
+        )
+    ):
+        inventory_config["inventory_type"] = "dynamic"
+        inventory_config["dynamic_script_needed"] = True
+
+    # Process each condition
+    for i, condition in enumerate(search_info["conditions"]):
+        group_name = _generate_group_name_from_condition(condition, i)
+
+        # Generate group configuration
+        group_config = {"hosts": [], "vars": {}, "children": []}
+
+        # Add host patterns based on condition type
+        if condition["operator"] == "equal":
+            if condition["key"] == "role":
+                # Role-based grouping
+                group_config["hosts"] = [f"# Hosts with role: {condition['value']}"]
+                inventory_config["variables"][f"{group_name}_role"] = condition["value"]
+            elif condition["key"] == "environment":
+                # Environment-based grouping
+                group_config["vars"]["environment"] = condition["value"]
+                group_config["hosts"] = [
+                    f"# Hosts in environment: {condition['value']}"
+                ]
+            elif condition["key"] == "platform":
+                # Platform-based grouping
+                group_config["vars"]["ansible_os_family"] = condition[
+                    "value"
+                ].capitalize()
+                group_config["hosts"] = [f"# {condition['value']} hosts"]
+            elif condition["key"] == "tags":
+                # Tag-based grouping
+                group_config["vars"]["tags"] = [condition["value"]]
+                group_config["hosts"] = [f"# Hosts tagged with: {condition['value']}"]
+        elif condition["operator"] == "wildcard":
+            # Wildcard patterns need dynamic inventory
+            group_config["hosts"] = [
+                f"# Hosts matching pattern: {condition['key']}:{condition['value']}"
+            ]
+            inventory_config["dynamic_script_needed"] = True
+        elif condition["operator"] == "regex":
+            # Regex patterns need dynamic inventory
+            group_config["hosts"] = [
+                f"# Hosts matching regex: {condition['key']}:{condition['value']}"
+            ]
+            inventory_config["dynamic_script_needed"] = True
+
+        inventory_config["groups"][group_name] = group_config
+
+    # Handle logical operators by creating combined groups
+    if search_info["logical_operators"]:
+        combined_group_name = "combined_search_results"
+        inventory_config["groups"][combined_group_name] = {
+            "children": list(inventory_config["groups"].keys()),
+            "vars": {"chef_search_query": search_info["original_query"]},
+        }
+
+    return inventory_config
+
+
+def _generate_group_name_from_condition(condition: dict[str, str], index: int) -> str:
+    """Generate an Ansible group name from a search condition.
+
+    Args:
+        condition: Parsed search condition.
+        index: Condition index for uniqueness.
+
+    Returns:
+        Valid Ansible group name.
+
+    """
+    # Sanitize values for group names
+    key = condition.get("key", "unknown").lower()
+    value = condition.get("value", "unknown").lower()
+
+    # Remove special characters and replace with underscores
+    import re
+
+    key = re.sub(r"[^a-z0-9_]", "_", key)
+    value = re.sub(r"[^a-z0-9_]", "_", value)
+
+    # Create meaningful group name
+    if condition.get("operator") == "equal":
+        return f"{key}_{value}"
+    elif condition.get("operator") == "wildcard":
+        return f"{key}_wildcard_{index}"
+    elif condition.get("operator") == "regex":
+        return f"{key}_regex_{index}"
+    elif condition.get("operator") == "not_equal":
+        return f"not_{key}_{value}"
+    else:
+        return f"search_condition_{index}"
+
+
+def _generate_inventory_script_content(queries_data: list[dict[str, str]]) -> str:
+    """Generate Python dynamic inventory script content.
+
+    Args:
+        queries_data: List of query/group mappings.
+
+    Returns:
+        Complete Python script content.
+
+    """
+    script_template = '''#!/usr/bin/env python3
+"""
+Dynamic Ansible Inventory Script
+Generated from Chef search queries by SousChef
+
+This script converts Chef search queries to Ansible inventory groups.
+Requires: python-requests (for Chef server API)
+"""
+
+import json
+import sys
+import argparse
+from typing import Dict, List, Any
+
+# Chef server configuration
+CHEF_SERVER_URL = "https://your-chef-server"
+CLIENT_NAME = "your-client-name"
+CLIENT_KEY_PATH = "/path/to/client.pem"
+
+# Search query to group mappings
+SEARCH_QUERIES = {search_queries_json}
+
+
+def get_chef_nodes(search_query: str) -> List[Dict[str, Any]]:
+    """Query Chef server for nodes matching search criteria.
+
+    Args:
+        search_query: Chef search query string
+
+    Returns:
+        List of node objects from Chef server
+    """
+    # TODO: Implement Chef server API client
+    # This is a placeholder - you'll need to implement Chef server communication
+    # using python-chef library or direct API calls
+
+    # Example structure of what this should return:
+    return [
+        {
+            "name": "web01.example.com",
+            "roles": ["web"],
+            "environment": "production",
+            "platform": "ubuntu",
+            "ipaddress": "10.0.1.10"
+        }
+    ]
+
+
+def build_inventory() -> Dict[str, Any]:
+    """Build Ansible inventory from Chef searches.
+
+    Returns:
+        Ansible inventory dictionary
+    """
+    inventory = {
+        "_meta": {
+            "hostvars": {}
+        }
+    }
+
+    for group_name, search_query in SEARCH_QUERIES.items():
+        inventory[group_name] = {
+            "hosts": [],
+            "vars": {
+                "chef_search_query": search_query
+            }
+        }
+
+        try:
+            nodes = get_chef_nodes(search_query)
+
+            for node in nodes:
+                hostname = node.get("name", node.get("fqdn", "unknown"))
+                inventory[group_name]["hosts"].append(hostname)
+
+                # Add host variables
+                inventory["_meta"]["hostvars"][hostname] = {
+                    "chef_roles": node.get("roles", []),
+                    "chef_environment": node.get("environment", ""),
+                    "chef_platform": node.get("platform", ""),
+                    "ansible_host": node.get("ipaddress", hostname)
+                }
+
+        except Exception as e:
+            print(
+                f"Error querying Chef server for group {group_name}: {e}",
+                file=sys.stderr,
+            )
+
+    return inventory
+
+
+def main():
+    """Main entry point for dynamic inventory script."""
+    parser = argparse.ArgumentParser(description="Dynamic Ansible Inventory from Chef")
+    parser.add_argument("--list", action="store_true", help="List all groups and hosts")
+    parser.add_argument("--host", help="Get variables for specific host")
+
+    args = parser.parse_args()
+
+    if args.list:
+        inventory = build_inventory()
+        print(json.dumps(inventory, indent=2))
+    elif args.host:
+        # Return empty dict for host-specific queries
+        # All host vars are included in _meta/hostvars
+        print(json.dumps({}))
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+    # Convert queries_data to JSON string for embedding
+    import json
+
+    queries_json = json.dumps(
+        {
+            item.get("group_name", f"group_{i}"): item.get("search_query", "")
+            for i, item in enumerate(queries_data)
+        },
+        indent=4,
+    )
+
+    return script_template.replace("{search_queries_json}", queries_json)
+
+
+def _extract_search_patterns_from_file(file_path: Path) -> list[dict[str, str]]:
+    """Extract Chef search patterns from a single recipe file.
+
+    Args:
+        file_path: Path to the recipe file.
+
+    Returns:
+        List of discovered search patterns.
+
+    """
+    try:
+        content = file_path.read_text()
+        return _find_search_patterns_in_content(content, str(file_path))
+    except Exception:
+        return []
+
+
+def _extract_search_patterns_from_cookbook(cookbook_path: Path) -> list[dict[str, str]]:
+    """Extract Chef search patterns from all files in a cookbook.
+
+    Args:
+        cookbook_path: Path to the cookbook directory.
+
+    Returns:
+        List of discovered search patterns from all recipe files.
+
+    """
+    patterns = []
+
+    # Search in recipes directory
+    recipes_dir = cookbook_path / "recipes"
+    if recipes_dir.exists():
+        for recipe_file in recipes_dir.glob("*.rb"):
+            file_patterns = _extract_search_patterns_from_file(recipe_file)
+            patterns.extend(file_patterns)
+
+    # Search in libraries directory
+    libraries_dir = cookbook_path / "libraries"
+    if libraries_dir.exists():
+        for library_file in libraries_dir.glob("*.rb"):
+            file_patterns = _extract_search_patterns_from_file(library_file)
+            patterns.extend(file_patterns)
+
+    # Search in resources directory
+    resources_dir = cookbook_path / "resources"
+    if resources_dir.exists():
+        for resource_file in resources_dir.glob("*.rb"):
+            file_patterns = _extract_search_patterns_from_file(resource_file)
+            patterns.extend(file_patterns)
+
+    return patterns
+
+
+def _find_search_patterns_in_content(
+    content: str, file_path: str
+) -> list[dict[str, str]]:
+    """Find Chef search patterns in file content.
+
+    Args:
+        content: File content to search.
+        file_path: Path to the file (for context).
+
+    Returns:
+        List of discovered search patterns.
+
+    """
+    import re
+
+    patterns = []
+
+    # Common Chef search patterns
+    search_patterns = [
+        # search(:node, "role:web")
+        r'search\s*\(\s*:?(\w+)\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)',
+        # partial_search(:node, "environment:production")
+        r'partial_search\s*\(\s*:?(\w+)\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)',
+        # data_bag_item with search-like queries
+        r'data_bag_item\s*\(\s*[\'"](\w+)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)',
+        # Node attribute queries that imply searches
+        r'node\[[\'"](\w+)[\'"]\]\[[\'"]([^\'"]+)[\'"]\]',
+    ]
+
+    for pattern in search_patterns:
+        matches = re.finditer(pattern, content, re.IGNORECASE)
+        for match in matches:
+            if "search" in pattern:
+                # Full search patterns
+                search_type = match.group(1)
+                query = match.group(2)
+                patterns.append(
+                    {
+                        "type": "search",
+                        "index": search_type,
+                        "query": query,
+                        "file": file_path,
+                        "context": _extract_context(content, match),
+                    }
+                )
+            elif "data_bag_item" in pattern:
+                # Data bag patterns (related to search)
+                bag_name = match.group(1)
+                item_name = match.group(2)
+                patterns.append(
+                    {
+                        "type": "data_bag_access",
+                        "bag": bag_name,
+                        "item": item_name,
+                        "file": file_path,
+                        "context": _extract_context(content, match),
+                    }
+                )
+            else:
+                # Node attribute patterns
+                attr_key = match.group(1)
+                attr_value = match.group(2)
+                patterns.append(
+                    {
+                        "type": "node_attribute",
+                        "key": attr_key,
+                        "value": attr_value,
+                        "file": file_path,
+                        "context": _extract_context(content, match),
+                    }
+                )
+
+    return patterns
+
+
+def _extract_context(content: str, match: re.Match[str]) -> str:
+    """Extract context around a regex match.
+
+    Args:
+        content: Full content.
+        match: Regex match object.
+
+    Returns:
+        Context string around the match.
+
+    """
+    start = max(0, match.start() - 50)
+    end = min(len(content), match.end() + 50)
+    context = content[start:end].strip()
+
+    # Clean up context
+    lines = context.split("\n")
+    if len(lines) > 3:
+        # Keep middle line and one line before/after
+        mid = len(lines) // 2
+        lines = lines[mid - 1 : mid + 2]
+
+    return "...".join(lines)
+
+
+def _generate_inventory_recommendations(
+    patterns: list[dict[str, str]],
+) -> dict[str, Any]:  # noqa: C901
+    """Generate inventory structure recommendations from search patterns.
+
+    Args:
+        patterns: List of discovered search patterns.
+
+    Returns:
+        Dictionary with recommended inventory structure.
+
+    """
+    recommendations = {
+        "groups": {},
+        "structure": "static",  # vs dynamic
+        "variables": {},
+        "notes": [],
+    }
+
+    # Count pattern types
+    pattern_types = {}
+    for pattern in patterns:
+        ptype = pattern.get("type", "unknown")
+        pattern_types[ptype] = pattern_types.get(ptype, 0) + 1
+
+    # Recommend structure type
+    if pattern_types.get("search", 0) > 2:
+        recommendations["structure"] = "dynamic"
+        recommendations["notes"].append(
+            "Multiple search patterns detected - dynamic inventory recommended"
+        )
+
+    # Generate group recommendations based on patterns
+    role_groups = set()
+    environment_groups = set()
+
+    for pattern in patterns:
+        if pattern.get("type") == "search":
+            query = pattern.get("query", "")
+            if "role:" in query:
+                role_match = re.search(r"role:([^\\s]+)", query)
+                if role_match:
+                    role_groups.add(role_match.group(1))
+            if "environment:" in query:
+                env_match = re.search(r"environment:([^\\s]+)", query)
+                if env_match:
+                    environment_groups.add(env_match.group(1))
+
+    # Add recommended groups
+    for role in role_groups:
+        recommendations["groups"][f"role_{role}"] = {
+            "description": f"Hosts with Chef role: {role}",
+            "vars": {"chef_role": role},
+        }
+
+    for env in environment_groups:
+        recommendations["groups"][f"env_{env}"] = {
+            "description": f"Hosts in Chef environment: {env}",
+            "vars": {"chef_environment": env},
+        }
+
+    # Add general recommendations
+    if len(patterns) > 5:
+        recommendations["notes"].append(
+            "Complex search patterns - consider Chef server integration"
+        )
+
+    if any(p.get("type") == "data_bag_access" for p in patterns):
+        recommendations["notes"].append(
+            "Data bag access detected - consider Ansible Vault migration"
+        )
+
+    return recommendations
+
+
 def _generate_playbook_structure(
     parsed_content: str, raw_content: str, recipe_name: str
 ) -> str:  # noqa: C901
@@ -2480,6 +3185,534 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:  # noqa: C901
 
     except Exception as e:
         return f"An error occurred while generating InSpec controls: {e}"
+
+
+@mcp.tool()
+def convert_chef_databag_to_vars(
+    databag_content: str,
+    databag_name: str,
+    item_name: str = "default",
+    is_encrypted: bool = False,
+    target_scope: str = "group_vars",
+) -> str:
+    """Convert Chef data bag to Ansible variables format.
+
+    Args:
+        databag_content: JSON content of the Chef data bag
+        databag_name: Name of the data bag
+        item_name: Name of the data bag item (default: "default")
+        is_encrypted: Whether the data bag is encrypted
+        target_scope: Variable scope ("group_vars", "host_vars", or "playbook")
+
+    Returns:
+        Ansible variables YAML content or vault file structure
+
+    """
+    try:
+        import json
+
+        import yaml
+
+        # Parse the data bag content
+        try:
+            data = json.loads(databag_content)
+        except json.JSONDecodeError as e:
+            return f"Error: Invalid JSON format in data bag: {e}"
+
+        # Convert to Ansible variables format
+        ansible_vars = _convert_databag_to_ansible_vars(
+            data, databag_name, item_name, is_encrypted
+        )
+
+        if is_encrypted:
+            # Generate vault file structure
+            vault_content = _generate_vault_content(ansible_vars, databag_name)
+            return f"""# Encrypted data bag converted to Ansible Vault
+# Original: data_bags/{databag_name}/{item_name}.json
+# Usage: ansible-vault encrypt {target_scope}/{databag_name}_vault.yml
+
+{vault_content}
+
+---
+# Instructions:
+# 1. Save this content to {target_scope}/{databag_name}_vault.yml
+# 2. Encrypt with: ansible-vault encrypt {target_scope}/{databag_name}_vault.yml
+# 3. Reference in playbooks with: vars_files:
+#    - "{target_scope}/{databag_name}_vault.yml"
+"""
+        else:
+            # Generate regular YAML variables
+            yaml_content = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
+            return f"""---
+# Chef data bag converted to Ansible variables
+# Original: data_bags/{databag_name}/{item_name}.json
+# Target: {target_scope}/{databag_name}.yml
+
+{yaml_content}"""
+
+    except Exception as e:
+        return f"Error converting data bag to Ansible variables: {e}"
+
+
+@mcp.tool()
+def generate_ansible_vault_from_databags(
+    databags_directory: str,
+    output_directory: str = "group_vars",
+    encryption_key_hint: str = "",
+) -> str:
+    """Generate Ansible Vault files from Chef data bags directory.
+
+    Args:
+        databags_directory: Path to Chef data_bags directory
+        output_directory: Target directory for Ansible variables (group_vars/host_vars)
+        encryption_key_hint: Hint for identifying encrypted data bags
+
+    Returns:
+        Summary of converted data bags and instructions
+
+    """
+    try:
+        from pathlib import Path
+
+        databags_path = Path(databags_directory)
+        if not databags_path.exists():
+            return f"Error: Data bags directory not found: {databags_directory}"
+
+        conversion_results = []
+
+        # Process each data bag directory
+        for databag_dir in databags_path.iterdir():
+            if not databag_dir.is_dir():
+                continue
+
+            databag_name = databag_dir.name
+
+            # Process each item in the data bag
+            for item_file in databag_dir.glob("*.json"):
+                item_name = item_file.stem
+
+                try:
+                    with open(item_file) as f:
+                        content = f.read()
+
+                    # Detect if encrypted (Chef encrypted data bags have specific structure)
+                    is_encrypted = _detect_encrypted_databag(content)
+
+                    # Convert to Ansible format
+                    result = convert_chef_databag_to_vars(
+                        content, databag_name, item_name, is_encrypted, output_directory
+                    )
+
+                    conversion_results.append(
+                        {
+                            "databag": databag_name,
+                            "item": item_name,
+                            "encrypted": is_encrypted,
+                            "target_file": f"{output_directory}/{databag_name}{'_vault' if is_encrypted else ''}.yml",
+                            "content": result,
+                        }
+                    )
+
+                except Exception as e:
+                    conversion_results.append(
+                        {"databag": databag_name, "item": item_name, "error": str(e)}
+                    )
+
+        # Generate summary and file structure
+        return _generate_databag_conversion_summary(
+            conversion_results, output_directory
+        )
+
+    except Exception as e:
+        return f"Error processing data bags directory: {e}"
+
+
+@mcp.tool()
+def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> str:
+    """Analyze Chef cookbook for data bag usage and provide migration recommendations.
+
+    Args:
+        cookbook_path: Path to Chef cookbook
+        databags_path: Optional path to data_bags directory for cross-reference
+
+    Returns:
+        Analysis of data bag usage and migration recommendations
+
+    """
+    try:
+        from pathlib import Path
+
+        cookbook = Path(cookbook_path)
+        if not cookbook.exists():
+            return f"Error: Cookbook path not found: {cookbook_path}"
+
+        # Find data bag usage patterns
+        usage_patterns = _extract_databag_usage_from_cookbook(cookbook)
+
+        # Analyze data bags structure if provided
+        databag_structure = {}
+        if databags_path:
+            databags = Path(databags_path)
+            if databags.exists():
+                databag_structure = _analyze_databag_structure(databags)
+
+        # Generate recommendations
+        recommendations = _generate_databag_migration_recommendations(
+            usage_patterns, databag_structure
+        )
+
+        return f"""# Chef Data Bag Usage Analysis
+
+## Data Bag Usage Patterns Found:
+{_format_usage_patterns(usage_patterns)}
+
+## Data Bag Structure Analysis:
+{_format_databag_structure(databag_structure)}
+
+## Migration Recommendations:
+{recommendations}
+
+## Conversion Steps:
+1. Use convert_chef_databag_to_vars for individual data bags
+2. Use generate_ansible_vault_from_databags for bulk conversion
+3. Update playbooks to reference new variable files
+4. Encrypt sensitive data with ansible-vault
+"""
+
+    except Exception as e:
+        return f"Error analyzing data bag usage: {e}"
+
+
+def _convert_databag_to_ansible_vars(
+    data: dict, databag_name: str, item_name: str, is_encrypted: bool
+) -> dict:
+    """Convert Chef data bag structure to Ansible variables format."""
+    # Remove Chef-specific metadata
+    ansible_vars = {}
+
+    for key, value in data.items():
+        if key == "id":  # Skip Chef ID field
+            continue
+
+        # Convert key to Ansible-friendly format
+        ansible_key = (
+            f"{databag_name}_{key}" if not key.startswith(databag_name) else key
+        )
+        ansible_vars[ansible_key] = value
+
+    # Add metadata for tracking
+    ansible_vars[f"{databag_name}_metadata"] = {
+        "source": f"data_bags/{databag_name}/{item_name}.json",
+        "converted_by": "souschef",
+        "encrypted": is_encrypted,
+    }
+
+    return ansible_vars
+
+
+def _generate_vault_content(vars_dict: dict, databag_name: str) -> str:
+    """Generate Ansible Vault YAML content from variables dictionary."""
+    import yaml
+
+    # Structure for vault file
+    vault_vars = {f"{databag_name}_vault": vars_dict}
+
+    return yaml.dump(vault_vars, default_flow_style=False, indent=2)
+
+
+def _detect_encrypted_databag(content: str) -> bool:
+    """Detect if a Chef data bag is encrypted based on content structure."""
+    try:
+        import json
+
+        data = json.loads(content)
+
+        # Chef encrypted data bags typically have specific encrypted fields
+        encrypted_indicators = ["encrypted_data", "cipher", "iv", "version"]
+
+        # Check if any encrypted indicators are present
+        for indicator in encrypted_indicators:
+            if indicator in data:
+                return True
+
+        # Check for encrypted field patterns
+        for _key, value in data.items():
+            if isinstance(value, dict) and "encrypted_data" in value:
+                return True
+
+        return False
+
+    except (json.JSONDecodeError, TypeError):
+        return False
+
+
+def _generate_databag_conversion_summary(results: list, output_dir: str) -> str:
+    """Generate summary of data bag conversion results."""
+    total_bags = len(results)
+    successful = len([r for r in results if "error" not in r])
+    encrypted = len([r for r in results if r.get("encrypted", False)])
+
+    summary = f"""# Data Bag Conversion Summary
+
+## Statistics:
+- Total data bags processed: {total_bags}
+- Successfully converted: {successful}
+- Failed conversions: {total_bags - successful}
+- Encrypted data bags: {encrypted}
+
+## Generated Files:
+"""
+
+    files_created = set()
+    for result in results:
+        if "error" not in result:
+            target_file = result["target_file"]
+            files_created.add(target_file)
+
+    for file in sorted(files_created):
+        summary += f"- {file}\n"
+
+    summary += "\n## Conversion Details:\n"
+
+    for result in results:
+        if "error" in result:
+            summary += f"❌ {result['databag']}/{result['item']}: {result['error']}\n"
+        else:
+            status = "🔒 Encrypted" if result["encrypted"] else "📄 Plain"
+            databag_item = f"{result['databag']}/{result['item']}"
+            target = result["target_file"]
+            summary += f"✅ {databag_item} → {target} ({status})\n"
+
+    summary += f"""
+## Next Steps:
+1. Review generated variable files in {output_dir}/
+2. Encrypt vault files: `ansible-vault encrypt {output_dir}/*_vault.yml`
+3. Update playbooks to include vars_files references
+4. Test variable access in playbooks
+5. Remove original Chef data bags after validation
+"""
+
+    return summary
+
+
+def _extract_databag_usage_from_cookbook(cookbook_path) -> list:
+    """Extract data bag usage patterns from Chef cookbook files."""
+    patterns = []
+
+    # Search for data bag usage in Ruby files
+    for ruby_file in cookbook_path.rglob("*.rb"):
+        try:
+            with open(ruby_file) as f:
+                content = f.read()
+
+            # Find data bag usage patterns
+            found_patterns = _find_databag_patterns_in_content(content, str(ruby_file))
+            patterns.extend(found_patterns)
+
+        except Exception as e:
+            patterns.append(
+                {"file": str(ruby_file), "error": f"Could not read file: {e}"}
+            )
+
+    return patterns
+
+
+def _find_databag_patterns_in_content(content: str, file_path: str) -> list:
+    """Find data bag usage patterns in file content."""
+    import re
+
+    patterns = []
+
+    # Common Chef data bag patterns
+    databag_patterns = [
+        (r"data_bag\([\'\"]\s*([^\'\"]*)\s*[\'\"]\)", "data_bag()"),
+        (
+            r"data_bag_item\([\'\"]\s*([^\'\"]*)\s*[\'\"]\s*,\s*[\'\"]\s*([^\'\"]*)\s*[\'\"]\)",
+            "data_bag_item()",
+        ),
+        (
+            r"encrypted_data_bag_item\([\'\"]\s*([^\'\"]*)\s*[\'\"]\s*,\s*[\'\"]\s*([^\'\"]*)\s*[\'\"]\)",
+            "encrypted_data_bag_item()",
+        ),
+        (r"search\(\s*:node.*data_bag.*\)", "search() with data_bag"),
+    ]
+
+    for pattern, pattern_type in databag_patterns:
+        matches = re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE)
+        for match in matches:
+            line_num = content[: match.start()].count("\n") + 1
+
+            patterns.append(
+                {
+                    "file": file_path,
+                    "line": line_num,
+                    "type": pattern_type,
+                    "match": match.group(0),
+                    "databag_name": match.group(1) if match.groups() else None,
+                    "item_name": match.group(2)
+                    if len(match.groups()) >= 2 and match.group(2)
+                    else None,
+                }
+            )
+
+    return patterns
+
+
+def _analyze_databag_structure(databags_path) -> dict:
+    """Analyze the structure of Chef data bags directory."""
+    structure = {
+        "total_databags": 0,
+        "total_items": 0,
+        "encrypted_items": 0,
+        "databags": {},
+    }
+
+    for databag_dir in databags_path.iterdir():
+        if not databag_dir.is_dir():
+            continue
+
+        databag_name = databag_dir.name
+        structure["total_databags"] += 1
+
+        items = []
+        for item_file in databag_dir.glob("*.json"):
+            structure["total_items"] += 1
+            item_name = item_file.stem
+
+            try:
+                with open(item_file) as f:
+                    content = f.read()
+
+                is_encrypted = _detect_encrypted_databag(content)
+                if is_encrypted:
+                    structure["encrypted_items"] += 1
+
+                items.append(
+                    {
+                        "name": item_name,
+                        "encrypted": is_encrypted,
+                        "size": item_file.stat().st_size,
+                    }
+                )
+
+            except Exception as e:
+                items.append({"name": item_name, "error": str(e)})
+
+        structure["databags"][databag_name] = {"items": items, "item_count": len(items)}
+
+    return structure
+
+
+def _generate_databag_migration_recommendations(
+    usage_patterns: list, databag_structure: dict
+) -> str:
+    """Generate migration recommendations based on usage analysis."""
+    recommendations = []
+
+    # Analyze usage patterns
+    if usage_patterns:
+        unique_databags = {
+            p.get("databag_name") for p in usage_patterns if p.get("databag_name")
+        }
+        recommendations.append(
+            f"• Found {len(usage_patterns)} data bag references "
+            f"across {len(unique_databags)} different data bags"
+        )
+
+        # Check for encrypted usage
+        encrypted_usage = [
+            p for p in usage_patterns if "encrypted" in p.get("type", "")
+        ]
+        if encrypted_usage:
+            recommendations.append(
+                f"• {len(encrypted_usage)} encrypted data bag references "
+                f"- convert to Ansible Vault"
+            )
+
+        # Check for complex patterns
+        search_patterns = [p for p in usage_patterns if "search" in p.get("type", "")]
+        if search_patterns:
+            recommendations.append(
+                f"• {len(search_patterns)} search patterns involving data bags "
+                f"- may need inventory integration"
+            )
+
+    # Analyze structure
+    if databag_structure:
+        total_bags = databag_structure.get("total_databags", 0)
+        encrypted_items = databag_structure.get("encrypted_items", 0)
+
+        if total_bags > 0:
+            recommendations.append(
+                f"• Convert {total_bags} data bags to group_vars/host_vars structure"
+            )
+
+        if encrypted_items > 0:
+            recommendations.append(
+                f"• {encrypted_items} encrypted items need Ansible Vault conversion"
+            )
+
+    # Variable scope recommendations
+    recommendations.extend(
+        [
+            "• Use group_vars/ for environment-specific data (production, staging)",
+            "• Use host_vars/ for node-specific configurations",
+            "• Consider splitting large data bags into logical variable files",
+            "• Implement variable precedence hierarchy matching Chef environments",
+        ]
+    )
+
+    return "\n".join(recommendations)
+
+
+def _format_usage_patterns(patterns: list) -> str:
+    """Format data bag usage patterns for display."""
+    if not patterns:
+        return "No data bag usage patterns found."
+
+    formatted = []
+    for pattern in patterns[:10]:  # Limit to first 10 for readability
+        if "error" in pattern:
+            formatted.append(f"❌ {pattern['file']}: {pattern['error']}")
+        else:
+            formatted.append(
+                f"• {pattern['type']} in {pattern['file']}:{pattern['line']} "
+                f"(databag: {pattern.get('databag_name', 'unknown')})"
+            )
+
+    if len(patterns) > 10:
+        formatted.append(f"... and {len(patterns) - 10} more patterns")
+
+    return "\n".join(formatted)
+
+
+def _format_databag_structure(structure: dict) -> str:
+    """Format data bag structure analysis for display."""
+    if not structure:
+        return "No data bag structure provided for analysis."
+
+    formatted = [
+        f"• Total data bags: {structure['total_databags']}",
+        f"• Total items: {structure['total_items']}",
+        f"• Encrypted items: {structure['encrypted_items']}",
+    ]
+
+    if structure["databags"]:
+        formatted.append("\n### Data Bag Details:")
+        for name, info in list(structure["databags"].items())[
+            :5
+        ]:  # Limit for readability
+            encrypted_count = sum(
+                1 for item in info["items"] if item.get("encrypted", False)
+            )
+            formatted.append(
+                f"• {name}: {info['item_count']} items ({encrypted_count} encrypted)"
+            )
+
+        if len(structure["databags"]) > 5:
+            formatted.append(f"... and {len(structure['databags']) - 5} more data bags")
+
+    return "\n".join(formatted)
 
 
 def main() -> None:
