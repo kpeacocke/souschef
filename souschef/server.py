@@ -1451,8 +1451,33 @@ def _convert_resource_to_task_dict(
         resource["type"], resource["name"], resource["action"], resource["properties"]
     )
 
-    # Extract notifications for this resource from raw content
+    # Extract and convert Chef guards to Ansible when conditions
+    guards = _extract_chef_guards(resource, raw_content)
+    if guards:
+        task.update(guards)
+
+    # Extract and convert Chef guards to Ansible when conditions
+    guards = _extract_chef_guards(resource, raw_content)
+    if guards:
+        task.update(guards)
+
+    # Enhanced notification handling with timing constraints
     handlers = []
+
+    # First, extract enhanced notifications with timing
+    notifications = _extract_enhanced_notifications(resource, raw_content)
+    for notification in notifications:
+        handler = _create_handler_with_timing(
+            notification["action"],
+            notification["target_type"],
+            notification["target_name"],
+            notification["timing"],
+        )
+        if handler:
+            if "notify" not in task:
+                task["notify"] = []
+            task["notify"].append(handler["name"])
+            handlers.append(handler)
     resource_type_escaped = resource["type"]
     resource_name_escaped = re.escape(resource["name"])
     resource_pattern = (
@@ -1573,6 +1598,333 @@ def _create_handler(
         return handler
 
     return None
+
+
+def _extract_enhanced_notifications(
+    resource: dict[str, str], raw_content: str
+) -> list[dict[str, str]]:
+    """Extract notification information with timing constraints for a resource.
+
+    Args:
+        resource: Resource dictionary.
+        raw_content: Raw recipe content.
+
+    Returns:
+        List of notification dictionaries with timing information.
+
+    """
+    import re
+
+    notifications = []
+
+    # Find the resource block in raw content
+    resource_type_escaped = resource["type"]
+    resource_name_escaped = re.escape(resource["name"])
+    resource_pattern = (
+        resource_type_escaped
+        + r"\s+['\"]?"
+        + resource_name_escaped
+        + r"['\"]?\s+do\s*(.*?)\nend"
+    )
+    resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
+
+    if resource_match:
+        resource_block = resource_match.group(1)
+
+        # Enhanced notifies pattern that captures timing
+        notify_pattern = re.compile(
+            r'notifies\s+:(\w+),\s*[\'"]([^\'"]+)[\'"]\s*(?:,\s*:(\w+))?'
+        )
+        notifies = notify_pattern.findall(resource_block)
+
+        for notify_action, notify_target, notify_timing in notifies:
+            # Parse target like 'service[nginx]'
+            target_match = re.match(r"(\w+)\[([^\]]+)\]", notify_target)
+            if target_match:
+                target_type = target_match.group(1)
+                target_name = target_match.group(2)
+
+                notifications.append(
+                    {
+                        "action": notify_action,
+                        "target_type": target_type,
+                        "target_name": target_name,
+                        "timing": notify_timing or "delayed",  # Default to delayed
+                    }
+                )
+
+    return notifications
+
+
+def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str, Any]:  # noqa: C901
+    """Extract Chef guards (only_if, not_if) and convert to Ansible when conditions.
+
+    Args:
+        resource: Resource dictionary with type, name, action, properties.
+        raw_content: Raw recipe content.
+
+    Returns:
+        Dictionary with Ansible when/unless conditions.
+
+    """
+    import re
+
+    guards = {}
+
+    # Find the resource block in raw content
+    resource_type_escaped = resource["type"]
+    resource_name_escaped = re.escape(resource["name"])
+    resource_pattern = (
+        resource_type_escaped
+        + r"\s+['\"]?"
+        + resource_name_escaped
+        + r"['\"]?\s+do\s*(.*?)\nend"
+    )
+    resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
+
+    if not resource_match:
+        return guards
+
+    resource_block = resource_match.group(1)
+
+    # Extract only_if conditions
+    only_if_pattern = re.compile(r'only_if\s+[\'"]([^\'"]+)[\'"]')
+    only_if_matches = only_if_pattern.findall(resource_block)
+
+    # Extract not_if conditions
+    not_if_pattern = re.compile(r'not_if\s+[\'"]([^\'"]+)[\'"]')
+    not_if_matches = not_if_pattern.findall(resource_block)
+
+    # Extract only_if blocks (Ruby code blocks)
+    only_if_block_pattern = re.compile(r"only_if\s+do\s*(.*?)\s*end", re.DOTALL)
+    only_if_block_matches = only_if_block_pattern.findall(resource_block)
+
+    # Extract not_if blocks (Ruby code blocks)
+    not_if_block_pattern = re.compile(r"not_if\s+do\s*(.*?)\s*end", re.DOTALL)
+    not_if_block_matches = not_if_block_pattern.findall(resource_block)
+
+    # Convert Chef guards to Ansible when conditions
+    when_conditions = []
+
+    # Process only_if conditions (these become when conditions)
+    for condition in only_if_matches:
+        ansible_condition = _convert_chef_condition_to_ansible(condition)
+        if ansible_condition:
+            when_conditions.append(ansible_condition)
+
+    # Process only_if blocks
+    for block in only_if_block_matches:
+        ansible_condition = _convert_chef_block_to_ansible(block, positive=True)
+        if ansible_condition:
+            when_conditions.append(ansible_condition)
+
+    # Process not_if conditions (these become when conditions with negation)
+    for condition in not_if_matches:
+        ansible_condition = _convert_chef_condition_to_ansible(condition, negate=True)
+        if ansible_condition:
+            when_conditions.append(ansible_condition)
+
+    # Process not_if blocks
+    for block in not_if_block_matches:
+        ansible_condition = _convert_chef_block_to_ansible(block, positive=False)
+        if ansible_condition:
+            when_conditions.append(ansible_condition)
+
+    if when_conditions:
+        if len(when_conditions) == 1:
+            guards["when"] = when_conditions[0]
+        else:
+            # Multiple conditions - combine with 'and'
+            guards["when"] = when_conditions
+
+    return guards
+
+
+def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> str:
+    """Convert a Chef condition string to Ansible when condition.
+
+    Args:
+        condition: Chef condition string.
+        negate: Whether to negate the condition (for not_if).
+
+    Returns:
+        Ansible when condition string.
+
+    """
+    import re
+
+    # Common Chef to Ansible condition mappings
+    condition_mappings = {
+        # File existence checks
+        r'File\.exist\?\([\'"]([^\'"]+)[\'"]\)': (
+            r'ansible_check_mode or {{ "\1" | is_file }}'
+        ),
+        r'File\.directory\?\([\'"]([^\'"]+)[\'"]\)': (
+            r'ansible_check_mode or {{ "\1" | is_dir }}'
+        ),
+        r'File\.executable\?\([\'"]([^\'"]+)[\'"]\)': (
+            r'ansible_check_mode or {{ "\1" | is_executable }}'
+        ),
+        # Package checks
+        r'system\([\'"]which\s+(\w+)[\'"]\)': (
+            r'ansible_check_mode or {{ ansible_facts.packages["\1"] is defined }}'
+        ),
+        # Service checks
+        r'system\([\'"]systemctl\s+is-active\s+(\w+)[\'"]\)': (
+            r'ansible_check_mode or {{ ansible_facts.services["\1"].state == "running" }}'
+        ),
+        r'system\([\'"]service\s+(\w+)\s+status[\'"]\)': (
+            r'ansible_check_mode or {{ ansible_facts.services["\1"].state == "running" }}'
+        ),
+        # Platform checks
+        r"platform\?": r"ansible_facts.os_family",
+        r"platform_family\?": r"ansible_facts.os_family",
+        # Node attribute checks
+        r'node\[[\'"]([^\'"]+)[\'"]\]': r'hostvars[inventory_hostname]["\1"]',
+        r"node\.([a-zA-Z_][a-zA-Z0-9_.]*)": r'hostvars[inventory_hostname]["\1"]',
+    }
+
+    # Apply mappings
+    converted = condition
+    for chef_pattern, ansible_replacement in condition_mappings.items():
+        converted = re.sub(
+            chef_pattern, ansible_replacement, converted, flags=re.IGNORECASE
+        )
+
+    # Handle simple command checks
+    if converted == condition:  # No mapping found, treat as shell command
+        converted = (
+            f"ansible_check_mode or {{ ansible_facts.env.PATH is defined "
+            f'and "{condition}" | length > 0 }}'
+        )
+
+    if negate:
+        converted = f"not ({converted})"
+
+    return converted
+
+
+def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
+    """Convert a Chef condition block to Ansible when condition.
+
+    Args:
+        block: Chef Ruby code block.
+        positive: True for only_if blocks, False for not_if blocks.
+
+    Returns:
+        Ansible when condition string.
+
+    """
+    import re
+
+    # Clean up the block
+    block = block.strip()
+
+    # Handle simple boolean returns
+    if block.lower() in ["true", "false"]:
+        result = block.lower() == "true"
+        return str(result if positive else not result).lower()
+
+    # Handle file existence patterns in blocks
+    file_exist_pattern = re.search(r'File\.exist\?\([\'"]([^\'"]+)[\'"]\)', block)
+    if file_exist_pattern:
+        path = file_exist_pattern.group(1)
+        condition = f'ansible_check_mode or {{ "{path}" | is_file }}'
+        return condition if positive else f"not ({condition})"
+
+    # Handle directory existence patterns
+    dir_exist_pattern = re.search(r'File\.directory\?\([\'"]([^\'"]+)[\'"]\)', block)
+    if dir_exist_pattern:
+        path = dir_exist_pattern.group(1)
+        condition = f'ansible_check_mode or {{ "{path}" | is_dir }}'
+        return condition if positive else f"not ({condition})"
+
+    # Handle command execution patterns
+    system_pattern = re.search(r'system\([\'"]([^\'"]+)[\'"]\)', block)
+    if system_pattern:
+        condition = "ansible_check_mode or {{ ansible_facts.env.PATH is defined }}"
+        return condition if positive else f"not ({condition})"
+
+    # For complex blocks, create a comment indicating manual review needed
+    condition = f"# TODO: Review Chef block condition: {block[:50]}..."
+    return condition
+
+
+def _extract_resource_subscriptions(
+    resource: dict[str, str], raw_content: str
+) -> list[dict[str, str]]:
+    """Extract subscription information with timing constraints for a resource.
+
+    Args:
+        resource: Resource dictionary.
+        raw_content: Raw recipe content.
+
+    Returns:
+        List of subscription dictionaries with timing information.
+
+    """
+    import re
+
+    subscriptions = []
+
+    # Enhanced subscribes pattern that captures timing
+    subscribes_pattern = re.compile(
+        r'subscribes\s+:(\w+),\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*:(\w+))?', re.IGNORECASE
+    )
+
+    # Find all subscribes declarations
+    subscribes_matches = subscribes_pattern.findall(raw_content)
+
+    for action, target, timing in subscribes_matches:
+        # Parse target like 'service[nginx]' or 'template[/etc/nginx/nginx.conf]'
+        target_match = re.match(r"(\w+)\[([^\]]+)\]", target)
+        if target_match:
+            target_type = target_match.group(1)
+            target_name = target_match.group(2)
+
+            # Check if this resource is what the subscription refers to
+            if resource["type"] == target_type and resource["name"] == target_name:
+                subscriptions.append(
+                    {
+                        "action": action,
+                        "resource_type": target_type,
+                        "resource_name": target_name,
+                        "timing": timing
+                        or "delayed",  # Default to delayed if not specified
+                    }
+                )
+
+    return subscriptions
+
+
+def _create_handler_with_timing(
+    action: str, resource_type: str, resource_name: str, timing: str
+) -> dict[str, Any]:
+    """Create an Ansible handler with timing considerations.
+
+    Args:
+        action: The Chef action (e.g., 'reload', 'restart').
+        resource_type: The Chef resource type (e.g., 'service').
+        resource_name: The resource name (e.g., 'nginx').
+        timing: The timing constraint ('immediate' or 'delayed').
+
+    Returns:
+        Handler task dictionary with timing metadata.
+
+    """
+    handler = _create_handler(action, resource_type, resource_name)
+    if handler:
+        # Add timing metadata (can be used by Ansible playbook optimization)
+        handler["_chef_timing"] = timing
+
+        # For immediate timing, we could add listen/notify optimization
+        if timing == "immediate":
+            handler["_priority"] = "immediate"
+            # Note: Ansible handlers always run at the end, but we can document
+            # the original Chef timing intention for migration planning
+            handler["# NOTE"] = "Chef immediate timing - consider task ordering"
+
+    return handler
 
 
 # InSpec parsing helper functions
