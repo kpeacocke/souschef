@@ -4329,6 +4329,727 @@ def _format_databag_structure(structure: dict) -> str:
     return "\n".join(formatted)
 
 
+@mcp.tool()
+def generate_awx_job_template_from_cookbook(
+    cookbook_path: str,
+    cookbook_name: str,
+    target_environment: str = "production",
+    include_survey: bool = True,
+) -> str:
+    """Generate AWX/AAP job template configuration from Chef cookbook.
+
+    Args:
+        cookbook_path: Path to Chef cookbook directory
+        cookbook_name: Name of the cookbook for job template
+        target_environment: Target environment for the job template
+        include_survey: Whether to include survey spec for cookbook attributes
+
+    Returns:
+        AWX/AAP job template JSON configuration
+
+    """
+    try:
+        import json
+        from pathlib import Path
+
+        cookbook = Path(cookbook_path)
+        if not cookbook.exists():
+            return f"Error: Cookbook path not found: {cookbook_path}"
+
+        # Analyze cookbook structure
+        cookbook_analysis = _analyze_cookbook_for_awx(cookbook, cookbook_name)
+
+        # Generate job template
+        job_template = _generate_awx_job_template(
+            cookbook_analysis, cookbook_name, target_environment, include_survey
+        )
+
+        return f"""# AWX/AAP Job Template Configuration
+# Generated from Chef cookbook: {cookbook_name}
+
+## Job Template JSON:
+```json
+{json.dumps(job_template, indent=2)}
+```
+
+## CLI Import Command:
+```bash
+awx-cli job_templates create \\
+    --name "{job_template["name"]}" \\
+    --project "{job_template["project"]}" \\
+    --playbook "{job_template["playbook"]}" \\
+    --inventory "{job_template["inventory"]}" \\
+    --credential "{job_template["credential"]}" \\
+    --job_type run \\
+    --verbosity 1
+```
+
+## Cookbook Analysis Summary:
+{_format_cookbook_analysis(cookbook_analysis)}
+"""
+
+    except Exception as e:
+        return f"Error generating AWX job template from cookbook: {e}"
+
+
+@mcp.tool()
+def generate_awx_workflow_from_chef_runlist(
+    runlist_content: str, workflow_name: str, environment: str = "production"
+) -> str:
+    """Generate AWX/AAP workflow template from Chef runlist.
+
+    Args:
+        runlist_content: Chef runlist content (JSON or comma-separated)
+        workflow_name: Name for the workflow template
+        environment: Target environment for workflow execution
+
+    Returns:
+        AWX/AAP workflow template configuration with job dependencies
+
+    """
+    try:
+        import json
+
+        # Parse runlist
+        runlist = _parse_chef_runlist(runlist_content)
+
+        # Generate workflow template
+        workflow_template = _generate_awx_workflow_template(
+            runlist, workflow_name, environment
+        )
+
+        return f"""# AWX/AAP Workflow Template Configuration
+# Generated from Chef runlist for: {workflow_name}
+
+## Workflow Template JSON:
+```json
+{json.dumps(workflow_template, indent=2)}
+```
+
+## Workflow Nodes Configuration:
+{_format_workflow_nodes(workflow_template.get("workflow_nodes", []))}
+
+## Chef Runlist Analysis:
+- Total recipes/roles: {len(runlist)}
+- Execution order preserved: Yes
+- Dependencies mapped: Yes
+
+## Import Instructions:
+1. Create individual job templates for each cookbook
+2. Import workflow template using AWX CLI or API
+3. Configure workflow node dependencies
+4. Test execution with survey parameters
+"""
+
+    except Exception as e:
+        return f"Error generating AWX workflow from Chef runlist: {e}"
+
+
+@mcp.tool()
+def generate_awx_project_from_cookbooks(
+    cookbooks_directory: str,
+    project_name: str,
+    scm_type: str = "git",
+    scm_url: str = "",
+) -> str:
+    """Generate AWX/AAP project configuration from Chef cookbooks directory.
+
+    Args:
+        cookbooks_directory: Path to Chef cookbooks directory
+        project_name: Name for the AWX project
+        scm_type: SCM type (git, svn, etc.)
+        scm_url: SCM repository URL
+
+    Returns:
+        AWX/AAP project configuration with converted playbooks structure
+
+    """
+    try:
+        import json
+        from pathlib import Path
+
+        cookbooks_path = Path(cookbooks_directory)
+        if not cookbooks_path.exists():
+            return f"Error: Cookbooks directory not found: {cookbooks_directory}"
+
+        # Analyze all cookbooks
+        cookbooks_analysis = _analyze_cookbooks_directory(cookbooks_path)
+
+        # Generate project structure
+        project_config = _generate_awx_project_config(
+            cookbooks_analysis, project_name, scm_type, scm_url
+        )
+
+        return f"""# AWX/AAP Project Configuration
+# Generated from Chef cookbooks: {project_name}
+
+## Project Configuration:
+```json
+{json.dumps(project_config, indent=2)}
+```
+
+## Recommended Directory Structure:
+```
+{project_name}/
+├── playbooks/
+{_format_playbook_structure(cookbooks_analysis)}
+├── inventories/
+│   ├── production/
+│   ├── staging/
+│   └── development/
+├── group_vars/
+├── host_vars/
+└── requirements.yml
+```
+
+## Cookbooks Analysis:
+{_format_cookbooks_analysis(cookbooks_analysis)}
+
+## Migration Steps:
+1. Convert cookbooks to Ansible playbooks
+2. Set up SCM repository with recommended structure
+3. Create AWX project pointing to repository
+4. Configure job templates for each converted cookbook
+5. Set up inventories and credentials
+"""
+
+    except Exception as e:
+        return f"Error generating AWX project from cookbooks: {e}"
+
+
+@mcp.tool()
+def generate_awx_inventory_source_from_chef(
+    chef_server_url: str, organization: str = "Default", sync_schedule: str = "daily"
+) -> str:
+    """Generate AWX/AAP inventory source from Chef server configuration.
+
+    Args:
+        chef_server_url: Chef server URL for inventory sync
+        organization: AWX organization name
+        sync_schedule: Inventory sync schedule (hourly, daily, weekly)
+
+    Returns:
+        AWX/AAP inventory source configuration for Chef server integration
+
+    """
+    try:
+        import json
+
+        # Generate inventory source configuration
+        inventory_source = _generate_chef_inventory_source(
+            chef_server_url, organization, sync_schedule
+        )
+
+        # Generate custom inventory script
+        custom_script = _generate_chef_inventory_script(chef_server_url)
+
+        return f"""# AWX/AAP Inventory Source Configuration
+# Chef Server Integration: {chef_server_url}
+
+## Inventory Source JSON:
+```json
+{json.dumps(inventory_source, indent=2)}
+```
+
+## Custom Inventory Script:
+```python
+{custom_script}
+```
+
+## Setup Instructions:
+1. Create custom credential type for Chef server authentication
+2. Create credential with Chef client key and node name
+3. Upload custom inventory script to AWX
+4. Create inventory source with Chef server configuration
+5. Configure sync schedule and test inventory update
+
+## Credential Type Fields:
+- chef_server_url: Chef server URL
+- chef_node_name: Chef client node name
+- chef_client_key: Chef client private key
+- chef_client_pem: Chef client PEM file content
+
+## Environment Variables:
+- CHEF_SERVER_URL: {chef_server_url}
+- CHEF_NODE_NAME: ${{chef_node_name}}
+- CHEF_CLIENT_KEY: ${{chef_client_key}}
+"""
+
+    except Exception as e:
+        return f"Error generating AWX inventory source from Chef: {e}"
+
+
+def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
+    """Analyze Chef cookbook structure for AWX job template generation."""
+    analysis = {
+        "name": cookbook_name,
+        "recipes": [],
+        "attributes": {},
+        "dependencies": [],
+        "templates": [],
+        "files": [],
+        "survey_fields": [],
+    }
+
+    # Analyze recipes
+    recipes_dir = cookbook_path / "recipes"
+    if recipes_dir.exists():
+        for recipe_file in recipes_dir.glob("*.rb"):
+            recipe_name = recipe_file.stem
+            analysis["recipes"].append(
+                {
+                    "name": recipe_name,
+                    "file": str(recipe_file),
+                    "size": recipe_file.stat().st_size,
+                }
+            )
+
+    # Analyze attributes for survey generation
+    attributes_dir = cookbook_path / "attributes"
+    if attributes_dir.exists():
+        for attr_file in attributes_dir.glob("*.rb"):
+            try:
+                with attr_file.open("r") as f:
+                    content = f.read()
+
+                # Extract attribute declarations for survey
+                attributes = _extract_cookbook_attributes(content)
+                analysis["attributes"].update(attributes)
+
+                # Generate survey fields from attributes
+                survey_fields = _generate_survey_fields_from_attributes(attributes)
+                analysis["survey_fields"].extend(survey_fields)
+
+            except Exception:
+                pass
+
+    # Analyze dependencies
+    metadata_file = cookbook_path / "metadata.rb"
+    if metadata_file.exists():
+        try:
+            with metadata_file.open("r") as f:
+                content = f.read()
+
+            dependencies = _extract_cookbook_dependencies(content)
+            analysis["dependencies"] = dependencies
+
+        except Exception:
+            pass
+
+    # Count templates and files
+    templates_dir = cookbook_path / "templates"
+    if templates_dir.exists():
+        analysis["templates"] = [
+            f.name for f in templates_dir.rglob("*") if f.is_file()
+        ]
+
+    files_dir = cookbook_path / "files"
+    if files_dir.exists():
+        analysis["files"] = [f.name for f in files_dir.rglob("*") if f.is_file()]
+
+    return analysis
+
+
+def _generate_awx_job_template(
+    analysis: dict, cookbook_name: str, environment: str, include_survey: bool
+) -> dict:
+    """Generate AWX job template configuration from cookbook analysis."""
+    job_template = {
+        "name": f"{cookbook_name}-{environment}",
+        "description": f"Deploy {cookbook_name} cookbook to {environment}",
+        "job_type": "run",
+        "project": f"{cookbook_name}-project",
+        "playbook": f"playbooks/{cookbook_name}.yml",
+        "inventory": environment,
+        "credential": f"{environment}-ssh",
+        "verbosity": 1,
+        "ask_variables_on_launch": True,
+        "ask_limit_on_launch": True,
+        "ask_tags_on_launch": False,
+        "ask_skip_tags_on_launch": False,
+        "ask_job_type_on_launch": False,
+        "ask_verbosity_on_launch": False,
+        "ask_inventory_on_launch": False,
+        "ask_credential_on_launch": False,
+        "survey_enabled": include_survey and len(analysis.get("survey_fields", [])) > 0,
+        "become_enabled": True,
+        "host_config_key": "",
+        "auto_run_on_commit": False,
+        "timeout": 3600,
+    }
+
+    if include_survey and analysis.get("survey_fields"):
+        job_template["survey_spec"] = {
+            "name": f"{cookbook_name} Configuration",
+            "description": f"Configuration parameters for {cookbook_name} cookbook",
+            "spec": analysis["survey_fields"],
+        }
+
+    return job_template
+
+
+def _generate_awx_workflow_template(
+    runlist: list, workflow_name: str, environment: str
+) -> dict:
+    """Generate AWX workflow template from Chef runlist."""
+    workflow_template = {
+        "name": f"{workflow_name}-{environment}",
+        "description": f"Execute {workflow_name} runlist in {environment}",
+        "organization": "Default",
+        "survey_enabled": True,
+        "ask_variables_on_launch": True,
+        "ask_limit_on_launch": True,
+        "workflow_nodes": [],
+    }
+
+    # Generate workflow nodes from runlist
+    for index, recipe in enumerate(runlist):
+        node_id = index + 1
+        node = {
+            "id": node_id,
+            "unified_job_template": f"{recipe.replace('::', '-')}-{environment}",
+            "unified_job_template_type": "job_template",
+            "success_nodes": [node_id + 1] if index < len(runlist) - 1 else [],
+            "failure_nodes": [],
+            "always_nodes": [],
+            "inventory": environment,
+            "credential": f"{environment}-ssh",
+        }
+        workflow_template["workflow_nodes"].append(node)
+
+    return workflow_template
+
+
+def _generate_awx_project_config(
+    analysis: dict, project_name: str, scm_type: str, scm_url: str
+) -> dict:
+    """Generate AWX project configuration from cookbooks analysis."""
+    project_config = {
+        "name": project_name,
+        "description": "Ansible playbooks converted from Chef cookbooks",
+        "organization": "Default",
+        "scm_type": scm_type,
+        "scm_url": scm_url,
+        "scm_branch": "main",
+        "scm_clean": True,
+        "scm_delete_on_update": False,
+        "credential": f"{scm_type}-credential",
+        "timeout": 300,
+        "scm_update_on_launch": True,
+        "scm_update_cache_timeout": 0,
+        "allow_override": False,
+        "default_environment": None,
+    }
+
+    return project_config
+
+
+def _generate_chef_inventory_source(
+    chef_server_url: str, organization: str, sync_schedule: str
+) -> dict:
+    """Generate Chef server inventory source configuration."""
+    inventory_source = {
+        "name": "Chef Server Inventory",
+        "description": f"Dynamic inventory from Chef server: {chef_server_url}",
+        "inventory": "Chef Nodes",
+        "source": "scm",
+        "source_project": "chef-inventory-scripts",
+        "source_path": "chef_inventory.py",
+        "credential": "chef-server-credential",
+        "overwrite": True,
+        "overwrite_vars": True,
+        "timeout": 300,
+        "verbosity": 1,
+        "update_on_launch": True,
+        "update_cache_timeout": 86400,  # 24 hours
+        "source_vars": json.dumps(
+            {
+                "chef_server_url": chef_server_url,
+                "ssl_verify": True,
+                "group_by_environment": True,
+                "group_by_roles": True,
+                "group_by_platform": True,
+            },
+            indent=2,
+        ),
+    }
+
+    # Map sync schedule to update frequency
+    schedule_mapping = {"hourly": 3600, "daily": 86400, "weekly": 604800}
+
+    inventory_source["update_cache_timeout"] = schedule_mapping.get(
+        sync_schedule, 86400
+    )
+
+    return inventory_source
+
+
+def _generate_chef_inventory_script(chef_server_url: str) -> str:
+    """Generate custom inventory script for Chef server integration."""
+    return f'''#!/usr/bin/env python3
+"""
+AWX/AAP Custom Inventory Script for Chef Server
+Connects to Chef server and generates Ansible inventory
+"""
+
+import json
+import sys
+import os
+from chef import ChefAPI
+
+def main():
+    # Chef server configuration
+    chef_server_url = os.environ.get('CHEF_SERVER_URL', '{chef_server_url}')
+    client_name = os.environ.get('CHEF_NODE_NAME', 'admin')
+    client_key = os.environ.get('CHEF_CLIENT_KEY', '/etc/chef/client.pem')
+
+    # Initialize Chef API
+    try:
+        api = ChefAPI(chef_server_url, client_key, client_name)
+
+        # Build Ansible inventory
+        inventory = {{
+            '_meta': {{'hostvars': {{}}}},
+            'all': {{'children': []}},
+            'ungrouped': {{'hosts': []}}
+        }}
+
+        # Get all nodes from Chef server
+        nodes = api['/nodes']
+
+        for node_name in nodes:
+            node = api[f'/nodes/{{node_name}}']
+
+            # Extract node information
+            node_data = {{
+                'ansible_host': node.get('automatic', {{}}).get('ipaddress', node_name),
+                'chef_environment': node.get('chef_environment', '_default'),
+                'chef_roles': node.get('run_list', []),
+                'chef_platform': node.get('automatic', {{}}).get('platform'),
+                'chef_platform_version': node.get('automatic', {{}}).get('platform_version')
+            }}
+
+            # Add to hostvars
+            inventory['_meta']['hostvars'][node_name] = node_data
+
+            # Group by environment
+            env_group = f"environment_{{node_data['chef_environment']}}"
+            if env_group not in inventory:
+                inventory[env_group] = {{'hosts': []}}
+                inventory['all']['children'].append(env_group)
+            inventory[env_group]['hosts'].append(node_name)
+
+            # Group by roles
+            for role in node.get('run_list', []):
+                role_name = role.replace('role[', '').replace(']', '')
+                if role_name.startswith('recipe['):
+                    continue
+
+                role_group = f"role_{{role_name}}"
+                if role_group not in inventory:
+                    inventory[role_group] = {{'hosts': []}}
+                    inventory['all']['children'].append(role_group)
+                inventory[role_group]['hosts'].append(node_name)
+
+            # Group by platform
+            if node_data['chef_platform']:
+                platform_group = f"platform_{{node_data['chef_platform']}}"
+                if platform_group not in inventory:
+                    inventory[platform_group] = {{'hosts': []}}
+                    inventory['all']['children'].append(platform_group)
+                inventory[platform_group]['hosts'].append(node_name)
+
+        # Output inventory JSON
+        print(json.dumps(inventory, indent=2))
+
+    except Exception as e:
+        print(f"Error connecting to Chef server: {{e}}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
+'''
+
+
+def _parse_chef_runlist(runlist_content: str) -> list:
+    """Parse Chef runlist content into list of recipes/roles."""
+    import json
+
+    try:
+        # Try parsing as JSON first
+        if runlist_content.strip().startswith("["):
+            runlist = json.loads(runlist_content)
+            return [
+                item.replace("recipe[", "").replace("role[", "").replace("]", "")
+                for item in runlist
+            ]
+    except json.JSONDecodeError:
+        pass
+
+    # Parse as comma-separated list
+    if "," in runlist_content:
+        items = [item.strip() for item in runlist_content.split(",")]
+        return [
+            item.replace("recipe[", "").replace("role[", "").replace("]", "")
+            for item in items
+        ]
+
+    # Parse single item
+    return [
+        runlist_content.replace("recipe[", "").replace("role[", "").replace("]", "")
+    ]
+
+
+def _extract_cookbook_attributes(content: str) -> dict:
+    """Extract cookbook attributes for survey generation."""
+    import re
+
+    attributes = {}
+
+    # Find default attribute declarations
+    attr_pattern = r"default\[['\"]([^'\"]+)['\"]\]\s*=\s*([^#\n]+)"
+    for match in re.finditer(attr_pattern, content):
+        attr_name = match.group(1)
+        attr_value = match.group(2).strip()
+
+        # Clean up value
+        if attr_value.startswith(("'", '"')):
+            attr_value = attr_value[1:-1]
+
+        attributes[attr_name] = attr_value
+
+    return attributes
+
+
+def _extract_cookbook_dependencies(content: str) -> list:
+    """Extract cookbook dependencies from metadata."""
+    import re
+
+    dependencies = []
+
+    # Find depends declarations
+    depends_pattern = r"depends\s+['\"]([^'\"]+)['\"]"
+    for match in re.finditer(depends_pattern, content):
+        dependencies.append(match.group(1))
+
+    return dependencies
+
+
+def _generate_survey_fields_from_attributes(attributes: dict) -> list:
+    """Generate AWX survey fields from cookbook attributes."""
+    survey_fields = []
+
+    for attr_name, attr_value in attributes.items():
+        # Determine field type based on value
+        field_type = "text"
+        if attr_value.lower() in ["true", "false"]:
+            field_type = "boolean"
+        elif attr_value.isdigit():
+            field_type = "integer"
+
+        field = {
+            "variable": attr_name.replace(".", "_"),
+            "question_name": attr_name.replace(".", " ").title(),
+            "question_description": f"Chef attribute: {attr_name}",
+            "required": False,
+            "type": field_type,
+            "default": attr_value,
+            "choices": "",
+        }
+
+        survey_fields.append(field)
+
+    return survey_fields
+
+
+def _analyze_cookbooks_directory(cookbooks_path) -> dict:
+    """Analyze entire cookbooks directory structure."""
+    analysis = {
+        "total_cookbooks": 0,
+        "cookbooks": {},
+        "total_recipes": 0,
+        "total_templates": 0,
+        "total_files": 0,
+    }
+
+    for cookbook_dir in cookbooks_path.iterdir():
+        if not cookbook_dir.is_dir():
+            continue
+
+        cookbook_name = cookbook_dir.name
+        analysis["total_cookbooks"] += 1
+
+        cookbook_analysis = _analyze_cookbook_for_awx(cookbook_dir, cookbook_name)
+        analysis["cookbooks"][cookbook_name] = cookbook_analysis
+
+        # Aggregate stats
+        analysis["total_recipes"] += len(cookbook_analysis["recipes"])
+        analysis["total_templates"] += len(cookbook_analysis["templates"])
+        analysis["total_files"] += len(cookbook_analysis["files"])
+
+    return analysis
+
+
+def _format_cookbook_analysis(analysis: dict) -> str:
+    """Format cookbook analysis for display."""
+    formatted = [
+        f"• Recipes: {len(analysis['recipes'])}",
+        f"• Attributes: {len(analysis['attributes'])}",
+        f"• Dependencies: {len(analysis['dependencies'])}",
+        f"• Templates: {len(analysis['templates'])}",
+        f"• Files: {len(analysis['files'])}",
+        f"• Survey fields: {len(analysis['survey_fields'])}",
+    ]
+
+    return "\n".join(formatted)
+
+
+def _format_workflow_nodes(nodes: list) -> str:
+    """Format workflow nodes for display."""
+    if not nodes:
+        return "No workflow nodes defined."
+
+    formatted = []
+    for node in nodes:
+        formatted.append(f"• Node {node['id']}: {node['unified_job_template']}")
+        if node.get("success_nodes"):
+            formatted.append(f"  → Success: Node {node['success_nodes'][0]}")
+
+    return "\n".join(formatted)
+
+
+def _format_playbook_structure(analysis: dict) -> str:
+    """Format recommended playbook structure."""
+    structure_lines = []
+
+    for cookbook_name in analysis.get("cookbooks", {}):
+        structure_lines.append(f"│   ├── {cookbook_name}.yml")
+
+    return "\n".join(structure_lines)
+
+
+def _format_cookbooks_analysis(analysis: dict) -> str:
+    """Format cookbooks directory analysis."""
+    formatted = [
+        f"• Total cookbooks: {analysis['total_cookbooks']}",
+        f"• Total recipes: {analysis['total_recipes']}",
+        f"• Total templates: {analysis['total_templates']}",
+        f"• Total files: {analysis['total_files']}",
+    ]
+
+    if analysis["cookbooks"]:
+        formatted.append("\n### Cookbook Details:")
+        for name, info in list(analysis["cookbooks"].items())[:5]:
+            formatted.append(
+                f"• {name}: {len(info['recipes'])} recipes, {len(info['attributes'])} attributes"
+            )
+
+        if len(analysis["cookbooks"]) > 5:
+            formatted.append(f"... and {len(analysis['cookbooks']) - 5} more cookbooks")
+
+    return "\n".join(formatted)
+
+
 def main() -> None:
     """Run the SousChef MCP server.
 
