@@ -5050,6 +5050,1104 @@ def _format_cookbooks_analysis(analysis: dict) -> str:
     return "\n".join(formatted)
 
 
+@mcp.tool()
+def convert_chef_deployment_to_ansible_strategy(
+    deployment_recipe_path: str,
+    deployment_pattern: str = "auto_detect",
+    target_strategy: str = "rolling_update",
+) -> str:
+    """Convert Chef application deployment recipe to Ansible deployment strategy.
+
+    Args:
+        deployment_recipe_path: Path to Chef deployment recipe
+        deployment_pattern: Chef deployment pattern (blue_green, rolling, canary, auto_detect)
+        target_strategy: Target Ansible strategy (rolling_update, blue_green, canary)
+
+    Returns:
+        Ansible playbook with deployment strategy implementation
+
+    """
+    try:
+        from pathlib import Path
+
+        recipe_path = Path(deployment_recipe_path)
+        if not recipe_path.exists():
+            return f"Error: Deployment recipe not found: {deployment_recipe_path}"
+
+        # Analyze Chef deployment recipe
+        with recipe_path.open("r") as f:
+            recipe_content = f.read()
+
+        deployment_analysis = _analyze_chef_deployment_pattern(
+            recipe_content, deployment_pattern
+        )
+
+        # Convert to Ansible deployment strategy
+        ansible_strategy = _generate_ansible_deployment_strategy(
+            deployment_analysis, target_strategy, recipe_path.stem
+        )
+
+        return f"""# Chef Deployment Recipe → Ansible Strategy Conversion
+# Source: {deployment_recipe_path}
+# Detected Pattern: {deployment_analysis["detected_pattern"]}
+# Target Strategy: {target_strategy}
+
+## Ansible Playbook:
+```yaml
+{ansible_strategy["playbook"]}
+```
+
+## Deployment Analysis:
+{_format_deployment_analysis(deployment_analysis)}
+
+## Strategy Features:
+{_format_strategy_features(ansible_strategy)}
+
+## Usage Instructions:
+```bash
+# Execute deployment
+ansible-playbook -i inventory/{target_strategy}_deployment.yml \\
+    --extra-vars "app_version={{{{ app_version }}}}" \\
+    --limit "{{{{ target_hosts }}}}"
+
+# Monitor deployment
+ansible-playbook -i inventory monitor_deployment.yml \\
+    --tags "health_check,rollback_ready"
+```
+"""
+
+    except Exception as e:
+        return f"Error converting Chef deployment to Ansible strategy: {e}"
+
+
+@mcp.tool()
+def generate_blue_green_deployment_playbook(
+    app_name: str, service_config: str = "", health_check_url: str = "/health"
+) -> str:
+    """Generate Ansible blue/green deployment playbook from application configuration.
+
+    Args:
+        app_name: Name of the application to deploy
+        service_config: JSON configuration for service setup
+        health_check_url: URL endpoint for health checks
+
+    Returns:
+        Complete blue/green deployment playbook with rollback capabilities
+
+    """
+    try:
+        import json
+
+        # Parse service configuration
+        config = {}
+        if service_config:
+            config = json.loads(service_config)
+
+        # Generate blue/green deployment playbook
+        playbook = _generate_blue_green_playbook(app_name, config, health_check_url)
+
+        return f"""# Blue/Green Deployment Playbook
+# Application: {app_name}
+
+## Main Deployment Playbook:
+```yaml
+{playbook["main_playbook"]}
+```
+
+## Supporting Playbooks:
+
+### Health Check Playbook:
+```yaml
+{playbook["health_check"]}
+```
+
+### Rollback Playbook:
+```yaml
+{playbook["rollback"]}
+```
+
+## Load Balancer Configuration:
+```yaml
+{playbook["load_balancer"]}
+```
+
+## Deployment Process:
+1. Deploy to inactive environment (blue/green)
+2. Run health checks on new deployment
+3. Switch traffic to new environment
+4. Keep previous environment as rollback option
+5. Cleanup old environment after validation
+
+## Variables:
+```yaml
+{playbook["variables"]}
+```
+
+## Execute Commands:
+```bash
+# Deploy new version
+ansible-playbook blue_green_deploy.yml -e "app_version=1.2.3 target_env=green"
+
+# Switch traffic
+ansible-playbook blue_green_switch.yml -e "active_env=green"
+
+# Rollback if needed
+ansible-playbook blue_green_rollback.yml -e "rollback_to=blue"
+```
+"""
+
+    except Exception as e:
+        return f"Error generating blue/green deployment playbook: {e}"
+
+
+@mcp.tool()
+def generate_canary_deployment_strategy(
+    app_name: str, canary_percentage: int = 10, rollout_steps: str = "10,25,50,100"
+) -> str:
+    """Generate Ansible canary deployment strategy with gradual rollout.
+
+    Args:
+        app_name: Name of the application for canary deployment
+        canary_percentage: Initial canary traffic percentage
+        rollout_steps: Comma-separated rollout percentages
+
+    Returns:
+        Canary deployment strategy with monitoring and automated rollback
+
+    """
+    try:
+        # Parse rollout steps
+        steps = [int(step.strip()) for step in rollout_steps.split(",")]
+
+        # Generate canary deployment strategy
+        canary_strategy = _generate_canary_strategy(app_name, canary_percentage, steps)
+
+        return f"""# Canary Deployment Strategy
+# Application: {app_name}
+# Initial Canary: {canary_percentage}%
+# Rollout Steps: {rollout_steps}%
+
+## Canary Deployment Playbook:
+```yaml
+{canary_strategy["main_playbook"]}
+```
+
+## Monitoring and Validation:
+```yaml
+{canary_strategy["monitoring"]}
+```
+
+## Progressive Rollout:
+```yaml
+{canary_strategy["progressive_rollout"]}
+```
+
+## Automated Rollback:
+```yaml
+{canary_strategy["rollback"]}
+```
+
+## Deployment Workflow:
+{_format_canary_workflow(steps, canary_percentage)}
+
+## Monitoring Checks:
+- Error rate: < 1%
+- Response time: < 500ms
+- Success rate: > 99%
+- Resource utilization: < 80%
+
+## Execution Commands:
+```bash
+# Start canary deployment
+ansible-playbook canary_deploy.yml -e "app_version=1.2.3 canary_percent={canary_percentage}"
+
+# Progress to next stage (if metrics are good)
+ansible-playbook canary_progress.yml -e "next_percent=25"
+
+# Full rollout (if all stages successful)
+ansible-playbook canary_complete.yml
+
+# Emergency rollback
+ansible-playbook canary_rollback.yml -e "reason='high_error_rate'"
+```
+"""
+
+    except Exception as e:
+        return f"Error generating canary deployment strategy: {e}"
+
+
+@mcp.tool()
+def analyze_chef_application_patterns(
+    cookbook_path: str, application_type: str = "web_application"
+) -> str:
+    """Analyze Chef cookbook for application deployment patterns and provide migration recommendations.
+
+    Args:
+        cookbook_path: Path to Chef application cookbook
+        application_type: Type of application (web_application, microservice, database, etc.)
+
+    Returns:
+        Analysis of deployment patterns with Ansible migration recommendations
+
+    """
+    try:
+        from pathlib import Path
+
+        cookbook = Path(cookbook_path)
+        if not cookbook.exists():
+            return f"Error: Cookbook path not found: {cookbook_path}"
+
+        # Analyze cookbook for deployment patterns
+        deployment_patterns = _analyze_application_cookbook(cookbook, application_type)
+
+        # Generate migration recommendations
+        migration_recommendations = _generate_deployment_migration_recommendations(
+            deployment_patterns, application_type
+        )
+
+        return f"""# Chef Application Cookbook Analysis
+# Cookbook: {cookbook.name}
+# Application Type: {application_type}
+
+## Deployment Patterns Detected:
+{_format_deployment_patterns(deployment_patterns)}
+
+## Chef Resources Analysis:
+{_format_chef_resources_analysis(deployment_patterns)}
+
+## Migration Recommendations:
+{migration_recommendations}
+
+## Recommended Ansible Strategies:
+{_recommend_ansible_strategies(deployment_patterns, application_type)}
+
+## Implementation Priority:
+1. Convert basic deployment logic to Ansible tasks
+2. Implement health checks and validation
+3. Add rollback capabilities
+4. Configure monitoring and alerting
+5. Test deployment strategies in staging
+6. Implement progressive deployment patterns
+
+## Next Steps:
+- Use convert_chef_deployment_to_ansible_strategy for specific recipes
+- Implement blue/green with generate_blue_green_deployment_playbook
+- Set up canary deployments with generate_canary_deployment_strategy
+- Integrate with AWX/AAP for automated execution
+"""
+
+    except Exception as e:
+        return f"Error analyzing Chef application patterns: {e}"
+
+
+def _analyze_chef_deployment_pattern(content: str, pattern_hint: str) -> dict:
+    """Analyze Chef recipe content for deployment patterns."""
+    import re
+
+    analysis = {
+        "detected_pattern": "standard",
+        "deployment_steps": [],
+        "health_checks": [],
+        "rollback_mechanisms": [],
+        "service_management": [],
+        "load_balancer_config": [],
+        "configuration_management": [],
+    }
+
+    # Detect deployment patterns
+    deployment_indicators = {
+        "blue_green": [
+            r"blue.*green|green.*blue",
+            r"inactive.*active",
+            r"current.*previous",
+            r"switch.*traffic",
+        ],
+        "rolling": [
+            r"rolling.*update",
+            r"serial.*deployment",
+            r"batch.*size",
+            r"max.*parallel",
+        ],
+        "canary": [
+            r"canary.*deployment",
+            r"traffic.*split",
+            r"percentage.*rollout",
+            r"gradual.*rollout",
+        ],
+    }
+
+    detected_patterns = []
+    for pattern_type, indicators in deployment_indicators.items():
+        for indicator in indicators:
+            if re.search(indicator, content, re.IGNORECASE):
+                detected_patterns.append(pattern_type)
+                break
+
+    if detected_patterns:
+        analysis["detected_pattern"] = detected_patterns[0]
+    elif pattern_hint != "auto_detect":
+        analysis["detected_pattern"] = pattern_hint
+
+    # Extract deployment steps
+    analysis["deployment_steps"] = _extract_deployment_steps(content)
+
+    # Find health checks
+    analysis["health_checks"] = _extract_health_checks(content)
+
+    # Find service management
+    analysis["service_management"] = _extract_service_management(content)
+
+    # Find load balancer configuration
+    analysis["load_balancer_config"] = _extract_load_balancer_config(content)
+
+    return analysis
+
+
+def _generate_ansible_deployment_strategy(
+    analysis: dict, target_strategy: str, recipe_name: str
+) -> dict:
+    """Generate Ansible deployment strategy from Chef analysis."""
+    strategy = {"playbook": "", "features": [], "variables": {}, "tasks_count": 0}
+
+    if target_strategy == "rolling_update":
+        strategy["playbook"] = _generate_rolling_update_playbook(analysis, recipe_name)
+        strategy["features"] = [
+            "Serial deployment",
+            "Health checks",
+            "Rollback on failure",
+        ]
+    elif target_strategy == "blue_green":
+        strategy["playbook"] = _generate_blue_green_conversion_playbook(
+            analysis, recipe_name
+        )
+        strategy["features"] = [
+            "Zero-downtime deployment",
+            "Instant rollback",
+            "Traffic switching",
+        ]
+    elif target_strategy == "canary":
+        strategy["playbook"] = _generate_canary_conversion_playbook(
+            analysis, recipe_name
+        )
+        strategy["features"] = [
+            "Gradual rollout",
+            "Risk mitigation",
+            "Automated monitoring",
+        ]
+
+    strategy["tasks_count"] = len(analysis.get("deployment_steps", []))
+    strategy["variables"] = _generate_strategy_variables(analysis, target_strategy)
+
+    return strategy
+
+
+def _generate_blue_green_playbook(
+    app_name: str, config: dict, health_check_url: str
+) -> dict:
+    """Generate complete blue/green deployment playbook structure."""
+    port = config.get("port", 8080)
+    service_name = config.get("service_name", app_name)
+
+    playbook = {
+        "main_playbook": f"""---
+- name: Blue/Green Deployment - {app_name}
+  hosts: app_servers
+  serial: "100%"
+  vars:
+    app_name: {app_name}
+    app_version: "{{{{ app_version | default('latest') }}}}"
+    target_env: "{{{{ target_env | default('green') }}}}"
+    current_env: "{{{{ current_env | default('blue') }}}}"
+    health_check_url: "{health_check_url}"
+    service_port: {port}
+
+  tasks:
+    - name: Determine inactive environment
+      set_fact:
+        inactive_env: "{{{{ 'green' if current_env == 'blue' else 'blue' }}}}"
+
+    - name: Deploy application to inactive environment
+      include_tasks: deploy_app.yml
+      vars:
+        deploy_env: "{{{{ inactive_env }}}}"
+
+    - name: Run health checks on new deployment
+      uri:
+        url: "http://{{{{ ansible_host }}}}:{{{{ service_port }}}}{{{{ health_check_url }}}}"
+        method: GET
+        timeout: 30
+      register: health_check
+      retries: 5
+      delay: 10
+
+    - name: Switch traffic to new environment
+      include_tasks: switch_traffic.yml
+      vars:
+        new_env: "{{{{ inactive_env }}}}"
+        old_env: "{{{{ current_env }}}}"
+      when: health_check is succeeded
+
+    - name: Update current environment marker
+      set_fact:
+        current_env: "{{{{ inactive_env }}}}"
+      when: health_check is succeeded""",
+        "health_check": f"""---
+- name: Health Check Validation
+  hosts: app_servers
+  tasks:
+    - name: Check application health
+      uri:
+        url: "http://{{{{ ansible_host }}}}:{{{{ service_port }}}}{{{{ health_check_url }}}}"
+        method: GET
+        status_code: 200
+        timeout: 30
+      register: health_result
+
+    - name: Validate response time
+      fail:
+        msg: "Response time too high: {{{{ health_result.elapsed }}}}"
+      when: health_result.elapsed > 2.0
+
+    - name: Check service status
+      systemd:
+        name: "{service_name}-{{{{ target_env }}}}"
+        state: started
+      register: service_status""",
+        "rollback": f"""---
+- name: Blue/Green Rollback
+  hosts: app_servers
+  vars:
+    rollback_to: "{{{{ rollback_to | default('blue') }}}}"
+
+  tasks:
+    - name: Switch traffic back to previous environment
+      include_tasks: switch_traffic.yml
+      vars:
+        new_env: "{{{{ rollback_to }}}}"
+        old_env: "{{{{ current_env }}}}"
+
+    - name: Stop failed deployment
+      systemd:
+        name: "{service_name}-{{{{ current_env }}}}"
+        state: stopped
+
+    - name: Update environment marker
+      set_fact:
+        current_env: "{{{{ rollback_to }}}}"
+
+    - name: Log rollback event
+      lineinfile:
+        path: /var/log/{app_name}_deployments.log
+        line: "{{{{ ansible_date_time.iso8601 }}}} ROLLBACK: {{{{ current_env }}}} -> {{{{ rollback_to }}}}"
+        create: yes""",
+        "load_balancer": f"""---
+- name: Load Balancer Traffic Management
+  hosts: load_balancers
+  tasks:
+    - name: Update upstream configuration
+      template:
+        src: upstream.conf.j2
+        dest: /etc/nginx/conf.d/{app_name}_upstream.conf
+      vars:
+        active_env: "{{{{ new_env }}}}"
+        inactive_env: "{{{{ old_env }}}}"
+
+    - name: Test nginx configuration
+      nginx:
+        state: reloaded
+      register: nginx_test
+
+    - name: Reload nginx if configuration is valid
+      systemd:
+        name: nginx
+        state: reloaded
+      when: nginx_test is succeeded""",
+        "variables": f"""---
+# Blue/Green Deployment Variables
+app_name: {app_name}
+app_version: latest
+current_env: blue
+health_check_url: {health_check_url}
+service_port: {port}
+
+# Deployment timeouts
+deployment_timeout: 300
+health_check_retries: 5
+health_check_delay: 10
+
+# Environment-specific configurations
+blue_env:
+  port: {port}
+  service_name: "{service_name}-blue"
+  config_file: "/etc/{app_name}/blue.conf"
+
+green_env:
+  port: {port + 1}
+  service_name: "{service_name}-green"
+  config_file: "/etc/{app_name}/green.conf\"""",
+    }
+
+    return playbook
+
+
+def _generate_canary_strategy(
+    app_name: str, initial_percent: int, rollout_steps: list
+) -> dict:
+    """Generate canary deployment strategy playbooks."""
+    strategy = {
+        "main_playbook": f"""---
+- name: Canary Deployment - {app_name}
+  hosts: app_servers
+  vars:
+    app_name: {app_name}
+    app_version: "{{{{ app_version }}}}"
+    canary_percent: {initial_percent}
+    rollout_steps: {rollout_steps}
+
+  tasks:
+    - name: Calculate canary instances
+      set_fact:
+        canary_count: "{{{{ (groups['app_servers'] | length * canary_percent / 100) | round(0, 'ceil') | int }}}}"
+
+    - name: Select canary instances
+      set_fact:
+        canary_hosts: "{{{{ groups['app_servers'][:canary_count | int] }}}}"
+        stable_hosts: "{{{{ groups['app_servers'][canary_count | int:] }}}}"
+
+    - name: Deploy canary version
+      include_tasks: deploy_canary.yml
+      vars:
+        target_hosts: "{{{{ canary_hosts }}}}"
+
+    - name: Configure traffic splitting
+      include_tasks: setup_traffic_split.yml
+      vars:
+        canary_percentage: "{{{{ canary_percent }}}}"
+
+    - name: Monitor canary metrics
+      include_tasks: monitor_canary.yml
+
+    - name: Wait for validation period
+      pause:
+        minutes: 10
+        prompt: "Monitoring canary deployment for 10 minutes..."
+
+    - name: Evaluate canary success
+      include_tasks: evaluate_canary.yml""",
+        "monitoring": """---
+- name: Canary Monitoring and Validation
+  hosts: monitoring_servers
+  tasks:
+    - name: Check error rate
+      uri:
+        url: "http://monitoring.internal/api/metrics/error_rate"
+        method: GET
+        return_content: yes
+      register: error_rate_result
+
+    - name: Validate error rate threshold
+      fail:
+        msg: "Error rate too high: {{ error_rate_result.json.value }}%"
+      when: error_rate_result.json.value | float > 1.0
+
+    - name: Check response time
+      uri:
+        url: "http://monitoring.internal/api/metrics/response_time"
+        method: GET
+        return_content: yes
+      register: response_time_result
+
+    - name: Validate response time threshold
+      fail:
+        msg: "Response time too high: {{ response_time_result.json.value }}ms"
+      when: response_time_result.json.value | float > 500
+
+    - name: Check success rate
+      uri:
+        url: "http://monitoring.internal/api/metrics/success_rate"
+        method: GET
+        return_content: yes
+      register: success_rate_result
+
+    - name: Validate success rate threshold
+      fail:
+        msg: "Success rate too low: {{ success_rate_result.json.value }}%"
+      when: success_rate_result.json.value | float < 99.0""",
+        "progressive_rollout": f"""---
+- name: Progressive Canary Rollout
+  hosts: app_servers
+  vars:
+    rollout_steps: {rollout_steps}
+
+  tasks:
+    - name: Progress through rollout steps
+      include_tasks: rollout_step.yml
+      vars:
+        target_percent: "{{{{ item }}}}"
+      loop: "{{{{ rollout_steps }}}}"
+      when: canary_success | default(true)
+
+    - name: Complete rollout
+      include_tasks: complete_deployment.yml
+      when: canary_success | default(true)""",
+        "rollback": f"""---
+- name: Canary Rollback
+  hosts: app_servers
+  tasks:
+    - name: Stop canary instances
+      systemd:
+        name: "{app_name}-canary"
+        state: stopped
+      delegate_to: "{{{{ item }}}}"
+      loop: "{{{{ canary_hosts }}}}"
+
+    - name: Restore stable version
+      systemd:
+        name: "{app_name}"
+        state: started
+      delegate_to: "{{{{ item }}}}"
+      loop: "{{{{ canary_hosts }}}}"
+
+    - name: Reset traffic routing
+      include_tasks: reset_traffic.yml
+
+    - name: Log rollback reason
+      lineinfile:
+        path: /var/log/{app_name}_canary.log
+        line: "{{{{ ansible_date_time.iso8601 }}}} ROLLBACK: {{{{ reason | default('manual') }}}}"
+        create: yes""",
+    }
+
+    return strategy
+
+
+def _extract_deployment_steps(content: str) -> list:
+    """Extract deployment steps from Chef recipe."""
+    import re
+
+    steps = []
+
+    # Look for common deployment patterns
+    deployment_patterns = [
+        r'(package|service|template|file|directory)\s+[\'"]([^\'"]*)[\'"]\s+do',
+        r'execute\s+[\'"]([^\'"]*)[\'"]\s+do',
+        r'bash\s+[\'"]([^\'"]*)[\'"]\s+do',
+    ]
+
+    for pattern in deployment_patterns:
+        matches = re.finditer(pattern, content, re.MULTILINE)
+        for match in matches:
+            resource_type = match.group(1)
+            resource_name = match.group(2)
+            steps.append(
+                {
+                    "type": resource_type,
+                    "name": resource_name,
+                    "line": content[: match.start()].count("\n") + 1,
+                }
+            )
+
+    return steps
+
+
+def _extract_health_checks(content: str) -> list:
+    """Extract health check patterns from Chef recipe."""
+    import re
+
+    health_checks = []
+
+    health_patterns = [
+        r"http_request.*health|health.*check",
+        r"curl.*health|wget.*health",
+        r"tcp.*check|port.*check",
+        r"service.*status|systemctl.*status",
+    ]
+
+    for pattern in health_patterns:
+        matches = re.finditer(pattern, content, re.IGNORECASE)
+        for match in matches:
+            health_checks.append(
+                {
+                    "pattern": match.group(0),
+                    "line": content[: match.start()].count("\n") + 1,
+                }
+            )
+
+    return health_checks
+
+
+def _extract_service_management(content: str) -> list:
+    """Extract service management patterns from Chef recipe."""
+    import re
+
+    services = []
+
+    service_patterns = [
+        r'service\s+[\'"]([^\'"]*)[\'"]\s+do',
+        r'systemd_service\s+[\'"]([^\'"]*)[\'"]\s+do',
+        r"systemctl\s+(start|stop|restart|reload)\s+([^\s]+)",
+    ]
+
+    for pattern in service_patterns:
+        matches = re.finditer(pattern, content)
+        for match in matches:
+            services.append(
+                {
+                    "name": match.group(1) if match.group(1) else match.group(2),
+                    "action": "manage",
+                    "line": content[: match.start()].count("\n") + 1,
+                }
+            )
+
+    return services
+
+
+def _extract_load_balancer_config(content: str) -> list:
+    """Extract load balancer configuration from Chef recipe."""
+    import re
+
+    lb_configs = []
+
+    lb_patterns = [
+        r"nginx.*upstream|haproxy.*backend",
+        r"load.*balance|traffic.*split",
+        r"proxy_pass|backend.*server",
+    ]
+
+    for pattern in lb_patterns:
+        matches = re.finditer(pattern, content, re.IGNORECASE)
+        for match in matches:
+            lb_configs.append(
+                {
+                    "type": "load_balancer",
+                    "config": match.group(0),
+                    "line": content[: match.start()].count("\n") + 1,
+                }
+            )
+
+    return lb_configs
+
+
+def _generate_rolling_update_playbook(analysis: dict, recipe_name: str) -> str:
+    """Generate rolling update playbook from Chef analysis."""
+    return f"""---
+- name: Rolling Update Deployment - {recipe_name}
+  hosts: app_servers
+  serial: 2
+  max_fail_percentage: 10
+
+  vars:
+    app_version: "{{{{ app_version }}}}"
+    health_check_retries: 3
+    health_check_delay: 10
+
+  pre_tasks:
+    - name: Remove server from load balancer
+      uri:
+        url: "http://lb.internal/api/servers/{{{{ ansible_host }}}}/disable"
+        method: POST
+      delegate_to: localhost
+
+  tasks:
+    - name: Deploy new version
+      include_tasks: deploy_application.yml
+
+    - name: Restart application service
+      systemd:
+        name: application
+        state: restarted
+        daemon_reload: yes
+
+    - name: Wait for service to be ready
+      wait_for:
+        port: 8080
+        delay: 5
+        timeout: 60
+
+    - name: Health check
+      uri:
+        url: "http://{{{{ ansible_host }}}}:8080/health"
+        method: GET
+        status_code: 200
+      retries: "{{{{ health_check_retries }}}}"
+      delay: "{{{{ health_check_delay }}}}"
+
+  post_tasks:
+    - name: Re-enable server in load balancer
+      uri:
+        url: "http://lb.internal/api/servers/{{{{ ansible_host }}}}/enable"
+        method: POST
+      delegate_to: localhost
+
+  rescue:
+    - name: Rollback on failure
+      include_tasks: rollback_deployment.yml
+
+    - name: Re-enable server in load balancer
+      uri:
+        url: "http://lb.internal/api/servers/{{{{ ansible_host }}}}/enable"
+        method: POST
+      delegate_to: localhost"""
+
+
+def _analyze_application_cookbook(cookbook_path, app_type: str) -> dict:
+    """Analyze Chef application cookbook for deployment patterns."""
+    analysis = {
+        "cookbook_name": cookbook_path.name,
+        "application_type": app_type,
+        "deployment_patterns": [],
+        "service_resources": [],
+        "configuration_files": [],
+        "health_checks": [],
+        "scaling_mechanisms": [],
+        "monitoring_setup": [],
+    }
+
+    # Analyze recipes for deployment patterns
+    recipes_dir = cookbook_path / "recipes"
+    if recipes_dir.exists():
+        for recipe_file in recipes_dir.glob("*.rb"):
+            with recipe_file.open("r") as f:
+                content = f.read()
+
+            # Detect deployment patterns
+            patterns = _detect_deployment_patterns_in_recipe(content, recipe_file.name)
+            analysis["deployment_patterns"].extend(patterns)
+
+            # Find service resources
+            services = _extract_service_management(content)
+            analysis["service_resources"].extend(services)
+
+            # Find health checks
+            health_checks = _extract_health_checks(content)
+            analysis["health_checks"].extend(health_checks)
+
+    # Analyze templates
+    templates_dir = cookbook_path / "templates"
+    if templates_dir.exists():
+        config_files = [f.name for f in templates_dir.rglob("*") if f.is_file()]
+        analysis["configuration_files"] = config_files
+
+    return analysis
+
+
+def _detect_deployment_patterns_in_recipe(content: str, recipe_name: str) -> list:
+    """Detect deployment patterns in a Chef recipe."""
+    import re
+
+    patterns = []
+
+    pattern_indicators = {
+        "blue_green": [
+            r"blue.*green|green.*blue",
+            r"switch.*traffic|traffic.*switch",
+            r"active.*inactive|inactive.*active",
+        ],
+        "rolling": [
+            r"rolling.*update|serial.*update",
+            r"batch.*deployment|phased.*rollout",
+            r"gradual.*deployment",
+        ],
+        "canary": [
+            r"canary.*deployment|canary.*release",
+            r"percentage.*traffic|traffic.*percentage",
+            r"A/B.*test|split.*traffic",
+        ],
+        "immutable": [
+            r"immutable.*deployment|replace.*instance",
+            r"new.*server|fresh.*deployment",
+        ],
+    }
+
+    for pattern_type, indicators in pattern_indicators.items():
+        for indicator in indicators:
+            if re.search(indicator, content, re.IGNORECASE):
+                patterns.append(
+                    {
+                        "type": pattern_type,
+                        "recipe": recipe_name,
+                        "confidence": "high"
+                        if len(
+                            [
+                                i
+                                for i in indicators
+                                if re.search(i, content, re.IGNORECASE)
+                            ]
+                        )
+                        > 1
+                        else "medium",
+                    }
+                )
+                break
+
+    return patterns
+
+
+def _format_deployment_analysis(analysis: dict) -> str:
+    """Format deployment analysis for display."""
+    formatted = [
+        f"• Detected Pattern: {analysis['detected_pattern']}",
+        f"• Deployment Steps: {len(analysis['deployment_steps'])}",
+        f"• Health Checks: {len(analysis['health_checks'])}",
+        f"• Service Management: {len(analysis['service_management'])}",
+        f"• Load Balancer Config: {len(analysis['load_balancer_config'])}",
+    ]
+
+    return "\n".join(formatted)
+
+
+def _format_strategy_features(strategy: dict) -> str:
+    """Format Ansible strategy features for display."""
+    formatted = [f"• {feature}" for feature in strategy.get("features", [])]
+    formatted.append(f"• Total Tasks: {strategy.get('tasks_count', 0)}")
+
+    return "\n".join(formatted)
+
+
+def _format_canary_workflow(steps: list, initial_percent: int) -> str:
+    """Format canary deployment workflow steps."""
+    workflow = [
+        f"1. Deploy canary version to {initial_percent}% of instances",
+        "2. Monitor metrics for validation period (10 minutes)",
+        "3. Evaluate success criteria (error rate, response time, success rate)",
+    ]
+
+    for i, step in enumerate(steps[1:], 4):
+        workflow.append(f"{i}. If successful, increase traffic to {step}%")
+
+    workflow.append(
+        f"{len(workflow) + 1}. Complete full rollout or rollback on failure"
+    )
+
+    return "\n".join(workflow)
+
+
+def _format_deployment_patterns(patterns: dict) -> str:
+    """Format detected deployment patterns."""
+    if not patterns.get("deployment_patterns"):
+        return "No specific deployment patterns detected."
+
+    formatted = []
+    for pattern in patterns["deployment_patterns"]:
+        confidence = pattern.get("confidence", "medium")
+        formatted.append(
+            f"• {pattern['type'].title()} deployment ({confidence} confidence) in {pattern['recipe']}"
+        )
+
+    return "\n".join(formatted)
+
+
+def _format_chef_resources_analysis(patterns: dict) -> str:
+    """Format Chef resources analysis."""
+    formatted = [
+        f"• Service Resources: {len(patterns.get('service_resources', []))}",
+        f"• Configuration Files: {len(patterns.get('configuration_files', []))}",
+        f"• Health Checks: {len(patterns.get('health_checks', []))}",
+        f"• Scaling Mechanisms: {len(patterns.get('scaling_mechanisms', []))}",
+    ]
+
+    return "\n".join(formatted)
+
+
+def _generate_deployment_migration_recommendations(
+    patterns: dict, app_type: str
+) -> str:
+    """Generate migration recommendations based on analysis."""
+    recommendations = []
+
+    deployment_count = len(patterns.get("deployment_patterns", []))
+
+    if deployment_count == 0:
+        recommendations.append(
+            "• No advanced deployment patterns detected - start with rolling updates"
+        )
+        recommendations.append("• Implement health checks for reliable deployments")
+        recommendations.append("• Add rollback mechanisms for quick recovery")
+    else:
+        for pattern in patterns.get("deployment_patterns", []):
+            if pattern["type"] == "blue_green":
+                recommendations.append(
+                    "• Convert blue/green logic to Ansible blue/green strategy"
+                )
+            elif pattern["type"] == "canary":
+                recommendations.append(
+                    "• Implement canary deployment with automated metrics validation"
+                )
+            elif pattern["type"] == "rolling":
+                recommendations.append(
+                    "• Use Ansible serial deployment with health checks"
+                )
+
+    # Application-specific recommendations
+    if app_type == "web_application":
+        recommendations.append(
+            "• Implement load balancer integration for traffic management"
+        )
+        recommendations.append("• Add SSL/TLS certificate handling in deployment")
+    elif app_type == "microservice":
+        recommendations.append(
+            "• Consider service mesh integration for traffic splitting"
+        )
+        recommendations.append("• Implement service discovery updates")
+    elif app_type == "database":
+        recommendations.append("• Add database migration handling")
+        recommendations.append("• Implement backup and restore procedures")
+
+    return "\n".join(recommendations)
+
+
+def _recommend_ansible_strategies(patterns: dict, app_type: str) -> str:
+    """Recommend appropriate Ansible strategies."""
+    strategies = []
+
+    detected_patterns = [p["type"] for p in patterns.get("deployment_patterns", [])]
+
+    if "blue_green" in detected_patterns:
+        strategies.append(
+            "• Blue/Green: Zero-downtime deployment with instant rollback"
+        )
+    if "canary" in detected_patterns:
+        strategies.append("• Canary: Risk-reduced deployment with gradual rollout")
+    if "rolling" in detected_patterns:
+        strategies.append(
+            "• Rolling Update: Balanced approach with configurable parallelism"
+        )
+
+    if not strategies:
+        strategies = [
+            "• Rolling Update: Recommended starting strategy",
+            "• Blue/Green: For critical applications requiring zero downtime",
+            "• Canary: For high-risk deployments requiring validation",
+        ]
+
+    return "\n".join(strategies)
+
+
+def _generate_strategy_variables(analysis: dict, strategy: str) -> dict:
+    """Generate strategy-specific variables."""
+    base_vars = {
+        "app_version": "latest",
+        "health_check_retries": 3,
+        "health_check_delay": 10,
+        "deployment_timeout": 300,
+    }
+
+    if strategy == "blue_green":
+        base_vars.update({"blue_port": 8080, "green_port": 8081, "switch_delay": 30})
+    elif strategy == "canary":
+        base_vars.update(
+            {
+                "canary_percentage": 10,
+                "validation_period": 600,
+                "rollback_threshold": 1.0,
+            }
+        )
+    elif strategy == "rolling_update":
+        base_vars.update({"serial_count": 2, "max_fail_percentage": 10})
+
+    return base_vars
+
+
 def main() -> None:
     """Run the SousChef MCP server.
 
