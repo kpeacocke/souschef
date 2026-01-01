@@ -3383,6 +3383,620 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
         return f"Error analyzing data bag usage: {e}"
 
 
+@mcp.tool()
+def convert_chef_environment_to_inventory_group(
+    environment_content: str, environment_name: str, include_constraints: bool = True
+) -> str:
+    """Convert Chef environment to Ansible inventory group with variables.
+
+    Args:
+        environment_content: Ruby content of the Chef environment file
+        environment_name: Name of the Chef environment
+        include_constraints: Whether to include cookbook version constraints
+
+    Returns:
+        Ansible inventory group configuration with variables
+
+    """
+    try:
+        # Parse Chef environment content
+        env_data = _parse_chef_environment_content(environment_content)
+
+        # Convert to Ansible inventory group format
+        inventory_config = _generate_inventory_group_from_environment(
+            env_data, environment_name, include_constraints
+        )
+
+        return f"""---
+# Chef environment converted to Ansible inventory group
+# Original: environments/{environment_name}.rb
+# Target: inventory/group_vars/{environment_name}.yml
+
+{inventory_config}
+
+---
+# Add to your Ansible inventory (hosts.yml or hosts.ini):
+# [{environment_name}]
+# # Add your hosts here
+#
+# [all:children]
+# {environment_name}
+"""
+
+    except Exception as e:
+        return f"Error converting Chef environment to inventory group: {e}"
+
+
+@mcp.tool()
+def generate_inventory_from_chef_environments(
+    environments_directory: str, output_format: str = "yaml"
+) -> str:
+    """Generate complete Ansible inventory from Chef environments directory.
+
+    Args:
+        environments_directory: Path to Chef environments directory
+        output_format: Output format ("yaml", "ini", or "both")
+
+    Returns:
+        Complete Ansible inventory structure with environment-based groups
+
+    """
+    try:
+        from pathlib import Path
+
+        env_path = Path(environments_directory)
+        if not env_path.exists():
+            return f"Error: Environments directory not found: {environments_directory}"
+
+        # Process all environment files
+        environments = {}
+        processing_results = []
+
+        for env_file in env_path.glob("*.rb"):
+            env_name = env_file.stem
+
+            try:
+                with env_file.open("r") as f:
+                    content = f.read()
+
+                env_data = _parse_chef_environment_content(content)
+                environments[env_name] = env_data
+
+                processing_results.append(
+                    {
+                        "environment": env_name,
+                        "status": "success",
+                        "attributes": len(env_data.get("default_attributes", {})),
+                        "overrides": len(env_data.get("override_attributes", {})),
+                        "constraints": len(env_data.get("cookbook_versions", {})),
+                    }
+                )
+
+            except Exception as e:
+                processing_results.append(
+                    {"environment": env_name, "status": "error", "error": str(e)}
+                )
+
+        # Generate inventory structure
+        return _generate_complete_inventory_from_environments(
+            environments, processing_results, output_format
+        )
+
+    except Exception as e:
+        return f"Error generating inventory from Chef environments: {e}"
+
+
+@mcp.tool()
+def analyze_chef_environment_usage(
+    cookbook_path: str, environments_path: str = ""
+) -> str:
+    """Analyze Chef cookbook for environment usage and provide migration recommendations.
+
+    Args:
+        cookbook_path: Path to Chef cookbook
+        environments_path: Optional path to environments directory for cross-reference
+
+    Returns:
+        Analysis of environment usage and migration recommendations
+
+    """
+    try:
+        from pathlib import Path
+
+        cookbook = Path(cookbook_path)
+        if not cookbook.exists():
+            return f"Error: Cookbook path not found: {cookbook_path}"
+
+        # Find environment usage patterns
+        usage_patterns = _extract_environment_usage_from_cookbook(cookbook)
+
+        # Analyze environments structure if provided
+        environment_structure = {}
+        if environments_path:
+            environments = Path(environments_path)
+            if environments.exists():
+                environment_structure = _analyze_environments_structure(environments)
+
+        # Generate recommendations
+        recommendations = _generate_environment_migration_recommendations(
+            usage_patterns, environment_structure
+        )
+
+        return f"""# Chef Environment Usage Analysis
+
+## Environment Usage Patterns Found:
+{_format_environment_usage_patterns(usage_patterns)}
+
+## Environment Structure Analysis:
+{_format_environment_structure(environment_structure)}
+
+## Migration Recommendations:
+{recommendations}
+
+## Conversion Steps:
+1. Use convert_chef_environment_to_inventory_group for individual environments
+2. Use generate_inventory_from_chef_environments for complete inventory
+3. Update playbooks to use group_vars for environment-specific variables
+4. Implement variable precedence hierarchy in Ansible
+5. Test environment-specific deployments with new inventory structure
+"""
+
+    except Exception as e:
+        return f"Error analyzing Chef environment usage: {e}"
+
+
+def _parse_chef_environment_content(content: str) -> dict:
+    """Parse Chef environment Ruby content into structured data."""
+    import re
+
+    env_data = {
+        "name": "",
+        "description": "",
+        "default_attributes": {},
+        "override_attributes": {},
+        "cookbook_versions": {},
+    }
+
+    # Extract name
+    name_match = re.search(r"name\s+[\'\"](.*?)[\'\"]", content)
+    if name_match:
+        env_data["name"] = name_match.group(1)
+
+    # Extract description
+    desc_match = re.search(r"description\s+[\'\"](.*?)[\'\"]", content)
+    if desc_match:
+        env_data["description"] = desc_match.group(1)
+
+    # Extract default attributes
+    default_attrs = _extract_attributes_block(content, "default_attributes")
+    if default_attrs:
+        env_data["default_attributes"] = default_attrs
+
+    # Extract override attributes
+    override_attrs = _extract_attributes_block(content, "override_attributes")
+    if override_attrs:
+        env_data["override_attributes"] = override_attrs
+
+    # Extract cookbook version constraints
+    constraints = _extract_cookbook_constraints(content)
+    if constraints:
+        env_data["cookbook_versions"] = constraints
+
+    return env_data
+
+
+def _extract_attributes_block(content: str, block_type: str) -> dict:
+    """Extract attribute blocks from Chef environment content."""
+    import re
+
+    # Find the block start
+    pattern = rf"{block_type}\s*\((.*?)\)"
+    match = re.search(pattern, content, re.DOTALL)
+
+    if not match:
+        return {}
+
+    block_content = match.group(1).strip()
+
+    # Simple parsing of Ruby hash-like structure
+    # This is a simplified parser - real implementation might need more robust parsing
+    attributes = {}
+
+    # Parse simple key-value pairs
+    key_value_pattern = r"[\'\"](.*?)[\'\"][:\s]*=>[:\s]*[\'\"](.*?)[\'\"]"
+    for match in re.finditer(key_value_pattern, block_content):
+        key = match.group(1)
+        value = match.group(2)
+        attributes[key] = value
+
+    # Parse nested structures (basic support)
+    nested_pattern = r"[\'\"](.*?)[\'\"][:\s]*=>[:\s]*\{(.*?)\}"
+    for match in re.finditer(nested_pattern, block_content):
+        key = match.group(1)
+        nested_content = match.group(2)
+        nested_attrs = {}
+
+        for nested_match in re.finditer(key_value_pattern, nested_content):
+            nested_key = nested_match.group(1)
+            nested_value = nested_match.group(2)
+            nested_attrs[nested_key] = nested_value
+
+        if nested_attrs:
+            attributes[key] = nested_attrs
+
+    return attributes
+
+
+def _extract_cookbook_constraints(content: str) -> dict:
+    """Extract cookbook version constraints from Chef environment."""
+    import re
+
+    constraints = {}
+
+    # Find cookbook version constraints
+    cookbook_pattern = r"cookbook\s+[\'\"](.*?)[\'\"],\s*[\'\"](.*?)[\'\"]"
+    for match in re.finditer(cookbook_pattern, content):
+        cookbook = match.group(1)
+        version = match.group(2)
+        constraints[cookbook] = version
+
+    return constraints
+
+
+def _generate_inventory_group_from_environment(
+    env_data: dict, env_name: str, include_constraints: bool
+) -> str:
+    """Generate Ansible inventory group configuration from environment data."""
+    import yaml
+
+    group_vars = {}
+
+    # Add environment metadata
+    group_vars["environment_name"] = env_name
+    group_vars["environment_description"] = env_data.get("description", "")
+
+    # Convert default attributes to group variables
+    default_attrs = env_data.get("default_attributes", {})
+    if default_attrs:
+        group_vars.update(default_attrs)
+
+    # Add override attributes with higher precedence indication
+    override_attrs = env_data.get("override_attributes", {})
+    if override_attrs:
+        group_vars["environment_overrides"] = override_attrs
+
+    # Add cookbook constraints if requested
+    if include_constraints:
+        cookbook_versions = env_data.get("cookbook_versions", {})
+        if cookbook_versions:
+            group_vars["cookbook_version_constraints"] = cookbook_versions
+
+    # Add Chef-to-Ansible mapping metadata
+    group_vars["chef_migration_metadata"] = {
+        "source_environment": env_name,
+        "converted_by": "souschef",
+        "variable_precedence": "group_vars (equivalent to Chef default_attributes)",
+        "overrides_location": "environment_overrides (requires extra_vars or host_vars)",
+    }
+
+    return yaml.dump(group_vars, default_flow_style=False, indent=2)
+
+
+def _generate_complete_inventory_from_environments(
+    environments: dict, results: list, output_format: str
+) -> str:
+    """Generate complete Ansible inventory from multiple Chef environments."""
+    import yaml
+
+    summary = f"""# Chef Environments to Ansible Inventory Conversion
+
+## Processing Summary:
+- Total environments processed: {len(results)}
+- Successfully converted: {len([r for r in results if r["status"] == "success"])}
+- Failed conversions: {len([r for r in results if r["status"] == "error"])}
+
+## Environment Details:
+"""
+
+    for result in results:
+        if result["status"] == "success":
+            summary += (
+                f"✅ {result['environment']}: {result['attributes']} attributes, "
+            )
+            summary += f"{result['overrides']} overrides, {result['constraints']} constraints\n"
+        else:
+            summary += f"❌ {result['environment']}: {result['error']}\n"
+
+    if output_format in ["yaml", "both"]:
+        summary += "\n## YAML Inventory Structure:\n\n```yaml\n"
+
+        # Generate YAML inventory
+        inventory = {"all": {"children": {}}}
+
+        for env_name, env_data in environments.items():
+            inventory["all"]["children"][env_name] = {
+                "hosts": {},  # Hosts to be added manually
+                "vars": _flatten_environment_vars(env_data),
+            }
+
+        summary += yaml.dump(inventory, default_flow_style=False, indent=2)
+        summary += "```\n"
+
+    if output_format in ["ini", "both"]:
+        summary += "\n## INI Inventory Structure:\n\n```ini\n"
+        summary += "[all:children]\n"
+        for env_name in environments:
+            summary += f"{env_name}\n"
+
+        summary += "\n"
+        for env_name in environments:
+            summary += f"[{env_name}]\n"
+            summary += "# Add your hosts here\n\n"
+
+        summary += "```\n"
+
+    summary += """
+## Next Steps:
+1. Create group_vars directory structure
+2. Add environment-specific variable files
+3. Populate inventory with actual hosts
+4. Update playbooks to reference environment groups
+5. Test variable precedence and override behavior
+
+## File Structure to Create:
+"""
+
+    for env_name in environments:
+        summary += f"- inventory/group_vars/{env_name}.yml\n"
+
+    return summary
+
+
+def _flatten_environment_vars(env_data: dict) -> dict:
+    """Flatten environment data for inventory variables."""
+    vars_dict = {}
+
+    # Add basic metadata
+    vars_dict["environment_name"] = env_data.get("name", "")
+    vars_dict["environment_description"] = env_data.get("description", "")
+
+    # Add default attributes
+    default_attrs = env_data.get("default_attributes", {})
+    vars_dict.update(default_attrs)
+
+    # Add override attributes in a separate namespace
+    override_attrs = env_data.get("override_attributes", {})
+    if override_attrs:
+        vars_dict["environment_overrides"] = override_attrs
+
+    # Add cookbook constraints
+    cookbook_versions = env_data.get("cookbook_versions", {})
+    if cookbook_versions:
+        vars_dict["cookbook_version_constraints"] = cookbook_versions
+
+    return vars_dict
+
+
+def _extract_environment_usage_from_cookbook(cookbook_path) -> list:
+    """Extract environment usage patterns from Chef cookbook files."""
+    patterns = []
+
+    # Search for environment usage in Ruby files
+    for ruby_file in cookbook_path.rglob("*.rb"):
+        try:
+            with ruby_file.open("r") as f:
+                content = f.read()
+
+            # Find environment usage patterns
+            found_patterns = _find_environment_patterns_in_content(
+                content, str(ruby_file)
+            )
+            patterns.extend(found_patterns)
+
+        except Exception as e:
+            patterns.append(
+                {"file": str(ruby_file), "error": f"Could not read file: {e}"}
+            )
+
+    return patterns
+
+
+def _find_environment_patterns_in_content(content: str, file_path: str) -> list:
+    """Find environment usage patterns in file content."""
+    import re
+
+    patterns = []
+
+    # Common Chef environment patterns
+    environment_patterns = [
+        (r"node\.chef_environment", "node.chef_environment"),
+        (r"node\[[\'\"]environment[\'\"]\]", 'node["environment"]'),
+        (r"environment\s+[\'\"](.*?)[\'\"]", "environment declaration"),
+        (
+            r"if\s+node\.chef_environment\s*==\s*[\'\"](.*?)[\'\"]",
+            "environment conditional",
+        ),
+        (r"case\s+node\.chef_environment", "environment case statement"),
+        (r"search\([^)]*environment[^)]*\)", "environment in search query"),
+    ]
+
+    for pattern, pattern_type in environment_patterns:
+        matches = re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE)
+        for match in matches:
+            line_num = content[: match.start()].count("\n") + 1
+
+            patterns.append(
+                {
+                    "file": file_path,
+                    "line": line_num,
+                    "type": pattern_type,
+                    "match": match.group(0),
+                    "environment_name": match.group(1)
+                    if match.groups() and match.group(1)
+                    else None,
+                }
+            )
+
+    return patterns
+
+
+def _analyze_environments_structure(environments_path) -> dict:
+    """Analyze the structure of Chef environments directory."""
+    structure = {"total_environments": 0, "environments": {}}
+
+    for env_file in environments_path.glob("*.rb"):
+        structure["total_environments"] += 1
+        env_name = env_file.stem
+
+        try:
+            with env_file.open("r") as f:
+                content = f.read()
+
+            env_data = _parse_chef_environment_content(content)
+
+            structure["environments"][env_name] = {
+                "name": env_data.get("name", env_name),
+                "description": env_data.get("description", ""),
+                "default_attributes_count": len(env_data.get("default_attributes", {})),
+                "override_attributes_count": len(
+                    env_data.get("override_attributes", {})
+                ),
+                "cookbook_constraints_count": len(
+                    env_data.get("cookbook_versions", {})
+                ),
+                "size": env_file.stat().st_size,
+            }
+
+        except Exception as e:
+            structure["environments"][env_name] = {"error": str(e)}
+
+    return structure
+
+
+def _generate_environment_migration_recommendations(
+    usage_patterns: list, env_structure: dict
+) -> str:
+    """Generate migration recommendations based on environment usage analysis."""
+    recommendations = []
+
+    # Analyze usage patterns
+    if usage_patterns:
+        environment_refs = [
+            p for p in usage_patterns if "environment" in p.get("type", "")
+        ]
+        conditional_usage = [
+            p
+            for p in usage_patterns
+            if "conditional" in p.get("type", "") or "case" in p.get("type", "")
+        ]
+
+        recommendations.append(
+            f"• Found {len(usage_patterns)} environment references in cookbook"
+        )
+
+        if environment_refs:
+            recommendations.append(
+                f"• {len(environment_refs)} direct environment attribute accesses need inventory group conversion"
+            )
+
+        if conditional_usage:
+            recommendations.append(
+                f"• {len(conditional_usage)} conditional environment logic needs when/group_names conditions"
+            )
+
+    # Analyze structure
+    if env_structure:
+        total_envs = env_structure.get("total_environments", 0)
+        if total_envs > 0:
+            recommendations.append(
+                f"• Convert {total_envs} Chef environments to Ansible inventory groups"
+            )
+
+            # Analyze complexity
+            complex_envs = []
+            for env_name, env_info in env_structure.get("environments", {}).items():
+                if "error" not in env_info:
+                    attrs_count = env_info.get(
+                        "default_attributes_count", 0
+                    ) + env_info.get("override_attributes_count", 0)
+                    if attrs_count > 10:
+                        complex_envs.append(env_name)
+
+            if complex_envs:
+                recommendations.append(
+                    f"• {len(complex_envs)} environments have >10 attributes - consider splitting into logical variable groups"
+                )
+
+    # General migration recommendations
+    recommendations.extend(
+        [
+            "• Use Ansible groups to replace Chef environment-based node targeting",
+            "• Convert Chef default_attributes to group_vars",
+            "• Handle Chef override_attributes with extra_vars or host_vars",
+            "• Implement environment-specific playbook execution with --limit",
+            "• Test variable precedence matches Chef behavior",
+            "• Consider using Ansible environments/staging for deployment workflows",
+        ]
+    )
+
+    return "\n".join(recommendations)
+
+
+def _format_environment_usage_patterns(patterns: list) -> str:
+    """Format environment usage patterns for display."""
+    if not patterns:
+        return "No environment usage patterns found."
+
+    formatted = []
+    for pattern in patterns[:15]:  # Limit to first 15 for readability
+        if "error" in pattern:
+            formatted.append(f"❌ {pattern['file']}: {pattern['error']}")
+        else:
+            env_info = (
+                f" (env: {pattern['environment_name']})"
+                if pattern.get("environment_name")
+                else ""
+            )
+            formatted.append(
+                f"• {pattern['type']} in {pattern['file']}:{pattern['line']}{env_info}"
+            )
+
+    if len(patterns) > 15:
+        formatted.append(f"... and {len(patterns) - 15} more patterns")
+
+    return "\n".join(formatted)
+
+
+def _format_environment_structure(structure: dict) -> str:
+    """Format environment structure analysis for display."""
+    if not structure:
+        return "No environment structure provided for analysis."
+
+    formatted = [f"• Total environments: {structure['total_environments']}"]
+
+    if structure["environments"]:
+        formatted.append("\n### Environment Details:")
+        for name, info in list(structure["environments"].items())[
+            :8
+        ]:  # Limit for readability
+            if "error" in info:
+                formatted.append(f"❌ {name}: {info['error']}")
+            else:
+                attrs = info.get("default_attributes_count", 0)
+                overrides = info.get("override_attributes_count", 0)
+                constraints = info.get("cookbook_constraints_count", 0)
+                formatted.append(
+                    f"• {name}: {attrs} attributes, {overrides} overrides, {constraints} constraints"
+                )
+
+        if len(structure["environments"]) > 8:
+            formatted.append(
+                f"... and {len(structure['environments']) - 8} more environments"
+            )
+
+    return "\n".join(formatted)
+
+
 def _convert_databag_to_ansible_vars(
     data: dict, databag_name: str, item_name: str, is_encrypted: bool
 ) -> dict:
