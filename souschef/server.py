@@ -5405,18 +5405,20 @@ def _analyze_chef_deployment_pattern(content: str, pattern_hint: str) -> dict:
 
 def _generate_blue_green_conversion_playbook(analysis: dict, recipe_name: str) -> str:
     """Generate blue/green deployment playbook from Chef analysis.
-    
+
     Args:
         analysis: Chef deployment analysis data
         recipe_name: Name of the original recipe
-        
+
     Returns:
         Blue/green deployment playbook YAML content
 
     """
     app_name = analysis.get("application_name", recipe_name)
     port = analysis.get("service_port", "8080")
-    health_check_url = analysis.get("health_check_url", f"http://localhost:{port}/health")
+    health_check_url = analysis.get(
+        "health_check_url", f"http://localhost:{port}/health"
+    )
 
     return f"""---
 - name: Blue/Green Deployment - {app_name}
@@ -5435,7 +5437,7 @@ def _generate_blue_green_conversion_playbook(analysis: dict, recipe_name: str) -
       include_tasks: deploy_app.yml
       vars:
         deploy_env: "{{{{ target_env }}}}"
-        
+
     - name: Health check inactive environment
       uri:
         url: "{{{{ health_check_url }}}}"
@@ -5443,7 +5445,7 @@ def _generate_blue_green_conversion_playbook(analysis: dict, recipe_name: str) -
       register: health_check
       retries: 10
       delay: 30
-      
+
     - name: Switch traffic to new environment
       include_tasks: switch_traffic.yml
       when: health_check.status == 200
@@ -5452,18 +5454,20 @@ def _generate_blue_green_conversion_playbook(analysis: dict, recipe_name: str) -
 
 def _generate_canary_conversion_playbook(analysis: dict, recipe_name: str) -> str:
     """Generate canary deployment playbook from Chef analysis.
-    
+
     Args:
         analysis: Chef deployment analysis data
         recipe_name: Name of the original recipe
-        
+
     Returns:
         Canary deployment playbook YAML content
 
     """
     app_name = analysis.get("application_name", recipe_name)
     port = analysis.get("service_port", "8080")
-    health_check_url = analysis.get("health_check_url", f"http://localhost:{port}/health")
+    health_check_url = analysis.get(
+        "health_check_url", f"http://localhost:{port}/health"
+    )
 
     return f"""---
 - name: Canary Deployment - {app_name}
@@ -5481,7 +5485,7 @@ def _generate_canary_conversion_playbook(analysis: dict, recipe_name: str) -> st
       include_tasks: deploy_app.yml
       vars:
         deploy_env: canary
-        
+
     - name: Health check canary deployment
       uri:
         url: "{{{{ health_check_url }}}}"
@@ -5489,11 +5493,11 @@ def _generate_canary_conversion_playbook(analysis: dict, recipe_name: str) -> st
       register: canary_health
       retries: 5
       delay: 10
-      
+
     - name: Monitor canary metrics
       include_tasks: monitor_canary.yml
       when: canary_health.status == 200
-      
+
     - name: Proceed with full deployment
       include_tasks: deploy_app.yml
       vars:
