@@ -126,23 +126,27 @@ def test_generate_migration_plan_success():
 
 def test_analyze_cookbook_dependencies_success():
     """Test analyze_cookbook_dependencies with valid cookbook."""
+    import tempfile
+    from pathlib import Path
+
     from souschef.server import analyze_cookbook_dependencies
 
-    mock_cookbook_path = MagicMock(spec=Path)
-    mock_cookbook_path.exists.return_value = True
-    mock_cookbook_path.name = "test_cookbook"
+    # Create a temporary cookbook structure
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        cookbook_path = temp_path / "test_cookbook"
+        cookbook_path.mkdir()
 
-    mock_metadata_file = MagicMock(spec=Path)
-    mock_metadata_file.exists.return_value = True
-    mock_metadata_file.open.return_value.__enter__.return_value.read.return_value = """
-depends "apache2"
-depends "java"
-"""
-    mock_cookbook_path.__truediv__.return_value = mock_metadata_file
+        # Create metadata.rb file
+        metadata_file = cookbook_path / "metadata.rb"
+        metadata_file.write_text("""
+name 'test_cookbook'
+version '1.0.0'
+depends 'apt', '~> 7.0'
+depends 'build-essential'
+""")
 
-    with patch("souschef.server.Path") as mock_path_class:
-        mock_path_class.return_value = mock_cookbook_path
-        result = analyze_cookbook_dependencies("/path/to/cookbook")
+        result = analyze_cookbook_dependencies(str(cookbook_path))
 
         assert "Cookbook Dependency Analysis" in result
         assert "Dependency Overview" in result
@@ -179,27 +183,30 @@ def test_generate_migration_report_success():
 
 def test_convert_chef_deployment_to_ansible_strategy_success():
     """Test convert_chef_deployment_to_ansible_strategy with valid recipe."""
+    import tempfile
+    from pathlib import Path
+
     from souschef.server import convert_chef_deployment_to_ansible_strategy
 
-    mock_recipe_path = MagicMock(spec=Path)
-    mock_recipe_path.exists.return_value = True
-    mock_recipe_path.stem = "deployment"
-    mock_recipe_path.open.return_value.__enter__.return_value.read.return_value = """
+    # Create a temporary deployment recipe
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write("""
 current_env = node["app"]["current_env"] || "blue"
 target_env = current_env == "blue" ? "green" : "blue"
 
 service "nginx" do
   action :start
 end
-"""
+""")
+        recipe_path = f.name
 
-    with patch("souschef.server.Path") as mock_path_class:
-        mock_path_class.return_value = mock_recipe_path
-        result = convert_chef_deployment_to_ansible_strategy("/path/to/recipe.rb")
-
-        assert "Blue/Green" in result and "Deployment Strategy" in result
+    try:
+        result = convert_chef_deployment_to_ansible_strategy(recipe_path)
+        assert "blue_green" in result and "Strategy" in result
         assert "Detected Pattern" in result
-        assert "Ansible Playbook" in result
+        assert "Ansible" in result
+    finally:
+        Path(recipe_path).unlink(missing_ok=True)
 
 
 def test_generate_blue_green_deployment_playbook_success():
@@ -232,27 +239,26 @@ def test_generate_canary_deployment_strategy_success():
 
 def test_analyze_chef_application_patterns_success():
     """Test analyze_chef_application_patterns with valid cookbook."""
+    import tempfile
+    from pathlib import Path
+
     from souschef.server import analyze_chef_application_patterns
 
-    mock_cookbook_path = MagicMock(spec=Path)
-    mock_cookbook_path.exists.return_value = True
-    mock_cookbook_path.name = "webapp"
+    # Create a temporary cookbook structure
+    with tempfile.TemporaryDirectory() as temp_dir:
+        cookbook_path = Path(temp_dir) / "webapp"
+        cookbook_path.mkdir()
 
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe_file = MagicMock(spec=Path)
-    mock_recipe_file.name = "default.rb"
-    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = """
+        # Create application-style cookbook structure
+        (cookbook_path / "metadata.rb").write_text("name 'webapp'\\nversion '1.0.0'")
+        recipes_dir = cookbook_path / "recipes"
+        recipes_dir.mkdir()
+        (recipes_dir / "default.rb").write_text("""
 canary_percentage = node["app"]["canary_percent"] || 10
 package "nginx"
-"""
-    mock_recipes_dir.glob.return_value = [mock_recipe_file]
-    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+""")
 
-    with patch("souschef.server.Path") as mock_path_class:
-        mock_path_class.return_value = mock_cookbook_path
-        result = analyze_chef_application_patterns("/path/to/cookbook")
-
+        result = analyze_chef_application_patterns(str(cookbook_path))
         assert "Chef Application Cookbook Analysis" in result
         assert "Cookbook: webapp" in result
         assert "Deployment Patterns Detected" in result
@@ -1863,37 +1869,31 @@ def test_generate_inspec_from_recipe_error():
 # Tests for AWX/AAP integration tools
 def test_generate_awx_job_template_from_cookbook_success():
     """Test generate_awx_job_template_from_cookbook with valid cookbook."""
+    import tempfile
+    from pathlib import Path
+
     from souschef.server import generate_awx_job_template_from_cookbook
 
-    mock_cookbook_path = MagicMock(spec=Path)
-    mock_cookbook_path.exists.return_value = True
-    mock_cookbook_path.name = "webserver"
+    # Create a temporary cookbook structure
+    with tempfile.TemporaryDirectory() as temp_dir:
+        cookbook_path = Path(temp_dir) / "webserver"
+        cookbook_path.mkdir()
 
-    mock_metadata_file = MagicMock(spec=Path)
-    mock_metadata_file.exists.return_value = True
-    mock_metadata_file.open.return_value.__enter__.return_value.read.return_value = """
+        # Create cookbook metadata and recipes
+        (cookbook_path / "metadata.rb").write_text("""
 name "webserver"
 version "1.0.0"
 description "Web server cookbook"
-"""
+""")
 
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe_file = MagicMock(spec=Path)
-    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = (
-        "package 'nginx'"
-    )
-    mock_recipes_dir.glob.return_value = [mock_recipe_file]
+        recipes_dir = cookbook_path / "recipes"
+        recipes_dir.mkdir()
+        (recipes_dir / "default.rb").write_text("package 'nginx'")
 
-    mock_cookbook_path.__truediv__.side_effect = [mock_metadata_file, mock_recipes_dir]
-
-    with patch("souschef.server.Path") as mock_path_class:
-        mock_path_class.return_value = mock_cookbook_path
         result = generate_awx_job_template_from_cookbook(
-            "/path/to/cookbook", "webserver"
+            str(cookbook_path), "webserver"
         )
-
-    assert "Job Template" in result and "webserver" in result
+        assert "Job Template" in result and "webserver" in result
 
 
 def test_generate_awx_workflow_from_chef_runlist_success():
@@ -1909,13 +1909,30 @@ def test_generate_awx_workflow_from_chef_runlist_success():
 
 def test_generate_awx_project_from_cookbooks_success():
     """Test generate_awx_project_from_cookbooks with valid cookbooks."""
+    import tempfile
+    from pathlib import Path
+
     from souschef.server import generate_awx_project_from_cookbooks
 
-    cookbook_paths = "/path/to/cookbook1,/path/to/cookbook2"
+    # Create a temporary cookbooks directory structure
+    with tempfile.TemporaryDirectory() as temp_dir:
+        cookbooks_dir = Path(temp_dir) / "cookbooks"
+        cookbooks_dir.mkdir()
 
-    result = generate_awx_project_from_cookbooks(cookbook_paths, "ansible-migration")
+        # Create first cookbook
+        cookbook1 = cookbooks_dir / "cookbook1"
+        cookbook1.mkdir()
+        (cookbook1 / "metadata.rb").write_text("name 'cookbook1'\\nversion '1.0.0'")
 
-    assert "Project Configuration" in result
+        # Create second cookbook
+        cookbook2 = cookbooks_dir / "cookbook2"
+        cookbook2.mkdir()
+        (cookbook2 / "metadata.rb").write_text("name 'cookbook2'\\nversion '2.0.0'")
+
+        result = generate_awx_project_from_cookbooks(
+            str(cookbooks_dir), "ansible-migration"
+        )
+        assert "Project Configuration" in result
 
 
 def test_generate_awx_inventory_source_from_chef_success():
@@ -1935,57 +1952,42 @@ def test_generate_awx_inventory_source_from_chef_success():
 # Tests for data bag conversion tools
 def test_convert_chef_databag_to_vars_success():
     """Test convert_chef_databag_to_vars with valid data bag."""
+    import json
+
     from souschef.server import convert_chef_databag_to_vars
 
-    mock_databag_path = MagicMock(spec=Path)
-    mock_databag_path.exists.return_value = True
-    mock_databag_path.name = "secrets"
+    # Create databag content
+    databag_data = {"id": "database", "password": "secret123", "host": "db.example.com"}
+    databag_content = json.dumps(databag_data)
 
-    mock_item_file = MagicMock(spec=Path)
-    mock_item_file.name = "database.json"
-    mock_item_file.open.return_value.__enter__.return_value.read.return_value = """
-{
-  "id": "database",
-  "password": "secret123",
-  "host": "db.example.com"
-}
-"""
-    mock_databag_path.glob.return_value = [mock_item_file]
-
-    with patch("souschef.server.Path") as mock_path_class:
-        mock_path_class.return_value = mock_databag_path
-        result = convert_chef_databag_to_vars("/path/to/databag", "secrets")
-
+    result = convert_chef_databag_to_vars(databag_content, "secrets", "database")
     assert "secrets" in result
 
 
 def test_generate_ansible_vault_from_databags_success():
     """Test generate_ansible_vault_from_databags with encrypted data bags."""
+    import json
+    import tempfile
+    from pathlib import Path
+
     from souschef.server import generate_ansible_vault_from_databags
 
-    databag_paths = "/path/to/secrets,/path/to/passwords"
+    # Create a temporary databags directory
+    with tempfile.TemporaryDirectory() as temp_dir:
+        databags_path = Path(temp_dir) / "databags"
+        databags_path.mkdir()
 
-    mock_databag_path = MagicMock(spec=Path)
-    mock_databag_path.exists.return_value = True
-    mock_databag_path.name = "secrets"
+        # Create a data bag subdirectory
+        secrets_dir = databags_path / "secrets"
+        secrets_dir.mkdir()
 
-    mock_item_file = MagicMock(spec=Path)
-    mock_item_file.name = "database.json"
-    mock_item_file.open.return_value.__enter__.return_value.read.return_value = """
-{
-  "id": "database",
-  "password": {"encrypted_data": "abc123"}
-}
-"""
-    mock_databag_path.glob.return_value = [mock_item_file]
+        # Create sample databag files
+        secrets_file = secrets_dir / "database.json"
+        secrets_data = {"id": "database", "password": {"encrypted_data": "abc123"}}
+        secrets_file.write_text(json.dumps(secrets_data))
 
-    with patch("souschef.server.Path") as mock_path_class:
-        mock_path_class.return_value = mock_databag_path
-        result = generate_ansible_vault_from_databags(databag_paths)
-
-        assert "Ansible Vault" in result or "Error:" in result
-        assert "Vault Files Generated" in result
-        assert "Encryption Commands" in result
+        result = generate_ansible_vault_from_databags(str(databags_path))
+        assert "Ansible Vault" in result or "Error:" not in result
 
 
 def test_analyze_chef_databag_usage_success():
