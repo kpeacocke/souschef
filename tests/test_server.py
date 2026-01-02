@@ -6198,7 +6198,7 @@ db_servers = search(:node, "role:database")
             try:
                 result = _parse_chef_search_query(query)
                 assert isinstance(result, dict)
-            except:
+            except (ValueError, TypeError, KeyError):
                 # Some queries might fail, that's acceptable
                 pass
 
@@ -6218,7 +6218,7 @@ db_servers = search(:node, "role:database")
             try:
                 result = _parse_search_condition(condition)
                 assert isinstance(result, dict)
-            except:
+            except (ValueError, TypeError, KeyError):
                 # Some conditions might fail, that's acceptable
                 pass
 
@@ -6272,7 +6272,7 @@ db_servers = search(:node, "role:database")
             try:
                 inventory = _generate_ansible_inventory_from_search(result, "web")
                 assert isinstance(inventory, str)
-            except:
+            except (ValueError, TypeError, KeyError):
                 # Some results might not be valid
                 pass
 
@@ -8399,19 +8399,19 @@ end""",
             try:
                 result = _strip_ruby_comments(test_case)
                 assert isinstance(result, str)
-            except:
+            except (ValueError, TypeError):
                 pass
 
             try:
                 result = _normalize_ruby_value(test_case)
                 assert isinstance(result, str)
-            except:
+            except (ValueError, TypeError):
                 pass
 
             try:
                 result = _convert_erb_to_jinja2(test_case)
                 assert isinstance(result, str)
-            except:
+            except (ValueError, TypeError):
                 pass
 
     def test_large_file_handling(self):

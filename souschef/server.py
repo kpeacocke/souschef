@@ -5403,6 +5403,105 @@ def _analyze_chef_deployment_pattern(content: str, pattern_hint: str) -> dict:
     return analysis
 
 
+def _generate_blue_green_conversion_playbook(analysis: dict, recipe_name: str) -> str:
+    """Generate blue/green deployment playbook from Chef analysis.
+    
+    Args:
+        analysis: Chef deployment analysis data
+        recipe_name: Name of the original recipe
+        
+    Returns:
+        Blue/green deployment playbook YAML content
+
+    """
+    app_name = analysis.get("application_name", recipe_name)
+    port = analysis.get("service_port", "8080")
+    health_check_url = analysis.get("health_check_url", f"http://localhost:{port}/health")
+
+    return f"""---
+- name: Blue/Green Deployment - {app_name}
+  hosts: app_servers
+  serial: "100%"
+  vars:
+    app_name: {app_name}
+    app_version: "{{{{ app_version | default('latest') }}}}"
+    target_env: "{{{{ target_env | default('green') }}}}"
+    current_env: "{{{{ current_env | default('blue') }}}}"
+    health_check_url: "{health_check_url}"
+    service_port: {port}
+
+  tasks:
+    - name: Deploy to inactive environment
+      include_tasks: deploy_app.yml
+      vars:
+        deploy_env: "{{{{ target_env }}}}"
+        
+    - name: Health check inactive environment
+      uri:
+        url: "{{{{ health_check_url }}}}"
+        method: GET
+      register: health_check
+      retries: 10
+      delay: 30
+      
+    - name: Switch traffic to new environment
+      include_tasks: switch_traffic.yml
+      when: health_check.status == 200
+"""
+
+
+def _generate_canary_conversion_playbook(analysis: dict, recipe_name: str) -> str:
+    """Generate canary deployment playbook from Chef analysis.
+    
+    Args:
+        analysis: Chef deployment analysis data
+        recipe_name: Name of the original recipe
+        
+    Returns:
+        Canary deployment playbook YAML content
+
+    """
+    app_name = analysis.get("application_name", recipe_name)
+    port = analysis.get("service_port", "8080")
+    health_check_url = analysis.get("health_check_url", f"http://localhost:{port}/health")
+
+    return f"""---
+- name: Canary Deployment - {app_name}
+  hosts: app_servers
+  serial: "{{ canary_percentage | default(10) }}%"
+  vars:
+    app_name: {app_name}
+    app_version: "{{{{ app_version | default('latest') }}}}"
+    canary_percentage: "{{{{ canary_percentage | default(10) }}}}"
+    health_check_url: "{health_check_url}"
+    service_port: {port}
+
+  tasks:
+    - name: Deploy to canary hosts
+      include_tasks: deploy_app.yml
+      vars:
+        deploy_env: canary
+        
+    - name: Health check canary deployment
+      uri:
+        url: "{{{{ health_check_url }}}}"
+        method: GET
+      register: canary_health
+      retries: 5
+      delay: 10
+      
+    - name: Monitor canary metrics
+      include_tasks: monitor_canary.yml
+      when: canary_health.status == 200
+      
+    - name: Proceed with full deployment
+      include_tasks: deploy_app.yml
+      vars:
+        deploy_env: production
+      when: canary_metrics.success | default(false)
+"""
+
+
 def _generate_ansible_deployment_strategy(
     analysis: dict, target_strategy: str, recipe_name: str
 ) -> dict:
@@ -6406,7 +6505,7 @@ def generate_migration_report(
                 if assessment_results.startswith("{")
                 else None
             )
-        except:
+        except (json.JSONDecodeError, ValueError, TypeError):
             assessment_data = None
 
         # Generate report based on format
