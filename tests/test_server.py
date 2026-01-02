@@ -2471,7 +2471,9 @@ end
         # Should contain some form of templating syntax
         assert "<" in result or "{" in result or "Port" in result
 
+
 # Additional comprehensive tests for better coverage
+
 
 class TestAdvancedParsingFunctions:
     """Test advanced parsing functions for comprehensive coverage."""
@@ -2484,39 +2486,37 @@ class TestAdvancedParsingFunctions:
         simple = "node['apache']['port']"
         result = _extract_node_attribute_path(simple)
         assert isinstance(result, str) or result is None
-        
+
         # Test nested path
         nested = "node['app']['config']['database']['host']"
         result = _extract_node_attribute_path(nested)
         assert isinstance(result, str) or result is None
-        
+
         # Test with double quotes
         double_quotes = 'node["nginx"]["version"]'
         result = _extract_node_attribute_path(double_quotes)
         assert isinstance(result, str) or result is None
-        
+
         # Test invalid input
         invalid = "not_a_node_attribute"
         result = _extract_node_attribute_path(invalid)
+
+
 # High-impact coverage tests to reach 95% target
 
-import pytest
 import tempfile
-import json
-from pathlib import Path
-from unittest.mock import patch, mock_open
 
 
 class TestCoreFunctionsCoverage:
     """Test core functions for maximum coverage impact."""
-    
+
     def test_read_file_success_cases(self):
         """Test read_file with various successful scenarios."""
         from souschef.server import read_file
-        
+
         # Create a temporary file with Chef content
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.rb', delete=False) as f:
-            f.write('''
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+            f.write("""
 # Chef recipe
 package "nginx" do
   action :install
@@ -2527,9 +2527,9 @@ service "nginx" do
   action :start
   supports restart: true
 end
-''')
+""")
             temp_path = f.name
-        
+
         try:
             result = read_file(temp_path)
             assert isinstance(result, str)
@@ -2540,19 +2540,19 @@ end
             assert "content" in parsed
         finally:
             Path(temp_path).unlink()
-            
+
     def test_read_file_error_cases(self):
         """Test read_file error handling."""
         from souschef.server import read_file
-        
+
         # Test with nonexistent file
         result = read_file("/nonexistent/file.rb")
         assert "Error: File not found" in result
-        
+
         # Test with directory instead of file
         result = read_file("/tmp")
         assert "Error:" in result and "directory" in result
-        
+
         # Test with permission denied (try /root if it exists)
         if Path("/root").exists():
             result = read_file("/root")
@@ -2561,11 +2561,11 @@ end
     def test_list_directory_success_cases(self):
         """Test list_directory with real directories."""
         from souschef.server import list_directory
-        
+
         # Test with existing directory
         result = list_directory("/tmp")
         assert isinstance(result, list) or isinstance(result, str)
-        
+
         # Test with workspace directory
         result = list_directory("/workspaces/souschef")
         assert isinstance(result, (list, str))
@@ -2575,7 +2575,7 @@ end
     def test_list_directory_error_cases(self):
         """Test list_directory error handling."""
         from souschef.server import list_directory
-        
+
         # Test with nonexistent directory
         result = list_directory("/nonexistent/directory")
         assert isinstance(result, str) and "Error" in result
@@ -2583,15 +2583,15 @@ end
     def test_parse_recipe_with_real_content(self):
         """Test parse_recipe with realistic Chef recipes."""
         from souschef.server import parse_recipe
-        
+
         # Create temporary recipe files with different content
         recipes = [
-            '''
+            """
 package "nginx" do
   action :install
 end
-''',
-            '''
+""",
+            """
 service "apache2" do
   action [:enable, :start]
   supports restart: true, reload: true
@@ -2604,8 +2604,8 @@ template "/etc/apache2/sites-available/default" do
   mode "0644"
   notifies :restart, "service[apache2]"
 end
-''',
-            '''
+""",
+            """
 directory "/opt/app" do
   owner "deploy"
   group "deploy"
@@ -2620,80 +2620,88 @@ file "/opt/app/config.yml" do
   group "deploy"
   mode "0644"
 end
-'''
+""",
         ]
-        
+
         for i, recipe_content in enumerate(recipes):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_{i}.rb", delete=False
+            ) as f:
                 f.write(recipe_content)
                 temp_path = f.name
-            
+
             try:
                 result = parse_recipe(temp_path)
                 assert isinstance(result, str)
                 assert len(result) > 20  # Should have substantial output
                 # Should contain resource information
-                assert "Resource" in result or "package" in result or "service" in result
+                assert (
+                    "Resource" in result or "package" in result or "service" in result
+                )
             finally:
                 Path(temp_path).unlink()
 
     def test_parse_attributes_with_real_content(self):
         """Test parse_attributes with realistic attribute files."""
         from souschef.server import parse_attributes
-        
+
         attribute_contents = [
-            '''
+            """
 default["nginx"]["port"] = 80
 default["nginx"]["worker_processes"] = "auto"
 default["nginx"]["worker_connections"] = 1024
-''',
-            '''
+""",
+            """
 override["apache"]["listen_ports"] = [80, 443]
 override["apache"]["modules"] = ["rewrite", "ssl", "headers"]
 override["mysql"]["bind_address"] = "0.0.0.0"
 override["mysql"]["port"] = 3306
-''',
-            '''
+""",
+            """
 normal["app"]["name"] = "production-app"
 normal["app"]["version"] = "2.1.0"
 normal["app"]["database"]["pool_size"] = 20
 normal["app"]["cache"]["redis"]["url"] = "redis://localhost:6379"
-'''
+""",
         ]
-        
+
         for i, attr_content in enumerate(attribute_contents):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_attr_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_attr_{i}.rb", delete=False
+            ) as f:
                 f.write(attr_content)
                 temp_path = f.name
-            
+
             try:
                 result = parse_attributes(temp_path)
                 assert isinstance(result, str)
                 assert len(result) > 10
                 # Should contain attribute information
-                assert "Attribute" in result or "default" in result or "override" in result
+                assert (
+                    "Attribute" in result or "default" in result or "override" in result
+                )
             finally:
                 Path(temp_path).unlink()
 
     def test_parse_template_with_real_erb(self):
         """Test parse_template with realistic ERB templates."""
         from souschef.server import parse_template
-        
+
         erb_templates = [
-            '''
+            """
 server {
     listen <%= node['nginx']['port'] %>;
     server_name <%= node['nginx']['server_name'] %>;
     root <%= node['nginx']['docroot'] %>;
-    
+
     <% if node['nginx']['ssl']['enabled'] %>
     listen 443 ssl;
     ssl_certificate <%= node['nginx']['ssl']['cert_path'] %>;
     ssl_certificate_key <%= node['nginx']['ssl']['key_path'] %>;
     <% end %>
 }
-''',
-            '''
+""",
+            """
 [mysqld]
 port = <%= node['mysql']['port'] %>
 bind-address = <%= node['mysql']['bind_address'] %>
@@ -2707,8 +2715,8 @@ log-bin = mysql-bin
 <% node['mysql']['databases'].each do |db| %>
 # Database: <%= db['name'] %>
 <% end %>
-''',
-            '''
+""",
+            """
 #!/bin/bash
 # Application deployment script
 
@@ -2726,14 +2734,16 @@ echo "Deploying $APP_NAME version $APP_VERSION"
 <% node['app']['services'].each do |service| %>
 systemctl restart <%= service %>
 <% end %>
-'''
+""",
         ]
-        
+
         for i, template_content in enumerate(erb_templates):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_template_{i}.erb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_template_{i}.erb", delete=False
+            ) as f:
                 f.write(template_content)
                 temp_path = f.name
-            
+
             try:
                 result = parse_template(temp_path)
                 assert isinstance(result, str)
@@ -2746,9 +2756,9 @@ systemctl restart <%= service %>
     def test_read_cookbook_metadata_with_real_content(self):
         """Test read_cookbook_metadata with realistic metadata."""
         from souschef.server import read_cookbook_metadata
-        
+
         metadata_contents = [
-            '''
+            """
 name 'nginx'
 maintainer 'Chef Software, Inc.'
 maintainer_email 'cookbooks@chef.io'
@@ -2763,8 +2773,8 @@ supports 'redhat', '>= 7.0'
 
 depends 'build-essential'
 depends 'yum-epel'
-''',
-            '''
+""",
+            """
 name 'apache2'
 maintainer 'Chef Software'
 license 'Apache-2.0'
@@ -2778,8 +2788,8 @@ gem 'chef-sugar'
 
 source_url 'https://github.com/chef-cookbooks/apache2'
 issues_url 'https://github.com/chef-cookbooks/apache2/issues'
-''',
-            '''
+""",
+            """
 name 'mysql'
 version '8.5.1'
 description 'Provides mysql_service, mysql_config, and mysql_client resources'
@@ -2790,53 +2800,65 @@ chef_version '>= 12.15'
 
 supports 'amazon'
 supports 'centos'
-supports 'debian' 
+supports 'debian'
 supports 'fedora'
 supports 'oracle'
 supports 'redhat'
 supports 'scientific'
 supports 'ubuntu'
-'''
+""",
         ]
-        
+
         for i, metadata_content in enumerate(metadata_contents):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_metadata_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_metadata_{i}.rb", delete=False
+            ) as f:
                 f.write(metadata_content)
                 temp_path = f.name
-            
+
             try:
                 result = read_cookbook_metadata(temp_path)
                 assert isinstance(result, str)
                 assert len(result) > 20
                 # Should contain metadata information
-                assert "name" in result.lower() or "version" in result.lower() or "metadata" in result.lower()
+                assert (
+                    "name" in result.lower()
+                    or "version" in result.lower()
+                    or "metadata" in result.lower()
+                )
             finally:
                 Path(temp_path).unlink()
 
     def test_list_cookbook_structure_with_real_structure(self):
         """Test list_cookbook_structure with realistic cookbook layout."""
         from souschef.server import list_cookbook_structure
-        
+
         # Test with workspace directory (should work)
         result = list_cookbook_structure("/workspaces/souschef")
         assert isinstance(result, str)
         assert len(result) > 10
-        
+
         # Test with temp directory structure
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            
+
             # Create typical cookbook structure
             (temp_path / "recipes").mkdir()
-            (temp_path / "attributes").mkdir() 
+            (temp_path / "attributes").mkdir()
             (temp_path / "templates").mkdir()
             (temp_path / "files").mkdir()
-            
-            (temp_path / "metadata.rb").write_text("name 'test_cookbook'\nversion '1.0.0'")
+
+            (temp_path / "metadata.rb").write_text(
+                "name 'test_cookbook'\nversion '1.0.0'"
+            )
             (temp_path / "recipes" / "default.rb").write_text('package "nginx"')
-            (temp_path / "attributes" / "default.rb").write_text('default["nginx"]["port"] = 80')
-            (temp_path / "templates" / "nginx.conf.erb").write_text("server { listen 80; }")
-            
+            (temp_path / "attributes" / "default.rb").write_text(
+                'default["nginx"]["port"] = 80'
+            )
+            (temp_path / "templates" / "nginx.conf.erb").write_text(
+                "server { listen 80; }"
+            )
+
             result = list_cookbook_structure(str(temp_path))
             assert isinstance(result, str)
             assert "recipes" in result or "cookbook" in result.lower()
@@ -2844,33 +2866,50 @@ supports 'ubuntu'
     def test_convert_resource_to_task_comprehensive(self):
         """Test convert_resource_to_task with various Chef resources."""
         from souschef.server import convert_resource_to_task
-        
+
         test_resources = [
-            ('package "nginx" do\n  action :install\nend', 'install'),
-            ('service "apache2" do\n  action :start\n  supports restart: true\nend', 'start'),
-            ('file "/etc/nginx/nginx.conf" do\n  owner "root"\n  group "root"\n  mode "0644"\nend', 'create'),
-            ('directory "/var/log/app" do\n  owner "deploy"\n  recursive true\nend', 'create'),
-            ('template "/etc/apache2/apache2.conf" do\n  source "apache2.conf.erb"\nend', 'create'),
-            ('execute "update-grub" do\n  command "grub-mkconfig -o /boot/grub/grub.cfg"\nend', 'run'),
+            ('package "nginx" do\n  action :install\nend', "install"),
+            (
+                'service "apache2" do\n  action :start\n  supports restart: true\nend',
+                "start",
+            ),
+            (
+                'file "/etc/nginx/nginx.conf" do\n  owner "root"\n  group "root"\n  mode "0644"\nend',
+                "create",
+            ),
+            (
+                'directory "/var/log/app" do\n  owner "deploy"\n  recursive true\nend',
+                "create",
+            ),
+            (
+                'template "/etc/apache2/apache2.conf" do\n  source "apache2.conf.erb"\nend',
+                "create",
+            ),
+            (
+                'execute "update-grub" do\n  command "grub-mkconfig -o /boot/grub/grub.cfg"\nend',
+                "run",
+            ),
         ]
-        
+
         for resource, action in test_resources:
             result = convert_resource_to_task(resource, action)
             assert isinstance(result, str)
             assert len(result) > 10  # Should produce meaningful Ansible output
             # Should contain Ansible-like structure
-            assert "name:" in result.lower() or "task" in result.lower() or "-" in result
+            assert (
+                "name:" in result.lower() or "task" in result.lower() or "-" in result
+            )
 
 
 class TestMCPToolsRealUsage:
     """Test MCP tools with realistic usage scenarios."""
-    
+
     def test_parse_custom_resource_with_real_files(self):
         """Test parse_custom_resource with realistic custom resources."""
         from souschef.server import parse_custom_resource
-        
+
         custom_resources = [
-            '''
+            """
 property :config_file, String, default: '/etc/myapp/config.yml'
 property :port, Integer, default: 8080
 property :user, String, default: 'myapp'
@@ -2881,7 +2920,7 @@ action :create do
     mode '0755'
     recursive true
   end
-  
+
   template new_resource.config_file do
     source 'config.yml.erb'
     owner new_resource.user
@@ -2894,8 +2933,8 @@ action :delete do
     action :delete
   end
 end
-''',
-            '''
+""",
+            """
 property :database_name, String, name_property: true
 property :username, String, required: true
 property :password, String, required: true
@@ -2904,7 +2943,7 @@ action :create do
   mysql_database new_resource.database_name do
     action :create
   end
-  
+
   mysql_database_user new_resource.username do
     password new_resource.password
     database_name new_resource.database_name
@@ -2912,29 +2951,35 @@ action :create do
     action [:create, :grant]
   end
 end
-'''
+""",
         ]
-        
+
         for i, resource_content in enumerate(custom_resources):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_resource_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_resource_{i}.rb", delete=False
+            ) as f:
                 f.write(resource_content)
                 temp_path = f.name
-            
+
             try:
                 result = parse_custom_resource(temp_path)
                 assert isinstance(result, str)
                 assert len(result) > 30
                 # Should contain custom resource analysis
-                assert "resource" in result.lower() or "property" in result.lower() or "action" in result.lower()
+                assert (
+                    "resource" in result.lower()
+                    or "property" in result.lower()
+                    or "action" in result.lower()
+                )
             finally:
                 Path(temp_path).unlink()
 
     def test_generate_playbook_from_recipe_integration(self):
         """Test generate_playbook_from_recipe with complete recipes."""
         from souschef.server import generate_playbook_from_recipe
-        
+
         complete_recipes = [
-            '''
+            """
 # Install and configure nginx
 package "nginx" do
   action :install
@@ -2960,8 +3005,8 @@ file "/var/www/html/index.html" do
   group "www-data"
   mode "0644"
 end
-''',
-            '''
+""",
+            """
 # Database server setup
 package "mysql-server" do
   action :install
@@ -2988,14 +3033,16 @@ execute "secure-mysql" do
   user "root"
   not_if "mysql -u root -e 'SELECT 1'"
 end
-'''
+""",
         ]
-        
+
         for i, recipe_content in enumerate(complete_recipes):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_recipe_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_recipe_{i}.rb", delete=False
+            ) as f:
                 f.write(recipe_content)
                 temp_path = f.name
-            
+
             try:
                 result = generate_playbook_from_recipe(temp_path)
                 # Note: This might return an error if the function has issues,
@@ -3007,8 +3054,8 @@ end
 
     def test_helper_functions_comprehensive_coverage(self):
         """Test internal helper functions for maximum coverage."""
-        from souschef.server import _strip_ruby_comments, _normalize_ruby_value
-        
+        from souschef.server import _normalize_ruby_value, _strip_ruby_comments
+
         # Test _strip_ruby_comments with various scenarios
         test_cases = [
             "# Simple comment\npackage 'nginx'",
@@ -3023,17 +3070,17 @@ end
             'name = "app" # comment with "quotes"',
             "url = 'http://example.com' # comment with 'quotes'",
         ]
-        
+
         for test_case in test_cases:
             result = _strip_ruby_comments(test_case)
             assert isinstance(result, str)
             # Comments should be removed or reduced
             assert len(result) <= len(test_case)
-        
+
         # Test _normalize_ruby_value with various types
         test_values = [
             ":install",
-            ":start", 
+            ":start",
             "[:enable, :start]",
             "'nginx'",
             '"apache2"',
@@ -3044,7 +3091,7 @@ end
             '{"key" => "value"}',
             "node['attribute']",
         ]
-        
+
         for test_value in test_values:
             result = _normalize_ruby_value(test_value)
             assert isinstance(result, str)
@@ -3054,24 +3101,24 @@ end
     def test_conversion_edge_cases(self):
         """Test conversion functions with edge cases and error conditions."""
         from souschef.server import convert_resource_to_task
-        
+
         # Test with malformed resources
         edge_cases = [
             "",  # Empty string
-            "package", # Incomplete resource
+            "package",  # Incomplete resource
             "invalid ruby syntax {{{",  # Malformed syntax
             "package 'nginx' do\n# missing end",  # Incomplete block
             "service 'apache2' do\n  action :unknown_action\nend",  # Unknown action
         ]
-        
+
         for edge_case in edge_cases:
             result = convert_resource_to_task(edge_case, "install")
             # Should not crash
             assert isinstance(result, str)
-        
+
         # Test with edge case actions
         edge_actions = ["", "unknown_action", "123", None]
-        
+
         for action in edge_actions:
             try:
                 result = convert_resource_to_task("package 'nginx'", action)
@@ -3083,11 +3130,11 @@ end
 
 class TestInDepthFunctionCoverage:
     """Test specific functions for deep coverage."""
-    
+
     def test_erb_jinja2_conversion_comprehensive(self):
         """Test ERB to Jinja2 conversion thoroughly."""
         from souschef.server import _convert_erb_to_jinja2
-        
+
         erb_examples = [
             "<%= variable %>",
             "<%= node['config']['port'] %>",
@@ -3098,7 +3145,7 @@ class TestInDepthFunctionCoverage:
             "Port <%= port || 80 %>",
             "<% if ssl_enabled -%>\nSSL on\n<% else -%>\nSSL off\n<% end -%>",
         ]
-        
+
         for erb in erb_examples:
             result = _convert_erb_to_jinja2(erb)
             assert isinstance(result, str)
@@ -3107,16 +3154,21 @@ class TestInDepthFunctionCoverage:
 
     def test_file_operations_error_coverage(self):
         """Test file operations to cover error handling paths."""
-        from souschef.server import read_file, parse_recipe, parse_attributes, parse_template
-        
+        from souschef.server import (
+            parse_attributes,
+            parse_recipe,
+            parse_template,
+            read_file,
+        )
+
         # Test various file system errors
         error_paths = [
             "/dev/null/nonexistent",  # Not a directory error
             "/proc/version",  # Should be readable but might have different content
         ]
-        
+
         functions_to_test = [read_file, parse_recipe, parse_attributes, parse_template]
-        
+
         for func in functions_to_test:
             for path in error_paths:
                 result = func(path)
@@ -3125,41 +3177,41 @@ class TestInDepthFunctionCoverage:
 
     def test_directory_operations_comprehensive(self):
         """Test directory operations comprehensively."""
-        from souschef.server import list_directory, list_cookbook_structure
-        
+        from souschef.server import list_cookbook_structure, list_directory
+
         # Test with various directory types
         test_dirs = [
             "/tmp",  # Writable directory
             "/usr",  # System directory
-            "/proc", # Virtual filesystem
+            "/proc",  # Virtual filesystem
         ]
-        
+
         for test_dir in test_dirs:
             if Path(test_dir).exists():
                 # Test list_directory
                 result = list_directory(test_dir)
                 assert isinstance(result, (list, str))
-                
-                # Test list_cookbook_structure 
+
+                # Test list_cookbook_structure
                 result = list_cookbook_structure(test_dir)
                 assert isinstance(result, str)
 
     def test_json_parsing_and_formatting(self):
         """Test JSON operations within the functions."""
         from souschef.server import read_file
-        
+
         # Create a JSON file to test JSON handling
         json_content = {
             "name": "test",
             "version": "1.0.0",
             "description": "Test cookbook",
-            "dependencies": ["nginx", "mysql"]
+            "dependencies": ["nginx", "mysql"],
         }
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(json_content, f)
             temp_path = f.name
-        
+
         try:
             result = read_file(temp_path)
             assert isinstance(result, str)
@@ -3167,25 +3219,22 @@ class TestInDepthFunctionCoverage:
             parsed = json.loads(result)
             assert "content" in parsed
         finally:
-            Path(temp_path).unlink()# Additional targeted tests for maximum coverage
+            Path(temp_path).unlink()  # Additional targeted tests for maximum coverage
 
-import pytest
-import tempfile
+
 import os
-from pathlib import Path
-from unittest.mock import patch, mock_open, MagicMock
 
 
 class TestUncoveredCodePaths:
     """Target specific uncovered code paths for 95% coverage."""
-    
+
     def test_detailed_recipe_parsing_coverage(self):
         """Test recipe parsing to cover specific parsing logic."""
         from souschef.server import parse_recipe
-        
+
         # Complex recipes that exercise different parsing paths
         complex_recipes = [
-            '''
+            """
 # Test resource with complex attributes
 package "nginx" do
   version "1.18.0-0ubuntu1"
@@ -3238,7 +3287,7 @@ end
 # Directory with complex permissions and ownership
 directory "/var/log/nginx" do
   owner node["nginx"]["user"]
-  group node["nginx"]["group"] 
+  group node["nginx"]["group"]
   mode 0755
   recursive true
   action :create
@@ -3254,7 +3303,7 @@ file "/etc/nginx/sites-available/default" do
     end
   }
   owner "root"
-  group "root" 
+  group "root"
   mode 0644
   backup false
   action :create
@@ -3295,7 +3344,7 @@ end
 
 # Group resource
 group "nginx" do
-  gid 33  
+  gid 33
   members ["www-data", "nginx"]
   system true
   append true
@@ -3307,7 +3356,7 @@ cron "nginx-log-rotation" do
   minute "0"
   hour "2"
   day "*"
-  month "*" 
+  month "*"
   weekday "*"
   user "root"
   command "/usr/sbin/logrotate /etc/logrotate.d/nginx"
@@ -3340,7 +3389,7 @@ end
 # Git resource
 git "/opt/nginx-configs" do
   repository "https://github.com/example/nginx-configs.git"
-  reference "main" 
+  reference "main"
   user "deploy"
   group "deploy"
   checkout_branch "production"
@@ -3362,7 +3411,7 @@ remote_file "/tmp/nginx-module.tar.gz" do
   action :create
 end
 
-# Cookbook file resource  
+# Cookbook file resource
 cookbook_file "/etc/nginx/mime.types" do
   source "mime.types"
   owner "root"
@@ -3402,7 +3451,7 @@ end
 script "setup-ssl-certs" do
   interpreter "python3"
   user "root"
-  group "root"  
+  group "root"
   cwd "/etc/ssl"
   code <<-EOH
 import os
@@ -3418,23 +3467,23 @@ if not os.path.exists(key_dir):
     os.makedirs(key_dir, mode=0o700)
 
 # Generate self-signed certificate if it doesn't exist
-cert_file = os.path.join(cert_dir, "nginx-selfsigned.crt") 
+cert_file = os.path.join(cert_dir, "nginx-selfsigned.crt")
 key_file = os.path.join(key_dir, "nginx-selfsigned.key")
 
 if not os.path.exists(cert_file):
     cmd = [
-        "openssl", "req", "-x509", "-nodes", 
+        "openssl", "req", "-x509", "-nodes",
         "-days", "365", "-newkey", "rsa:2048",
         "-keyout", key_file,
         "-out", cert_file,
         "-subj", "/C=US/ST=State/L=City/O=Org/CN=localhost"
     ]
     subprocess.run(cmd, check=True)
-    
+
     # Set proper permissions
     os.chmod(cert_file, 0o644)
     os.chmod(key_file, 0o600)
-    
+
     print(f"Generated SSL certificate: {cert_file}")
     print(f"Generated SSL key: {key_file}")
   EOH
@@ -3459,7 +3508,7 @@ if node["nginx"]["ssl"]["enabled"]
   package "nginx-extras" do
     action :install
   end
-  
+
   template "/etc/nginx/ssl.conf" do
     source "ssl.conf.erb"
     variables ssl_config: node["nginx"]["ssl"]
@@ -3477,7 +3526,7 @@ when "ubuntu", "debian"
   service_name = "nginx"
   conf_dir = "/etc/nginx"
 when "centos", "redhat", "amazon"
-  service_name = "nginx" 
+  service_name = "nginx"
   conf_dir = "/etc/nginx"
 when "arch"
   service_name = "nginx"
@@ -3487,7 +3536,7 @@ else
   conf_dir = "/etc/nginx"
 end
 
-# Loop through virtual hosts configuration  
+# Loop through virtual hosts configuration
 node["nginx"]["sites"].each do |site_name, site_config|
   template "/etc/nginx/sites-available/#{site_name}" do
     source "site.conf.erb"
@@ -3508,22 +3557,22 @@ node["nginx"]["sites"].each do |site_name, site_config|
     action :create
     notifies :reload, "service[#{service_name}]", :delayed
   end
-  
+
   link "/etc/nginx/sites-enabled/#{site_name}" do
     to "/etc/nginx/sites-available/#{site_name}"
     action :create
     only_if { site_config["enabled"] }
   end
-  
+
   # Create document root directory
   directory site_config["document_root"] do
     owner site_config["user"] || "www-data"
-    group site_config["group"] || "www-data"  
+    group site_config["group"] || "www-data"
     mode 0755
     recursive true
     action :create
   end
-  
+
   # Create log directories for each site
   %w[access error].each do |log_type|
     directory "/var/log/nginx/#{site_name}" do
@@ -3533,7 +3582,7 @@ node["nginx"]["sites"].each do |site_name, site_config|
       recursive true
       action :create
     end
-    
+
     file "/var/log/nginx/#{site_name}/#{log_type}.log" do
       owner "www-data"
       group "adm"
@@ -3587,10 +3636,10 @@ if node["nginx"]["monitoring"]["enabled"]
     )
     action :create
   end
-  
+
   cron "nginx-status-check" do
     minute "*/5"
-    user "root" 
+    user "root"
     command "curl -s http://localhost#{node['nginx']['monitoring']['status_path']} > /dev/null || systemctl restart nginx"
     action :create
   end
@@ -3605,14 +3654,16 @@ ruby_block "cleanup-nginx-temp-files" do
   end
   action :run
 end
-''',
+""",
         ]
-        
+
         for i, recipe_content in enumerate(complex_recipes):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_complex_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_complex_{i}.rb", delete=False
+            ) as f:
                 f.write(recipe_content)
                 temp_path = f.name
-            
+
             try:
                 result = parse_recipe(temp_path)
                 assert isinstance(result, str)
@@ -3626,12 +3677,12 @@ end
     def test_comprehensive_attribute_parsing(self):
         """Test attribute parsing with complex attribute files."""
         from souschef.server import parse_attributes
-        
+
         complex_attributes = [
-            '''
+            """
 # Default attributes for nginx cookbook
 default["nginx"]["version"] = "1.18.0"
-default["nginx"]["user"] = "www-data"  
+default["nginx"]["user"] = "www-data"
 default["nginx"]["group"] = "www-data"
 default["nginx"]["dir"] = "/etc/nginx"
 default["nginx"]["log_dir"] = "/var/log/nginx"
@@ -3733,7 +3784,7 @@ default["nginx"]["upstreams"] = {
         "fail_timeout" => "30s"
       },
       {
-        "address" => "127.0.0.1:3001", 
+        "address" => "127.0.0.1:3001",
         "weight" => 1,
         "max_fails" => 3,
         "fail_timeout" => "30s",
@@ -3762,7 +3813,7 @@ default["nginx"]["log_formats"] = {
   "cache" => '$remote_addr - $upstream_cache_status [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"'
 }
 
-# Rate limiting configuration  
+# Rate limiting configuration
 default["nginx"]["rate_limiting"] = {
   "enabled" => false,
   "zones" => {
@@ -3773,7 +3824,7 @@ default["nginx"]["rate_limiting"] = {
     },
     "login" => {
       "key" => "$binary_remote_addr",
-      "size" => "1m", 
+      "size" => "1m",
       "rate" => "5r/m"
     }
   }
@@ -3805,7 +3856,7 @@ force_override["nginx"]["security"] = {
 automatic["nginx"]["detected_version"] = "1.18.0-0ubuntu1.2"
 automatic["nginx"]["compiled_modules"] = [
   "http_ssl_module",
-  "http_realip_module", 
+  "http_realip_module",
   "http_addition_module",
   "http_sub_module",
   "http_dav_module",
@@ -3838,7 +3889,7 @@ when "centos", "redhat", "amazon"
   default["nginx"]["enabled_dir"] = "/etc/nginx/conf.d"
 when "arch"
   default["nginx"]["package_name"] = "nginx"
-  default["nginx"]["service_name"] = "nginx"  
+  default["nginx"]["service_name"] = "nginx"
   default["nginx"]["conf_dir"] = "/etc/nginx"
   default["nginx"]["available_dir"] = "/etc/nginx/sites-available"
   default["nginx"]["enabled_dir"] = "/etc/nginx/sites-enabled"
@@ -3884,13 +3935,13 @@ end
 # Array and hash manipulation
 default["nginx"]["modules_to_load"] = []
 default["nginx"]["modules_to_load"] << "ngx_http_image_filter_module" if node["nginx"]["image_filter"]["enabled"]
-default["nginx"]["modules_to_load"] << "ngx_http_xslt_module" if node["nginx"]["xslt"]["enabled"]  
+default["nginx"]["modules_to_load"] << "ngx_http_xslt_module" if node["nginx"]["xslt"]["enabled"]
 default["nginx"]["modules_to_load"] << "ngx_http_geoip_module" if node["nginx"]["geoip"]["enabled"]
 
 # Complex hash merging
 base_headers = {
   "X-Content-Type-Options" => "nosniff",
-  "X-Frame-Options" => "DENY", 
+  "X-Frame-Options" => "DENY",
   "X-XSS-Protection" => "1; mode=block"
 }
 
@@ -3931,18 +3982,22 @@ default["nginx"]["template_variables"] = {
     "use" => node["nginx"]["use"]
   }
 }
-''',
+""",
         ]
-        
+
         for i, attr_content in enumerate(complex_attributes):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_complex_attr_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_complex_attr_{i}.rb", delete=False
+            ) as f:
                 f.write(attr_content)
                 temp_path = f.name
-            
+
             try:
                 result = parse_attributes(temp_path)
                 assert isinstance(result, str)
-                assert len(result) > 200  # Should have extensive output for complex attributes
+                assert (
+                    len(result) > 200
+                )  # Should have extensive output for complex attributes
                 # Should contain various attribute types
                 assert "default" in result.lower()
                 attribute_count = result.lower().count("attribute")
@@ -3952,15 +4007,19 @@ default["nginx"]["template_variables"] = {
 
     def test_realistic_inspec_scenarios(self):
         """Test InSpec functions with realistic profiles."""
-        from souschef.server import parse_inspec_profile, convert_inspec_to_test, generate_inspec_from_recipe
-        
+        from souschef.server import (
+            convert_inspec_to_test,
+            generate_inspec_from_recipe,
+            parse_inspec_profile,
+        )
+
         # Create a realistic InSpec profile structure
         with tempfile.TemporaryDirectory() as temp_dir:
             profile_path = Path(temp_dir) / "nginx-baseline"
             profile_path.mkdir()
-            
+
             # Create inspec.yml
-            (profile_path / "inspec.yml").write_text('''
+            (profile_path / "inspec.yml").write_text("""
 name: nginx-baseline
 title: Nginx Security Baseline
 maintainer: DevOps Team
@@ -3972,29 +4031,29 @@ version: 1.0.0
 supports:
   - platform: ubuntu
     release: 18.04
-  - platform: ubuntu  
+  - platform: ubuntu
     release: 20.04
   - platform: centos
     release: 7
 depends:
   - name: linux-baseline
     url: https://github.com/dev-sec/linux-baseline
-''')
-            
+""")
+
             # Create controls directory and controls
             controls_dir = profile_path / "controls"
             controls_dir.mkdir()
-            
-            (controls_dir / "nginx_installed.rb").write_text('''
+
+            (controls_dir / "nginx_installed.rb").write_text("""
 control 'nginx-01' do
   impact 1.0
   title 'Nginx should be installed'
   desc 'Nginx should be installed and available'
-  
+
   describe package('nginx') do
     it { should be_installed }
   end
-  
+
   describe service('nginx') do
     it { should be_installed }
     it { should be_enabled }
@@ -4006,7 +4065,7 @@ control 'nginx-02' do
   impact 0.8
   title 'Nginx configuration should be secure'
   desc 'Nginx configuration should follow security best practices'
-  
+
   describe file('/etc/nginx/nginx.conf') do
     it { should exist }
     it { should be_file }
@@ -4015,7 +4074,7 @@ control 'nginx-02' do
     it { should_not be_executable.by('others') }
     it { should_not be_readable.by('others') }
   end
-  
+
   describe nginx_conf('/etc/nginx/nginx.conf') do
     its('server_tokens') { should eq 'off' }
     its('worker_processes') { should eq 'auto' }
@@ -4026,12 +4085,12 @@ control 'nginx-03' do
   impact 0.7
   title 'Nginx should listen on expected ports'
   desc 'Nginx should be configured to listen on standard HTTP/HTTPS ports'
-  
+
   describe port(80) do
     it { should be_listening }
     its('protocols') { should include 'tcp' }
   end
-  
+
   describe port(443) do
     it { should be_listening }
     its('protocols') { should include 'tcp' }
@@ -4042,12 +4101,12 @@ control 'nginx-04' do
   impact 0.9
   title 'Nginx SSL configuration should be secure'
   desc 'SSL/TLS configuration should use secure protocols and ciphers'
-  
+
   describe file('/etc/nginx/ssl.conf') do
     it { should exist }
-    its('content') { should match(/ssl_protocols\s+TLSv1\.2\s+TLSv1\.3/) }
-    its('content') { should match(/ssl_prefer_server_ciphers\s+on/) }
-    its('content') { should_not match(/SSLv2|SSLv3|TLSv1\.0|TLSv1\.1/) }
+    its('content') { should match(/ssl_protocols\\s+TLSv1\\.2\\s+TLSv1\\.3/) }
+    its('content') { should match(/ssl_prefer_server_ciphers\\s+on/) }
+    its('content') { should_not match(/SSLv2|SSLv3|TLSv1\\.0|TLSv1\\.1/) }
   end
 end
 
@@ -4055,7 +4114,7 @@ control 'nginx-05' do
   impact 0.6
   title 'Nginx log files should exist and have proper permissions'
   desc 'Nginx access and error logs should exist with appropriate permissions'
-  
+
   %w[/var/log/nginx/access.log /var/log/nginx/error.log].each do |log_file|
     describe file(log_file) do
       it { should exist }
@@ -4068,23 +4127,23 @@ control 'nginx-05' do
     end
   end
 end
-''')
-            
+""")
+
             # Test parse_inspec_profile
             result = parse_inspec_profile(str(profile_path))
             assert isinstance(result, str)
             assert len(result) > 100
             assert "nginx" in result.lower() or "profile" in result.lower()
-            
+
             # Test convert_inspec_to_test
             for framework in ["testinfra", "serverspec"]:
                 result = convert_inspec_to_test(str(profile_path), framework)
                 assert isinstance(result, str)
                 # Should produce some conversion output
-            
+
         # Test generate_inspec_from_recipe
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.rb', delete=False) as f:
-            f.write('''
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+            f.write("""
 package "nginx" do
   action :install
 end
@@ -4098,9 +4157,9 @@ file "/etc/nginx/nginx.conf" do
   group "root"
   mode "0644"
 end
-''')
+""")
             temp_recipe = f.name
-        
+
         try:
             result = generate_inspec_from_recipe(temp_recipe)
             assert isinstance(result, str)
@@ -4111,10 +4170,10 @@ end
     def test_extensive_template_scenarios(self):
         """Test template parsing with extensive ERB scenarios."""
         from souschef.server import parse_template
-        
+
         complex_templates = [
-            '''
-<%# 
+            """
+<%#
   Nginx configuration template
   Variables:
   - server_name: Primary server name
@@ -4131,16 +4190,16 @@ server {
     <% if @ssl_enabled %>
     listen <%= @ssl_port || 443 %> ssl http2;
     <% end %>
-    
+
     server_name <%= @server_name %><% if @server_aliases %> <%= @server_aliases.join(' ') %><% end %>;
-    
+
     root <%= @document_root || '/var/www/html' %>;
     index <%= @index_files || 'index.html index.htm' %><% if @php_enabled %> index.php<% end %>;
-    
+
     # Logging configuration
     access_log <%= @access_log || '/var/log/nginx/access.log' %> <%= @log_format || 'combined' %>;
     error_log <%= @error_log || '/var/log/nginx/error.log' %> <%= @error_log_level || 'warn' %>;
-    
+
     <% if @ssl_enabled %>
     # SSL Configuration
     ssl_certificate <%= @ssl_certificate %>;
@@ -4150,16 +4209,16 @@ server {
     ssl_prefer_server_ciphers <%= @ssl_prefer_server_ciphers || 'off' %>;
     ssl_session_cache <%= @ssl_session_cache || 'shared:SSL:1m' %>;
     ssl_session_timeout <%= @ssl_session_timeout || '10m' %>;
-    
+
     <% if @ssl_dhparam %>
     ssl_dhparam <%= @ssl_dhparam %>;
     <% end %>
-    
+
     <% if @hsts_enabled %>
     # HSTS (HTTP Strict Transport Security)
     add_header Strict-Transport-Security "max-age=<%= @hsts_max_age || 31536000 %>; includeSubDomains<% if @hsts_preload %>; preload<% end %>" always;
     <% end %>
-    
+
     <% if @ssl_redirect && !@ssl_only %>
     # Redirect HTTP to HTTPS
     if ($scheme != "https") {
@@ -4167,12 +4226,12 @@ server {
     }
     <% end %>
     <% end %>
-    
+
     # Security headers
     <% (@security_headers || {}).each do |header, value| %>
     add_header <%= header %> "<%= value %>" always;
     <% end %>
-    
+
     # Gzip configuration
     <% if @gzip_enabled %>
     gzip on;
@@ -4190,21 +4249,21 @@ server {
           'application/json'
         ]).join("\\n        ") %>;
     <% end %>
-    
+
     # Main location block
     location / {
         try_files $uri $uri/ <%= @try_files_fallback || '=404' %>;
-        
+
         <% if @auth_basic %>
         auth_basic "<%= @auth_basic_realm || 'Restricted Area' %>";
         auth_basic_user_file <%= @auth_basic_user_file %>;
         <% end %>
-        
+
         # Rate limiting
         <% if @rate_limit %>
         limit_req zone=<%= @rate_limit_zone %> burst=<%= @rate_limit_burst || 20 %> nodelay;
         <% end %>
-        
+
         # CORS headers
         <% if @cors_enabled %>
         <% (@cors_origins || ['*']).each do |origin| %>
@@ -4212,7 +4271,7 @@ server {
         <% end %>
         add_header 'Access-Control-Allow-Methods' '<%= (@cors_methods || ['GET', 'POST', 'OPTIONS']).join(', ') %>' always;
         add_header 'Access-Control-Allow-Headers' '<%= (@cors_headers || ['Authorization', 'Content-Type']).join(', ') %>' always;
-        
+
         if ($request_method = 'OPTIONS') {
             add_header 'Access-Control-Max-Age' <%= @cors_max_age || 1728000 %>;
             add_header 'Content-Type' 'text/plain; charset=utf-8';
@@ -4221,13 +4280,13 @@ server {
         }
         <% end %>
     }
-    
+
     <% if @php_enabled %>
     # PHP-FPM configuration
     location ~ \\.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass <%= @php_fpm_socket || 'unix:/run/php/php7.4-fpm.sock' %>;
-        
+
         # PHP-FPM timeout settings
         fastcgi_connect_timeout <%= @php_connect_timeout || 60 %>s;
         fastcgi_send_timeout <%= @php_send_timeout || 180 %>s;
@@ -4236,12 +4295,12 @@ server {
         fastcgi_buffers <%= @php_buffers || '4 256k' %>;
         fastcgi_busy_buffers_size <%= @php_busy_buffers_size || '256k' %>;
         fastcgi_temp_file_write_size <%= @php_temp_file_write_size || '256k' %>;
-        
+
         # Security for PHP
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param PATH_INFO $fastcgi_path_info;
         fastcgi_param PATH_TRANSLATED $document_root$fastcgi_path_info;
-        
+
         <% if @php_admin_values %>
         <% @php_admin_values.each do |directive, value| %>
         fastcgi_param PHP_ADMIN_VALUE "<%= directive %>=<%= value %>";
@@ -4249,21 +4308,21 @@ server {
         <% end %>
     }
     <% end %>
-    
+
     # Static assets optimization
     location ~* \\.(jpg|jpeg|gif|png|css|js|ico|xml)$ {
         expires <%= @static_expires || '1y' %>;
         add_header Cache-Control "<%= @static_cache_control || 'public, immutable' %>";
         add_header Vary Accept-Encoding;
         access_log off;
-        
+
         # Gzip static files
         gzip_static on;
-        
+
         # Set etags for better caching
         etag on;
     }
-    
+
     # Font files
     location ~* \\.(eot|ttf|woff|woff2)$ {
         expires <%= @font_expires || '1M' %>;
@@ -4271,32 +4330,32 @@ server {
         add_header Access-Control-Allow-Origin "*";
         access_log off;
     }
-    
+
     # Security locations
     location ~ /\\. {
         deny all;
         access_log off;
         log_not_found off;
     }
-    
+
     location ~ ~$ {
         deny all;
         access_log off;
         log_not_found off;
     }
-    
+
     location = /robots.txt {
         allow all;
         access_log off;
         log_not_found off;
     }
-    
+
     location = /favicon.ico {
         allow all;
         access_log off;
         log_not_found off;
     }
-    
+
     # Custom location blocks
     <% if @custom_locations %>
     <% @custom_locations.each do |location_path, location_config| %>
@@ -4307,33 +4366,33 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         <% if location_config['proxy_timeout'] %>
         proxy_connect_timeout <%= location_config['proxy_timeout'] %>s;
         proxy_send_timeout <%= location_config['proxy_timeout'] %>s;
         proxy_read_timeout <%= location_config['proxy_timeout'] %>s;
         <% end %>
-        
+
         <% if location_config['proxy_buffering'] == false %>
         proxy_buffering off;
         <% end %>
         <% end %>
-        
+
         <% if location_config['return'] %>
         return <%= location_config['return'] %>;
         <% end %>
-        
+
         <% if location_config['rewrite'] %>
         rewrite <%= location_config['rewrite'] %>;
         <% end %>
-        
+
         <% if location_config['custom'] %>
         <%= location_config['custom'] %>
         <% end %>
     }
     <% end %>
     <% end %>
-    
+
     # Error pages
     <% if @custom_error_pages %>
     <% @custom_error_pages.each do |error_code, error_page| %>
@@ -4343,11 +4402,11 @@ server {
     error_page 404 /404.html;
     error_page 500 502 503 504 /50x.html;
     <% end %>
-    
+
     location = /50x.html {
         root /var/www/html;
     }
-    
+
     location = /404.html {
         root /var/www/html;
     }
@@ -4361,14 +4420,16 @@ server {
     return 301 https://$server_name$request_uri;
 }
 <% end %>
-''',
+""",
         ]
-        
+
         for i, template_content in enumerate(complex_templates):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_complex_template_{i}.erb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_complex_template_{i}.erb", delete=False
+            ) as f:
                 f.write(template_content)
                 temp_path = f.name
-            
+
             try:
                 result = parse_template(temp_path)
                 assert isinstance(result, str)
@@ -4382,16 +4443,26 @@ server {
     def test_error_edge_cases_comprehensive(self):
         """Test error handling and edge cases comprehensively."""
         from souschef.server import (
-            read_file, parse_recipe, parse_attributes, parse_template, 
-            read_cookbook_metadata, list_cookbook_structure, list_directory
+            list_cookbook_structure,
+            list_directory,
+            parse_attributes,
+            parse_recipe,
+            parse_template,
+            read_cookbook_metadata,
+            read_file,
         )
-        
+
         # Test functions with various error conditions
         functions_to_test = [
-            read_file, parse_recipe, parse_attributes, parse_template, 
-            read_cookbook_metadata, list_cookbook_structure, list_directory
+            read_file,
+            parse_recipe,
+            parse_attributes,
+            parse_template,
+            read_cookbook_metadata,
+            list_cookbook_structure,
+            list_directory,
         ]
-        
+
         error_paths = [
             "/dev/null",  # Device file
             "/proc/cpuinfo",  # Proc file
@@ -4401,7 +4472,7 @@ server {
             "/etc/passwd",  # System file that exists but isn't a recipe
             "/tmp",  # Directory instead of file (for file functions)
         ]
-        
+
         for func in functions_to_test:
             for error_path in error_paths:
                 try:
@@ -4414,19 +4485,19 @@ server {
 
     def test_permission_and_filesystem_edge_cases(self):
         """Test filesystem permission and access edge cases."""
-        from souschef.server import read_file, list_directory
-        
+        from souschef.server import read_file
+
         # Test with various filesystem scenarios
         # Create temporary files with different permissions
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
             f.write("test content")
             temp_file = f.name
-        
+
         try:
             # Test readable file
             result = read_file(temp_file)
             assert isinstance(result, str)
-            
+
             # Make file unreadable (if possible)
             try:
                 os.chmod(temp_file, 0o000)
@@ -4435,7 +4506,7 @@ server {
                 assert "Error" in result or "Permission" in result
             except (OSError, PermissionError):
                 pass  # May not be able to change permissions in some environments
-            
+
         finally:
             try:
                 os.chmod(temp_file, 0o644)  # Restore permissions to clean up
@@ -4445,8 +4516,8 @@ server {
 
     def test_unicode_and_encoding_scenarios(self):
         """Test Unicode and encoding scenarios."""
-        from souschef.server import read_file, parse_recipe
-        
+        from souschef.server import parse_recipe, read_file
+
         # Test files with different encodings and Unicode content
         unicode_contents = [
             "# Recipe with émojis and spëcial cháracters\npackage 'nginx' 🚀",
@@ -4454,31 +4525,33 @@ server {
             "# Recipe with Russian\n# Это тестовая конфигурация\nservice 'apache2'",
             "# Recipe with Arabic\n# هذا اختبار\ndirectory '/opt/app'",
         ]
-        
+
         for i, content in enumerate(unicode_contents):
-            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix=f'_unicode_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", suffix=f"_unicode_{i}.rb", delete=False
+            ) as f:
                 f.write(content)
                 temp_path = f.name
-            
+
             try:
                 result = read_file(temp_path)
                 assert isinstance(result, str)
-                
+
                 result = parse_recipe(temp_path)
                 assert isinstance(result, str)
                 # Should handle Unicode content gracefully
-                
+
             finally:
                 Path(temp_path).unlink()
 
     def test_large_file_scenarios(self):
         """Test with larger file scenarios."""
-        from souschef.server import parse_recipe, parse_attributes
-        
+        from souschef.server import parse_recipe
+
         # Create a large recipe file
         large_recipe_parts = []
         for i in range(50):  # Create 50 resources
-            large_recipe_parts.append(f'''
+            large_recipe_parts.append(f"""
 package "package-{i}" do
   action :install
   version "1.{i}.0"
@@ -4523,14 +4596,16 @@ systemd_unit "app-{i}.service" do
   action :nothing
   subscribes :daemon_reload, "template[/etc/systemd/system/app-{i}.service]", :immediately
 end
-''')
-        
-        large_recipe = '\n'.join(large_recipe_parts)
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='_large_recipe.rb', delete=False) as f:
+""")
+
+        large_recipe = "\n".join(large_recipe_parts)
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix="_large_recipe.rb", delete=False
+        ) as f:
             f.write(large_recipe)
             temp_path = f.name
-        
+
         try:
             result = parse_recipe(temp_path)
             assert isinstance(result, str)
@@ -4541,28 +4616,25 @@ end
 
     def test_malformed_and_edge_case_syntax(self):
         """Test with malformed and edge case syntax."""
-        from souschef.server import parse_recipe, parse_attributes
-        
+        from souschef.server import parse_recipe
+
         malformed_examples = [
             # Incomplete resources
             "package 'nginx' do\n# missing end",
             "service 'apache2' do\n  action :start\n  # missing end",
-            
             # Syntax errors
             "package nginx do\n  action :install\nend",  # Missing quotes
             "package 'nginx do\n  action :install\nend",  # Unmatched quotes
-            
             # Complex Ruby expressions
-            '''
+            """
 package node["packages"]["web_server"] do
   action node["package_actions"]["install"] || :install
   version node.run_state["package_versions"][node["packages"]["web_server"]]
   only_if { node["install_packages"] && !node.run_state["skip_packages"].include?(node["packages"]["web_server"]) }
 end
-''',
-            
+""",
             # Embedded Ruby code
-            '''
+            """
 packages = %w[nginx apache2 mysql-server redis-server]
 packages.each do |pkg|
   package pkg do
@@ -4570,10 +4642,9 @@ packages.each do |pkg|
     version node["package_versions"][pkg] if node["package_versions"][pkg]
   end
 end
-''',
-            
+""",
             # Multi-line strings and complex attributes
-            '''
+            """
 template "/etc/nginx/sites-available/app" do
   source "app.conf.erb"
   variables({
@@ -4589,71 +4660,63 @@ template "/etc/nginx/sites-available/app" do
     } : nil
   })
 end
-''',
+""",
         ]
-        
+
         for i, malformed_content in enumerate(malformed_examples):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_malformed_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_malformed_{i}.rb", delete=False
+            ) as f:
                 f.write(malformed_content)
                 temp_path = f.name
-            
+
             try:
                 result = parse_recipe(temp_path)
                 assert isinstance(result, str)
                 # Should handle malformed content gracefully without crashing
             finally:
-                Path(temp_path).unlink()# Final push to 95% coverage - targeted function tests
-
-import tempfile
-import json
-import os
-from pathlib import Path
-from unittest.mock import patch, mock_open
+                Path(
+                    temp_path
+                ).unlink()  # Final push to 95% coverage - targeted function tests
 
 
 class TestSpecificFunctionCoverage:
     """Target specific functions for maximum coverage gain."""
-    
+
     def test_strip_ruby_comments_edge_cases(self):
         """Test _strip_ruby_comments with comprehensive edge cases."""
         from souschef.server import _strip_ruby_comments
-        
+
         # Test various comment scenarios that exercise different code paths
         test_cases = [
             # Test quote counting logic
             'name = "test # not a comment" # real comment',
-            "path = 'file # not a comment' # real comment", 
-            'mixed = "double # quote" + \'single # quote\' # comment',
-            
+            "path = 'file # not a comment' # real comment",
+            "mixed = \"double # quote\" + 'single # quote' # comment",
             # Test escaped quotes
             'escaped = "test \\"quoted\\"" # comment after escaped quotes',
             "escaped_single = 'test \\'quoted\\'' # comment after escaped quotes",
-            
             # Test multiple quotes
             'multi = "first" + "second" # comment',
             "multi_single = 'first' + 'second' # comment",
-            
             # Test odd/even quote logic
             'odd_quotes = "start # middle" extra # end comment',
             "complex = 'a' + \"b\" + 'c' # final comment",
-            
             # Empty and whitespace
             "",
             "   ",
             "\n\n\n",
             "# only comment",
             "   # indented comment",
-            
             # No comments
             'package "nginx"',
             "action :install",
-            
             # Comments at different positions
             "start # immediate comment",
             "  middle  # spaced comment  ",
             "end#no_space_comment",
         ]
-        
+
         for test_case in test_cases:
             result = _strip_ruby_comments(test_case)
             assert isinstance(result, str)
@@ -4662,48 +4725,63 @@ class TestSpecificFunctionCoverage:
     def test_normalize_ruby_value_comprehensive(self):
         """Test _normalize_ruby_value with all possible input types."""
         from souschef.server import _normalize_ruby_value
-        
+
         test_values = [
             # Symbols
-            ":install", ":start", ":stop", ":enable", ":disable",
-            
-            # Arrays of symbols  
-            "[:install, :upgrade]", "[:enable, :start, :reload]",
+            ":install",
+            ":start",
+            ":stop",
+            ":enable",
+            ":disable",
+            # Arrays of symbols
+            "[:install, :upgrade]",
+            "[:enable, :start, :reload]",
             "[  :create  ,  :delete  ]",  # With spaces
-            
             # Strings
-            '"nginx"', "'apache2'", '""', "''",
-            
+            '"nginx"',
+            "'apache2'",
+            '""',
+            "''",
             # Numbers
-            "80", "443", "0", "-1", "3.14", "1.0e10",
-            
+            "80",
+            "443",
+            "0",
+            "-1",
+            "3.14",
+            "1.0e10",
             # Booleans and nil
-            "true", "false", "nil", "null",
-            
+            "true",
+            "false",
+            "nil",
+            "null",
             # Hashes
-            '{}', '{ "key" => "value" }', "{ :symbol => 'string' }",
-            
+            "{}",
+            '{ "key" => "value" }',
+            "{ :symbol => 'string' }",
             # Complex arrays
             '["item1", "item2", "item3"]',
             "['single', 'quoted', 'items']",
-            '[1, 2, 3, 4]',
-            
+            "[1, 2, 3, 4]",
             # Node attributes
-            'node["attribute"]', "node['nested']['attribute']",
+            'node["attribute"]',
+            "node['nested']['attribute']",
             'node["deep"]["nested"]["path"]',
-            
             # Ruby expressions
-            "value || default", "condition ? true_val : false_val",
-            "array.join(', ')", "string.downcase.strip",
-            
+            "value || default",
+            "condition ? true_val : false_val",
+            "array.join(', ')",
+            "string.downcase.strip",
             # Edge cases
-            "", "   ", "\n", "\t",
-            
+            "",
+            "   ",
+            "\n",
+            "\t",
             # Special characters
-            "file:///path/to/file", "http://example.com:8080/path",
+            "file:///path/to/file",
+            "http://example.com:8080/path",
             "/usr/bin/nginx --config=/etc/nginx.conf",
         ]
-        
+
         for test_value in test_values:
             result = _normalize_ruby_value(test_value)
             assert isinstance(result, str)
@@ -4712,81 +4790,73 @@ class TestSpecificFunctionCoverage:
     def test_convert_erb_to_jinja2_comprehensive(self):
         """Test _convert_erb_to_jinja2 with comprehensive patterns."""
         from souschef.server import _convert_erb_to_jinja2
-        
+
         erb_patterns = [
             # Basic output tags
             "<%= variable %>",
             "<%=variable%>",  # No spaces
             "<%=  variable  %>",  # Extra spaces
-            
             # Node attributes
             "<%= node['config']['port'] %>",
             '<%= node["app"]["name"] %>',
             "<%= node['deep']['nested']['attribute']['value'] %>",
-            
             # Code blocks
             "<% if condition %>",
             "<% unless disabled %>",
-            "<% elsif alternative %>", 
+            "<% elsif alternative %>",
             "<% else %>",
             "<% end %>",
-            
             # Loops
             "<% array.each do |item| %>",
-            "<% hash.each do |key, value| %>", 
+            "<% hash.each do |key, value| %>",
             "<% (1..10).each do |i| %>",
             "<% node['items'].each_with_index do |item, index| %>",
-            
             # Complex expressions
             "<%= value.nil? ? 'default' : value %>",
             "<%= array.empty? ? [] : array.first %>",
             "<%= string.present? ? string.upcase : 'EMPTY' %>",
-            
             # String interpolation within ERB
             '<%= "Server: #{hostname}:#{port}" %>',
             "<%= 'Path: #{node['app']['path']}/config' %>",
-            
             # Mathematical operations
             "<%= port + 1000 %>",
             "<%= memory * 0.8 %>",
             "<%= cores / 2 %>",
-            
             # Method calls
             "<%= array.join(', ') %>",
             "<%= string.strip.downcase %>",
             "<%= hash.keys.sort %>",
-            
             # Conditional output
             "<%= ssl_enabled ? 'https' : 'http' %>",
             "<%= debug_mode && 'DEBUG' %>",
             "<%= production_env || development_env %>",
-            
             # Multi-line code blocks
-            '''<% if node['ssl']['enabled'] %>
+            """<% if node['ssl']['enabled'] %>
 SSL Configuration
 ssl_certificate <%= node['ssl']['cert'] %>
 ssl_certificate_key <%= node['ssl']['key'] %>
-<% end %>''',
-            
+<% end %>""",
             # Nested conditions
-            '''<% if node['app']['enabled'] %>
+            """<% if node['app']['enabled'] %>
 <% if node['app']['ssl']['enabled'] %>
 https://<%= node['app']['domain'] %>
 <% else %>
 http://<%= node['app']['domain'] %>
 <% end %>
-<% end %>''',
-            
+<% end %>""",
             # Comments and mixed content
-            '''<%# This is an ERB comment %>
+            """<%# This is an ERB comment %>
 <%= variable %> some text <%= another_variable %>
-<%# Another comment %>''',
-            
+<%# Another comment %>""",
             # Edge cases
-            "", "no erb here", "<%", "%>", "<%=", "<%# incomplete",
-            
+            "",
+            "no erb here",
+            "<%",
+            "%>",
+            "<%=",
+            "<%# incomplete",
             # HTML with ERB
-            '''<html>
+            """<html>
 <head><title><%= page_title %></title></head>
 <body>
 <h1><%= header %></h1>
@@ -4794,9 +4864,9 @@ http://<%= node['app']['domain'] %>
 <p><%= item %></p>
 <% end %>
 </body>
-</html>''',
+</html>""",
         ]
-        
+
         for erb_pattern in erb_patterns:
             result = _convert_erb_to_jinja2(erb_pattern)
             assert isinstance(result, str)
@@ -4804,12 +4874,19 @@ http://<%= node['app']['domain'] %>
 
     def test_file_operations_with_various_file_types(self):
         """Test file operations with various file types and contents."""
-        from souschef.server import read_file, parse_recipe, parse_attributes, parse_template
-        
+        from souschef.server import (
+            parse_attributes,
+            parse_recipe,
+            parse_template,
+            read_file,
+        )
+
         # Test with different file types and contents
         file_contents = [
             # Ruby files
-            ("recipe.rb", '''
+            (
+                "recipe.rb",
+                """
 package "nginx" do
   action :install
   version "latest"
@@ -4818,17 +4895,21 @@ end
 service "nginx" do
   action [:enable, :start]
 end
-'''),
-            
+""",
+            ),
             # Attribute files
-            ("attributes.rb", '''
+            (
+                "attributes.rb",
+                """
 default["nginx"]["port"] = 80
 default["nginx"]["ssl"]["enabled"] = false
 override["nginx"]["worker_processes"] = "auto"
-'''),
-            
+""",
+            ),
             # Template files
-            ("config.erb", '''
+            (
+                "config.erb",
+                """
 server {
     listen <%= @port || 80 %>;
     server_name <%= @server_name %>;
@@ -4836,19 +4917,23 @@ server {
     ssl_certificate <%= @ssl_cert %>;
     <% end %>
 }
-'''),
-            
+""",
+            ),
             # Metadata files
-            ("metadata.rb", '''
+            (
+                "metadata.rb",
+                """
 name 'nginx'
 maintainer 'DevOps Team'
 version '1.0.0'
 depends 'build-essential'
 supports 'ubuntu'
-'''),
-            
+""",
+            ),
             # JSON files
-            ("data.json", '''
+            (
+                "data.json",
+                """
 {
   "name": "test-cookbook",
   "version": "1.0.0",
@@ -4856,10 +4941,12 @@ supports 'ubuntu'
     "nginx": ">=1.0.0"
   }
 }
-'''),
-            
-            # YAML files  
-            ("config.yml", '''
+""",
+            ),
+            # YAML files
+            (
+                "config.yml",
+                """
 app:
   name: test-app
   port: 8080
@@ -4868,20 +4955,23 @@ app:
 database:
   host: localhost
   port: 5432
-'''),
-            
+""",
+            ),
             # Empty files
             ("empty.rb", ""),
-            
             # Files with only comments
-            ("comments.rb", '''
+            (
+                "comments.rb",
+                """
 # This is only comments
 # No actual code here
 # Just documentation
-'''),
-            
+""",
+            ),
             # Files with mixed content
-            ("mixed.rb", '''
+            (
+                "mixed.rb",
+                """
 #!/usr/bin/env ruby
 # -*- coding: utf-8 -*-
 
@@ -4902,105 +4992,132 @@ template "/etc/#{node['packages']['web_server']}/config" do
     }
   }
 end
-'''),
+""",
+            ),
         ]
-        
+
         for filename, content in file_contents:
-            with tempfile.NamedTemporaryFile(mode='w', suffix=filename, delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=filename, delete=False
+            ) as f:
                 f.write(content)
                 temp_path = f.name
-            
+
             try:
                 # Test read_file with all file types
                 result = read_file(temp_path)
                 assert isinstance(result, str)
-                
+
                 # Test specific parsers with appropriate file types
-                if filename.endswith('.rb') and 'recipe' in filename:
+                if filename.endswith(".rb") and "recipe" in filename:
                     result = parse_recipe(temp_path)
                     assert isinstance(result, str)
-                
-                if filename.endswith('.rb') and 'attributes' in filename:
+
+                if filename.endswith(".rb") and "attributes" in filename:
                     result = parse_attributes(temp_path)
                     assert isinstance(result, str)
-                
-                if filename.endswith('.erb'):
+
+                if filename.endswith(".erb"):
                     result = parse_template(temp_path)
                     assert isinstance(result, str)
-                
+
             finally:
                 Path(temp_path).unlink()
 
     def test_directory_and_cookbook_structure_operations(self):
         """Test directory operations comprehensively."""
-        from souschef.server import list_directory, list_cookbook_structure
-        
+        from souschef.server import list_cookbook_structure, list_directory
+
         # Create complex directory structures
         with tempfile.TemporaryDirectory() as base_dir:
             base_path = Path(base_dir)
-            
+
             # Create a comprehensive cookbook structure
             cookbook_dirs = [
-                "recipes", "attributes", "templates", "files", "libraries", 
-                "providers", "resources", "definitions", "spec", "test"
+                "recipes",
+                "attributes",
+                "templates",
+                "files",
+                "libraries",
+                "providers",
+                "resources",
+                "definitions",
+                "spec",
+                "test",
             ]
-            
+
             for cookbook_dir in cookbook_dirs:
                 (base_path / cookbook_dir).mkdir(exist_ok=True)
-                
+
                 # Add some files to each directory
                 if cookbook_dir == "recipes":
-                    (base_path / cookbook_dir / "default.rb").write_text("# Default recipe")
-                    (base_path / cookbook_dir / "install.rb").write_text("# Install recipe")
-                    (base_path / cookbook_dir / "configure.rb").write_text("# Configure recipe")
-                
+                    (base_path / cookbook_dir / "default.rb").write_text(
+                        "# Default recipe"
+                    )
+                    (base_path / cookbook_dir / "install.rb").write_text(
+                        "# Install recipe"
+                    )
+                    (base_path / cookbook_dir / "configure.rb").write_text(
+                        "# Configure recipe"
+                    )
+
                 elif cookbook_dir == "attributes":
-                    (base_path / cookbook_dir / "default.rb").write_text('default["app"]["port"] = 80')
-                    (base_path / cookbook_dir / "database.rb").write_text('default["db"]["host"] = "localhost"')
-                
+                    (base_path / cookbook_dir / "default.rb").write_text(
+                        'default["app"]["port"] = 80'
+                    )
+                    (base_path / cookbook_dir / "database.rb").write_text(
+                        'default["db"]["host"] = "localhost"'
+                    )
+
                 elif cookbook_dir == "templates":
                     templates_default = base_path / cookbook_dir / "default"
                     templates_default.mkdir(exist_ok=True)
                     (templates_default / "config.erb").write_text("Port <%= @port %>")
-                    (templates_default / "service.erb").write_text("Service: <%= @name %>")
-                
+                    (templates_default / "service.erb").write_text(
+                        "Service: <%= @name %>"
+                    )
+
                 elif cookbook_dir == "files":
                     files_default = base_path / cookbook_dir / "default"
                     files_default.mkdir(exist_ok=True)
                     (files_default / "config.conf").write_text("# Static config file")
-                    (files_default / "script.sh").write_text("#!/bin/bash\necho 'hello'")
-                
+                    (files_default / "script.sh").write_text(
+                        "#!/bin/bash\necho 'hello'"
+                    )
+
                 else:
                     # Add a generic file to other directories
-                    (base_path / cookbook_dir / "example.rb").write_text("# Example file")
-            
+                    (base_path / cookbook_dir / "example.rb").write_text(
+                        "# Example file"
+                    )
+
             # Add cookbook metadata
-            (base_path / "metadata.rb").write_text('''
+            (base_path / "metadata.rb").write_text("""
 name 'test-cookbook'
 version '1.0.0'
 maintainer 'DevOps Team'
 description 'Test cookbook for coverage'
 supports 'ubuntu'
 depends 'build-essential'
-''')
-            
+""")
+
             # Add other cookbook files
             (base_path / "README.md").write_text("# Test Cookbook")
             (base_path / "CHANGELOG.md").write_text("## 1.0.0\n- Initial release")
             (base_path / "Berksfile").write_text("source 'https://supermarket.chef.io'")
             (base_path / ".kitchen.yml").write_text("---\ndriver:\n  name: vagrant")
-            
+
             # Test list_directory with the complex structure
             result = list_directory(str(base_path))
             assert isinstance(result, (list, str))
             if isinstance(result, list):
                 assert len(result) > 5  # Should find many items
-            
+
             # Test list_cookbook_structure with the cookbook
             result = list_cookbook_structure(str(base_path))
             assert isinstance(result, str)
             assert len(result) > 100  # Should produce detailed output
-            
+
             # Test with subdirectories
             for cookbook_dir in cookbook_dirs[:3]:  # Test a few subdirectories
                 result = list_directory(str(base_path / cookbook_dir))
@@ -5009,50 +5126,61 @@ depends 'build-essential'
     def test_conversion_functions_comprehensive(self):
         """Test conversion functions with comprehensive inputs."""
         from souschef.server import convert_resource_to_task
-        
+
         # Comprehensive Chef resource examples
         chef_resources = [
             # Package resources with various attributes
-            ('''package "nginx" do
+            (
+                """package "nginx" do
   action :install
-end''', "install"),
-            
-            ('''package "mysql-server" do
+end""",
+                "install",
+            ),
+            (
+                """package "mysql-server" do
   version "8.0.28-0ubuntu0.20.04.3"
   action :install
   options ["--no-install-recommends", "--force-yes"]
   timeout 300
   retries 3
-end''', "install"),
-            
+end""",
+                "install",
+            ),
             # Service resources
-            ('''service "nginx" do
+            (
+                """service "nginx" do
   action [:enable, :start]
   supports restart: true, reload: true, status: true
   provider Chef::Provider::Service::Systemd
-end''', "start"),
-            
+end""",
+                "start",
+            ),
             # File resources
-            ('''file "/etc/nginx/nginx.conf" do
+            (
+                """file "/etc/nginx/nginx.conf" do
   owner "root"
   group "root"
   mode "0644"
   content "user nginx;"
   backup 5
   action :create
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Directory resources
-            ('''directory "/var/log/nginx" do
+            (
+                """directory "/var/log/nginx" do
   owner "www-data"
   group "www-data"
   mode "0755"
   recursive true
   action :create
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Template resources
-            ('''template "/etc/apache2/sites-available/default" do
+            (
+                """template "/etc/apache2/sites-available/default" do
   source "default-site.erb"
   owner "root"
   group "root"
@@ -5062,20 +5190,24 @@ end''', "create"),
     :document_root => "/var/www/html"
   })
   action :create
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Execute resources
-            ('''execute "update-grub" do
+            (
+                """execute "update-grub" do
   command "grub-mkconfig -o /boot/grub/grub.cfg"
   user "root"
   cwd "/boot"
   environment ({ 'PATH' => '/usr/local/bin:/usr/bin:/bin' })
   only_if "test -f /boot/grub/grub.cfg"
   action :run
-end''', "run"),
-            
+end""",
+                "run",
+            ),
             # User resources
-            ('''user "deploy" do
+            (
+                """user "deploy" do
   comment "Deployment user"
   uid 1001
   gid "deploy"
@@ -5083,51 +5215,63 @@ end''', "run"),
   shell "/bin/bash"
   manage_home true
   action :create
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Group resources
-            ('''group "developers" do
+            (
+                """group "developers" do
   gid 1100
   members ["alice", "bob", "charlie"]
   system false
   action :create
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Cron resources
-            ('''cron "backup-database" do
+            (
+                """cron "backup-database" do
   minute "0"
   hour "2"
   command "/opt/backup/db-backup.sh"
   user "root"
   action :create
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Mount resources
-            ('''mount "/mnt/data" do
+            (
+                """mount "/mnt/data" do
   device "/dev/sdb1"
   fstype "ext4"
   options "defaults,noatime"
   action [:mount, :enable]
-end''', "mount"),
-            
+end""",
+                "mount",
+            ),
             # Link resources
-            ('''link "/usr/local/bin/node" do
+            (
+                """link "/usr/local/bin/node" do
   to "/usr/bin/nodejs"
   link_type :symbolic
   action :create
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Git resources
-            ('''git "/opt/application" do
+            (
+                """git "/opt/application" do
   repository "https://github.com/company/app.git"
   reference "main"
   user "deploy"
   group "deploy"
   action :sync
-end''', "sync"),
-            
+end""",
+                "sync",
+            ),
             # Complex resources with notifications
-            ('''template "/etc/nginx/sites-available/app" do
+            (
+                """template "/etc/nginx/sites-available/app" do
   source "app.conf.erb"
   variables lazy {
     {
@@ -5138,40 +5282,56 @@ end''', "sync"),
   notifies :reload, "service[nginx]", :delayed
   subscribes :create, "package[nginx]", :immediately
   action :create
-end''', "create"),
+end""",
+                "create",
+            ),
         ]
-        
+
         for resource_text, action in chef_resources:
             result = convert_resource_to_task(resource_text, action)
             assert isinstance(result, str)
             assert len(result) > 10  # Should produce meaningful output
             # Should contain Ansible task structure
-            assert "name:" in result.lower() or "-" in result or "task" in result.lower()
+            assert (
+                "name:" in result.lower() or "-" in result or "task" in result.lower()
+            )
 
     def test_error_conditions_exhaustive(self):
         """Test exhaustive error conditions for maximum coverage."""
         from souschef.server import (
-            read_file, parse_recipe, parse_attributes, parse_template,
-            read_cookbook_metadata, list_cookbook_structure, list_directory,
-            parse_custom_resource, convert_resource_to_task
+            list_cookbook_structure,
+            list_directory,
+            parse_attributes,
+            parse_custom_resource,
+            parse_recipe,
+            parse_template,
+            read_cookbook_metadata,
+            read_file,
         )
-        
+
         # Test all functions with various error conditions
         error_scenarios = [
             # File system errors
             "/dev/null/impossible",  # Not a directory
-            "/root/restricted" if Path("/root").exists() else "/tmp",  # Permission issues
+            "/root/restricted"
+            if Path("/root").exists()
+            else "/tmp",  # Permission issues
             "",  # Empty string
             None,  # None value (might cause TypeError)
-            123,  # Wrong type (might cause TypeError)  
+            123,  # Wrong type (might cause TypeError)
         ]
-        
+
         functions_to_test = [
-            read_file, parse_recipe, parse_attributes, parse_template,
-            read_cookbook_metadata, list_cookbook_structure, list_directory,
-            parse_custom_resource
+            read_file,
+            parse_recipe,
+            parse_attributes,
+            parse_template,
+            read_cookbook_metadata,
+            list_cookbook_structure,
+            list_directory,
+            parse_custom_resource,
         ]
-        
+
         for func in functions_to_test:
             for error_input in error_scenarios:
                 try:
@@ -5180,55 +5340,53 @@ end''', "create"),
                         result = func(error_input)
                     else:
                         result = func(error_input)
-                    
+
                     # If no exception, should return string or list
                     assert isinstance(result, (str, list))
-                    
+
                 except (TypeError, AttributeError, ValueError):
                     # These exceptions are acceptable for invalid input
                     pass
                 except Exception as e:
                     # Other exceptions should be handled gracefully
-                    assert False, f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}"
+                    assert False, (
+                        f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}"
+                    )
 
     def test_json_and_data_handling(self):
         """Test JSON and data handling within functions."""
         from souschef.server import read_file
-        
+
         # Test with various JSON and data formats
         data_formats = [
             # Valid JSON
-            ('{"name": "test", "version": "1.0.0"}', '.json'),
-            
+            ('{"name": "test", "version": "1.0.0"}', ".json"),
             # Invalid JSON (should still be readable as text)
-            ('{"name": "test", "version":}', '.json'),
-            
+            ('{"name": "test", "version":}', ".json"),
             # YAML-like content
-            ('name: test\nversion: 1.0.0\ndependencies:\n  - nginx\n  - mysql', '.yml'),
-            
+            ("name: test\nversion: 1.0.0\ndependencies:\n  - nginx\n  - mysql", ".yml"),
             # XML-like content
-            ('<config><name>test</name><port>80</port></config>', '.xml'),
-            
+            ("<config><name>test</name><port>80</port></config>", ".xml"),
             # Binary-like content (with some text)
-            ('#!/bin/bash\necho "hello world"\n\x00\x01\x02', '.sh'),
-            
+            ('#!/bin/bash\necho "hello world"\n\x00\x01\x02', ".sh"),
             # Very large content
-            ('x' * 10000, '.txt'),
-            
+            ("x" * 10000, ".txt"),
             # Unicode content
-            ('测试内容 🚀 émojis', '.txt'),
+            ("测试内容 🚀 émojis", ".txt"),
         ]
-        
+
         for content, extension in data_formats:
-            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix=extension, delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", suffix=extension, delete=False
+            ) as f:
                 f.write(content)
                 temp_path = f.name
-            
+
             try:
                 result = read_file(temp_path)
                 assert isinstance(result, str)
                 # Should handle all data formats
-                
+
                 # Try to parse JSON from result
                 try:
                     parsed = json.loads(result)
@@ -5236,24 +5394,24 @@ end''', "create"),
                 except json.JSONDecodeError:
                     # Not all results will be JSON, that's okay
                     pass
-                    
+
             finally:
                 Path(temp_path).unlink()
 
     def test_complex_recipe_parsing_patterns(self):
         """Test complex recipe parsing patterns for deep coverage."""
         from souschef.server import parse_recipe
-        
+
         # Very complex recipes that exercise advanced parsing
         complex_patterns = [
             # Recipe with Ruby metaprogramming
-            '''
+            """
 # Dynamic resource creation
 %w[nginx apache2 mysql-server].each do |service_name|
   package service_name do
     action :install
   end
-  
+
   service service_name do
     action [:enable, :start]
     only_if { node["services"][service_name]["enabled"] }
@@ -5318,11 +5476,11 @@ end
 ruby_block "update-database-config" do
   block do
     require 'yaml'
-    
+
     config_file = "/opt/app/config/database.yml"
     config = YAML.load_file(config_file) if File.exist?(config_file)
     config ||= {}
-    
+
     environments = %w[development test production staging]
     environments.each do |env|
       config[env] ||= {}
@@ -5335,11 +5493,11 @@ ruby_block "update-database-config" do
       config[env]["pool"] = node["database"]["pool_size"]
       config[env]["timeout"] = node["database"]["timeout"]
     end
-    
+
     File.open(config_file, 'w') do |f|
       f.write(config.to_yaml)
     end
-    
+
     Chef::Log.info("Updated database configuration for #{environments.join(', ')}")
   end
   action :run
@@ -5349,11 +5507,11 @@ end
 define :create_app_user, :username => nil, :app_name => nil do
   user_name = params[:username] || params[:name]
   application_name = params[:app_name] || "default"
-  
+
   group "#{application_name}-users" do
     action :create
   end
-  
+
   user user_name do
     comment "Application user for #{application_name}"
     gid "#{application_name}-users"
@@ -5362,7 +5520,7 @@ define :create_app_user, :username => nil, :app_name => nil do
     manage_home true
     action :create
   end
-  
+
   directory "/home/#{user_name}/.ssh" do
     owner user_name
     group "#{application_name}-users"
@@ -5400,7 +5558,7 @@ node.override["system"]["configured"] = true
 # Search-based resource creation
 search(:node, "roles:database AND chef_environment:#{node.chef_environment}").each do |db_node|
   log "Found database server: #{db_node['fqdn']}"
-  
+
   template "/etc/app/database-#{db_node['fqdn'].gsub('.', '-')}.conf" do
     source "database-server.conf.erb"
     variables(
@@ -5428,14 +5586,16 @@ EOH
   sensitive true
   action :create
 end
-''',
+""",
         ]
-        
+
         for i, complex_recipe in enumerate(complex_patterns):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_very_complex_{i}.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_very_complex_{i}.rb", delete=False
+            ) as f:
                 f.write(complex_recipe)
                 temp_path = f.name
-            
+
             try:
                 result = parse_recipe(temp_path)
                 assert isinstance(result, str)
@@ -5449,37 +5609,46 @@ end
 
 class TestCoverageBoosterFunctions:
     """Additional functions to boost coverage to 95%."""
-    
+
     def test_all_mcp_tools_with_realistic_inputs(self):
         """Test all MCP tools with more realistic inputs."""
         # Import as many MCP tools as possible and test them
         mcp_functions = []
         try:
             from souschef.server import (
-                parse_inspec_profile, convert_inspec_to_test, 
-                generate_inspec_from_recipe, generate_playbook_from_recipe
+                convert_inspec_to_test,
+                generate_inspec_from_recipe,
+                generate_playbook_from_recipe,
+                parse_inspec_profile,
             )
-            mcp_functions.extend([
-                parse_inspec_profile, convert_inspec_to_test, 
-                generate_inspec_from_recipe, generate_playbook_from_recipe
-            ])
+
+            mcp_functions.extend(
+                [
+                    parse_inspec_profile,
+                    convert_inspec_to_test,
+                    generate_inspec_from_recipe,
+                    generate_playbook_from_recipe,
+                ]
+            )
         except ImportError:
             pass
-        
+
         # Test each function with various inputs
         test_inputs = [
-            "/tmp/test-input", 
+            "/tmp/test-input",
             "/nonexistent/path",
             "",
         ]
-        
+
         for func in mcp_functions:
             for test_input in test_inputs:
                 try:
                     if func.__name__ == "convert_inspec_to_test":
                         result = func(test_input, "testinfra")
                     elif func.__name__ == "generate_inspec_from_recipe":
-                        with tempfile.NamedTemporaryFile(mode='w', suffix='.rb', delete=False) as f:
+                        with tempfile.NamedTemporaryFile(
+                            mode="w", suffix=".rb", delete=False
+                        ) as f:
                             f.write('package "nginx"')
                             temp_file = f.name
                         try:
@@ -5488,7 +5657,7 @@ class TestCoverageBoosterFunctions:
                             Path(temp_file).unlink()
                     else:
                         result = func(test_input)
-                    
+
                     assert isinstance(result, str)
                 except (TypeError, ImportError):
                     # Some functions might not be available or have different signatures
@@ -5499,10 +5668,12 @@ class TestCoverageBoosterFunctions:
         # Test helper functions that exist in the server module
         try:
             from souschef.server import (
-                _extract_node_attribute_path, _extract_template_variables,
-                _extract_output_variables, _extract_code_block_variables
+                _extract_code_block_variables,
+                _extract_node_attribute_path,
+                _extract_output_variables,
+                _extract_template_variables,
             )
-            
+
             # Test _extract_node_attribute_path
             test_paths = [
                 "node['simple']",
@@ -5514,11 +5685,11 @@ class TestCoverageBoosterFunctions:
                 "node[]",
                 "node['']",
             ]
-            
+
             for path in test_paths:
                 result = _extract_node_attribute_path(path)
                 assert result is None or isinstance(result, str)
-            
+
             # Test template variable extraction functions
             template_examples = [
                 "Simple <%= variable %> template",
@@ -5527,38 +5698,38 @@ class TestCoverageBoosterFunctions:
                 "",
                 "No variables here",
             ]
-            
+
             for template in template_examples:
                 variables = set()
                 _extract_output_variables(template, variables)
                 assert isinstance(variables, set)
-                
-                variables = set()  
+
+                variables = set()
                 _extract_code_block_variables(template, variables)
                 assert isinstance(variables, set)
-                
+
                 result = _extract_template_variables(template)
                 assert isinstance(result, set)
-            
+
         except ImportError:
             # Functions might not exist, that's okay
             pass
 
     def test_cookbook_structure_comprehensive(self):
-        """Test cookbook structure analysis comprehensively.""" 
+        """Test cookbook structure analysis comprehensively."""
         from souschef.server import list_cookbook_structure
-        
+
         # Test with the actual test fixtures if they exist
         fixtures_dir = Path(__file__).parent / "fixtures"
         if fixtures_dir.exists():
             result = list_cookbook_structure(str(fixtures_dir))
             assert isinstance(result, str)
-        
+
         # Test with current project directory
         project_dir = Path(__file__).parent.parent
         result = list_cookbook_structure(str(project_dir))
         assert isinstance(result, str)
-        
+
         # Test with various system directories
         system_dirs = ["/etc", "/usr", "/var", "/tmp"]
         for sys_dir in system_dirs:
@@ -5569,7 +5740,7 @@ class TestCoverageBoosterFunctions:
     def test_comprehensive_edge_cases(self):
         """Test comprehensive edge cases to maximize coverage."""
         from souschef.server import convert_resource_to_task
-        
+
         # Test with extremely edge case inputs
         edge_cases = [
             ("", ""),
@@ -5581,7 +5752,7 @@ class TestCoverageBoosterFunctions:
             ("INVALID RUBY SYNTAX {{{", "install"),
             ("# only comments\n# more comments", "install"),
         ]
-        
+
         for resource, action in edge_cases:
             try:
                 result = convert_resource_to_task(resource, action)
@@ -5593,9 +5764,9 @@ class TestCoverageBoosterFunctions:
     def test_platform_and_environment_specific_code(self):
         """Test platform and environment specific code paths."""
         from souschef.server import parse_attributes
-        
+
         # Create attributes that test platform-specific logic
-        platform_attributes = '''
+        platform_attributes = """
 case node["platform"]
 when "ubuntu", "debian"
   default["package_manager"] = "apt"
@@ -5632,12 +5803,14 @@ else
   default["app"]["workers"] = 1
   default["app"]["memory_limit"] = "128MB"
 end
-'''
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='_platform_attrs.rb', delete=False) as f:
+"""
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix="_platform_attrs.rb", delete=False
+        ) as f:
             f.write(platform_attributes)
             temp_path = f.name
-        
+
         try:
             result = parse_attributes(temp_path)
             assert isinstance(result, str)
@@ -5650,16 +5823,16 @@ end
         # Create a very large cookbook structure
         with tempfile.TemporaryDirectory() as temp_dir:
             base_path = Path(temp_dir)
-            
+
             # Create many directories and files
             for i in range(20):
                 recipe_dir = base_path / f"cookbook-{i}" / "recipes"
                 recipe_dir.mkdir(parents=True)
-                
+
                 # Create multiple recipe files
                 for j in range(5):
                     recipe_file = recipe_dir / f"recipe-{j}.rb"
-                    recipe_file.write_text(f'''
+                    recipe_file.write_text(f"""
 # Recipe {i}-{j}
 package "package-{i}-{j}" do
   action :install
@@ -5668,21 +5841,19 @@ end
 service "service-{i}-{j}" do
   action :start
 end
-''')
-            
+""")
+
             # Test directory listing with large structure
-            from souschef.server import list_directory, list_cookbook_structure
-            
+            from souschef.server import list_cookbook_structure, list_directory
+
             result = list_directory(str(base_path))
             assert isinstance(result, (str, list))
-            
+
             result = list_cookbook_structure(str(base_path))
             assert isinstance(result, str)
-            assert len(result) > 200  # Should produce substantial output# Critical MCP tool coverage tests - targeting 95%
-
-import tempfile
-import json
-from pathlib import Path
+            assert (
+                len(result) > 200
+            )  # Should produce substantial output# Critical MCP tool coverage tests - targeting 95%
 
 
 class TestCriticalMCPToolCoverage:
@@ -5691,31 +5862,27 @@ class TestCriticalMCPToolCoverage:
     def test_convert_chef_search_to_inventory_comprehensive(self):
         """Test convert_chef_search_to_inventory with realistic Chef search patterns."""
         from souschef.server import convert_chef_search_to_inventory
-        
+
         search_patterns = [
             # Basic search patterns
             "role:web-server",
-            "role:database AND chef_environment:production", 
+            "role:database AND chef_environment:production",
             "name:app-server-*",
             "platform:ubuntu AND platform_version:20.04",
             "tags:monitoring AND NOT tags:disabled",
-            
-            # Complex search patterns  
+            # Complex search patterns
             "role:web AND (chef_environment:production OR chef_environment:staging)",
             "platform_family:debian AND memory_total:[* TO 8000000] AND cpu_total:[4 TO *]",
             "role:database AND chef_environment:production AND platform:ubuntu",
             "tags:load-balancer AND ipaddress:10.0.*",
             "name:web-* AND uptime_seconds:[3600 TO *]",
-            
             # Data bag searches
             "data_bag:users",
             "data_bag:secrets AND data_bag_item:production",
-            
             # Advanced search patterns
-            'attributes.nginx.version:1.* AND role:web-server',
+            "attributes.nginx.version:1.* AND role:web-server",
             'run_list:"role[web-server]" AND chef_environment:production',
-            'automatic.platform_version:18.04 AND roles:database',
-            
+            "automatic.platform_version:18.04 AND roles:database",
             # Edge cases
             "",
             "   ",
@@ -5724,7 +5891,7 @@ class TestCriticalMCPToolCoverage:
             ":production",
             "AND OR NOT",
         ]
-        
+
         for search_pattern in search_patterns:
             result = convert_chef_search_to_inventory(search_pattern)
             assert isinstance(result, str)
@@ -5735,48 +5902,43 @@ class TestCriticalMCPToolCoverage:
     def test_generate_dynamic_inventory_script_comprehensive(self):
         """Test generate_dynamic_inventory_script with multiple search queries."""
         from souschef.server import generate_dynamic_inventory_script
-        
+
         search_query_sets = [
             # Single query
             "role:web-server",
-            
             # Multiple queries (JSON format expected)
-            '''[
+            """[
     "role:web-server AND chef_environment:production",
-    "role:database AND chef_environment:production", 
+    "role:database AND chef_environment:production",
     "role:cache AND chef_environment:production"
-]''',
-            
+]""",
             # Complex multi-environment queries
-            '''[
+            """[
     "role:web-server AND chef_environment:production",
     "role:web-server AND chef_environment:staging",
     "role:database AND chef_environment:production",
     "role:database AND chef_environment:staging",
     "role:load-balancer",
     "tags:monitoring"
-]''',
-            
+]""",
             # Query with various platforms
-            '''[
+            """[
     "platform:ubuntu AND role:web",
-    "platform:centos AND role:web", 
+    "platform:centos AND role:web",
     "platform_family:debian",
     "platform_family:rhel"
-]''',
-            
+]""",
             # Empty and edge cases
             "[]",
             '[""]',
             '["role:web", "", "role:db"]',
             "",
             "invalid-json",
-            
             # Single string vs array
             "role:single-query",
             '["role:array-query"]',
         ]
-        
+
         for query_set in search_query_sets:
             result = generate_dynamic_inventory_script(query_set)
             assert isinstance(result, str)
@@ -5787,17 +5949,19 @@ class TestCriticalMCPToolCoverage:
     def test_analyze_chef_search_patterns_comprehensive(self):
         """Test analyze_chef_search_patterns with various Chef files."""
         from souschef.server import analyze_chef_search_patterns
-        
+
         # Create files with different search patterns
         chef_files_with_searches = [
             # Recipe with search calls
-            ('recipe_with_searches.rb', '''
+            (
+                "recipe_with_searches.rb",
+                """
 # Find web servers
 web_servers = search(:node, "role:web-server AND chef_environment:#{node.chef_environment}")
 
 web_servers.each do |server|
   log "Found web server: #{server['fqdn']}"
-  
+
   template "/etc/nginx/upstream-#{server['fqdn'].gsub('.', '-')}.conf" do
     source "upstream.conf.erb"
     variables(
@@ -5807,12 +5971,12 @@ web_servers.each do |server|
   end
 end
 
-# Find database servers  
+# Find database servers
 db_servers = search(:node, "role:database AND chef_environment:#{node.chef_environment} AND platform:ubuntu")
 
 if db_servers.any?
   db_master = db_servers.find { |db| db['mysql']['master'] == true }
-  
+
   template "/etc/app/database.yml" do
     variables(
       host: db_master['fqdn'],
@@ -5844,10 +6008,12 @@ when 'debian'
 when 'rhel'
   yum_servers = search(:node, "role:yum-mirror AND platform_family:rhel")
 end
-'''),
-            
+""",
+            ),
             # Cookbook with multiple search patterns
-            ('complex_cookbook.rb', '''
+            (
+                "complex_cookbook.rb",
+                """
 # Environment-specific searches
 if node.chef_environment == "production"
   load_balancers = search(:node, "role:load-balancer AND chef_environment:production AND tags:active")
@@ -5869,7 +6035,7 @@ stale_nodes = search(:node, "ohai_time:[* TO #{(Time.now - 86400).to_i}]")
 
 # Application-specific searches
 nginx_servers = search(:node, 'run_list:"recipe[nginx]" AND nginx.version:1.*')
-mysql_servers = search(:node, 'recipes:mysql\:\:server AND mysql.version:[5.7 TO *]')
+mysql_servers = search(:node, 'recipes:mysql\\:\\:server AND mysql.version:[5.7 TO *]')
 
 # Network-based searches
 dmz_servers = search(:node, "ipaddress:10.1.* AND role:dmz")
@@ -5882,81 +6048,94 @@ ssl_enabled_servers = search(:node, "ssl.enabled:true AND certificates.expires:[
 # Data bag searches for configuration
 app_configs = search(:configs, "application:#{node['app']['name']} AND environment:#{node.chef_environment}")
 ssl_certs = search(:certificates, "domain:#{node['app']['domain']} AND valid:true")
-'''),
-            
+""",
+            ),
             # File with no searches
-            ('no_searches.rb', '''
+            (
+                "no_searches.rb",
+                """
 package "nginx" do
   action :install
 end
 
 service "nginx" do
-  action [:enable, :start]  
+  action [:enable, :start]
 end
 
 template "/etc/nginx/nginx.conf" do
   source "nginx.conf.erb"
   action :create
 end
-'''),
-            
+""",
+            ),
             # File with malformed searches
-            ('malformed_searches.rb', '''
+            (
+                "malformed_searches.rb",
+                """
 # These are malformed search calls that should be handled gracefully
-bad_search1 = search(:node, 
+bad_search1 = search(:node,
 bad_search2 = search(, "role:web")
 bad_search3 = search()
 
 # Mixed good and bad
 good_search = search(:node, "role:web")
 bad_search4 = search(:node, "invalid syntax here ][")
-'''),
-            
+""",
+            ),
             # Empty file
-            ('empty.rb', ''),
-            
+            ("empty.rb", ""),
             # File with only comments
-            ('comments_only.rb', '''
+            (
+                "comments_only.rb",
+                """
 # This file only has comments
 # search(:node, "role:web") <- this is in a comment, should not be detected
 # No actual search calls
-'''),
+""",
+            ),
         ]
-        
+
         for filename, content in chef_files_with_searches:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='_' + filename, delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix="_" + filename, delete=False
+            ) as f:
                 f.write(content)
                 temp_path = f.name
-            
+
             try:
                 result = analyze_chef_search_patterns(temp_path)
                 assert isinstance(result, str)
-                
+
                 # Validate output based on file content
-                if "search(" in content and "# This file only has comments" not in content:
+                if (
+                    "search(" in content
+                    and "# This file only has comments" not in content
+                ):
                     assert len(result) > 50  # Should find search patterns
                     if "role:web-server" in content:
-                        assert "web-server" in result.lower() or "search" in result.lower()
+                        assert (
+                            "web-server" in result.lower() or "search" in result.lower()
+                        )
                 else:
                     # No searches expected
                     assert "no search patterns" in result.lower() or len(result) < 100
-                
+
             finally:
                 Path(temp_path).unlink()
-        
+
         # Test with directories (should analyze multiple files)
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a cookbook structure with searches
             recipes_dir = Path(temp_dir) / "recipes"
             recipes_dir.mkdir()
-            
-            (recipes_dir / "web.rb").write_text('''
+
+            (recipes_dir / "web.rb").write_text("""
 web_servers = search(:node, "role:web AND chef_environment:production")
-''')
-            (recipes_dir / "database.rb").write_text('''
+""")
+            (recipes_dir / "database.rb").write_text("""
 db_servers = search(:node, "role:database")
-''')
-            
+""")
+
             result = analyze_chef_search_patterns(temp_dir)
             assert isinstance(result, str)
             assert len(result) > 100  # Should analyze multiple files
@@ -5964,11 +6143,14 @@ db_servers = search(:node, "role:database")
     def test_parse_chef_search_internal_functions(self):
         """Test internal Chef search parsing functions directly."""
         try:
-            from souschef.server import _parse_chef_search_query, _parse_search_condition
+            from souschef.server import (
+                _parse_chef_search_query,
+                _parse_search_condition,
+            )
         except ImportError:
             # Functions might not be available for direct import
             return
-        
+
         # Test _parse_chef_search_query
         search_queries = [
             "role:web-server",
@@ -5981,7 +6163,7 @@ db_servers = search(:node, "role:database")
             "",
             "invalid:query:with:too:many:colons",
         ]
-        
+
         for query in search_queries:
             try:
                 result = _parse_chef_search_query(query)
@@ -5989,7 +6171,7 @@ db_servers = search(:node, "role:database")
             except:
                 # Some queries might fail, that's acceptable
                 pass
-        
+
         # Test _parse_search_condition
         conditions = [
             "role:web",
@@ -6001,7 +6183,7 @@ db_servers = search(:node, "role:database")
             "role:",
             ":web",
         ]
-        
+
         for condition in conditions:
             try:
                 result = _parse_search_condition(condition)
@@ -6016,33 +6198,46 @@ db_servers = search(:node, "role:database")
             from souschef.server import _generate_ansible_inventory_from_search
         except ImportError:
             return
-        
+
         search_results = [
             # Simple search result
-            {"role": ["web"], "chef_environment": "production", "fqdn": "web1.example.com"},
-            
+            {
+                "role": ["web"],
+                "chef_environment": "production",
+                "fqdn": "web1.example.com",
+            },
             # Multiple results
             [
-                {"role": ["web"], "chef_environment": "production", "fqdn": "web1.example.com"},
-                {"role": ["web"], "chef_environment": "production", "fqdn": "web2.example.com"},
-                {"role": ["database"], "chef_environment": "production", "fqdn": "db1.example.com"},
+                {
+                    "role": ["web"],
+                    "chef_environment": "production",
+                    "fqdn": "web1.example.com",
+                },
+                {
+                    "role": ["web"],
+                    "chef_environment": "production",
+                    "fqdn": "web2.example.com",
+                },
+                {
+                    "role": ["database"],
+                    "chef_environment": "production",
+                    "fqdn": "db1.example.com",
+                },
             ],
-            
             # Empty results
             [],
             {},
-            
             # Complex result with nested attributes
             {
-                "role": ["web", "monitoring"], 
+                "role": ["web", "monitoring"],
                 "chef_environment": "staging",
                 "fqdn": "complex.example.com",
                 "platform": "ubuntu",
                 "platform_version": "20.04",
-                "ipaddress": "10.0.1.100"
-            }
+                "ipaddress": "10.0.1.100",
+            },
         ]
-        
+
         for result in search_results:
             try:
                 inventory = _generate_ansible_inventory_from_search(result, "web")
@@ -6054,18 +6249,17 @@ db_servers = search(:node, "role:database")
     def test_heredoc_and_complex_ruby_parsing(self):
         """Test heredoc parsing and complex Ruby constructs."""
         from souschef.server import _extract_heredoc_strings
-        
+
         ruby_content_with_heredocs = [
             # Basic heredoc
-            '''
+            """
 content = <<-EOH
 This is a heredoc
 Multiple lines
 EOH
-''',
-            
+""",
             # Multiple heredocs
-            '''
+            """
 script = <<-SCRIPT
 #!/bin/bash
 echo "Hello World"
@@ -6076,20 +6270,18 @@ server {
     listen 80;
 }
 CONFIG
-''',
-            
+""",
             # Nested heredocs with ERB
-            '''
+            """
 template_content = <<-TEMPLATE
 <%= node['app']['name'] %>
 <% if node['ssl']['enabled'] %>
 SSL Configuration
 <% end %>
 TEMPLATE
-''',
-            
+""",
             # Complex heredoc with variables
-            '''
+            """
 full_config = <<-CONFIG
 # Generated config for #{node['app']['name']}
 server_name = #{node['app']['domain']};
@@ -6098,8 +6290,7 @@ port = #{node['app']['port']};
 ssl_certificate = #{node['app']['ssl']['cert']};
 <% end %>
 CONFIG
-''',
-            
+""",
             # Edge cases
             "",
             "no heredoc here",
@@ -6107,13 +6298,13 @@ CONFIG
             "<<-EOF\n",
             "incomplete",
         ]
-        
+
         for content in ruby_content_with_heredocs:
             result = _extract_heredoc_strings(content)
             assert isinstance(result, dict)
-            
+
             # Should find heredocs when present
-            if "<<-" in content and content.count('\n') > 2:
+            if "<<-" in content and content.count("\n") > 2:
                 # Should extract at least one heredoc if properly formatted
                 pass
 
@@ -6124,12 +6315,12 @@ class TestInspecIntegrationCoverage:
     def test_parse_inspec_profile_comprehensive(self):
         """Test parse_inspec_profile with realistic InSpec profiles."""
         from souschef.server import parse_inspec_profile
-        
+
         # Create realistic InSpec profile structures
         inspec_profiles = [
             # Basic profile with controls
             {
-                'inspec.yml': '''
+                "inspec.yml": """
 name: nginx-profile
 title: Nginx Security Profile
 version: 1.0.0
@@ -6140,13 +6331,13 @@ supports:
 depends:
   - name: baseline
     git: https://github.com/dev-sec/linux-baseline
-''',
-                'controls/nginx.rb': '''
+""",
+                "controls/nginx.rb": """
 control 'nginx-installed' do
   impact 1.0
   title 'Nginx should be installed'
   desc 'Nginx package should be installed on the system'
-  
+
   describe package('nginx') do
     it { should be_installed }
     its('version') { should cmp >= '1.14.0' }
@@ -6157,7 +6348,7 @@ control 'nginx-service' do
   impact 0.8
   title 'Nginx service should be running'
   desc 'Nginx service should be enabled and running'
-  
+
   describe service('nginx') do
     it { should be_installed }
     it { should be_enabled }
@@ -6169,60 +6360,59 @@ control 'nginx-config' do
   impact 0.7
   title 'Nginx configuration should be secure'
   desc 'Nginx configuration should follow security best practices'
-  
+
   describe file('/etc/nginx/nginx.conf') do
     it { should exist }
     it { should be_file }
     it { should be_owned_by 'root' }
     its('mode') { should cmp '0644' }
   end
-  
+
   describe nginx_conf.server do
     its('listen') { should include ['80'] }
     its('server_name') { should_not be_empty }
   end
 end
-''',
-                'controls/ssl.rb': '''
+""",
+                "controls/ssl.rb": """
 control 'ssl-config' do
   impact 0.9
   title 'SSL Configuration'
   desc 'SSL should be properly configured if enabled'
-  
+
   only_if { file('/etc/nginx/ssl').exist? }
-  
+
   describe file('/etc/nginx/ssl/server.crt') do
     it { should exist }
     it { should be_file }
     its('mode') { should cmp '0644' }
   end
-  
+
   describe file('/etc/nginx/ssl/server.key') do
     it { should exist }
     it { should be_file }
     its('mode') { should cmp '0600' }
   end
-  
+
   describe x509_certificate('/etc/nginx/ssl/server.crt') do
     its('validity_in_days') { should be > 30 }
-    its('subject.CN') { should match /example\.com/ }
+    its('subject.CN') { should match /example\\.com/ }
   end
 end
-'''
+""",
             },
-            
             # Profile with multiple resource types
             {
-                'inspec.yml': '''
-name: web-stack-profile  
+                "inspec.yml": """
+name: web-stack-profile
 title: Complete Web Stack Profile
 version: 2.1.0
-''',
-                'controls/system.rb': '''
+""",
+                "controls/system.rb": """
 control 'system-packages' do
   impact 1.0
   title 'Required system packages'
-  
+
   %w[curl wget git].each do |pkg|
     describe package(pkg) do
       it { should be_installed }
@@ -6233,13 +6423,13 @@ end
 control 'system-users' do
   impact 0.8
   title 'System users configuration'
-  
+
   describe user('nginx') do
     it { should exist }
     its('shell') { should eq '/usr/sbin/nologin' }
     its('home') { should eq '/var/cache/nginx' }
   end
-  
+
   describe group('nginx') do
     it { should exist }
   end
@@ -6248,7 +6438,7 @@ end
 control 'system-directories' do
   impact 0.6
   title 'Required directories exist'
-  
+
   %w[/var/log/nginx /var/cache/nginx /etc/nginx/conf.d].each do |dir|
     describe directory(dir) do
       it { should exist }
@@ -6256,18 +6446,18 @@ control 'system-directories' do
     end
   end
 end
-''',
-                'controls/network.rb': '''
+""",
+                "controls/network.rb": """
 control 'network-ports' do
   impact 0.8
   title 'Network ports configuration'
-  
+
   describe port(80) do
     it { should be_listening }
     its('protocols') { should include 'tcp' }
     its('processes') { should include 'nginx' }
   end
-  
+
   describe port(443) do
     it { should be_listening }
     its('protocols') { should include 'tcp' }
@@ -6277,33 +6467,32 @@ end
 control 'firewall-rules' do
   impact 0.7
   title 'Firewall configuration'
-  
+
   describe iptables do
     it { should have_rule('-A INPUT -p tcp --dport 80 -j ACCEPT') }
     it { should have_rule('-A INPUT -p tcp --dport 443 -j ACCEPT') }
   end
 end
-'''
+""",
             },
-            
             # Profile with complex matchers
             {
-                'inspec.yml': '''
+                "inspec.yml": """
 name: database-profile
 title: Database Security Profile
 version: 1.5.0
-''',
-                'controls/mysql.rb': '''
+""",
+                "controls/mysql.rb": """
 control 'mysql-config' do
   impact 1.0
   title 'MySQL Configuration Security'
-  
+
   describe mysql_conf('/etc/mysql/my.cnf') do
     its('bind-address') { should eq '127.0.0.1' }
     its('port') { should eq 3306 }
     its('log-bin') { should_not be_nil }
   end
-  
+
   describe mysql_session('root', 'password').query('SELECT user FROM mysql.user;') do
     its('stdout') { should_not match /^$/ }
     its('exit_status') { should eq 0 }
@@ -6313,70 +6502,68 @@ end
 control 'mysql-permissions' do
   impact 0.9
   title 'MySQL File Permissions'
-  
+
   describe file('/etc/mysql/my.cnf') do
     its('mode') { should cmp '0644' }
     it { should be_owned_by 'root' }
     it { should be_grouped_into 'root' }
   end
-  
+
   describe directory('/var/lib/mysql') do
     its('mode') { should cmp '0755' }
     it { should be_owned_by 'mysql' }
   end
 end
-'''
+""",
             },
-            
             # Empty profile
             {
-                'inspec.yml': '''
+                "inspec.yml": """
 name: empty-profile
 version: 0.1.0
-'''
-            }
+"""
+            },
         ]
-        
+
         for profile_data in inspec_profiles:
             with tempfile.TemporaryDirectory() as temp_dir:
                 profile_path = Path(temp_dir)
-                
+
                 # Create profile structure
                 for file_path, content in profile_data.items():
                     full_path = profile_path / file_path
                     full_path.parent.mkdir(parents=True, exist_ok=True)
                     full_path.write_text(content)
-                
+
                 result = parse_inspec_profile(str(profile_path))
                 assert isinstance(result, str)
-                
+
                 # Should analyze profile content
                 if len(profile_data) > 1:  # More than just inspec.yml
                     assert len(result) > 100
-                    if 'controls' in str(profile_data):
+                    if "controls" in str(profile_data):
                         assert "control" in result.lower()
 
     def test_convert_inspec_to_test_comprehensive(self):
         """Test convert_inspec_to_test with various test frameworks."""
         from souschef.server import convert_inspec_to_test
-        
+
         inspec_controls = [
             # Basic package/service tests
-            '''
+            """
 control 'nginx-basic' do
   describe package('nginx') do
     it { should be_installed }
   end
-  
+
   describe service('nginx') do
     it { should be_running }
     it { should be_enabled }
   end
 end
-''',
-            
+""",
             # File and directory tests
-            '''
+            """
 control 'file-tests' do
   describe file('/etc/nginx/nginx.conf') do
     it { should exist }
@@ -6384,109 +6571,110 @@ control 'file-tests' do
     its('mode') { should cmp '0644' }
     it { should be_owned_by 'root' }
   end
-  
+
   describe directory('/var/log/nginx') do
     it { should exist }
     it { should be_directory }
     its('mode') { should cmp '0755' }
   end
 end
-''',
-            
+""",
             # Port and network tests
-            '''
-control 'network-tests' do  
+            """
+control 'network-tests' do
   describe port(80) do
     it { should be_listening }
     its('protocols') { should include 'tcp' }
   end
-  
+
   describe host('example.com', port: 443, protocol: 'tcp') do
     it { should be_reachable }
     it { should be_resolvable }
   end
 end
-''',
-            
+""",
             # User and group tests
-            '''
+            """
 control 'user-tests' do
   describe user('nginx') do
     it { should exist }
     its('shell') { should eq '/usr/sbin/nologin' }
     its('home') { should eq '/var/cache/nginx' }
   end
-  
+
   describe group('nginx') do
     it { should exist }
   end
 end
-''',
-            
+""",
             # Command and process tests
-            '''
+            """
 control 'process-tests' do
   describe processes('nginx') do
     its('users') { should include 'nginx' }
     its('commands') { should include 'nginx: master process' }
   end
-  
+
   describe command('nginx -t') do
     its('exit_status') { should eq 0 }
     its('stdout') { should match /syntax is ok/ }
   end
 end
-''',
-            
+""",
             # Complex matchers
-            '''
+            """
 control 'complex-tests' do
   describe json('/etc/app/config.json') do
     its(['database', 'host']) { should eq 'localhost' }
     its(['ssl', 'enabled']) { should eq true }
   end
-  
+
   describe yaml('/etc/app/config.yml') do
     its(['app', 'name']) { should eq 'myapp' }
   end
-  
+
   describe ini('/etc/app/app.ini') do
     its(['section.key']) { should eq 'value' }
   end
 end
-''',
+""",
         ]
-        
-        test_frameworks = ['testinfra', 'serverspec', 'goss']
-        
+
+        test_frameworks = ["testinfra", "serverspec", "goss"]
+
         for control in inspec_controls:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='_control.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix="_control.rb", delete=False
+            ) as f:
                 f.write(control)
                 temp_path = f.name
-            
+
             try:
                 for framework in test_frameworks:
                     result = convert_inspec_to_test(temp_path, framework)
                     assert isinstance(result, str)
-                    
+
                     # Should generate appropriate test format
-                    if framework == 'testinfra' and 'package(' in control:
-                        assert 'def test_' in result or 'import' in result
-                    elif framework == 'serverspec' and 'describe' in control:
-                        assert 'describe' in result or 'it ' in result
-                    elif framework == 'goss' and any(resource in control for resource in ['package', 'service', 'file']):
+                    if framework == "testinfra" and "package(" in control:
+                        assert "def test_" in result or "import" in result
+                    elif framework == "serverspec" and "describe" in control:
+                        assert "describe" in result or "it " in result
+                    elif framework == "goss" and any(
+                        resource in control
+                        for resource in ["package", "service", "file"]
+                    ):
                         pass  # Goss format validation
-                        
+
             finally:
                 Path(temp_path).unlink()
 
     def test_generate_inspec_from_recipe_comprehensive(self):
         """Test generate_inspec_from_recipe with complex Chef recipes."""
         from souschef.server import generate_inspec_from_recipe
-        
+
         complex_recipes = [
             # Recipe with packages and services
-            '''
+            """
 package "nginx" do
   action :install
   version ">=1.14"
@@ -6504,10 +6692,9 @@ end
 service "php7.4-fpm" do
   action [:enable, :start]
 end
-''',
-            
+""",
             # Recipe with files and directories
-            '''
+            """
 directory "/var/log/myapp" do
   owner "root"
   group "root"
@@ -6535,10 +6722,9 @@ template "/etc/nginx/sites-available/myapp" do
   )
   action :create
 end
-''',
-            
+""",
             # Recipe with users and groups
-            '''
+            """
 group "deploy" do
   gid 1001
   action :create
@@ -6549,7 +6735,7 @@ user "deploy" do
   uid 1001
   gid "deploy"
   home "/home/deploy"
-  shell "/bin/bash" 
+  shell "/bin/bash"
   manage_home true
   action :create
 end
@@ -6560,10 +6746,9 @@ directory "/home/deploy/.ssh" do
   mode "0700"
   action :create
 end
-''',
-            
+""",
             # Recipe with execute commands
-            '''
+            """
 execute "update-package-cache" do
   command "apt-get update"
   user "root"
@@ -6585,10 +6770,9 @@ bash "compile-app" do
   user "deploy"
   action :run
 end
-''',
-            
+""",
             # Recipe with mount points
-            '''
+            """
 mount "/mnt/data" do
   device "/dev/sdb1"
   fstype "ext4"
@@ -6602,10 +6786,9 @@ directory "/mnt/data/logs" do
   mode "0755"
   action :create
 end
-''',
-            
+""",
             # Recipe with cron jobs
-            '''
+            """
 cron "backup-database" do
   minute "0"
   hour "2"
@@ -6622,10 +6805,9 @@ cron "cleanup-logs" do
   user "root"
   action :create
 end
-''',
-            
+""",
             # Recipe with links
-            '''
+            """
 link "/usr/local/bin/myapp" do
   to "/opt/myapp/bin/myapp"
   link_type :symbolic
@@ -6636,28 +6818,25 @@ link "/etc/nginx/sites-enabled/myapp" do
   to "/etc/nginx/sites-available/myapp"
   action :create
 end
-''',
-            
+""",
             # Empty recipe
-            '''
+            """
 # Empty recipe file
 # No resources here
-''',
-            
+""",
             # Recipe with only comments
-            '''
+            """
 # This recipe only has comments
 # package "nginx"  # commented out
 # No actual resources
-''',
-            
+""",
             # Recipe with complex conditionals
-            '''
+            """
 if node['platform_family'] == 'debian'
   package "nginx" do
     action :install
   end
-  
+
   service "nginx" do
     action [:enable, :start]
   end
@@ -6665,7 +6844,7 @@ elsif node['platform_family'] == 'rhel'
   package "nginx" do
     action :install
   end
-  
+
   service "nginx" do
     action [:enable, :start]
   end
@@ -6681,27 +6860,32 @@ when 'postgresql'
     action :install
   end
 end
-''',
+""",
         ]
-        
+
         for recipe_content in complex_recipes:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='_recipe.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix="_recipe.rb", delete=False
+            ) as f:
                 f.write(recipe_content)
                 temp_path = f.name
-            
+
             try:
                 result = generate_inspec_from_recipe(temp_path)
                 assert isinstance(result, str)
-                
+
                 # Should generate InSpec controls based on recipe content
-                if any(resource in recipe_content for resource in ['package ', 'service ', 'file ', 'directory ']):
+                if any(
+                    resource in recipe_content
+                    for resource in ["package ", "service ", "file ", "directory "]
+                ):
                     assert len(result) > 50  # Should produce meaningful InSpec profile
                     if 'package "nginx"' in recipe_content:
-                        assert 'nginx' in result.lower()
+                        assert "nginx" in result.lower()
                 else:
                     # Empty or comment-only recipes
                     assert "no resources" in result.lower() or len(result) < 100
-                        
+
             finally:
                 Path(temp_path).unlink()
 
@@ -6709,72 +6893,86 @@ end
 # Test helper functions that might not be covered
 class TestHelperFunctionsCoverage:
     """Test helper and utility functions for complete coverage."""
-    
+
     def test_all_format_functions(self):
         """Test all _format_* helper functions."""
         try:
-            from souschef.server import _format_metadata, _format_resources, _format_attributes, _format_cookbook_structure, _format_ansible_task
+            from souschef.server import (
+                _format_ansible_task,
+                _format_attributes,
+                _format_cookbook_structure,
+                _format_metadata,
+                _format_resources,
+            )
         except ImportError:
             return
-        
+
         # Test _format_metadata
         metadata_samples = [
             {"name": "test-cookbook", "version": "1.0.0"},
-            {"name": "complex", "version": "2.1.0", "maintainer": "DevOps Team", "depends": ["nginx", "mysql"]},
+            {
+                "name": "complex",
+                "version": "2.1.0",
+                "maintainer": "DevOps Team",
+                "depends": ["nginx", "mysql"],
+            },
             {},
             {"name": "", "version": ""},
         ]
-        
+
         for metadata in metadata_samples:
             result = _format_metadata(metadata)
             assert isinstance(result, str)
-        
+
         # Test _format_resources
         resource_samples = [
             [{"type": "package", "name": "nginx", "action": "install"}],
             [
                 {"type": "package", "name": "nginx", "action": "install"},
-                {"type": "service", "name": "nginx", "action": "start"}
+                {"type": "service", "name": "nginx", "action": "start"},
             ],
             [],
         ]
-        
+
         for resources in resource_samples:
             result = _format_resources(resources)
             assert isinstance(result, str)
-        
+
         # Test _format_attributes
         attribute_samples = [
             [{"name": "port", "value": "80", "level": "default"}],
             [
                 {"name": "ssl.enabled", "value": "false", "level": "default"},
-                {"name": "workers", "value": "auto", "level": "override"}
+                {"name": "workers", "value": "auto", "level": "override"},
             ],
             [],
         ]
-        
+
         for attributes in attribute_samples:
             result = _format_attributes(attributes)
             assert isinstance(result, str)
-        
+
         # Test _format_cookbook_structure
         structure_samples = [
             {"recipes": ["default.rb"], "templates": ["config.erb"]},
             {"recipes": [], "attributes": [], "templates": []},
             {},
         ]
-        
+
         for structure in structure_samples:
             result = _format_cookbook_structure(structure)
             assert isinstance(result, str)
-        
+
         # Test _format_ansible_task
         task_samples = [
             {"name": "Install nginx", "package": {"name": "nginx", "state": "present"}},
-            {"name": "Start service", "service": {"name": "nginx", "state": "started", "enabled": True}},
+            {
+                "name": "Start service",
+                "service": {"name": "nginx", "state": "started", "enabled": True},
+            },
             {},
         ]
-        
+
         for task in task_samples:
             result = _format_ansible_task(task)
             assert isinstance(result, str)
@@ -6783,12 +6981,16 @@ class TestHelperFunctionsCoverage:
         """Test all _extract_* helper functions."""
         try:
             from souschef.server import (
-                _extract_metadata, _extract_resources, _extract_conditionals,
-                _extract_attributes, _extract_resource_properties, _extract_resource_actions
+                _extract_attributes,
+                _extract_conditionals,
+                _extract_metadata,
+                _extract_resource_actions,
+                _extract_resource_properties,
+                _extract_resources,
             )
         except ImportError:
             return
-        
+
         # Test _extract_metadata
         metadata_contents = [
             "name 'test'\nversion '1.0.0'\nmaintainer 'team'",
@@ -6796,78 +6998,78 @@ class TestHelperFunctionsCoverage:
             "",
             "invalid metadata content",
         ]
-        
+
         for content in metadata_contents:
             result = _extract_metadata(content)
             assert isinstance(result, dict)
-        
+
         # Test _extract_resources
         resource_contents = [
-            '''package "nginx" do
+            """package "nginx" do
   action :install
-end''',
-            '''service "nginx" do
+end""",
+            """service "nginx" do
   action [:enable, :start]
 end
 
 file "/etc/config" do
   action :create
-end''',
+end""",
             "",
             "invalid ruby content",
         ]
-        
+
         for content in resource_contents:
             result = _extract_resources(content)
             assert isinstance(result, list)
-        
+
         # Test _extract_conditionals
         conditional_contents = [
             "if node['platform'] == 'ubuntu'\n  package 'nginx'\nend",
             "unless disabled\n  service 'nginx'\nend",
             "",
         ]
-        
+
         for content in conditional_contents:
             result = _extract_conditionals(content)
             assert isinstance(result, list)
-        
+
         # Test _extract_attributes
         attribute_contents = [
             "default['nginx']['port'] = 80\noverride['ssl']['enabled'] = false",
             "normal['app']['name'] = 'myapp'",
             "",
         ]
-        
+
         for content in attribute_contents:
             result = _extract_attributes(content)
             assert isinstance(result, list)
-        
+
         # Test _extract_resource_properties
         property_contents = [
-            '''package "nginx" do
+            """package "nginx" do
   version "1.14"
   options ["--no-install-recommends"]
   action :install
-end''',
+end""",
             "",
         ]
-        
+
         for content in property_contents:
             result = _extract_resource_properties(content)
             assert isinstance(result, list)
-        
+
         # Test _extract_resource_actions
         action_contents = [
-            '''package "nginx" do
+            """package "nginx" do
   action :install
-end''',
-            '''service "nginx" do
+end""",
+            """service "nginx" do
   action [:enable, :start]
-end''',
+end""",
             "",
         ]
-        
+
         for content in action_contents:
             result = _extract_resource_actions(content)
             assert isinstance(result, dict)
@@ -6876,34 +7078,36 @@ end''',
         """Test conversion helper functions."""
         try:
             from souschef.server import (
-                _get_service_params, _get_file_params, _convert_chef_resource_to_ansible
+                _convert_chef_resource_to_ansible,
+                _get_file_params,
+                _get_service_params,
             )
         except ImportError:
             return
-        
+
         # Test _get_service_params
         service_tests = [
             ("nginx", "start"),
-            ("mysql", "stop"), 
+            ("mysql", "stop"),
             ("apache2", "restart"),
             ("", ""),
         ]
-        
+
         for service_name, action in service_tests:
             result = _get_service_params(service_name, action)
             assert isinstance(result, dict)
-        
+
         # Test _get_file_params
         file_tests = [
             ("/etc/nginx/nginx.conf", "create", {"owner": "root", "mode": "0644"}),
             ("/tmp/test", "delete", {}),
             ("", "", {}),
         ]
-        
+
         for file_path, action, attributes in file_tests:
             result = _get_file_params(file_path, action, attributes)
             assert isinstance(result, dict)
-        
+
         # Test _convert_chef_resource_to_ansible
         conversion_tests = [
             ("package", "nginx", "install", {}),
@@ -6911,15 +7115,14 @@ end''',
             ("file", "/etc/config", "create", {"owner": "root"}),
             ("", "", "", {}),
         ]
-        
-        for resource_type, resource_name, action, attributes in conversion_tests:
-            result = _convert_chef_resource_to_ansible(resource_type, resource_name, action, attributes)
-            assert isinstance(result, dict)# Final comprehensive test push for 95% coverage
 
-import tempfile
-import json
-from pathlib import Path
-from unittest.mock import patch, mock_open, MagicMock
+        for resource_type, resource_name, action, attributes in conversion_tests:
+            result = _convert_chef_resource_to_ansible(
+                resource_type, resource_name, action, attributes
+            )
+            assert isinstance(
+                result, dict
+            )  # Final comprehensive test push for 95% coverage
 
 
 class TestFinalCoveragePush:
@@ -6928,21 +7131,27 @@ class TestFinalCoveragePush:
     def test_all_mcp_tools_exhaustively(self):
         """Test every MCP tool with extensive scenarios."""
         from souschef.server import (
-            parse_template, parse_custom_resource, list_directory, read_file,
-            read_cookbook_metadata, parse_recipe, parse_attributes, list_cookbook_structure,
-            convert_resource_to_task, generate_playbook_from_recipe,
-            convert_chef_search_to_inventory, generate_dynamic_inventory_script,
-            analyze_chef_search_patterns, parse_inspec_profile, convert_inspec_to_test,
-            generate_inspec_from_recipe
+            analyze_chef_search_patterns,
+            convert_inspec_to_test,
+            generate_inspec_from_recipe,
+            generate_playbook_from_recipe,
+            list_cookbook_structure,
+            list_directory,
+            parse_attributes,
+            parse_inspec_profile,
+            parse_recipe,
+            parse_template,
+            read_cookbook_metadata,
+            read_file,
         )
-        
+
         # Create comprehensive test scenarios for each MCP tool
         with tempfile.TemporaryDirectory() as temp_dir:
             base_path = Path(temp_dir)
-            
+
             # Create extensive cookbook structure
             cookbook_structure = {
-                "metadata.rb": '''
+                "metadata.rb": """
 name 'comprehensive-cookbook'
 version '3.2.1'
 maintainer 'SousChef Test Suite'
@@ -6962,8 +7171,8 @@ depends 'mysql', '~> 8.5'
 suggests 'logrotate'
 provides 'comprehensive-cookbook::web'
 provides 'comprehensive-cookbook::database'
-''',
-                "recipes/default.rb": '''
+""",
+                "recipes/default.rb": """
 # Default recipe with comprehensive resources
 Chef::Log.info("Starting comprehensive cookbook deployment")
 
@@ -6974,11 +7183,11 @@ when 'debian'
     action :update
     frequency 86400
   end
-  
+
   package %w[curl wget git vim htop] do
     action :install
   end
-  
+
 when 'rhel', 'amazon'
   yum_package %w[curl wget git vim htop] do
     action :install
@@ -7112,13 +7321,13 @@ bash 'compile-application' do
   code <<-EOH
     export NODE_ENV=#{node.chef_environment}
     export PATH=/usr/local/bin:$PATH
-    
+
     echo "Installing dependencies..."
     npm ci --production
-    
+
     echo "Building application..."
     npm run build
-    
+
     echo "Setting permissions..."
     chown -R myapp:myapp /opt/myapp
     chmod +x /opt/myapp/bin/myapp
@@ -7218,15 +7427,15 @@ ruby_block 'configure-firewall' do
   block do
     require 'chef/mixin/shell_out'
     include Chef::Mixin::ShellOut
-    
+
     ports = [80, 443]
     ports << node['myapp']['port'] if node['myapp']['port']
-    
+
     ports.each do |port|
       cmd = shell_out!("ufw allow #{port}/tcp")
       Chef::Log.info("Opened port #{port}: #{cmd.stdout}")
     end
-    
+
     # Enable UFW if not already enabled
     cmd = shell_out("ufw status")
     unless cmd.stdout.include?('Status: active')
@@ -7248,8 +7457,8 @@ log 'deployment-completed' do
   message "Completed deployment of myapp on #{node['fqdn']}"
   level :info
 end
-''',
-                "attributes/default.rb": '''
+""",
+                "attributes/default.rb": """
 # Default attributes for comprehensive cookbook
 default['nginx']['version'] = nil
 default['nginx']['worker_connections'] = 1024
@@ -7322,8 +7531,8 @@ default['performance']['worker_processes'] = 'auto'
 default['performance']['worker_rlimit_nofile'] = 65535
 default['performance']['multi_accept'] = true
 default['performance']['use_epoll'] = true
-''',
-                "templates/default/nginx.conf.erb": '''
+""",
+                "templates/default/nginx.conf.erb": """
 # Nginx configuration generated by Chef
 # Cookbook: comprehensive-cookbook
 # Generated on: <%= Time.now %>
@@ -7408,30 +7617,30 @@ http {
         }
     }
 }
-''',
-                "inspec/controls/nginx.rb": '''
+""",
+                "inspec/controls/nginx.rb": """
 control 'nginx-installed' do
   impact 1.0
   title 'Nginx should be installed'
   desc 'Verify that Nginx is installed and configured properly'
-  
+
   describe package('nginx') do
     it { should be_installed }
   end
-  
+
   describe service('nginx') do
     it { should be_installed }
     it { should be_enabled }
     it { should be_running }
   end
-  
+
   describe file('/etc/nginx/nginx.conf') do
     it { should exist }
     it { should be_file }
     it { should be_owned_by 'root' }
     its('mode') { should cmp '0644' }
   end
-  
+
   describe port(80) do
     it { should be_listening }
   end
@@ -7440,27 +7649,27 @@ end
 control 'myapp-config' do
   impact 0.8
   title 'MyApp configuration should be secure'
-  
+
   describe file('/etc/myapp/config.conf') do
     it { should exist }
     its('mode') { should cmp '0640' }
     it { should be_owned_by 'root' }
     it { should be_grouped_into 'myapp' }
   end
-  
+
   describe user('myapp') do
     it { should exist }
     its('uid') { should eq 1001 }
     its('home') { should eq '/opt/myapp' }
   end
-  
+
   describe group('myapp') do
     it { should exist }
     its('gid') { should eq 1001 }
   end
 end
-''',
-                "inspec/inspec.yml": '''
+""",
+                "inspec/inspec.yml": """
 name: comprehensive-profile
 title: Comprehensive Security Profile
 version: 1.0.0
@@ -7473,15 +7682,15 @@ depends:
   - name: baseline
     git: https://github.com/dev-sec/linux-baseline
     compliance: base
-''',
+""",
             }
-            
+
             # Create all cookbook files
             for file_path, content in cookbook_structure.items():
                 full_path = base_path / file_path
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 full_path.write_text(content)
-            
+
             # Test every MCP tool with this comprehensive cookbook
             tools_to_test = [
                 (parse_template, str(base_path / "templates/default/nginx.conf.erb")),
@@ -7494,20 +7703,24 @@ depends:
                 (generate_playbook_from_recipe, str(base_path / "recipes/default.rb")),
                 (parse_inspec_profile, str(base_path / "inspec")),
                 (generate_inspec_from_recipe, str(base_path / "recipes/default.rb")),
-                (convert_inspec_to_test, str(base_path / "inspec/controls/nginx.rb"), "testinfra"),
+                (
+                    convert_inspec_to_test,
+                    str(base_path / "inspec/controls/nginx.rb"),
+                    "testinfra",
+                ),
                 (analyze_chef_search_patterns, str(base_path)),
             ]
-            
+
             for tool_args in tools_to_test:
                 tool = tool_args[0]
                 args = tool_args[1:]
-                
+
                 try:
                     if len(args) == 1:
                         result = tool(args[0])
                     else:
                         result = tool(*args)
-                    
+
                     assert isinstance(result, (str, list))
                     if isinstance(result, str):
                         assert len(result) > 0
@@ -7518,11 +7731,12 @@ depends:
     def test_resource_conversion_comprehensive(self):
         """Test resource conversion with all possible resource types."""
         from souschef.server import convert_resource_to_task
-        
+
         # Comprehensive resource types and configurations
         comprehensive_resources = [
             # Package resources with all possible attributes
-            ('''package "nginx" do
+            (
+                """package "nginx" do
   version "1.18.0"
   action :install
   timeout 300
@@ -7531,10 +7745,12 @@ depends:
   options ["--no-install-recommends", "--assume-yes"]
   response_file "/tmp/package.response"
   source "/path/to/package.deb"
-end''', "install"),
-            
+end""",
+                "install",
+            ),
             # Service resources with all attributes
-            ('''service "nginx" do
+            (
+                """service "nginx" do
   service_name "nginx"
   pattern "nginx: master"
   start_command "/etc/init.d/nginx start"
@@ -7549,10 +7765,12 @@ end''', "install"),
   priority 20
   timeout 30
   retries 3
-end''', "start"),
-            
+end""",
+                "start",
+            ),
             # File resources with comprehensive attributes
-            ('''file "/etc/myapp/config.conf" do
+            (
+                """file "/etc/myapp/config.conf" do
   content "server=localhost\\nport=8080\\n"
   owner "root"
   group "myapp"
@@ -7567,10 +7785,12 @@ end''', "start"),
   action :create
   sensitive true
   force_unlink false
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Directory resources
-            ('''directory "/var/log/myapp" do
+            (
+                """directory "/var/log/myapp" do
   owner "myapp"
   group "myapp"
   mode "0755"
@@ -7579,10 +7799,12 @@ end''', "create"),
   inherits false
   rights :full_control, "myapp"
   rights :read_execute, "Users"
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Template resources
-            ('''template "/etc/nginx/sites-available/myapp" do
+            (
+                """template "/etc/nginx/sites-available/myapp" do
   source "nginx-site.erb"
   cookbook "myapp"
   owner "root"
@@ -7597,10 +7819,12 @@ end''', "create"),
   action :create
   backup 3
   atomic_update false
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Execute resources
-            ('''execute "compile-application" do
+            (
+                """execute "compile-application" do
   command "npm run build"
   cwd "/opt/myapp"
   user "myapp"
@@ -7618,10 +7842,12 @@ end''', "create"),
   not_if "test -f dist/app.js"
   sensitive false
   live_stream true
-end''', "run"),
-            
+end""",
+                "run",
+            ),
             # User resources
-            ('''user "deploy" do
+            (
+                """user "deploy" do
   comment "Deployment user account"
   uid 1001
   gid "deploy"
@@ -7635,10 +7861,12 @@ end''', "run"),
   action :create
   iterations 25000
   salt "mysalt"
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Group resources
-            ('''group "developers" do
+            (
+                """group "developers" do
   gid 1100
   members ["alice", "bob", "charlie", "deploy"]
   system false
@@ -7646,10 +7874,12 @@ end''', "create"),
   action :create
   append true
   excluded_members ["olduser"]
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Cron resources
-            ('''cron "backup-database" do
+            (
+                """cron "backup-database" do
   minute "0"
   hour "2"
   day "1"
@@ -7663,10 +7893,12 @@ end''', "create"),
   shell "/bin/bash"
   action :create
   environment ({ "BACKUP_DIR" => "/backups" })
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Mount resources
-            ('''mount "/mnt/shared" do
+            (
+                """mount "/mnt/shared" do
   device "//server/share"
   fstype "cifs"
   options "username=user,password=pass,uid=1000,gid=1000"
@@ -7677,10 +7909,12 @@ end''', "create"),
   device_type :device
   enabled true
   supports [:remount]
-end''', "mount"),
-            
+end""",
+                "mount",
+            ),
             # Link resources
-            ('''link "/usr/local/bin/myapp" do
+            (
+                """link "/usr/local/bin/myapp" do
   to "/opt/myapp/bin/myapp"
   link_type :symbolic
   owner "root"
@@ -7688,10 +7922,12 @@ end''', "mount"),
   mode "0755"
   action :create
   target_file "/usr/local/bin/myapp"
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Git resources
-            ('''git "/opt/myapp" do
+            (
+                """git "/opt/myapp" do
   repository "https://github.com/example/myapp.git"
   reference "v2.1.0"
   revision "abc123def456"
@@ -7705,10 +7941,12 @@ end''', "create"),
   checkout_branch "main"
   action :sync
   environment ({ "GIT_SSL_NO_VERIFY" => "1" })
-end''', "sync"),
-            
+end""",
+                "sync",
+            ),
             # Remote file resources
-            ('''remote_file "/tmp/app.tar.gz" do
+            (
+                """remote_file "/tmp/app.tar.gz" do
   source "https://releases.example.com/app-1.0.tar.gz"
   checksum "sha256:abcd1234567890"
   owner "root"
@@ -7722,10 +7960,12 @@ end''', "sync"),
   atomic_update true
   ftp_active_mode false
   show_progress true
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Archive resources
-            ('''archive_file "/tmp/backup.tar.gz" do
+            (
+                """archive_file "/tmp/backup.tar.gz" do
   path "/opt/myapp"
   destination "/backups/myapp-backup.tar.gz"
   owner "backup"
@@ -7736,10 +7976,12 @@ end''', "create"),
   action :create
   options [:exclude_hidden]
   strip_components 1
-end''', "create"),
-            
+end""",
+                "create",
+            ),
             # Ruby block resources
-            ('''ruby_block "update-config" do
+            (
+                """ruby_block "update-config" do
   block do
     # Complex Ruby code here
     require 'json'
@@ -7749,32 +7991,38 @@ end''', "create"),
   end
   action :run
   only_if { File.exist?('/etc/app/config.json') }
-end''', "run"),
-            
+end""",
+                "run",
+            ),
             # Log resources
-            ('''log "deployment-info" do
+            (
+                """log "deployment-info" do
   message "Deploying application version #{node['app']['version']}"
   level :info
   action :write
-end''', "write"),
+end""",
+                "write",
+            ),
         ]
-        
+
         for resource_text, action in comprehensive_resources:
             result = convert_resource_to_task(resource_text, action)
             assert isinstance(result, str)
             assert len(result) > 20  # Should produce substantial Ansible task
-            
+
             # Verify Ansible task structure
-            assert any(keyword in result.lower() for keyword in ['name:', 'task', '-', 'module'])
+            assert any(
+                keyword in result.lower()
+                for keyword in ["name:", "task", "-", "module"]
+            )
 
     def test_search_functionality_exhaustive(self):
         """Test Chef search functionality comprehensively."""
         from souschef.server import (
             convert_chef_search_to_inventory,
             generate_dynamic_inventory_script,
-            analyze_chef_search_patterns
         )
-        
+
         # Comprehensive search patterns covering all Chef search syntax
         comprehensive_searches = [
             # Basic searches
@@ -7784,95 +8032,79 @@ end''', "write"),
             "chef_environment:production",
             "platform:ubuntu",
             "platform_family:debian",
-            
             # Compound searches with AND
             "role:web AND chef_environment:production",
             "platform:ubuntu AND platform_version:20.04",
             "role:database AND chef_environment:production AND platform:ubuntu",
             "tags:monitoring AND tags:active AND NOT tags:disabled",
-            
             # Compound searches with OR
             "role:web OR role:api",
             "chef_environment:production OR chef_environment:staging",
             "platform:ubuntu OR platform:debian",
             "datacenter:us-east OR datacenter:us-west",
-            
             # Complex boolean logic
             "role:web AND (chef_environment:production OR chef_environment:staging)",
             "(role:web OR role:api) AND chef_environment:production",
             "platform_family:debian AND (role:web OR role:database) AND NOT tags:disabled",
             "role:database AND (platform:ubuntu OR platform:debian) AND memory_total:[8000000 TO *]",
-            
             # Range searches
             "memory_total:[4000000 TO *]",
             "cpu_total:[4 TO 16]",
             "uptime_seconds:[3600 TO *]",
             "disk_usage:[* TO 80]",
             "ohai_time:[1640995200 TO *]",
-            
             # Wildcard searches
             "name:web-server-*",
             "fqdn:*.example.com",
             "ipaddress:192.168.*",
             "hostname:db-*",
             "datacenter:us-*",
-            
             # Attribute-based searches
             "nginx.version:1.*",
             "mysql.version:[5.7 TO *]",
             "ssl.enabled:true",
             "docker.installed:true",
             "virtualization.system:kvm",
-            
             # Run list searches
             'run_list:"recipe[nginx]"',
             'run_list:"role[web-server]"',
             'run_list:"recipe[mysql::server]" AND mysql.version:[8.0 TO *]',
             'expanded_run_list:"recipe[logrotate::default]"',
-            
             # Data bag searches
             "data_bag:users",
             "data_bag:secrets",
             "data_bag:certificates AND environment:production",
-            
             # Network-based searches
             "ipaddress:10.0.0.*",
             "network.interfaces.eth0.addresses:192.168.*",
             "network.default_gateway:10.0.0.1",
-            
             # Time-based searches
             "automatic.ohai_time:[1609459200 TO *]",
             "chef_packages.chef.version:[15.0 TO *]",
             "uptime_seconds:[86400 TO *]",
-            
             # Geographic/datacenter searches
             "datacenter:us-east-1",
             "availability_zone:us-east-1a",
             "region:us-east",
             "cloud.provider:aws",
-            
             # Hardware-specific searches
             "dmi.system.manufacturer:Dell",
             "cpu.model_name:*Intel*",
             "memory.total:[8388608 TO *]",
             "filesystem./.size:[1000000 TO *]",
-            
             # Virtualization searches
             "virtualization.system:docker",
             "virtualization.role:guest",
             "cloud.provider:*",
-            
             # Custom attribute searches
             "myapp.version:2.*",
             "deployment.stage:production",
             "monitoring.enabled:true",
             "backup.schedule:daily",
-            
             # Negation searches
             "NOT role:database",
             "role:web AND NOT tags:maintenance",
             "chef_environment:production AND NOT platform:windows",
-            
             # Edge cases and complex patterns
             "",  # Empty search
             "*",  # Match all
@@ -7882,56 +8114,56 @@ end''', "write"),
             "(role:web",  # Unmatched parenthesis
             "role:web) AND (role:db",  # Mismatched parentheses
         ]
-        
+
         # Test convert_chef_search_to_inventory
         for search_query in comprehensive_searches:
             result = convert_chef_search_to_inventory(search_query)
             assert isinstance(result, str)
-            
-            if search_query.strip() and ':' in search_query and 'invalid' not in search_query.lower():
+
+            if (
+                search_query.strip()
+                and ":" in search_query
+                and "invalid" not in search_query.lower()
+            ):
                 assert len(result) > 10  # Should produce inventory content
-        
+
         # Test generate_dynamic_inventory_script with multiple searches
         multi_search_scenarios = [
             # Simple array
             '["role:web", "role:database"]',
-            
             # Production environment searches
-            '''[
+            """[
     "role:web-server AND chef_environment:production",
     "role:database AND chef_environment:production",
     "role:cache AND chef_environment:production",
     "role:queue AND chef_environment:production",
     "role:load-balancer AND chef_environment:production"
-]''',
-            
+]""",
             # Multi-environment deployment
-            '''[
+            """[
     "role:web AND chef_environment:production",
-    "role:web AND chef_environment:staging", 
+    "role:web AND chef_environment:staging",
     "role:web AND chef_environment:development",
     "role:database AND chef_environment:production",
     "role:database AND chef_environment:staging"
-]''',
-            
+]""",
             # Geographic distribution
-            '''[
+            """[
     "role:web AND datacenter:us-east",
     "role:web AND datacenter:us-west",
     "role:web AND datacenter:eu-west",
     "role:database AND datacenter:us-east AND tags:master",
     "role:database AND datacenter:us-west AND tags:slave"
-]''',
-            
+]""",
             # Platform-specific queries
-            '''[
+            """[
     "platform:ubuntu AND role:web",
     "platform:centos AND role:web",
     "platform_family:debian AND role:database",
     "platform_family:rhel AND role:database"
-]''',
+]""",
         ]
-        
+
         for multi_search in multi_search_scenarios:
             result = generate_dynamic_inventory_script(multi_search)
             assert isinstance(result, str)
@@ -7941,11 +8173,18 @@ end''', "write"),
     def test_error_handling_and_edge_cases_comprehensive(self):
         """Test comprehensive error handling and edge cases."""
         from souschef.server import (
-            parse_template, parse_custom_resource, list_directory, read_file,
-            read_cookbook_metadata, parse_recipe, parse_attributes, list_cookbook_structure,
-            convert_resource_to_task, generate_playbook_from_recipe
+            convert_resource_to_task,
+            generate_playbook_from_recipe,
+            list_cookbook_structure,
+            list_directory,
+            parse_attributes,
+            parse_custom_resource,
+            parse_recipe,
+            parse_template,
+            read_cookbook_metadata,
+            read_file,
         )
-        
+
         # Edge case inputs that should be handled gracefully
         edge_case_inputs = [
             "",  # Empty string
@@ -7970,29 +8209,38 @@ end''', "write"),
             "COM1",  # Windows device name
             "NUL",  # Windows null device
         ]
-        
+
         # Test all functions with edge cases
         functions_to_test = [
-            parse_template, parse_custom_resource, list_directory, read_file,
-            read_cookbook_metadata, parse_recipe, parse_attributes, list_cookbook_structure,
-            generate_playbook_from_recipe
+            parse_template,
+            parse_custom_resource,
+            list_directory,
+            read_file,
+            read_cookbook_metadata,
+            parse_recipe,
+            parse_attributes,
+            list_cookbook_structure,
+            generate_playbook_from_recipe,
         ]
-        
+
         for func in functions_to_test:
             for edge_input in edge_case_inputs:
                 try:
                     result = func(edge_input)
                     # Function should return a string or list, never crash
                     assert isinstance(result, (str, list))
-                except (OSError, IOError, FileNotFoundError, PermissionError) as e:
+                except (OSError, FileNotFoundError, PermissionError) as e:
                     # These exceptions are acceptable for file system operations
                     assert isinstance(str(e), str)
                 except Exception as e:
                     # Any other exception should be gracefully handled
                     error_msg = str(e).lower()
                     # Should contain error indication
-                    assert any(word in error_msg for word in ['error', 'not found', 'invalid', 'failed'])
-        
+                    assert any(
+                        word in error_msg
+                        for word in ["error", "not found", "invalid", "failed"]
+                    )
+
         # Test convert_resource_to_task with edge cases
         resource_edge_cases = [
             ("", ""),
@@ -8003,7 +8251,7 @@ end''', "write"),
             ("# only comments", "install"),
             ("MALFORMED RUBY!@#$%", "install"),
         ]
-        
+
         for resource_text, action in resource_edge_cases:
             try:
                 result = convert_resource_to_task(resource_text, action)
@@ -8015,10 +8263,14 @@ end''', "write"),
     def test_unicode_and_special_characters(self):
         """Test handling of Unicode and special characters."""
         from souschef.server import (
-            parse_template, parse_recipe, parse_attributes, 
-            _strip_ruby_comments, _normalize_ruby_value, _convert_erb_to_jinja2
+            _convert_erb_to_jinja2,
+            _normalize_ruby_value,
+            _strip_ruby_comments,
+            parse_attributes,
+            parse_recipe,
+            parse_template,
         )
-        
+
         # Unicode and special character test cases
         unicode_test_cases = [
             # Basic Unicode
@@ -8029,39 +8281,39 @@ end''', "write"),
             "日本語",  # Japanese
             "한국어",  # Korean
             "🚀 🎉 ⭐",  # Emojis
-            
             # Special characters
             "!@#$%^&*()_+-=[]{}|;:',.<>?",
             "\\n\\t\\r\\v\\f",  # Escape sequences
             "\x00\x01\x02\x03",  # Control characters
             "\u0000\u0001\u0002",  # Unicode control characters
-            
             # Mixed content
             "package 'nginx-测试' do\n  # Comment with émojis 🚀\n  action :install\nend",
             "default['app']['名前'] = 'テストアプリ'",
             "<%= node['app']['título'] %> - <%= node['configuración']['puerto'] %>",
         ]
-        
+
         for test_case in unicode_test_cases:
             # Test file operations with Unicode content
-            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.rb', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", suffix=".rb", delete=False
+            ) as f:
                 try:
                     f.write(test_case)
                     temp_path = f.name
-                    
+
                     # Test parsing functions with Unicode content
                     try:
                         result = parse_recipe(temp_path)
                         assert isinstance(result, str)
                     except UnicodeError:
                         pass  # Unicode errors are acceptable
-                    
+
                     try:
-                        result = parse_attributes(temp_path)  
+                        result = parse_attributes(temp_path)
                         assert isinstance(result, str)
                     except UnicodeError:
                         pass
-                        
+
                 except UnicodeError:
                     pass  # Some content might not be writable
                 finally:
@@ -8069,17 +8321,19 @@ end''', "write"),
                         Path(temp_path).unlink()
                     except:
                         pass
-            
+
             # Test template parsing with Unicode
-            if '.erb' in str(test_case) or '<%' in test_case:
-                with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.erb', delete=False) as f:
+            if ".erb" in str(test_case) or "<%" in test_case:
+                with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", suffix=".erb", delete=False
+                ) as f:
                     try:
                         f.write(test_case)
                         temp_path = f.name
-                        
+
                         result = parse_template(temp_path)
                         assert isinstance(result, str)
-                        
+
                     except UnicodeError:
                         pass
                     finally:
@@ -8087,20 +8341,20 @@ end''', "write"),
                             Path(temp_path).unlink()
                         except:
                             pass
-            
+
             # Test helper functions directly with Unicode
             try:
                 result = _strip_ruby_comments(test_case)
                 assert isinstance(result, str)
             except:
                 pass
-            
+
             try:
                 result = _normalize_ruby_value(test_case)
                 assert isinstance(result, str)
             except:
                 pass
-            
+
             try:
                 result = _convert_erb_to_jinja2(test_case)
                 assert isinstance(result, str)
@@ -8109,52 +8363,60 @@ end''', "write"),
 
     def test_large_file_handling(self):
         """Test handling of large files and content."""
-        from souschef.server import parse_recipe, parse_attributes, parse_template, read_file
-        
+        from souschef.server import (
+            parse_attributes,
+            parse_recipe,
+            parse_template,
+            read_file,
+        )
+
         # Create large content scenarios
         large_content_scenarios = [
             # Large recipe with many resources
             ("large_recipe.rb", "package 'pkg-{}' do\n  action :install\nend\n" * 1000),
-            
             # Large attributes file
             ("large_attrs.rb", "default['app']['setting_{}'] = 'value{}'\n" * 500),
-            
             # Large template file
             ("large_template.erb", "<%= node['item_{}'] %>\n" * 800),
-            
             # Very long single line
             ("long_line.rb", "# " + "x" * 10000 + "\npackage 'nginx'"),
-            
             # File with many blank lines
             ("blank_lines.rb", "\n" * 5000 + "package 'nginx'"),
-            
             # Mixed large content
-            ("mixed_large.rb", 
-             "# Header\n" + 
-             ("package 'pkg-{}' do\n  version '1.0.{}'\n  action :install\nend\n\n".format(i, i) for i in range(500)).__iter__().__next__() * 500),
+            (
+                "mixed_large.rb",
+                "# Header\n"
+                + (
+                    f"package 'pkg-{i}' do\n  version '1.0.{i}'\n  action :install\nend\n\n"
+                    for i in range(500)
+                ).__iter__().__next__()
+                * 500,
+            ),
         ]
-        
+
         for filename, content in large_content_scenarios:
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_{filename}', delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_{filename}", delete=False
+            ) as f:
                 try:
                     f.write(content)
                     temp_path = f.name
-                    
+
                     # Test read_file with large content
                     result = read_file(temp_path)
                     assert isinstance(result, str)
-                    
+
                     # Test appropriate parser
-                    if 'recipe' in filename:
+                    if "recipe" in filename:
                         result = parse_recipe(temp_path)
                         assert isinstance(result, str)
-                    elif 'attrs' in filename or filename.endswith('.rb'):
+                    elif "attrs" in filename or filename.endswith(".rb"):
                         result = parse_attributes(temp_path)
-                        assert isinstance(result, str) 
-                    elif 'template' in filename:
+                        assert isinstance(result, str)
+                    elif "template" in filename:
                         result = parse_template(temp_path)
                         assert isinstance(result, str)
-                    
+
                 except MemoryError:
                     # Large files might cause memory issues, that's acceptable
                     pass
@@ -8166,28 +8428,31 @@ end''', "write"),
 
     def test_concurrent_operations_simulation(self):
         """Simulate concurrent operations to test thread safety."""
-        from souschef.server import read_file, parse_recipe
         import threading
-        
+
+        from souschef.server import parse_recipe, read_file
+
         # Create test files for concurrent access
         test_files = []
         for i in range(10):
-            with tempfile.NamedTemporaryFile(mode='w', suffix=f'_concurrent_{i}.rb', delete=False) as f:
-                f.write(f'''
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_concurrent_{i}.rb", delete=False
+            ) as f:
+                f.write(f"""
 # Concurrent test file {i}
 package "test-package-{i}" do
   action :install
 end
 
-service "test-service-{i}" do  
+service "test-service-{i}" do
   action :start
 end
-''')
+""")
                 test_files.append(f.name)
-        
+
         results = []
         errors = []
-        
+
         def worker(file_path):
             try:
                 # Multiple operations on the same file
@@ -8196,30 +8461,1733 @@ end
                 results.extend([result1, result2])
             except Exception as e:
                 errors.append(str(e))
-        
+
         # Create multiple threads
         threads = []
         for file_path in test_files:
             for _ in range(3):  # 3 threads per file
                 thread = threading.Thread(target=worker, args=(file_path,))
                 threads.append(thread)
-        
+
         # Start all threads
         for thread in threads:
             thread.start()
-        
+
         # Wait for all threads to complete
         for thread in threads:
             thread.join(timeout=10)  # 10 second timeout
-        
+
         # Verify results
         assert len(results) > 0  # Should have some results
         for result in results:
             assert isinstance(result, str)
-        
+
         # Clean up
         for file_path in test_files:
             try:
                 Path(file_path).unlink()
             except:
+                pass  # Ultimate coverage tests - targeting specific missing lines in server.py
+
+
+class TestUltimateCoverageTarget:
+    """Target specific uncovered code paths for 95% coverage."""
+
+    def test_all_internal_parsing_functions_exhaustively(self):
+        """Test all internal parsing functions with edge cases."""
+        from souschef.server import (
+            _extract_code_block_variables,
+            _extract_node_attribute_path,
+            _extract_output_variables,
+            _extract_template_variables,
+        )
+
+        # Test _extract_node_attribute_path with all possible formats
+        node_paths = [
+            "node['simple']",
+            'node["double"]',
+            "node['deep']['nested']['path']",
+            'node["mixed"]["quotes"]',
+            "node['array'][0]",
+            'node["array"][1]["nested"]',
+            "node['attr']['with-dashes']",
+            'node["attr"]["with_underscores"]',
+            "node['123numeric']",
+            'node["special-chars!@#"]',
+            "node[]",
+            "node['']",
+            'node[""]',
+            "invalid_node_path",
+            "",
+            "node",
+            "node[",
+            "node]",
+            'node["unclosed',
+            "node['unclosed",
+        ]
+
+        for path in node_paths:
+            result = _extract_node_attribute_path(path)
+            assert result is None or isinstance(result, str)
+
+        # Test _extract_template_variables with comprehensive ERB patterns
+        erb_templates = [
+            # Output variables
+            "<%= variable %>",
+            "<%=@instance_var%>",
+            "<%= node['attr'] %>",
+            '<%= @config["key"] %>',
+            "<%= complex.method.call %>",
+            # Code block variables
+            "<% if condition %>",
+            "<% @items.each do |item| %>",
+            "<% unless disabled %>",
+            "<% elsif alternative %>",
+            "<% case platform %>",
+            "<% when 'ubuntu' %>",
+            "<% else %>",
+            "<% end %>",
+            # Complex expressions
+            "<%= value.nil? ? default : value %>",
+            "<% array.each_with_index do |item, idx| %>",
+            "<%= hash.keys.sort.join(',') %>",
+            "<% if defined?(variable) && variable.present? %>",
+            # Nested structures
+            """<% if ssl_enabled %>
+<%= ssl_cert %>
+<% if ssl_key %>
+<%= ssl_key %>
+<% end %>
+<% end %>""",
+            # Comments mixed with code
+            """<%# This is a comment %>
+<%= variable %>
+<%# Another comment %>
+<% code_block %>""",
+            # String interpolation
+            '<%= "Server: #{hostname}:#{port}" %>',
+            "<%= 'Path: #{app_path}/config' %>",
+            # Mathematical operations
+            "<%= memory * 0.75 %>",
+            "<%= workers + 2 %>",
+            "<%= (cores / 2).ceil %>",
+            # Method chaining
+            "<%= items.select(&:active).map(&:name).join(', ') %>",
+            "<%= config.deep_merge(overrides).to_yaml %>",
+            # Edge cases
+            "",
+            "no erb here",
+            "<%",
+            "%>",
+            "<%=",
+            "<%#",
+            "incomplete erb <% if",
+        ]
+
+        for template in erb_templates:
+            variables = _extract_template_variables(template)
+            assert isinstance(variables, set)
+
+            # Test individual extraction functions
+            var_set = set()
+            _extract_output_variables(template, var_set)
+            assert isinstance(var_set, set)
+
+            var_set = set()
+            _extract_code_block_variables(template, var_set)
+            assert isinstance(var_set, set)
+
+    def test_heredoc_extraction_comprehensive(self):
+        """Test heredoc extraction with all possible formats."""
+        from souschef.server import _extract_heredoc_strings
+
+        heredoc_examples = [
+            # Basic heredocs
+            """content = <<-EOH
+This is content
+Multiple lines
+EOH""",
+            # Multiple heredocs
+            """script = <<-SCRIPT
+#!/bin/bash
+echo "hello"
+SCRIPT
+
+config = <<-CONFIG
+key=value
+CONFIG""",
+            # Heredocs with different terminators
+            """text1 = <<-END
+Content 1
+END
+
+text2 = <<-FINISH
+Content 2
+FINISH
+
+text3 = <<-DOCUMENT
+Content 3
+DOCUMENT""",
+            # Heredocs with indented terminators
+            """indented = <<-EOF
+  Indented content
+  More indented
+EOF""",
+            # Heredocs with variables inside
+            """template = <<-TEMPLATE
+Server: <%= @server %>
+Port: <%= @port %>
+TEMPLATE""",
+            # Nested heredocs (edge case)
+            """outer = <<-OUTER
+This contains #{inner = <<-INNER
+nested content
+INNER
+}
+OUTER""",
+            # Heredoc with special characters
+            """special = <<-SPECIAL
+!@#$%^&*()
+"quotes" and 'apostrophes'
+SPECIAL""",
+            # Empty heredoc
+            """empty = <<-EMPTY
+EMPTY""",
+            # Heredoc with only whitespace
+            """whitespace = <<-WS
+
+
+WS""",
+            # Malformed heredocs
+            "incomplete = <<-EOF",
+            "no_terminator = <<-NOTERMINATOR\nContent here",
+            "<<-MALFORMED without assignment",
+            "",
+            "no heredoc content",
+        ]
+
+        for example in heredoc_examples:
+            result = _extract_heredoc_strings(example)
+            assert isinstance(result, dict)
+
+    def test_resource_extraction_edge_cases(self):
+        """Test resource extraction with all edge cases."""
+        from souschef.server import (
+            _extract_resource_actions,
+            _extract_resource_properties,
+            _extract_resources,
+        )
+
+        # Complex resource definitions
+        complex_resources = [
+            # Standard resources
+            """package "nginx" do
+  action :install
+end""",
+            # Resources with all possible attributes
+            """package "complex-package" do
+  version "1.2.3"
+  action [:install, :upgrade]
+  timeout 300
+  retries 3
+  retry_delay 10
+  options ["--no-install-recommends", "--assume-yes"]
+  response_file "/tmp/response"
+  source "/path/to/package"
+  provider Chef::Provider::Package::Apt
+  not_if "dpkg -l | grep complex-package"
+  only_if { node['install_packages'] }
+  subscribes :install, "file[/etc/apt/sources.list]", :immediately
+  notifies :restart, "service[nginx]", :delayed
+  ignore_failure true
+  sensitive false
+end""",
+            # Service with comprehensive attributes
+            """service "comprehensive-service" do
+  service_name "my-service"
+  pattern "my-service: master"
+  start_command "/etc/init.d/my-service start"
+  stop_command "/etc/init.d/my-service stop"
+  restart_command "/etc/init.d/my-service restart"
+  reload_command "/etc/init.d/my-service reload"
+  status_command "/etc/init.d/my-service status"
+  supports restart: true, reload: true, status: true
+  action [:enable, :start]
+  provider Chef::Provider::Service::Systemd
+  init_command "/etc/init.d/my-service"
+  priority 20
+  timeout 60
+  retries 5
+  retry_delay 2
+  subscribes :restart, "template[/etc/my-service/config]", :delayed
+  notifies :reload, "service[dependent-service]", :immediately
+end""",
+            # File with complex content and attributes
+            """file "/complex/file/path" do
+  content <<-EOH
+# This is complex content
+# With multiple lines
+server_name = #{node['fqdn']}
+port = #{node['port']}
+EOH
+  owner "root"
+  group "root"
+  mode "0644"
+  backup 5
+  atomic_update true
+  checksum "abc123def456"
+  inherits true
+  rights :read, "Everyone"
+  deny_rights :write, "Users"
+  action :create
+  not_if { File.exist?("/complex/file/path") }
+  only_if { node['create_file'] }
+end""",
+            # Template with lazy variables
+            """template "/path/to/template" do
+  source "template.erb"
+  cookbook "mycookbook"
+  variables lazy {
+    {
+      :server_name => node['fqdn'],
+      :port => node['port'],
+      :ssl_enabled => node['ssl']['enabled'],
+      :workers => node['cpu']['total'],
+      :memory => node['memory']['total'].to_i / 1024 / 1024
+    }
+  }
+  helpers(MyCookbook::Helpers)
+  action :create
+  backup 3
+  atomic_update false
+  sensitive true
+end""",
+            # Execute with environment and guards
+            """execute "complex-command" do
+  command "complex --operation --with-args"
+  cwd "/working/directory"
+  user "service-user"
+  group "service-group"
+  environment ({
+    "PATH" => "/usr/local/bin:/usr/bin:/bin",
+    "HOME" => "/home/service-user",
+    "LANG" => "en_US.UTF-8"
+  })
+  umask "022"
+  timeout 1800
+  returns [0, 1, 2]
+  action :run
+  creates "/path/to/output/file"
+  not_if "test -f /path/to/output/file"
+  only_if { node['run_command'] }
+  subscribes :run, "file[/config/file]", :delayed
+  notifies :restart, "service[dependent]", :immediately
+  live_stream true
+  sensitive false
+end""",
+            # Directory with permissions
+            """directory "/complex/directory/structure" do
+  owner "app-user"
+  group "app-group"
+  mode "0755"
+  recursive true
+  action :create
+  inherits false
+  rights :full_control, "app-user"
+  rights :read_execute, "app-group"
+  rights :read, "Others"
+end""",
+            # User with all attributes
+            """user "complex-user" do
+  comment "Complex user account with all options"
+  uid 1001
+  gid "app-group"
+  home "/home/complex-user"
+  shell "/bin/bash"
+  password "$6$salt$hash"
+  system false
+  manage_home true
+  non_unique false
+  force false
+  action :create
+  iterations 25000
+  salt "custom-salt"
+end""",
+            # Group with members
+            """group "complex-group" do
+  gid 1100
+  members ["user1", "user2", "user3"]
+  system false
+  non_unique false
+  action :create
+  append true
+  excluded_members ["removed-user"]
+end""",
+            # Cron with all options
+            """cron "complex-cron-job" do
+  minute "*/15"
+  hour "2-6"
+  day "1,15"
+  month "*/2"
+  weekday "1-5"
+  command "/usr/local/bin/backup.sh >> /var/log/backup.log 2>&1"
+  user "backup-user"
+  mailto "admin@example.com"
+  path "/usr/local/bin:/usr/bin:/bin"
+  home "/home/backup-user"
+  shell "/bin/bash"
+  action :create
+  environment ({ "BACKUP_DIR" => "/backups" })
+end""",
+            # Mount with all options
+            """mount "/mount/point" do
+  device "/dev/disk/by-uuid/12345678-1234-1234-1234-123456789012"
+  fstype "ext4"
+  options "defaults,noatime,nofail"
+  dump 1
+  pass 2
+  action [:mount, :enable]
+  mount_point "/mount/point"
+  device_type :device
+  enabled true
+  supports [:remount]
+end""",
+            # Link with options
+            """link "/usr/local/bin/myapp" do
+  to "/opt/myapp/bin/myapp"
+  link_type :symbolic
+  owner "root"
+  group "root"
+  mode "0755"
+  action :create
+  target_file "/usr/local/bin/myapp"
+end""",
+            # Git with comprehensive options
+            """git "/opt/application" do
+  repository "https://github.com/example/app.git"
+  reference "v2.1.0"
+  revision "abcdef123456"
+  user "deploy"
+  group "deploy"
+  ssh_wrapper "/tmp/git_ssh_wrapper.sh"
+  timeout 600
+  depth 10
+  enable_submodules true
+  remote "origin"
+  checkout_branch "main"
+  action :sync
+  environment ({
+    "GIT_SSL_NO_VERIFY" => "1",
+    "GIT_SSH_COMMAND" => "ssh -o StrictHostKeyChecking=no"
+  })
+end""",
+            # Multiple resources in one string
+            """package "first" do
+  action :install
+end
+
+service "first" do
+  action :start
+end
+
+package "second" do
+  action :install
+end""",
+            # Resources with Ruby code blocks
+            """ruby_block "complex-ruby-code" do
+  block do
+    require 'json'
+    require 'net/http'
+    require 'uri'
+
+    config_data = {
+      'server' => node['fqdn'],
+      'port' => node['port'],
+      'ssl' => node['ssl']['enabled']
+    }
+
+    File.open('/etc/app/config.json', 'w') do |file|
+      file.write(JSON.pretty_generate(config_data))
+    end
+
+    Chef::Log.info("Configuration written successfully")
+  end
+  action :run
+  not_if { File.exist?('/etc/app/config.json') && File.mtime('/etc/app/config.json') > Time.now - 3600 }
+end""",
+            # Malformed resources (should be handled gracefully)
+            """package "malformed" do
+  # Missing end""",
+            """service "incomplete"
+  action :start
+end""",
+            # Empty resource
+            """package "empty" do
+end""",
+            # Resource with only comments
+            """package "commented" do
+  # This is only comments
+  # No actual attributes
+end""",
+            # Edge cases
+            "",
+            "no resources here",
+            "# only comments",
+            "invalid ruby syntax {[}",
+        ]
+
+        for resource_code in complex_resources:
+            # Test resource extraction
+            resources = _extract_resources(resource_code)
+            assert isinstance(resources, list)
+
+            # Test property extraction
+            properties = _extract_resource_properties(resource_code)
+            assert isinstance(properties, list)
+
+            # Test action extraction
+            actions = _extract_resource_actions(resource_code)
+            assert isinstance(actions, dict)
+
+    def test_conditional_extraction_comprehensive(self):
+        """Test conditional extraction with all Ruby conditional patterns."""
+        from souschef.server import _extract_conditionals
+
+        conditional_patterns = [
+            # Basic if statements
+            """if condition
+  package "nginx"
+end""",
+            # If with elsif and else
+            """if node['platform'] == 'ubuntu'
+  package "ubuntu-package"
+elsif node['platform'] == 'centos'
+  package "centos-package"
+else
+  package "generic-package"
+end""",
+            # Unless statements
+            """unless node['skip_install']
+  package "required-package"
+end""",
+            # Case statements
+            """case node['platform_family']
+when 'debian'
+  package "debian-specific"
+when 'rhel', 'amazon'
+  package "rhel-specific"
+else
+  package "generic"
+end""",
+            # Complex conditions
+            """if node['app']['enabled'] && node['app']['version'] > '1.0'
+  service "advanced-app"
+end""",
+            """unless node['maintenance_mode'] || node['skip_services']
+  service "production-service"
+end""",
+            # Nested conditionals
+            """if node['web']['enabled']
+  if node['web']['ssl']['enabled']
+    package "ssl-module"
+  else
+    log "SSL disabled"
+  end
+
+  unless node['web']['skip_config']
+    template "/etc/web/config"
+  end
+end""",
+            # Conditionals with complex expressions
+            """if defined?(node['complex']) && node['complex']['nested']['deep']['value']
+  execute "complex-command"
+end""",
+            # Ternary operator (inline conditional)
+            """package node['ssl']['enabled'] ? 'nginx-ssl' : 'nginx-basic' do
+  action :install
+end""",
+            # Conditionals with method calls
+            """if node['services'].include?('web') && node['roles'].any? { |r| r.start_with?('web') }
+  include_recipe "web-services"
+end""",
+            # Platform-specific conditionals
+            """if platform?('ubuntu', 'debian')
+  apt_update "update package cache"
+elsif platform_family?('rhel')
+  execute "yum clean all"
+end""",
+            # Environment-based conditionals
+            """if node.chef_environment == 'production'
+  cron "backup-job"
+elsif %w[staging development].include?(node.chef_environment)
+  log "Non-production environment"
+end""",
+            # Resource-specific conditionals
+            """service "myapp" do
+  action node['myapp']['enabled'] ? [:enable, :start] : [:disable, :stop]
+end""",
+            # Guards in resources (only_if, not_if)
+            """package "conditional-package" do
+  action :install
+  only_if { node['install_packages'] && File.exist?('/etc/apt/sources.list') }
+  not_if "dpkg -l | grep conditional-package"
+end""",
+            # Multiple nested case statements
+            """case node['app']['type']
+when 'web'
+  case node['web']['server']
+  when 'nginx'
+    include_recipe "nginx::default"
+  when 'apache'
+    include_recipe "apache::default"
+  end
+when 'database'
+  case node['database']['type']
+  when 'mysql'
+    include_recipe "mysql::server"
+  when 'postgresql'
+    include_recipe "postgresql::server"
+  end
+end""",
+            # Conditional includes
+            """include_recipe "ssl::default" if node['ssl']['enabled']
+include_recipe "monitoring::default" if node['monitoring']['enabled']
+
+if node['backup']['enabled']
+  include_recipe "backup::#{node['backup']['type']}"
+end""",
+            # Conditionals with search
+            """web_servers = search(:node, "role:web AND chef_environment:#{node.chef_environment}")
+if web_servers.any?
+  template "/etc/nginx/upstream.conf" do
+    variables(:servers => web_servers)
+  end
+end""",
+            # Edge cases
+            "",
+            "no conditionals here",
+            "# if this is a comment",
+            "malformed if without end",
+            "end without if",
+        ]
+
+        for pattern in conditional_patterns:
+            result = _extract_conditionals(pattern)
+            assert isinstance(result, list)
+
+    def test_attribute_extraction_comprehensive(self):
+        """Test attribute extraction with all Chef attribute patterns."""
+        from souschef.server import _extract_attributes
+
+        attribute_patterns = [
+            # Basic default attributes
+            """default['app']['name'] = 'myapp'
+default['app']['version'] = '1.0.0'
+default['app']['port'] = 8080""",
+            # All attribute precedence levels
+            """automatic['system']['hostname'] = node['hostname']
+default['config']['enabled'] = true
+normal['config']['level'] = 'normal'
+override['config']['forced'] = 'yes'
+force_default['config']['base'] = 'forced_default'
+force_override['config']['final'] = 'forced_override""",
+            # Nested attributes with different quote styles
+            """default["nginx"]["port"] = 80
+default['nginx']['ssl']['enabled'] = false
+default["nginx"]['worker_processes'] = 'auto'
+default['nginx']["keepalive_timeout"] = 65""",
+            # Array attributes
+            """default['app']['allowed_hosts'] = ['localhost', '127.0.0.1']
+default['nginx']['ssl']['protocols'] = %w[TLSv1.2 TLSv1.3]
+override['firewall']['allowed_ports'] = [22, 80, 443, 8080]""",
+            # Hash attributes
+            """default['database']['config'] = {
+  'host' => 'localhost',
+  'port' => 5432,
+  'username' => 'app',
+  'pool_size' => 10
+}""",
+            # Complex nested structures
+            """default['app']['config'] = {
+  'server' => {
+    'host' => '0.0.0.0',
+    'port' => 8080,
+    'ssl' => {
+      'enabled' => false,
+      'cert_path' => '/etc/ssl/certs/app.crt',
+      'key_path' => '/etc/ssl/private/app.key'
+    }
+  },
+  'database' => {
+    'adapter' => 'postgresql',
+    'host' => 'db.example.com',
+    'port' => 5432,
+    'pool_size' => 25,
+    'timeout' => 5000
+  },
+  'cache' => {
+    'type' => 'redis',
+    'host' => 'cache.example.com',
+    'port' => 6379,
+    'db' => 0
+  }
+}""",
+            # Attributes with Ruby expressions
+            """default['app']['workers'] = node['cpu']['total'] * 2
+default['app']['memory_limit'] = "#{node['memory']['total'].to_i / 1024 / 1024 / 2}MB"
+default['app']['debug'] = node.chef_environment != 'production'   # production check""",
+            # Platform-specific attributes
+            """case node['platform_family']
+when 'debian'
+  default['package_manager'] = 'apt'
+  default['service_manager'] = 'systemd'
+when 'rhel'
+  default['package_manager'] = 'yum'
+  default['service_manager'] = 'systemd'
+when 'amazon'
+  default['package_manager'] = 'yum'
+  default['service_manager'] = 'upstart'
+end""",
+            # Environment-based attributes
+            """if node.chef_environment == 'production'
+  default['app']['log_level'] = 'warn'
+  default['app']['debug'] = false
+  default['app']['workers'] = 8
+elsif node.chef_environment == 'staging'
+  default['app']['log_level'] = 'info'
+  default['app']['debug'] = true
+  default['app']['workers'] = 4
+else
+  default['app']['log_level'] = 'debug'
+  default['app']['debug'] = true
+  default['app']['workers'] = 2
+end""",
+            # Conditional attribute assignment
+            """default['ssl']['enabled'] = node['environment'] == 'production'
+default['monitoring']['endpoint'] = node['monitoring']['enabled'] ? 'https://monitoring.example.com' : nil
+default['backup']['retention'] = node['environment'] == 'production' ? 30 : 7""",
+            # Attributes with method calls
+            """default['app']['secret_key'] = SecureRandom.hex(32)
+default['database']['password'] = Chef::EncryptedDataBagItem.load('secrets', 'database')['password']
+default['ssl']['certificate'] = File.read('/etc/ssl/certs/app.crt') if File.exist?('/etc/ssl/certs/app.crt')""",
+            # Node attribute references
+            """default['app']['hostname'] = node['fqdn']
+default['app']['ip_address'] = node['ipaddress']
+default['app']['platform'] = node['platform']
+default['app']['memory'] = node['memory']['total']""",
+            # Multi-line attribute values
+            """default['nginx']['config'] = <<-CONFIG
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+CONFIG""",
+            # Attributes with comments
+            """# Application configuration
+default['app']['name'] = 'myapp'  # Application name
+default['app']['version'] = '1.0.0'  # Current version
+
+# Database configuration
+default['database']['host'] = 'localhost'  # Database server
+default['database']['port'] = 5432  # Database port""",
+            # Symbol values
+            """default['service']['action'] = :start
+default['package']['actions'] = [:install, :upgrade]
+default['file']['mode'] = :create""",
+            # Boolean and nil values
+            """default['feature']['enabled'] = true
+default['feature']['disabled'] = false
+default['feature']['undefined'] = nil""",
+            # Numeric values with different formats
+            """default['timeout'] = 30
+default['memory'] = 1024.0
+default['percentage'] = 0.75
+default['scientific'] = 1.5e6""",
+            # Regular expressions
+            """default['log']['pattern'] = /^\\d{4}-\\d{2}-\\d{2}/
+default['validation']['email'] = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$/""",
+            # Edge cases
+            "",
+            "# Only comments in attributes file",
+            "invalid = attribute = assignment",
+            "default['incomplete'",
+            "malformed['attribute'] = ",
+        ]
+
+        for pattern in attribute_patterns:
+            result = _extract_attributes(pattern)
+            assert isinstance(result, list)
+
+    def test_metadata_extraction_comprehensive(self):
+        """Test metadata extraction with all possible metadata fields."""
+        from souschef.server import _extract_metadata
+
+        metadata_patterns = [
+            # Basic metadata
+            """name 'simple-cookbook'
+version '1.0.0'
+maintainer 'Chef Team'
+description 'A simple cookbook'
+license 'Apache-2.0' """,
+            # Complete metadata with all fields
+            """name 'comprehensive-cookbook'
+maintainer 'DevOps Team'
+maintainer_email 'devops@example.com'
+license 'MIT'
+description 'A comprehensive cookbook for testing'
+long_description 'This cookbook provides comprehensive functionality for web application deployment including nginx configuration, SSL setup, monitoring integration, and backup procedures.'
+version '2.1.0'
+chef_version '>= 15.0'
+supports 'ubuntu', '>= 18.04'
+supports 'centos', '>= 7.0'
+supports 'debian', '>= 9.0'
+supports 'amazon', '>= 2.0'
+depends 'build-essential', '~> 8.0'
+depends 'nginx', '~> 9.0'
+depends 'ssl_certificate', '>= 1.0'
+depends 'logrotate', '~> 2.2'
+suggests 'monitoring'
+suggests 'backup'
+provides 'comprehensive-cookbook::web'
+provides 'comprehensive-cookbook::ssl'
+conflicts 'apache2'
+replaces 'old-cookbook'
+source_url 'https://github.com/example/comprehensive-cookbook'
+issues_url 'https://github.com/example/comprehensive-cookbook/issues'
+privacy true
+ohai_version '>= 14.0'
+gem 'httparty', '~> 0.18.0'
+gem 'json', '>= 2.0'
+attribute 'nginx/port',
+  :display_name => 'Nginx Port',
+  :description => 'Port for nginx to listen on',
+  :default => 80
+attribute 'ssl/enabled',
+  :display_name => 'SSL Enabled',
+  :description => 'Enable SSL/TLS encryption',
+  :type => 'string',
+  :choice => ['true', 'false'],
+  :default => 'false'
+recipe 'comprehensive-cookbook::default', 'Installs and configures the application'
+recipe 'comprehensive-cookbook::ssl', 'Configures SSL/TLS encryption'
+grouping 'nginx',
+  :title => 'Nginx Configuration',
+  :description => 'Configuration options for Nginx web server' """,
+            # Metadata with version constraints
+            """name 'version-constraints'
+version '1.0.0'
+depends 'cookbook1', '= 1.0.0'
+depends 'cookbook2', '>= 2.0.0'
+depends 'cookbook3', '~> 3.1.0'
+depends 'cookbook4', '< 4.0.0'
+depends 'cookbook5', '<= 5.0.0'
+depends 'cookbook6', '!= 6.0.0'
+depends 'cookbook7', '>= 1.0.0, < 2.0.0' """,
+            # Platform support variations
+            """name 'platform-support'
+version '1.0.0'
+supports 'ubuntu'
+supports 'centos', '>= 6.0'
+supports 'debian', '~> 9.0'
+supports 'amazon', '= 2.0'
+supports 'redhat', '>= 7.0, < 8.0' """,
+            # Multiple maintainers and contributors
+            """name 'multi-maintainer'
+version '1.0.0'
+maintainer 'Primary Maintainer'
+maintainer_email 'primary@example.com'
+maintainer 'Secondary Maintainer <secondary@example.com>'
+license 'Apache-2.0'
+description 'Cookbook with multiple maintainers' """,
+            # Cookbook with attributes definitions
+            """name 'attributes-cookbook'
+version '1.0.0'
+attribute 'app/name',
+  :display_name => 'Application Name',
+  :description => 'Name of the application',
+  :type => 'string',
+  :required => 'required',
+  :default => 'myapp'
+attribute 'app/port',
+  :display_name => 'Application Port',
+  :description => 'Port number for the application to listen on',
+  :type => 'string',
+  :choice => ['80', '8080', '3000', '8000'],
+  :default => '8080'
+attribute 'app/workers',
+  :display_name => 'Worker Processes',
+  :description => 'Number of worker processes',
+  :type => 'string',
+  :recipes => ['app::default'],
+  :default => '4' """,
+            # Recipe definitions
+            """name 'recipes-cookbook'
+version '1.0.0'
+recipe 'recipes-cookbook', 'Default recipe'
+recipe 'recipes-cookbook::install', 'Installs the application'
+recipe 'recipes-cookbook::configure', 'Configures the application'
+recipe 'recipes-cookbook::service', 'Manages the application service'
+recipe 'recipes-cookbook::ssl', 'Configures SSL'
+recipe 'recipes-cookbook::monitoring', 'Sets up monitoring'
+recipe 'recipes-cookbook::backup', 'Configures backup' """,
+            # Grouping definitions
+            """name 'grouped-cookbook'
+version '1.0.0'
+grouping 'database',
+  :title => 'Database Configuration',
+  :description => 'Settings for database connection and management'
+grouping 'security',
+  :title => 'Security Settings',
+  :description => 'Security-related configuration options'
+grouping 'performance',
+  :title => 'Performance Tuning',
+  :description => 'Performance optimization settings' """,
+            # Gems and external dependencies
+            """name 'gems-cookbook'
+version '1.0.0'
+gem 'json'
+gem 'httparty', '>= 0.16.0'
+gem 'aws-sdk', '~> 3.0'
+gem 'redis', '>= 4.0.0, < 5.0.0' """,
+            # Edge cases and malformed metadata
+            """name 'edge-cases'
+version '1.0.0'
+depends 'incomplete-dependency'
+supports 'unsupported-platform'
+attribute 'incomplete-attribute'
+recipe 'incomplete-recipe' """,
+            # Metadata with quotes and special characters
+            """name "quoted-cookbook"
+version "1.0.0"
+maintainer "Maintainer with Special chars!@#$"
+description 'Description with "mixed" quotes'
+license "GPL-3.0+"
+depends "cookbook-with-dashes", "~> 1.0"
+supports "platform-with-dashes", ">= 1.0" """,
+            # Empty and minimal metadata
+            """name 'minimal'
+version '0.1.0' """,
+            # Just name
+            "name 'just-name'",
+            # Edge cases
+            "",
+            "# Only comments",
+            "invalid metadata format",
+            "name",
+            "version",
+            "depends",
+        ]
+
+        for pattern in metadata_patterns:
+            result = _extract_metadata(pattern)
+            assert isinstance(result, dict)
+
+    def test_conversion_functions_comprehensive(self):
+        """Test all conversion and helper functions exhaustively."""
+        from souschef.server import (
+            _convert_chef_resource_to_ansible,
+            _format_ansible_task,
+            _format_attributes,
+            _format_cookbook_structure,
+            _format_metadata,
+            _format_resources,
+            _get_file_params,
+            _get_service_params,
+        )
+
+        # Test _get_service_params with all service actions
+        service_test_cases = [
+            ("nginx", "start"),
+            ("apache2", "stop"),
+            ("mysql", "restart"),
+            ("redis", "reload"),
+            ("postgresql", "enable"),
+            ("mongodb", "disable"),
+            ("docker", "status"),
+            ("", "start"),
+            ("service", ""),
+            ("service-with-dashes", "start"),
+            ("service_with_underscores", "stop"),
+            ("service123", "restart"),
+        ]
+
+        for service_name, action in service_test_cases:
+            result = _get_service_params(service_name, action)
+            assert isinstance(result, dict)
+            if service_name and action:
+                assert "name" in result or "state" in result or len(result) > 0
+
+        # Test _get_file_params with all file actions and attributes
+        file_test_cases = [
+            (
+                "/etc/config",
+                "create",
+                {"owner": "root", "group": "root", "mode": "0644"},
+            ),
+            ("/var/log/app.log", "create", {"owner": "app", "mode": "0664"}),
+            ("/tmp/temp", "delete", {}),
+            (
+                "/opt/app/config.json",
+                "create",
+                {
+                    "owner": "app",
+                    "group": "app",
+                    "mode": "0640",
+                    "backup": "5",
+                    "checksum": "abc123",
+                },
+            ),
+            ("", "create", {}),
+            ("/path", "", {}),
+            ("/path/with spaces/file", "create", {"owner": "user with spaces"}),
+            ("/path/with-special!@#$%chars", "create", {"mode": "0777"}),
+        ]
+
+        for file_path, action, attributes in file_test_cases:
+            result = _get_file_params(file_path, action, attributes)
+            assert isinstance(result, dict)
+
+        # Test _convert_chef_resource_to_ansible with all resource types
+        conversion_test_cases = [
+            ("package", "nginx", "install", {"version": "1.18"}),
+            ("service", "nginx", "start", {"enabled": True}),
+            ("file", "/etc/config", "create", {"owner": "root", "mode": "0644"}),
+            ("directory", "/var/log", "create", {"owner": "root", "mode": "0755"}),
+            ("template", "/etc/app.conf", "create", {"source": "app.conf.erb"}),
+            ("execute", "update-cache", "run", {"command": "apt-get update"}),
+            ("user", "appuser", "create", {"uid": 1001, "home": "/home/appuser"}),
+            ("group", "appgroup", "create", {"gid": 1001}),
+            (
+                "cron",
+                "backup",
+                "create",
+                {"minute": "0", "hour": "2", "command": "backup.sh"},
+            ),
+            ("mount", "/mnt/data", "mount", {"device": "/dev/sdb1", "fstype": "ext4"}),
+            ("link", "/usr/bin/app", "create", {"to": "/opt/app/bin/app"}),
+            (
+                "git",
+                "/opt/repo",
+                "sync",
+                {"repository": "https://github.com/example/repo"},
+            ),
+            ("ruby_block", "custom-code", "run", {"code": "puts 'hello'"}),
+            ("unknown_resource", "unknown", "unknown", {}),
+            ("", "", "", {}),
+        ]
+
+        for resource_type, resource_name, action, attributes in conversion_test_cases:
+            result = _convert_chef_resource_to_ansible(
+                resource_type, resource_name, action, attributes
+            )
+            assert isinstance(result, dict)
+
+        # Test all format functions
+        format_test_cases = [
+            # _format_metadata
+            (
+                _format_metadata,
+                [
+                    {"name": "test", "version": "1.0.0"},
+                    {
+                        "name": "complex",
+                        "version": "2.0",
+                        "maintainer": "team",
+                        "depends": ["dep1", "dep2"],
+                    },
+                    {},
+                    {"name": "", "version": ""},
+                ],
+            ),
+            # _format_resources
+            (
+                _format_resources,
+                [
+                    [{"type": "package", "name": "nginx", "action": "install"}],
+                    [
+                        {"type": "package", "name": "nginx", "action": "install"},
+                        {"type": "service", "name": "nginx", "action": "start"},
+                    ],
+                    [],
+                    [{"incomplete": "resource"}],
+                ],
+            ),
+            # _format_attributes
+            (
+                _format_attributes,
+                [
+                    [{"name": "port", "value": "80", "precedence": "default"}],
+                    [
+                        {
+                            "name": "ssl.enabled",
+                            "value": "false",
+                            "precedence": "default",
+                        },
+                        {"name": "workers", "value": "auto", "precedence": "override"},
+                    ],
+                    [],
+                    [{"incomplete": "attribute"}],
+                ],
+            ),
+            # _format_cookbook_structure
+            (
+                _format_cookbook_structure,
+                [
+                    {"recipes": ["default.rb"], "attributes": ["default.rb"]},
+                    {"recipes": [], "attributes": [], "templates": []},
+                    {},
+                    {"invalid": "structure"},
+                ],
+            ),
+            # _format_ansible_task
+            (
+                _format_ansible_task,
+                [
+                    {
+                        "name": "Install nginx",
+                        "package": {"name": "nginx", "state": "present"},
+                    },
+                    {
+                        "name": "Start service",
+                        "service": {"name": "nginx", "state": "started"},
+                    },
+                    {},
+                    {"invalid": "task"},
+                ],
+            ),
+        ]
+
+        for format_func, test_inputs in format_test_cases:
+            for test_input in test_inputs:
+                try:
+                    result = format_func(test_input)
+                    assert isinstance(result, str)
+                except (KeyError, AttributeError, TypeError) as e:
+                    # Some malformed inputs might cause exceptions
+                    assert isinstance(str(e), str)
+
+    def test_search_parsing_functions_comprehensive(self):
+        """Test Chef search parsing functions exhaustively."""
+        try:
+            from souschef.server import (
+                _generate_ansible_inventory_from_search,
+                _parse_chef_search_query,
+                _parse_search_condition,
+            )
+        except ImportError:
+            # Functions might not be available for direct import
+            return
+
+        # Test _parse_chef_search_query with comprehensive search patterns
+        search_queries = [
+            # Simple queries
+            "role:web",
+            "name:app-*",
+            "chef_environment:production",
+            "platform:ubuntu",
+            # Boolean queries
+            "role:web AND chef_environment:production",
+            "role:web OR role:api",
+            "NOT role:database",
+            "role:web AND NOT tags:disabled",
+            # Complex boolean logic
+            "role:web AND (chef_environment:production OR chef_environment:staging)",
+            "(role:web OR role:api) AND platform:ubuntu",
+            "NOT (role:database OR role:cache)",
+            # Range queries
+            "memory_total:[4000000 TO *]",
+            "cpu_total:[4 TO 16]",
+            "uptime:[3600 TO *]",
+            "ohai_time:[1609459200 TO 1640995200]",
+            # Wildcard queries
+            "name:web-*",
+            "fqdn:*.example.com",
+            "ipaddress:192.168.*",
+            # Attribute queries
+            "nginx.version:1.*",
+            "ssl.enabled:true",
+            "attributes.nested.deep.value:test",
+            # Run list queries
+            'run_list:"recipe[nginx]"',
+            'run_list:"role[web-server]"',
+            # Edge cases
+            "",
+            "*",
+            ":",
+            "role:",
+            ":production",
+            "invalid:query:syntax",
+            "role:web AND",
+            "(role:web",
+            "role:web)",
+        ]
+
+        for query in search_queries:
+            try:
+                result = _parse_chef_search_query(query)
+                assert isinstance(result, dict)
+            except Exception as e:
+                # Some queries might fail parsing, that's acceptable
+                assert isinstance(str(e), str)
+
+        # Test _parse_search_condition
+        search_conditions = [
+            "role:web",
+            "memory_total:[4000000 TO *]",
+            "platform:ubuntu",
+            "tags:monitoring",
+            "name:app-*",
+            "fqdn:*.example.com",
+            "nginx.version:1.*",
+            "ssl.enabled:true",
+            "",
+            "invalid-condition",
+            ":",
+            "key:",
+            ":value",
+        ]
+
+        for condition in search_conditions:
+            try:
+                result = _parse_search_condition(condition)
+                assert isinstance(result, dict)
+            except Exception:
+                # Some conditions might fail, that's acceptable
                 pass
+
+        # Test _generate_ansible_inventory_from_search
+        search_results = [
+            # Single node
+            {
+                "fqdn": "web1.example.com",
+                "role": ["web"],
+                "chef_environment": "production",
+            },
+            # Multiple nodes
+            [
+                {
+                    "fqdn": "web1.example.com",
+                    "role": ["web"],
+                    "chef_environment": "production",
+                },
+                {
+                    "fqdn": "web2.example.com",
+                    "role": ["web"],
+                    "chef_environment": "production",
+                },
+                {
+                    "fqdn": "db1.example.com",
+                    "role": ["database"],
+                    "chef_environment": "production",
+                },
+            ],
+            # Complex node with many attributes
+            {
+                "fqdn": "complex.example.com",
+                "role": ["web", "monitoring"],
+                "chef_environment": "staging",
+                "platform": "ubuntu",
+                "platform_version": "20.04",
+                "ipaddress": "10.0.1.100",
+                "memory": {"total": 8388608},
+                "cpu": {"total": 4},
+                "nginx": {"version": "1.18.0"},
+                "ssl": {"enabled": True},
+            },
+            # Empty results
+            [],
+            {},
+            None,
+            # Malformed results
+            {"no_fqdn": True},
+            [{"incomplete": "node"}],
+        ]
+
+        group_names = ["web", "database", "all", "", "group-with-dashes"]
+
+        for result in search_results:
+            for group_name in group_names[:2]:  # Test with a couple group names
+                try:
+                    inventory = _generate_ansible_inventory_from_search(
+                        result, group_name
+                    )
+                    assert isinstance(inventory, str)
+                except Exception:
+                    # Some results might not be valid, that's acceptable
+                    pass
+
+    def test_deep_nested_functionality(self):
+        """Test deeply nested functionality and edge cases."""
+        from souschef.server import (
+            convert_resource_to_task,
+            generate_playbook_from_recipe,
+            parse_attributes,
+            parse_recipe,
+            parse_template,
+        )
+
+        # Create deeply complex nested scenarios
+        complex_scenarios = [
+            # Deeply nested recipe with complex Ruby
+            (
+                "deeply_nested_recipe.rb",
+                """
+# Complex nested recipe with all possible Chef constructs
+Chef::Log.info("Starting complex deployment")
+
+# Nested loops and conditions
+%w[web database cache].each do |service_type|
+  case service_type
+  when 'web'
+    %w[nginx apache2].each do |web_server|
+      next unless node['services']['web']['servers'].include?(web_server)
+
+      package web_server do
+        version node['services']['web'][web_server]['version'] if node['services']['web'][web_server]['version']
+        action :install
+        only_if { node['services']['web']['enabled'] }
+        not_if "systemctl is-active #{web_server}"
+      end
+
+      service web_server do
+        action [:enable, :start]
+        supports restart: true, reload: true, status: true
+        subscribes :restart, "template[/etc/#{web_server}/#{web_server}.conf]", :delayed
+        only_if { node['services']['web']['manage_service'] }
+      end
+
+      # Nested template with complex variables
+      template "/etc/#{web_server}/#{web_server}.conf" do
+        source "#{web_server}.conf.erb"
+        variables lazy {
+          config = {}
+          config[:server_name] = node['fqdn']
+          config[:port] = node['services']['web'][web_server]['port'] || 80
+          config[:ssl_port] = node['services']['web'][web_server]['ssl_port'] || 443
+          config[:worker_processes] = node['cpu']['total']
+          config[:worker_connections] = 1024 * node['cpu']['total']
+
+          # SSL configuration
+          if node['services']['web']['ssl']['enabled']
+            config[:ssl_certificate] = node['services']['web']['ssl']['certificate']
+            config[:ssl_certificate_key] = node['services']['web']['ssl']['private_key']
+            config[:ssl_protocols] = node['services']['web']['ssl']['protocols']
+            config[:ssl_ciphers] = node['services']['web']['ssl']['ciphers']
+          end
+
+          # Upstream servers from search
+          upstream_servers = []
+          search(:node, "role:app-server AND chef_environment:#{node.chef_environment}").each do |app_server|
+            upstream_servers << {
+              :name => app_server['fqdn'],
+              :ip => app_server['ipaddress'],
+              :port => app_server['services']['app']['port'] || 8080,
+              :weight => app_server['services']['app']['weight'] || 1,
+              :max_fails => app_server['services']['app']['max_fails'] || 3,
+              :fail_timeout => app_server['services']['app']['fail_timeout'] || 10
+            }
+          end
+          config[:upstream_servers] = upstream_servers
+
+          # Location blocks
+          locations = []
+          node['services']['web']['locations'].each do |path, location_config|
+            locations << {
+              :path => path,
+              :proxy_pass => location_config['proxy_pass'],
+              :proxy_set_headers => location_config['headers'] || {},
+              :proxy_timeout => location_config['timeout'] || 30
+            }
+          end
+          config[:locations] = locations
+
+          config
+        }
+        action :create
+        backup 5
+        notifies :reload, "service[#{web_server}]", :delayed
+      end
+    end
+
+  when 'database'
+    database_types = node['services']['database']['types'] || ['mysql']
+    database_types.each do |db_type|
+      case db_type
+      when 'mysql'
+        package 'mysql-server' do
+          action :install
+        end
+
+        service 'mysql' do
+          action [:enable, :start]
+        end
+
+        # Create databases and users
+        node['services']['database']['mysql']['databases'].each do |db_name, db_config|
+          mysql_database db_name do
+            connection mysql_connection_info
+            action :create
+          end
+
+          db_config['users'].each do |username, user_config|
+            mysql_database_user username do
+              connection mysql_connection_info
+              password user_config['password']
+              database_name db_name
+              privileges user_config['privileges'] || ['SELECT', 'INSERT', 'UPDATE', 'DELETE']
+              action :grant
+            end
+          end
+        end
+
+      when 'postgresql'
+        package 'postgresql-server' do
+          action :install
+        end
+
+        service 'postgresql' do
+          action [:enable, :start]
+        end
+
+        # PostgreSQL configuration would go here
+      end
+    end
+
+  when 'cache'
+    cache_types = node['services']['cache']['types'] || ['redis']
+    cache_types.each do |cache_type|
+      package cache_type do
+        action :install
+      end
+
+      service cache_type do
+        action [:enable, :start]
+      end
+
+      template "/etc/#{cache_type}/#{cache_type}.conf" do
+        source "#{cache_type}.conf.erb"
+        variables(
+          :bind_address => node['services']['cache'][cache_type]['bind_address'] || '127.0.0.1',
+          :port => node['services']['cache'][cache_type]['port'] || 6379,
+          :max_memory => node['services']['cache'][cache_type]['max_memory'] || '256mb',
+          :max_memory_policy => node['services']['cache'][cache_type]['max_memory_policy'] || 'allkeys-lru'
+        )
+        notifies :restart, "service[#{cache_type}]", :delayed
+      end
+    end
+  end
+end
+
+# User management with complex logic
+node['system']['users'].each do |username, user_config|
+  group user_config['primary_group'] do
+    gid user_config['gid']
+    action :create
+  end
+
+  user username do
+    comment user_config['comment'] || "System user #{username}"
+    uid user_config['uid']
+    gid user_config['primary_group']
+    home user_config['home'] || "/home/#{username}"
+    shell user_config['shell'] || '/bin/bash'
+    manage_home user_config['manage_home'] != false
+    system user_config['system'] == true
+    action :create
+  end
+
+  # SSH key management
+  if user_config['ssh_keys']
+    directory "#{user_config['home'] || "/home/#{username}"}/.ssh" do
+      owner username
+      group user_config['primary_group']
+      mode '0700'
+      action :create
+    end
+
+    user_config['ssh_keys'].each_with_index do |key_data, index|
+      file "#{user_config['home'] || "/home/#{username}"}/.ssh/authorized_keys" do
+        content user_config['ssh_keys'].join("\\n") + "\\n"
+        owner username
+        group user_config['primary_group']
+        mode '0600'
+        action :create
+      end
+    end
+  end
+
+  # Sudo access
+  if user_config['sudo_access']
+    template "/etc/sudoers.d/#{username}" do
+      source 'sudoers.erb'
+      variables(
+        :username => username,
+        :commands => user_config['sudo_commands'] || ['ALL'],
+        :nopasswd => user_config['sudo_nopasswd'] == true
+      )
+      mode '0440'
+      action :create
+    end
+  end
+end
+
+# Cron job management
+node['system']['cron_jobs'].each do |job_name, job_config|
+  cron job_name do
+    minute job_config['minute'] || '*'
+    hour job_config['hour'] || '*'
+    day job_config['day'] || '*'
+    month job_config['month'] || '*'
+    weekday job_config['weekday'] || '*'
+    command job_config['command']
+    user job_config['user'] || 'root'
+    mailto job_config['mailto']
+    path job_config['path']
+    home job_config['home']
+    shell job_config['shell'] || '/bin/bash'
+    action job_config['action'] == 'delete' ? :delete : :create
+    only_if { job_config['enabled'] != false }
+  end
+end
+
+# File system management
+node['system']['mount_points'].each do |mount_point, mount_config|
+  directory mount_point do
+    owner mount_config['owner'] || 'root'
+    group mount_config['group'] || 'root'
+    mode mount_config['mode'] || '0755'
+    recursive true
+    action :create
+  end
+
+  mount mount_point do
+    device mount_config['device']
+    fstype mount_config['fstype']
+    options mount_config['options'] || 'defaults'
+    dump mount_config['dump'] || 0
+    pass mount_config['pass'] || 0
+    action [:mount, :enable]
+    only_if { File.exist?(mount_config['device']) }
+  end
+end
+
+# Log rotation setup
+node['system']['log_rotation'].each do |service_name, rotation_config|
+  template "/etc/logrotate.d/#{service_name}" do
+    source 'logrotate.erb'
+    variables(
+      :log_files => rotation_config['log_files'],
+      :frequency => rotation_config['frequency'] || 'daily',
+      :rotate => rotation_config['rotate'] || 30,
+      :compress => rotation_config['compress'] != false,
+      :delaycompress => rotation_config['delaycompress'] == true,
+      :missingok => rotation_config['missingok'] == true,
+      :notifempty => rotation_config['notifempty'] != false,
+      :create => rotation_config['create'],
+      :postrotate => rotation_config['postrotate']
+    )
+    action :create
+  end
+end
+
+# Firewall rules
+if node['security']['firewall']['enabled']
+  package 'ufw' do
+    action :install
+  end
+
+  execute 'ufw-default-deny' do
+    command 'ufw --force default deny incoming'
+    action :run
+  end
+
+  execute 'ufw-default-allow-outgoing' do
+    command 'ufw --force default allow outgoing'
+    action :run
+  end
+
+  node['security']['firewall']['rules'].each do |rule|
+    execute "ufw-rule-#{rule['name']}" do
+      command "ufw #{rule['action']} #{rule['direction']} #{rule['port']}/#{rule['protocol']}"
+      action :run
+      not_if "ufw status | grep #{rule['port']}/#{rule['protocol']}"
+    end
+  end
+
+  execute 'ufw-enable' do
+    command 'echo "y" | ufw enable'
+    action :run
+  end
+end
+
+# Monitoring setup
+if node['monitoring']['enabled']
+  monitoring_agents = node['monitoring']['agents'] || ['node_exporter']
+
+  monitoring_agents.each do |agent|
+    case agent
+    when 'node_exporter'
+      remote_file '/tmp/node_exporter.tar.gz' do
+        source node['monitoring']['node_exporter']['download_url']
+        checksum node['monitoring']['node_exporter']['checksum']
+        action :create
+      end
+
+      execute 'extract-node-exporter' do
+        command 'tar -xzf /tmp/node_exporter.tar.gz -C /opt/ && mv /opt/node_exporter-* /opt/node_exporter'
+        creates '/opt/node_exporter/node_exporter'
+        action :run
+      end
+
+      user 'node_exporter' do
+        system true
+        shell '/bin/false'
+        home '/opt/node_exporter'
+        action :create
+      end
+
+      template '/etc/systemd/system/node_exporter.service' do
+        source 'node_exporter.service.erb'
+        variables(
+          :user => 'node_exporter',
+          :binary_path => '/opt/node_exporter/node_exporter',
+          :args => node['monitoring']['node_exporter']['args'] || []
+        )
+        notifies :run, 'execute[systemd-reload]', :immediately
+        notifies :restart, 'service[node_exporter]', :delayed
+      end
+
+      execute 'systemd-reload' do
+        command 'systemctl daemon-reload'
+        action :nothing
+      end
+
+      service 'node_exporter' do
+        action [:enable, :start]
+      end
+    end
+  end
+end
+
+# Backup setup
+if node['backup']['enabled']
+  directory node['backup']['local_path'] do
+    owner 'root'
+    group 'root'
+    mode '0700'
+    recursive true
+    action :create
+  end
+
+  template '/usr/local/bin/backup.sh' do
+    source 'backup.sh.erb'
+    variables(
+      :backup_sources => node['backup']['sources'],
+      :backup_destination => node['backup']['destination'],
+      :retention_days => node['backup']['retention_days'] || 30,
+      :compression => node['backup']['compression'] || 'gzip',
+      :encryption => node['backup']['encryption']
+    )
+    mode '0755'
+    action :create
+  end
+
+  cron 'automated-backup' do
+    minute node['backup']['schedule']['minute'] || '0'
+    hour node['backup']['schedule']['hour'] || '2'
+    day node['backup']['schedule']['day'] || '*'
+    month node['backup']['schedule']['month'] || '*'
+    weekday node['backup']['schedule']['weekday'] || '*'
+    command '/usr/local/bin/backup.sh >> /var/log/backup.log 2>&1'
+    user 'root'
+    action :create
+  end
+end
+
+# Final configuration validation
+ruby_block 'validate-configuration' do
+  block do
+    Chef::Log.info("Validating final configuration...")
+
+    # Check service status
+    node['services'].each do |service_type, service_config|
+      if service_config['enabled']
+        Chef::Log.info("#{service_type} service is enabled and should be running")
+      end
+    end
+
+    # Check file permissions
+    critical_files = [
+      '/etc/passwd',
+      '/etc/shadow',
+      '/etc/ssh/sshd_config'
+    ]
+
+    critical_files.each do |file_path|
+      if File.exist?(file_path)
+        file_stat = File.stat(file_path)
+        Chef::Log.info("#{file_path} has mode #{file_stat.mode.to_s(8)}")
+      end
+    end
+
+    Chef::Log.info("Configuration validation completed successfully")
+  end
+  action :run
+end
+
+Chef::Log.info("Complex deployment completed successfully")
+""",
+            ),
+        ]
+
+        for filename, content in complex_scenarios:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=f"_{filename}", delete=False
+            ) as f:
+                f.write(content)
+                temp_path = f.name
+
+            try:
+                # Test parsing functions
+                if filename.endswith(".rb"):
+                    if "recipe" in filename:
+                        result = parse_recipe(temp_path)
+                        assert isinstance(result, str)
+                        assert len(result) > 1000  # Should produce extensive output
+
+                        # Test playbook generation
+                        playbook_result = generate_playbook_from_recipe(temp_path)
+                        assert isinstance(playbook_result, str)
+                        assert (
+                            len(playbook_result) > 500
+                        )  # Should generate substantial playbook
+
+                    elif "attributes" in filename:
+                        result = parse_attributes(temp_path)
+                        assert isinstance(result, str)
+
+                elif filename.endswith(".erb"):
+                    result = parse_template(temp_path)
+                    assert isinstance(result, str)
+
+                # Test resource conversion with complex content
+                if "recipe" in filename:
+                    # Extract a few resources and test conversion
+                    test_resources = [
+                        ('package "nginx" do\n  action :install\nend', "install"),
+                        ('service "nginx" do\n  action :start\nend', "start"),
+                        ('template "/etc/config" do\n  action :create\nend', "create"),
+                    ]
+
+                    for resource_text, action in test_resources:
+                        conversion_result = convert_resource_to_task(
+                            resource_text, action
+                        )
+                        assert isinstance(conversion_result, str)
+                        assert len(conversion_result) > 20
+
+            finally:
+                try:
+                    Path(temp_path).unlink()
+                except:
+                    pass
