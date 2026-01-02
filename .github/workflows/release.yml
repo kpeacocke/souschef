@@ -5,24 +5,50 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel releases
+
 permissions:
   contents: write
   id-token: write
 
+env:
+  PYTHON_VERSION: "3.14"
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for branch validation
+
+    - name: Validate release is on main branch
+      run: |
+        # Check that tag is on main branch
+        if ! git branch -r --contains ${{ github.sha }} | grep -q 'origin/main'; then
+          echo "Error: Release tag must be on main branch"
+          echo "Current branches containing this commit:"
+          git branch -r --contains ${{ github.sha }}
+          exit 1
+        fi
+        echo "✓ Release tag is on main branch"
+
+    - name: Cache uv dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/uv
+        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-uv-
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4
       with:
         version: "latest"
-
-    - name: Set up Python
-      run: uv python install 3.14
 
     - name: Install dependencies
       run: uv sync --all-extras --dev
@@ -37,18 +63,49 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: test
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Validate semver tag
+      run: |
+        TAG="${{ github.ref_name }}"
+        if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+          echo "Error: Tag '$TAG' does not follow semver format (vX.Y.Z)"
+          exit 1
+        fi
+        echo "Tag '$TAG' is valid semver"
+
+    - name: Check version matches tag
+      id: get-version
+      run: |
+        TAG_VERSION="${{ github.ref_name }}"
+        TAG_VERSION="${TAG_VERSION#v}"  # Remove 'v' prefix
+        PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+
+        if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+          echo "Error: Tag version ($TAG_VERSION) does not match pyproject.toml version ($PYPROJECT_VERSION)"
+          exit 1
+        fi
+        echo "Version $TAG_VERSION matches pyproject.toml"
+        echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Cache uv dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/uv
+        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-uv-
 
     - name: Install uv
       uses: astral-sh/setup-uv@v4
       with:
         version: "latest"
-
-    - name: Set up Python
-      run: uv python install 3.14
 
     - name: Install dependencies
       run: uv sync --all-extras --dev
@@ -64,6 +121,7 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: build
 
     steps:
@@ -91,10 +149,10 @@ jobs:
 
           ```bash
           # Install via pip
-          pip install souschef==${{ github.ref_name }}
+          pip install souschef==${{ needs.build.outputs.version }}
 
           # Install via uv
-          uv add souschef==${{ github.ref_name }}
+          uv add souschef==${{ needs.build.outputs.version }}
           ```
 
           ### Usage
@@ -116,6 +174,7 @@ jobs:
 
   publish-pypi:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: release
     environment: pypi
 

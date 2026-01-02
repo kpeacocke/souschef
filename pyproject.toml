@@ -46,4 +46,6 @@ dev = [
     "hypothesis>=6.125.0",
     "mutmut>=3.4.0",
     "ruff>=0.14.10",
+    "pip-audit>=2.7.0",
+    "twine>=6.0.0",
 ]

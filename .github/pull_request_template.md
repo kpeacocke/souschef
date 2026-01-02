@@ -1,5 +1,20 @@
 # Pull Request Template
 
+## 🌿 Gitflow Branch Check
+
+**Source branch**: `[your branch name]`
+**Target branch**: `[base branch]`
+
+Please verify your branch follows gitflow conventions:
+- ✅ `feature/*` → targets `develop`
+- ✅ `bugfix/*` → targets `develop`
+- ✅ `release/*` → targets `main`
+- ✅ `hotfix/*` → targets `main`
+
+_The gitflow workflow will automatically validate this._
+
+---
+
 ## 📋 Summary
 
 Brief description of what this PR does and why.

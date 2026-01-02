@@ -1,0 +1,180 @@
+name: Gitflow Validation
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+  push:
+    branches-ignore:
+      - main
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate-branch-name:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+
+    steps:
+    - name: Check branch naming convention
+      run: |
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          BRANCH_NAME="${{ github.head_ref }}"
+        else
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+        fi
+
+        echo "Validating branch: $BRANCH_NAME"
+
+        # Allow main and develop
+        if [[ "$BRANCH_NAME" == "main" ]] || [[ "$BRANCH_NAME" == "develop" ]]; then
+          echo "✓ Protected branch: $BRANCH_NAME"
+          exit 0
+        fi
+
+        # Validate gitflow branch naming
+        if [[ "$BRANCH_NAME" =~ ^feature/.+ ]]; then
+          echo "✓ Valid feature branch: $BRANCH_NAME"
+        elif [[ "$BRANCH_NAME" =~ ^release/.+ ]]; then
+          echo "✓ Valid release branch: $BRANCH_NAME"
+        elif [[ "$BRANCH_NAME" =~ ^hotfix/.+ ]]; then
+          echo "✓ Valid hotfix branch: $BRANCH_NAME"
+        elif [[ "$BRANCH_NAME" =~ ^bugfix/.+ ]]; then
+          echo "✓ Valid bugfix branch: $BRANCH_NAME"
+        elif [[ "$BRANCH_NAME" =~ ^support/.+ ]]; then
+          echo "✓ Valid support branch: $BRANCH_NAME"
+        else
+          echo "✗ Invalid branch name: $BRANCH_NAME"
+          echo ""
+          echo "Branch names must follow gitflow conventions:"
+          echo "  - feature/<description>  (for new features)"
+          echo "  - bugfix/<description>   (for bug fixes)"
+          echo "  - release/<version>      (for release preparation)"
+          echo "  - hotfix/<version>       (for production fixes)"
+          echo "  - support/<description>  (for support branches)"
+          echo ""
+          echo "Examples:"
+          echo "  - feature/add-ansible-support"
+          echo "  - bugfix/fix-parser-error"
+          echo "  - release/1.2.0"
+          echo "  - hotfix/1.1.1"
+          exit 1
+        fi
+
+  validate-pr-base:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Validate PR target branch
+      run: |
+        SOURCE_BRANCH="${{ github.head_ref }}"
+        TARGET_BRANCH="${{ github.base_ref }}"
+
+        echo "PR: $SOURCE_BRANCH → $TARGET_BRANCH"
+
+        # Main should never merge to develop (wrong direction)
+        if [[ "$SOURCE_BRANCH" == "main" ]]; then
+          echo "✗ Main branch cannot be used as source for PRs"
+          echo "   Releases should be cut from main, not merged back to main"
+          exit 1
+        fi
+
+        # Feature branches must target develop
+        if [[ "$SOURCE_BRANCH" =~ ^feature/.+ ]]; then
+          if [[ "$TARGET_BRANCH" != "develop" ]]; then
+            echo "✗ Feature branches must target 'develop', not '$TARGET_BRANCH'"
+            exit 1
+          fi
+          echo "✓ Feature branch correctly targets develop"
+        fi
+
+        # Bugfix branches must target develop
+        if [[ "$SOURCE_BRANCH" =~ ^bugfix/.+ ]]; then
+          if [[ "$TARGET_BRANCH" != "develop" ]]; then
+            echo "✗ Bugfix branches must target 'develop', not '$TARGET_BRANCH'"
+            exit 1
+          fi
+          echo "✓ Bugfix branch correctly targets develop"
+        fi
+
+        # Support branches can target develop or main
+        if [[ "$SOURCE_BRANCH" =~ ^support/.+ ]]; then
+          if [[ "$TARGET_BRANCH" != "develop" ]] && [[ "$TARGET_BRANCH" != "main" ]]; then
+            echo "✗ Support branches must target 'develop' or 'main', not '$TARGET_BRANCH'"
+            exit 1
+          fi
+          echo "✓ Support branch correctly targets $TARGET_BRANCH"
+        fi
+
+        # Release branches must target main
+        if [[ "$SOURCE_BRANCH" =~ ^release/.+ ]]; then
+          if [[ "$TARGET_BRANCH" != "main" ]]; then
+            echo "✗ Release branches must target 'main', not '$TARGET_BRANCH'"
+            exit 1
+          fi
+          echo "✓ Release branch correctly targets main"
+        fi
+
+        # Hotfix branches must target main
+        if [[ "$SOURCE_BRANCH" =~ ^hotfix/.+ ]]; then
+          if [[ "$TARGET_BRANCH" != "main" ]]; then
+            echo "✗ Hotfix branches must target 'main', not '$TARGET_BRANCH'"
+            exit 1
+          fi
+          echo "✓ Hotfix branch correctly targets main"
+        fi
+
+        # Develop can merge to main
+        if [[ "$SOURCE_BRANCH" == "develop" ]]; then
+          if [[ "$TARGET_BRANCH" != "main" ]]; then
+            echo "✗ Develop can only merge to 'main', not '$TARGET_BRANCH'"
+            exit 1
+          fi
+          echo "✓ Develop correctly targets main"
+        fi
+
+  comment-pr-guidance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+
+    steps:
+    - name: Comment gitflow guidance on new PRs
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const sourceBranch = context.payload.pull_request.head.ref;
+          const targetBranch = context.payload.pull_request.base.ref;
+
+          let branchType = 'unknown';
+          if (sourceBranch.startsWith('feature/')) branchType = 'feature';
+          else if (sourceBranch.startsWith('bugfix/')) branchType = 'bugfix';
+          else if (sourceBranch.startsWith('release/')) branchType = 'release';
+          else if (sourceBranch.startsWith('hotfix/')) branchType = 'hotfix';
+          else if (sourceBranch === 'develop') branchType = 'develop';
+
+          const guidance = {
+            'feature': '🌟 **Feature Branch**: After merging to `develop`, remember to delete this branch.',
+            'bugfix': '🐛 **Bugfix Branch**: After merging to `develop`, remember to delete this branch.',
+            'release': '🚀 **Release Branch**: After merging to `main`, merge back to `develop` and tag the release.',
+            'hotfix': '🔥 **Hotfix Branch**: After merging to `main`, merge back to `develop` and tag the release.',
+            'develop': '🔄 **Develop → Main**: This should only happen for releases. Ensure all tests pass!'
+          };
+
+          if (guidance[branchType]) {
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Gitflow Validation\n\n${guidance[branchType]}\n\n### Checklist:\n- [ ] All tests passing\n- [ ] Code reviewed\n- [ ] Documentation updated\n- [ ] Changelog updated (if applicable)\n\n---\n*This is an automated gitflow guidance message.*`
+            });
+          }
