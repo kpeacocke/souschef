@@ -171,7 +171,41 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
    ```
 
 3. **Start using SousChef**:
-   Ask your MCP client: \"Analyze the cookbook at /path/to/my/cookbook\" or \"Convert this Chef recipe to an Ansible playbook\"\n\n### Development Setup\n\n```bash\n# Install dependencies\nuv sync\n\n# Run tests\nuv run pytest\n\n# Run with coverage\nuv run pytest --cov=souschef --cov-report=html\n\n# Lint and format\nuv run ruff check .\nuv run ruff format .\n```
+   Ask your MCP client: "Analyze the cookbook at /path/to/my/cookbook" or "Convert this Chef recipe to an Ansible playbook"
+
+### Command Line Interface (CLI)
+
+SousChef includes a standalone CLI for direct cookbook parsing and conversion:
+
+```bash
+# Basic usage examples
+souschef-cli --help
+souschef-cli recipe /path/to/recipe.rb
+souschef-cli template /path/to/template.erb
+souschef-cli convert package nginx --action install
+souschef-cli cookbook /path/to/cookbook
+
+# Parse and convert with output formats
+souschef-cli recipe recipe.rb --format json
+souschef-cli inspec-generate recipe.rb > validation.rb
+souschef-cli inspec-convert controls.rb --format testinfra
+```
+
+**Available Commands:**
+- `recipe` - Parse Chef recipe files and extract resources
+- `template` - Convert ERB templates to Jinja2 with variable extraction
+- `resource` - Parse custom resources and LWRPs
+- `attributes` - Extract Chef attribute definitions
+- `metadata` - Parse cookbook metadata.rb files
+- `structure` - Display cookbook directory structure
+- `convert` - Convert Chef resources to Ansible tasks
+- `cookbook` - Comprehensive cookbook analysis
+- `inspec-parse` - Parse InSpec profiles and controls
+- `inspec-convert` - Convert InSpec to Testinfra/Ansible tests
+- `inspec-generate` - Generate InSpec validation from recipes
+- `ls` / `cat` - File system operations
+
+### Development Setup\n\n```bash\n# Install dependencies\nuv sync\n\n# Run tests\nuv run pytest\n\n# Run with coverage\nuv run pytest --cov=souschef --cov-report=html\n\n# Lint and format\nuv run ruff check .\nuv run ruff format .\n```
 ## 🏗️ Architecture & Design
 
 ### MCP Protocol Integration
@@ -188,7 +222,7 @@ Following enterprise-grade testing standards:
 - **Unit Tests**: Mock-based testing for individual functions (tests/test_server.py)
 - **Integration Tests**: Real cookbook testing with fixtures (tests/test_integration.py)
 - **Property-Based Tests**: Hypothesis fuzz testing for edge cases (tests/test_property_based.py)
-- **95%+ Coverage Goal**: Comprehensive test coverage for production readiness
+- **82% Coverage**: Comprehensive test coverage with goal of 95% for production readiness
 
 ### Quality Assurance
 - **Zero Warnings Policy**: All code passes linting without disabling checks
@@ -237,9 +271,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Blue/green and canary deployment pattern generation
 - ✅ Migration complexity assessment and planning tools
 - ✅ Comprehensive testing suite (unit, integration, property-based)
+- ✅ Command-line interface (CLI) for standalone usage
 
 ### In Progress 🔄
-- 🔄 CLI interface improvements and additional commands
 - 🔄 Enhanced error handling and user experience
 - 🔄 Documentation website and interactive examples
 - 🔄 Performance optimizations for large-scale migrations
@@ -598,7 +632,7 @@ souschef/
 ### Development Standards
 
 - **Code Quality**: Zero warnings policy, type hints required, Google-style docstrings
-- **Testing**: 100% test coverage goal using pytest
+- **Testing**: High test coverage (82%) using pytest with goal of 100%
 - **Linting**: Code must pass `ruff check` with no violations
 - **Formatting**: Code must be formatted with `ruff format`
 
@@ -659,7 +693,7 @@ The project includes multiple types of tests:
 
 ### Test Coverage
 
-The project maintains 99%+ test coverage. Run coverage with HTML report:
+The project maintains 82% test coverage with a goal of 95%+. Run coverage with HTML report:
 
 ```bash
 uv run pytest --cov=souschef --cov-report=html
