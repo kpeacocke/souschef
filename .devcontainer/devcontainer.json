@@ -13,6 +13,10 @@
         "ghcr.io/devcontainers/features/git:1": {
             "version": "latest",
             "ppa": true
+        },
+        "ghcr.io/devcontainers/features/ruby:1": {
+            "version": "3.1",
+            "installGems": "chef"
         }
     },
     "onCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc",
