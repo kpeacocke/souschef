@@ -1,179 +1,267 @@
 # SousChef 🍳
 
-An AI-powered MCP (Model Context Protocol) server that assists with analyzing and converting Chef cookbooks to Ansible playbooks.
+An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 
-## Features
+## Overview
 
-### Chef Cookbook Analysis
-- **Parse Metadata** - Extract cookbook metadata (name, version, dependencies, etc.)
-- **Parse Recipes** - Analyze Chef resources, actions, and properties
-- **Parse Attributes** - Extract default, override, and normal attributes
-- **Parse Custom Resources** - Extract properties, attributes, and actions from custom resources and LWRPs
-- **List Cookbook Structure** - Display the directory structure of Chef cookbooks
-- **File Operations** - Read files and list directories
+SousChef is a complete enterprise-grade migration platform with 34 MCP tools organized across 8 major capability areas to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, SousChef provides everything needed for a successful infrastructure automation migration.
 
-### Chef to Ansible Conversion
-- **Convert Resources** - Transform Chef resources to Ansible tasks with proper module mapping
-- **Action Mapping** - Automatically map Chef actions (install, start, create) to Ansible states
-- **Module Selection** - Intelligently select appropriate Ansible modules for each resource type
-- **YAML Generation** - Output valid Ansible task YAML ready for playbooks
-- **Template Parsing** - Parse ERB templates and convert to Jinja2 format with variable extraction
+## 🚀 Core Capabilities
 
-### InSpec Integration & Validation
-- **Parse InSpec Profiles** - Extract controls, describe blocks, and test expectations from InSpec profiles
-- **Convert InSpec to Tests** - Transform InSpec controls to Testinfra (Python) or Ansible assert tasks
-- **Generate InSpec from Chef** - Create InSpec validation controls from Chef recipes automatically
-- **Validation Workflow** - Complete Chef → Ansible → InSpec validation pipeline
-- **Multi-format Support** - Handle single control files or complete InSpec profile directories
+### 1. Chef Cookbook Analysis & Parsing
+Complete cookbook introspection and analysis tools:
 
-### Coming Soon
-- Full playbook generation from recipes
-- Chef guards and notifications conversion
-- Complex attribute precedence handling
-- Chef search and data bags conversion
+- **parse_template** - Parse ERB templates with Jinja2 conversion and variable extraction
+- **parse_custom_resource** - Extract properties, attributes, and actions from custom resources and LWRPs
+- **list_directory** - Navigate and explore cookbook directory structures
+- **read_file** - Read cookbook files with error handling
+- **read_cookbook_metadata** - Parse metadata.rb files for dependencies and cookbook information
+- **parse_recipe** - Analyze Chef recipes and extract resources, actions, and properties
+- **parse_attributes** - Parse attribute files (default, override, normal) with precedence analysis
+- **list_cookbook_structure** - Display complete cookbook directory hierarchy
 
-## Installation
+### 2. Chef-to-Ansible Conversion Engine
+Advanced resource-to-task conversion with intelligent module selection:
+
+- **convert_resource_to_task** - Transform individual Chef resources to Ansible tasks
+- **generate_playbook_from_recipe** - Generate complete Ansible playbooks from Chef recipes
+
+### 3. Chef Search & Inventory Integration
+Convert Chef search patterns to dynamic Ansible inventory:
+
+- **convert_chef_search_to_inventory** - Transform Chef search queries to Ansible inventory groups
+- **generate_dynamic_inventory_script** - Create dynamic inventory scripts from Chef server queries
+- **analyze_chef_search_patterns** - Discover and analyze search usage in cookbooks
+
+### 4. InSpec Integration & Validation
+Complete InSpec-to-Ansible testing pipeline:
+
+- **parse_inspec_profile** - Parse InSpec profiles and extract controls
+- **convert_inspec_to_test** - Convert InSpec controls to Testinfra or Ansible assert tasks
+- **generate_inspec_from_recipe** - Auto-generate InSpec validation from Chef recipes
+
+### 5. Data Bags & Secrets Management
+Chef data bags to Ansible vars/vault conversion:
+
+- **convert_chef_databag_to_vars** - Transform data bags to Ansible variable files
+- **generate_ansible_vault_from_databags** - Convert encrypted data bags to Ansible Vault
+- **analyze_chef_databag_usage** - Analyze data bag usage patterns in cookbooks
+
+### 6. Environment & Configuration Management
+Chef environments to Ansible inventory groups:
+
+- **convert_chef_environment_to_inventory_group** - Transform Chef environments to inventory
+- **generate_inventory_from_chef_environments** - Generate complete inventory from environments
+- **analyze_chef_environment_usage** - Analyze environment usage in cookbooks
+
+### 7. AWX/Ansible Automation Platform Integration
+Enterprise AWX/AAP configuration generation:
+
+- **generate_awx_job_template_from_cookbook** - Create AWX job templates from cookbooks
+- **generate_awx_workflow_from_chef_runlist** - Transform Chef run-lists to AWX workflows
+- **generate_awx_project_from_cookbooks** - Generate AWX projects from cookbook collections
+- **generate_awx_inventory_source_from_chef** - Create dynamic inventory sources from Chef server
+
+### 8. Advanced Deployment Patterns & Migration Assessment
+Modern deployment strategies and migration planning:
+
+- **convert_chef_deployment_to_ansible_strategy** - Convert deployment recipes to Ansible strategies
+- **generate_blue_green_deployment_playbook** - Create blue/green deployment playbooks
+- **generate_canary_deployment_strategy** - Generate canary deployment configurations
+- **analyze_chef_application_patterns** - Identify application deployment patterns
+- **assess_chef_migration_complexity** - Comprehensive migration complexity assessment
+- **generate_migration_plan** - Create detailed migration execution plans
+- **analyze_cookbook_dependencies** - Analyze dependencies and migration order
+- **generate_migration_report** - Generate executive and technical migration reports
+
+## 🎯 Migration Workflow
+
+### Phase 1: Discovery & Assessment
+```bash
+# Assess migration complexity
+assess_chef_migration_complexity /path/to/cookbooks
+
+# Analyze cookbook dependencies
+analyze_cookbook_dependencies /path/to/cookbook
+
+# Generate migration plan
+generate_migration_plan '{\"cookbooks\": [\"/path/to/cookbook1\", \"/path/to/cookbook2\"]}'
+```
+
+### Phase 2: Content Conversion
+```bash
+# Convert recipes to playbooks
+generate_playbook_from_recipe /path/to/recipe.rb
+
+# Convert data bags to Ansible Vault
+generate_ansible_vault_from_databags /path/to/databags
+
+# Convert environments to inventory
+generate_inventory_from_chef_environments /path/to/environments
+```
+
+### Phase 3: AWX/AAP Integration
+```bash
+# Generate AWX job templates
+generate_awx_job_template_from_cookbook /path/to/cookbook cookbook_name
+
+# Create AWX workflows from run-lists
+generate_awx_workflow_from_chef_runlist \"recipe[app::deploy]\" workflow_name
+
+# Setup dynamic inventory from Chef server
+generate_awx_inventory_source_from_chef https://chef.example.com production web_servers
+```
+
+### Phase 4: Validation & Testing
+```bash
+# Generate InSpec validation
+generate_inspec_from_recipe /path/to/recipe.rb
+
+# Convert existing InSpec to Ansible tests
+convert_inspec_to_test /path/to/inspec_profile testinfra
+```
+
+## 📊 Enterprise Features
+
+### Migration Assessment & Reporting
+- **Complexity Analysis**: Automated assessment of migration effort and risk factors
+- **Dependency Mapping**: Complete cookbook dependency analysis with migration ordering
+- **Impact Analysis**: Resource usage patterns and conversion recommendations
+- **Executive Reports**: Stakeholder-ready migration reports with timelines and costs
+
+### Modern Deployment Patterns
+- **Blue/Green Deployments**: Zero-downtime deployment strategies
+- **Canary Releases**: Gradual rollout configurations
+- **Application Patterns**: Modern containerized and cloud-native deployment patterns
+- **Rollback Strategies**: Automated failure recovery procedures
+
+### Enterprise Integration
+- **AWX/AAP Ready**: Native Ansible Automation Platform integration
+- **Dynamic Inventory**: Chef server integration for hybrid environments
+- **Secrets Management**: Secure data bag to Vault conversion
+- **Multi-Environment**: Production-ready inventory and variable management
+
+## 🛠️ Installation & Setup
 
 ### Prerequisites
 - Python 3.14+
 - [uv](https://github.com/astral-sh/uv) for dependency management
+- MCP-compatible client (Claude Desktop, VS Code with MCP extension, etc.)
 
-### Setup
+### Quick Start
 
-1. Clone the repository:
+1. **Clone and setup**:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/your-org/souschef
    cd souschef
-   ```
-
-2. Install dependencies:
-   ```bash
    uv sync
    ```
 
-3. Run the server directly:
-   ```bash
-   uv run souschef
+2. **Configure MCP client** (Claude Desktop example):
+   ```json
+   {
+     \"mcpServers\": {
+       \"souschef\": {
+         \"command\": \"uv\",
+         \"args\": [\"--directory\", \"/path/to/souschef\", \"run\", \"souschef\"],
+         \"env\": {}
+       }
+     }
+   }
    ```
 
-   Or run as a Python module:
-   ```bash
-   uv run python -m souschef.server
-   ```
+3. **Start using SousChef**:
+   Ask your MCP client: \"Analyze the cookbook at /path/to/my/cookbook\" or \"Convert this Chef recipe to an Ansible playbook\"\n\n### Development Setup\n\n```bash\n# Install dependencies\nuv sync\n\n# Run tests\nuv run pytest\n\n# Run with coverage\nuv run pytest --cov=souschef --cov-report=html\n\n# Lint and format\nuv run ruff check .\nuv run ruff format .\n```
+## 🏗️ Architecture & Design
 
-4. Run tests to verify installation:
-   ```bash
-   uv run pytest
-   ```
+### MCP Protocol Integration
+SousChef leverages the Model Context Protocol (MCP) to provide seamless integration with AI assistants and development environments:
 
-## Usage
+- **34 Specialized Tools**: Each migration capability exposed as dedicated MCP tool
+- **Type-Safe Interfaces**: Full Python type hints for reliable AI interactions
+- **Comprehensive Error Handling**: Graceful degradation and helpful error messages
+- **Streaming Support**: Efficient handling of large cookbook conversions
 
-### Command Line Interface
+### Testing Strategy
+Following enterprise-grade testing standards:
 
-SousChef provides a convenient CLI for local usage without needing an MCP client.
+- **Unit Tests**: Mock-based testing for individual functions (tests/test_server.py)
+- **Integration Tests**: Real cookbook testing with fixtures (tests/test_integration.py)
+- **Property-Based Tests**: Hypothesis fuzz testing for edge cases (tests/test_property_based.py)
+- **95%+ Coverage Goal**: Comprehensive test coverage for production readiness
 
-See **[CLI.md](CLI.md)** for complete CLI documentation and examples.
+### Quality Assurance
+- **Zero Warnings Policy**: All code passes linting without disabling checks
+- **Type Safety**: Complete type annotations throughout the codebase
+- **Automated Testing**: CI/CD pipeline with comprehensive test suites
+- **Documentation**: Detailed docstrings and usage examples
 
-**Quick Start:**
+## 📚 Documentation
 
-```bash
-# Install the CLI
-uv sync
+### Tool Reference
+Each MCP tool includes comprehensive documentation:
+- Purpose and use cases
+- Parameter descriptions and types
+- Return value specifications
+- Usage examples and patterns
+- Error handling behaviors
 
-# Parse a Chef recipe
-souschef-cli recipe path/to/recipe.rb
+### Migration Guides
+- **[Enterprise Migration Guide](docs/enterprise-migration.md)** - Complete methodology for large-scale migrations
+- **[AWX Integration Guide](docs/awx-integration.md)** - Step-by-step AWX/AAP setup and configuration
+- **[Testing Strategy Guide](docs/testing-strategy.md)** - Validation and testing approaches
+- **[Best Practices](docs/best-practices.md)** - Recommended patterns and approaches
 
-# Parse an ERB template and convert to Jinja2
-souschef-cli template path/to/template.erb
+## 🤝 Contributing
 
-# Convert a Chef resource to Ansible task
-souschef-cli convert package nginx --action install
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Development setup and workflow
+- Code style and testing requirements
+- Pull request process
+- Issue reporting guidelines
 
-# Parse InSpec profiles and controls
-souschef-cli inspec-parse path/to/inspec/profile/
+## 📄 License
 
-# Convert InSpec to Testinfra tests
-souschef-cli inspec-convert controls.rb --format testinfra
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-# Generate InSpec validation from Chef recipe
-souschef-cli inspec-generate recipe.rb
+## 🚀 Roadmap
 
-# Analyze an entire cookbook
-souschef-cli cookbook path/to/cookbook
+### Completed ✅
+- ✅ Complete Chef cookbook parsing (recipes, attributes, metadata, templates)
+- ✅ InSpec profile parsing and conversion to Testinfra/Ansible tests
+- ✅ Chef resource to Ansible task conversion with module mapping
+- ✅ Data bags to Ansible Vault conversion
+- ✅ Chef environments to Ansible inventory conversion
+- ✅ Chef search patterns to dynamic inventory conversion
+- ✅ AWX/AAP job templates, workflows, and project generation
+- ✅ Blue/green and canary deployment pattern generation
+- ✅ Migration complexity assessment and planning tools
+- ✅ Comprehensive testing suite (unit, integration, property-based)
 
-# Get help
-souschef-cli --help
-```
+### In Progress 🔄
+- 🔄 CLI interface improvements and additional commands
+- 🔄 Enhanced error handling and user experience
+- 🔄 Documentation website and interactive examples
+- 🔄 Performance optimizations for large-scale migrations
 
-### Conversion Examples
+### Planned 📅
+- 📅 Chef Habitat to containerized deployment conversion
+- 📅 Integration with additional test frameworks (ServerSpec, Goss)
+- 📅 Visual migration planning and dependency mapping interface
+- 📅 Terraform provider for infrastructure state management
+- 📅 Jenkins/GitLab CI pipeline generation
+- 📅 Custom resource conversion framework
+- 📅 Advanced templating and variable substitution patterns
 
-The `examples/` directory contains complete Chef cookbooks demonstrating conversion capabilities:
+## 🙋‍♀️ Support & Community
 
-- **[web-server](examples/web-server/)** - Complete nginx web server setup with:
-  - Package installation, service management, templates
-  - Custom resources (nginx_vhost)
-  - Platform-specific logic (Debian/RHEL)
-  - SSL configuration, guards, notifications
-  - [Full conversion guide](examples/web-server/CONVERSION.md)
+- **Issues**: [GitHub Issues](https://github.com/your-org/souschef/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/souschef/discussions)
+- **Documentation**: [Wiki](https://github.com/your-org/souschef/wiki)
 
-- **[database](examples/database/)** - PostgreSQL database server with:
-  - Database and user management custom resources
-  - Complex configuration templates
-  - Backup automation with cron jobs
-  - Guard conditions and idempotency
+---
 
-See [examples/README.md](examples/README.md) for detailed usage.
-
-### InSpec Validation Workflow
-
-SousChef provides complete integration with InSpec for validating your Chef to Ansible conversions, ensuring that your infrastructure automation maintains the same desired state regardless of the tool used.
-
-#### Complete Workflow Example
-
-```bash
-# 1. Start with a Chef recipe
-cat > nginx-recipe.rb << 'EOF'
-package 'nginx' do
-  action :install
-end
-
-service 'nginx' do
-  action [:enable, :start]
-end
-
-template '/etc/nginx/nginx.conf' do
-  source 'nginx.conf.erb'
-  owner 'root'
-  group 'root'
-  mode '0644'
-  action :create
-end
-EOF
-
-# 2. Convert Chef recipe to Ansible playbook (manual or automated)
-# ... your conversion process ...
-
-# 3. Generate InSpec validation controls from the original Chef recipe
-souschef-cli inspec-generate nginx-recipe.rb > validation-controls.rb
-
-# 4. Run InSpec validation against your infrastructure
-inspec exec validation-controls.rb -t ssh://your-server
-
-# 5. Convert InSpec controls to Testinfra for CI/CD integration
-souschef-cli inspec-convert validation-controls.rb --format testinfra > test_nginx.py
-
-# 6. Run tests with pytest
-pytest test_nginx.py --hosts='ssh://your-server'
-```
-
-#### Generated InSpec Controls
-
-From the Chef recipe above, SousChef generates:
-
-```ruby
-# InSpec controls generated from Chef recipe
-control 'package-nginx' do
-  title 'Verify package nginx'
+**SousChef** - *Transforming infrastructure automation, one recipe at a time.* 🍳✨
   desc 'Ensure package nginx is properly configured'
   impact 1.0
 

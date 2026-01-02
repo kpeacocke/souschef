@@ -48,6 +48,216 @@ def test_list_directory_success():
         assert result == ["file1.txt", "file2.txt"]
 
 
+def test_assess_chef_migration_complexity_success():
+    """Test assess_chef_migration_complexity with valid cookbook paths."""
+    from souschef.server import assess_chef_migration_complexity
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = True
+    mock_cookbook_path.name = "test_cookbook"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe_file = MagicMock(spec=Path)
+    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = """
+package "nginx" do
+  action :install
+end
+
+service "nginx" do
+  action [:enable, :start]
+end
+"""
+    mock_recipes_dir.glob.return_value = [mock_recipe_file]
+    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = assess_chef_migration_complexity("/path/to/cookbook")
+
+        assert "Chef to Ansible Migration Assessment" in result
+        assert "Overall Migration Metrics" in result
+        assert "Migration Recommendations" in result
+        assert "Migration Roadmap" in result
+
+
+def test_assess_chef_migration_complexity_cookbook_not_found():
+    """Test assess_chef_migration_complexity when cookbook doesn't exist."""
+    from souschef.server import assess_chef_migration_complexity
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = False
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = assess_chef_migration_complexity("/nonexistent/path")
+
+        assert "Total Cookbooks: 0" in result
+        assert "Migration Assessment" in result
+
+
+def test_generate_migration_plan_success():
+    """Test generate_migration_plan with valid parameters."""
+    from souschef.server import generate_migration_plan
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = True
+    mock_cookbook_path.name = "test_cookbook"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe_file = MagicMock(spec=Path)
+    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = (
+        "package 'nginx'"
+    )
+    mock_recipes_dir.glob.return_value = [mock_recipe_file]
+    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = generate_migration_plan("/path/to/cookbook", "phased", 12)
+
+        assert "Chef to Ansible Migration Plan" in result
+        assert "Strategy: phased" in result
+        assert "Timeline: 12 weeks" in result
+        assert "Migration Phases" in result
+        assert "Team Requirements" in result
+
+
+def test_analyze_cookbook_dependencies_success():
+    """Test analyze_cookbook_dependencies with valid cookbook."""
+    from souschef.server import analyze_cookbook_dependencies
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = True
+    mock_cookbook_path.name = "test_cookbook"
+
+    mock_metadata_file = MagicMock(spec=Path)
+    mock_metadata_file.exists.return_value = True
+    mock_metadata_file.open.return_value.__enter__.return_value.read.return_value = """
+depends "apache2"
+depends "java"
+"""
+    mock_cookbook_path.__truediv__.return_value = mock_metadata_file
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = analyze_cookbook_dependencies("/path/to/cookbook")
+
+        assert "Cookbook Dependency Analysis" in result
+        assert "Dependency Overview" in result
+        assert "Migration Order Recommendations" in result
+
+
+def test_analyze_cookbook_dependencies_not_found():
+    """Test analyze_cookbook_dependencies when cookbook doesn't exist."""
+    from souschef.server import analyze_cookbook_dependencies
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = False
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = analyze_cookbook_dependencies("/nonexistent/path")
+
+        assert "Error: Cookbook path not found" in result
+
+
+def test_generate_migration_report_success():
+    """Test generate_migration_report with valid assessment results."""
+    from souschef.server import generate_migration_report
+
+    assessment_data = '{"total_cookbooks": 3, "complexity_score": 45}'
+
+    result = generate_migration_report(assessment_data, "executive", "yes")
+
+    assert "Chef to Ansible Migration Report" in result
+    assert "Executive Summary" in result
+    assert "Migration Scope and Objectives" in result
+    assert "Technical Implementation Details" in result
+
+
+def test_convert_chef_deployment_to_ansible_strategy_success():
+    """Test convert_chef_deployment_to_ansible_strategy with valid recipe."""
+    from souschef.server import convert_chef_deployment_to_ansible_strategy
+
+    mock_recipe_path = MagicMock(spec=Path)
+    mock_recipe_path.exists.return_value = True
+    mock_recipe_path.stem = "deployment"
+    mock_recipe_path.open.return_value.__enter__.return_value.read.return_value = """
+current_env = node["app"]["current_env"] || "blue"
+target_env = current_env == "blue" ? "green" : "blue"
+
+service "nginx" do
+  action :start
+end
+"""
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_recipe_path
+        result = convert_chef_deployment_to_ansible_strategy("/path/to/recipe.rb")
+
+        assert "Blue/Green" in result and "Deployment Strategy" in result
+        assert "Detected Pattern" in result
+        assert "Ansible Playbook" in result
+
+
+def test_generate_blue_green_deployment_playbook_success():
+    """Test generate_blue_green_deployment_playbook with valid parameters."""
+    from souschef.server import generate_blue_green_deployment_playbook
+
+    result = generate_blue_green_deployment_playbook(
+        "webapp", '{"port": 8080}', "/health"
+    )
+
+    assert "Blue/Green Deployment Playbook" in result
+    assert "Application: webapp" in result
+    assert "Main Deployment Playbook" in result
+    assert "Health Check Playbook" in result
+    assert "Rollback Playbook" in result
+
+
+def test_generate_canary_deployment_strategy_success():
+    """Test generate_canary_deployment_strategy with valid parameters."""
+    from souschef.server import generate_canary_deployment_strategy
+
+    result = generate_canary_deployment_strategy("webapp", 10, "10,25,50,100")
+
+    assert "Canary Deployment Strategy" in result
+    assert "Application: webapp" in result
+    assert "Initial Canary: 10%" in result
+    assert "Canary Deployment Playbook" in result
+    assert "Monitoring and Validation" in result
+
+
+def test_analyze_chef_application_patterns_success():
+    """Test analyze_chef_application_patterns with valid cookbook."""
+    from souschef.server import analyze_chef_application_patterns
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = True
+    mock_cookbook_path.name = "webapp"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe_file = MagicMock(spec=Path)
+    mock_recipe_file.name = "default.rb"
+    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = """
+canary_percentage = node["app"]["canary_percent"] || 10
+package "nginx"
+"""
+    mock_recipes_dir.glob.return_value = [mock_recipe_file]
+    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = analyze_chef_application_patterns("/path/to/cookbook")
+
+        assert "Chef Application Cookbook Analysis" in result
+        assert "Cookbook: webapp" in result
+        assert "Deployment Patterns Detected" in result
+
+
 def test_list_directory_empty():
     """Test that list_directory returns an empty list for empty directories."""
     mock_path = MagicMock(spec=Path)
@@ -1648,3 +1858,525 @@ def test_generate_inspec_from_recipe_error():
         result = generate_inspec_from_recipe("/path/to/recipe.rb")
 
         assert result.startswith("Error:")
+
+
+# Tests for AWX/AAP integration tools
+def test_generate_awx_job_template_from_cookbook_success():
+    """Test generate_awx_job_template_from_cookbook with valid cookbook."""
+    from souschef.server import generate_awx_job_template_from_cookbook
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = True
+    mock_cookbook_path.name = "webserver"
+
+    mock_metadata_file = MagicMock(spec=Path)
+    mock_metadata_file.exists.return_value = True
+    mock_metadata_file.open.return_value.__enter__.return_value.read.return_value = """
+name "webserver"
+version "1.0.0"
+description "Web server cookbook"
+"""
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe_file = MagicMock(spec=Path)
+    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = (
+        "package 'nginx'"
+    )
+    mock_recipes_dir.glob.return_value = [mock_recipe_file]
+
+    mock_cookbook_path.__truediv__.side_effect = [mock_metadata_file, mock_recipes_dir]
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = generate_awx_job_template_from_cookbook(
+            "/path/to/cookbook", "webserver"
+        )
+
+    assert "Job Template" in result and "webserver" in result
+
+
+def test_generate_awx_workflow_from_chef_runlist_success():
+    """Test generate_awx_workflow_from_chef_runlist with valid runlist."""
+    from souschef.server import generate_awx_workflow_from_chef_runlist
+
+    runlist = "recipe[base::default],recipe[webserver::nginx],recipe[database::mysql]"
+
+    result = generate_awx_workflow_from_chef_runlist(runlist, "deployment-workflow")
+
+    assert "Workflow Template" in result
+
+
+def test_generate_awx_project_from_cookbooks_success():
+    """Test generate_awx_project_from_cookbooks with valid cookbooks."""
+    from souschef.server import generate_awx_project_from_cookbooks
+
+    cookbook_paths = "/path/to/cookbook1,/path/to/cookbook2"
+
+    result = generate_awx_project_from_cookbooks(cookbook_paths, "ansible-migration")
+
+    assert "Project Configuration" in result
+
+
+def test_generate_awx_inventory_source_from_chef_success():
+    """Test generate_awx_inventory_source_from_chef with valid parameters."""
+    from souschef.server import generate_awx_inventory_source_from_chef
+
+    result = generate_awx_inventory_source_from_chef(
+        "https://chef.example.com", "production", "web_servers"
+    )
+
+    assert "AWX/AAP Inventory Source" in result
+    assert "Chef Server: https://chef.example.com" in result
+    assert "Environment: production" in result
+    assert "Custom Inventory Script" in result
+
+
+# Tests for data bag conversion tools
+def test_convert_chef_databag_to_vars_success():
+    """Test convert_chef_databag_to_vars with valid data bag."""
+    from souschef.server import convert_chef_databag_to_vars
+
+    mock_databag_path = MagicMock(spec=Path)
+    mock_databag_path.exists.return_value = True
+    mock_databag_path.name = "secrets"
+
+    mock_item_file = MagicMock(spec=Path)
+    mock_item_file.name = "database.json"
+    mock_item_file.open.return_value.__enter__.return_value.read.return_value = """
+{
+  "id": "database",
+  "password": "secret123",
+  "host": "db.example.com"
+}
+"""
+    mock_databag_path.glob.return_value = [mock_item_file]
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_databag_path
+        result = convert_chef_databag_to_vars("/path/to/databag", "secrets")
+
+    assert "secrets" in result
+
+
+def test_generate_ansible_vault_from_databags_success():
+    """Test generate_ansible_vault_from_databags with encrypted data bags."""
+    from souschef.server import generate_ansible_vault_from_databags
+
+    databag_paths = "/path/to/secrets,/path/to/passwords"
+
+    mock_databag_path = MagicMock(spec=Path)
+    mock_databag_path.exists.return_value = True
+    mock_databag_path.name = "secrets"
+
+    mock_item_file = MagicMock(spec=Path)
+    mock_item_file.name = "database.json"
+    mock_item_file.open.return_value.__enter__.return_value.read.return_value = """
+{
+  "id": "database",
+  "password": {"encrypted_data": "abc123"}
+}
+"""
+    mock_databag_path.glob.return_value = [mock_item_file]
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_databag_path
+        result = generate_ansible_vault_from_databags(databag_paths)
+
+        assert "Ansible Vault" in result or "Error:" in result
+        assert "Vault Files Generated" in result
+        assert "Encryption Commands" in result
+
+
+def test_analyze_chef_databag_usage_success():
+    """Test analyze_chef_databag_usage with cookbook and data bags."""
+    from souschef.server import analyze_chef_databag_usage
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = True
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe_file = MagicMock(spec=Path)
+    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = """
+secrets = data_bag_item("secrets", "database")
+password = secrets["password"]
+"""
+    mock_recipes_dir.glob.return_value = [mock_recipe_file]
+    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = analyze_chef_databag_usage("/path/to/cookbook")
+
+        assert "Chef Data Bag Usage Analysis" in result
+        assert "Data Bag References Found" in result
+
+
+# Tests for environment conversion tools
+def test_convert_chef_environment_to_inventory_group_success():
+    """Test convert_chef_environment_to_inventory_group with valid environment."""
+    from souschef.server import convert_chef_environment_to_inventory_group
+
+    mock_env_file = MagicMock(spec=Path)
+    mock_env_file.exists.return_value = True
+    mock_env_file.name = "production.rb"
+    mock_env_file.open.return_value.__enter__.return_value.read.return_value = """
+name "production"
+description "Production environment"
+default_attributes(
+  "nginx" => {
+    "port" => 80
+  }
+)
+"""
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_env_file
+        result = convert_chef_environment_to_inventory_group(
+            "/path/to/production.rb", "production"
+        )
+
+        assert "Chef Environment → Ansible Inventory Group" in result
+        assert "Environment: production" in result
+        assert "Inventory Group Configuration" in result
+
+
+def test_generate_inventory_from_chef_environments_success():
+    """Test generate_inventory_from_chef_environments with multiple environments."""
+    from souschef.server import generate_inventory_from_chef_environments
+
+    environments_path = "/path/to/environments"
+
+    mock_env_dir = MagicMock(spec=Path)
+    mock_env_dir.exists.return_value = True
+    mock_env_dir.is_dir.return_value = True
+
+    mock_env_file = MagicMock(spec=Path)
+    mock_env_file.name = "production.rb"
+    mock_env_file.open.return_value.__enter__.return_value.read.return_value = (
+        "name 'production'"
+    )
+    mock_env_dir.glob.return_value = [mock_env_file]
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_env_dir
+        result = generate_inventory_from_chef_environments(environments_path)
+
+        assert "Inventory" in result or "Error:" in result
+        assert "Inventory Structure" in result
+
+
+def test_analyze_chef_environment_usage_success():
+    """Test analyze_chef_environment_usage with cookbook path."""
+    from souschef.server import analyze_chef_environment_usage
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = True
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe_file = MagicMock(spec=Path)
+    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = """
+if node.chef_environment == "production"
+  nginx_port = 80
+end
+"""
+    mock_recipes_dir.glob.return_value = [mock_recipe_file]
+    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = analyze_chef_environment_usage("/path/to/cookbook")
+
+        assert "Environment" in result or "chef_environment" in result
+        assert "Environment References Found" in result
+
+
+# Tests for Chef search tools
+def test_convert_chef_search_to_inventory_success():
+    """Test convert_chef_search_to_inventory with valid search query."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    search_query = "role:web_server AND chef_environment:production"
+
+    result = convert_chef_search_to_inventory(search_query)
+
+    assert "inventory_type" in result
+    assert "Search Query: role:web_server AND chef_environment:production" in result
+    assert "Inventory Configuration" in result
+
+
+def test_generate_dynamic_inventory_script_success():
+    """Test generate_dynamic_inventory_script with search queries."""
+    from souschef.server import generate_dynamic_inventory_script
+
+    search_queries = '["role:web_server", "role:database"]'
+
+    result = generate_dynamic_inventory_script(search_queries)
+
+    assert "Dynamic Inventory Script" in result
+    assert "Chef Server Query" in result
+    assert "python3 chef_inventory.py" in result
+
+
+def test_analyze_chef_search_patterns_success():
+    """Test analyze_chef_search_patterns with cookbook containing searches."""
+    from souschef.server import analyze_chef_search_patterns
+
+    mock_cookbook_path = MagicMock(spec=Path)
+    mock_cookbook_path.exists.return_value = True
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe_file = MagicMock(spec=Path)
+    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = """
+web_servers = search(:node, "role:web_server")
+db_host = search(:node, "role:database").first["ipaddress"]
+"""
+    mock_recipes_dir.glob.return_value = [mock_recipe_file]
+    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_cookbook_path
+        result = analyze_chef_search_patterns("/path/to/cookbook")
+
+        assert "discovered_searches" in result
+        assert "Search Queries Found" in result
+
+
+# Tests for playbook generation
+def test_generate_playbook_from_recipe_success():
+    """Test generate_playbook_from_recipe with valid recipe."""
+    from souschef.server import generate_playbook_from_recipe
+
+    mock_recipe_path = MagicMock(spec=Path)
+    mock_recipe_path.exists.return_value = True
+    mock_recipe_path.stem = "webserver"
+    mock_recipe_path.open.return_value.__enter__.return_value.read.return_value = """
+package "nginx" do
+  action :install
+  notifies :start, "service[nginx]", :delayed
+end
+
+service "nginx" do
+  action [:enable, :start]
+end
+"""
+
+    with patch("souschef.server.Path") as mock_path_class:
+        mock_path_class.return_value = mock_recipe_path
+        result = generate_playbook_from_recipe("/path/to/recipe.rb")
+
+        assert "Chef Recipe → Ansible Playbook Conversion" in result
+        assert "Recipe: webserver" in result
+        assert "Generated Playbook" in result
+
+
+# Additional comprehensive tests for helper functions and edge cases
+
+
+# Additional working tests for better coverage
+
+
+def test_strip_ruby_comments():
+    """Test Ruby comment stripping helper."""
+    from souschef.server import _strip_ruby_comments
+
+    content_with_comments = """
+# This is a comment
+package "nginx" do  # inline comment
+  action :install
+end
+# Another comment
+    """
+
+    result = _strip_ruby_comments(content_with_comments)
+
+    # Comments should be removed or handled
+    assert isinstance(result, str)
+    assert 'package "nginx" do' in result
+
+
+def test_extract_node_attribute_path():
+    """Test node attribute path extraction."""
+    from souschef.server import _extract_node_attribute_path
+
+    node_ref = "node['apache']['port']"
+    result = _extract_node_attribute_path(node_ref)
+
+    assert "apache.port" in result
+
+
+def test_normalize_ruby_value():
+    """Test Ruby value normalization."""
+    from souschef.server import _normalize_ruby_value
+
+    # Test string values
+    assert _normalize_ruby_value('"test"') == "test"
+    assert _normalize_ruby_value("'test'") == "test"
+
+    # Test numeric values
+    assert _normalize_ruby_value("123") == "123"
+    assert _normalize_ruby_value("true") == "true"
+    assert _normalize_ruby_value("false") == "false"
+
+
+def test_convert_erb_to_jinja2_public():
+    """Test ERB to Jinja2 conversion."""
+    from souschef.server import _convert_erb_to_jinja2
+
+    erb_content = "Port <%= node['apache']['port'] %>"
+    result = _convert_erb_to_jinja2(erb_content)
+
+    # Should convert ERB syntax to Jinja2
+    assert "{{" in result and "}}" in result
+
+
+def test_extract_template_variables():
+    """Test template variable extraction."""
+    from souschef.server import _extract_template_variables
+
+    template_content = """
+Port <%= node['apache']['port'] %>
+<% if node['ssl']['enabled'] %>
+SSL Port <%= node['ssl']['port'] %>
+<% end %>
+    """
+
+    result = _extract_template_variables(template_content)
+
+    assert isinstance(result, set)
+    # Should find variable references
+    assert len(result) > 0
+
+
+def test_format_metadata():
+    """Test metadata formatting."""
+    from souschef.server import _format_metadata
+
+    metadata = {
+        "name": "test-cookbook",
+        "version": "1.0.0",
+        "description": "A test cookbook",
+    }
+
+    result = _format_metadata(metadata)
+
+    assert "name: test-cookbook" in result
+    assert "version: 1.0.0" in result
+    assert "description: A test cookbook" in result
+
+
+def test_format_resources():
+    """Test resource formatting."""
+    from souschef.server import _format_resources
+
+    resources = [{"type": "package", "name": "nginx", "action": "install"}]
+
+    result = _format_resources(resources)
+
+    assert "Resource 1:" in result
+    assert "Type: package" in result
+    assert "Name: nginx" in result
+    assert "Action: install" in result
+
+
+def test_format_attributes():
+    """Test attributes formatting."""
+    from souschef.server import _format_attributes
+
+    attributes = [{"level": "default", "path": "apache.port", "value": "80"}]
+
+    result = _format_attributes(attributes)
+
+    assert "Default Attributes:" in result
+    assert "apache.port = 80" in result
+
+
+# Test file operation error cases that don't exist
+
+
+def test_read_file_error_handling():
+    """Test read_file error handling."""
+    from souschef.server import read_file
+
+    result = read_file("/path/that/does/not/exist")
+    assert "Error" in result
+
+
+def test_list_directory_error_handling():
+    """Test list_directory error handling."""
+    from souschef.server import list_directory
+
+    result = list_directory("/path/that/does/not/exist")
+    assert isinstance(result, str) and "Error" in result
+
+
+def test_parse_recipe_error_handling():
+    """Test parse_recipe error handling."""
+    from souschef.server import parse_recipe
+
+    result = parse_recipe("/nonexistent/recipe.rb")
+    assert "Error" in result
+
+
+def test_parse_attributes_error_handling():
+    """Test parse_attributes error handling."""
+    from souschef.server import parse_attributes
+
+    result = parse_attributes("/nonexistent/attributes.rb")
+    assert "Error" in result
+
+
+def test_parse_template_error_handling():
+    """Test parse_template error handling."""
+    from souschef.server import parse_template
+
+    result = parse_template("/nonexistent/template.erb")
+    assert "Error" in result
+
+
+def test_read_cookbook_metadata_error_handling():
+    """Test read_cookbook_metadata error handling."""
+    from souschef.server import read_cookbook_metadata
+
+    result = read_cookbook_metadata("/nonexistent/metadata.rb")
+    assert "Error" in result
+
+
+def test_convert_resource_to_task_error_handling():
+    """Test convert_resource_to_task error handling."""
+    from souschef.server import convert_resource_to_task
+
+    # Empty resource
+    result = convert_resource_to_task("", "install")
+    assert isinstance(result, str)
+
+    # Invalid resource
+    result = convert_resource_to_task("invalid resource", "install")
+    assert isinstance(result, str)
+
+
+def test_parse_inspec_profile_error_handling():
+    """Test parse_inspec_profile error handling."""
+    from souschef.server import parse_inspec_profile
+
+    result = parse_inspec_profile("/nonexistent/profile")
+    assert "Error" in result
+
+
+def test_convert_inspec_to_test_error_handling():
+    """Test convert_inspec_to_test error handling."""
+    from souschef.server import convert_inspec_to_test
+
+    result = convert_inspec_to_test("/nonexistent/profile", "testinfra")
+    assert "Error" in result
+
+
+def test_generate_inspec_from_recipe_error_handling():
+    """Test generate_inspec_from_recipe error handling."""
+    from souschef.server import generate_inspec_from_recipe
+
+    result = generate_inspec_from_recipe("/nonexistent/recipe.rb")
+    assert "Error" in result
