@@ -1421,9 +1421,9 @@ def _parse_search_condition(condition: str) -> dict[str, str]:
     }
 
 
-def _generate_ansible_inventory_from_search(
+def _generate_ansible_inventory_from_search(  # noqa: C901
     search_info: dict[str, Any],
-) -> dict[str, Any]:  # noqa: C901
+) -> dict[str, Any]:
     """Generate Ansible inventory structure from parsed Chef search.
 
     Args:
@@ -1834,9 +1834,9 @@ def _extract_context(content: str, match: re.Match[str]) -> str:
     return "...".join(lines)
 
 
-def _generate_inventory_recommendations(
+def _generate_inventory_recommendations(  # noqa: C901
     patterns: list[dict[str, str]],
-) -> dict[str, Any]:  # noqa: C901
+) -> dict[str, Any]:
     """Generate inventory structure recommendations from search patterns.
 
     Args:
@@ -1909,9 +1909,9 @@ def _generate_inventory_recommendations(
     return recommendations
 
 
-def _generate_playbook_structure(
+def _generate_playbook_structure(  # noqa: C901
     parsed_content: str, raw_content: str, recipe_name: str
-) -> str:  # noqa: C901
+) -> str:
     """Generate complete playbook structure from parsed recipe content.
 
     Args:

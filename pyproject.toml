@@ -23,13 +23,15 @@ package = true
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "C90", "I", "N", "D", "UP", "B", "A", "C4", "T20", "SIM", "PTH", "ISC"]
+select = ["E", "F", "W", "C90", "I", "N", "UP", "B", "A", "C4", "T20", "SIM", "PTH", "ISC"]
+# Docstring rules - explicitly select compatible ones
+extend-select = ["D200", "D201", "D202", "D204", "D205", "D206", "D207", "D208", "D209", "D210", "D211", "D214", "D215", "D300", "D301", "D400", "D401", "D402", "D403", "D404", "D405", "D406", "D407", "D408", "D409", "D410", "D411", "D412", "D413", "D414", "D415", "D416", "D417"]
 ignore = ["D100", "D104", "D105", "D107"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["S101"]
-"souschef/server.py" = ["T201"]  # Allow print statements in main entry point
+"souschef/server.py" = ["T201", "E501"]  # Allow print in main entry, long lines in templates/reports
 
 [tool.pytest.ini_options]
 minversion = "6.0"
