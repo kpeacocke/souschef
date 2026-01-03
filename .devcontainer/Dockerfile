@@ -1,8 +1,5 @@
 FROM mcr.microsoft.com/devcontainers/python:3.14
 
-# Install clipboard utilities for Snyk and other tools
-RUN apt-get update && apt-get install -y xclip xsel && rm -rf /var/lib/apt/lists/*
-
 # Install Snyk CLI with architecture detection
 RUN ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "amd64" ]; then \
