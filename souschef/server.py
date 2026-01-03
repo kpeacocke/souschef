@@ -675,8 +675,6 @@ def read_file(path: str) -> str:
         return f"Error: {path} is a directory, not a file"
     except PermissionError:
         return f"Error: Permission denied for {path}"
-    except UnicodeDecodeError:
-        return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -711,8 +709,6 @@ def read_cookbook_metadata(path: str) -> str:
         return f"Error: {path} is a directory, not a file"
     except PermissionError:
         return f"Error: Permission denied for {path}"
-    except UnicodeDecodeError:
-        return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -802,8 +798,6 @@ def parse_recipe(path: str) -> str:
         return f"Error: {path} is a directory, not a file"
     except PermissionError:
         return f"Error: Permission denied for {path}"
-    except UnicodeDecodeError:
-        return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -965,8 +959,6 @@ def parse_attributes(path: str) -> str:
         return f"Error: {path} is a directory, not a file"
     except PermissionError:
         return f"Error: Permission denied for {path}"
-    except UnicodeDecodeError:
-        return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
         return f"An error occurred: {e}"
 
