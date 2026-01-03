@@ -1,5 +1,6 @@
 """SousChef MCP Server - Chef to Ansible conversion assistant."""
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -2133,9 +2134,7 @@ def _build_playbook_header(recipe_name: str) -> list[str]:
     ]
 
 
-def _add_playbook_variables(
-    playbook_lines: list[str], raw_content: str
-) -> None:
+def _add_playbook_variables(playbook_lines: list[str], raw_content: str) -> None:
     """Extract and add variables section to playbook.
 
     Args:
@@ -3135,9 +3134,7 @@ def _parse_inspec_control(content: str) -> list[dict[str, Any]]:
     return controls
 
 
-def _find_nested_block_end(
-    lines: list[str], start_index: int
-) -> tuple[list[str], int]:
+def _find_nested_block_end(lines: list[str], start_index: int) -> tuple[list[str], int]:
     """Find the end of a nested Ruby block (do...end).
 
     Args:
@@ -3825,7 +3822,7 @@ def _extract_resources_from_parse_result(parse_result: str) -> list[dict[str, An
             # Parse properties dict
             props_str = line.split(":", 1)[1].strip()
             try:
-                current_resource["properties"] = eval(props_str)
+                current_resource["properties"] = ast.literal_eval(props_str)
             except Exception:
                 current_resource["properties"] = {}
 
