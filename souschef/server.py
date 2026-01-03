@@ -1977,7 +1977,101 @@ def _extract_context(content: str, match: re.Match[str]) -> str:
     return "...".join(lines)
 
 
-def _generate_inventory_recommendations(  # noqa: C901
+def _count_pattern_types(patterns: list[dict[str, str]]) -> dict[str, int]:
+    """Count pattern types from list of patterns.
+
+    Args:
+        patterns: List of discovered search patterns.
+
+    Returns:
+        Dictionary mapping pattern types to counts.
+
+    """
+    pattern_types: dict[str, int] = {}
+    for pattern in patterns:
+        ptype = pattern.get("type", "unknown")
+        pattern_types[ptype] = pattern_types.get(ptype, 0) + 1
+    return pattern_types
+
+
+def _extract_role_and_environment_groups(
+    patterns: list[dict[str, str]],
+) -> tuple[set[str], set[str]]:
+    """Extract role and environment groups from patterns.
+
+    Args:
+        patterns: List of discovered search patterns.
+
+    Returns:
+        Tuple of (role_groups, environment_groups).
+
+    """
+    role_groups: set[str] = set()
+    environment_groups: set[str] = set()
+
+    for pattern in patterns:
+        if pattern.get("type") == "search":
+            query = pattern.get("query", "")
+            if "role:" in query:
+                role_match = re.search(r"role:([^\\s]+)", query)
+                if role_match:
+                    role_groups.add(role_match.group(1))
+            if "environment:" in query:
+                env_match = re.search(r"environment:([^\\s]+)", query)
+                if env_match:
+                    environment_groups.add(env_match.group(1))
+
+    return role_groups, environment_groups
+
+
+def _add_group_recommendations(
+    recommendations: dict[str, Any],
+    role_groups: set[str],
+    environment_groups: set[str],
+) -> None:
+    """Add group recommendations based on discovered groups.
+
+    Args:
+        recommendations: Recommendations dict to update.
+        role_groups: Set of Chef roles.
+        environment_groups: Set of Chef environments.
+
+    """
+    for role in role_groups:
+        recommendations["groups"][f"role_{role}"] = {
+            "description": f"Hosts with Chef role: {role}",
+            "vars": {"chef_role": role},
+        }
+
+    for env in environment_groups:
+        recommendations["groups"][f"env_{env}"] = {
+            "description": f"Hosts in Chef environment: {env}",
+            "vars": {"chef_environment": env},
+        }
+
+
+def _add_general_recommendations(
+    recommendations: dict[str, Any], patterns: list[dict[str, str]]
+) -> None:
+    """Add general migration recommendations based on patterns.
+
+    Args:
+        recommendations: Recommendations dict to update.
+        patterns: List of discovered search patterns.
+
+    """
+    if len(patterns) > 5:
+        recommendations["notes"].append(
+            "Complex search patterns - consider Chef server integration"
+        )
+
+    if any(p.get("type") == "data_bag_access" for p in patterns):
+        recommendations["notes"].append(
+            "Data bag access detected - consider Ansible Vault migration"
+        )
+
+
+def _generate_inventory_recommendations(
     patterns: list[dict[str, str]],
 ) -> dict[str, Any]:
     """Generate inventory structure recommendations from search patterns.
@@ -1996,58 +2090,20 @@ def _generate_inventory_recommendations(  # noqa: C901
         "notes": [],
     }
 
-    # Count pattern types
-    pattern_types = {}
-    for pattern in patterns:
-        ptype = pattern.get("type", "unknown")
-        pattern_types[ptype] = pattern_types.get(ptype, 0) + 1
-
-    # Recommend structure type
+    # Count pattern types and recommend structure
+    pattern_types = _count_pattern_types(patterns)
     if pattern_types.get("search", 0) > 2:
         recommendations["structure"] = "dynamic"
         recommendations["notes"].append(
             "Multiple search patterns detected - dynamic inventory recommended"
         )
 
-    # Generate group recommendations based on patterns
-    role_groups = set()
-    environment_groups = set()
-
-    for pattern in patterns:
-        if pattern.get("type") == "search":
-            query = pattern.get("query", "")
-            if "role:" in query:
-                role_match = re.search(r"role:([^\\s]+)", query)
-                if role_match:
-                    role_groups.add(role_match.group(1))
-            if "environment:" in query:
-                env_match = re.search(r"environment:([^\\s]+)", query)
-                if env_match:
-                    environment_groups.add(env_match.group(1))
-
-    # Add recommended groups
-    for role in role_groups:
-        recommendations["groups"][f"role_{role}"] = {
-            "description": f"Hosts with Chef role: {role}",
-            "vars": {"chef_role": role},
-        }
-
-    for env in environment_groups:
-        recommendations["groups"][f"env_{env}"] = {
-            "description": f"Hosts in Chef environment: {env}",
-            "vars": {"chef_environment": env},
-        }
+    # Extract and add group recommendations
+    role_groups, environment_groups = _extract_role_and_environment_groups(patterns)
+    _add_group_recommendations(recommendations, role_groups, environment_groups)
 
     # Add general recommendations
-    if len(patterns) > 5:
-        recommendations["notes"].append(
-            "Complex search patterns - consider Chef server integration"
-        )
-
-    if any(p.get("type") == "data_bag_access" for p in patterns):
-        recommendations["notes"].append(
-            "Data bag access detected - consider Ansible Vault migration"
-        )
+    _add_general_recommendations(recommendations, patterns)
 
     return recommendations
 
