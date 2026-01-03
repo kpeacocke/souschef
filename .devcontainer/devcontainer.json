@@ -29,7 +29,7 @@
             "installGradle": false
         },
         "ghcr.io/devcontainers/features/node:1": {
-            "version": "lts"
+            "version": "22"
         }
     },
     "onCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc",
