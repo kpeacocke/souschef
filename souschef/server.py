@@ -35,8 +35,8 @@ def _normalize_path(path_str: str) -> Path:
 
     try:
         # Resolve to absolute path, removing .., ., and resolving symlinks
-        # nosemgrep: python.lang.security.audit.dangerous-system-call.dangerous-system-call
-        return Path(path_str).resolve()  # nosec B605
+        # deepcode ignore PT: This is the path normalization function itself
+        return Path(path_str).resolve()
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
 

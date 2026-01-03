@@ -5355,7 +5355,9 @@ end""",
                     pass
                 except Exception as e:
                     # Other exceptions should be handled gracefully
-                    raise AssertionError(f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}")
+                    raise AssertionError(
+                        f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}"
+                    )
 
     def test_json_and_data_handling(self):
         """Test JSON and data handling within functions."""
