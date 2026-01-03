@@ -24,6 +24,7 @@ ruff = ">=0.14.10"
 pip-audit = ">=2.7.0"
 twine = ">=6.0.0"
 pre-commit = ">=4.5.1"
+mutmut = ">=3.4.0"
 
 [tool.poetry.scripts]
 souschef = "souschef.server:main"
