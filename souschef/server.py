@@ -3259,7 +3259,92 @@ def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:
     return tests
 
 
-def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:  # noqa: C901
+def _convert_package_to_testinfra(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert package resource to Testinfra assertions.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Name of the package.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f'    pkg = host.package("{resource_name}")')
+    for exp in expectations:
+        if "be_installed" in exp["matcher"]:
+            lines.append("    assert pkg.is_installed")
+        elif exp["type"] == "its" and exp["property"] == "version":
+            version_match = re.search(r"match\s+/([^/]+)/", exp["matcher"])
+            if version_match:
+                version = version_match.group(1)
+                lines.append(f'    assert pkg.version.startswith("{version}")')
+
+
+def _convert_service_to_testinfra(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert service resource to Testinfra assertions.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Name of the service.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f'    svc = host.service("{resource_name}")')
+    for exp in expectations:
+        if "be_running" in exp["matcher"]:
+            lines.append("    assert svc.is_running")
+        elif "be_enabled" in exp["matcher"]:
+            lines.append("    assert svc.is_enabled")
+
+
+def _convert_file_to_testinfra(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert file resource to Testinfra assertions.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Path to the file.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f'    f = host.file("{resource_name}")')
+    for exp in expectations:
+        if "exist" in exp["matcher"]:
+            lines.append("    assert f.exists")
+        elif exp["type"] == "its" and exp["property"] == "mode":
+            mode_match = re.search(r"cmp\s+'([^']+)'", exp["matcher"])
+            if mode_match:
+                mode = mode_match.group(1)
+                lines.append(f'    assert oct(f.mode) == "{mode}"')
+        elif exp["type"] == "its" and exp["property"] == "owner":
+            owner_match = re.search(r"eq\s+['\"]([^'\"]+)['\"]", exp["matcher"])
+            if owner_match:
+                owner = owner_match.group(1)
+                lines.append(f'    assert f.user == "{owner}"')
+
+
+def _convert_port_to_testinfra(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert port resource to Testinfra assertions.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Port number or address.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f'    port = host.socket("tcp://{resource_name}")')
+    for exp in expectations:
+        if "be_listening" in exp["matcher"]:
+            lines.append("    assert port.is_listening")
+
+
+def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:
     """Convert InSpec control to Testinfra test.
 
     Args:
@@ -3282,48 +3367,17 @@ def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:  # noqa: C901
     for test in control["tests"]:
         resource_type = test["resource_type"]
         resource_name = test["resource_name"]
+        expectations = test["expectations"]
 
-        # Map InSpec resources to Testinfra
+        # Map InSpec resources to Testinfra using dedicated converters
         if resource_type == "package":
-            lines.append(f'    pkg = host.package("{resource_name}")')
-            for exp in test["expectations"]:
-                if "be_installed" in exp["matcher"]:
-                    lines.append("    assert pkg.is_installed")
-                elif exp["type"] == "its" and exp["property"] == "version":
-                    version_match = re.search(r"match\s+/([^/]+)/", exp["matcher"])
-                    if version_match:
-                        version = version_match.group(1)
-                        lines.append(f'    assert pkg.version.startswith("{version}")')
-
+            _convert_package_to_testinfra(lines, resource_name, expectations)
         elif resource_type == "service":
-            lines.append(f'    svc = host.service("{resource_name}")')
-            for exp in test["expectations"]:
-                if "be_running" in exp["matcher"]:
-                    lines.append("    assert svc.is_running")
-                elif "be_enabled" in exp["matcher"]:
-                    lines.append("    assert svc.is_enabled")
-
+            _convert_service_to_testinfra(lines, resource_name, expectations)
         elif resource_type == "file":
-            lines.append(f'    f = host.file("{resource_name}")')
-            for exp in test["expectations"]:
-                if "exist" in exp["matcher"]:
-                    lines.append("    assert f.exists")
-                elif exp["type"] == "its" and exp["property"] == "mode":
-                    mode_match = re.search(r"cmp\s+'([^']+)'", exp["matcher"])
-                    if mode_match:
-                        mode = mode_match.group(1)
-                        lines.append(f'    assert oct(f.mode) == "{mode}"')
-                elif exp["type"] == "its" and exp["property"] == "owner":
-                    owner_match = re.search(r"eq\s+['\"]([^'\"]+)['\"]", exp["matcher"])
-                    if owner_match:
-                        owner = owner_match.group(1)
-                        lines.append(f'    assert f.user == "{owner}"')
-
+            _convert_file_to_testinfra(lines, resource_name, expectations)
         elif resource_type == "port":
-            lines.append(f'    port = host.socket("tcp://{resource_name}")')
-            for exp in test["expectations"]:
-                if "be_listening" in exp["matcher"]:
-                    lines.append("    assert port.is_listening")
+            _convert_port_to_testinfra(lines, resource_name, expectations)
 
     lines.append("")
     return "\n".join(lines)
