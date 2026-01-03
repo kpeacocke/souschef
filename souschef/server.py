@@ -37,7 +37,7 @@ def _normalize_path(path_str: str) -> Path:
         # Resolve to absolute path, removing .., ., and resolving symlinks
         return Path(path_str).resolve()
     except (OSError, RuntimeError) as e:
-        raise ValueError(f"Invalid path {path_str}: {e}")
+        raise ValueError(f"Invalid path {path_str}: {e}") from e
 
 
 # Constants for commonly used strings
@@ -1271,7 +1271,7 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
             return recipe_content
 
         # Parse the raw recipe file to extract notifications and other advanced features
-        recipe_file = Path(recipe_path)
+        recipe_file = _normalize_path(recipe_path)
         if not recipe_file.exists():
             return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
 
@@ -3999,9 +3999,7 @@ def generate_ansible_vault_from_databags(
 
     """
     try:
-        from pathlib import Path
-
-        databags_path = Path(databags_directory)
+        databags_path = _normalize_path(databags_directory)
         if not databags_path.exists():
             return f"Error: Data bags directory not found: {databags_directory}"
 
@@ -4069,9 +4067,7 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
 
     """
     try:
-        from pathlib import Path
-
-        cookbook = Path(cookbook_path)
+        cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -4081,7 +4077,7 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
         # Analyze data bags structure if provided
         databag_structure = {}
         if databags_path:
-            databags = Path(databags_path)
+            databags = _normalize_path(databags_path)
             if databags.exists():
                 databag_structure = _analyze_databag_structure(databags)
 
@@ -4171,9 +4167,7 @@ def generate_inventory_from_chef_environments(
 
     """
     try:
-        from pathlib import Path
-
-        env_path = Path(environments_directory)
+        env_path = _normalize_path(environments_directory)
         if not env_path.exists():
             return f"Error: Environments directory not found: {environments_directory}"
 
@@ -4232,9 +4226,7 @@ def analyze_chef_environment_usage(
 
     """
     try:
-        from pathlib import Path
-
-        cookbook = Path(cookbook_path)
+        cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -4244,7 +4236,7 @@ def analyze_chef_environment_usage(
         # Analyze environments structure if provided
         environment_structure = {}
         if environments_path:
-            environments = Path(environments_path)
+            environments = _normalize_path(environments_path)
             if environments.exists():
                 environment_structure = _analyze_environments_structure(environments)
 
@@ -5205,9 +5197,8 @@ def generate_awx_project_from_cookbooks(
     """
     try:
         import json
-        from pathlib import Path
 
-        cookbooks_path = Path(cookbooks_directory)
+        cookbooks_path = _normalize_path(cookbooks_directory)
         if not cookbooks_path.exists():
             return f"Error: Cookbooks directory not found: {cookbooks_directory}"
 
@@ -5808,9 +5799,7 @@ def convert_chef_deployment_to_ansible_strategy(
 
     """
     try:
-        from pathlib import Path
-
-        recipe_path = Path(deployment_recipe_path)
+        recipe_path = _normalize_path(deployment_recipe_path)
         if not recipe_path.exists():
             return f"Error: Deployment recipe not found: {deployment_recipe_path}"
 
@@ -6035,9 +6024,7 @@ def analyze_chef_application_patterns(
 
     """
     try:
-        from pathlib import Path
-
-        cookbook = Path(cookbook_path)
+        cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -7017,10 +7004,8 @@ def assess_chef_migration_complexity(
 
     """
     try:
-        from pathlib import Path
-
         # Parse cookbook paths
-        paths = [Path(path.strip()) for path in cookbook_paths.split(",")]
+        paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
 
         # Assess each cookbook
         cookbook_assessments = []
@@ -7110,10 +7095,8 @@ def generate_migration_plan(
 
     """
     try:
-        from pathlib import Path
-
         # Parse and assess cookbooks
-        paths = [Path(path.strip()) for path in cookbook_paths.split(",")]
+        paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
         cookbook_assessments = []
 
         for cookbook_path in paths:
