@@ -30,6 +30,7 @@ MANIFEST
 .pytest_cache/
 .coverage
 coverage.xml
+coverage.json
 htmlcov/
 
 # Snyk
