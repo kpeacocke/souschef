@@ -62,17 +62,17 @@ ACTION_TO_STATE = {
 # ERB to Jinja2 pattern mappings
 ERB_PATTERNS = {
     # Variable output: <%= var %> -> {{ var }}
-    "output": (r"<%=\s*(.+?)\s*%>", r"{{ \1 }}"),
+    "output": (r"<%=\s*([^%]+?)\s*%>", r"{{ \1 }}"),
     # Variable with node prefix: <%= node['attr'] %> -> {{ attr }}
-    "node_attr": (r"<%=\s*node\[(['\"])(.+?)\1\]\s*%>", r"{{ \2 }}"),
+    "node_attr": (r"<%=\s*node\[(['\"])([^%]+?)\1\]\s*%>", r"{{ \2 }}"),
     # If statements: <% if condition %> -> {% if condition %}
-    "if_start": (r"<%\s*if\s+(.+?)\s*%>", r"{% if \1 %}"),
+    "if_start": (r"<%\s*if\s+([^%]+?)\s*%>", r"{% if \1 %}"),
     # Unless (negated if): <% unless condition %> -> {% if not condition %}
-    "unless": (r"<%\s*unless\s+(.+?)\s*%>", r"{% if not \1 %}"),
+    "unless": (r"<%\s*unless\s+([^%]+?)\s*%>", r"{% if not \1 %}"),
     # Else: <% else %> -> {% else %}
     "else": (r"<%\s*else\s*%>", r"{% else %}"),
     # Elsif: <% elsif condition %> -> {% elif condition %}
-    "elsif": (r"<%\s*elsif\s+(.+?)\s*%>", r"{% elif \1 %}"),
+    "elsif": (r"<%\s*elsif\s+([^%]+?)\s*%>", r"{% elif \1 %}"),
     # End: <% end %> -> {% endif %}
     "end": (r"<%\s*end\s*%>", r"{% endif %}"),
     # Each loop: <% array.each do |item| %> -> {% for item in array %}
@@ -162,7 +162,7 @@ def _extract_output_variables(content: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    output_vars = re.findall(r"<%=\s*(.+?)\s*%>", content)
+    output_vars = re.findall(r"<%=\s*([^%]+?)\s*%>", content)
     for var in output_vars:
         var = var.strip()
         if var.startswith("node["):
@@ -271,7 +271,7 @@ def _extract_code_block_variables(content: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    code_blocks = re.findall(r"<%\s+(.+?)\s+%>", content, re.DOTALL)
+    code_blocks = re.findall(r"<%\s+([^%]+?)\s+%>", content, re.DOTALL)
     for code in code_blocks:
         _extract_interpolated_variables(code, variables)
         _extract_node_attributes(code, variables)
@@ -377,7 +377,7 @@ def _extract_heredoc_strings(content: str) -> dict[str, str]:
     """
     heredocs = {}
     # Match heredoc patterns: <<-MARKER or <<MARKER
-    heredoc_pattern = r"<<-?(\w+)\s*\n(.*?)^\s*\1\s*$"
+    heredoc_pattern = r"<<-?(\w+)\s*\n((?:(?!^\s*\1\s*$)[\s\S])*?)^\s*\1\s*$"
     for match in re.finditer(heredoc_pattern, content, re.DOTALL | re.MULTILINE):
         marker = match.group(1)
         content_text = match.group(2)
@@ -455,7 +455,7 @@ def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
         properties.append(prop_info)
 
     # Match LWRP attribute syntax: attribute :name, kind_of: Type
-    attribute_pattern = r"attribute\s+:(\w+)(?:,\s*(.+?))?\s*(?:\n|$)"
+    attribute_pattern = r"attribute\s+:(\w+)(?:,\s*([^\n]+?))?\s*(?:\n|$)"
     for match in re.finditer(attribute_pattern, content, re.MULTILINE):
         attr_name = match.group(1)
         attr_options = match.group(2) if match.group(2) else ""
@@ -511,7 +511,7 @@ def _extract_resource_actions(content: str) -> dict[str, Any]:
             result["actions"].append(action_name)
 
     # Extract LWRP-style actions declaration: actions :create, :drop
-    actions_decl = re.search(r"actions\s+(.+?)(?:\n|$)", content)
+    actions_decl = re.search(r"actions\s+([^\n]+?)(?:\n|$)", content)
     if actions_decl:
         action_symbols = re.findall(r":(\w+)", actions_decl.group(1))
         for action in action_symbols:
@@ -767,7 +767,7 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
     # 2. With parentheses: package('nginx') do ... end
     # 3. Multi-line strings: package 'nginx' do\n  content <<-EOH\n  ...\n  EOH\nend
     # Use a more robust pattern that handles nested blocks
-    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do(.*?)^end"
+    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do([\s\S]*?)^end"
 
     for match in re.finditer(pattern, clean_content, re.DOTALL | re.MULTILINE):
         resource_type = match.group(1)
@@ -812,7 +812,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
     conditionals = []
 
     # Match case/when statements
-    case_pattern = r"case\s+(.*?)\n(.*?)^end"
+    case_pattern = r"case\s+([^\n]+?)\n([\s\S]*?)^end"
     for match in re.finditer(case_pattern, content, re.DOTALL | re.MULTILINE):
         case_expr = match.group(1).strip()
         case_body = match.group(2)
@@ -826,7 +826,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
         )
 
     # Match if/elsif/else statements
-    if_pattern = r"if\s+(.*?)(?:\n|$)"
+    if_pattern = r"if\s+([^\n]+?)(?:\n|$)"
     for match in re.finditer(if_pattern, content):
         condition = match.group(1).strip()
         if condition and not condition.startswith(("elsif", "end")):
@@ -838,7 +838,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
             )
 
     # Match unless statements
-    unless_pattern = r"unless\s+(.*?)(?:\n|$)"
+    unless_pattern = r"unless\s+([^\n]+?)(?:\n|$)"
     for match in re.finditer(unless_pattern, content):
         condition = match.group(1).strip()
         conditionals.append(
@@ -926,10 +926,7 @@ def _extract_attributes(content: str) -> list[dict[str, str]]:
     # Match attribute declarations like: default['nginx']['port'] = 80
     # Use non-capturing group (?:...) with + to match one or more brackets
     # Updated to handle multi-line values and heredocs
-    pattern = (
-        r"(default|override|normal)((?:\[[^\]]+\])+)\s*=\s*"
-        r"(.+?)(?=\n(?:default|override|normal|case|when|end|$)|$)"
-    )
+    pattern = r"(default|override|normal)((?:\[[^\]]+\])+)\s*=\s*([^\n]+?)(?=\s*\n|$)"
 
     for match in re.finditer(pattern, clean_content, re.DOTALL):
         precedence = match.group(1)
@@ -2398,12 +2395,12 @@ def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str
             resource["type"] = type_match.group(1)
 
         # Extract resource name
-        name_match = re.search(r"Name:\s*(.+)", block)
+        name_match = re.search(r"Name:\s*([^\n]+)", block)
         if name_match:
             resource["name"] = name_match.group(1).strip()
 
         # Extract action
-        action_match = re.search(r"Action:\s*(.+)", block)
+        action_match = re.search(r"Action:\s*([^\n]+)", block)
         if action_match:
             resource["action"] = action_match.group(1).strip()
         else:
@@ -2411,7 +2408,7 @@ def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str
 
         # Extract properties
         properties_section = re.search(
-            r"Properties:(.*?)(?=\n\n|\n$|$)", block, re.DOTALL
+            r"Properties:([\s\S]*?)(?=\n\n|\n$|$)", block, re.DOTALL
         )
         if properties_section:
             resource["properties"] = properties_section.group(1).strip()
@@ -2768,11 +2765,11 @@ def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list
     not_if_matches = not_if_pattern.findall(resource_block)
 
     # Extract only_if blocks (Ruby code blocks)
-    only_if_block_pattern = re.compile(r"only_if\s+do\s*(.*?)\s*end", re.DOTALL)
+    only_if_block_pattern = re.compile(r"only_if\s+do\s*([\s\S]*?)\s*end", re.DOTALL)
     only_if_block_matches = only_if_block_pattern.findall(resource_block)
 
     # Extract not_if blocks (Ruby code blocks)
-    not_if_block_pattern = re.compile(r"not_if\s+do\s*(.*?)\s*end", re.DOTALL)
+    not_if_block_pattern = re.compile(r"not_if\s+do\s*([\s\S]*?)\s*end", re.DOTALL)
     not_if_block_matches = not_if_block_pattern.findall(resource_block)
 
     return (
