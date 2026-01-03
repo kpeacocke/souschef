@@ -2136,9 +2136,144 @@ def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str
     return resources
 
 
+def _extract_notify_declarations(
+    resource: dict[str, str], raw_content: str
+) -> list[tuple[str, str, str]]:
+    """Extract notifies declarations from a resource block.
+
+    Args:
+        resource: Resource dictionary with type, name, action, properties.
+        raw_content: Raw recipe content.
+
+    Returns:
+        List of tuples (action, target, timing).
+
+    """
+    import re
+
+    resource_type_escaped = resource["type"]
+    resource_name_escaped = re.escape(resource["name"])
+    resource_pattern = (
+        resource_type_escaped
+        + r"\s+['\"]?"
+        + resource_name_escaped
+        + r"['\"]?\s+do\s*(.*?)\nend"
+    )
+    resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
+
+    if not resource_match:
+        return []
+
+    resource_block = resource_match.group(1)
+    notify_pattern = re.compile(
+        r'notifies\s+:(\w+),\s*[\'"]([^\'\"]+)[\'"]\s*,?\s*:?(\w+)?'
+    )
+    return notify_pattern.findall(resource_block)
+
+
+def _extract_subscribe_declarations(raw_content: str) -> list[tuple[str, str, str]]:
+    """Extract subscribes declarations from raw content.
+
+    Args:
+        raw_content: Raw recipe content.
+
+    Returns:
+        List of tuples (action, target, timing).
+
+    """
+    import re
+
+    subscribes_pattern = re.compile(
+        r'subscribes\s+:(\w+),\s*[\'"]([^\'\"]+)[\'"]\s*,?\s*:?(\w+)?'
+    )
+    return subscribes_pattern.findall(raw_content)
+
+
+def _process_notifications(
+    notifications: list[tuple[str, str, str]],
+    task: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Process notification declarations and create handlers.
+
+    Args:
+        notifications: List of (action, target, timing) tuples.
+        task: Task dictionary to update with notify keys.
+
+    Returns:
+        List of handler dictionaries.
+
+    """
+    import re
+
+    handlers = []
+    for notify_action, notify_target, _notify_timing in notifications:
+        target_match = re.match(r"(\w+)\[([^\]]+)\]", notify_target)
+        if target_match:
+            target_type = target_match.group(1)
+            target_name = target_match.group(2)
+
+            handler = _create_handler(notify_action, target_type, target_name)
+            if handler:
+                if "notify" not in task:
+                    task["notify"] = []
+                task["notify"].append(handler["name"])
+                handlers.append(handler)
+
+    return handlers
+
+
+def _process_subscribes(
+    resource: dict[str, str],
+    subscribes: list[tuple[str, str, str]],
+    raw_content: str,
+    task: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Process subscribes declarations and create handlers.
+
+    Args:
+        resource: Resource dictionary.
+        subscribes: List of (action, target, timing) tuples.
+        raw_content: Raw recipe content.
+        task: Task dictionary to update with notify keys.
+
+    Returns:
+        List of handler dictionaries.
+
+    """
+    import re
+
+    handlers = []
+    for sub_action, sub_target, _sub_timing in subscribes:
+        target_match = re.match(r"(\w+)\[([^\]]+)\]", sub_target)
+        if not target_match:
+            continue
+
+        target_type = target_match.group(1)
+        target_name = target_match.group(2)
+
+        if resource["type"] != target_type or resource["name"] != target_name:
+            continue
+
+        subscriber_pattern = (
+            rf"(\w+)\s+['\"]?[^'\"]*['\"]?\s+do\s*.*?subscribes\s+:{sub_action}"
+        )
+        subscriber_match = re.search(subscriber_pattern, raw_content, re.DOTALL)
+
+        if subscriber_match:
+            subscriber_type = subscriber_match.group(1)
+            handler = _create_handler(sub_action, subscriber_type, resource["name"])
+            if handler:
+                if "notify" not in task:
+                    task["notify"] = []
+                task["notify"].append(handler["name"])
+                handlers.append(handler)
+
+    return handlers
+
+
 def _convert_resource_to_task_dict(
     resource: dict[str, str], raw_content: str
-) -> dict[str, Any]:  # noqa: C901
+) -> dict[str, Any]:
     """Convert a Chef resource to an Ansible task dictionary with handlers.
 
     Args:
@@ -2149,8 +2284,6 @@ def _convert_resource_to_task_dict(
         Dictionary with 'task' and 'handlers' keys.
 
     """
-    import re
-
     # Convert basic resource to task
     task = _convert_chef_resource_to_ansible(
         resource["type"], resource["name"], resource["action"], resource["properties"]
@@ -2166,10 +2299,10 @@ def _convert_resource_to_task_dict(
     if guards:
         task.update(guards)
 
-    # Enhanced notification handling with timing constraints
+    # Process all handlers
     handlers = []
 
-    # First, extract enhanced notifications with timing
+    # Handle enhanced notifications with timing
     notifications = _extract_enhanced_notifications(resource, raw_content)
     for notification in notifications:
         handler = _create_handler_with_timing(
@@ -2183,77 +2316,14 @@ def _convert_resource_to_task_dict(
                 task["notify"] = []
             task["notify"].append(handler["name"])
             handlers.append(handler)
-    resource_type_escaped = resource["type"]
-    resource_name_escaped = re.escape(resource["name"])
-    resource_pattern = (
-        resource_type_escaped
-        + r"\s+['\"]?"
-        + resource_name_escaped
-        + r"['\"]?\s+do\s*(.*?)\nend"
-    )
-    resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
 
-    if resource_match:
-        resource_block = resource_match.group(1)
-
-        # Find notifies declarations
-        notify_pattern = re.compile(
-            r'notifies\s+:(\w+),\s*[\'"]([^\'\"]+)[\'"]\s*,?\s*:?(\w+)?'
-        )
-        notifies = notify_pattern.findall(resource_block)
-
-        for notify_action, notify_target, _notify_timing in notifies:
-            # Parse target like 'service[nginx]'
-            target_match = re.match(r"(\w+)\[([^\]]+)\]", notify_target)
-            if target_match:
-                target_type = target_match.group(1)
-                target_name = target_match.group(2)
-
-                # Create handler
-                handler = _create_handler(notify_action, target_type, target_name)
-                if handler:
-                    # Add notify to task
-                    if "notify" not in task:
-                        task["notify"] = []
-                    task["notify"].append(handler["name"])
-
-                    handlers.append(handler)
+    # Handle basic notifies declarations
+    notifies = _extract_notify_declarations(resource, raw_content)
+    handlers.extend(_process_notifications(notifies, task))
 
     # Handle subscribes (reverse notifications)
-    subscribes_pattern = re.compile(
-        r'subscribes\s+:(\w+),\s*[\'"]([^\'\"]+)[\'"]\s*,?\s*:?(\w+)?'
-    )
-    subscribes = subscribes_pattern.findall(raw_content)
-
-    for sub_action, sub_target, _sub_timing in subscribes:
-        # Check if this resource is the subscriber
-        target_match = re.match(r"(\w+)\[([^\]]+)\]", sub_target)
-        if target_match:
-            target_type = target_match.group(1)
-            target_name = target_match.group(2)
-
-            # If this task creates the target resource, it should notify the subscriber
-            if resource["type"] == target_type and resource["name"] == target_name:
-                # Find the subscriber resource in raw content
-                subscriber_pattern = (
-                    rf"(\w+)\s+['\"]?[^'\"]*['\"]?\s+do\s*.*?subscribes\s+:{sub_action}"
-                )
-                subscriber_match = re.search(subscriber_pattern, raw_content, re.DOTALL)
-
-                if subscriber_match:
-                    subscriber_type = subscriber_match.group(1)
-
-                    # Create handler for subscriber
-                    handler = _create_handler(
-                        sub_action, subscriber_type, resource["name"]
-                    )
-                    if handler:
-                        # Add notify to task
-                        if "notify" not in task:
-                            task["notify"] = []
-                        task["notify"].append(handler["name"])
-
-                        handlers.append(handler)
+    subscribes = _extract_subscribe_declarations(raw_content)
+    handlers.extend(_process_subscribes(resource, subscribes, raw_content, task))
 
     return {"task": task, "handlers": handlers}
 
