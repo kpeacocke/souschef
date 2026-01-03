@@ -628,3 +628,452 @@ def test_generate_awx_functions_with_invalid_paths():
     result3 = generate_awx_project_from_cookbooks("/nonexistent", "test", "git", "url")
     assert isinstance(result3, str)
     assert "error" in result3.lower() or len(result3) > 0
+
+
+def test_parse_recipe_with_file_exist_guard_without_colons():
+    """Test parse_recipe with File.exist? (no :: prefix) to match regex."""
+    recipe_with_file_check = """
+service 'nginx' do
+  action :start
+  only_if { File.exist?('/etc/nginx/nginx.conf') }
+end
+
+package 'apache2' do
+  action :remove
+  not_if { File.exist?('/usr/sbin/apache2') }
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe_with_file_check)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+        assert "Resource 2:" in result
+
+
+def test_parse_recipe_with_directory_exist_guard():
+    """Test parse_recipe with File.directory? guard condition."""
+    recipe_with_dir_check = """
+directory '/var/www/html' do
+  owner 'www-data'
+  action :create
+  not_if { File.directory?('/var/www/html') }
+end
+
+file '/opt/app/config.yml' do
+  content 'key: value'
+  action :create
+  only_if { File.directory?('/opt/app') }
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe_with_dir_check)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+
+
+def test_parse_recipe_with_system_call_in_guard():
+    """Test parse_recipe with system() call in guard condition."""
+    recipe_with_system_guard = """
+package 'nginx' do
+  action :install
+  not_if { system('which nginx') }
+end
+
+service 'postgresql' do
+  action :start
+  only_if { system('test -f /etc/postgresql/postgresql.conf') }
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe_with_system_guard)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+
+
+def test_parse_recipe_with_matching_subscribes_pattern():
+    """Test parse_recipe with subscribes that match the target resource."""
+    # The subscribes pattern needs to reference a resource that exists
+    recipe_with_matching_subscribes = """
+template '/etc/nginx/nginx.conf' do
+  source 'nginx.conf.erb'
+  action :create
+end
+
+service 'nginx' do
+  action :nothing
+  subscribes :restart, 'template[/etc/nginx/nginx.conf]'
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe_with_matching_subscribes)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+        assert "Resource 2:" in result
+
+
+def test_parse_recipe_with_subscribes_timing():
+    """Test parse_recipe with subscribes that have timing specified."""
+    recipe_with_timed_subscribes = """
+file '/etc/app/config.json' do
+  content '{"key": "value"}'
+  action :create
+end
+
+service 'app-server' do
+  action :nothing
+  subscribes :reload, 'file[/etc/app/config.json]', :immediately
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe_with_timed_subscribes)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+
+
+def test_parse_recipe_with_multiple_subscribes_patterns():
+    """Test parse_recipe with multiple subscribes to same resource."""
+    recipe_with_multi_subscribes = """
+template '/etc/haproxy/haproxy.cfg' do
+  source 'haproxy.cfg.erb'
+  action :create
+end
+
+service 'haproxy' do
+  action :nothing
+  subscribes :reload, 'template[/etc/haproxy/haproxy.cfg]', :delayed
+end
+
+execute 'validate-haproxy-config' do
+  command 'haproxy -c -f /etc/haproxy/haproxy.cfg'
+  action :nothing
+  subscribes :run, 'template[/etc/haproxy/haproxy.cfg]', :immediately
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe_with_multi_subscribes)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+
+
+def test_parse_recipe_with_complex_guard_block():
+    """Test parse_recipe with complex guard blocks that need manual review."""
+    recipe_with_complex_guard = """
+package 'redis' do
+  action :install
+  only_if { node['platform_family'] == 'debian' && node['redis']['install'] == true }
+end
+
+service 'memcached' do
+  action :start
+  not_if { node.run_state['memcached_disabled'] || File.exists?('/tmp/skip-memcached') }
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe_with_complex_guard)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+
+
+def test_generate_awx_job_template_with_complex_cookbook():
+    """Test AWX job template generation with cookbook containing recipes and attributes."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cookbook_path = Path(tmpdir) / "complex_cookbook"
+        cookbook_path.mkdir()
+
+        # Create metadata with dependencies
+        metadata = cookbook_path / "metadata.rb"
+        metadata.write_text("""
+name 'complex_cookbook'
+version '2.1.0'
+description 'Complex cookbook for testing'
+depends 'nginx', '>= 1.0.0'
+depends 'postgresql', '~> 3.0'
+""")
+
+        # Create recipes directory with multiple recipes
+        recipes_dir = cookbook_path / "recipes"
+        recipes_dir.mkdir()
+
+        default_recipe = recipes_dir / "default.rb"
+        default_recipe.write_text("""
+include_recipe 'complex_cookbook::install'
+include_recipe 'complex_cookbook::configure'
+""")
+
+        install_recipe = recipes_dir / "install.rb"
+        install_recipe.write_text("""
+package 'nginx' do
+  action :install
+end
+
+package 'postgresql' do
+  action :install
+end
+""")
+
+        # Create attributes
+        attrs_dir = cookbook_path / "attributes"
+        attrs_dir.mkdir()
+        attrs_file = attrs_dir / "default.rb"
+        attrs_file.write_text("""
+default['nginx']['port'] = 80
+default['postgresql']['version'] = '14'
+""")
+
+        result = generate_awx_job_template_from_cookbook(
+            str(cookbook_path), "complex_cookbook"
+        )
+
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+
+def test_generate_awx_workflow_with_complex_runlist():
+    """Test AWX workflow generation with complex runlist including roles and recipes."""
+    complex_runlist = (
+        "role[webserver],recipe[nginx::default],recipe[app::deploy],"
+        "role[database],recipe[postgresql::server],recipe[app::migrate]"
+    )
+
+    result = generate_awx_workflow_from_chef_runlist(
+        complex_runlist, "full_stack_deploy"
+    )
+
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_analyze_chef_environment_with_complex_attributes():
+    """Test environment analysis with complex nested attributes."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        env_path = Path(tmpdir) / "environments"
+        env_path.mkdir()
+
+        # Create environment with complex attributes
+        staging_env = env_path / "staging.rb"
+        staging_env.write_text("""
+name 'staging'
+description 'Staging environment with complex config'
+default_attributes({
+  'nginx' => {
+    'port' => 8080,
+    'worker_processes' => 4,
+    'ssl' => {
+      'enabled' => true,
+      'certificate' => '/etc/ssl/certs/staging.crt'
+    }
+  },
+  'app' => {
+    'debug' => true,
+    'database' => {
+      'host' => 'db-staging.example.com',
+      'pool_size' => 10
+    }
+  }
+})
+override_attributes({
+  'app' => {
+    'log_level' => 'debug'
+  }
+})
+cookbook 'nginx', '= 2.0.0'
+cookbook 'postgresql', '>= 3.0.0'
+""")
+
+        cookbook_path = Path(tmpdir) / "cookbook"
+        cookbook_path.mkdir()
+        metadata = cookbook_path / "metadata.rb"
+        metadata.write_text("name 'test'\nversion '1.0.0'\n")
+
+        result = analyze_chef_environment_usage(str(cookbook_path), str(env_path))
+
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+
+def test_convert_environment_with_cookbook_constraints():
+    """Test environment conversion with various cookbook version constraints."""
+    env_with_constraints = """
+name 'production'
+description 'Production environment'
+cookbook 'nginx', '= 2.5.0'
+cookbook 'postgresql', '~> 3.1'
+cookbook 'redis', '>= 4.0.0'
+cookbook 'memcached', '< 2.0.0'
+default_attributes({
+  'app' => {
+    'env' => 'production'
+  }
+})
+"""
+
+    result = convert_chef_environment_to_inventory_group(
+        env_with_constraints, "production", include_constraints=True
+    )
+
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_convert_environment_without_constraints():
+    """Test environment conversion with constraints excluded."""
+    env_content = """
+name 'test'
+description 'Test environment'
+cookbook 'nginx', '= 1.0.0'
+default_attributes({})
+"""
+
+    result = convert_chef_environment_to_inventory_group(
+        env_content, "test", include_constraints=False
+    )
+
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_generate_inventory_with_multiple_environments():
+    """Test inventory generation from multiple environment files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        env_path = Path(tmpdir)
+
+        # Create multiple environments
+        for env_name in ["dev", "staging", "prod"]:
+            env_file = env_path / f"{env_name}.rb"
+            env_file.write_text(f"""
+name '{env_name}'
+description '{env_name.title()} environment'
+default_attributes({{
+  'app' => {{
+    'env' => '{env_name}'
+  }}
+}})
+""")
+
+        result = generate_inventory_from_chef_environments(str(env_path))
+
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+
+def test_parse_recipe_with_file_exist_block_do_end():
+    """Test parse_recipe with File.exist? in do...end block to match regex."""
+    recipe_with_do_end_guard = """
+package 'nginx' do
+  action :install
+  only_if do
+    File.exist?('/etc/nginx/nginx.conf')
+  end
+end
+
+service 'apache2' do
+  action :stop
+  not_if do
+    File.exist?('/usr/sbin/apache2')
+  end
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe_with_do_end_guard)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+
+
+def test_parse_recipe_with_directory_check_do_end():
+    """Test parse_recipe with File.directory? in do...end block."""
+    recipe = """
+directory '/var/log/app' do
+  owner 'app'
+  action :create
+  not_if do
+    File.directory?('/var/log/app')
+  end
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+
+
+def test_parse_recipe_with_system_call_do_end():
+    """Test parse_recipe with system() call in do...end block."""
+    recipe = """
+package 'postgresql' do
+  action :install
+  only_if do
+    system('test -f /etc/postgresql/postgresql.conf')
+  end
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
+
+
+def test_parse_recipe_with_true_false_guards_do_end():
+    """Test parse_recipe with simple true/false in do...end blocks."""
+    recipe = """
+service 'nginx' do
+  action :start
+  only_if do
+    true
+  end
+end
+
+package 'unused' do
+  action :install
+  not_if do
+    false
+  end
+end
+"""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        f.write(recipe)
+        f.flush()
+
+        result = parse_recipe(f.name)
+
+        assert isinstance(result, str)
+        assert "Resource 1:" in result
