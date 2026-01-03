@@ -2991,7 +2991,134 @@ def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:  # noqa: 
     return "\n".join(lines)
 
 
-def _generate_inspec_from_resource(  # noqa: C901
+def _generate_inspec_package_checks(
+    resource_name: str, properties: dict[str, Any]
+) -> list[str]:
+    """Generate InSpec checks for package resource.
+
+    Args:
+        resource_name: Name of the package.
+        properties: Resource properties.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    lines = [
+        f"  describe package('{resource_name}') do",
+        "    it { should be_installed }",
+    ]
+    if "version" in properties:
+        version = properties["version"]
+        lines.append(f"    its('version') {{ should match /{version}/ }}")
+    lines.append("  end")
+    return lines
+
+
+def _generate_inspec_service_checks(resource_name: str) -> list[str]:
+    """Generate InSpec checks for service resource.
+
+    Args:
+        resource_name: Name of the service.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    return [
+        f"  describe service('{resource_name}') do",
+        "    it { should be_running }",
+        "    it { should be_enabled }",
+        "  end",
+    ]
+
+
+def _generate_inspec_file_checks(
+    resource_name: str, properties: dict[str, Any]
+) -> list[str]:
+    """Generate InSpec checks for file/template resource.
+
+    Args:
+        resource_name: Name/path of the file.
+        properties: Resource properties.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    lines = [f"  describe file('{resource_name}') do", "    it { should exist }"]
+    if "mode" in properties:
+        lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
+    if "owner" in properties:
+        lines.append(f"    its('owner') {{ should eq '{properties['owner']}' }}")
+    if "group" in properties:
+        lines.append(f"    its('group') {{ should eq '{properties['group']}' }}")
+    lines.append("  end")
+    return lines
+
+
+def _generate_inspec_directory_checks(
+    resource_name: str, properties: dict[str, Any]
+) -> list[str]:
+    """Generate InSpec checks for directory resource.
+
+    Args:
+        resource_name: Path of the directory.
+        properties: Resource properties.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    lines = [
+        f"  describe file('{resource_name}') do",
+        "    it { should exist }",
+        "    it { should be_directory }",
+    ]
+    if "mode" in properties:
+        lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
+    lines.append("  end")
+    return lines
+
+
+def _generate_inspec_user_checks(
+    resource_name: str, properties: dict[str, Any]
+) -> list[str]:
+    """Generate InSpec checks for user resource.
+
+    Args:
+        resource_name: Username.
+        properties: Resource properties.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    lines = [f"  describe user('{resource_name}') do", "    it { should exist }"]
+    if "shell" in properties:
+        lines.append(f"    its('shell') {{ should eq '{properties['shell']}' }}")
+    lines.append("  end")
+    return lines
+
+
+def _generate_inspec_group_checks(resource_name: str) -> list[str]:
+    """Generate InSpec checks for group resource.
+
+    Args:
+        resource_name: Group name.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    return [
+        f"  describe group('{resource_name}') do",
+        "    it { should exist }",
+        "  end",
+    ]
+
+
+def _generate_inspec_from_resource(
     resource_type: str, resource_name: str, properties: dict[str, Any]
 ) -> str:
     """Generate InSpec control from Chef resource.
@@ -3007,61 +3134,32 @@ def _generate_inspec_from_resource(  # noqa: C901
     """
     control_id = f"{resource_type}-{resource_name.replace('/', '-')}"
 
-    lines = []
-    lines.append(f"control '{control_id}' do")
-    lines.append(f"  title 'Verify {resource_type} {resource_name}'")
-    desc = f"Ensure {resource_type} {resource_name} is properly configured"
-    lines.append(f"  desc '{desc}'")
-    lines.append("  impact 1.0")
-    lines.append("")
+    lines = [
+        f"control '{control_id}' do",
+        f"  title 'Verify {resource_type} {resource_name}'",
+        f"  desc 'Ensure {resource_type} {resource_name} is properly configured'",
+        "  impact 1.0",
+        "",
+    ]
 
-    if resource_type == "package":
-        lines.append(f"  describe package('{resource_name}') do")
-        lines.append("    it { should be_installed }")
-        if "version" in properties:
-            version = properties["version"]
-            lines.append(f"    its('version') {{ should match /{version}/ }}")
-        lines.append("  end")
+    # Generate resource-specific checks
+    resource_generators = {
+        "package": lambda: _generate_inspec_package_checks(resource_name, properties),
+        "service": lambda: _generate_inspec_service_checks(resource_name),
+        "file": lambda: _generate_inspec_file_checks(resource_name, properties),
+        "template": lambda: _generate_inspec_file_checks(resource_name, properties),
+        "directory": lambda: _generate_inspec_directory_checks(
+            resource_name, properties
+        ),
+        "user": lambda: _generate_inspec_user_checks(resource_name, properties),
+        "group": lambda: _generate_inspec_group_checks(resource_name),
+    }
 
-    elif resource_type == "service":
-        lines.append(f"  describe service('{resource_name}') do")
-        lines.append("    it { should be_running }")
-        lines.append("    it { should be_enabled }")
-        lines.append("  end")
+    generator = resource_generators.get(resource_type)
+    if generator:
+        lines.extend(generator())
 
-    elif resource_type in ("file", "template"):
-        lines.append(f"  describe file('{resource_name}') do")
-        lines.append("    it { should exist }")
-        if "mode" in properties:
-            lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
-        if "owner" in properties:
-            lines.append(f"    its('owner') {{ should eq '{properties['owner']}' }}")
-        if "group" in properties:
-            lines.append(f"    its('group') {{ should eq '{properties['group']}' }}")
-        lines.append("  end")
-
-    elif resource_type == "directory":
-        lines.append(f"  describe file('{resource_name}') do")
-        lines.append("    it { should exist }")
-        lines.append("    it { should be_directory }")
-        if "mode" in properties:
-            lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
-        lines.append("  end")
-
-    elif resource_type == "user":
-        lines.append(f"  describe user('{resource_name}') do")
-        lines.append("    it { should exist }")
-        if "shell" in properties:
-            lines.append(f"    its('shell') {{ should eq '{properties['shell']}' }}")
-        lines.append("  end")
-
-    elif resource_type == "group":
-        lines.append(f"  describe group('{resource_name}') do")
-        lines.append("    it { should exist }")
-        lines.append("  end")
-
-    lines.append("end")
-    lines.append("")
+    lines.extend(["end", ""])
 
     return "\n".join(lines)
 
