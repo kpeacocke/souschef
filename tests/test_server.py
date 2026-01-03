@@ -1,8 +1,13 @@
 """Tests for the SousChef MCP server."""
 
+import builtins
+import contextlib
 import json
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from souschef.server import (
     _convert_erb_to_jinja2,
@@ -1487,7 +1492,7 @@ end
     assert controls[0]["id"] == "nginx-1"
     assert controls[0]["title"] == "Verify nginx installation"
     assert controls[0]["desc"] == "Ensure nginx is installed and running"
-    assert controls[0]["impact"] == 1.0
+    assert controls[0]["impact"] == pytest.approx(1.0)
     assert len(controls[0]["tests"]) == 2
 
 
@@ -2488,12 +2493,10 @@ class TestAdvancedParsingFunctions:
 
         # Test invalid input
         invalid = "not_a_node_attribute"
-        result = _extract_node_attribute_path(invalid)
+        _ = _extract_node_attribute_path(invalid)
 
 
 # High-impact coverage tests to reach 95% target
-
-import tempfile
 
 
 class TestCoreFunctionsCoverage:
@@ -3213,12 +3216,10 @@ class TestInDepthFunctionCoverage:
             parsed = json.loads(result)
             assert "name" in parsed
         finally:
-            Path(temp_path).unlink()  # Additional targeted tests for maximum coverage
+            Path(temp_path).unlink()
 
 
-import builtins
-import contextlib
-import os
+# Additional targeted tests for maximum coverage
 
 
 class TestUncoveredCodePaths:
@@ -4506,18 +4507,18 @@ server {
 
             # Make file unreadable (if possible)
             try:
-                os.chmod(temp_file, 0o000)
+                Path(temp_file).chmod(0o000)
                 result = read_file(temp_file)
                 assert isinstance(result, str)
                 assert "Error" in result or "Permission" in result
-            except (OSError, PermissionError):
+            except OSError:
                 pass  # May not be able to change permissions in some environments
 
         finally:
             try:
-                os.chmod(temp_file, 0o644)  # Restore permissions to clean up
+                Path(temp_file).chmod(0o644)  # Restore permissions to clean up
                 Path(temp_file).unlink()
-            except (OSError, FileNotFoundError):
+            except OSError:
                 pass
 
     def test_unicode_and_encoding_scenarios(self):
@@ -5357,11 +5358,7 @@ end""",
                     # Other exceptions should be handled gracefully
                     raise AssertionError(
                         f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}"
-                    )
-
-    def test_json_and_data_handling(self):
-        """Test JSON and data handling within functions."""
-        from souschef.server import read_file
+                    ) from None
 
         # Test with various JSON and data formats
         data_formats = [
@@ -5972,10 +5969,10 @@ class TestCriticalMCPToolCoverage:
                 query_set.strip()
                 and query_set not in ["", "[]", '[""]', "invalid-json"]
                 and '"' in query_set
+                and not result.startswith("Error")
             ):
                 # Only check for Python script if it's a potentially valid query
-                if not result.startswith("Error"):
-                    assert "#!/usr/bin/env python" in result or "import" in result
+                assert "#!/usr/bin/env python" in result or "import" in result
 
     def test_analyze_chef_search_patterns_comprehensive(self):
         """Test analyze_chef_search_patterns with various Chef files."""
@@ -8284,7 +8281,7 @@ end""",
                     result = func(edge_input)
                     # Function should return a string or list, never crash
                     assert isinstance(result, (str, list))
-                except (OSError, FileNotFoundError, PermissionError) as e:
+                except OSError as e:
                     # These exceptions are acceptable for file system operations
                     assert isinstance(str(e), str)
                 except Exception as e:
@@ -8532,11 +8529,11 @@ end
             assert isinstance(result, str)
 
         # Clean up
+        import contextlib
+
         for file_path in test_files:
-            try:
+            with contextlib.suppress(Exception):
                 Path(file_path).unlink()
-            except:
-                pass  # Ultimate coverage tests - targeting specific missing lines in server.py
 
 
 class TestUltimateCoverageTarget:
