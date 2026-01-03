@@ -50,6 +50,9 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
 
+    - name: Install poetry-plugin-export
+      run: poetry self add poetry-plugin-export
+
     - name: Cache Poetry dependencies
       uses: actions/cache@v5
       with:
@@ -75,8 +78,8 @@ jobs:
     - name: Ensure SARIF file exists
       if: always()
       run: |
-        if [ ! -f snyk-sca.sarif ]; then
-          echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[]}' > snyk-sca.sarif
+        if [ ! -f snyk-sca.sarif ] || [ ! -s snyk-sca.sarif ]; then
+          echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"Snyk SCA","version":"1.0.0"}},"results":[]}]}' > snyk-sca.sarif
         fi
 
     - name: Upload Snyk SCA results to GitHub Code Scanning
@@ -110,8 +113,8 @@ jobs:
     - name: Ensure SARIF file exists
       if: always()
       run: |
-        if [ ! -f snyk-code.sarif ]; then
-          echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[]}' > snyk-code.sarif
+        if [ ! -f snyk-code.sarif ] || [ ! -s snyk-code.sarif ]; then
+          echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"Snyk Code","version":"1.0.0"}},"results":[]}]}' > snyk-code.sarif
         fi
 
     - name: Upload Snyk Code results to GitHub Code Scanning
@@ -147,8 +150,8 @@ jobs:
     - name: Ensure SARIF file exists
       if: always()
       run: |
-        if [ ! -f snyk-iac.sarif ]; then
-          echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[]}' > snyk-iac.sarif
+        if [ ! -f snyk-iac.sarif ] || [ ! -s snyk-iac.sarif ]; then
+          echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"Snyk IaC","version":"1.0.0"}},"results":[]}]}' > snyk-iac.sarif
         fi
 
     - name: Upload Snyk IaC results to GitHub Code Scanning
@@ -180,6 +183,9 @@ jobs:
         version: latest
         virtualenvs-create: true
         virtualenvs-in-project: true
+
+    - name: Install poetry-plugin-export
+      run: poetry self add poetry-plugin-export
 
     - name: Cache Poetry dependencies
       uses: actions/cache@v5
