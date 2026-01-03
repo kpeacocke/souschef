@@ -38,7 +38,7 @@ jobs:
         echo "✓ Release tag is on main branch"
 
     - name: Cache uv dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.cache/uv
         key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
@@ -95,7 +95,7 @@ jobs:
         echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
 
     - name: Cache uv dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.cache/uv
         key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
