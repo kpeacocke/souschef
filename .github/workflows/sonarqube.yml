@@ -1,4 +1,4 @@
-name: SonarQube Analysis
+name: SonarCloud Analysis
 
 on:
   push:
@@ -27,71 +27,10 @@ env:
   PYTHON_VERSION: "3.14"
 
 jobs:
-  sonarqube:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.SONAR_TOKEN != '' && secrets.SONAR_HOST_URL != ''
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Shallow clones should be disabled for better analysis
-
-    - name: Cache uv dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
-
-    - name: Install dependencies
-      run: uv sync --all-extras --dev
-
-    - name: Run tests with coverage
-      run: |
-        uv run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
-      continue-on-error: true
-
-    - name: Fix coverage paths for SonarQube
-      run: |
-        sed -i 's|<source>/workspaces/souschef|<source>/github/workspace|g' coverage.xml || true
-        sed -i 's|filename="/workspaces/souschef/|filename="|g' coverage.xml || true
-
-    - name: SonarQube Scan
-      uses: sonarsource/sonarqube-scan-action@master
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      with:
-        args: >
-          -Dsonar.projectKey=souschef
-          -Dsonar.projectName=SousChef
-          -Dsonar.sources=souschef
-          -Dsonar.tests=tests
-          -Dsonar.python.coverage.reportPaths=coverage.xml
-          -Dsonar.python.version=3.14
-          -Dsonar.exclusions=**/__pycache__/**,**/htmlcov/**,**/.pytest_cache/**,**/souschef.egg-info/**
-          -Dsonar.test.inclusions=tests/**
-          -Dsonar.coverage.exclusions=tests/**,**/__init__.py
-
-    - name: SonarQube Quality Gate check
-      uses: sonarsource/sonarqube-quality-gate-action@master
-      timeout-minutes: 5
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      continue-on-error: true
-
   sonarcloud:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && (secrets.SONAR_HOST_URL == '' && secrets.SONAR_TOKEN != '')
+    if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.SONAR_TOKEN != ''
 
     steps:
     - uses: actions/checkout@v4

@@ -1,0 +1,144 @@
+name: Technical Debt
+description: Document technical debt that needs to be addressed
+title: "[Tech Debt] "
+labels: ["technical-debt", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to track technical debt - code that works but needs improvement.
+
+        Examples: complexity violations, code smells, suppressions, workarounds, outdated patterns.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What type of technical debt is this?
+      options:
+        - Code Complexity (C901)
+        - Code Smell / Anti-pattern
+        - Missing Tests / Coverage
+        - Performance Issue
+        - Security Concern
+        - Documentation Debt
+        - Dependency Update
+        - Suppressed Warning
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this to fix?
+      options:
+        - Low - Can wait until major version
+        - Medium - Should fix in next minor release
+        - High - Should fix soon
+        - Critical - Blocks release
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: "File path and line number (e.g., souschef/server.py:2141)"
+      placeholder: "souschef/server.py:2141"
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-state
+    attributes:
+      label: Current State
+      description: What is the current problematic code/pattern?
+      placeholder: |
+        - Function has complexity 17 (threshold: 10)
+        - Uses # noqa: C901 suppression
+        - Maps 30+ Chef resource types to Ansible tasks
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-exists
+    attributes:
+      label: Why Does This Exist?
+      description: Why was this done this way? What constraints led to this?
+      placeholder: |
+        This function handles comprehensive Chef resource to Ansible task conversion.
+        The complexity comes from needing to handle many different resource types
+        and their specific parameter mappings.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What problems does this cause? (maintainability, bugs, performance, etc.)
+      placeholder: |
+        - Hard to understand and modify
+        - Difficult to test individual resource type conversions
+        - Error handling is mixed with conversion logic
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution(s)
+      description: How should this be fixed? List options if multiple approaches exist.
+      placeholder: |
+        **Option 1: Extract Strategy Pattern**
+        - Create ResourceConverter base class
+        - Implement specific converters per resource type
+        - Register converters in a map
+
+        **Option 2: Break into smaller functions**
+        - Extract _convert_package_resource()
+        - Extract _convert_service_resource()
+        - etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this is properly fixed?
+      value: |
+        - [ ] Complexity metric below threshold (or documented justification)
+        - [ ] All existing tests pass
+        - [ ] New tests added if needed
+        - [ ] No behavior changes (unless documented)
+        - [ ] Code review approved
+        - [ ] Documentation updated
+
+  - type: input
+    id: target-version
+    attributes:
+      label: Target Version
+      description: When should this be fixed? (e.g., v2.0.0, v1.5.0)
+      placeholder: "v2.0.0"
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to related issues, PRs, docs, or discussions
+      placeholder: |
+        - Related to #123
+        - Discussed in PR #456
+        - See also: https://...
+
+  - type: checkboxes
+    id: breaking-change
+    attributes:
+      label: Breaking Change
+      description: Will fixing this require breaking API changes?
+      options:
+        - label: This fix will require breaking changes
+          required: false

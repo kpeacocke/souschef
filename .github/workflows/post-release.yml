@@ -1,0 +1,104 @@
+name: Post-Release Sync
+
+# This workflow runs after a successful release to merge changes back to develop
+# Ensures develop branch stays in sync with main after hotfixes and releases
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-develop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for merging
+        ref: main  # Start from main branch
+
+    - name: Configure Git
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Merge main to develop
+      run: |
+        # Checkout develop
+        git checkout develop
+        git pull origin develop
+
+        # Get the latest tag to include in commit message
+        LATEST_TAG=$(git describe --tags --abbrev=0 origin/main 2>/dev/null || echo "no-tag")
+        echo "Latest tag: $LATEST_TAG"
+
+        # Merge main into develop
+        echo "Merging main into develop..."
+        if git merge origin/main --no-ff -m "chore: merge release ${LATEST_TAG} from main to develop
+
+        Automatic post-release sync to keep develop up to date.
+
+        Release: ${LATEST_TAG}
+        Triggered by: ${{ github.event_name }}"; then
+          echo "✓ Merge successful"
+
+          # Push to develop
+          git push origin develop
+          echo "✓ Pushed to develop"
+        else
+          echo "✗ Merge conflict detected"
+          echo "Creating PR instead of direct merge..."
+
+          # Abort the merge
+          git merge --abort
+
+          # Create a branch for the merge
+          MERGE_BRANCH="auto-merge/release-${LATEST_TAG}-to-develop"
+          git checkout -b "$MERGE_BRANCH"
+          git merge origin/main --no-ff -m "chore: merge release ${LATEST_TAG} from main to develop" || true
+
+          # Push the branch
+          git push -u origin "$MERGE_BRANCH"
+
+          # Create PR using GitHub CLI
+          gh pr create \
+            --base develop \
+            --head "$MERGE_BRANCH" \
+            --title "chore: merge release ${LATEST_TAG} from main to develop" \
+            --body "Automatic post-release sync from main to develop.
+
+          **Release:** ${LATEST_TAG}
+          **Triggered by:** ${{ github.event_name }}
+
+          ⚠️ **Merge conflicts detected** - manual resolution required.
+
+          Please review and resolve conflicts before merging." \
+            --label "automated" \
+            --label "sync"
+
+          echo "✓ Created PR for manual conflict resolution"
+          exit 0
+        fi
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Comment on release
+      if: success()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const release = context.payload.release;
+          if (release) {
+            await github.rest.repos.createReleaseComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              body: '✅ Changes automatically merged to `develop` branch.'
+            });
+          }
