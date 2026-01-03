@@ -36,7 +36,7 @@ jobs:
       actions: read
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -51,7 +51,7 @@ jobs:
         virtualenvs-in-project: true
 
     - name: Cache Poetry dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: .venv
         key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
@@ -89,7 +89,7 @@ jobs:
       actions: read
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Snyk CLI
       uses: snyk/actions/setup@master
@@ -117,7 +117,7 @@ jobs:
       actions: read
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Snyk CLI
       uses: snyk/actions/setup@master
@@ -145,7 +145,7 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -160,7 +160,7 @@ jobs:
         virtualenvs-in-project: true
 
     - name: Cache Poetry dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: .venv
         key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}

@@ -423,9 +423,9 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 {
   "mcpServers": {
     "souschef": {
-      "command": "uv",
+      "command": "poetry",
       "args": [
-        "--directory",
+        "-C",
         "/path/to/souschef",
         "run",
         "souschef"
@@ -659,28 +659,28 @@ See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detai
 
 ```bash
 # Run all tests
-uv run pytest
+poetry run pytest
 
 # Run with coverage report
-uv run pytest --cov=souschef --cov-report=term-missing --cov-report=html
+poetry run pytest --cov=souschef --cov-report=term-missing --cov-report=html
 
 # Run only unit tests (mocked)
-uv run pytest tests/test_server.py
+poetry run pytest tests/test_server.py
 
 # Run only integration tests (real files)
-uv run pytest tests/test_integration.py
+poetry run pytest tests/test_integration.py
 
 # Run property-based tests
-uv run pytest tests/test_property_based.py
+poetry run pytest tests/test_property_based.py
 
 # Run with benchmarks
-uv run pytest --benchmark-only
+poetry run pytest --benchmark-only
 
 # Run linting
-uv run ruff check .
+poetry run ruff check .
 
 # Run formatting
-uv run ruff format .
+poetry run ruff format .
 ```
 
 ### Test Types
@@ -713,7 +713,7 @@ The project includes multiple types of tests:
 The project maintains 82% test coverage with a goal of 95%+. Run coverage with HTML report:
 
 ```bash
-uv run pytest --cov=souschef --cov-report=html
+poetry run pytest --cov=souschef --cov-report=html
 open htmlcov/index.html  # View detailed coverage report
 ```
 
@@ -722,8 +722,8 @@ open htmlcov/index.html  # View detailed coverage report
 To verify test quality with mutation testing:
 
 ```bash
-uv run mutmut run
-uv run mutmut results
+poetry run mutmut run
+poetry run mutmut results
 ```
 
 ### VS Code Tasks

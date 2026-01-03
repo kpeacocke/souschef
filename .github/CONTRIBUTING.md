@@ -40,12 +40,12 @@ git pull origin develop
 git checkout -b feature/your-feature-name
 
 # Install dependencies
-uv sync --all-extras --dev
+poetry install
 
 # Make your changes, then test
-uv run pytest --cov=souschef --cov-report=term-missing
-uv run ruff check .
-uv run ruff format .
+poetry run pytest --cov=souschef --cov-report=term-missing
+poetry run ruff check .
+poetry run ruff format .
 
 # Commit and push
 git add .
@@ -57,9 +57,9 @@ git push -u origin feature/your-feature-name
 
 ### Before Submitting PR
 
-- ✅ All tests pass (`uv run pytest`)
-- ✅ Code is linted (`uv run ruff check .`)
-- ✅ Code is formatted (`uv run ruff format .`)
+- ✅ All tests pass (`poetry run pytest`)
+- ✅ Code is linted (`poetry run ruff check .`)
+- ✅ Code is formatted (`poetry run ruff format .`)
 - ✅ Documentation updated if needed
 - ✅ Branch follows naming convention (`feature/*`, `bugfix/*`, etc.)
 - ✅ PR targets correct base branch
@@ -283,9 +283,9 @@ Follow [Semantic Versioning](https://semver.org/) (SemVer):
 - Concurrency control: Cancels outdated workflow runs for the same PR/branch
 - Fail-fast strategy: Stops all jobs if one fails
 - Timeout protection: Jobs automatically fail if they exceed time limits
-- Dependency caching: Caches uv dependencies to speed up builds
+- Dependency caching: Caches Poetry dependencies to speed up builds
 - Dynamic TruffleHog scanning: Compares against correct base branch (main/develop)
-- Optimized Python setup: uv sync automatically installs correct Python version
+- Optimized Python setup: Poetry install automatically sets up the virtual environment
 
 **Artifacts**: Distribution packages (retained 7 days)
 
@@ -321,7 +321,7 @@ Follow [Semantic Versioning](https://semver.org/) (SemVer):
 - Concurrency control: Ensures only one scan per ref
 - Enhanced error handling: Validates SNYK_TOKEN before running
 - Conditional execution: Skips jobs if SNYK_TOKEN not configured
-- Dependency caching: Caches uv dependencies
+- Dependency caching: Caches Poetry dependencies
 - Fork-safe: Works on fork PRs without failing
 
 **Output**: SARIF uploaded to GitHub Security tab
@@ -340,7 +340,7 @@ Follow [Semantic Versioning](https://semver.org/) (SemVer):
 - Concurrency control: Prevents duplicate analysis runs
 - Conditional execution: Only runs if appropriate secrets are configured
 - Fork-safe: Skips on fork PRs without secrets (prevents workflow failures)
-- Dependency caching: Caches uv dependencies
+- Dependency caching: Caches Poetry dependencies
 
 **Features**: Coverage analysis from pytest, quality gate enforcement
 
@@ -475,23 +475,23 @@ git push origin --delete release/1.0.0
 
 ```bash
 # Install dependencies
-uv sync --all-extras --dev
+poetry install
 
 # Run tests
-uv run pytest --cov=souschef --cov-report=term-missing
+poetry run pytest --cov=souschef --cov-report=term-missing
 
 # Lint
-uv run ruff check .
+poetry run ruff check .
 
 # Format
-uv run ruff format .
+poetry run ruff format .
 
 # Security scan
-uv run pip-audit
+poetry run pip-audit
 
 # Build package
-uv build
-uv run twine check dist/*
+poetry build
+poetry run twine check dist/*
 ```
 
 ### Branch Protection Rules
@@ -624,26 +624,26 @@ Run the full test suite:
 
 ```bash
 # Lint
-uv run ruff check .
+poetry run ruff check .
 
 # Format
-uv run ruff format .
+poetry run ruff format .
 
 # Test with coverage
-uv run pytest --cov=souschef --cov-report=term-missing
+poetry run pytest --cov=souschef --cov-report=term-missing
 
 # Security scan
-uv run pip-audit
+poetry run pip-audit
 ```
 
 Or use the provided tasks:
 
 ```bash
 # Run tests
-uv run pytest
+poetry run pytest
 
 # Run with coverage
-uv run pytest --cov=souschef --cov-report=term-missing --cov-report=html
+poetry run pytest --cov=souschef --cov-report=term-missing --cov-report=html
 
 # Lint and test
 # (runs lint first, then tests)

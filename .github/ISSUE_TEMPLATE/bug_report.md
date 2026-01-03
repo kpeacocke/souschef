@@ -36,7 +36,7 @@ end
 - **SousChef Version**: [e.g., 0.1.0]
 - **Python Version**: [e.g., 3.14.1]
 - **Operating System**: [e.g., Ubuntu 22.04, macOS 13.0, Windows 11]
-- **Installation Method**: [e.g., uv, pip, from source]
+- **Installation Method**: [e.g., poetry, pip, from source]
 
 ## 📋 Output/Error Messages
 

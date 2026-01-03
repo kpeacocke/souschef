@@ -20,7 +20,7 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0  # Need full history for branch validation
 
@@ -48,7 +48,7 @@ jobs:
         virtualenvs-in-project: true
 
     - name: Cache Poetry dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: .venv
         key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
@@ -76,7 +76,7 @@ jobs:
       version: ${{ steps.get-version.outputs.version }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Validate semver tag
       run: |
@@ -114,7 +114,7 @@ jobs:
         virtualenvs-in-project: true
 
     - name: Cache Poetry dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: .venv
         key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
@@ -128,7 +128,7 @@ jobs:
       run: poetry build
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: release-packages
         path: dist/
@@ -141,7 +141,7 @@ jobs:
       contents: write
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Download build artifacts
       uses: actions/download-artifact@v4
