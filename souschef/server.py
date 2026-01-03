@@ -10,12 +10,24 @@ from mcp.server.fastmcp import FastMCP
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
 
+# Constants for commonly used strings
+ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"
+METADATA_FILENAME = "metadata.rb"
+ERROR_PREFIX = "Error:"
+REGEX_WHITESPACE_QUOTE = r"\s+['\"]?"
+REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*(.*?)\nend"
+REGEX_RESOURCE_BRACKET = r"(\w+)\[([^\]]+)\]"
+INSPEC_END_INDENT = "  end"
+INSPEC_SHOULD_EXIST = "    it { should exist }"
+CHEF_RECIPE_PREFIX = "recipe["
+CHEF_ROLE_PREFIX = "role["
+
 # Chef resource to Ansible module mappings
 RESOURCE_MAPPINGS = {
     "package": "ansible.builtin.package",
     "apt_package": "ansible.builtin.apt",
     "yum_package": "ansible.builtin.yum",
-    "service": "ansible.builtin.service",
+    "service": ANSIBLE_SERVICE_MODULE,
     "systemd_unit": "ansible.builtin.systemd",
     "template": "ansible.builtin.template",
     "file": "ansible.builtin.file",
@@ -963,9 +975,9 @@ def list_cookbook_structure(path: str) -> str:
                     structure[dir_name] = files
 
         # Check for metadata.rb
-        metadata_path = cookbook_path / "metadata.rb"
+        metadata_path = cookbook_path / METADATA_FILENAME
         if metadata_path.exists():
-            structure["metadata"] = ["metadata.rb"]
+            structure["metadata"] = [METADATA_FILENAME]
 
         if not structure:
             return f"Warning: No standard cookbook structure found in {path}"
@@ -1183,13 +1195,13 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
         # First, parse the recipe to extract resources
         recipe_content = parse_recipe(recipe_path)
 
-        if recipe_content.startswith("Error:"):
+        if recipe_content.startswith(ERROR_PREFIX):
             return recipe_content
 
         # Parse the raw recipe file to extract notifications and other advanced features
         recipe_file = Path(recipe_path)
         if not recipe_file.exists():
-            return f"Error: Recipe file does not exist: {recipe_path}"
+            return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
 
         raw_content = recipe_file.read_text()
 
@@ -2356,11 +2368,11 @@ def _create_handler(
 
         handler = {
             "name": f"{action.capitalize()} {resource_name}",
-            "ansible.builtin.service": {"name": resource_name, "state": ansible_state},
+            ANSIBLE_SERVICE_MODULE: {"name": resource_name, "state": ansible_state},
         }
 
         if action == "enable":
-            handler["ansible.builtin.service"]["enabled"] = True
+            handler[ANSIBLE_SERVICE_MODULE]["enabled"] = True
 
         return handler
 
@@ -2371,7 +2383,7 @@ def _create_handler(
         }
         return handler
 
-    return None
+    return {}
 
 
 def _extract_enhanced_notifications(
@@ -3275,7 +3287,7 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         parse_result = parse_inspec_profile(inspec_path)
 
         # Check if parsing failed
-        if parse_result.startswith("Error:"):
+        if parse_result.startswith(ERROR_PREFIX):
             return parse_result
 
         # Parse JSON result
@@ -3333,7 +3345,7 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:  # noqa: C901
         # First parse the recipe
         recipe_result = parse_recipe(recipe_path)
 
-        if recipe_result.startswith("Error:"):
+        if recipe_result.startswith(ERROR_PREFIX):
             return recipe_result
 
         # Extract resources from parsed output
@@ -4688,9 +4700,7 @@ def generate_awx_project_from_cookbooks(
         cookbooks_analysis = _analyze_cookbooks_directory(cookbooks_path)
 
         # Generate project structure
-        project_config = _generate_awx_project_config(
-            cookbooks_analysis, project_name, scm_type, scm_url
-        )
+        project_config = _generate_awx_project_config(project_name, scm_type, scm_url)
 
         return f"""# AWX/AAP Project Configuration
 # Generated from Chef cookbooks: {project_name}
@@ -4749,7 +4759,7 @@ def generate_awx_inventory_source_from_chef(
 
         # Generate inventory source configuration
         inventory_source = _generate_chef_inventory_source(
-            chef_server_url, organization, sync_schedule
+            chef_server_url, sync_schedule
         )
 
         # Generate custom inventory script
@@ -4836,7 +4846,7 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
                 pass
 
     # Analyze dependencies
-    metadata_file = cookbook_path / "metadata.rb"
+    metadata_file = cookbook_path / METADATA_FILENAME
     if metadata_file.exists():
         try:
             with metadata_file.open("r") as f:
@@ -4933,7 +4943,7 @@ def _generate_awx_workflow_template(
 
 
 def _generate_awx_project_config(
-    analysis: dict, project_name: str, scm_type: str, scm_url: str
+    project_name: str, scm_type: str, scm_url: str
 ) -> dict:
     """Generate AWX project configuration from cookbooks analysis."""
     project_config = {
@@ -4956,9 +4966,7 @@ def _generate_awx_project_config(
     return project_config
 
 
-def _generate_chef_inventory_source(
-    chef_server_url: str, organization: str, sync_schedule: str
-) -> dict:
+def _generate_chef_inventory_source(chef_server_url: str, sync_schedule: str) -> dict:
     """Generate Chef server inventory source configuration."""
     inventory_source = {
         "name": "Chef Server Inventory",
@@ -5540,7 +5548,7 @@ def analyze_chef_application_patterns(
 {migration_recommendations}
 
 ## Recommended Ansible Strategies:
-{_recommend_ansible_strategies(deployment_patterns, application_type)}
+{_recommend_ansible_strategies(deployment_patterns)}
 
 ## Implementation Priority:
 1. Convert basic deployment logic to Ansible tasks
@@ -5734,7 +5742,7 @@ def _generate_ansible_deployment_strategy(
     strategy = {"playbook": "", "features": [], "variables": {}, "tasks_count": 0}
 
     if target_strategy == "rolling_update":
-        strategy["playbook"] = _generate_rolling_update_playbook(analysis, recipe_name)
+        strategy["playbook"] = _generate_rolling_update_playbook(recipe_name)
         strategy["features"] = [
             "Serial deployment",
             "Health checks",
@@ -5760,7 +5768,7 @@ def _generate_ansible_deployment_strategy(
         ]
 
     strategy["tasks_count"] = len(analysis.get("deployment_steps", []))
-    strategy["variables"] = _generate_strategy_variables(analysis, target_strategy)
+    strategy["variables"] = _generate_strategy_variables(target_strategy)
 
     return strategy
 
@@ -6156,7 +6164,7 @@ def _extract_load_balancer_config(content: str) -> list:
     return lb_configs
 
 
-def _generate_rolling_update_playbook(analysis: dict, recipe_name: str) -> str:
+def _generate_rolling_update_playbook(recipe_name: str) -> str:
     """Generate rolling update playbook from Chef analysis."""
     return f"""---
 - name: Rolling Update Deployment - {recipe_name}
@@ -6424,7 +6432,7 @@ def _generate_deployment_migration_recommendations(
     return "\n".join(recommendations)
 
 
-def _recommend_ansible_strategies(patterns: dict, app_type: str) -> str:
+def _recommend_ansible_strategies(patterns: dict) -> str:
     """Recommend appropriate Ansible strategies."""
     strategies = []
 
@@ -6451,7 +6459,7 @@ def _recommend_ansible_strategies(patterns: dict, app_type: str) -> str:
     return "\n".join(strategies)
 
 
-def _generate_strategy_variables(analysis: dict, strategy: str) -> dict:
+def _generate_strategy_variables(strategy: str) -> dict:
     """Generate strategy-specific variables."""
     base_vars = {
         "app_version": "latest",
@@ -6511,9 +6519,7 @@ def assess_chef_migration_complexity(
 
         for cookbook_path in paths:
             if cookbook_path.exists():
-                assessment = _assess_single_cookbook(
-                    cookbook_path, migration_scope, target_platform
-                )
+                assessment = _assess_single_cookbook(cookbook_path)
                 cookbook_assessments.append(assessment)
 
                 # Aggregate metrics
@@ -6531,9 +6537,9 @@ def assess_chef_migration_complexity(
 
         # Calculate averages
         if cookbook_assessments:
-            overall_metrics["avg_complexity"] = overall_metrics[
-                "complexity_score"
-            ] / len(cookbook_assessments)
+            overall_metrics["avg_complexity"] = int(
+                overall_metrics["complexity_score"] / len(cookbook_assessments)
+            )
 
         # Generate migration recommendations
         recommendations = _generate_migration_recommendations_from_assessment(
@@ -6541,7 +6547,7 @@ def assess_chef_migration_complexity(
         )
 
         # Create migration roadmap
-        roadmap = _create_migration_roadmap(cookbook_assessments, migration_scope)
+        roadmap = _create_migration_roadmap(cookbook_assessments)
 
         return f"""# Chef to Ansible Migration Assessment
 # Scope: {migration_scope}
@@ -6597,9 +6603,7 @@ def generate_migration_plan(
 
         for cookbook_path in paths:
             if cookbook_path.exists():
-                assessment = _assess_single_cookbook(
-                    cookbook_path, "full", "ansible_awx"
-                )
+                assessment = _assess_single_cookbook(cookbook_path)
                 cookbook_assessments.append(assessment)
 
         # Generate migration plan based on strategy
@@ -6661,14 +6665,12 @@ def analyze_cookbook_dependencies(
     try:
         from pathlib import Path
 
-        cookbook_path = Path(cookbook_path)
-        if not cookbook_path.exists():
-            return f"Error: Cookbook path not found: {cookbook_path}"
+        cookbook_path_obj = Path(cookbook_path)
+        if not cookbook_path_obj.exists():
+            return f"{ERROR_PREFIX} Cookbook path not found: {cookbook_path}"
 
         # Analyze dependencies
-        dependency_analysis = _analyze_cookbook_dependencies_detailed(
-            cookbook_path, dependency_depth
-        )
+        dependency_analysis = _analyze_cookbook_dependencies_detailed(cookbook_path_obj)
 
         # Determine migration order
         migration_order = _determine_migration_order(dependency_analysis)
@@ -6677,7 +6679,7 @@ def analyze_cookbook_dependencies(
         circular_deps = _identify_circular_dependencies(dependency_analysis)
 
         return f"""# Cookbook Dependency Analysis
-# Cookbook: {cookbook_path.name}
+# Cookbook: {cookbook_path_obj.name}
 # Analysis Depth: {dependency_depth}
 
 ## Dependency Overview:
@@ -6724,24 +6726,11 @@ def generate_migration_report(
 
     """
     try:
-        import json
         from datetime import datetime
-
-        # Parse assessment results if JSON
-        try:
-            assessment_data = (
-                json.loads(assessment_results)
-                if assessment_results.startswith("{")
-                else None
-            )
-        except (json.JSONDecodeError, ValueError, TypeError):
-            assessment_data = None
 
         # Generate report based on format
         report = _generate_comprehensive_migration_report(
-            assessment_data or assessment_results,
-            report_format,
-            include_technical_details == "yes",
+            include_technical_details == "yes"
         )
 
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -6789,9 +6778,7 @@ def generate_migration_report(
         return f"Error generating migration report: {e}"
 
 
-def _assess_single_cookbook(
-    cookbook_path, migration_scope: str, target_platform: str
-) -> dict:
+def _assess_single_cookbook(cookbook_path) -> dict:
     """Assess complexity of a single cookbook."""
     from pathlib import Path
 
@@ -6902,15 +6889,18 @@ def _format_cookbook_assessments(assessments: list) -> str:
     if not assessments:
         return "No cookbooks assessed."
 
+    def _get_priority_icon(priority: str) -> str:
+        """Get priority icon based on migration priority level."""
+        if priority == "high":
+            return "🔴"
+        elif priority == "medium":
+            return "🟡"
+        else:
+            return "🟢"
+
     formatted = []
     for assessment in assessments:
-        priority_icon = (
-            "🔴"
-            if assessment["migration_priority"] == "high"
-            else "🟡"
-            if assessment["migration_priority"] == "medium"
-            else "🟢"
-        )
+        priority_icon = _get_priority_icon(assessment["migration_priority"])
         formatted.append(f"""### {assessment["cookbook_name"]} {priority_icon}
 • Complexity Score: {assessment["complexity_score"]:.1f}/100
 • Estimated Effort: {assessment["estimated_effort_days"]} days
@@ -7013,7 +7003,7 @@ def _generate_migration_recommendations_from_assessment(
     return "\n".join(recommendations)
 
 
-def _create_migration_roadmap(assessments: list, migration_scope: str) -> str:
+def _create_migration_roadmap(assessments: list) -> str:
     """Create a migration roadmap based on assessments."""
     # Sort cookbooks by complexity (low to high for easier wins first)
     sorted_cookbooks = sorted(assessments, key=lambda x: x["complexity_score"])
@@ -7122,7 +7112,7 @@ def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
 • **Training:** 2-3 days Ansible/AWX training for team"""
 
 
-def _analyze_cookbook_dependencies_detailed(cookbook_path, depth: str) -> dict:
+def _analyze_cookbook_dependencies_detailed(cookbook_path) -> dict:
     """Analyze cookbook dependencies in detail."""
     analysis = {
         "cookbook_name": cookbook_path.name,
@@ -7134,7 +7124,7 @@ def _analyze_cookbook_dependencies_detailed(cookbook_path, depth: str) -> dict:
     }
 
     # Read metadata.rb for dependencies
-    metadata_file = cookbook_path / "metadata.rb"
+    metadata_file = cookbook_path / METADATA_FILENAME
     if metadata_file.exists():
         with metadata_file.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
@@ -7259,13 +7249,9 @@ def _generate_detailed_migration_plan(
     elif strategy == "big_bang":
         plan["phases"] = _generate_big_bang_phases(assessments, timeline_weeks)
     else:  # parallel
-        plan["phases"] = _generate_parallel_migration_phases(
-            assessments, timeline_weeks
-        )
+        plan["phases"] = _generate_parallel_migration_phases(timeline_weeks)
 
-    plan["timeline"] = _generate_migration_timeline(
-        assessments, strategy, timeline_weeks
-    )
+    plan["timeline"] = _generate_migration_timeline(strategy, timeline_weeks)
 
     plan["team_requirements"] = f"""**Core Team:**
 • 1 Migration Lead (Ansible expert)
@@ -7314,9 +7300,7 @@ def _generate_detailed_migration_plan(
     return plan
 
 
-def _generate_comprehensive_migration_report(
-    assessment_data, report_format: str, include_technical: bool
-) -> dict:
+def _generate_comprehensive_migration_report(include_technical: bool) -> dict:
     """Generate comprehensive migration report."""
     report = {
         "executive_summary": "",
@@ -7559,7 +7543,7 @@ def _generate_big_bang_phases(assessments: list, timeline_weeks: int) -> str:
   • Rollback readiness verification"""
 
 
-def _generate_parallel_migration_phases(assessments: list, timeline_weeks: int) -> str:
+def _generate_parallel_migration_phases(timeline_weeks: int) -> str:
     """Generate parallel migration phases."""
     return f"""**Track A - Infrastructure (Weeks 1-{timeline_weeks}):**
   • Core infrastructure cookbooks
@@ -7577,9 +7561,7 @@ def _generate_parallel_migration_phases(assessments: list, timeline_weeks: int) 
   • Testing and validation automation"""
 
 
-def _generate_migration_timeline(
-    assessments: list, strategy: str, timeline_weeks: int
-) -> str:
+def _generate_migration_timeline(strategy: str, timeline_weeks: int) -> str:
     """Generate migration timeline."""
     milestones = []
 
