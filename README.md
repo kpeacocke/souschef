@@ -145,7 +145,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
 
 ### Prerequisites
 - Python 3.14+
-- [uv](https://github.com/astral-sh/uv) for dependency management
+- [Poetry](https://python-poetry.org/) for dependency management
 - MCP-compatible client (Claude Desktop, VS Code with MCP extension, etc.)
 
 ### Quick Start
@@ -154,7 +154,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
    ```bash
    git clone https://github.com/your-org/souschef
    cd souschef
-   uv sync
+   poetry install
    ```
 
 2. **Configure MCP client** (Claude Desktop example):
@@ -162,7 +162,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
    {
      \"mcpServers\": {
        \"souschef\": {
-         \"command\": \"uv\",
+         \"command\": \"poetry\",
          \"args\": [\"--directory\", \"/path/to/souschef\", \"run\", \"souschef\"],
          \"env\": {}
        }
@@ -205,7 +205,22 @@ souschef-cli inspec-convert controls.rb --format testinfra
 - `inspec-generate` - Generate InSpec validation from recipes
 - `ls` / `cat` - File system operations
 
-### Development Setup\n\n```bash\n# Install dependencies\nuv sync\n\n# Run tests\nuv run pytest\n\n# Run with coverage\nuv run pytest --cov=souschef --cov-report=html\n\n# Lint and format\nuv run ruff check .\nuv run ruff format .\n```
+### Development Setup
+
+```bash
+# Install dependencies
+poetry install
+
+# Run tests
+poetry run pytest
+
+# Run with coverage
+poetry run pytest --cov=souschef --cov-report=html
+
+# Lint and format
+poetry run ruff check .
+poetry run ruff format .
+```
 ## 🏗️ Architecture & Design
 
 ### MCP Protocol Integration

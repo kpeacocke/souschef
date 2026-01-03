@@ -4,7 +4,7 @@
         {
             "label": "Run Tests",
             "type": "shell",
-            "command": "uv",
+            "command": "poetry",
             "args": ["run", "pytest"],
             "group": {
                 "kind": "test",
@@ -19,7 +19,7 @@
         {
             "label": "Run Tests with Coverage",
             "type": "shell",
-            "command": "uv",
+            "command": "poetry",
             "args": [
                 "run",
                 "pytest",
@@ -37,7 +37,7 @@
         {
             "label": "Lint (Ruff)",
             "type": "shell",
-            "command": "uv",
+            "command": "poetry",
             "args": ["run", "ruff", "check", "."],
             "group": "build",
             "presentation": {
@@ -49,7 +49,7 @@
         {
             "label": "Format (Ruff)",
             "type": "shell",
-            "command": "uv",
+            "command": "poetry",
             "args": ["run", "ruff", "format", "."],
             "group": "build",
             "presentation": {

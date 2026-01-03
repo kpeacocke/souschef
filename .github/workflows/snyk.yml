@@ -39,21 +39,31 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Cache uv dependencies
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
       uses: actions/cache@v4
       with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          ${{ runner.os }}-uv-
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
+          ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: uv sync --all-extras --dev
+      run: poetry install --no-interaction
+
+    - name: Export requirements.txt for Snyk
+      run: poetry export -f requirements.txt --output requirements.txt --without-hashes
 
     - name: Run Snyk to check for vulnerabilities
       uses: snyk/actions/python@master
@@ -61,7 +71,7 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
-        args: --severity-threshold=high --file=pyproject.toml
+        args: --severity-threshold=high --file=requirements.txt
 
     - name: Upload Snyk results to GitHub Code Scanning
       uses: github/codeql-action/upload-sarif@v3
@@ -77,21 +87,31 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Cache uv dependencies
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
       uses: actions/cache@v4
       with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          ${{ runner.os }}-uv-
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
+          ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: uv sync --all-extras --dev
+      run: poetry install --no-interaction
+
+    - name: Export requirements.txt for Snyk
+      run: poetry export -f requirements.txt --output requirements.txt --without-hashes
 
     - name: Run Snyk monitor
       uses: snyk/actions/python@master
@@ -99,4 +119,4 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
         command: monitor
-        args: --file=pyproject.toml --project-name=souschef
+        args: --file=requirements.txt --project-name=souschef

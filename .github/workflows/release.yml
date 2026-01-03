@@ -37,29 +37,36 @@ jobs:
         fi
         echo "✓ Release tag is on main branch"
 
-    - name: Cache uv dependencies
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
       uses: actions/cache@v4
       with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          ${{ runner.os }}-uv-
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
+          ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: uv sync --all-extras --dev
+      run: poetry install --no-interaction
 
     - name: Run tests
-      run: uv run pytest --cov=souschef
+      run: poetry run pytest --cov=souschef
 
     - name: Lint
       run: |
-        uv run ruff check .
-        uv run ruff format --check .
+        poetry run ruff check .
+        poetry run ruff format --check .
 
   build:
     runs-on: ubuntu-latest
@@ -94,24 +101,31 @@ jobs:
         echo "Version $TAG_VERSION matches pyproject.toml"
         echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
 
-    - name: Cache uv dependencies
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
       uses: actions/cache@v4
       with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          ${{ runner.os }}-uv-
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
+          ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: uv sync --all-extras --dev
+      run: poetry install --no-interaction
 
     - name: Build package
-      run: uv build
+      run: poetry build
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -151,8 +165,8 @@ jobs:
           # Install via pip
           pip install souschef==${{ needs.build.outputs.version }}
 
-          # Install via uv
-          uv add souschef==${{ needs.build.outputs.version }}
+          # Install via Poetry
+          poetry add souschef==${{ needs.build.outputs.version }}
           ```
 
           ### Usage

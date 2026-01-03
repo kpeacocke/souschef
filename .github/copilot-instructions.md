@@ -71,9 +71,9 @@ The project maintains three types of tests - ensure all are updated when adding 
 - **Branch strategy**: Feature branches for new functionality
 
 ### Dependencies Management
-- **Tool**: Use `uv` for dependency management
-- **Lock file**: Always commit `uv.lock` to version control
-- **Dev dependencies**: Keep development dependencies separate in `[dependency-groups]`
+- **Tool**: Use Poetry for dependency management
+- **Lock file**: Always commit `poetry.lock` to version control
+- **Dev dependencies**: Keep development dependencies separate in `[tool.poetry.group.dev.dependencies]`
 
 ## Code Review Checklist
 Before suggesting code, ensure:

@@ -2341,7 +2341,7 @@ class TestMCPToolsComprehensive:
         result2 = generate_blue_green_deployment_playbook("test_app", "production")
         assert isinstance(result2, str)  # Should not crash
 
-        result3 = generate_canary_deployment_strategy("test_app", "production", "10")
+        result3 = generate_canary_deployment_strategy("test_app", 10, "10,25,50,100")
         assert isinstance(result3, str)  # Should not crash
 
         result4 = analyze_chef_application_patterns("/nonexistent/cookbook")
@@ -5342,11 +5342,8 @@ end""",
         for func in functions_to_test:
             for error_input in error_scenarios:
                 try:
-                    if error_input is None or isinstance(error_input, int):
-                        # These might raise TypeError, which is acceptable
-                        result = func(error_input)
-                    else:
-                        result = func(error_input)
+                    # Call function - None/int might raise TypeError, which is acceptable
+                    result = func(error_input)
 
                     # If no exception, should return string or list
                     assert isinstance(result, (str, list))
@@ -6272,8 +6269,8 @@ db_servers = search(:node, "role:database")
 
         for result in search_results:
             try:
-                inventory = _generate_ansible_inventory_from_search(result, "web")
-                assert isinstance(inventory, str)
+                inventory = _generate_ansible_inventory_from_search(result)
+                assert isinstance(inventory, dict)
             except (ValueError, TypeError, KeyError):
                 # Some results might not be valid
                 pass
@@ -8312,102 +8309,102 @@ end""",
                 # Should handle malformed input gracefully
                 assert isinstance(str(e), str)
 
-    def test_unicode_and_special_characters(self):
-        """Test handling of Unicode and special characters."""
-        from souschef.server import (
-            _convert_erb_to_jinja2,
-            _normalize_ruby_value,
-            _strip_ruby_comments,
-            parse_attributes,
-            parse_recipe,
-            parse_template,
-        )
 
-        # Unicode and special character test cases
-        unicode_test_cases = [
-            # Basic Unicode
-            "测试内容",  # Chinese characters
-            "café résumé naïve",  # Accented characters
-            "Москва",  # Cyrillic
-            "العربية",  # Arabic
-            "日本語",  # Japanese
-            "한국어",  # Korean
-            "🚀 🎉 ⭐",  # Emojis
-            # Special characters
-            "!@#$%^&*()_+-=[]{}|;:',.<>?",
-            "\\n\\t\\r\\v\\f",  # Escape sequences
-            "\x00\x01\x02\x03",  # Control characters
-            "\u0000\u0001\u0002",  # Unicode control characters
-            # Mixed content
-            "package 'nginx-测试' do\n  # Comment with émojis 🚀\n  action :install\nend",
-            "default['app']['名前'] = 'テストアプリ'",
-            "<%= node['app']['título'] %> - <%= node['configuración']['puerto'] %>",
-        ]
+def _test_parsing_with_temp_file(content, suffix, parser_func):
+    """Test parser with temporary file containing content."""
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=suffix, delete=False
+    ) as f:
+        try:
+            f.write(content)
+            temp_path = f.name
+            result = parser_func(temp_path)
+            assert isinstance(result, str)
+        except UnicodeError:
+            pass  # Unicode errors are acceptable
+        finally:
+            with contextlib.suppress(builtins.BaseException):
+                Path(temp_path).unlink()
 
-        for test_case in unicode_test_cases:
-            # Test file operations with Unicode content
-            with tempfile.NamedTemporaryFile(
-                mode="w", encoding="utf-8", suffix=".rb", delete=False
-            ) as f:
-                try:
-                    f.write(test_case)
-                    temp_path = f.name
 
-                    # Test parsing functions with Unicode content
-                    try:
-                        result = parse_recipe(temp_path)
-                        assert isinstance(result, str)
-                    except UnicodeError:
-                        pass  # Unicode errors are acceptable
+def _test_helper_function_with_input(helper_func, test_input):
+    """Test a function with given input, handling expected exceptions."""
+    try:
+        result = helper_func(test_input)
+        assert isinstance(result, str)
+    except (ValueError, TypeError):
+        pass  # These exceptions are acceptable for invalid/unicode input
 
-                    try:
-                        result = parse_attributes(temp_path)
-                        assert isinstance(result, str)
-                    except UnicodeError:
-                        pass
 
-                except UnicodeError:
-                    pass  # Some content might not be writable
-                finally:
-                    with contextlib.suppress(builtins.BaseException):
-                        Path(temp_path).unlink()
+class TestUnicodeAndSpecialCharacters:
+    """Test handling of Unicode and special characters."""
 
-            # Test template parsing with Unicode
-            if ".erb" in str(test_case) or "<%" in test_case:
-                with tempfile.NamedTemporaryFile(
-                    mode="w", encoding="utf-8", suffix=".erb", delete=False
-                ) as f:
-                    try:
-                        f.write(test_case)
-                        temp_path = f.name
+    UNICODE_TEST_CASES = [
+        # Basic Unicode
+        "测试内容",  # Chinese characters
+        "café résumé naïve",  # Accented characters
+        "Москва",  # Cyrillic
+        "العربية",  # Arabic
+        "日本語",  # Japanese
+        "한국어",  # Korean
+        "🚀 🎉 ⭐",  # Emojis
+        # Special characters
+        "!@#$%^&*()_+-=[]{}|;:',.<>?",
+        "\\n\\t\\r\\v\\f",  # Escape sequences
+        "\x00\x01\x02\x03",  # Control characters
+        "\u0000\u0001\u0002",  # Unicode control characters
+        # Mixed content
+        "package 'nginx-测试' do\n  # Comment with émojis 🚀\n  action :install\nend",
+        "default['app']['名前'] = 'テストアプリ'",
+        "<%= node['app']['título'] %> - <%= node['configuración']['puerto'] %>",
+    ]
 
-                        result = parse_template(temp_path)
-                        assert isinstance(result, str)
+    def test_recipe_parsing_with_unicode(self):
+        """Test recipe parsing with Unicode content."""
+        from souschef.server import parse_recipe
 
-                    except UnicodeError:
-                        pass
-                    finally:
-                        with contextlib.suppress(builtins.BaseException):
-                            Path(temp_path).unlink()
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_parsing_with_temp_file(test_case, ".rb", parse_recipe)
 
-            # Test helper functions directly with Unicode
-            try:
-                result = _strip_ruby_comments(test_case)
-                assert isinstance(result, str)
-            except (ValueError, TypeError):
-                pass
+    def test_attributes_parsing_with_unicode(self):
+        """Test attributes parsing with Unicode content."""
+        from souschef.server import parse_attributes
 
-            try:
-                result = _normalize_ruby_value(test_case)
-                assert isinstance(result, str)
-            except (ValueError, TypeError):
-                pass
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_parsing_with_temp_file(test_case, ".rb", parse_attributes)
 
-            try:
-                result = _convert_erb_to_jinja2(test_case)
-                assert isinstance(result, str)
-            except (ValueError, TypeError):
-                pass
+    def test_template_parsing_with_unicode(self):
+        """Test template parsing with Unicode content (ERB files)."""
+        from souschef.server import parse_template
+
+        erb_test_cases = [tc for tc in self.UNICODE_TEST_CASES if "<%" in tc]
+        for test_case in erb_test_cases:
+            _test_parsing_with_temp_file(test_case, ".erb", parse_template)
+
+    def test_strip_ruby_comments_with_unicode(self):
+        """Test _strip_ruby_comments with Unicode content."""
+        from souschef.server import _strip_ruby_comments
+
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_helper_function_with_input(_strip_ruby_comments, test_case)
+
+    def test_normalize_ruby_value_with_unicode(self):
+        """Test _normalize_ruby_value with Unicode content."""
+        from souschef.server import _normalize_ruby_value
+
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_helper_function_with_input(_normalize_ruby_value, test_case)
+
+    def test_convert_erb_to_jinja2_with_unicode(self):
+        """Test _convert_erb_to_jinja2 with Unicode content."""
+        from souschef.server import _convert_erb_to_jinja2
+
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_helper_function_with_input(_convert_erb_to_jinja2, test_case)
+
+
+class TestLargeFileHandling:
+    """Test handling of large files and content."""
 
     def test_large_file_handling(self):
         """Test handling of large files and content."""
@@ -9749,18 +9746,13 @@ version '0.1.0' """,
             [{"incomplete": "node"}],
         ]
 
-        group_names = ["web", "database", "all", "", "group-with-dashes"]
-
         for result in search_results:
-            for group_name in group_names[:2]:  # Test with a couple group names
-                try:
-                    inventory = _generate_ansible_inventory_from_search(
-                        result, group_name
-                    )
-                    assert isinstance(inventory, str)
-                except Exception:
-                    # Some results might not be valid, that's acceptable
-                    pass
+            try:
+                inventory = _generate_ansible_inventory_from_search(result)
+                assert isinstance(inventory, dict)
+            except Exception:
+                # Some results might not be valid, that's acceptable
+                pass
 
     def test_deep_nested_functionality(self):
         """Test deeply nested functionality and edge cases."""
