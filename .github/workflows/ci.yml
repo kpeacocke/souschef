@@ -37,10 +37,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  security-events: write  # Required for security scanning results
-
 env:
   PYTHON_VERSION: "3.14"
 
@@ -48,6 +44,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     strategy:
       fail-fast: true
       matrix:
@@ -101,6 +99,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: test
+    permissions:
+      contents: read
 
     steps:
     - uses: actions/checkout@v4
@@ -152,6 +152,9 @@ jobs:
   security:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
     - uses: actions/checkout@v4
@@ -193,10 +196,60 @@ jobs:
         base: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
         head: ${{ github.event.pull_request.head.sha || github.sha }}
 
+  ansible-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install ansible-lint
+      run: pip install ansible-lint
+
+    - name: Create test playbooks from examples
+      run: |
+        mkdir -p .ansible-lint-test
+        # Create a minimal playbook to validate ansible-lint is working
+        cat > .ansible-lint-test/test-playbook.yml << 'EOF'
+        ---
+        - name: Test playbook for linting
+          hosts: localhost
+          gather_facts: false
+          tasks:
+            - name: Debug message
+              ansible.builtin.debug:
+                msg: "Ansible-lint validation working"
+        EOF
+
+    - name: Run ansible-lint on test playbook
+      run: |
+        ansible-lint .ansible-lint-test/
+
+    - name: Lint any generated playbooks in examples
+      run: |
+        # Find and lint any YAML files that look like Ansible playbooks
+        find examples -name '*.yml' -o -name '*.yaml' | while read -r file; do
+          if grep -q 'hosts:' "$file" 2>/dev/null; then
+            echo "Linting potential playbook: $file"
+            ansible-lint "$file" || true  # Don't fail on example files
+          fi
+        done
+      continue-on-error: true
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [test, test-cli, security]
+    needs: [test, test-cli, security, ansible-lint]
+    permissions:
+      contents: read
 
     steps:
     - uses: actions/checkout@v4

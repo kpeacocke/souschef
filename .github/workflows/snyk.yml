@@ -22,11 +22,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  security-events: write
-  actions: read
-
 env:
   PYTHON_VERSION: "3.14"
 
@@ -35,6 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: secrets.SNYK_TOKEN != ''
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
 
     steps:
     - uses: actions/checkout@v4
@@ -71,18 +70,79 @@ jobs:
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
-        args: --severity-threshold=high --file=requirements.txt
+        args: --severity-threshold=high --file=requirements.txt --sarif-file-output=snyk-sca.sarif
 
-    - name: Upload Snyk results to GitHub Code Scanning
+    - name: Upload Snyk SCA results to GitHub Code Scanning
       uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
-        sarif_file: snyk.sarif
+        sarif_file: snyk-sca.sarif
+        category: snyk-sca
+
+  snyk-code:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: secrets.SNYK_TOKEN != ''
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Snyk CLI
+      uses: snyk/actions/setup@master
+
+    - name: Run Snyk Code (SAST)
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      run: snyk code test --sarif-file-output=snyk-code.sarif
+
+    - name: Upload Snyk Code results to GitHub Code Scanning
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: snyk-code.sarif
+        category: snyk-code
+
+  snyk-iac:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: secrets.SNYK_TOKEN != ''
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Snyk CLI
+      uses: snyk/actions/setup@master
+
+    - name: Run Snyk IaC scan
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      run: |
+        # Scan any Ansible playbooks in examples
+        snyk iac test examples/ --sarif-file-output=snyk-iac.sarif || true
+
+    - name: Upload Snyk IaC results to GitHub Code Scanning
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: snyk-iac.sarif
+        category: snyk-iac
 
   snyk-monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.SNYK_TOKEN != ''
+    permissions:
+      contents: read
 
     steps:
     - uses: actions/checkout@v4

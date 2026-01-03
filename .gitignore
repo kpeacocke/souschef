@@ -29,13 +29,20 @@ MANIFEST
 # pytest
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
+
+# Snyk
+requirements.txt
 
 # Hypothesis
 .hypothesis/
 
 # ruff
 .ruff_cache/
+
+# Ruby LSP
+.ruby-lsp/
 
 # Virtualenv
 .venv/

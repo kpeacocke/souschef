@@ -1,8 +1,13 @@
 {
     "name": "SousChef",
     "build": {
-        "dockerfile": "Dockerfile"
+        "dockerfile": "Dockerfile",
+        "args": {
+            "SNYK_VERSION": "latest"
+        }
     },
+    "workspaceFolder": "/workspaces/souschef",
+    "shutdownAction": "stopContainer",
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
             "installZsh": true,
@@ -32,7 +37,6 @@
             "version": "lts"
         }
     },
-    "onCreateCommand": "curl -sSL https://install.python-poetry.org | python3 - && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc",
     "customizations": {
         "vscode": {
             "settings": {
@@ -47,7 +51,6 @@
                 ],
                 "[python]": {
                     "editor.formatOnSave": true,
-                    "editor.defaultFormatter": "charliermarsh.ruff",
                     "editor.codeActionsOnSave": {
                         "source.fixAll": "explicit",
                         "source.organizeImports": "explicit"
@@ -78,11 +81,16 @@
                 "redhat.vscode-yaml",
                 "Shopify.ruby-lsp",
                 "snyk-security.snyk-vulnerability-scanner",
-                "SonarSource.sonarlint-vscode"
+                "SonarSource.sonarlint-vscode",
+                "Progress.chef",
+                "redhat.ansible",
+                "zbr.vscode-ansible",
+                "ms-vscode.test-adapter-converter"
             ]
         }
     },
-    "postCreateCommand": "cat > ~/.gitconfig << 'EOF'\n[include]\n\tpath = ~/.gitconfig.host\n[gpg]\n\tprogram = gpg\n[commit]\n\tgpgsign = false\nEOF\nexport PATH=\"$HOME/.local/bin:$PATH\" && poetry config virtualenvs.in-project true && poetry install && poetry run pre-commit install && poetry run pytest",
+    "onCreateCommand": "curl -sSL https://install.python-poetry.org | python3 - && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc",
+    "postCreateCommand": "chmod +x .devcontainer/post-create.sh && .devcontainer/post-create.sh",
     "remoteUser": "vscode",
     "mounts": [
         "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig.host,type=bind,consistency=cached",

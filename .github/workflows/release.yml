@@ -9,10 +9,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false  # Don't cancel releases
 
-permissions:
-  contents: write
-  id-token: write
-
 env:
   PYTHON_VERSION: "3.14"
 
@@ -20,6 +16,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
     - uses: actions/checkout@v4
@@ -72,6 +70,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: test
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.get-version.outputs.version }}
 
@@ -137,6 +137,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: build
+    permissions:
+      contents: write
 
     steps:
     - uses: actions/checkout@v4
@@ -191,6 +193,9 @@ jobs:
     timeout-minutes: 10
     needs: release
     environment: pypi
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
     - name: Download build artifacts
