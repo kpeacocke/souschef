@@ -2546,22 +2546,19 @@ def _extract_enhanced_notifications(
     return notifications
 
 
-def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str, Any]:  # noqa: C901
-    """Extract Chef guards (only_if, not_if) and convert to Ansible when conditions.
+def _find_resource_block(resource: dict[str, str], raw_content: str) -> str | None:
+    """Find the resource block in raw content.
 
     Args:
-        resource: Resource dictionary with type, name, action, properties.
+        resource: Resource dictionary with type and name.
         raw_content: Raw recipe content.
 
     Returns:
-        Dictionary with Ansible when/unless conditions.
+        Resource block content or None if not found.
 
     """
     import re
 
-    guards = {}
-
-    # Find the resource block in raw content
     resource_type_escaped = resource["type"]
     resource_name_escaped = re.escape(resource["name"])
     resource_pattern = (
@@ -2572,10 +2569,22 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
     )
     resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
 
-    if not resource_match:
-        return guards
+    if resource_match:
+        return resource_match.group(1)
+    return None
 
-    resource_block = resource_match.group(1)
+
+def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list]:
+    """Extract all guard patterns from resource block.
+
+    Args:
+        resource_block: Resource block content.
+
+    Returns:
+        Tuple of (only_if_conditions, not_if_conditions, only_if_blocks, not_if_blocks).
+
+    """
+    import re
 
     # Extract only_if conditions
     only_if_pattern = re.compile(r'only_if\s+[\'"]([^\'"]+)[\'"]')
@@ -2593,33 +2602,93 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
     not_if_block_pattern = re.compile(r"not_if\s+do\s*(.*?)\s*end", re.DOTALL)
     not_if_block_matches = not_if_block_pattern.findall(resource_block)
 
-    # Convert Chef guards to Ansible when conditions
+    return (
+        only_if_matches,
+        not_if_matches,
+        only_if_block_matches,
+        not_if_block_matches,
+    )
+
+
+def _convert_guards_to_when_conditions(
+    only_if_conditions: list,
+    not_if_conditions: list,
+    only_if_blocks: list,
+    not_if_blocks: list,
+) -> list[str]:
+    """Convert Chef guards to Ansible when conditions.
+
+    Args:
+        only_if_conditions: List of only_if condition strings.
+        not_if_conditions: List of not_if condition strings.
+        only_if_blocks: List of only_if block contents.
+        not_if_blocks: List of not_if block contents.
+
+    Returns:
+        List of Ansible when conditions.
+
+    """
     when_conditions = []
 
     # Process only_if conditions (these become when conditions)
-    for condition in only_if_matches:
+    for condition in only_if_conditions:
         ansible_condition = _convert_chef_condition_to_ansible(condition)
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
     # Process only_if blocks
-    for block in only_if_block_matches:
+    for block in only_if_blocks:
         ansible_condition = _convert_chef_block_to_ansible(block, positive=True)
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
     # Process not_if conditions (these become when conditions with negation)
-    for condition in not_if_matches:
+    for condition in not_if_conditions:
         ansible_condition = _convert_chef_condition_to_ansible(condition, negate=True)
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
     # Process not_if blocks
-    for block in not_if_block_matches:
+    for block in not_if_blocks:
         ansible_condition = _convert_chef_block_to_ansible(block, positive=False)
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
+    return when_conditions
+
+
+def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str, Any]:
+    """Extract Chef guards (only_if, not_if) and convert to Ansible when conditions.
+
+    Args:
+        resource: Resource dictionary with type, name, action, properties.
+        raw_content: Raw recipe content.
+
+    Returns:
+        Dictionary with Ansible when/unless conditions.
+
+    """
+    guards = {}
+
+    # Find the resource block in raw content
+    resource_block = _find_resource_block(resource, raw_content)
+    if not resource_block:
+        return guards
+
+    # Extract all guard patterns
+    (
+        only_if_conditions,
+        not_if_conditions,
+        only_if_blocks,
+        not_if_blocks,
+    ) = _extract_guard_patterns(resource_block)
+
+    # Convert to Ansible when conditions
+    when_conditions = _convert_guards_to_when_conditions(
+        only_if_conditions, not_if_conditions, only_if_blocks, not_if_blocks
+    )
+
+    # Format the when clause
     if when_conditions:
         if len(when_conditions) == 1:
             guards["when"] = when_conditions[0]
