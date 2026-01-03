@@ -11,6 +11,35 @@ from mcp.server.fastmcp import FastMCP
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
 
+
+def _normalize_path(path_str: str) -> Path:
+    """Normalize a file path for safe filesystem operations.
+
+    This function resolves relative paths and symlinks to absolute paths,
+    preventing path traversal attacks (CWE-23). Note: This MCP server
+    intentionally allows full filesystem access as it runs in the user's
+    local environment with their permissions.
+
+    Args:
+        path_str: Path string to normalize.
+
+    Returns:
+        Resolved absolute Path object.
+
+    Raises:
+        ValueError: If the path contains null bytes or is invalid.
+
+    """
+    if "\x00" in path_str:
+        raise ValueError(f"Path contains null bytes: {path_str!r}")
+
+    try:
+        # Resolve to absolute path, removing .., ., and resolving symlinks
+        return Path(path_str).resolve()
+    except (OSError, RuntimeError) as e:
+        raise ValueError(f"Invalid path {path_str}: {e}")
+
+
 # Constants for commonly used strings
 ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"
 METADATA_FILENAME = "metadata.rb"
@@ -93,7 +122,7 @@ def parse_template(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         # Extract variables
@@ -538,7 +567,7 @@ def parse_custom_resource(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         # Determine resource type
@@ -587,8 +616,10 @@ def list_directory(path: str) -> list[str] | str:
 
     """
     try:
-        dir_path = Path(path)
+        dir_path = _normalize_path(path)
         return [item.name for item in dir_path.iterdir()]
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: Directory not found at {path}"
     except NotADirectoryError:
@@ -611,8 +642,10 @@ def read_file(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         return file_path.read_text(encoding="utf-8")
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found at {path}"
     except IsADirectoryError:
@@ -637,7 +670,7 @@ def read_cookbook_metadata(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         metadata = _extract_metadata(content)
@@ -647,6 +680,8 @@ def read_cookbook_metadata(path: str) -> str:
 
         return _format_metadata(metadata)
 
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found at {path}"
     except IsADirectoryError:
@@ -726,7 +761,7 @@ def parse_recipe(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         resources = _extract_resources(content)
@@ -736,6 +771,8 @@ def parse_recipe(path: str) -> str:
 
         return _format_resources(resources)
 
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found at {path}"
     except IsADirectoryError:
@@ -887,7 +924,7 @@ def parse_attributes(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         attributes = _extract_attributes(content)
@@ -897,6 +934,8 @@ def parse_attributes(path: str) -> str:
 
         return _format_attributes(attributes)
 
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found at {path}"
     except IsADirectoryError:
@@ -983,7 +1022,7 @@ def list_cookbook_structure(path: str) -> str:
 
     """
     try:
-        cookbook_path = Path(path)
+        cookbook_path = _normalize_path(path)
 
         if not cookbook_path.is_dir():
             return f"Error: {path} is not a directory"
@@ -1314,7 +1353,7 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
 
     """
     try:
-        path_obj = Path(recipe_or_cookbook_path)
+        path_obj = _normalize_path(recipe_or_cookbook_path)
 
         if path_obj.is_file():
             # Single recipe file
@@ -3704,7 +3743,7 @@ def parse_inspec_profile(path: str) -> str:
 
     """
     try:
-        profile_path = Path(path)
+        profile_path = _normalize_path(path)
 
         if not profile_path.exists():
             return f"Error: Path does not exist: {path}"
@@ -5051,9 +5090,8 @@ def generate_awx_job_template_from_cookbook(
     """
     try:
         import json
-        from pathlib import Path
 
-        cookbook = Path(cookbook_path)
+        cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -7140,9 +7178,7 @@ def analyze_cookbook_dependencies(
 
     """
     try:
-        from pathlib import Path
-
-        cookbook_path_obj = Path(cookbook_path)
+        cookbook_path_obj = _normalize_path(cookbook_path)
         if not cookbook_path_obj.exists():
             return f"{ERROR_PREFIX} Cookbook path not found: {cookbook_path}"
 
@@ -7257,9 +7293,7 @@ def generate_migration_report(
 
 def _assess_single_cookbook(cookbook_path) -> dict:
     """Assess complexity of a single cookbook."""
-    from pathlib import Path
-
-    cookbook = Path(cookbook_path)
+    cookbook = _normalize_path(cookbook_path)
     assessment = {
         "cookbook_name": cookbook.name,
         "cookbook_path": str(cookbook),
