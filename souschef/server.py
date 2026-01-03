@@ -201,7 +201,68 @@ def _extract_node_attribute_path(node_ref: str) -> str:
     return attr_path
 
 
-def _extract_code_block_variables(content: str, variables: set[str]) -> None:  # noqa: C901
+def _extract_interpolated_variables(code: str, variables: set[str]) -> None:
+    """Extract variables from Ruby string interpolation.
+
+    Args:
+        code: Code block content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    interpolated = re.findall(r"#\{([^}]+)\}", code)
+    for expr in interpolated:
+        var_match = re.match(r"[\w.\[\]'\"]+", expr.strip())
+        if var_match:
+            variables.add(var_match.group())
+
+
+def _extract_node_attributes(code: str, variables: set[str]) -> None:
+    """Extract node attribute references from code.
+
+    Args:
+        code: Code block content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    if "node[" in code:
+        node_matches = re.finditer(r"node\[.+\]", code)
+        for match in node_matches:
+            attr_path = _extract_node_attribute_path(match.group())
+            if attr_path:
+                variables.add(attr_path)
+
+
+def _extract_conditional_variables(code: str, variables: set[str]) -> None:
+    """Extract variables from conditional statements.
+
+    Args:
+        code: Code block content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    if code.startswith(("if ", "unless ", "elsif ")):
+        var_refs = re.findall(r"\b(\w+)", code)
+        for var in var_refs:
+            if var not in ["if", "unless", "elsif", "end", "do", "node"]:
+                variables.add(var)
+
+
+def _extract_iterator_variables(code: str, variables: set[str]) -> None:
+    """Extract variables from .each iterators.
+
+    Args:
+        code: Code block content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    if ".each" in code:
+        match = re.search(r"(\w+)\.each\s+do\s+\|(\w+)\|", code)
+        if match:
+            variables.add(match.group(1))  # Array variable
+            variables.add(match.group(2))  # Iterator variable
+
+
+def _extract_code_block_variables(content: str, variables: set[str]) -> None:
     """Extract variables from <% %> code blocks.
 
     Args:
@@ -211,36 +272,10 @@ def _extract_code_block_variables(content: str, variables: set[str]) -> None:  #
     """
     code_blocks = re.findall(r"<%\s+(.+?)\s+%>", content, re.DOTALL)
     for code in code_blocks:
-        # Handle Ruby string interpolation: "text #{var} more"
-        interpolated = re.findall(r"#\{([^}]+)\}", code)
-        for expr in interpolated:
-            # Extract variable name from expression
-            var_match = re.match(r"[\w.\[\]'\"]+", expr.strip())
-            if var_match:
-                variables.add(var_match.group())
-
-        # Handle node attributes in conditionals
-        if "node[" in code:
-            # Find all node attribute references in this code block
-            # Use greedy match to capture full nested path: node['a']['b']['c']
-            node_matches = re.finditer(r"node\[.+\]", code)
-            for match in node_matches:
-                attr_path = _extract_node_attribute_path(match.group())
-                if attr_path:
-                    variables.add(attr_path)
-
-        if code.startswith(("if ", "unless ", "elsif ")):
-            # Extract variables from conditions (non-node variables)
-            var_refs = re.findall(r"\b(\w+)", code)
-            for var in var_refs:
-                if var not in ["if", "unless", "elsif", "end", "do", "node"]:
-                    variables.add(var)
-        elif ".each" in code:
-            # Extract array variable and iterator
-            match = re.search(r"(\w+)\.each\s+do\s+\|(\w+)\|", code)
-            if match:
-                variables.add(match.group(1))  # Array variable
-                variables.add(match.group(2))  # Iterator variable
+        _extract_interpolated_variables(code, variables)
+        _extract_node_attributes(code, variables)
+        _extract_conditional_variables(code, variables)
+        _extract_iterator_variables(code, variables)
 
 
 def _extract_template_variables(content: str) -> set[str]:

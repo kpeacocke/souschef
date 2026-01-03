@@ -1956,6 +1956,7 @@ def test_convert_chef_databag_to_vars_success():
     from souschef.server import convert_chef_databag_to_vars
 
     # Create databag content
+    # deepcode ignore NoHardcodedPasswords/test: test password>
     databag_data = {"id": "database", "password": "secret123", "host": "db.example.com"}
     databag_content = json.dumps(databag_data)
 
@@ -5350,9 +5351,7 @@ end""",
                     pass
                 except Exception as e:
                     # Other exceptions should be handled gracefully
-                    assert False, (
-                        f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}"
-                    )
+                    assert False, f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}"
 
     def test_json_and_data_handling(self):
         """Test JSON and data handling within functions."""
