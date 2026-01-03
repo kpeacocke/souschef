@@ -3063,7 +3063,37 @@ def _create_handler_with_timing(
 # InSpec parsing helper functions
 
 
-def _parse_inspec_control(content: str) -> list[dict[str, Any]]:  # noqa: C901
+def _extract_control_metadata(control_body: str) -> dict[str, Any]:
+    """Extract title, description, and impact from control body.
+
+    Args:
+        control_body: Content of the control block.
+
+    Returns:
+        Dictionary with title, desc, and impact.
+
+    """
+    metadata = {"title": "", "desc": "", "impact": 1.0}
+
+    # Extract title
+    title_match = re.search(r"title\s+['\"]([^'\"]+)['\"]", control_body)
+    if title_match:
+        metadata["title"] = title_match.group(1)
+
+    # Extract description
+    desc_match = re.search(r"desc\s+['\"]([^'\"]+)['\"]", control_body)
+    if desc_match:
+        metadata["desc"] = desc_match.group(1)
+
+    # Extract impact
+    impact_match = re.search(r"impact\s+([\d.]+)", control_body)
+    if impact_match:
+        metadata["impact"] = float(impact_match.group(1))
+
+    return metadata
+
+
+def _parse_inspec_control(content: str) -> list[dict[str, Any]]:
     """Parse InSpec control blocks from content.
 
     Args:
@@ -3085,56 +3115,18 @@ def _parse_inspec_control(content: str) -> list[dict[str, Any]]:  # noqa: C901
         if control_match:
             control_id = control_match.group(1)
 
-            # Find the matching end for this control by tracking nesting
-            nesting_level = 0
-            control_body_lines = []
-
-            i += 1  # Move past the control line
-            while i < len(lines):
-                current_line = lines[i]
-                stripped = current_line.strip()
-
-                # Count do/end for nesting
-                if re.search(r"\bdo\s*$", stripped):
-                    nesting_level += 1
-                elif stripped == "end":
-                    if nesting_level == 0:
-                        # This is the end of our control
-                        break
-                    else:
-                        nesting_level -= 1
-
-                control_body_lines.append(current_line)
-                i += 1
+            # Find the matching end for this control
+            control_body_lines, end_index = _find_nested_block_end(lines, i + 1)
+            i = end_index
 
             # Parse the control body
             control_body = "\n".join(control_body_lines)
 
             control_data: dict[str, Any] = {
                 "id": control_id,
-                "title": "",
-                "desc": "",
-                "impact": 1.0,
-                "tests": [],
+                **_extract_control_metadata(control_body),
+                "tests": _extract_inspec_describe_blocks(control_body),
             }
-
-            # Extract title
-            title_match = re.search(r"title\s+['\"]([^'\"]+)['\"]", control_body)
-            if title_match:
-                control_data["title"] = title_match.group(1)
-
-            # Extract description
-            desc_match = re.search(r"desc\s+['\"]([^'\"]+)['\"]", control_body)
-            if desc_match:
-                control_data["desc"] = desc_match.group(1)
-
-            # Extract impact
-            impact_match = re.search(r"impact\s+([\d.]+)", control_body)
-            if impact_match:
-                control_data["impact"] = float(impact_match.group(1))
-
-            # Extract describe blocks
-            control_data["tests"] = _extract_inspec_describe_blocks(control_body)
 
             controls.append(control_data)
 
@@ -3143,7 +3135,81 @@ def _parse_inspec_control(content: str) -> list[dict[str, Any]]:  # noqa: C901
     return controls
 
 
-def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:  # noqa: C901
+def _find_nested_block_end(
+    lines: list[str], start_index: int
+) -> tuple[list[str], int]:
+    """Find the end of a nested Ruby block (do...end).
+
+    Args:
+        lines: All lines of content.
+        start_index: Starting line index (after the 'do' line).
+
+    Returns:
+        Tuple of (body_lines, ending_index).
+
+    """
+    nesting_level = 0
+    body_lines = []
+    i = start_index
+
+    while i < len(lines):
+        current_line = lines[i]
+        stripped = current_line.strip()
+
+        if re.search(r"\bdo\s*$", stripped):
+            nesting_level += 1
+        elif stripped == "end":
+            if nesting_level == 0:
+                break
+            else:
+                nesting_level -= 1
+
+        body_lines.append(current_line)
+        i += 1
+
+    return body_lines, i
+
+
+def _extract_it_expectations(describe_body: str) -> list[dict[str, Any]]:
+    """Extract 'it { should ... }' expectations from describe block.
+
+    Args:
+        describe_body: Content of the describe block.
+
+    Returns:
+        List of expectation dictionaries.
+
+    """
+    expectations = []
+    it_pattern = re.compile(r"it\s+\{([^}]+)\}")
+    for it_match in it_pattern.finditer(describe_body):
+        expectation = it_match.group(1).strip()
+        expectations.append({"type": "should", "matcher": expectation})
+    return expectations
+
+
+def _extract_its_expectations(describe_body: str) -> list[dict[str, Any]]:
+    """Extract 'its(...) { should ... }' expectations from describe block.
+
+    Args:
+        describe_body: Content of the describe block.
+
+    Returns:
+        List of expectation dictionaries.
+
+    """
+    expectations = []
+    its_pattern = re.compile(r"its\(['\"]([^'\"]+)['\"]\)\s+\{([^}]+)\}")
+    for its_match in its_pattern.finditer(describe_body):
+        property_name = its_match.group(1)
+        expectation = its_match.group(2).strip()
+        expectations.append(
+            {"type": "its", "property": property_name, "matcher": expectation}
+        )
+    return expectations
+
+
+def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:
     """Extract InSpec describe blocks and their matchers.
 
     Args:
@@ -3169,26 +3235,8 @@ def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:  # no
             resource_name = describe_match.group(2).strip()
 
             # Find the matching end for this describe block
-            nesting_level = 0
-            describe_body_lines = []
-
-            i += 1  # Move past the describe line
-            while i < len(lines):
-                current_line = lines[i]
-                stripped = current_line.strip()
-
-                # Count do/end for nesting
-                if re.search(r"\bdo\s*$", stripped):
-                    nesting_level += 1
-                elif stripped == "end":
-                    if nesting_level == 0:
-                        # This is the end of our describe block
-                        break
-                    else:
-                        nesting_level -= 1
-
-                describe_body_lines.append(current_line)
-                i += 1
+            describe_body_lines, end_index = _find_nested_block_end(lines, i + 1)
+            i = end_index
 
             # Parse the describe body
             describe_body = "\n".join(describe_body_lines)
@@ -3199,29 +3247,9 @@ def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:  # no
                 "expectations": [],
             }
 
-            # Extract 'it { should ... }' blocks
-            it_pattern = re.compile(r"it\s+\{([^}]+)\}")
-            for it_match in it_pattern.finditer(describe_body):
-                expectation = it_match.group(1).strip()
-                test_data["expectations"].append(
-                    {
-                        "type": "should",
-                        "matcher": expectation,
-                    }
-                )
-
-            # Extract 'its(...) { should ... }' blocks
-            its_pattern = re.compile(r"its\(['\"]([^'\"]+)['\"]\)\s+\{([^}]+)\}")
-            for its_match in its_pattern.finditer(describe_body):
-                property_name = its_match.group(1)
-                expectation = its_match.group(2).strip()
-                test_data["expectations"].append(
-                    {
-                        "type": "its",
-                        "property": property_name,
-                        "matcher": expectation,
-                    }
-                )
+            # Extract expectations
+            test_data["expectations"].extend(_extract_it_expectations(describe_body))
+            test_data["expectations"].extend(_extract_its_expectations(describe_body))
 
             if test_data["expectations"]:
                 tests.append(test_data)
