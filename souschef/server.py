@@ -2074,25 +2074,38 @@ def _get_current_timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _extract_recipe_variables(raw_content: str) -> dict[str, str]:  # noqa: C901
-    """Extract variables from Chef recipe content.
+def _extract_version_variable(raw_content: str) -> dict[str, str]:
+    """Extract version specification from recipe content.
 
     Args:
         raw_content: Raw Chef recipe file content.
 
     Returns:
-        Dictionary of variable names and values.
+        Dictionary with package_version key if found.
+
+    """
+    import re
+
+    version_pattern = re.compile(r"version\s+['\"]([^'\"]+)['\"]")
+    versions = version_pattern.findall(raw_content)
+    if versions:
+        return {"package_version": f'"{versions[0]}"'}
+    return {}
+
+
+def _extract_content_variables(raw_content: str) -> dict[str, str]:
+    """Extract content and source specifications from recipe content.
+
+    Args:
+        raw_content: Raw Chef recipe file content.
+
+    Returns:
+        Dictionary with file_content and/or template_source keys if found.
 
     """
     import re
 
     variables = {}
-
-    # Extract version specifications
-    version_pattern = re.compile(r"version\s+['\"]([^'\"]+)['\"]")
-    versions = version_pattern.findall(raw_content)
-    if versions:
-        variables["package_version"] = f'"{versions[0]}"'
 
     # Extract content specifications
     content_pattern = re.compile(r"content\s+['\"]([^'\"]*)['\"]", re.DOTALL)
@@ -2106,26 +2119,79 @@ def _extract_recipe_variables(raw_content: str) -> dict[str, str]:  # noqa: C901
     if sources:
         variables["template_source"] = f'"{sources[0]}"'
 
-    # Extract owner/group specifications
+    return variables
+
+
+def _extract_ownership_variables(raw_content: str) -> dict[str, str]:
+    """Extract owner and group specifications from recipe content.
+
+    Args:
+        raw_content: Raw Chef recipe file content.
+
+    Returns:
+        Dictionary with file_owner and/or file_group keys if found.
+
+    """
+    import re
+
+    variables = {}
+
+    # Extract owner specifications
     owner_pattern = re.compile(r"owner\s+['\"]([^'\"]+)['\"]")
     owners = owner_pattern.findall(raw_content)
     if owners and owners[0] not in ["root"]:  # Skip default root
         variables["file_owner"] = f'"{owners[0]}"'
 
+    # Extract group specifications
     group_pattern = re.compile(r"group\s+['\"]([^'\"]+)['\"]")
     groups = group_pattern.findall(raw_content)
     if groups and groups[0] not in ["root"]:  # Skip default root
         variables["file_group"] = f'"{groups[0]}"'
 
+    return variables
+
+
+def _extract_mode_variables(raw_content: str) -> dict[str, str]:
+    """Extract mode specifications from recipe content.
+
+    Args:
+        raw_content: Raw Chef recipe file content.
+
+    Returns:
+        Dictionary with file_mode and/or directory_mode keys if found.
+
+    """
+    import re
+
     # Extract mode specifications
     mode_pattern = re.compile(r"mode\s+['\"]([^'\"]+)['\"]")
     modes = mode_pattern.findall(raw_content)
     unique_modes = list(set(modes))
+
     if len(unique_modes) == 1:
-        variables["file_mode"] = f'"{unique_modes[0]}"'
+        return {"file_mode": f'"{unique_modes[0]}"'}
     elif len(unique_modes) > 1:
-        variables["directory_mode"] = '"0755"'
-        variables["file_mode"] = '"0644"'
+        return {"directory_mode": '"0755"', "file_mode": '"0644"'}
+    return {}
+
+
+def _extract_recipe_variables(raw_content: str) -> dict[str, str]:
+    """Extract variables from Chef recipe content.
+
+    Args:
+        raw_content: Raw Chef recipe file content.
+
+    Returns:
+        Dictionary of variable names and values.
+
+    """
+    variables = {}
+
+    # Combine all extracted variables
+    variables.update(_extract_version_variable(raw_content))
+    variables.update(_extract_content_variables(raw_content))
+    variables.update(_extract_ownership_variables(raw_content))
+    variables.update(_extract_mode_variables(raw_content))
 
     return variables
 
