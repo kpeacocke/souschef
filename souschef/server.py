@@ -429,7 +429,7 @@ def _extract_heredoc_strings(content: str) -> dict[str, str]:
     """
     heredocs = {}
     # Match heredoc patterns: <<-MARKER or <<MARKER
-    heredoc_pattern = r"<<-?(\w+)\s*\n((?:(?!^\s*\1\s*$)[\s\S])*?)^\s*\1\s*$"
+    heredoc_pattern = r"<<-?(\w+)\s*\n((?:(?!^\s*\1\s*$).)*?)^\s*\1\s*$"
     for match in re.finditer(heredoc_pattern, content, re.DOTALL | re.MULTILINE):
         marker = match.group(1)
         content_text = match.group(2)
@@ -454,8 +454,30 @@ def _normalize_ruby_value(value: str) -> str:
     # Handle arrays: [:a, :b] -> ["a", "b"]
     if value.startswith("[") and value.endswith("]"):
         # Simple symbol array conversion
-        value = re.sub(r":([\w_]+)", r'"\1"', value)
+        value = re.sub(r":(\w+)", r'"\1"', value)
     return value
+
+
+def _extract_common_property_options(options: str, info: dict[str, Any]) -> None:
+    """Extract common property options (default, required, name_property).
+
+    Args:
+        options: Options string from property/attribute definition.
+        info: Dictionary to update with extracted options.
+
+    """
+    # Extract name_property / name_attribute
+    if "name_property: true" in options or "name_attribute: true" in options:
+        info["name_property"] = True
+
+    # Extract default value
+    default_match = re.search(r"default:\s*([^,\n]+)", options)
+    if default_match:
+        info["default"] = default_match.group(1).strip()
+
+    # Extract required
+    if "required: true" in options:
+        info["required"] = True
 
 
 def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
@@ -478,42 +500,19 @@ def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
         r"property\s+:(\w+),\s*([^,\n\[]+(?:\[[^\]]+\])?),?\s*([^\n]*?)(?:\n|$)"
     )
     for match in re.finditer(property_pattern, clean_content, re.MULTILINE):
-        prop_name = match.group(1)
-        prop_type = match.group(2).strip()
-        prop_options = match.group(3) if match.group(3) else ""
-
         prop_info: dict[str, Any] = {
-            "name": prop_name,
-            "type": prop_type,
+            "name": match.group(1),
+            "type": match.group(2).strip(),
         }
-
-        # Extract name_property
-        name_property_check = (
-            "name_property: true" in prop_options
-            or "name_attribute: true" in prop_options
-        )
-        if name_property_check:
-            prop_info["name_property"] = True
-
-        # Extract default value
-        default_match = re.search(r"default:\s*([^,\n]+)", prop_options)
-        if default_match:
-            prop_info["default"] = default_match.group(1).strip()
-
-        # Extract required
-        if "required: true" in prop_options:
-            prop_info["required"] = True
-
+        _extract_common_property_options(match.group(3) or "", prop_info)
         properties.append(prop_info)
 
     # Match LWRP attribute syntax: attribute :name, kind_of: Type
-    attribute_pattern = r"attribute\s+:(\w+)(?:,\s*([^\n]+?))?\s*(?:\n|$)"
+    attribute_pattern = r"attribute\s+:(\w+)(?:,\s*([^\n]+))?\n?"
     for match in re.finditer(attribute_pattern, content, re.MULTILINE):
-        attr_name = match.group(1)
-        attr_options = match.group(2) if match.group(2) else ""
-
+        attr_options = match.group(2) or ""
         attr_info: dict[str, Any] = {
-            "name": attr_name,
+            "name": match.group(1),
             "type": "Any",  # Default type
         }
 
@@ -522,19 +521,7 @@ def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
         if kind_of_match:
             attr_info["type"] = kind_of_match.group(1)
 
-        # Extract name_attribute
-        if "name_attribute: true" in attr_options:
-            attr_info["name_property"] = True
-
-        # Extract default value
-        default_match = re.search(r"default:\s*([^,\n]+)", attr_options)
-        if default_match:
-            attr_info["default"] = default_match.group(1).strip()
-
-        # Extract required
-        if "required: true" in attr_options:
-            attr_info["required"] = True
-
+        _extract_common_property_options(attr_options, attr_info)
         properties.append(attr_info)
 
     return properties
@@ -563,7 +550,7 @@ def _extract_resource_actions(content: str) -> dict[str, Any]:
             result["actions"].append(action_name)
 
     # Extract LWRP-style actions declaration: actions :create, :drop
-    actions_decl = re.search(r"actions\s+([^\n]+?)(?:\n|$)", content)
+    actions_decl = re.search(r"actions\s+([^\n]+)\n?", content)
     if actions_decl:
         action_symbols = re.findall(r":(\w+)", actions_decl.group(1))
         for action in action_symbols:
@@ -821,7 +808,7 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
     # 2. With parentheses: package('nginx') do ... end
     # 3. Multi-line strings: package 'nginx' do\n  content <<-EOH\n  ...\n  EOH\nend
     # Use a more robust pattern that handles nested blocks
-    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do([\s\S]*?)^end"
+    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do(.*?)^end"
 
     for match in re.finditer(pattern, clean_content, re.DOTALL | re.MULTILINE):
         resource_type = match.group(1)
@@ -866,7 +853,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
     conditionals = []
 
     # Match case/when statements
-    case_pattern = r"case\s+([^\n]+?)\n([\s\S]*?)^end"
+    case_pattern = r"case\s+([^\n]+)\n(.*?)^end"
     for match in re.finditer(case_pattern, content, re.DOTALL | re.MULTILINE):
         case_expr = match.group(1).strip()
         case_body = match.group(2)
@@ -880,7 +867,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
         )
 
     # Match if/elsif/else statements
-    if_pattern = r"if\s+([^\n]+?)(?:\n|$)"
+    if_pattern = r"if\s+([^\n]+)\n?"
     for match in re.finditer(if_pattern, content):
         condition = match.group(1).strip()
         if condition and not condition.startswith(("elsif", "end")):
@@ -892,7 +879,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
             )
 
     # Match unless statements
-    unless_pattern = r"unless\s+([^\n]+?)(?:\n|$)"
+    unless_pattern = r"unless\s+([^\n]+)\n?"
     for match in re.finditer(unless_pattern, content):
         condition = match.group(1).strip()
         conditionals.append(
@@ -980,7 +967,7 @@ def _extract_attributes(content: str) -> list[dict[str, str]]:
     # Match attribute declarations like: default['nginx']['port'] = 80
     # Use non-capturing group (?:...) with + to match one or more brackets
     # Updated to handle multi-line values and heredocs
-    pattern = r"(default|override|normal)((?:\[[^\]]+\])+)\s*=\s*([^\n]+?)(?=\s*\n|$)"
+    pattern = r"(default|override|normal)((?:\[[^\]]+\])+)\s*=\s*([^\n]+)"
 
     for match in re.finditer(pattern, clean_content, re.DOTALL):
         precedence = match.group(1)
@@ -1231,6 +1218,23 @@ def _convert_chef_resource_to_ansible(
     return task
 
 
+def _format_yaml_value(value: Any) -> str:
+    """Format a value for YAML output."""
+    import json
+
+    if isinstance(value, str):
+        return f'"{value}"'
+    return json.dumps(value)
+
+
+def _format_dict_value(key: str, value: dict[str, Any]) -> list[str]:
+    """Format a dictionary value for YAML output."""
+    lines = [f"  {key}:"]
+    for param_key, param_value in value.items():
+        lines.append(f"    {param_key}: {_format_yaml_value(param_value)}")
+    return lines
+
+
 def _format_ansible_task(task: dict[str, Any]) -> str:
     """Format an Ansible task dictionary as YAML.
 
@@ -1241,28 +1245,15 @@ def _format_ansible_task(task: dict[str, Any]) -> str:
         YAML-formatted string.
 
     """
-    import json
-
-    # Simple YAML formatting (basic implementation)
-    result = []
-    result.append("- name: " + task["name"])
+    result = ["- name: " + task["name"]]
 
     for key, value in task.items():
         if key == "name":
             continue
-
         if isinstance(value, dict):
-            result.append(f"  {key}:")
-            for param_key, param_value in value.items():
-                if isinstance(param_value, str):
-                    result.append(f'    {param_key}: "{param_value}"')
-                else:
-                    result.append(f"    {param_key}: {json.dumps(param_value)}")
+            result.extend(_format_dict_value(key, value))
         else:
-            if isinstance(value, str):
-                result.append(f'  {key}: "{value}"')
-            else:
-                result.append(f"  {key}: {json.dumps(value)}")
+            result.append(f"  {key}: {_format_yaml_value(value)}")
 
     return "\n".join(result)
 
@@ -1417,7 +1408,9 @@ def _determine_search_index(normalized_query: str) -> str:
     return "node"
 
 
-def _extract_query_parts(normalized_query: str) -> tuple[list[str], list[str]]:
+def _extract_query_parts(
+    normalized_query: str,
+) -> tuple[list[dict[str, str]], list[str]]:
     """Extract conditions and operators from query.
 
     Args:
@@ -1432,8 +1425,8 @@ def _extract_query_parts(normalized_query: str) -> tuple[list[str], list[str]]:
     operator_pattern = r"\s+(AND|OR|NOT)\s+"
     parts = re.split(operator_pattern, normalized_query, flags=re.IGNORECASE)
 
-    conditions = []
-    operators = []
+    conditions: list[dict[str, str]] = []
+    operators: list[str] = []
 
     for part in parts:
         part = part.strip()
@@ -2046,6 +2039,21 @@ def _count_pattern_types(patterns: list[dict[str, str]]) -> dict[str, int]:
     return pattern_types
 
 
+def _extract_groups_from_query(query: str) -> tuple[str | None, str | None]:
+    """Extract role and environment from a single query."""
+    role = None
+    env = None
+    if "role:" in query:
+        role_match = re.search(r"role:([^\s]+)", query)
+        if role_match:
+            role = role_match.group(1)
+    if "environment:" in query:
+        env_match = re.search(r"environment:([^\s]+)", query)
+        if env_match:
+            env = env_match.group(1)
+    return role, env
+
+
 def _extract_role_and_environment_groups(
     patterns: list[dict[str, str]],
 ) -> tuple[set[str], set[str]]:
@@ -2062,16 +2070,13 @@ def _extract_role_and_environment_groups(
     environment_groups: set[str] = set()
 
     for pattern in patterns:
-        if pattern.get("type") == "search":
-            query = pattern.get("query", "")
-            if "role:" in query:
-                role_match = re.search(r"role:([^\\s]+)", query)
-                if role_match:
-                    role_groups.add(role_match.group(1))
-            if "environment:" in query:
-                env_match = re.search(r"environment:([^\\s]+)", query)
-                if env_match:
-                    environment_groups.add(env_match.group(1))
+        if pattern.get("type") != "search":
+            continue
+        role, env = _extract_groups_from_query(pattern.get("query", ""))
+        if role:
+            role_groups.add(role)
+        if env:
+            environment_groups.add(env)
 
     return role_groups, environment_groups
 
@@ -2229,10 +2234,22 @@ def _convert_and_collect_resources(
     return tasks, handlers
 
 
+def _format_item_lines(item_yaml: str) -> list[str]:
+    """Format a single task/handler's YAML lines with proper indentation."""
+    formatted = []
+    for i, line in enumerate(item_yaml.split("\n")):
+        if i == 0:  # First line gets 4-space indent
+            formatted.append(f"    {line}")
+        elif line.strip():  # Non-empty property lines get 6-space indent
+            formatted.append(f"      {line}")
+        else:  # Empty lines preserved as-is
+            formatted.append(line)
+    return formatted
+
+
 def _add_formatted_items(
     playbook_lines: list[str],
     items: list[dict[str, Any]],
-    section_name: str,
     default_message: str,
 ) -> None:
     """Add formatted tasks or handlers to playbook.
@@ -2240,24 +2257,17 @@ def _add_formatted_items(
     Args:
         playbook_lines: Playbook lines list to append to.
         items: Tasks or handlers to format and add.
-        section_name: Section header name (e.g., "tasks", "handlers").
         default_message: Message to show if no items.
 
     """
-    if items:
-        for i, item in enumerate(items):
-            if i > 0:
-                playbook_lines.append("")
-
-            item_yaml = _format_ansible_task(item)
-            item_lines = item_yaml.split("\n")
-            for j, line in enumerate(item_lines):
-                if j == 0:  # First line
-                    playbook_lines.append(f"    {line}")
-                else:  # Property lines
-                    playbook_lines.append(f"      {line}" if line.strip() else line)
-    else:
+    if not items:
         playbook_lines.append(f"    {default_message}")
+        return
+
+    for i, item in enumerate(items):
+        if i > 0:
+            playbook_lines.append("")
+        playbook_lines.extend(_format_item_lines(_format_ansible_task(item)))
 
 
 def _generate_playbook_structure(
@@ -2281,12 +2291,12 @@ def _generate_playbook_structure(
     tasks, handlers = _convert_and_collect_resources(parsed_content, raw_content)
 
     # Add tasks section
-    _add_formatted_items(playbook_lines, tasks, "tasks", "# No tasks found")
+    _add_formatted_items(playbook_lines, tasks, "# No tasks found")
 
     # Add handlers section if any
     if handlers:
         playbook_lines.extend(["", "  handlers:"])
-        _add_formatted_items(playbook_lines, handlers, "handlers", "")
+        _add_formatted_items(playbook_lines, handlers, "")
 
     return "\n".join(playbook_lines)
 
@@ -2420,6 +2430,38 @@ def _extract_recipe_variables(raw_content: str) -> dict[str, str]:
     return variables
 
 
+def _parse_resource_block(block: str) -> dict[str, str] | None:
+    """Parse a single resource block into a dictionary."""
+    if not block.strip() or not block.startswith("Resource"):
+        return None
+
+    resource: dict[str, str] = {}
+
+    # Extract resource type
+    type_match = re.search(r"Type:\s*(\w+)", block)
+    if type_match:
+        resource["type"] = type_match.group(1)
+
+    # Extract resource name
+    name_match = re.search(r"Name:\s*([^\n]+)", block)
+    if name_match:
+        resource["name"] = name_match.group(1).strip()
+
+    # Extract action (default to "create")
+    action_match = re.search(r"Action:\s*([^\n]+)", block)
+    resource["action"] = action_match.group(1).strip() if action_match else "create"
+
+    # Extract properties
+    props_match = re.search(r"Properties:\n?((?:(?!\n\n).)*)", block, re.DOTALL)
+    resource["properties"] = props_match.group(1).strip() if props_match else ""
+
+    # Return None if missing required fields
+    if not resource.get("type") or not resource.get("name"):
+        return None
+
+    return resource
+
+
 def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str, str]]:
     """Extract resource information from parsed recipe content.
 
@@ -2430,48 +2472,12 @@ def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str
         List of resource dictionaries with type, name, action, and properties.
 
     """
-    import re
-
-    resources = []
-
-    # Parse the structured output from parse_recipe
     resource_blocks = re.split(r"\n(?=Resource \d+:)", parsed_content)
-
+    resources = []
     for block in resource_blocks:
-        if not block.strip() or not block.startswith("Resource"):
-            continue
-
-        resource = {}
-
-        # Extract resource type
-        type_match = re.search(r"Type:\s*(\w+)", block)
-        if type_match:
-            resource["type"] = type_match.group(1)
-
-        # Extract resource name
-        name_match = re.search(r"Name:\s*([^\n]+)", block)
-        if name_match:
-            resource["name"] = name_match.group(1).strip()
-
-        # Extract action
-        action_match = re.search(r"Action:\s*([^\n]+)", block)
-        if action_match:
-            resource["action"] = action_match.group(1).strip()
-        else:
-            resource["action"] = "create"  # default action
-
-        # Extract properties
-        properties_section = re.search(
-            r"Properties:([\s\S]*?)(?=\n\n|\n$|$)", block, re.DOTALL
-        )
-        if properties_section:
-            resource["properties"] = properties_section.group(1).strip()
-        else:
-            resource["properties"] = ""
-
-        if resource.get("type") and resource.get("name"):
+        resource = _parse_resource_block(block)
+        if resource:
             resources.append(resource)
-
     return resources
 
 
@@ -2488,15 +2494,13 @@ def _extract_notify_declarations(
         List of tuples (action, target, timing).
 
     """
-    import re
-
     resource_type_escaped = resource["type"]
     resource_name_escaped = re.escape(resource["name"])
     resource_pattern = (
         resource_type_escaped
-        + r"\s+['\"]?"
+        + REGEX_WHITESPACE_QUOTE
         + resource_name_escaped
-        + r"['\"]?\s+do\s*(.*?)\nend"
+        + REGEX_QUOTE_DO_END
     )
     resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
 
@@ -2542,11 +2546,9 @@ def _process_notifications(
         List of handler dictionaries.
 
     """
-    import re
-
     handlers = []
     for notify_action, notify_target, _notify_timing in notifications:
-        target_match = re.match(r"(\w+)\[([^\]]+)\]", notify_target)
+        target_match = re.match(REGEX_RESOURCE_BRACKET, notify_target)
         if target_match:
             target_type = target_match.group(1)
             target_name = target_match.group(2)
@@ -2579,11 +2581,9 @@ def _process_subscribes(
         List of handler dictionaries.
 
     """
-    import re
-
     handlers = []
     for sub_action, sub_target, _sub_timing in subscribes:
-        target_match = re.match(r"(\w+)\[([^\]]+)\]", sub_target)
+        target_match = re.match(REGEX_RESOURCE_BRACKET, sub_target)
         if not target_match:
             continue
 
@@ -2736,9 +2736,9 @@ def _extract_enhanced_notifications(
     resource_name_escaped = re.escape(resource["name"])
     resource_pattern = (
         resource_type_escaped
-        + r"\s+['\"]?"
+        + REGEX_WHITESPACE_QUOTE
         + resource_name_escaped
-        + r"['\"]?\s+do\s*(.*?)\nend"
+        + REGEX_QUOTE_DO_END
     )
     resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
 
@@ -2753,7 +2753,7 @@ def _extract_enhanced_notifications(
 
         for notify_action, notify_target, notify_timing in notifies:
             # Parse target like 'service[nginx]'
-            target_match = re.match(r"(\w+)\[([^\]]+)\]", notify_target)
+            target_match = re.match(REGEX_RESOURCE_BRACKET, notify_target)
             if target_match:
                 target_type = target_match.group(1)
                 target_name = target_match.group(2)
@@ -2787,9 +2787,9 @@ def _find_resource_block(resource: dict[str, str], raw_content: str) -> str | No
     resource_name_escaped = re.escape(resource["name"])
     resource_pattern = (
         resource_type_escaped
-        + r"\s+['\"]?"
+        + REGEX_WHITESPACE_QUOTE
         + resource_name_escaped
-        + r"['\"]?\s+do\s*(.*?)\nend"
+        + REGEX_QUOTE_DO_END
     )
     resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
 
@@ -2819,11 +2819,11 @@ def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list
     not_if_matches = not_if_pattern.findall(resource_block)
 
     # Extract only_if blocks (Ruby code blocks)
-    only_if_block_pattern = re.compile(r"only_if\s+do\s*([\s\S]*?)\s*end", re.DOTALL)
+    only_if_block_pattern = re.compile(r"only_if\s+do\s*(.*?)\s*end", re.DOTALL)
     only_if_block_matches = only_if_block_pattern.findall(resource_block)
 
     # Extract not_if blocks (Ruby code blocks)
-    not_if_block_pattern = re.compile(r"not_if\s+do\s*([\s\S]*?)\s*end", re.DOTALL)
+    not_if_block_pattern = re.compile(r"not_if\s+do\s*(.*?)\s*end", re.DOTALL)
     not_if_block_matches = not_if_block_pattern.findall(resource_block)
 
     return (
@@ -3060,7 +3060,7 @@ def _extract_resource_subscriptions(
 
     for action, target, timing in subscribes_matches:
         # Parse target like 'service[nginx]' or 'template[/etc/nginx/nginx.conf]'
-        target_match = re.match(r"(\w+)\[([^\]]+)\]", target)
+        target_match = re.match(REGEX_RESOURCE_BRACKET, target)
         if target_match:
             target_type = target_match.group(1)
             target_name = target_match.group(2)
@@ -3538,7 +3538,7 @@ def _generate_inspec_package_checks(
     if "version" in properties:
         version = properties["version"]
         lines.append(f"    its('version') {{ should match /{version}/ }}")
-    lines.append("  end")
+    lines.append(INSPEC_END_INDENT)
     return lines
 
 
@@ -3556,7 +3556,7 @@ def _generate_inspec_service_checks(resource_name: str) -> list[str]:
         f"  describe service('{resource_name}') do",
         "    it { should be_running }",
         "    it { should be_enabled }",
-        "  end",
+        INSPEC_END_INDENT,
     ]
 
 
@@ -3573,14 +3573,14 @@ def _generate_inspec_file_checks(
         List of InSpec check lines.
 
     """
-    lines = [f"  describe file('{resource_name}') do", "    it { should exist }"]
+    lines = [f"  describe file('{resource_name}') do", INSPEC_SHOULD_EXIST]
     if "mode" in properties:
         lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
     if "owner" in properties:
         lines.append(f"    its('owner') {{ should eq '{properties['owner']}' }}")
     if "group" in properties:
         lines.append(f"    its('group') {{ should eq '{properties['group']}' }}")
-    lines.append("  end")
+    lines.append(INSPEC_END_INDENT)
     return lines
 
 
@@ -3599,12 +3599,12 @@ def _generate_inspec_directory_checks(
     """
     lines = [
         f"  describe file('{resource_name}') do",
-        "    it { should exist }",
+        INSPEC_SHOULD_EXIST,
         "    it { should be_directory }",
     ]
     if "mode" in properties:
         lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
-    lines.append("  end")
+    lines.append(INSPEC_END_INDENT)
     return lines
 
 
@@ -3621,10 +3621,10 @@ def _generate_inspec_user_checks(
         List of InSpec check lines.
 
     """
-    lines = [f"  describe user('{resource_name}') do", "    it { should exist }"]
+    lines = [f"  describe user('{resource_name}') do", INSPEC_SHOULD_EXIST]
     if "shell" in properties:
         lines.append(f"    its('shell') {{ should eq '{properties['shell']}' }}")
-    lines.append("  end")
+    lines.append(INSPEC_END_INDENT)
     return lines
 
 
@@ -3640,8 +3640,8 @@ def _generate_inspec_group_checks(resource_name: str) -> list[str]:
     """
     return [
         f"  describe group('{resource_name}') do",
-        "    it { should exist }",
-        "  end",
+        INSPEC_SHOULD_EXIST,
+        INSPEC_END_INDENT,
     ]
 
 
@@ -4616,74 +4616,90 @@ def _analyze_environments_structure(environments_path) -> dict:
     return structure
 
 
+def _analyze_usage_pattern_recommendations(usage_patterns: list) -> list[str]:
+    """Analyze usage patterns and generate recommendations."""
+    if not usage_patterns:
+        return []
+
+    recommendations = []
+    environment_refs = [p for p in usage_patterns if "environment" in p.get("type", "")]
+    conditional_usage = [
+        p
+        for p in usage_patterns
+        if "conditional" in p.get("type", "") or "case" in p.get("type", "")
+    ]
+
+    recommendations.append(
+        f"• Found {len(usage_patterns)} environment references in cookbook"
+    )
+
+    if environment_refs:
+        recommendations.append(
+            f"• {len(environment_refs)} direct environment attribute "
+            f"accesses need inventory group conversion"
+        )
+
+    if conditional_usage:
+        recommendations.append(
+            f"• {len(conditional_usage)} conditional environment logic "
+            f"needs when/group_names conditions"
+        )
+
+    return recommendations
+
+
+def _analyze_structure_recommendations(env_structure: dict) -> list[str]:
+    """Analyze environment structure and generate recommendations."""
+    if not env_structure:
+        return []
+
+    total_envs = env_structure.get("total_environments", 0)
+    if total_envs == 0:
+        return []
+
+    recommendations = [
+        f"• Convert {total_envs} Chef environments to Ansible inventory groups"
+    ]
+
+    # Find complex environments
+    complex_envs = [
+        env_name
+        for env_name, env_info in env_structure.get("environments", {}).items()
+        if "error" not in env_info
+        and env_info.get("default_attributes_count", 0)
+        + env_info.get("override_attributes_count", 0)
+        > 10
+    ]
+
+    if complex_envs:
+        recommendations.append(
+            f"• {len(complex_envs)} environments have >10 attributes - "
+            f"consider splitting into logical variable groups"
+        )
+
+    return recommendations
+
+
+def _get_general_migration_recommendations() -> list[str]:
+    """Get standard migration recommendations."""
+    return [
+        "• Use Ansible groups to replace Chef environment-based node targeting",
+        "• Convert Chef default_attributes to group_vars",
+        "• Handle Chef override_attributes with extra_vars or host_vars",
+        "• Implement environment-specific playbook execution with --limit",
+        "• Test variable precedence matches Chef behavior",
+        "• Consider using Ansible environments/staging for deployment workflows",
+    ]
+
+
 def _generate_environment_migration_recommendations(
     usage_patterns: list, env_structure: dict
 ) -> str:
     """Generate migration recommendations based on environment usage analysis."""
     recommendations = []
-
-    # Analyze usage patterns
-    if usage_patterns:
-        environment_refs = [
-            p for p in usage_patterns if "environment" in p.get("type", "")
-        ]
-        conditional_usage = [
-            p
-            for p in usage_patterns
-            if "conditional" in p.get("type", "") or "case" in p.get("type", "")
-        ]
-
-        recommendations.append(
-            f"• Found {len(usage_patterns)} environment references in cookbook"
-        )
-
-        if environment_refs:
-            recommendations.append(
-                f"• {len(environment_refs)} direct environment attribute "
-                f"accesses need inventory group conversion"
-            )
-
-        if conditional_usage:
-            recommendations.append(
-                f"• {len(conditional_usage)} conditional environment logic "
-                f"needs when/group_names conditions"
-            )
-
-    # Analyze structure
-    if env_structure:
-        total_envs = env_structure.get("total_environments", 0)
-        if total_envs > 0:
-            recommendations.append(
-                f"• Convert {total_envs} Chef environments to Ansible inventory groups"
-            )
-
-            # Analyze complexity
-            complex_envs = []
-            for env_name, env_info in env_structure.get("environments", {}).items():
-                if "error" not in env_info:
-                    attrs_count = env_info.get(
-                        "default_attributes_count", 0
-                    ) + env_info.get("override_attributes_count", 0)
-                    if attrs_count > 10:
-                        complex_envs.append(env_name)
-
-            if complex_envs:
-                recommendations.append(
-                    f"• {len(complex_envs)} environments have >10 attributes - "
-                    f"consider splitting into logical variable groups"
-                )
-
-    # General migration recommendations
-    recommendations.extend(
-        [
-            "• Use Ansible groups to replace Chef environment-based node targeting",
-            "• Convert Chef default_attributes to group_vars",
-            "• Handle Chef override_attributes with extra_vars or host_vars",
-            "• Implement environment-specific playbook execution with --limit",
-            "• Test variable precedence matches Chef behavior",
-            "• Consider using Ansible environments/staging for deployment workflows",
-        ]
-    )
+    recommendations.extend(_analyze_usage_pattern_recommendations(usage_patterns))
+    recommendations.extend(_analyze_structure_recommendations(env_structure))
+    recommendations.extend(_get_general_migration_recommendations())
 
     return "\n".join(recommendations)
 
@@ -5623,7 +5639,9 @@ def _parse_chef_runlist(runlist_content: str) -> list:
         if runlist_content.strip().startswith("["):
             runlist = json.loads(runlist_content)
             return [
-                item.replace("recipe[", "").replace("role[", "").replace("]", "")
+                item.replace(CHEF_RECIPE_PREFIX, "")
+                .replace(CHEF_ROLE_PREFIX, "")
+                .replace("]", "")
                 for item in runlist
             ]
     except json.JSONDecodeError:
@@ -5633,13 +5651,17 @@ def _parse_chef_runlist(runlist_content: str) -> list:
     if "," in runlist_content:
         items = [item.strip() for item in runlist_content.split(",")]
         return [
-            item.replace("recipe[", "").replace("role[", "").replace("]", "")
+            item.replace(CHEF_RECIPE_PREFIX, "")
+            .replace(CHEF_ROLE_PREFIX, "")
+            .replace("]", "")
             for item in items
         ]
 
     # Parse single item
     return [
-        runlist_content.replace("recipe[", "").replace("role[", "").replace("]", "")
+        runlist_content.replace(CHEF_RECIPE_PREFIX, "")
+        .replace(CHEF_ROLE_PREFIX, "")
+        .replace("]", "")
     ]
 
 
