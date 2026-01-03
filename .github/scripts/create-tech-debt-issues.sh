@@ -1,6 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Script to create GitHub issues from technical debt inventory
 # Usage: ./create-tech-debt-issues.sh
+#
+# Compatible with bash 3.2+ (macOS default)
 
 set -e
 
@@ -21,26 +23,27 @@ fi
 echo "Creating technical debt issues..."
 
 # Function Complexity Issues - sorted by complexity (highest first)
-declare -A functions=(
-    ["_convert_resource_to_task_dict"]="17:2141"
-    ["parse_inspec_profile"]="17:3001"
-    ["_generate_inspec_from_resource"]="16:2925"
-    ["_generate_playbook_structure"]="15:1915"
-    ["_convert_inspec_to_testinfra"]="15:2806"
-    ["generate_inspec_from_recipe"]="15:3123"
-    ["_parse_inspec_control"]="14:2638"
-    ["_convert_inspec_to_ansible_assert"]="14:2876"
-    ["_generate_inventory_recommendations"]="13:1840"
-    ["_extract_inspec_describe_blocks"]="13:2718"
-    ["_parse_chef_search_query"]="12:1301"
-    ["_extract_recipe_variables"]="12:2028"
-    ["_extract_chef_guards"]="12:2364"
-    ["_generate_ansible_inventory_from_search"]="11:1427"
-    ["_extract_code_block_variables"]="11:192"
+# Format: "function_name|complexity|line_number"
+functions=(
+    "_convert_resource_to_task_dict|17|2141"
+    "parse_inspec_profile|17|3001"
+    "_generate_inspec_from_resource|16|2925"
+    "_generate_playbook_structure|15|1915"
+    "_convert_inspec_to_testinfra|15|2806"
+    "generate_inspec_from_recipe|15|3123"
+    "_parse_inspec_control|14|2638"
+    "_convert_inspec_to_ansible_assert|14|2876"
+    "_generate_inventory_recommendations|13|1840"
+    "_extract_inspec_describe_blocks|13|2718"
+    "_parse_chef_search_query|12|1301"
+    "_extract_recipe_variables|12|2028"
+    "_extract_chef_guards|12|2364"
+    "_generate_ansible_inventory_from_search|11|1427"
+    "_extract_code_block_variables|11|192"
 )
 
-for func in "${!functions[@]}"; do
-    IFS=':' read -r complexity line <<< "${functions[$func]}"
+for entry in "${functions[@]}"; do
+    IFS='|' read -r func complexity line <<< "$entry"
 
     echo "Creating issue for $func (complexity: $complexity)..."
 

@@ -1,6 +1,8 @@
 {
     "name": "SousChef",
-    "image": "mcr.microsoft.com/devcontainers/python:3.14",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
             "installZsh": true,
@@ -14,15 +16,27 @@
             "version": "latest",
             "ppa": true
         },
+        "ghcr.io/devcontainers/features/github-cli:1": {
+            "version": "latest"
+        },
         "ghcr.io/devcontainers/features/ruby:1": {
             "version": "3.1",
             "installGems": "chef"
+        },
+        "ghcr.io/devcontainers/features/java:1": {
+            "version": "17",
+            "installMaven": false,
+            "installGradle": false
+        },
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "lts"
         }
     },
     "onCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc",
     "customizations": {
         "vscode": {
             "settings": {
+
                 "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
                 "python.testing.pytestEnabled": true,
                 "python.testing.unittestEnabled": false,
@@ -62,14 +76,16 @@
                 "GitHub.copilot-chat",
                 "editorconfig.editorconfig",
                 "redhat.vscode-yaml",
-                "Shopify.ruby-lsp"
+                "Shopify.ruby-lsp",
+                "snyk-security.snyk-vulnerability-scanner",
+                "SonarSource.sonarlint-vscode"
             ]
         }
     },
-    "postCreateC: "vscode",
+    "postCreateCommand": "cat > ~/.gitconfig << 'EOF'\n[include]\n\tpath = ~/.gitconfig.host\n[gpg]\n\tprogram = gpg\n[commit]\n\tgpgsign = false\nEOF\nuv sync && uv run pytest",
+    "remoteUser": "vscode",
     "mounts": [
-        "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.gnupg,target=/home/vscode/.gnupg,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig.host,type=bind,consistency=cached",
         "source=souschef-zsh-history,target=/home/vscode/.zsh_history,type=volume"
     ]
 }

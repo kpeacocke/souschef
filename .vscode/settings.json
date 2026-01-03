@@ -44,5 +44,9 @@
     "cSpell.words": [
         "charliermarsh",
         "souschef"
-    ]
+    ],
+    "sonarlint.connectedMode.project": {
+        "connectionId": "kpeacocke",
+        "projectKey": "kpeacocke_souschef"
+    }
 }
