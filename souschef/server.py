@@ -3797,8 +3797,46 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         return f"An error occurred while converting InSpec: {e}"
 
 
+def _extract_resources_from_parse_result(parse_result: str) -> list[dict[str, Any]]:
+    """Extract resource data from recipe parse result.
+
+    Args:
+        parse_result: Output from parse_recipe function.
+
+    Returns:
+        List of resource dictionaries with type, name, and properties.
+
+    """
+    resources = []
+    current_resource: dict[str, Any] = {}
+
+    for line in parse_result.split("\n"):
+        line = line.strip()
+
+        if line.startswith("Resource"):
+            if current_resource:
+                resources.append(current_resource)
+            current_resource = {}
+        elif line.startswith("Type:"):
+            current_resource["type"] = line.split(":", 1)[1].strip()
+        elif line.startswith("Name:"):
+            current_resource["name"] = line.split(":", 1)[1].strip()
+        elif line.startswith("Properties:"):
+            # Parse properties dict
+            props_str = line.split(":", 1)[1].strip()
+            try:
+                current_resource["properties"] = eval(props_str)
+            except Exception:
+                current_resource["properties"] = {}
+
+    if current_resource:
+        resources.append(current_resource)
+
+    return resources
+
+
 @mcp.tool()
-def generate_inspec_from_recipe(recipe_path: str) -> str:  # noqa: C901
+def generate_inspec_from_recipe(recipe_path: str) -> str:
     """Generate InSpec controls from a Chef recipe.
 
     Args:
@@ -3816,39 +3854,17 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:  # noqa: C901
             return recipe_result
 
         # Extract resources from parsed output
-        resources = []
-        current_resource = {}
-
-        for line in recipe_result.split("\n"):
-            line = line.strip()
-
-            if line.startswith("Resource"):
-                if current_resource:
-                    resources.append(current_resource)
-                current_resource = {}
-            elif line.startswith("Type:"):
-                current_resource["type"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Name:"):
-                current_resource["name"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Properties:"):
-                # Parse properties dict
-                props_str = line.split(":", 1)[1].strip()
-                try:
-                    current_resource["properties"] = eval(props_str)
-                except Exception:
-                    current_resource["properties"] = {}
-
-        if current_resource:
-            resources.append(current_resource)
+        resources = _extract_resources_from_parse_result(recipe_result)
 
         if not resources:
             return "Error: No resources found in recipe"
 
         # Generate InSpec controls
-        controls = []
-        controls.append("# InSpec controls generated from Chef recipe")
-        controls.append(f"# Source: {recipe_path}")
-        controls.append("")
+        controls = [
+            "# InSpec controls generated from Chef recipe",
+            f"# Source: {recipe_path}",
+            "",
+        ]
 
         for resource in resources:
             if "type" in resource and "name" in resource:
