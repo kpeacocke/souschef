@@ -274,9 +274,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Command-line interface (CLI) for standalone usage
 
 ### In Progress 🔄
-- 🔄 Enhanced error handling and user experience
+- 🔄 Enhanced error handling and user experience improvements
 - 🔄 Documentation website and interactive examples
-- 🔄 Performance optimizations for large-scale migrations
+- 🔄 Performance optimizations for large-scale enterprise migrations
+- 🔄 Technical debt reduction (15 functions tracked in [GitHub Issues](https://github.com/kpeacocke/souschef/issues?q=is%3Aissue+is%3Aopen+label%3Atechnical-debt))
 
 ### Planned 📅
 - 📅 Chef Habitat to containerized deployment conversion
@@ -284,8 +285,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
 - 📅 Jenkins/GitLab CI pipeline generation
-- 📅 Custom resource conversion framework
-- 📅 Advanced templating and variable substitution patterns
+- 📅 Advanced Chef guard handling (only_if, not_if conditions)
+- 📅 Complex attribute precedence and merging logic
+- 📅 Conversion validation and testing framework
 
 ## 🙋‍♀️ Support & Community
 
@@ -731,14 +733,6 @@ Contributions are welcome! Please ensure:
 
 TBD
 
-## Roadmap
+---
 
-- [x] Add server entry point and runner
-- [x] Implement Chef → Ansible resource conversion (basic)
-- [x] Support template conversion (ERB → Jinja2)
-- [x] Parse custom Chef resources/LWRPs
-- [ ] Generate complete Ansible playbooks from recipes
-- [ ] Handle Chef guards (only_if, not_if) and notifications
-- [ ] Support complex attribute precedence and merging
-- [ ] Add conversion validation and testing
-- [ ] Handle Chef search and data bags
+**SousChef** - *Transforming infrastructure automation, one recipe at a time.* 🍳✨
