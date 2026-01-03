@@ -1309,7 +1309,78 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         return f"Error analyzing Chef search patterns: {e}"
 
 
-def _parse_chef_search_query(query: str) -> dict[str, Any]:  # noqa: C901
+def _determine_search_index(normalized_query: str) -> str:
+    """Determine the search index from the query.
+
+    Args:
+        normalized_query: Normalized query string.
+
+    Returns:
+        Index name (defaults to 'node').
+
+    """
+    import re
+
+    index_match = re.match(r"^(\w+):", normalized_query)
+    if index_match:
+        potential_index = index_match.group(1)
+        if potential_index in ["role", "environment", "tag", "platform"]:
+            return "node"  # These are node attributes
+        return potential_index
+    return "node"
+
+
+def _extract_query_parts(normalized_query: str) -> tuple[list[str], list[str]]:
+    """Extract conditions and operators from query.
+
+    Args:
+        normalized_query: Normalized query string.
+
+    Returns:
+        Tuple of (conditions, operators).
+
+    """
+    import re
+
+    operator_pattern = r"\s+(AND|OR|NOT)\s+"
+    parts = re.split(operator_pattern, normalized_query, flags=re.IGNORECASE)
+
+    conditions = []
+    operators = []
+
+    for part in parts:
+        part = part.strip()
+        if part.upper() in ["AND", "OR", "NOT"]:
+            operators.append(part.upper())
+        elif part:  # Non-empty condition
+            condition = _parse_search_condition(part)
+            if condition:
+                conditions.append(condition)
+
+    return conditions, operators
+
+
+def _determine_query_complexity(
+    conditions: list[dict[str, str]], operators: list[str]
+) -> str:
+    """Determine query complexity level.
+
+    Args:
+        conditions: List of parsed conditions.
+        operators: List of logical operators.
+
+    Returns:
+        Complexity level: 'simple', 'intermediate', or 'complex'.
+
+    """
+    if len(conditions) > 1 or operators:
+        return "complex"
+    elif any(cond.get("operator") in ["~", "!="] for cond in conditions):
+        return "intermediate"
+    return "simple"
+
+
+def _parse_chef_search_query(query: str) -> dict[str, Any]:
     """Parse a Chef search query into structured components.
 
     Args:
@@ -1319,54 +1390,21 @@ def _parse_chef_search_query(query: str) -> dict[str, Any]:  # noqa: C901
         Dictionary with parsed query components.
 
     """
-    import re
-
-    # Normalize the query
     normalized_query = query.strip()
 
-    # Parse different types of search patterns
     search_info = {
         "original_query": query,
-        "index": "node",  # Default to node search
+        "index": _determine_search_index(normalized_query),
         "conditions": [],
         "logical_operators": [],
         "complexity": "simple",
     }
 
-    # Check if it specifies a different index (e.g., role:, environment:)
-    index_match = re.match(r"^(\w+):", normalized_query)
-    if index_match:
-        potential_index = index_match.group(1)
-        if potential_index in ["role", "environment", "tag", "platform"]:
-            search_info["index"] = "node"  # These are node attributes
-        else:
-            search_info["index"] = potential_index
-
-    # Split by logical operators
-    # Handle AND, OR, NOT operators
-    operator_pattern = r"\s+(AND|OR|NOT)\s+"
-    parts = re.split(operator_pattern, normalized_query, flags=re.IGNORECASE)
-
-    conditions = []
-    operators = []
-
-    for _i, part in enumerate(parts):
-        part = part.strip()
-        if part.upper() in ["AND", "OR", "NOT"]:
-            operators.append(part.upper())
-        elif part:  # Non-empty condition
-            condition = _parse_search_condition(part)
-            if condition:
-                conditions.append(condition)
+    conditions, operators = _extract_query_parts(normalized_query)
 
     search_info["conditions"] = conditions
     search_info["logical_operators"] = operators
-
-    # Determine complexity
-    if len(conditions) > 1 or operators:
-        search_info["complexity"] = "complex"
-    elif any(cond.get("operator") in ["~", "!="] for cond in conditions):
-        search_info["complexity"] = "intermediate"
+    search_info["complexity"] = _determine_query_complexity(conditions, operators)
 
     return search_info
 
