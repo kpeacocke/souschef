@@ -30,19 +30,33 @@ jobs:
   sonarcloud:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.SONAR_TOKEN != ''
+    # Note: secrets check is done in steps; job-level if cannot use secrets context
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
+    - name: Check for SONAR_TOKEN
+      id: check-token
+      run: |
+        if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+          echo "SONAR_TOKEN is not set. Skipping SonarCloud analysis."
+          echo "has_token=false" >> $GITHUB_OUTPUT
+        else
+          echo "has_token=true" >> $GITHUB_OUTPUT
+        fi
+
     - uses: actions/checkout@v6
+      if: steps.check-token.outputs.has_token == 'true'
       with:
         fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
     - name: Set up Python
+      if: steps.check-token.outputs.has_token == 'true'
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install Poetry
+      if: steps.check-token.outputs.has_token == 'true'
       uses: snok/install-poetry@v1
       with:
         version: latest
@@ -50,6 +64,7 @@ jobs:
         virtualenvs-in-project: true
 
     - name: Cache Poetry dependencies
+      if: steps.check-token.outputs.has_token == 'true'
       uses: actions/cache@v5
       with:
         path: .venv
@@ -58,14 +73,17 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
+      if: steps.check-token.outputs.has_token == 'true'
       run: poetry install --no-interaction
 
     - name: Run tests with coverage
+      if: steps.check-token.outputs.has_token == 'true'
       run: |
         poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
       continue-on-error: true
 
     - name: SonarCloud Scan
+      if: steps.check-token.outputs.has_token == 'true'
       uses: SonarSource/sonarcloud-github-action@master
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

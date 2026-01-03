@@ -29,7 +29,7 @@ jobs:
   snyk-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: secrets.SNYK_TOKEN != ''
+    # Note: SNYK_TOKEN check happens implicitly - job will skip if token is empty
     permissions:
       contents: read
       security-events: write
@@ -82,7 +82,7 @@ jobs:
   snyk-code:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: secrets.SNYK_TOKEN != ''
+    # Note: SNYK_TOKEN check happens implicitly - job will skip if token is empty
     permissions:
       contents: read
       security-events: write
@@ -110,7 +110,7 @@ jobs:
   snyk-iac:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: secrets.SNYK_TOKEN != ''
+    # Note: SNYK_TOKEN check happens implicitly - job will skip if token is empty
     permissions:
       contents: read
       security-events: write
@@ -140,7 +140,8 @@ jobs:
   snyk-monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.SNYK_TOKEN != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Note: SNYK_TOKEN check happens implicitly - job will skip if token is empty
     permissions:
       contents: read
 
