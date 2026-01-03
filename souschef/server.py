@@ -40,6 +40,28 @@ def _normalize_path(path_str: str) -> Path:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
 
 
+def _safe_join(base_path: Path, *parts: str) -> Path:
+    """Safely join path components ensuring result stays within base directory.
+
+    Args:
+        base_path: Normalized base path.
+        *parts: Path components to join.
+
+    Returns:
+        Joined path within base_path.
+
+    Raises:
+        ValueError: If result would escape base_path.
+
+    """
+    result = base_path.joinpath(*parts).resolve()
+    try:
+        result.relative_to(base_path)
+        return result
+    except ValueError as e:
+        raise ValueError(f"Path traversal attempt: {parts} escapes {base_path}") from e
+
+
 # Constants for commonly used strings
 ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"
 METADATA_FILENAME = "metadata.rb"
@@ -1040,14 +1062,14 @@ def list_cookbook_structure(path: str) -> str:
         ]
 
         for dir_name in common_dirs:
-            dir_path = cookbook_path / dir_name
+            dir_path = _safe_join(cookbook_path, dir_name)
             if dir_path.exists() and dir_path.is_dir():
                 files = [f.name for f in dir_path.iterdir() if f.is_file()]
                 if files:
                     structure[dir_name] = files
 
         # Check for metadata.rb
-        metadata_path = cookbook_path / METADATA_FILENAME
+        metadata_path = _safe_join(cookbook_path, METADATA_FILENAME)
         if metadata_path.exists():
             structure["metadata"] = [METADATA_FILENAME]
 
@@ -1891,21 +1913,21 @@ def _extract_search_patterns_from_cookbook(cookbook_path: Path) -> list[dict[str
     patterns = []
 
     # Search in recipes directory
-    recipes_dir = cookbook_path / "recipes"
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
             file_patterns = _extract_search_patterns_from_file(recipe_file)
             patterns.extend(file_patterns)
 
     # Search in libraries directory
-    libraries_dir = cookbook_path / "libraries"
+    libraries_dir = _safe_join(cookbook_path, "libraries")
     if libraries_dir.exists():
         for library_file in libraries_dir.glob("*.rb"):
             file_patterns = _extract_search_patterns_from_file(library_file)
             patterns.extend(file_patterns)
 
     # Search in resources directory
-    resources_dir = cookbook_path / "resources"
+    resources_dir = _safe_join(cookbook_path, "resources")
     if resources_dir.exists():
         for resource_file in resources_dir.glob("*.rb"):
             file_patterns = _extract_search_patterns_from_file(resource_file)
@@ -3691,7 +3713,7 @@ def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
         RuntimeError: If error reading control files.
 
     """
-    controls_dir = profile_path / "controls"
+    controls_dir = _safe_join(profile_path, "controls")
     if not controls_dir.exists():
         raise FileNotFoundError(f"No controls directory found in {profile_path}")
 
@@ -5320,7 +5342,7 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
     }
 
     # Analyze recipes
-    recipes_dir = cookbook_path / "recipes"
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
             recipe_name = recipe_file.stem
@@ -5333,7 +5355,7 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
             )
 
     # Analyze attributes for survey generation
-    attributes_dir = cookbook_path / "attributes"
+    attributes_dir = _safe_join(cookbook_path, "attributes")
     if attributes_dir.exists():
         for attr_file in attributes_dir.glob("*.rb"):
             try:
@@ -5352,7 +5374,7 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
                 pass
 
     # Analyze dependencies
-    metadata_file = cookbook_path / METADATA_FILENAME
+    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
     if metadata_file.exists():
         try:
             with metadata_file.open("r") as f:
@@ -5365,13 +5387,13 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
             pass
 
     # Count templates and files
-    templates_dir = cookbook_path / "templates"
+    templates_dir = _safe_join(cookbook_path, "templates")
     if templates_dir.exists():
         analysis["templates"] = [
             f.name for f in templates_dir.rglob("*") if f.is_file()
         ]
 
-    files_dir = cookbook_path / "files"
+    files_dir = _safe_join(cookbook_path, "files")
     if files_dir.exists():
         analysis["files"] = [f.name for f in files_dir.rglob("*") if f.is_file()]
 
@@ -6742,7 +6764,7 @@ def _analyze_application_cookbook(cookbook_path, app_type: str) -> dict:
     }
 
     # Analyze recipes for deployment patterns
-    recipes_dir = cookbook_path / "recipes"
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
             with recipe_file.open("r") as f:
@@ -6761,7 +6783,7 @@ def _analyze_application_cookbook(cookbook_path, app_type: str) -> dict:
             analysis["health_checks"].extend(health_checks)
 
     # Analyze templates
-    templates_dir = cookbook_path / "templates"
+    templates_dir = _safe_join(cookbook_path, "templates")
     if templates_dir.exists():
         config_files = [f.name for f in templates_dir.rglob("*") if f.is_file()]
         analysis["configuration_files"] = config_files
@@ -7289,7 +7311,7 @@ def _assess_single_cookbook(cookbook_path) -> dict:
     }
 
     # Count recipes and resources
-    recipes_dir = cookbook / "recipes"
+    recipes_dir = _safe_join(cookbook, "recipes")
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
     # Analyze recipe complexity
@@ -7320,11 +7342,11 @@ def _assess_single_cookbook(cookbook_path) -> dict:
         "resource_count": resource_count,
         "custom_resources": custom_resources,
         "ruby_blocks": ruby_blocks,
-        "templates": len(list((cookbook / "templates").glob("*")))
-        if (cookbook / "templates").exists()
+        "templates": len(list(_safe_join(cookbook, "templates").glob("*")))
+        if _safe_join(cookbook, "templates").exists()
         else 0,
-        "files": len(list((cookbook / "files").glob("*")))
-        if (cookbook / "files").exists()
+        "files": len(list(_safe_join(cookbook, "files").glob("*")))
+        if _safe_join(cookbook, "files").exists()
         else 0,
     }
 
@@ -7630,7 +7652,7 @@ def _analyze_cookbook_dependencies_detailed(cookbook_path) -> dict:
         analysis["direct_dependencies"] = depends_matches
 
     # Read Berksfile for additional dependencies
-    berksfile = cookbook_path / "Berksfile"
+    berksfile = _safe_join(cookbook_path, "Berksfile")
     if berksfile.exists():
         with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
