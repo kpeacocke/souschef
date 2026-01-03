@@ -702,7 +702,10 @@ def test_parse_attributes_other_exception():
 
 def test_list_cookbook_structure_success():
     """Test list_cookbook_structure with valid cookbook."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with (
+        patch("souschef.server._normalize_path") as mock_path,
+        patch("souschef.server._safe_join") as mock_safe_join,
+    ):
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.return_value = True
@@ -730,20 +733,20 @@ def test_list_cookbook_structure_success():
         mock_metadata = MagicMock()
         mock_metadata.exists.return_value = True
 
-        # Mock the truediv operator for path joining
-        def mock_truediv(self, other):
-            if other == "recipes":
+        # Mock _safe_join for path joining
+        def mock_join_side_effect(base, component):
+            if component == "recipes":
                 return mock_recipes
-            elif other == "attributes":
+            elif component == "attributes":
                 return mock_attributes
-            elif other == "metadata.rb":
+            elif component == "metadata.rb":
                 return mock_metadata
             else:
                 mock_dir = MagicMock()
                 mock_dir.exists.return_value = False
                 return mock_dir
 
-        mock_cookbook.__truediv__ = mock_truediv
+        mock_safe_join.side_effect = mock_join_side_effect
 
         result = list_cookbook_structure("/cookbooks/nginx")
 
@@ -756,17 +759,20 @@ def test_list_cookbook_structure_success():
 
 def test_list_cookbook_structure_empty():
     """Test list_cookbook_structure with empty directory."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with (
+        patch("souschef.server._normalize_path") as mock_path,
+        patch("souschef.server._safe_join") as mock_safe_join,
+    ):
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.return_value = True
 
-        def mock_truediv(self, other):
+        def mock_join_side_effect(base, component):
             mock_dir = MagicMock()
             mock_dir.exists.return_value = False
             return mock_dir
 
-        mock_cookbook.__truediv__ = mock_truediv
+        mock_safe_join.side_effect = mock_join_side_effect
 
         result = list_cookbook_structure("/empty/cookbook")
 
@@ -2549,7 +2555,7 @@ end
 
         # Test with existing directory
         result = list_directory("/tmp")
-        assert isinstance(result, list) or isinstance(result, str)
+        assert isinstance(result, (list, str))
 
         # Test with workspace directory
         result = list_directory("/workspaces/souschef")
@@ -3210,6 +3216,8 @@ class TestInDepthFunctionCoverage:
             Path(temp_path).unlink()  # Additional targeted tests for maximum coverage
 
 
+import builtins
+import contextlib
 import os
 
 
@@ -5347,7 +5355,7 @@ end""",
                     pass
                 except Exception as e:
                     # Other exceptions should be handled gracefully
-                    assert False, f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}"
+                    raise AssertionError(f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}")
 
     def test_json_and_data_handling(self):
         """Test JSON and data handling within functions."""
@@ -7764,10 +7772,7 @@ depends:
                 args = tool_args[1:]
 
                 try:
-                    if len(args) == 1:
-                        result = tool(args[0])
-                    else:
-                        result = tool(*args)
+                    result = tool(args[0]) if len(args) == 1 else tool(*args)
 
                     assert isinstance(result, (str, list))
                     if isinstance(result, str):
@@ -8365,10 +8370,8 @@ end""",
                 except UnicodeError:
                     pass  # Some content might not be writable
                 finally:
-                    try:
+                    with contextlib.suppress(builtins.BaseException):
                         Path(temp_path).unlink()
-                    except:
-                        pass
 
             # Test template parsing with Unicode
             if ".erb" in str(test_case) or "<%" in test_case:
@@ -8385,10 +8388,8 @@ end""",
                     except UnicodeError:
                         pass
                     finally:
-                        try:
+                        with contextlib.suppress(builtins.BaseException):
                             Path(temp_path).unlink()
-                        except:
-                            pass
 
             # Test helper functions directly with Unicode
             try:
@@ -8469,10 +8470,8 @@ end""",
                     # Large files might cause memory issues, that's acceptable
                     pass
                 finally:
-                    try:
+                    with contextlib.suppress(builtins.BaseException):
                         Path(temp_path).unlink()
-                    except:
-                        pass
 
     def test_concurrent_operations_simulation(self):
         """Simulate concurrent operations to test thread safety."""
@@ -10235,7 +10234,5 @@ Chef::Log.info("Complex deployment completed successfully")
                         assert len(conversion_result) > 20
 
             finally:
-                try:
+                with contextlib.suppress(builtins.BaseException):
                     Path(temp_path).unlink()
-                except:
-                    pass
