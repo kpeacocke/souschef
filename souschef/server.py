@@ -3068,7 +3068,62 @@ def _generate_inspec_from_resource(  # noqa: C901
 
 
 @mcp.tool()
-def parse_inspec_profile(path: str) -> str:  # noqa: C901
+def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
+    """Parse all control files from an InSpec profile directory.
+
+    Args:
+        profile_path: Path to the InSpec profile directory.
+
+    Returns:
+        List of parsed controls.
+
+    Raises:
+        FileNotFoundError: If controls directory doesn't exist.
+        RuntimeError: If error reading control files.
+
+    """
+    controls_dir = profile_path / "controls"
+    if not controls_dir.exists():
+        raise FileNotFoundError(f"No controls directory found in {profile_path}")
+
+    controls = []
+    for control_file in controls_dir.glob("*.rb"):
+        try:
+            content = control_file.read_text()
+            file_controls = _parse_inspec_control(content)
+            for ctrl in file_controls:
+                ctrl["file"] = str(control_file.relative_to(profile_path))
+            controls.extend(file_controls)
+        except Exception as e:
+            raise RuntimeError(f"Error reading {control_file}: {e}") from e
+
+    return controls
+
+
+def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
+    """Parse controls from a single InSpec control file.
+
+    Args:
+        profile_path: Path to the control file.
+
+    Returns:
+        List of parsed controls.
+
+    Raises:
+        RuntimeError: If error reading the file.
+
+    """
+    try:
+        content = profile_path.read_text()
+        controls = _parse_inspec_control(content)
+        for ctrl in controls:
+            ctrl["file"] = profile_path.name
+        return controls
+    except Exception as e:
+        raise RuntimeError(f"Error reading file: {e}") from e
+
+
+def parse_inspec_profile(path: str) -> str:
     """Parse an InSpec profile and extract controls.
 
     Args:
@@ -3084,35 +3139,10 @@ def parse_inspec_profile(path: str) -> str:  # noqa: C901
         if not profile_path.exists():
             return f"Error: Path does not exist: {path}"
 
-        controls = []
-
-        # If it's a directory, look for controls in controls/
         if profile_path.is_dir():
-            controls_dir = profile_path / "controls"
-            if not controls_dir.exists():
-                return f"Error: No controls directory found in {path}"
-
-            # Parse all .rb files in controls/
-            for control_file in controls_dir.glob("*.rb"):
-                try:
-                    content = control_file.read_text()
-                    file_controls = _parse_inspec_control(content)
-                    for ctrl in file_controls:
-                        ctrl["file"] = str(control_file.relative_to(profile_path))
-                    controls.extend(file_controls)
-                except Exception as e:
-                    return f"Error reading {control_file}: {e}"
-
-        # If it's a file, parse it directly
+            controls = _parse_controls_from_directory(profile_path)
         elif profile_path.is_file():
-            try:
-                content = profile_path.read_text()
-                controls = _parse_inspec_control(content)
-                for ctrl in controls:
-                    ctrl["file"] = profile_path.name
-            except Exception as e:
-                return f"Error reading file: {e}"
-
+            controls = _parse_controls_from_file(profile_path)
         else:
             return f"Error: Invalid path type: {path}"
 
@@ -3125,6 +3155,8 @@ def parse_inspec_profile(path: str) -> str:  # noqa: C901
             indent=2,
         )
 
+    except (FileNotFoundError, RuntimeError) as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"An error occurred while parsing InSpec profile: {e}"
 
