@@ -72,8 +72,15 @@ jobs:
       with:
         args: --severity-threshold=high --file=requirements.txt --sarif-file-output=snyk-sca.sarif
 
+    - name: Ensure SARIF file exists
+      if: always()
+      run: |
+        if [ ! -f snyk-sca.sarif ]; then
+          echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[]}' > snyk-sca.sarif
+        fi
+
     - name: Upload Snyk SCA results to GitHub Code Scanning
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       if: always()
       with:
         sarif_file: snyk-sca.sarif
@@ -100,8 +107,15 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: snyk code test --sarif-file-output=snyk-code.sarif
 
+    - name: Ensure SARIF file exists
+      if: always()
+      run: |
+        if [ ! -f snyk-code.sarif ]; then
+          echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[]}' > snyk-code.sarif
+        fi
+
     - name: Upload Snyk Code results to GitHub Code Scanning
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       if: always()
       with:
         sarif_file: snyk-code.sarif
@@ -130,8 +144,15 @@ jobs:
         # Scan any Ansible playbooks in examples
         snyk iac test examples/ --sarif-file-output=snyk-iac.sarif || true
 
+    - name: Ensure SARIF file exists
+      if: always()
+      run: |
+        if [ ! -f snyk-iac.sarif ]; then
+          echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[]}' > snyk-iac.sarif
+        fi
+
     - name: Upload Snyk IaC results to GitHub Code Scanning
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       if: always()
       with:
         sarif_file: snyk-iac.sarif

@@ -84,8 +84,10 @@ jobs:
 
     - name: SonarCloud Scan
       if: steps.check-token.outputs.has_token == 'true'
-      uses: SonarSource/sonarcloud-github-action@master
+      uses: SonarSource/sonarqube-scan-action@v4
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       # Configuration is in sonar-project.properties
+      # Note: Disable "Automatic Analysis" in SonarCloud project settings
+      # (Administration > Analysis Method) to avoid conflicts with CI analysis

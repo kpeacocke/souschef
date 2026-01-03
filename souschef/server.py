@@ -160,8 +160,6 @@ def parse_template(path: str) -> str:
             "jinja2_template": jinja2_content,
         }
 
-        import json
-
         return json.dumps(result, indent=2)
 
     except FileNotFoundError:
@@ -597,8 +595,6 @@ def parse_custom_resource(path: str) -> str:
             "actions": actions_info["actions"],
             "default_action": actions_info["default_action"],
         }
-
-        import json
 
         return json.dumps(result, indent=2)
 
@@ -1220,8 +1216,6 @@ def _convert_chef_resource_to_ansible(
 
 def _format_yaml_value(value: Any) -> str:
     """Format a value for YAML output."""
-    import json
-
     if isinstance(value, str):
         return f'"{value}"'
     return json.dumps(value)
@@ -1312,8 +1306,6 @@ def convert_chef_search_to_inventory(search_query: str) -> str:
         # Convert to Ansible inventory patterns
         inventory_config = _generate_ansible_inventory_from_search(search_info)
 
-        import json
-
         return json.dumps(inventory_config, indent=2)
 
     except Exception as e:
@@ -1332,8 +1324,6 @@ def generate_dynamic_inventory_script(search_queries: str) -> str:
 
     """
     try:
-        import json
-
         queries_data = json.loads(search_queries)
 
         # Generate dynamic inventory script
@@ -1373,8 +1363,6 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         # Generate inventory recommendations
         recommendations = _generate_inventory_recommendations(search_patterns)
 
-        import json
-
         return json.dumps(
             {
                 "discovered_searches": search_patterns,
@@ -1397,8 +1385,6 @@ def _determine_search_index(normalized_query: str) -> str:
         Index name (defaults to 'node').
 
     """
-    import re
-
     index_match = re.match(r"^(\w+):", normalized_query)
     if index_match:
         potential_index = index_match.group(1)
@@ -1420,8 +1406,6 @@ def _extract_query_parts(
         Tuple of (conditions, operators).
 
     """
-    import re
-
     operator_pattern = r"\s+(AND|OR|NOT)\s+"
     parts = re.split(operator_pattern, normalized_query, flags=re.IGNORECASE)
 
@@ -1499,8 +1483,6 @@ def _parse_search_condition(condition: str) -> dict[str, str]:
         Dictionary with condition components.
 
     """
-    import re
-
     # Handle different condition patterns
     patterns = [
         # Wildcard search: role:web*
@@ -1712,7 +1694,6 @@ def _generate_group_name_from_condition(condition: dict[str, str], index: int) -
     value = condition.get("value", "unknown").lower()
 
     # Remove special characters and replace with underscores
-    import re
 
     key = re.sub(r"[^a-z0-9_]", "_", key)
     value = re.sub(r"[^a-z0-9_]", "_", value)
@@ -1856,7 +1837,6 @@ if __name__ == "__main__":
 '''
 
     # Convert queries_data to JSON string for embedding
-    import json
 
     queries_json = json.dumps(
         {
@@ -1935,8 +1915,6 @@ def _find_search_patterns_in_content(
         List of discovered search patterns.
 
     """
-    import re
-
     patterns = []
 
     # Common Chef search patterns
@@ -2318,8 +2296,6 @@ def _extract_version_variable(raw_content: str) -> dict[str, str]:
         Dictionary with package_version key if found.
 
     """
-    import re
-
     version_pattern = re.compile(r"version\s+['\"]([^'\"]+)['\"]")
     versions = version_pattern.findall(raw_content)
     if versions:
@@ -2337,8 +2313,6 @@ def _extract_content_variables(raw_content: str) -> dict[str, str]:
         Dictionary with file_content and/or template_source keys if found.
 
     """
-    import re
-
     variables = {}
 
     # Extract content specifications
@@ -2366,8 +2340,6 @@ def _extract_ownership_variables(raw_content: str) -> dict[str, str]:
         Dictionary with file_owner and/or file_group keys if found.
 
     """
-    import re
-
     variables = {}
 
     # Extract owner specifications
@@ -2395,8 +2367,6 @@ def _extract_mode_variables(raw_content: str) -> dict[str, str]:
         Dictionary with file_mode and/or directory_mode keys if found.
 
     """
-    import re
-
     # Extract mode specifications
     mode_pattern = re.compile(r"mode\s+['\"]([^'\"]+)['\"]")
     modes = mode_pattern.findall(raw_content)
@@ -2524,8 +2494,6 @@ def _extract_subscribe_declarations(raw_content: str) -> list[tuple[str, str, st
         List of tuples (action, target, timing).
 
     """
-    import re
-
     subscribes_pattern = re.compile(
         r'subscribes\s+:(\w+),\s*[\'"]([^\'\"]+)[\'"]\s*,?\s*:?(\w+)?'
     )
@@ -2727,8 +2695,6 @@ def _extract_enhanced_notifications(
         List of notification dictionaries with timing information.
 
     """
-    import re
-
     notifications = []
 
     # Find the resource block in raw content
@@ -2781,8 +2747,6 @@ def _find_resource_block(resource: dict[str, str], raw_content: str) -> str | No
         Resource block content or None if not found.
 
     """
-    import re
-
     resource_type_escaped = resource["type"]
     resource_name_escaped = re.escape(resource["name"])
     resource_pattern = (
@@ -2808,8 +2772,6 @@ def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list
         Tuple of (only_if_conditions, not_if_conditions, only_if_blocks, not_if_blocks).
 
     """
-    import re
-
     # Extract only_if conditions
     only_if_pattern = re.compile(r'only_if\s+[\'"]([^\'"]+)[\'"]')
     only_if_matches = only_if_pattern.findall(resource_block)
@@ -2934,8 +2896,6 @@ def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> 
         Ansible when condition string.
 
     """
-    import re
-
     # Common Chef to Ansible condition mappings
     condition_mappings = {
         # File existence checks
@@ -2998,8 +2958,6 @@ def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
         Ansible when condition string.
 
     """
-    import re
-
     # Clean up the block
     block = block.strip()
 
@@ -3046,8 +3004,6 @@ def _extract_resource_subscriptions(
         List of subscription dictionaries with timing information.
 
     """
-    import re
-
     subscriptions = []
 
     # Enhanced subscribes pattern that captures timing
@@ -3951,8 +3907,6 @@ def convert_chef_databag_to_vars(
 
     """
     try:
-        import json
-
         import yaml
 
         # Parse the data bag content
@@ -4285,8 +4239,6 @@ def analyze_chef_environment_usage(
 
 def _parse_chef_environment_content(content: str) -> dict:
     """Parse Chef environment Ruby content into structured data."""
-    import re
-
     env_data = {
         "name": "",
         "description": "",
@@ -4325,8 +4277,6 @@ def _parse_chef_environment_content(content: str) -> dict:
 
 def _extract_attributes_block(content: str, block_type: str) -> dict:
     """Extract attribute blocks from Chef environment content."""
-    import re
-
     # Find the block start
     pattern = rf"{block_type}\s*\((.*?)\)"
     match = re.search(pattern, content, re.DOTALL)
@@ -4367,8 +4317,6 @@ def _extract_attributes_block(content: str, block_type: str) -> dict:
 
 def _extract_cookbook_constraints(content: str) -> dict:
     """Extract cookbook version constraints from Chef environment."""
-    import re
-
     constraints = {}
 
     # Find cookbook version constraints
@@ -4546,8 +4494,6 @@ def _extract_environment_usage_from_cookbook(cookbook_path) -> list:
 
 def _find_environment_patterns_in_content(content: str, file_path: str) -> list:
     """Find environment usage patterns in file content."""
-    import re
-
     patterns = []
 
     # Common Chef environment patterns
@@ -4800,8 +4746,6 @@ def _generate_vault_content(vars_dict: dict, databag_name: str) -> str:
 def _detect_encrypted_databag(content: str) -> bool:
     """Detect if a Chef data bag is encrypted based on content structure."""
     try:
-        import json
-
         data = json.loads(content)
 
         # Chef encrypted data bags typically have specific encrypted fields
@@ -4896,8 +4840,6 @@ def _extract_databag_usage_from_cookbook(cookbook_path) -> list:
 
 def _find_databag_patterns_in_content(content: str, file_path: str) -> list:
     """Find data bag usage patterns in file content."""
-    import re
-
     patterns = []
 
     # Common Chef data bag patterns
@@ -5112,8 +5054,6 @@ def generate_awx_job_template_from_cookbook(
 
     """
     try:
-        import json
-
         cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
             return f"Error: Cookbook path not found: {cookbook_path}"
@@ -5170,8 +5110,6 @@ def generate_awx_workflow_from_chef_runlist(
 
     """
     try:
-        import json
-
         # Parse runlist
         runlist = _parse_chef_runlist(runlist_content)
 
@@ -5227,8 +5165,6 @@ def generate_awx_project_from_cookbooks(
 
     """
     try:
-        import json
-
         cookbooks_path = _normalize_path(cookbooks_directory)
         if not cookbooks_path.exists():
             return f"Error: Cookbooks directory not found: {cookbooks_directory}"
@@ -5292,8 +5228,6 @@ def generate_awx_inventory_source_from_chef(
 
     """
     try:
-        import json
-
         # Generate inventory source configuration
         inventory_source = _generate_chef_inventory_source(
             chef_server_url, sync_schedule
@@ -5380,6 +5314,7 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
                 analysis["survey_fields"].extend(survey_fields)
 
             except Exception:
+                # Silently skip malformed attribute files; continue analyzing other files
                 pass
 
     # Analyze dependencies
@@ -5393,6 +5328,7 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
             analysis["dependencies"] = dependencies
 
         except Exception:
+            # Silently skip malformed metadata; dependencies remain empty
             pass
 
     # Count templates and files
@@ -5632,8 +5568,6 @@ if __name__ == '__main__':
 
 def _parse_chef_runlist(runlist_content: str) -> list:
     """Parse Chef runlist content into list of recipes/roles."""
-    import json
-
     try:
         # Try parsing as JSON first
         if runlist_content.strip().startswith("["):
@@ -5645,6 +5579,7 @@ def _parse_chef_runlist(runlist_content: str) -> list:
                 for item in runlist
             ]
     except json.JSONDecodeError:
+        # Not valid JSON; fall through to parse as comma-separated or single item
         pass
 
     # Parse as comma-separated list
@@ -5667,8 +5602,6 @@ def _parse_chef_runlist(runlist_content: str) -> list:
 
 def _extract_cookbook_attributes(content: str) -> dict:
     """Extract cookbook attributes for survey generation."""
-    import re
-
     attributes = {}
 
     # Find default attribute declarations
@@ -5688,8 +5621,6 @@ def _extract_cookbook_attributes(content: str) -> dict:
 
 def _extract_cookbook_dependencies(content: str) -> list:
     """Extract cookbook dependencies from metadata."""
-    import re
-
     dependencies = []
 
     # Find depends declarations
@@ -5902,8 +5833,6 @@ def generate_blue_green_deployment_playbook(
 
     """
     try:
-        import json
-
         # Parse service configuration
         config = {}
         if service_config:
@@ -6110,8 +6039,6 @@ def analyze_chef_application_patterns(
 
 def _analyze_chef_deployment_pattern(content: str, pattern_hint: str) -> dict:
     """Analyze Chef recipe content for deployment patterns."""
-    import re
-
     analysis = {
         "detected_pattern": "standard",
         "deployment_steps": [],
@@ -6598,8 +6525,6 @@ def _generate_canary_strategy(
 
 def _extract_deployment_steps(content: str) -> list:
     """Extract deployment steps from Chef recipe."""
-    import re
-
     steps = []
 
     # Look for common deployment patterns
@@ -6627,8 +6552,6 @@ def _extract_deployment_steps(content: str) -> list:
 
 def _extract_health_checks(content: str) -> list:
     """Extract health check patterns from Chef recipe."""
-    import re
-
     health_checks = []
 
     health_patterns = [
@@ -6653,8 +6576,6 @@ def _extract_health_checks(content: str) -> list:
 
 def _extract_service_management(content: str) -> list:
     """Extract service management patterns from Chef recipe."""
-    import re
-
     services = []
 
     service_patterns = [
@@ -6679,8 +6600,6 @@ def _extract_service_management(content: str) -> list:
 
 def _extract_load_balancer_config(content: str) -> list:
     """Extract load balancer configuration from Chef recipe."""
-    import re
-
     lb_configs = []
 
     lb_patterns = [
@@ -6808,8 +6727,6 @@ def _analyze_application_cookbook(cookbook_path, app_type: str) -> dict:
 
 def _detect_deployment_patterns_in_recipe(content: str, recipe_name: str) -> list:
     """Detect deployment patterns in a Chef recipe."""
-    import re
-
     patterns = []
 
     pattern_indicators = {
@@ -7341,7 +7258,6 @@ def _assess_single_cookbook(cookbook_path) -> dict:
             with recipe_file.open("r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
                 # Count Chef resources
-                import re
 
                 resources = len(re.findall(r'\w+\s+[\'"].*[\'"]\s+do', content))
                 ruby_blocks += len(
@@ -7663,7 +7579,6 @@ def _analyze_cookbook_dependencies_detailed(cookbook_path) -> dict:
             content = f.read()
 
         # Parse dependencies
-        import re
 
         depends_matches = re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
         analysis["direct_dependencies"] = depends_matches
@@ -7673,8 +7588,6 @@ def _analyze_cookbook_dependencies_detailed(cookbook_path) -> dict:
     if berksfile.exists():
         with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
-
-        import re
 
         cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
         analysis["external_dependencies"].extend(cookbook_matches)
