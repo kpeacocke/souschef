@@ -1471,7 +1471,112 @@ def _parse_search_condition(condition: str) -> dict[str, str]:
     }
 
 
-def _generate_ansible_inventory_from_search(  # noqa: C901
+def _should_use_dynamic_inventory(search_info: dict[str, Any]) -> bool:
+    """Determine if dynamic inventory is needed based on search complexity.
+
+    Args:
+        search_info: Parsed Chef search information.
+
+    Returns:
+        True if dynamic inventory is needed.
+
+    """
+    return (
+        search_info["complexity"] != "simple"
+        or len(search_info["conditions"]) > 1
+        or any(
+            cond.get("operator") in ["regex", "wildcard", "range"]
+            for cond in search_info["conditions"]
+        )
+    )
+
+
+def _create_group_config_for_equal_condition(
+    condition: dict[str, str],
+) -> dict[str, Any]:
+    """Create group configuration for equal operator conditions.
+
+    Args:
+        condition: Condition with 'equal' operator.
+
+    Returns:
+        Group configuration dictionary.
+
+    """
+    group_config = {"hosts": [], "vars": {}, "children": []}
+    key = condition["key"]
+    value = condition["value"]
+
+    if key == "role":
+        group_config["hosts"] = [f"# Hosts with role: {value}"]
+        return group_config
+    elif key == "environment":
+        group_config["vars"]["environment"] = value
+        group_config["hosts"] = [f"# Hosts in environment: {value}"]
+        return group_config
+    elif key == "platform":
+        group_config["vars"]["ansible_os_family"] = value.capitalize()
+        group_config["hosts"] = [f"# {value} hosts"]
+        return group_config
+    elif key == "tags":
+        group_config["vars"]["tags"] = [value]
+        group_config["hosts"] = [f"# Hosts tagged with: {value}"]
+        return group_config
+
+    return group_config
+
+
+def _create_group_config_for_pattern_condition(
+    condition: dict[str, str],
+) -> dict[str, Any]:
+    """Create group configuration for wildcard/regex conditions.
+
+    Args:
+        condition: Condition with 'wildcard' or 'regex' operator.
+
+    Returns:
+        Group configuration dictionary.
+
+    """
+    operator = condition["operator"]
+    pattern_type = "pattern" if operator == "wildcard" else "regex"
+    return {
+        "hosts": [
+            f"# Hosts matching {pattern_type}: {condition['key']}:{condition['value']}"
+        ],
+        "vars": {},
+        "children": [],
+    }
+
+
+def _process_search_condition(
+    condition: dict[str, str], index: int, inventory_config: dict[str, Any]
+) -> None:
+    """Process a single search condition and update inventory config.
+
+    Args:
+        condition: Search condition to process.
+        index: Condition index for group naming.
+        inventory_config: Inventory configuration to update.
+
+    """
+    group_name = _generate_group_name_from_condition(condition, index)
+
+    if condition["operator"] == "equal":
+        group_config = _create_group_config_for_equal_condition(condition)
+        # Add role variable if it's a role condition
+        if condition["key"] == "role":
+            inventory_config["variables"][f"{group_name}_role"] = condition["value"]
+    elif condition["operator"] in ["wildcard", "regex"]:
+        group_config = _create_group_config_for_pattern_condition(condition)
+        inventory_config["dynamic_script_needed"] = True
+    else:
+        group_config = {"hosts": [], "vars": {}, "children": []}
+
+    inventory_config["groups"][group_name] = group_config
+
+
+def _generate_ansible_inventory_from_search(
     search_info: dict[str, Any],
 ) -> dict[str, Any]:
     """Generate Ansible inventory structure from parsed Chef search.
@@ -1492,60 +1597,13 @@ def _generate_ansible_inventory_from_search(  # noqa: C901
     }
 
     # Determine if we need dynamic inventory
-    if (
-        search_info["complexity"] != "simple"
-        or len(search_info["conditions"]) > 1
-        or any(
-            cond.get("operator") in ["regex", "wildcard", "range"]
-            for cond in search_info["conditions"]
-        )
-    ):
+    if _should_use_dynamic_inventory(search_info):
         inventory_config["inventory_type"] = "dynamic"
         inventory_config["dynamic_script_needed"] = True
 
     # Process each condition
     for i, condition in enumerate(search_info["conditions"]):
-        group_name = _generate_group_name_from_condition(condition, i)
-
-        # Generate group configuration
-        group_config = {"hosts": [], "vars": {}, "children": []}
-
-        # Add host patterns based on condition type
-        if condition["operator"] == "equal":
-            if condition["key"] == "role":
-                # Role-based grouping
-                group_config["hosts"] = [f"# Hosts with role: {condition['value']}"]
-                inventory_config["variables"][f"{group_name}_role"] = condition["value"]
-            elif condition["key"] == "environment":
-                # Environment-based grouping
-                group_config["vars"]["environment"] = condition["value"]
-                group_config["hosts"] = [
-                    f"# Hosts in environment: {condition['value']}"
-                ]
-            elif condition["key"] == "platform":
-                # Platform-based grouping
-                group_config["vars"]["ansible_os_family"] = condition[
-                    "value"
-                ].capitalize()
-                group_config["hosts"] = [f"# {condition['value']} hosts"]
-            elif condition["key"] == "tags":
-                # Tag-based grouping
-                group_config["vars"]["tags"] = [condition["value"]]
-                group_config["hosts"] = [f"# Hosts tagged with: {condition['value']}"]
-        elif condition["operator"] == "wildcard":
-            # Wildcard patterns need dynamic inventory
-            group_config["hosts"] = [
-                f"# Hosts matching pattern: {condition['key']}:{condition['value']}"
-            ]
-            inventory_config["dynamic_script_needed"] = True
-        elif condition["operator"] == "regex":
-            # Regex patterns need dynamic inventory
-            group_config["hosts"] = [
-                f"# Hosts matching regex: {condition['key']}:{condition['value']}"
-            ]
-            inventory_config["dynamic_script_needed"] = True
-
-        inventory_config["groups"][group_name] = group_config
+        _process_search_condition(condition, i, inventory_config)
 
     # Handle logical operators by creating combined groups
     if search_info["logical_operators"]:
