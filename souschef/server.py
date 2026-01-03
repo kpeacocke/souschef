@@ -375,8 +375,7 @@ def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
     # Match modern property syntax: property :name, Type, options
     # Updated to handle multi-line definitions and complex types like [true, false]
     property_pattern = (
-        r"property\s+:(\w+),\s*([^,\n\[]+(?:\[[^\]]+\])?)"
-        r",?\s*([^\n]*?)(?:\n|$)"
+        r"property\s+:(\w+),\s*([^,\n\[]+(?:\[[^\]]+\])?),?\s*([^\n]*?)(?:\n|$)"
     )
     for match in re.finditer(property_pattern, clean_content, re.MULTILINE):
         prop_name = match.group(1)
@@ -3394,7 +3393,7 @@ def generate_ansible_vault_from_databags(
                 item_name = item_file.stem
 
                 try:
-                    with open(item_file) as f:
+                    with item_file.open() as f:
                         content = f.read()
 
                     # Detect if encrypted (Chef encrypted data bags have specific structure)
@@ -3405,12 +3404,14 @@ def generate_ansible_vault_from_databags(
                         content, databag_name, item_name, is_encrypted, output_directory
                     )
 
+                    vault_suffix = "_vault" if is_encrypted else ""
+                    target_file = f"{output_directory}/{databag_name}{vault_suffix}.yml"
                     conversion_results.append(
                         {
                             "databag": databag_name,
                             "item": item_name,
                             "encrypted": is_encrypted,
-                            "target_file": f"{output_directory}/{databag_name}{'_vault' if is_encrypted else ''}.yml",
+                            "target_file": target_file,
                             "content": result,
                         }
                     )
@@ -3592,7 +3593,9 @@ def generate_inventory_from_chef_environments(
 def analyze_chef_environment_usage(
     cookbook_path: str, environments_path: str = ""
 ) -> str:
-    """Analyze Chef cookbook for environment usage and provide migration recommendations.
+    """Analyze Chef cookbook for environment usage.
+
+    Provides migration recommendations.
 
     Args:
         cookbook_path: Path to Chef cookbook
@@ -3777,8 +3780,10 @@ def _generate_inventory_group_from_environment(
     group_vars["chef_migration_metadata"] = {
         "source_environment": env_name,
         "converted_by": "souschef",
-        "variable_precedence": "group_vars (equivalent to Chef default_attributes)",
-        "overrides_location": "environment_overrides (requires extra_vars or host_vars)",
+        "variable_precedence": ("group_vars (equivalent to Chef default_attributes)"),
+        "overrides_location": (
+            "environment_overrides (requires extra_vars or host_vars)"
+        ),
     }
 
     return yaml.dump(group_vars, default_flow_style=False, indent=2)
@@ -3805,7 +3810,10 @@ def _generate_complete_inventory_from_environments(
             summary += (
                 f"✅ {result['environment']}: {result['attributes']} attributes, "
             )
-            summary += f"{result['overrides']} overrides, {result['constraints']} constraints\n"
+            summary += (
+                f"{result['overrides']} overrides, "
+                f"{result['constraints']} constraints\n"
+            )
         else:
             summary += f"❌ {result['environment']}: {result['error']}\n"
 
@@ -3998,12 +4006,14 @@ def _generate_environment_migration_recommendations(
 
         if environment_refs:
             recommendations.append(
-                f"• {len(environment_refs)} direct environment attribute accesses need inventory group conversion"
+                f"• {len(environment_refs)} direct environment attribute "
+                f"accesses need inventory group conversion"
             )
 
         if conditional_usage:
             recommendations.append(
-                f"• {len(conditional_usage)} conditional environment logic needs when/group_names conditions"
+                f"• {len(conditional_usage)} conditional environment logic "
+                f"needs when/group_names conditions"
             )
 
     # Analyze structure
@@ -4026,7 +4036,8 @@ def _generate_environment_migration_recommendations(
 
             if complex_envs:
                 recommendations.append(
-                    f"• {len(complex_envs)} environments have >10 attributes - consider splitting into logical variable groups"
+                    f"• {len(complex_envs)} environments have >10 attributes - "
+                    f"consider splitting into logical variable groups"
                 )
 
     # General migration recommendations
@@ -4088,7 +4099,8 @@ def _format_environment_structure(structure: dict) -> str:
                 overrides = info.get("override_attributes_count", 0)
                 constraints = info.get("cookbook_constraints_count", 0)
                 formatted.append(
-                    f"• {name}: {attrs} attributes, {overrides} overrides, {constraints} constraints"
+                    f"• {name}: {attrs} attributes, {overrides} overrides, "
+                    f"{constraints} constraints"
                 )
 
         if len(structure["environments"]) > 8:
@@ -4218,7 +4230,7 @@ def _extract_databag_usage_from_cookbook(cookbook_path) -> list:
     # Search for data bag usage in Ruby files
     for ruby_file in cookbook_path.rglob("*.rb"):
         try:
-            with open(ruby_file) as f:
+            with ruby_file.open() as f:
                 content = f.read()
 
             # Find data bag usage patterns
@@ -4296,7 +4308,7 @@ def _analyze_databag_structure(databags_path) -> dict:
             item_name = item_file.stem
 
             try:
-                with open(item_file) as f:
+                with item_file.open() as f:
                     content = f.read()
 
                 is_encrypted = _detect_encrypted_databag(content)
@@ -4928,7 +4940,9 @@ def main():
                 'chef_environment': node.get('chef_environment', '_default'),
                 'chef_roles': node.get('run_list', []),
                 'chef_platform': node.get('automatic', {{}}).get('platform'),
-                'chef_platform_version': node.get('automatic', {{}}).get('platform_version')
+                'chef_platform_version': (
+                    node.get('automatic', {{}}).get('platform_version')
+                )
             }}
 
             # Add to hostvars
@@ -5143,7 +5157,8 @@ def _format_cookbooks_analysis(analysis: dict) -> str:
         formatted.append("\n### Cookbook Details:")
         for name, info in list(analysis["cookbooks"].items())[:5]:
             formatted.append(
-                f"• {name}: {len(info['recipes'])} recipes, {len(info['attributes'])} attributes"
+                f"• {name}: {len(info['recipes'])} recipes, "
+                f"{len(info['attributes'])} attributes"
             )
 
         if len(analysis["cookbooks"]) > 5:
@@ -5162,8 +5177,10 @@ def convert_chef_deployment_to_ansible_strategy(
 
     Args:
         deployment_recipe_path: Path to Chef deployment recipe
-        deployment_pattern: Chef deployment pattern (blue_green, rolling, canary, auto_detect)
-        target_strategy: Target Ansible strategy (rolling_update, blue_green, canary)
+        deployment_pattern: Chef deployment pattern
+            (blue_green, rolling, canary, auto_detect)
+        target_strategy: Target Ansible strategy
+            (rolling_update, blue_green, canary)
 
     Returns:
         Ansible playbook with deployment strategy implementation
@@ -5361,7 +5378,8 @@ def generate_canary_deployment_strategy(
 ## Execution Commands:
 ```bash
 # Start canary deployment
-ansible-playbook canary_deploy.yml -e "app_version=1.2.3 canary_percent={canary_percentage}"
+ansible-playbook canary_deploy.yml -e \
+  "app_version=1.2.3 canary_percent={canary_percentage}"
 
 # Progress to next stage (if metrics are good)
 ansible-playbook canary_progress.yml -e "next_percent=25"
@@ -5382,11 +5400,14 @@ ansible-playbook canary_rollback.yml -e "reason='high_error_rate'"
 def analyze_chef_application_patterns(
     cookbook_path: str, application_type: str = "web_application"
 ) -> str:
-    """Analyze Chef cookbook for application deployment patterns and provide migration recommendations.
+    """Analyze Chef cookbook for application deployment patterns.
+
+    Provides migration recommendations.
 
     Args:
         cookbook_path: Path to Chef application cookbook
-        application_type: Type of application (web_application, microservice, database, etc.)
+        application_type: Type of application
+            (web_application, microservice, database, etc.)
 
     Returns:
         Analysis of deployment patterns with Ansible migration recommendations
@@ -5678,7 +5699,9 @@ def _generate_blue_green_playbook(
 
     - name: Run health checks on new deployment
       uri:
-        url: "http://{{{{ ansible_host }}}}:{{{{ service_port }}}}{{{{ health_check_url }}}}"
+        url: >-
+          http://{{{{ ansible_host }}}}:{{{{ service_port }}}}
+          {{{{ health_check_url }}}}
         method: GET
         timeout: 30
       register: health_check
@@ -5702,7 +5725,9 @@ def _generate_blue_green_playbook(
   tasks:
     - name: Check application health
       uri:
-        url: "http://{{{{ ansible_host }}}}:{{{{ service_port }}}}{{{{ health_check_url }}}}"
+        url: >-
+          http://{{{{ ansible_host }}}}:{{{{ service_port }}}}
+          {{{{ health_check_url }}}}
         method: GET
         status_code: 200
         timeout: 30
