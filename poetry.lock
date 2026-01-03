@@ -3027,6 +3027,21 @@ anyio = ">=3.6.2,<5"
 full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
 
 [[package]]
+name = "syrupy"
+version = "5.0.0"
+description = "Pytest Snapshot Test Utility"
+optional = false
+python-versions = ">=3.10"
+groups = ["dev"]
+files = [
+    {file = "syrupy-5.0.0-py3-none-any.whl", hash = "sha256:c848e1a980ca52a28715cd2d2b4d434db424699c05653bd1158fb31cf56e9546"},
+    {file = "syrupy-5.0.0.tar.gz", hash = "sha256:3282fe963fa5d4d3e47231b16d1d4d0f4523705e8199eeb99a22a1bc9f5942f2"},
+]
+
+[package.dependencies]
+pytest = ">=8.0.0"
+
+[[package]]
 name = "textual"
 version = "7.0.0"
 description = "Modern Text User Interface framework"
@@ -3291,4 +3306,4 @@ cli = ["dropbox (>=11.36.0)", "typer[all] (>=0.15.0)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.14,<4.0"
-content-hash = "837b66f8fd68803827a0878ecb50277bce72584557285013a05ab9fec387fd3c"
+content-hash = "254f80358418cf6dc03c70f833723b4c712592ecdfb428fbfdca2388aeafcd7d"
