@@ -3383,7 +3383,58 @@ def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:  # noqa: C901
+def _convert_package_to_ansible_assert(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert package expectations to Ansible assert conditions.
+
+    Args:
+        lines: List to append assertion lines to.
+        resource_name: Name of the package.
+        expectations: List of InSpec expectations.
+
+    """
+    for exp in expectations:
+        if "be_installed" in exp["matcher"]:
+            lines.append(
+                f"      - ansible_facts.packages['{resource_name}'] is defined"
+            )
+
+
+def _convert_service_to_ansible_assert(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert service expectations to Ansible assert conditions.
+
+    Args:
+        lines: List to append assertion lines to.
+        resource_name: Name of the service.
+        expectations: List of InSpec expectations.
+
+    """
+    for exp in expectations:
+        if "be_running" in exp["matcher"]:
+            lines.append(f"      - services['{resource_name}'].state == 'running'")
+        elif "be_enabled" in exp["matcher"]:
+            lines.append(f"      - services['{resource_name}'].status == 'enabled'")
+
+
+def _convert_file_to_ansible_assert(
+    lines: list[str], expectations: list[dict[str, Any]]
+) -> None:
+    """Convert file expectations to Ansible assert conditions.
+
+    Args:
+        lines: List to append assertion lines to.
+        expectations: List of InSpec expectations.
+
+    """
+    for exp in expectations:
+        if "exist" in exp["matcher"]:
+            lines.append("      - stat_result.stat.exists")
+
+
+def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:
     """Convert InSpec control to Ansible assert task.
 
     Args:
@@ -3393,39 +3444,26 @@ def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:  # noqa: 
         Ansible assert task in YAML format.
 
     """
-    lines = []
+    lines = [
+        f"- name: Verify {control['title'] or control['id']}",
+        "  ansible.builtin.assert:",
+        "    that:",
+    ]
 
-    lines.append(f"- name: Verify {control['title'] or control['id']}")
-    lines.append("  ansible.builtin.assert:")
-    lines.append("    that:")
-
+    # Convert each describe block to assertions
     for test in control["tests"]:
         resource_type = test["resource_type"]
         resource_name = test["resource_name"]
+        expectations = test["expectations"]
 
         if resource_type == "package":
-            for exp in test["expectations"]:
-                if "be_installed" in exp["matcher"]:
-                    lines.append(
-                        f"      - ansible_facts.packages['{resource_name}'] is defined"
-                    )
-
+            _convert_package_to_ansible_assert(lines, resource_name, expectations)
         elif resource_type == "service":
-            for exp in test["expectations"]:
-                if "be_running" in exp["matcher"]:
-                    lines.append(
-                        f"      - services['{resource_name}'].state == 'running'"
-                    )
-                elif "be_enabled" in exp["matcher"]:
-                    lines.append(
-                        f"      - services['{resource_name}'].status == 'enabled'"
-                    )
-
+            _convert_service_to_ansible_assert(lines, resource_name, expectations)
         elif resource_type == "file":
-            for exp in test["expectations"]:
-                if "exist" in exp["matcher"]:
-                    lines.append("      - stat_result.stat.exists")
+            _convert_file_to_ansible_assert(lines, expectations)
 
+    # Add failure message
     fail_msg = f"{control['desc'] or control['id']} validation failed"
     lines.append(f'    fail_msg: "{fail_msg}"')
 
