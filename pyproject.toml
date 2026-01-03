@@ -54,3 +54,6 @@ addopts = "-ra -q --cov=souschef --cov-report=term-missing"
 testpaths = [
     "tests",
 ]
+
+[tool.mutmut]
+backup = false

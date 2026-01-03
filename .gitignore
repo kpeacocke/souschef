@@ -33,6 +33,10 @@ coverage.xml
 coverage.json
 htmlcov/
 
+# Mutation testing
+.mutmut-cache
+mutants/
+
 # Snyk
 requirements.txt
 
