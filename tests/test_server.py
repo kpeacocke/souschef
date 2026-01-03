@@ -1,8 +1,13 @@
 """Tests for the SousChef MCP server."""
 
+import builtins
+import contextlib
 import json
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from souschef.server import (
     _convert_erb_to_jinja2,
@@ -43,7 +48,7 @@ def test_list_directory_success():
     mock_file2.name = "file2.txt"
     mock_path.iterdir.return_value = [mock_file1, mock_file2]
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = list_directory(".")
         assert result == ["file1.txt", "file2.txt"]
 
@@ -71,7 +76,7 @@ end
     mock_recipes_dir.glob.return_value = [mock_recipe_file]
     mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
 
-    with patch("souschef.server.Path") as mock_path_class:
+    with patch("souschef.server._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = assess_chef_migration_complexity("/path/to/cookbook")
 
@@ -88,7 +93,7 @@ def test_assess_chef_migration_complexity_cookbook_not_found():
     mock_cookbook_path = MagicMock(spec=Path)
     mock_cookbook_path.exists.return_value = False
 
-    with patch("souschef.server.Path") as mock_path_class:
+    with patch("souschef.server._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = assess_chef_migration_complexity("/nonexistent/path")
 
@@ -113,7 +118,7 @@ def test_generate_migration_plan_success():
     mock_recipes_dir.glob.return_value = [mock_recipe_file]
     mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
 
-    with patch("souschef.server.Path") as mock_path_class:
+    with patch("souschef.server._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = generate_migration_plan("/path/to/cookbook", "phased", 12)
 
@@ -160,7 +165,7 @@ def test_analyze_cookbook_dependencies_not_found():
     mock_cookbook_path = MagicMock(spec=Path)
     mock_cookbook_path.exists.return_value = False
 
-    with patch("souschef.server.Path") as mock_path_class:
+    with patch("souschef.server._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = analyze_cookbook_dependencies("/nonexistent/path")
 
@@ -269,7 +274,7 @@ def test_list_directory_empty():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.return_value = []
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = list_directory("/empty")
         assert result == []
 
@@ -279,7 +284,7 @@ def test_list_directory_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = FileNotFoundError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = list_directory("non_existent_directory")
         assert "Error: Directory not found" in result
 
@@ -289,7 +294,7 @@ def test_list_directory_not_a_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = NotADirectoryError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = list_directory("file.txt")
         assert "Error:" in result
         assert "is not a directory" in result
@@ -300,7 +305,7 @@ def test_list_directory_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = PermissionError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = list_directory("/root")
         assert "Error: Permission denied" in result
 
@@ -310,7 +315,7 @@ def test_list_directory_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = Exception("A test exception")
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = list_directory(".")
         assert "An error occurred: A test exception" in result
 
@@ -320,7 +325,7 @@ def test_read_file_success():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.return_value = "file contents here"
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = read_file("test.txt")
         assert result == "file contents here"
         mock_path.read_text.assert_called_once_with(encoding="utf-8")
@@ -331,7 +336,7 @@ def test_read_file_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = read_file("missing.txt")
         assert "Error: File not found" in result
 
@@ -341,7 +346,7 @@ def test_read_file_is_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = IsADirectoryError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = read_file("somedir")
         assert "Error:" in result
         assert "is a directory" in result
@@ -352,7 +357,7 @@ def test_read_file_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = read_file("protected.txt")
         assert "Error: Permission denied" in result
 
@@ -362,10 +367,9 @@ def test_read_file_unicode_decode_error():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = read_file("binary.dat")
-        assert "Error: Unable to decode" in result
-        assert "UTF-8" in result
+        assert "Error:" in result and "codec can't decode" in result
 
 
 def test_read_file_other_exception():
@@ -373,7 +377,7 @@ def test_read_file_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = Exception("Unexpected error")
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = read_file("test.txt")
         assert "An error occurred: Unexpected error" in result
 
@@ -391,7 +395,7 @@ depends 'iptables'
 supports 'ubuntu'
 supports 'debian'
     """
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = metadata_content
@@ -410,7 +414,7 @@ supports 'debian'
 def test_read_cookbook_metadata_minimal():
     """Test read_cookbook_metadata with minimal metadata."""
     metadata_content = "name 'simple'"
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = metadata_content
@@ -423,7 +427,7 @@ def test_read_cookbook_metadata_minimal():
 
 def test_read_cookbook_metadata_empty():
     """Test read_cookbook_metadata with empty file."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = ""
@@ -435,7 +439,7 @@ def test_read_cookbook_metadata_empty():
 
 def test_read_cookbook_metadata_not_found():
     """Test read_cookbook_metadata with non-existent file."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = FileNotFoundError()
@@ -447,7 +451,7 @@ def test_read_cookbook_metadata_not_found():
 
 def test_read_cookbook_metadata_is_directory():
     """Test read_cookbook_metadata when path is a directory."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = IsADirectoryError()
@@ -460,7 +464,7 @@ def test_read_cookbook_metadata_is_directory():
 
 def test_read_cookbook_metadata_permission_denied():
     """Test read_cookbook_metadata with permission error."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = PermissionError()
@@ -472,7 +476,7 @@ def test_read_cookbook_metadata_permission_denied():
 
 def test_read_cookbook_metadata_unicode_error():
     """Test read_cookbook_metadata with unicode decode error."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = UnicodeDecodeError(
@@ -481,13 +485,12 @@ def test_read_cookbook_metadata_unicode_error():
 
         result = read_cookbook_metadata("/binary/file")
 
-        assert "Error: Unable to decode" in result
-        assert "UTF-8" in result
+        assert "Error:" in result and "codec can't decode" in result
 
 
 def test_read_cookbook_metadata_other_exception():
     """Test read_cookbook_metadata with unexpected exception."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = Exception("Unexpected")
@@ -514,7 +517,7 @@ template '/etc/nginx/nginx.conf' do
   action :create
 end
     """
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = recipe_content
@@ -533,7 +536,7 @@ end
 
 def test_parse_recipe_empty():
     """Test parse_recipe with no resources."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = "# Just comments"
@@ -545,7 +548,7 @@ def test_parse_recipe_empty():
 
 def test_parse_recipe_not_found():
     """Test parse_recipe with non-existent file."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = FileNotFoundError()
@@ -557,7 +560,7 @@ def test_parse_recipe_not_found():
 
 def test_parse_recipe_is_directory():
     """Test parse_recipe when path is a directory."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = IsADirectoryError()
@@ -570,7 +573,7 @@ def test_parse_recipe_is_directory():
 
 def test_parse_recipe_permission_denied():
     """Test parse_recipe with permission error."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = PermissionError()
@@ -582,7 +585,7 @@ def test_parse_recipe_permission_denied():
 
 def test_parse_recipe_unicode_error():
     """Test parse_recipe with unicode decode error."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = UnicodeDecodeError(
@@ -591,13 +594,12 @@ def test_parse_recipe_unicode_error():
 
         result = parse_recipe("/binary/file.rb")
 
-        assert "Error: Unable to decode" in result
-        assert "UTF-8" in result
+        assert "Error:" in result and "codec can't decode" in result
 
 
 def test_parse_recipe_other_exception():
     """Test parse_recipe with unexpected exception."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = Exception("Unexpected")
@@ -615,7 +617,7 @@ default['nginx']['ssl_port'] = 443
 override['nginx']['worker_processes'] = 4
 default['nginx']['user'] = 'www-data'
     """
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = attributes_content
@@ -630,7 +632,7 @@ default['nginx']['user'] = 'www-data'
 
 def test_parse_attributes_empty():
     """Test parse_attributes with no attributes."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = "# Just comments"
@@ -642,7 +644,7 @@ def test_parse_attributes_empty():
 
 def test_parse_attributes_not_found():
     """Test parse_attributes with non-existent file."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = FileNotFoundError()
@@ -654,7 +656,7 @@ def test_parse_attributes_not_found():
 
 def test_parse_attributes_is_directory():
     """Test parse_attributes when path is a directory."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = IsADirectoryError()
@@ -667,7 +669,7 @@ def test_parse_attributes_is_directory():
 
 def test_parse_attributes_permission_denied():
     """Test parse_attributes with permission error."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = PermissionError()
@@ -679,7 +681,7 @@ def test_parse_attributes_permission_denied():
 
 def test_parse_attributes_unicode_error():
     """Test parse_attributes with unicode decode error."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = UnicodeDecodeError(
@@ -688,13 +690,12 @@ def test_parse_attributes_unicode_error():
 
         result = parse_attributes("/binary/file.rb")
 
-        assert "Error: Unable to decode" in result
-        assert "UTF-8" in result
+        assert "Error:" in result and "codec can't decode" in result
 
 
 def test_parse_attributes_other_exception():
     """Test parse_attributes with unexpected exception."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = Exception("Unexpected")
@@ -706,7 +707,10 @@ def test_parse_attributes_other_exception():
 
 def test_list_cookbook_structure_success():
     """Test list_cookbook_structure with valid cookbook."""
-    with patch("souschef.server.Path") as mock_path:
+    with (
+        patch("souschef.server._normalize_path") as mock_path,
+        patch("souschef.server._safe_join") as mock_safe_join,
+    ):
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.return_value = True
@@ -734,20 +738,20 @@ def test_list_cookbook_structure_success():
         mock_metadata = MagicMock()
         mock_metadata.exists.return_value = True
 
-        # Mock the truediv operator for path joining
-        def mock_truediv(self, other):
-            if other == "recipes":
+        # Mock _safe_join for path joining
+        def mock_join_side_effect(base, component):
+            if component == "recipes":
                 return mock_recipes
-            elif other == "attributes":
+            elif component == "attributes":
                 return mock_attributes
-            elif other == "metadata.rb":
+            elif component == "metadata.rb":
                 return mock_metadata
             else:
                 mock_dir = MagicMock()
                 mock_dir.exists.return_value = False
                 return mock_dir
 
-        mock_cookbook.__truediv__ = mock_truediv
+        mock_safe_join.side_effect = mock_join_side_effect
 
         result = list_cookbook_structure("/cookbooks/nginx")
 
@@ -760,17 +764,20 @@ def test_list_cookbook_structure_success():
 
 def test_list_cookbook_structure_empty():
     """Test list_cookbook_structure with empty directory."""
-    with patch("souschef.server.Path") as mock_path:
+    with (
+        patch("souschef.server._normalize_path") as mock_path,
+        patch("souschef.server._safe_join") as mock_safe_join,
+    ):
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.return_value = True
 
-        def mock_truediv(self, other):
+        def mock_join_side_effect(base, component):
             mock_dir = MagicMock()
             mock_dir.exists.return_value = False
             return mock_dir
 
-        mock_cookbook.__truediv__ = mock_truediv
+        mock_safe_join.side_effect = mock_join_side_effect
 
         result = list_cookbook_structure("/empty/cookbook")
 
@@ -779,7 +786,7 @@ def test_list_cookbook_structure_empty():
 
 def test_list_cookbook_structure_not_directory():
     """Test list_cookbook_structure with non-directory path."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.return_value = False
@@ -792,7 +799,7 @@ def test_list_cookbook_structure_not_directory():
 
 def test_list_cookbook_structure_permission_denied():
     """Test list_cookbook_structure with permission error."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.side_effect = PermissionError()
@@ -804,7 +811,7 @@ def test_list_cookbook_structure_permission_denied():
 
 def test_list_cookbook_structure_other_exception():
     """Test list_cookbook_structure with unexpected exception."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.side_effect = Exception("Unexpected")
@@ -962,7 +969,7 @@ def test_parse_template_success():
     erb_content = "Hello <%= @name %>!"
     mock_path.read_text.return_value = erb_content
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = parse_template("/path/to/template.erb")
 
         assert "variables" in result
@@ -975,7 +982,7 @@ def test_parse_template_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = parse_template("/nonexistent/template.erb")
 
         assert "Error: File not found" in result
@@ -986,7 +993,7 @@ def test_parse_template_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = parse_template("/forbidden/template.erb")
 
         assert "Error: Permission denied" in result
@@ -1124,7 +1131,7 @@ end
 """
     mock_path.read_text.return_value = resource_content
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = parse_custom_resource("/path/to/resource.rb")
 
         assert "properties" in result
@@ -1137,7 +1144,7 @@ def test_parse_custom_resource_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = parse_custom_resource("/nonexistent/resource.rb")
 
         assert "Error: File not found" in result
@@ -1148,7 +1155,7 @@ def test_parse_custom_resource_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch("souschef.server.Path", return_value=mock_path):
+    with patch("souschef.server._normalize_path", return_value=mock_path):
         result = parse_custom_resource("/forbidden/resource.rb")
 
         assert "Error: Permission denied" in result
@@ -1389,7 +1396,7 @@ package 'nginx' do  # Using nginx
   action :install
 end
 """
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = recipe_content
@@ -1410,7 +1417,7 @@ when 'centos'
   default['pkg']['name'] = 'httpd'
 end
 """
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = attr_content
@@ -1445,7 +1452,7 @@ line3'
   action :create
 end
 """
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = recipe_content
@@ -1485,7 +1492,7 @@ end
     assert controls[0]["id"] == "nginx-1"
     assert controls[0]["title"] == "Verify nginx installation"
     assert controls[0]["desc"] == "Ensure nginx is installed and running"
-    assert controls[0]["impact"] == 1.0
+    assert controls[0]["impact"] == pytest.approx(1.0)
     assert len(controls[0]["tests"]) == 2
 
 
@@ -1653,7 +1660,7 @@ control 'test-1' do
 end
 """
 
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.exists.return_value = True
@@ -1678,7 +1685,7 @@ control 'dir-test' do
 end
 """
 
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.exists.return_value = True
@@ -1703,7 +1710,7 @@ end
 
 def test_parse_inspec_profile_not_found():
     """Test parsing InSpec profile with non-existent path."""
-    with patch("souschef.server.Path") as mock_path:
+    with patch("souschef.server._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.exists.return_value = False
@@ -1956,6 +1963,7 @@ def test_convert_chef_databag_to_vars_success():
     from souschef.server import convert_chef_databag_to_vars
 
     # Create databag content
+    # deepcode ignore NoHardcodedPasswords/test: test password>
     databag_data = {"id": "database", "password": "secret123", "host": "db.example.com"}
     databag_content = json.dumps(databag_data)
 
@@ -2333,7 +2341,7 @@ class TestMCPToolsComprehensive:
         result2 = generate_blue_green_deployment_playbook("test_app", "production")
         assert isinstance(result2, str)  # Should not crash
 
-        result3 = generate_canary_deployment_strategy("test_app", "production", "10")
+        result3 = generate_canary_deployment_strategy("test_app", 10, "10,25,50,100")
         assert isinstance(result3, str)  # Should not crash
 
         result4 = analyze_chef_application_patterns("/nonexistent/cookbook")
@@ -2485,12 +2493,10 @@ class TestAdvancedParsingFunctions:
 
         # Test invalid input
         invalid = "not_a_node_attribute"
-        result = _extract_node_attribute_path(invalid)
+        _ = _extract_node_attribute_path(invalid)
 
 
 # High-impact coverage tests to reach 95% target
-
-import tempfile
 
 
 class TestCoreFunctionsCoverage:
@@ -2552,7 +2558,7 @@ end
 
         # Test with existing directory
         result = list_directory("/tmp")
-        assert isinstance(result, list) or isinstance(result, str)
+        assert isinstance(result, (list, str))
 
         # Test with workspace directory
         result = list_directory("/workspaces/souschef")
@@ -3210,10 +3216,10 @@ class TestInDepthFunctionCoverage:
             parsed = json.loads(result)
             assert "name" in parsed
         finally:
-            Path(temp_path).unlink()  # Additional targeted tests for maximum coverage
+            Path(temp_path).unlink()
 
 
-import os
+# Additional targeted tests for maximum coverage
 
 
 class TestUncoveredCodePaths:
@@ -4501,18 +4507,18 @@ server {
 
             # Make file unreadable (if possible)
             try:
-                os.chmod(temp_file, 0o000)
+                Path(temp_file).chmod(0o000)
                 result = read_file(temp_file)
                 assert isinstance(result, str)
                 assert "Error" in result or "Permission" in result
-            except (OSError, PermissionError):
+            except OSError:
                 pass  # May not be able to change permissions in some environments
 
         finally:
             try:
-                os.chmod(temp_file, 0o644)  # Restore permissions to clean up
+                Path(temp_file).chmod(0o644)  # Restore permissions to clean up
                 Path(temp_file).unlink()
-            except (OSError, FileNotFoundError):
+            except OSError:
                 pass
 
     def test_unicode_and_encoding_scenarios(self):
@@ -5336,11 +5342,8 @@ end""",
         for func in functions_to_test:
             for error_input in error_scenarios:
                 try:
-                    if error_input is None or isinstance(error_input, int):
-                        # These might raise TypeError, which is acceptable
-                        result = func(error_input)
-                    else:
-                        result = func(error_input)
+                    # Call function - None/int might raise TypeError, which is acceptable
+                    result = func(error_input)
 
                     # If no exception, should return string or list
                     assert isinstance(result, (str, list))
@@ -5350,13 +5353,9 @@ end""",
                     pass
                 except Exception as e:
                     # Other exceptions should be handled gracefully
-                    assert False, (
+                    raise AssertionError(
                         f"Function {func.__name__} raised unexpected exception {type(e).__name__}: {e}"
-                    )
-
-    def test_json_and_data_handling(self):
-        """Test JSON and data handling within functions."""
-        from souschef.server import read_file
+                    ) from None
 
         # Test with various JSON and data formats
         data_formats = [
@@ -5967,10 +5966,10 @@ class TestCriticalMCPToolCoverage:
                 query_set.strip()
                 and query_set not in ["", "[]", '[""]', "invalid-json"]
                 and '"' in query_set
+                and not result.startswith("Error")
             ):
                 # Only check for Python script if it's a potentially valid query
-                if not result.startswith("Error"):
-                    assert "#!/usr/bin/env python" in result or "import" in result
+                assert "#!/usr/bin/env python" in result or "import" in result
 
     def test_analyze_chef_search_patterns_comprehensive(self):
         """Test analyze_chef_search_patterns with various Chef files."""
@@ -6270,8 +6269,8 @@ db_servers = search(:node, "role:database")
 
         for result in search_results:
             try:
-                inventory = _generate_ansible_inventory_from_search(result, "web")
-                assert isinstance(inventory, str)
+                inventory = _generate_ansible_inventory_from_search(result)
+                assert isinstance(inventory, dict)
             except (ValueError, TypeError, KeyError):
                 # Some results might not be valid
                 pass
@@ -7769,10 +7768,7 @@ depends:
                 args = tool_args[1:]
 
                 try:
-                    if len(args) == 1:
-                        result = tool(args[0])
-                    else:
-                        result = tool(*args)
+                    result = tool(args[0]) if len(args) == 1 else tool(*args)
 
                     assert isinstance(result, (str, list))
                     if isinstance(result, str):
@@ -8282,7 +8278,7 @@ end""",
                     result = func(edge_input)
                     # Function should return a string or list, never crash
                     assert isinstance(result, (str, list))
-                except (OSError, FileNotFoundError, PermissionError) as e:
+                except OSError as e:
                     # These exceptions are acceptable for file system operations
                     assert isinstance(str(e), str)
                 except Exception as e:
@@ -8313,106 +8309,102 @@ end""",
                 # Should handle malformed input gracefully
                 assert isinstance(str(e), str)
 
-    def test_unicode_and_special_characters(self):
-        """Test handling of Unicode and special characters."""
-        from souschef.server import (
-            _convert_erb_to_jinja2,
-            _normalize_ruby_value,
-            _strip_ruby_comments,
-            parse_attributes,
-            parse_recipe,
-            parse_template,
-        )
 
-        # Unicode and special character test cases
-        unicode_test_cases = [
-            # Basic Unicode
-            "测试内容",  # Chinese characters
-            "café résumé naïve",  # Accented characters
-            "Москва",  # Cyrillic
-            "العربية",  # Arabic
-            "日本語",  # Japanese
-            "한국어",  # Korean
-            "🚀 🎉 ⭐",  # Emojis
-            # Special characters
-            "!@#$%^&*()_+-=[]{}|;:',.<>?",
-            "\\n\\t\\r\\v\\f",  # Escape sequences
-            "\x00\x01\x02\x03",  # Control characters
-            "\u0000\u0001\u0002",  # Unicode control characters
-            # Mixed content
-            "package 'nginx-测试' do\n  # Comment with émojis 🚀\n  action :install\nend",
-            "default['app']['名前'] = 'テストアプリ'",
-            "<%= node['app']['título'] %> - <%= node['configuración']['puerto'] %>",
-        ]
+def _test_parsing_with_temp_file(content, suffix, parser_func):
+    """Test parser with temporary file containing content."""
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=suffix, delete=False
+    ) as f:
+        try:
+            f.write(content)
+            temp_path = f.name
+            result = parser_func(temp_path)
+            assert isinstance(result, str)
+        except UnicodeError:
+            pass  # Unicode errors are acceptable
+        finally:
+            with contextlib.suppress(builtins.BaseException):
+                Path(temp_path).unlink()
 
-        for test_case in unicode_test_cases:
-            # Test file operations with Unicode content
-            with tempfile.NamedTemporaryFile(
-                mode="w", encoding="utf-8", suffix=".rb", delete=False
-            ) as f:
-                try:
-                    f.write(test_case)
-                    temp_path = f.name
 
-                    # Test parsing functions with Unicode content
-                    try:
-                        result = parse_recipe(temp_path)
-                        assert isinstance(result, str)
-                    except UnicodeError:
-                        pass  # Unicode errors are acceptable
+def _test_helper_function_with_input(helper_func, test_input):
+    """Test a function with given input, handling expected exceptions."""
+    try:
+        result = helper_func(test_input)
+        assert isinstance(result, str)
+    except (ValueError, TypeError):
+        pass  # These exceptions are acceptable for invalid/unicode input
 
-                    try:
-                        result = parse_attributes(temp_path)
-                        assert isinstance(result, str)
-                    except UnicodeError:
-                        pass
 
-                except UnicodeError:
-                    pass  # Some content might not be writable
-                finally:
-                    try:
-                        Path(temp_path).unlink()
-                    except:
-                        pass
+class TestUnicodeAndSpecialCharacters:
+    """Test handling of Unicode and special characters."""
 
-            # Test template parsing with Unicode
-            if ".erb" in str(test_case) or "<%" in test_case:
-                with tempfile.NamedTemporaryFile(
-                    mode="w", encoding="utf-8", suffix=".erb", delete=False
-                ) as f:
-                    try:
-                        f.write(test_case)
-                        temp_path = f.name
+    UNICODE_TEST_CASES = [
+        # Basic Unicode
+        "测试内容",  # Chinese characters
+        "café résumé naïve",  # Accented characters
+        "Москва",  # Cyrillic
+        "العربية",  # Arabic
+        "日本語",  # Japanese
+        "한국어",  # Korean
+        "🚀 🎉 ⭐",  # Emojis
+        # Special characters
+        "!@#$%^&*()_+-=[]{}|;:',.<>?",
+        "\\n\\t\\r\\v\\f",  # Escape sequences
+        "\x00\x01\x02\x03",  # Control characters
+        "\u0000\u0001\u0002",  # Unicode control characters
+        # Mixed content
+        "package 'nginx-测试' do\n  # Comment with émojis 🚀\n  action :install\nend",
+        "default['app']['名前'] = 'テストアプリ'",
+        "<%= node['app']['título'] %> - <%= node['configuración']['puerto'] %>",
+    ]
 
-                        result = parse_template(temp_path)
-                        assert isinstance(result, str)
+    def test_recipe_parsing_with_unicode(self):
+        """Test recipe parsing with Unicode content."""
+        from souschef.server import parse_recipe
 
-                    except UnicodeError:
-                        pass
-                    finally:
-                        try:
-                            Path(temp_path).unlink()
-                        except:
-                            pass
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_parsing_with_temp_file(test_case, ".rb", parse_recipe)
 
-            # Test helper functions directly with Unicode
-            try:
-                result = _strip_ruby_comments(test_case)
-                assert isinstance(result, str)
-            except (ValueError, TypeError):
-                pass
+    def test_attributes_parsing_with_unicode(self):
+        """Test attributes parsing with Unicode content."""
+        from souschef.server import parse_attributes
 
-            try:
-                result = _normalize_ruby_value(test_case)
-                assert isinstance(result, str)
-            except (ValueError, TypeError):
-                pass
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_parsing_with_temp_file(test_case, ".rb", parse_attributes)
 
-            try:
-                result = _convert_erb_to_jinja2(test_case)
-                assert isinstance(result, str)
-            except (ValueError, TypeError):
-                pass
+    def test_template_parsing_with_unicode(self):
+        """Test template parsing with Unicode content (ERB files)."""
+        from souschef.server import parse_template
+
+        erb_test_cases = [tc for tc in self.UNICODE_TEST_CASES if "<%" in tc]
+        for test_case in erb_test_cases:
+            _test_parsing_with_temp_file(test_case, ".erb", parse_template)
+
+    def test_strip_ruby_comments_with_unicode(self):
+        """Test _strip_ruby_comments with Unicode content."""
+        from souschef.server import _strip_ruby_comments
+
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_helper_function_with_input(_strip_ruby_comments, test_case)
+
+    def test_normalize_ruby_value_with_unicode(self):
+        """Test _normalize_ruby_value with Unicode content."""
+        from souschef.server import _normalize_ruby_value
+
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_helper_function_with_input(_normalize_ruby_value, test_case)
+
+    def test_convert_erb_to_jinja2_with_unicode(self):
+        """Test _convert_erb_to_jinja2 with Unicode content."""
+        from souschef.server import _convert_erb_to_jinja2
+
+        for test_case in self.UNICODE_TEST_CASES:
+            _test_helper_function_with_input(_convert_erb_to_jinja2, test_case)
+
+
+class TestLargeFileHandling:
+    """Test handling of large files and content."""
 
     def test_large_file_handling(self):
         """Test handling of large files and content."""
@@ -8474,10 +8466,8 @@ end""",
                     # Large files might cause memory issues, that's acceptable
                     pass
                 finally:
-                    try:
+                    with contextlib.suppress(builtins.BaseException):
                         Path(temp_path).unlink()
-                    except:
-                        pass
 
     def test_concurrent_operations_simulation(self):
         """Simulate concurrent operations to test thread safety."""
@@ -8536,11 +8526,11 @@ end
             assert isinstance(result, str)
 
         # Clean up
+        import contextlib
+
         for file_path in test_files:
-            try:
+            with contextlib.suppress(Exception):
                 Path(file_path).unlink()
-            except:
-                pass  # Ultimate coverage tests - targeting specific missing lines in server.py
 
 
 class TestUltimateCoverageTarget:
@@ -9756,18 +9746,13 @@ version '0.1.0' """,
             [{"incomplete": "node"}],
         ]
 
-        group_names = ["web", "database", "all", "", "group-with-dashes"]
-
         for result in search_results:
-            for group_name in group_names[:2]:  # Test with a couple group names
-                try:
-                    inventory = _generate_ansible_inventory_from_search(
-                        result, group_name
-                    )
-                    assert isinstance(inventory, str)
-                except Exception:
-                    # Some results might not be valid, that's acceptable
-                    pass
+            try:
+                inventory = _generate_ansible_inventory_from_search(result)
+                assert isinstance(inventory, dict)
+            except Exception:
+                # Some results might not be valid, that's acceptable
+                pass
 
     def test_deep_nested_functionality(self):
         """Test deeply nested functionality and edge cases."""
@@ -10240,7 +10225,5 @@ Chef::Log.info("Complex deployment completed successfully")
                         assert len(conversion_result) > 20
 
             finally:
-                try:
+                with contextlib.suppress(builtins.BaseException):
                     Path(temp_path).unlink()
-                except:
-                    pass

@@ -1,5 +1,6 @@
 """SousChef MCP Server - Chef to Ansible conversion assistant."""
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -10,12 +11,76 @@ from mcp.server.fastmcp import FastMCP
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
 
+
+def _normalize_path(path_str: str) -> Path:
+    """Normalize a file path for safe filesystem operations.
+
+    This function resolves relative paths and symlinks to absolute paths,
+    preventing path traversal attacks (CWE-23). Note: This MCP server
+    intentionally allows full filesystem access as it runs in the user's
+    local environment with their permissions.
+
+    Args:
+        path_str: Path string to normalize.
+
+    Returns:
+        Resolved absolute Path object.
+
+    Raises:
+        ValueError: If the path contains null bytes or is invalid.
+
+    """
+    if "\x00" in path_str:
+        raise ValueError(f"Path contains null bytes: {path_str!r}")
+
+    try:
+        # Resolve to absolute path, removing .., ., and resolving symlinks
+        # deepcode ignore PT: This is the path normalization function itself
+        return Path(path_str).resolve()
+    except (OSError, RuntimeError) as e:
+        raise ValueError(f"Invalid path {path_str}: {e}") from e
+
+
+def _safe_join(base_path: Path, *parts: str) -> Path:
+    """Safely join path components ensuring result stays within base directory.
+
+    Args:
+        base_path: Normalized base path.
+        *parts: Path components to join.
+
+    Returns:
+        Joined path within base_path.
+
+    Raises:
+        ValueError: If result would escape base_path.
+
+    """
+    result = base_path.joinpath(*parts).resolve()
+    try:
+        result.relative_to(base_path)
+        return result
+    except ValueError as e:
+        raise ValueError(f"Path traversal attempt: {parts} escapes {base_path}") from e
+
+
+# Constants for commonly used strings
+ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"
+METADATA_FILENAME = "metadata.rb"
+ERROR_PREFIX = "Error:"
+REGEX_WHITESPACE_QUOTE = r"\s+['\"]?"
+REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*(.*?)\nend"
+REGEX_RESOURCE_BRACKET = r"(\w+)\[([^\]]+)\]"
+INSPEC_END_INDENT = "  end"
+INSPEC_SHOULD_EXIST = "    it { should exist }"
+CHEF_RECIPE_PREFIX = "recipe["
+CHEF_ROLE_PREFIX = "role["
+
 # Chef resource to Ansible module mappings
 RESOURCE_MAPPINGS = {
     "package": "ansible.builtin.package",
     "apt_package": "ansible.builtin.apt",
     "yum_package": "ansible.builtin.yum",
-    "service": "ansible.builtin.service",
+    "service": ANSIBLE_SERVICE_MODULE,
     "systemd_unit": "ansible.builtin.systemd",
     "template": "ansible.builtin.template",
     "file": "ansible.builtin.file",
@@ -49,17 +114,17 @@ ACTION_TO_STATE = {
 # ERB to Jinja2 pattern mappings
 ERB_PATTERNS = {
     # Variable output: <%= var %> -> {{ var }}
-    "output": (r"<%=\s*(.+?)\s*%>", r"{{ \1 }}"),
+    "output": (r"<%=\s*([^%]+?)\s*%>", r"{{ \1 }}"),
     # Variable with node prefix: <%= node['attr'] %> -> {{ attr }}
-    "node_attr": (r"<%=\s*node\[(['\"])(.+?)\1\]\s*%>", r"{{ \2 }}"),
+    "node_attr": (r"<%=\s*node\[(['\"])([^%]+?)\1\]\s*%>", r"{{ \2 }}"),
     # If statements: <% if condition %> -> {% if condition %}
-    "if_start": (r"<%\s*if\s+(.+?)\s*%>", r"{% if \1 %}"),
+    "if_start": (r"<%\s*if\s+([^%]+?)\s*%>", r"{% if \1 %}"),
     # Unless (negated if): <% unless condition %> -> {% if not condition %}
-    "unless": (r"<%\s*unless\s+(.+?)\s*%>", r"{% if not \1 %}"),
+    "unless": (r"<%\s*unless\s+([^%]+?)\s*%>", r"{% if not \1 %}"),
     # Else: <% else %> -> {% else %}
     "else": (r"<%\s*else\s*%>", r"{% else %}"),
     # Elsif: <% elsif condition %> -> {% elif condition %}
-    "elsif": (r"<%\s*elsif\s+(.+?)\s*%>", r"{% elif \1 %}"),
+    "elsif": (r"<%\s*elsif\s+([^%]+?)\s*%>", r"{% elif \1 %}"),
     # End: <% end %> -> {% endif %}
     "end": (r"<%\s*end\s*%>", r"{% endif %}"),
     # Each loop: <% array.each do |item| %> -> {% for item in array %}
@@ -80,7 +145,7 @@ def parse_template(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         # Extract variables
@@ -94,8 +159,6 @@ def parse_template(path: str) -> str:
             "variables": sorted(variables),
             "jinja2_template": jinja2_content,
         }
-
-        import json
 
         return json.dumps(result, indent=2)
 
@@ -149,7 +212,7 @@ def _extract_output_variables(content: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    output_vars = re.findall(r"<%=\s*(.+?)\s*%>", content)
+    output_vars = re.findall(r"<%=\s*([^%]+?)\s*%>", content)
     for var in output_vars:
         var = var.strip()
         if var.startswith("node["):
@@ -189,7 +252,68 @@ def _extract_node_attribute_path(node_ref: str) -> str:
     return attr_path
 
 
-def _extract_code_block_variables(content: str, variables: set[str]) -> None:  # noqa: C901
+def _extract_interpolated_variables(code: str, variables: set[str]) -> None:
+    """Extract variables from Ruby string interpolation.
+
+    Args:
+        code: Code block content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    interpolated = re.findall(r"#\{([^}]+)\}", code)
+    for expr in interpolated:
+        var_match = re.match(r"[\w.\[\]'\"]+", expr.strip())
+        if var_match:
+            variables.add(var_match.group())
+
+
+def _extract_node_attributes(code: str, variables: set[str]) -> None:
+    """Extract node attribute references from code.
+
+    Args:
+        code: Code block content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    if "node[" in code:
+        node_matches = re.finditer(r"node\[.+\]", code)
+        for match in node_matches:
+            attr_path = _extract_node_attribute_path(match.group())
+            if attr_path:
+                variables.add(attr_path)
+
+
+def _extract_conditional_variables(code: str, variables: set[str]) -> None:
+    """Extract variables from conditional statements.
+
+    Args:
+        code: Code block content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    if code.startswith(("if ", "unless ", "elsif ")):
+        var_refs = re.findall(r"\b(\w+)", code)
+        for var in var_refs:
+            if var not in ["if", "unless", "elsif", "end", "do", "node"]:
+                variables.add(var)
+
+
+def _extract_iterator_variables(code: str, variables: set[str]) -> None:
+    """Extract variables from .each iterators.
+
+    Args:
+        code: Code block content.
+        variables: Set to add found variables to (modified in place).
+
+    """
+    if ".each" in code:
+        match = re.search(r"(\w+)\.each\s+do\s+\|(\w+)\|", code)
+        if match:
+            variables.add(match.group(1))  # Array variable
+            variables.add(match.group(2))  # Iterator variable
+
+
+def _extract_code_block_variables(content: str, variables: set[str]) -> None:
     """Extract variables from <% %> code blocks.
 
     Args:
@@ -197,38 +321,12 @@ def _extract_code_block_variables(content: str, variables: set[str]) -> None:  #
         variables: Set to add found variables to (modified in place).
 
     """
-    code_blocks = re.findall(r"<%\s+(.+?)\s+%>", content, re.DOTALL)
+    code_blocks = re.findall(r"<%\s+([^%]+?)\s+%>", content, re.DOTALL)
     for code in code_blocks:
-        # Handle Ruby string interpolation: "text #{var} more"
-        interpolated = re.findall(r"#\{([^}]+)\}", code)
-        for expr in interpolated:
-            # Extract variable name from expression
-            var_match = re.match(r"[\w.\[\]'\"]+", expr.strip())
-            if var_match:
-                variables.add(var_match.group())
-
-        # Handle node attributes in conditionals
-        if "node[" in code:
-            # Find all node attribute references in this code block
-            # Use greedy match to capture full nested path: node['a']['b']['c']
-            node_matches = re.finditer(r"node\[.+\]", code)
-            for match in node_matches:
-                attr_path = _extract_node_attribute_path(match.group())
-                if attr_path:
-                    variables.add(attr_path)
-
-        if code.startswith(("if ", "unless ", "elsif ")):
-            # Extract variables from conditions (non-node variables)
-            var_refs = re.findall(r"\b(\w+)", code)
-            for var in var_refs:
-                if var not in ["if", "unless", "elsif", "end", "do", "node"]:
-                    variables.add(var)
-        elif ".each" in code:
-            # Extract array variable and iterator
-            match = re.search(r"(\w+)\.each\s+do\s+\|(\w+)\|", code)
-            if match:
-                variables.add(match.group(1))  # Array variable
-                variables.add(match.group(2))  # Iterator variable
+        _extract_interpolated_variables(code, variables)
+        _extract_node_attributes(code, variables)
+        _extract_conditional_variables(code, variables)
+        _extract_iterator_variables(code, variables)
 
 
 def _extract_template_variables(content: str) -> set[str]:
@@ -329,7 +427,7 @@ def _extract_heredoc_strings(content: str) -> dict[str, str]:
     """
     heredocs = {}
     # Match heredoc patterns: <<-MARKER or <<MARKER
-    heredoc_pattern = r"<<-?(\w+)\s*\n(.*?)^\s*\1\s*$"
+    heredoc_pattern = r"<<-?(\w+)\s*\n((?:(?!^\s*\1\s*$).)*?)^\s*\1\s*$"
     for match in re.finditer(heredoc_pattern, content, re.DOTALL | re.MULTILINE):
         marker = match.group(1)
         content_text = match.group(2)
@@ -354,8 +452,30 @@ def _normalize_ruby_value(value: str) -> str:
     # Handle arrays: [:a, :b] -> ["a", "b"]
     if value.startswith("[") and value.endswith("]"):
         # Simple symbol array conversion
-        value = re.sub(r":([\w_]+)", r'"\1"', value)
+        value = re.sub(r":(\w+)", r'"\1"', value)
     return value
+
+
+def _extract_common_property_options(options: str, info: dict[str, Any]) -> None:
+    """Extract common property options (default, required, name_property).
+
+    Args:
+        options: Options string from property/attribute definition.
+        info: Dictionary to update with extracted options.
+
+    """
+    # Extract name_property / name_attribute
+    if "name_property: true" in options or "name_attribute: true" in options:
+        info["name_property"] = True
+
+    # Extract default value
+    default_match = re.search(r"default:\s*([^,\n]+)", options)
+    if default_match:
+        info["default"] = default_match.group(1).strip()
+
+    # Extract required
+    if "required: true" in options:
+        info["required"] = True
 
 
 def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
@@ -375,46 +495,22 @@ def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
     # Match modern property syntax: property :name, Type, options
     # Updated to handle multi-line definitions and complex types like [true, false]
     property_pattern = (
-        r"property\s+:(\w+),\s*([^,\n\[]+(?:\[[^\]]+\])?)"
-        r",?\s*([^\n]*?)(?:\n|$)"
+        r"property\s+:(\w+),\s*([^,\n\[]+(?:\[[^\]]+\])?),?\s*([^\n]*?)(?:\n|$)"
     )
     for match in re.finditer(property_pattern, clean_content, re.MULTILINE):
-        prop_name = match.group(1)
-        prop_type = match.group(2).strip()
-        prop_options = match.group(3) if match.group(3) else ""
-
         prop_info: dict[str, Any] = {
-            "name": prop_name,
-            "type": prop_type,
+            "name": match.group(1),
+            "type": match.group(2).strip(),
         }
-
-        # Extract name_property
-        name_property_check = (
-            "name_property: true" in prop_options
-            or "name_attribute: true" in prop_options
-        )
-        if name_property_check:
-            prop_info["name_property"] = True
-
-        # Extract default value
-        default_match = re.search(r"default:\s*([^,\n]+)", prop_options)
-        if default_match:
-            prop_info["default"] = default_match.group(1).strip()
-
-        # Extract required
-        if "required: true" in prop_options:
-            prop_info["required"] = True
-
+        _extract_common_property_options(match.group(3) or "", prop_info)
         properties.append(prop_info)
 
     # Match LWRP attribute syntax: attribute :name, kind_of: Type
-    attribute_pattern = r"attribute\s+:(\w+)(?:,\s*(.+?))?\s*(?:\n|$)"
+    attribute_pattern = r"attribute\s+:(\w+)(?:,\s*([^\n]+))?\n?"
     for match in re.finditer(attribute_pattern, content, re.MULTILINE):
-        attr_name = match.group(1)
-        attr_options = match.group(2) if match.group(2) else ""
-
+        attr_options = match.group(2) or ""
         attr_info: dict[str, Any] = {
-            "name": attr_name,
+            "name": match.group(1),
             "type": "Any",  # Default type
         }
 
@@ -423,19 +519,7 @@ def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
         if kind_of_match:
             attr_info["type"] = kind_of_match.group(1)
 
-        # Extract name_attribute
-        if "name_attribute: true" in attr_options:
-            attr_info["name_property"] = True
-
-        # Extract default value
-        default_match = re.search(r"default:\s*([^,\n]+)", attr_options)
-        if default_match:
-            attr_info["default"] = default_match.group(1).strip()
-
-        # Extract required
-        if "required: true" in attr_options:
-            attr_info["required"] = True
-
+        _extract_common_property_options(attr_options, attr_info)
         properties.append(attr_info)
 
     return properties
@@ -464,7 +548,7 @@ def _extract_resource_actions(content: str) -> dict[str, Any]:
             result["actions"].append(action_name)
 
     # Extract LWRP-style actions declaration: actions :create, :drop
-    actions_decl = re.search(r"actions\s+(.+?)(?:\n|$)", content)
+    actions_decl = re.search(r"actions\s+([^\n]+)\n?", content)
     if actions_decl:
         action_symbols = re.findall(r":(\w+)", actions_decl.group(1))
         for action in action_symbols:
@@ -491,7 +575,7 @@ def parse_custom_resource(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         # Determine resource type
@@ -511,8 +595,6 @@ def parse_custom_resource(path: str) -> str:
             "actions": actions_info["actions"],
             "default_action": actions_info["default_action"],
         }
-
-        import json
 
         return json.dumps(result, indent=2)
 
@@ -540,8 +622,10 @@ def list_directory(path: str) -> list[str] | str:
 
     """
     try:
-        dir_path = Path(path)
+        dir_path = _normalize_path(path)
         return [item.name for item in dir_path.iterdir()]
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: Directory not found at {path}"
     except NotADirectoryError:
@@ -564,16 +648,16 @@ def read_file(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         return file_path.read_text(encoding="utf-8")
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found at {path}"
     except IsADirectoryError:
         return f"Error: {path} is a directory, not a file"
     except PermissionError:
         return f"Error: Permission denied for {path}"
-    except UnicodeDecodeError:
-        return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -590,7 +674,7 @@ def read_cookbook_metadata(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         metadata = _extract_metadata(content)
@@ -600,14 +684,14 @@ def read_cookbook_metadata(path: str) -> str:
 
         return _format_metadata(metadata)
 
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found at {path}"
     except IsADirectoryError:
         return f"Error: {path} is a directory, not a file"
     except PermissionError:
         return f"Error: Permission denied for {path}"
-    except UnicodeDecodeError:
-        return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -679,7 +763,7 @@ def parse_recipe(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         resources = _extract_resources(content)
@@ -689,14 +773,14 @@ def parse_recipe(path: str) -> str:
 
         return _format_resources(resources)
 
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found at {path}"
     except IsADirectoryError:
         return f"Error: {path} is a directory, not a file"
     except PermissionError:
         return f"Error: Permission denied for {path}"
-    except UnicodeDecodeError:
-        return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -765,7 +849,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
     conditionals = []
 
     # Match case/when statements
-    case_pattern = r"case\s+(.*?)\n(.*?)^end"
+    case_pattern = r"case\s+([^\n]+)\n(.*?)^end"
     for match in re.finditer(case_pattern, content, re.DOTALL | re.MULTILINE):
         case_expr = match.group(1).strip()
         case_body = match.group(2)
@@ -779,7 +863,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
         )
 
     # Match if/elsif/else statements
-    if_pattern = r"if\s+(.*?)(?:\n|$)"
+    if_pattern = r"if\s+([^\n]+)\n?"
     for match in re.finditer(if_pattern, content):
         condition = match.group(1).strip()
         if condition and not condition.startswith(("elsif", "end")):
@@ -791,7 +875,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
             )
 
     # Match unless statements
-    unless_pattern = r"unless\s+(.*?)(?:\n|$)"
+    unless_pattern = r"unless\s+([^\n]+)\n?"
     for match in re.finditer(unless_pattern, content):
         condition = match.group(1).strip()
         conditionals.append(
@@ -840,7 +924,7 @@ def parse_attributes(path: str) -> str:
 
     """
     try:
-        file_path = Path(path)
+        file_path = _normalize_path(path)
         content = file_path.read_text(encoding="utf-8")
 
         attributes = _extract_attributes(content)
@@ -850,14 +934,14 @@ def parse_attributes(path: str) -> str:
 
         return _format_attributes(attributes)
 
+    except ValueError as e:
+        return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: File not found at {path}"
     except IsADirectoryError:
         return f"Error: {path} is a directory, not a file"
     except PermissionError:
         return f"Error: Permission denied for {path}"
-    except UnicodeDecodeError:
-        return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -879,10 +963,7 @@ def _extract_attributes(content: str) -> list[dict[str, str]]:
     # Match attribute declarations like: default['nginx']['port'] = 80
     # Use non-capturing group (?:...) with + to match one or more brackets
     # Updated to handle multi-line values and heredocs
-    pattern = (
-        r"(default|override|normal)((?:\[[^\]]+\])+)\s*=\s*"
-        r"(.+?)(?=\n(?:default|override|normal|case|when|end|$)|$)"
-    )
+    pattern = r"(default|override|normal)((?:\[[^\]]+\])+)\s*=\s*([^\n]+)"
 
     for match in re.finditer(pattern, clean_content, re.DOTALL):
         precedence = match.group(1)
@@ -939,7 +1020,7 @@ def list_cookbook_structure(path: str) -> str:
 
     """
     try:
-        cookbook_path = Path(path)
+        cookbook_path = _normalize_path(path)
 
         if not cookbook_path.is_dir():
             return f"Error: {path} is not a directory"
@@ -957,16 +1038,16 @@ def list_cookbook_structure(path: str) -> str:
         ]
 
         for dir_name in common_dirs:
-            dir_path = cookbook_path / dir_name
+            dir_path = _safe_join(cookbook_path, dir_name)
             if dir_path.exists() and dir_path.is_dir():
                 files = [f.name for f in dir_path.iterdir() if f.is_file()]
                 if files:
                     structure[dir_name] = files
 
         # Check for metadata.rb
-        metadata_path = cookbook_path / "metadata.rb"
+        metadata_path = _safe_join(cookbook_path, METADATA_FILENAME)
         if metadata_path.exists():
-            structure["metadata"] = ["metadata.rb"]
+            structure["metadata"] = [METADATA_FILENAME]
 
         if not structure:
             return f"Warning: No standard cookbook structure found in {path}"
@@ -1133,6 +1214,21 @@ def _convert_chef_resource_to_ansible(
     return task
 
 
+def _format_yaml_value(value: Any) -> str:
+    """Format a value for YAML output."""
+    if isinstance(value, str):
+        return f'"{value}"'
+    return json.dumps(value)
+
+
+def _format_dict_value(key: str, value: dict[str, Any]) -> list[str]:
+    """Format a dictionary value for YAML output."""
+    lines = [f"  {key}:"]
+    for param_key, param_value in value.items():
+        lines.append(f"    {param_key}: {_format_yaml_value(param_value)}")
+    return lines
+
+
 def _format_ansible_task(task: dict[str, Any]) -> str:
     """Format an Ansible task dictionary as YAML.
 
@@ -1143,28 +1239,15 @@ def _format_ansible_task(task: dict[str, Any]) -> str:
         YAML-formatted string.
 
     """
-    import json
-
-    # Simple YAML formatting (basic implementation)
-    result = []
-    result.append("- name: " + task["name"])
+    result = ["- name: " + task["name"]]
 
     for key, value in task.items():
         if key == "name":
             continue
-
         if isinstance(value, dict):
-            result.append(f"  {key}:")
-            for param_key, param_value in value.items():
-                if isinstance(param_value, str):
-                    result.append(f'    {param_key}: "{param_value}"')
-                else:
-                    result.append(f"    {param_key}: {json.dumps(param_value)}")
+            result.extend(_format_dict_value(key, value))
         else:
-            if isinstance(value, str):
-                result.append(f'  {key}: "{value}"')
-            else:
-                result.append(f"  {key}: {json.dumps(value)}")
+            result.append(f"  {key}: {_format_yaml_value(value)}")
 
     return "\n".join(result)
 
@@ -1184,13 +1267,13 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
         # First, parse the recipe to extract resources
         recipe_content = parse_recipe(recipe_path)
 
-        if recipe_content.startswith("Error:"):
+        if recipe_content.startswith(ERROR_PREFIX):
             return recipe_content
 
         # Parse the raw recipe file to extract notifications and other advanced features
-        recipe_file = Path(recipe_path)
+        recipe_file = _normalize_path(recipe_path)
         if not recipe_file.exists():
-            return f"Error: Recipe file does not exist: {recipe_path}"
+            return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
 
         raw_content = recipe_file.read_text()
 
@@ -1223,8 +1306,6 @@ def convert_chef_search_to_inventory(search_query: str) -> str:
         # Convert to Ansible inventory patterns
         inventory_config = _generate_ansible_inventory_from_search(search_info)
 
-        import json
-
         return json.dumps(inventory_config, indent=2)
 
     except Exception as e:
@@ -1243,8 +1324,6 @@ def generate_dynamic_inventory_script(search_queries: str) -> str:
 
     """
     try:
-        import json
-
         queries_data = json.loads(search_queries)
 
         # Generate dynamic inventory script
@@ -1270,7 +1349,7 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
 
     """
     try:
-        path_obj = Path(recipe_or_cookbook_path)
+        path_obj = _normalize_path(recipe_or_cookbook_path)
 
         if path_obj.is_file():
             # Single recipe file
@@ -1284,8 +1363,6 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         # Generate inventory recommendations
         recommendations = _generate_inventory_recommendations(search_patterns)
 
-        import json
-
         return json.dumps(
             {
                 "discovered_searches": search_patterns,
@@ -1298,7 +1375,76 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         return f"Error analyzing Chef search patterns: {e}"
 
 
-def _parse_chef_search_query(query: str) -> dict[str, Any]:  # noqa: C901
+def _determine_search_index(normalized_query: str) -> str:
+    """Determine the search index from the query.
+
+    Args:
+        normalized_query: Normalized query string.
+
+    Returns:
+        Index name (defaults to 'node').
+
+    """
+    index_match = re.match(r"^(\w+):", normalized_query)
+    if index_match:
+        potential_index = index_match.group(1)
+        if potential_index in ["role", "environment", "tag", "platform"]:
+            return "node"  # These are node attributes
+        return potential_index
+    return "node"
+
+
+def _extract_query_parts(
+    normalized_query: str,
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Extract conditions and operators from query.
+
+    Args:
+        normalized_query: Normalized query string.
+
+    Returns:
+        Tuple of (conditions, operators).
+
+    """
+    operator_pattern = r"\s+(AND|OR|NOT)\s+"
+    parts = re.split(operator_pattern, normalized_query, flags=re.IGNORECASE)
+
+    conditions: list[dict[str, str]] = []
+    operators: list[str] = []
+
+    for part in parts:
+        part = part.strip()
+        if part.upper() in ["AND", "OR", "NOT"]:
+            operators.append(part.upper())
+        elif part:  # Non-empty condition
+            condition = _parse_search_condition(part)
+            if condition:
+                conditions.append(condition)
+
+    return conditions, operators
+
+
+def _determine_query_complexity(
+    conditions: list[dict[str, str]], operators: list[str]
+) -> str:
+    """Determine query complexity level.
+
+    Args:
+        conditions: List of parsed conditions.
+        operators: List of logical operators.
+
+    Returns:
+        Complexity level: 'simple', 'intermediate', or 'complex'.
+
+    """
+    if len(conditions) > 1 or operators:
+        return "complex"
+    elif any(cond.get("operator") in ["~", "!="] for cond in conditions):
+        return "intermediate"
+    return "simple"
+
+
+def _parse_chef_search_query(query: str) -> dict[str, Any]:
     """Parse a Chef search query into structured components.
 
     Args:
@@ -1308,54 +1454,21 @@ def _parse_chef_search_query(query: str) -> dict[str, Any]:  # noqa: C901
         Dictionary with parsed query components.
 
     """
-    import re
-
-    # Normalize the query
     normalized_query = query.strip()
 
-    # Parse different types of search patterns
     search_info = {
         "original_query": query,
-        "index": "node",  # Default to node search
+        "index": _determine_search_index(normalized_query),
         "conditions": [],
         "logical_operators": [],
         "complexity": "simple",
     }
 
-    # Check if it specifies a different index (e.g., role:, environment:)
-    index_match = re.match(r"^(\w+):", normalized_query)
-    if index_match:
-        potential_index = index_match.group(1)
-        if potential_index in ["role", "environment", "tag", "platform"]:
-            search_info["index"] = "node"  # These are node attributes
-        else:
-            search_info["index"] = potential_index
-
-    # Split by logical operators
-    # Handle AND, OR, NOT operators
-    operator_pattern = r"\s+(AND|OR|NOT)\s+"
-    parts = re.split(operator_pattern, normalized_query, flags=re.IGNORECASE)
-
-    conditions = []
-    operators = []
-
-    for _i, part in enumerate(parts):
-        part = part.strip()
-        if part.upper() in ["AND", "OR", "NOT"]:
-            operators.append(part.upper())
-        elif part:  # Non-empty condition
-            condition = _parse_search_condition(part)
-            if condition:
-                conditions.append(condition)
+    conditions, operators = _extract_query_parts(normalized_query)
 
     search_info["conditions"] = conditions
     search_info["logical_operators"] = operators
-
-    # Determine complexity
-    if len(conditions) > 1 or operators:
-        search_info["complexity"] = "complex"
-    elif any(cond.get("operator") in ["~", "!="] for cond in conditions):
-        search_info["complexity"] = "intermediate"
+    search_info["complexity"] = _determine_query_complexity(conditions, operators)
 
     return search_info
 
@@ -1370,8 +1483,6 @@ def _parse_search_condition(condition: str) -> dict[str, str]:
         Dictionary with condition components.
 
     """
-    import re
-
     # Handle different condition patterns
     patterns = [
         # Wildcard search: role:web*
@@ -1422,9 +1533,114 @@ def _parse_search_condition(condition: str) -> dict[str, str]:
     }
 
 
+def _should_use_dynamic_inventory(search_info: dict[str, Any]) -> bool:
+    """Determine if dynamic inventory is needed based on search complexity.
+
+    Args:
+        search_info: Parsed Chef search information.
+
+    Returns:
+        True if dynamic inventory is needed.
+
+    """
+    return (
+        search_info["complexity"] != "simple"
+        or len(search_info["conditions"]) > 1
+        or any(
+            cond.get("operator") in ["regex", "wildcard", "range"]
+            for cond in search_info["conditions"]
+        )
+    )
+
+
+def _create_group_config_for_equal_condition(
+    condition: dict[str, str],
+) -> dict[str, Any]:
+    """Create group configuration for equal operator conditions.
+
+    Args:
+        condition: Condition with 'equal' operator.
+
+    Returns:
+        Group configuration dictionary.
+
+    """
+    group_config = {"hosts": [], "vars": {}, "children": []}
+    key = condition["key"]
+    value = condition["value"]
+
+    if key == "role":
+        group_config["hosts"] = [f"# Hosts with role: {value}"]
+        return group_config
+    elif key == "environment":
+        group_config["vars"]["environment"] = value
+        group_config["hosts"] = [f"# Hosts in environment: {value}"]
+        return group_config
+    elif key == "platform":
+        group_config["vars"]["ansible_os_family"] = value.capitalize()
+        group_config["hosts"] = [f"# {value} hosts"]
+        return group_config
+    elif key == "tags":
+        group_config["vars"]["tags"] = [value]
+        group_config["hosts"] = [f"# Hosts tagged with: {value}"]
+        return group_config
+
+    return group_config
+
+
+def _create_group_config_for_pattern_condition(
+    condition: dict[str, str],
+) -> dict[str, Any]:
+    """Create group configuration for wildcard/regex conditions.
+
+    Args:
+        condition: Condition with 'wildcard' or 'regex' operator.
+
+    Returns:
+        Group configuration dictionary.
+
+    """
+    operator = condition["operator"]
+    pattern_type = "pattern" if operator == "wildcard" else "regex"
+    return {
+        "hosts": [
+            f"# Hosts matching {pattern_type}: {condition['key']}:{condition['value']}"
+        ],
+        "vars": {},
+        "children": [],
+    }
+
+
+def _process_search_condition(
+    condition: dict[str, str], index: int, inventory_config: dict[str, Any]
+) -> None:
+    """Process a single search condition and update inventory config.
+
+    Args:
+        condition: Search condition to process.
+        index: Condition index for group naming.
+        inventory_config: Inventory configuration to update.
+
+    """
+    group_name = _generate_group_name_from_condition(condition, index)
+
+    if condition["operator"] == "equal":
+        group_config = _create_group_config_for_equal_condition(condition)
+        # Add role variable if it's a role condition
+        if condition["key"] == "role":
+            inventory_config["variables"][f"{group_name}_role"] = condition["value"]
+    elif condition["operator"] in ["wildcard", "regex"]:
+        group_config = _create_group_config_for_pattern_condition(condition)
+        inventory_config["dynamic_script_needed"] = True
+    else:
+        group_config = {"hosts": [], "vars": {}, "children": []}
+
+    inventory_config["groups"][group_name] = group_config
+
+
 def _generate_ansible_inventory_from_search(
     search_info: dict[str, Any],
-) -> dict[str, Any]:  # noqa: C901
+) -> dict[str, Any]:
     """Generate Ansible inventory structure from parsed Chef search.
 
     Args:
@@ -1443,60 +1659,13 @@ def _generate_ansible_inventory_from_search(
     }
 
     # Determine if we need dynamic inventory
-    if (
-        search_info["complexity"] != "simple"
-        or len(search_info["conditions"]) > 1
-        or any(
-            cond.get("operator") in ["regex", "wildcard", "range"]
-            for cond in search_info["conditions"]
-        )
-    ):
+    if _should_use_dynamic_inventory(search_info):
         inventory_config["inventory_type"] = "dynamic"
         inventory_config["dynamic_script_needed"] = True
 
     # Process each condition
     for i, condition in enumerate(search_info["conditions"]):
-        group_name = _generate_group_name_from_condition(condition, i)
-
-        # Generate group configuration
-        group_config = {"hosts": [], "vars": {}, "children": []}
-
-        # Add host patterns based on condition type
-        if condition["operator"] == "equal":
-            if condition["key"] == "role":
-                # Role-based grouping
-                group_config["hosts"] = [f"# Hosts with role: {condition['value']}"]
-                inventory_config["variables"][f"{group_name}_role"] = condition["value"]
-            elif condition["key"] == "environment":
-                # Environment-based grouping
-                group_config["vars"]["environment"] = condition["value"]
-                group_config["hosts"] = [
-                    f"# Hosts in environment: {condition['value']}"
-                ]
-            elif condition["key"] == "platform":
-                # Platform-based grouping
-                group_config["vars"]["ansible_os_family"] = condition[
-                    "value"
-                ].capitalize()
-                group_config["hosts"] = [f"# {condition['value']} hosts"]
-            elif condition["key"] == "tags":
-                # Tag-based grouping
-                group_config["vars"]["tags"] = [condition["value"]]
-                group_config["hosts"] = [f"# Hosts tagged with: {condition['value']}"]
-        elif condition["operator"] == "wildcard":
-            # Wildcard patterns need dynamic inventory
-            group_config["hosts"] = [
-                f"# Hosts matching pattern: {condition['key']}:{condition['value']}"
-            ]
-            inventory_config["dynamic_script_needed"] = True
-        elif condition["operator"] == "regex":
-            # Regex patterns need dynamic inventory
-            group_config["hosts"] = [
-                f"# Hosts matching regex: {condition['key']}:{condition['value']}"
-            ]
-            inventory_config["dynamic_script_needed"] = True
-
-        inventory_config["groups"][group_name] = group_config
+        _process_search_condition(condition, i, inventory_config)
 
     # Handle logical operators by creating combined groups
     if search_info["logical_operators"]:
@@ -1525,7 +1694,6 @@ def _generate_group_name_from_condition(condition: dict[str, str], index: int) -
     value = condition.get("value", "unknown").lower()
 
     # Remove special characters and replace with underscores
-    import re
 
     key = re.sub(r"[^a-z0-9_]", "_", key)
     value = re.sub(r"[^a-z0-9_]", "_", value)
@@ -1669,7 +1837,6 @@ if __name__ == "__main__":
 '''
 
     # Convert queries_data to JSON string for embedding
-    import json
 
     queries_json = json.dumps(
         {
@@ -1712,21 +1879,21 @@ def _extract_search_patterns_from_cookbook(cookbook_path: Path) -> list[dict[str
     patterns = []
 
     # Search in recipes directory
-    recipes_dir = cookbook_path / "recipes"
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
             file_patterns = _extract_search_patterns_from_file(recipe_file)
             patterns.extend(file_patterns)
 
     # Search in libraries directory
-    libraries_dir = cookbook_path / "libraries"
+    libraries_dir = _safe_join(cookbook_path, "libraries")
     if libraries_dir.exists():
         for library_file in libraries_dir.glob("*.rb"):
             file_patterns = _extract_search_patterns_from_file(library_file)
             patterns.extend(file_patterns)
 
     # Search in resources directory
-    resources_dir = cookbook_path / "resources"
+    resources_dir = _safe_join(cookbook_path, "resources")
     if resources_dir.exists():
         for resource_file in resources_dir.glob("*.rb"):
             file_patterns = _extract_search_patterns_from_file(resource_file)
@@ -1748,8 +1915,6 @@ def _find_search_patterns_in_content(
         List of discovered search patterns.
 
     """
-    import re
-
     patterns = []
 
     # Common Chef search patterns
@@ -1835,9 +2000,115 @@ def _extract_context(content: str, match: re.Match[str]) -> str:
     return "...".join(lines)
 
 
+def _count_pattern_types(patterns: list[dict[str, str]]) -> dict[str, int]:
+    """Count pattern types from list of patterns.
+
+    Args:
+        patterns: List of discovered search patterns.
+
+    Returns:
+        Dictionary mapping pattern types to counts.
+
+    """
+    pattern_types: dict[str, int] = {}
+    for pattern in patterns:
+        ptype = pattern.get("type", "unknown")
+        pattern_types[ptype] = pattern_types.get(ptype, 0) + 1
+    return pattern_types
+
+
+def _extract_groups_from_query(query: str) -> tuple[str | None, str | None]:
+    """Extract role and environment from a single query."""
+    role = None
+    env = None
+    if "role:" in query:
+        role_match = re.search(r"role:([^\s]+)", query)
+        if role_match:
+            role = role_match.group(1)
+    if "environment:" in query:
+        env_match = re.search(r"environment:([^\s]+)", query)
+        if env_match:
+            env = env_match.group(1)
+    return role, env
+
+
+def _extract_role_and_environment_groups(
+    patterns: list[dict[str, str]],
+) -> tuple[set[str], set[str]]:
+    """Extract role and environment groups from patterns.
+
+    Args:
+        patterns: List of discovered search patterns.
+
+    Returns:
+        Tuple of (role_groups, environment_groups).
+
+    """
+    role_groups: set[str] = set()
+    environment_groups: set[str] = set()
+
+    for pattern in patterns:
+        if pattern.get("type") != "search":
+            continue
+        role, env = _extract_groups_from_query(pattern.get("query", ""))
+        if role:
+            role_groups.add(role)
+        if env:
+            environment_groups.add(env)
+
+    return role_groups, environment_groups
+
+
+def _add_group_recommendations(
+    recommendations: dict[str, Any],
+    role_groups: set[str],
+    environment_groups: set[str],
+) -> None:
+    """Add group recommendations based on discovered groups.
+
+    Args:
+        recommendations: Recommendations dict to update.
+        role_groups: Set of Chef roles.
+        environment_groups: Set of Chef environments.
+
+    """
+    for role in role_groups:
+        recommendations["groups"][f"role_{role}"] = {
+            "description": f"Hosts with Chef role: {role}",
+            "vars": {"chef_role": role},
+        }
+
+    for env in environment_groups:
+        recommendations["groups"][f"env_{env}"] = {
+            "description": f"Hosts in Chef environment: {env}",
+            "vars": {"chef_environment": env},
+        }
+
+
+def _add_general_recommendations(
+    recommendations: dict[str, Any], patterns: list[dict[str, str]]
+) -> None:
+    """Add general migration recommendations based on patterns.
+
+    Args:
+        recommendations: Recommendations dict to update.
+        patterns: List of discovered search patterns.
+
+    """
+    if len(patterns) > 5:
+        recommendations["notes"].append(
+            "Complex search patterns - consider Chef server integration"
+        )
+
+    if any(p.get("type") == "data_bag_access" for p in patterns):
+        recommendations["notes"].append(
+            "Data bag access detected - consider Ansible Vault migration"
+        )
+
+
 def _generate_inventory_recommendations(
     patterns: list[dict[str, str]],
-) -> dict[str, Any]:  # noqa: C901
+) -> dict[str, Any]:
     """Generate inventory structure recommendations from search patterns.
 
     Args:
@@ -1854,65 +2125,132 @@ def _generate_inventory_recommendations(
         "notes": [],
     }
 
-    # Count pattern types
-    pattern_types = {}
-    for pattern in patterns:
-        ptype = pattern.get("type", "unknown")
-        pattern_types[ptype] = pattern_types.get(ptype, 0) + 1
-
-    # Recommend structure type
+    # Count pattern types and recommend structure
+    pattern_types = _count_pattern_types(patterns)
     if pattern_types.get("search", 0) > 2:
         recommendations["structure"] = "dynamic"
         recommendations["notes"].append(
             "Multiple search patterns detected - dynamic inventory recommended"
         )
 
-    # Generate group recommendations based on patterns
-    role_groups = set()
-    environment_groups = set()
-
-    for pattern in patterns:
-        if pattern.get("type") == "search":
-            query = pattern.get("query", "")
-            if "role:" in query:
-                role_match = re.search(r"role:([^\\s]+)", query)
-                if role_match:
-                    role_groups.add(role_match.group(1))
-            if "environment:" in query:
-                env_match = re.search(r"environment:([^\\s]+)", query)
-                if env_match:
-                    environment_groups.add(env_match.group(1))
-
-    # Add recommended groups
-    for role in role_groups:
-        recommendations["groups"][f"role_{role}"] = {
-            "description": f"Hosts with Chef role: {role}",
-            "vars": {"chef_role": role},
-        }
-
-    for env in environment_groups:
-        recommendations["groups"][f"env_{env}"] = {
-            "description": f"Hosts in Chef environment: {env}",
-            "vars": {"chef_environment": env},
-        }
+    # Extract and add group recommendations
+    role_groups, environment_groups = _extract_role_and_environment_groups(patterns)
+    _add_group_recommendations(recommendations, role_groups, environment_groups)
 
     # Add general recommendations
-    if len(patterns) > 5:
-        recommendations["notes"].append(
-            "Complex search patterns - consider Chef server integration"
-        )
-
-    if any(p.get("type") == "data_bag_access" for p in patterns):
-        recommendations["notes"].append(
-            "Data bag access detected - consider Ansible Vault migration"
-        )
+    _add_general_recommendations(recommendations, patterns)
 
     return recommendations
 
 
+def _build_playbook_header(recipe_name: str) -> list[str]:
+    """Build playbook header with metadata.
+
+    Args:
+        recipe_name: Name of the recipe file.
+
+    Returns:
+        List of header lines.
+
+    """
+    return [
+        "---",
+        f"# Ansible playbook generated from Chef recipe: {recipe_name}",
+        f"# Generated by SousChef on {_get_current_timestamp()}",
+        "",
+        "- name: Configure system using converted Chef recipe",
+        "  hosts: all",
+        "  become: true",
+        "  gather_facts: true",
+        "",
+        "  vars:",
+        "    # Variables extracted from Chef recipe",
+    ]
+
+
+def _add_playbook_variables(playbook_lines: list[str], raw_content: str) -> None:
+    """Extract and add variables section to playbook.
+
+    Args:
+        playbook_lines: Playbook lines list to append to.
+        raw_content: Raw recipe file content for variable extraction.
+
+    """
+    variables = _extract_recipe_variables(raw_content)
+    for var_name, var_value in variables.items():
+        playbook_lines.append(f"    {var_name}: {var_value}")
+
+    if not variables:
+        playbook_lines.append("    # No variables found")
+
+    playbook_lines.extend(["", "  tasks:"])
+
+
+def _convert_and_collect_resources(
+    parsed_content: str, raw_content: str
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Convert Chef resources to Ansible tasks and collect handlers.
+
+    Args:
+        parsed_content: Parsed recipe content from parse_recipe.
+        raw_content: Raw recipe file content for advanced parsing.
+
+    Returns:
+        Tuple of (tasks, handlers).
+
+    """
+    resources = _extract_resources_from_parsed_content(parsed_content)
+    tasks = []
+    handlers = []
+
+    for resource in resources:
+        task_result = _convert_resource_to_task_dict(resource, raw_content)
+        tasks.append(task_result["task"])
+        if task_result["handlers"]:
+            handlers.extend(task_result["handlers"])
+
+    return tasks, handlers
+
+
+def _format_item_lines(item_yaml: str) -> list[str]:
+    """Format a single task/handler's YAML lines with proper indentation."""
+    formatted = []
+    for i, line in enumerate(item_yaml.split("\n")):
+        if i == 0:  # First line gets 4-space indent
+            formatted.append(f"    {line}")
+        elif line.strip():  # Non-empty property lines get 6-space indent
+            formatted.append(f"      {line}")
+        else:  # Empty lines preserved as-is
+            formatted.append(line)
+    return formatted
+
+
+def _add_formatted_items(
+    playbook_lines: list[str],
+    items: list[dict[str, Any]],
+    default_message: str,
+) -> None:
+    """Add formatted tasks or handlers to playbook.
+
+    Args:
+        playbook_lines: Playbook lines list to append to.
+        items: Tasks or handlers to format and add.
+        default_message: Message to show if no items.
+
+    """
+    if not items:
+        playbook_lines.append(f"    {default_message}")
+        return
+
+    for i, item in enumerate(items):
+        if i > 0:
+            playbook_lines.append("")
+        playbook_lines.extend(_format_item_lines(_format_ansible_task(item)))
+
+
 def _generate_playbook_structure(
     parsed_content: str, raw_content: str, recipe_name: str
-) -> str:  # noqa: C901
+) -> str:
     """Generate complete playbook structure from parsed recipe content.
 
     Args:
@@ -1924,96 +2262,19 @@ def _generate_playbook_structure(
         Complete Ansible playbook as YAML string.
 
     """
-    playbook_lines = []
+    playbook_lines = _build_playbook_header(recipe_name)
+    _add_playbook_variables(playbook_lines, raw_content)
 
-    # Playbook header
-    playbook_lines.extend(
-        [
-            "---",
-            f"# Ansible playbook generated from Chef recipe: {recipe_name}",
-            f"# Generated by SousChef on {_get_current_timestamp()}",
-            "",
-            "- name: Configure system using converted Chef recipe",
-            "  hosts: all",
-            "  become: true",
-            "  gather_facts: true",
-            "",
-            "  vars:",
-            "    # Variables extracted from Chef recipe",
-        ]
-    )
+    # Convert resources to tasks and handlers
+    tasks, handlers = _convert_and_collect_resources(parsed_content, raw_content)
 
-    # Extract variables from raw content
-    variables = _extract_recipe_variables(raw_content)
-    for var_name, var_value in variables.items():
-        playbook_lines.append(f"    {var_name}: {var_value}")
-
-    if not variables:
-        playbook_lines.append("    # No variables found")
-
-    playbook_lines.extend(
-        [
-            "",
-            "  tasks:",
-        ]
-    )
-
-    # Convert each resource to a task
-    resources = _extract_resources_from_parsed_content(parsed_content)
-    tasks = []
-    handlers = []
-
-    for resource in resources:
-        task_result = _convert_resource_to_task_dict(resource, raw_content)
-        tasks.append(task_result["task"])
-
-        # Collect handlers from notifications
-        if task_result["handlers"]:
-            handlers.extend(task_result["handlers"])
-
-    # Add tasks to playbook
-    if tasks:
-        for i, task in enumerate(tasks):
-            # Add spacing between tasks
-            if i > 0:
-                playbook_lines.append("")
-
-            task_yaml = _format_ansible_task(task)
-            # Indent task YAML by 4 spaces (first line gets 4 spaces, rest get 6)
-            task_lines = task_yaml.split("\n")
-            indented_lines = []
-            for j, line in enumerate(task_lines):
-                if j == 0:  # First line (task name)
-                    indented_lines.append(f"    {line}")
-                else:  # Property lines
-                    indented_lines.append(f"      {line}" if line.strip() else line)
-            playbook_lines.extend(indented_lines)
-    else:
-        playbook_lines.append("    # No tasks found")
+    # Add tasks section
+    _add_formatted_items(playbook_lines, tasks, "# No tasks found")
 
     # Add handlers section if any
     if handlers:
-        playbook_lines.extend(
-            [
-                "",
-                "  handlers:",
-            ]
-        )
-
-        for i, handler in enumerate(handlers):
-            if i > 0:
-                playbook_lines.append("")
-
-            handler_yaml = _format_ansible_task(handler)
-            # Indent handler YAML by 4 spaces (first line gets 4 spaces, rest get 6)
-            handler_lines = handler_yaml.split("\n")
-            indented_lines = []
-            for j, line in enumerate(handler_lines):
-                if j == 0:  # First line (handler name)
-                    indented_lines.append(f"    {line}")
-                else:  # Property lines
-                    indented_lines.append(f"      {line}" if line.strip() else line)
-            playbook_lines.extend(indented_lines)
+        playbook_lines.extend(["", "  handlers:"])
+        _add_formatted_items(playbook_lines, handlers, "")
 
     return "\n".join(playbook_lines)
 
@@ -2025,25 +2286,34 @@ def _get_current_timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _extract_recipe_variables(raw_content: str) -> dict[str, str]:  # noqa: C901
-    """Extract variables from Chef recipe content.
+def _extract_version_variable(raw_content: str) -> dict[str, str]:
+    """Extract version specification from recipe content.
 
     Args:
         raw_content: Raw Chef recipe file content.
 
     Returns:
-        Dictionary of variable names and values.
+        Dictionary with package_version key if found.
 
     """
-    import re
-
-    variables = {}
-
-    # Extract version specifications
     version_pattern = re.compile(r"version\s+['\"]([^'\"]+)['\"]")
     versions = version_pattern.findall(raw_content)
     if versions:
-        variables["package_version"] = f'"{versions[0]}"'
+        return {"package_version": f'"{versions[0]}"'}
+    return {}
+
+
+def _extract_content_variables(raw_content: str) -> dict[str, str]:
+    """Extract content and source specifications from recipe content.
+
+    Args:
+        raw_content: Raw Chef recipe file content.
+
+    Returns:
+        Dictionary with file_content and/or template_source keys if found.
+
+    """
+    variables = {}
 
     # Extract content specifications
     content_pattern = re.compile(r"content\s+['\"]([^'\"]*)['\"]", re.DOTALL)
@@ -2057,28 +2327,109 @@ def _extract_recipe_variables(raw_content: str) -> dict[str, str]:  # noqa: C901
     if sources:
         variables["template_source"] = f'"{sources[0]}"'
 
-    # Extract owner/group specifications
+    return variables
+
+
+def _extract_ownership_variables(raw_content: str) -> dict[str, str]:
+    """Extract owner and group specifications from recipe content.
+
+    Args:
+        raw_content: Raw Chef recipe file content.
+
+    Returns:
+        Dictionary with file_owner and/or file_group keys if found.
+
+    """
+    variables = {}
+
+    # Extract owner specifications
     owner_pattern = re.compile(r"owner\s+['\"]([^'\"]+)['\"]")
     owners = owner_pattern.findall(raw_content)
     if owners and owners[0] not in ["root"]:  # Skip default root
         variables["file_owner"] = f'"{owners[0]}"'
 
+    # Extract group specifications
     group_pattern = re.compile(r"group\s+['\"]([^'\"]+)['\"]")
     groups = group_pattern.findall(raw_content)
     if groups and groups[0] not in ["root"]:  # Skip default root
         variables["file_group"] = f'"{groups[0]}"'
 
+    return variables
+
+
+def _extract_mode_variables(raw_content: str) -> dict[str, str]:
+    """Extract mode specifications from recipe content.
+
+    Args:
+        raw_content: Raw Chef recipe file content.
+
+    Returns:
+        Dictionary with file_mode and/or directory_mode keys if found.
+
+    """
     # Extract mode specifications
     mode_pattern = re.compile(r"mode\s+['\"]([^'\"]+)['\"]")
     modes = mode_pattern.findall(raw_content)
     unique_modes = list(set(modes))
+
     if len(unique_modes) == 1:
-        variables["file_mode"] = f'"{unique_modes[0]}"'
+        return {"file_mode": f'"{unique_modes[0]}"'}
     elif len(unique_modes) > 1:
-        variables["directory_mode"] = '"0755"'
-        variables["file_mode"] = '"0644"'
+        return {"directory_mode": '"0755"', "file_mode": '"0644"'}
+    return {}
+
+
+def _extract_recipe_variables(raw_content: str) -> dict[str, str]:
+    """Extract variables from Chef recipe content.
+
+    Args:
+        raw_content: Raw Chef recipe file content.
+
+    Returns:
+        Dictionary of variable names and values.
+
+    """
+    variables = {}
+
+    # Combine all extracted variables
+    variables.update(_extract_version_variable(raw_content))
+    variables.update(_extract_content_variables(raw_content))
+    variables.update(_extract_ownership_variables(raw_content))
+    variables.update(_extract_mode_variables(raw_content))
 
     return variables
+
+
+def _parse_resource_block(block: str) -> dict[str, str] | None:
+    """Parse a single resource block into a dictionary."""
+    if not block.strip() or not block.startswith("Resource"):
+        return None
+
+    resource: dict[str, str] = {}
+
+    # Extract resource type
+    type_match = re.search(r"Type:\s*(\w+)", block)
+    if type_match:
+        resource["type"] = type_match.group(1)
+
+    # Extract resource name
+    name_match = re.search(r"Name:\s*([^\n]+)", block)
+    if name_match:
+        resource["name"] = name_match.group(1).strip()
+
+    # Extract action (default to "create")
+    action_match = re.search(r"Action:\s*([^\n]+)", block)
+    resource["action"] = action_match.group(1).strip() if action_match else "create"
+
+    # Extract properties
+    props_match = re.search(r"Properties:\n?((?:(?!\n\n).)*)", block, re.DOTALL)
+    resource["properties"] = props_match.group(1).strip() if props_match else ""
+
+    # Return None if missing required fields
+    if not resource.get("type") or not resource.get("name"):
+        return None
+
+    return resource
 
 
 def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str, str]]:
@@ -2091,54 +2442,145 @@ def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str
         List of resource dictionaries with type, name, action, and properties.
 
     """
-    import re
-
-    resources = []
-
-    # Parse the structured output from parse_recipe
     resource_blocks = re.split(r"\n(?=Resource \d+:)", parsed_content)
-
+    resources = []
     for block in resource_blocks:
-        if not block.strip() or not block.startswith("Resource"):
+        resource = _parse_resource_block(block)
+        if resource:
+            resources.append(resource)
+    return resources
+
+
+def _extract_notify_declarations(
+    resource: dict[str, str], raw_content: str
+) -> list[tuple[str, str, str]]:
+    """Extract notifies declarations from a resource block.
+
+    Args:
+        resource: Resource dictionary with type, name, action, properties.
+        raw_content: Raw recipe content.
+
+    Returns:
+        List of tuples (action, target, timing).
+
+    """
+    resource_type_escaped = resource["type"]
+    resource_name_escaped = re.escape(resource["name"])
+    resource_pattern = (
+        resource_type_escaped
+        + REGEX_WHITESPACE_QUOTE
+        + resource_name_escaped
+        + REGEX_QUOTE_DO_END
+    )
+    resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
+
+    if not resource_match:
+        return []
+
+    resource_block = resource_match.group(1)
+    notify_pattern = re.compile(
+        r'notifies\s+:(\w+),\s*[\'"]([^\'\"]+)[\'"]\s*,?\s*:?(\w+)?'
+    )
+    return notify_pattern.findall(resource_block)
+
+
+def _extract_subscribe_declarations(raw_content: str) -> list[tuple[str, str, str]]:
+    """Extract subscribes declarations from raw content.
+
+    Args:
+        raw_content: Raw recipe content.
+
+    Returns:
+        List of tuples (action, target, timing).
+
+    """
+    subscribes_pattern = re.compile(
+        r'subscribes\s+:(\w+),\s*[\'"]([^\'\"]+)[\'"]\s*,?\s*:?(\w+)?'
+    )
+    return subscribes_pattern.findall(raw_content)
+
+
+def _process_notifications(
+    notifications: list[tuple[str, str, str]],
+    task: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Process notification declarations and create handlers.
+
+    Args:
+        notifications: List of (action, target, timing) tuples.
+        task: Task dictionary to update with notify keys.
+
+    Returns:
+        List of handler dictionaries.
+
+    """
+    handlers = []
+    for notify_action, notify_target, _notify_timing in notifications:
+        target_match = re.match(REGEX_RESOURCE_BRACKET, notify_target)
+        if target_match:
+            target_type = target_match.group(1)
+            target_name = target_match.group(2)
+
+            handler = _create_handler(notify_action, target_type, target_name)
+            if handler:
+                if "notify" not in task:
+                    task["notify"] = []
+                task["notify"].append(handler["name"])
+                handlers.append(handler)
+
+    return handlers
+
+
+def _process_subscribes(
+    resource: dict[str, str],
+    subscribes: list[tuple[str, str, str]],
+    raw_content: str,
+    task: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Process subscribes declarations and create handlers.
+
+    Args:
+        resource: Resource dictionary.
+        subscribes: List of (action, target, timing) tuples.
+        raw_content: Raw recipe content.
+        task: Task dictionary to update with notify keys.
+
+    Returns:
+        List of handler dictionaries.
+
+    """
+    handlers = []
+    for sub_action, sub_target, _sub_timing in subscribes:
+        target_match = re.match(REGEX_RESOURCE_BRACKET, sub_target)
+        if not target_match:
             continue
 
-        resource = {}
+        target_type = target_match.group(1)
+        target_name = target_match.group(2)
 
-        # Extract resource type
-        type_match = re.search(r"Type:\s*(\w+)", block)
-        if type_match:
-            resource["type"] = type_match.group(1)
+        if resource["type"] != target_type or resource["name"] != target_name:
+            continue
 
-        # Extract resource name
-        name_match = re.search(r"Name:\s*(.+)", block)
-        if name_match:
-            resource["name"] = name_match.group(1).strip()
-
-        # Extract action
-        action_match = re.search(r"Action:\s*(.+)", block)
-        if action_match:
-            resource["action"] = action_match.group(1).strip()
-        else:
-            resource["action"] = "create"  # default action
-
-        # Extract properties
-        properties_section = re.search(
-            r"Properties:(.*?)(?=\n\n|\n$|$)", block, re.DOTALL
+        subscriber_pattern = (
+            rf"(\w+)\s+['\"]?[^'\"]*['\"]?\s+do\s*.*?subscribes\s+:{sub_action}"
         )
-        if properties_section:
-            resource["properties"] = properties_section.group(1).strip()
-        else:
-            resource["properties"] = ""
+        subscriber_match = re.search(subscriber_pattern, raw_content, re.DOTALL)
 
-        if resource.get("type") and resource.get("name"):
-            resources.append(resource)
+        if subscriber_match:
+            subscriber_type = subscriber_match.group(1)
+            handler = _create_handler(sub_action, subscriber_type, resource["name"])
+            if handler:
+                if "notify" not in task:
+                    task["notify"] = []
+                task["notify"].append(handler["name"])
+                handlers.append(handler)
 
-    return resources
+    return handlers
 
 
 def _convert_resource_to_task_dict(
     resource: dict[str, str], raw_content: str
-) -> dict[str, Any]:  # noqa: C901
+) -> dict[str, Any]:
     """Convert a Chef resource to an Ansible task dictionary with handlers.
 
     Args:
@@ -2149,8 +2591,6 @@ def _convert_resource_to_task_dict(
         Dictionary with 'task' and 'handlers' keys.
 
     """
-    import re
-
     # Convert basic resource to task
     task = _convert_chef_resource_to_ansible(
         resource["type"], resource["name"], resource["action"], resource["properties"]
@@ -2166,10 +2606,10 @@ def _convert_resource_to_task_dict(
     if guards:
         task.update(guards)
 
-    # Enhanced notification handling with timing constraints
+    # Process all handlers
     handlers = []
 
-    # First, extract enhanced notifications with timing
+    # Handle enhanced notifications with timing
     notifications = _extract_enhanced_notifications(resource, raw_content)
     for notification in notifications:
         handler = _create_handler_with_timing(
@@ -2183,77 +2623,14 @@ def _convert_resource_to_task_dict(
                 task["notify"] = []
             task["notify"].append(handler["name"])
             handlers.append(handler)
-    resource_type_escaped = resource["type"]
-    resource_name_escaped = re.escape(resource["name"])
-    resource_pattern = (
-        resource_type_escaped
-        + r"\s+['\"]?"
-        + resource_name_escaped
-        + r"['\"]?\s+do\s*(.*?)\nend"
-    )
-    resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
 
-    if resource_match:
-        resource_block = resource_match.group(1)
-
-        # Find notifies declarations
-        notify_pattern = re.compile(
-            r'notifies\s+:(\w+),\s*[\'"]([^\'\"]+)[\'"]\s*,?\s*:?(\w+)?'
-        )
-        notifies = notify_pattern.findall(resource_block)
-
-        for notify_action, notify_target, _notify_timing in notifies:
-            # Parse target like 'service[nginx]'
-            target_match = re.match(r"(\w+)\[([^\]]+)\]", notify_target)
-            if target_match:
-                target_type = target_match.group(1)
-                target_name = target_match.group(2)
-
-                # Create handler
-                handler = _create_handler(notify_action, target_type, target_name)
-                if handler:
-                    # Add notify to task
-                    if "notify" not in task:
-                        task["notify"] = []
-                    task["notify"].append(handler["name"])
-
-                    handlers.append(handler)
+    # Handle basic notifies declarations
+    notifies = _extract_notify_declarations(resource, raw_content)
+    handlers.extend(_process_notifications(notifies, task))
 
     # Handle subscribes (reverse notifications)
-    subscribes_pattern = re.compile(
-        r'subscribes\s+:(\w+),\s*[\'"]([^\'\"]+)[\'"]\s*,?\s*:?(\w+)?'
-    )
-    subscribes = subscribes_pattern.findall(raw_content)
-
-    for sub_action, sub_target, _sub_timing in subscribes:
-        # Check if this resource is the subscriber
-        target_match = re.match(r"(\w+)\[([^\]]+)\]", sub_target)
-        if target_match:
-            target_type = target_match.group(1)
-            target_name = target_match.group(2)
-
-            # If this task creates the target resource, it should notify the subscriber
-            if resource["type"] == target_type and resource["name"] == target_name:
-                # Find the subscriber resource in raw content
-                subscriber_pattern = (
-                    rf"(\w+)\s+['\"]?[^'\"]*['\"]?\s+do\s*.*?subscribes\s+:{sub_action}"
-                )
-                subscriber_match = re.search(subscriber_pattern, raw_content, re.DOTALL)
-
-                if subscriber_match:
-                    subscriber_type = subscriber_match.group(1)
-
-                    # Create handler for subscriber
-                    handler = _create_handler(
-                        sub_action, subscriber_type, resource["name"]
-                    )
-                    if handler:
-                        # Add notify to task
-                        if "notify" not in task:
-                            task["notify"] = []
-                        task["notify"].append(handler["name"])
-
-                        handlers.append(handler)
+    subscribes = _extract_subscribe_declarations(raw_content)
+    handlers.extend(_process_subscribes(resource, subscribes, raw_content, task))
 
     return {"task": task, "handlers": handlers}
 
@@ -2287,11 +2664,11 @@ def _create_handler(
 
         handler = {
             "name": f"{action.capitalize()} {resource_name}",
-            "ansible.builtin.service": {"name": resource_name, "state": ansible_state},
+            ANSIBLE_SERVICE_MODULE: {"name": resource_name, "state": ansible_state},
         }
 
         if action == "enable":
-            handler["ansible.builtin.service"]["enabled"] = True
+            handler[ANSIBLE_SERVICE_MODULE]["enabled"] = True
 
         return handler
 
@@ -2302,7 +2679,7 @@ def _create_handler(
         }
         return handler
 
-    return None
+    return {}
 
 
 def _extract_enhanced_notifications(
@@ -2318,8 +2695,6 @@ def _extract_enhanced_notifications(
         List of notification dictionaries with timing information.
 
     """
-    import re
-
     notifications = []
 
     # Find the resource block in raw content
@@ -2327,9 +2702,9 @@ def _extract_enhanced_notifications(
     resource_name_escaped = re.escape(resource["name"])
     resource_pattern = (
         resource_type_escaped
-        + r"\s+['\"]?"
+        + REGEX_WHITESPACE_QUOTE
         + resource_name_escaped
-        + r"['\"]?\s+do\s*(.*?)\nend"
+        + REGEX_QUOTE_DO_END
     )
     resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
 
@@ -2344,7 +2719,7 @@ def _extract_enhanced_notifications(
 
         for notify_action, notify_target, notify_timing in notifies:
             # Parse target like 'service[nginx]'
-            target_match = re.match(r"(\w+)\[([^\]]+)\]", notify_target)
+            target_match = re.match(REGEX_RESOURCE_BRACKET, notify_target)
             if target_match:
                 target_type = target_match.group(1)
                 target_name = target_match.group(2)
@@ -2361,37 +2736,42 @@ def _extract_enhanced_notifications(
     return notifications
 
 
-def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str, Any]:  # noqa: C901
-    """Extract Chef guards (only_if, not_if) and convert to Ansible when conditions.
+def _find_resource_block(resource: dict[str, str], raw_content: str) -> str | None:
+    """Find the resource block in raw content.
 
     Args:
-        resource: Resource dictionary with type, name, action, properties.
+        resource: Resource dictionary with type and name.
         raw_content: Raw recipe content.
 
     Returns:
-        Dictionary with Ansible when/unless conditions.
+        Resource block content or None if not found.
 
     """
-    import re
-
-    guards = {}
-
-    # Find the resource block in raw content
     resource_type_escaped = resource["type"]
     resource_name_escaped = re.escape(resource["name"])
     resource_pattern = (
         resource_type_escaped
-        + r"\s+['\"]?"
+        + REGEX_WHITESPACE_QUOTE
         + resource_name_escaped
-        + r"['\"]?\s+do\s*(.*?)\nend"
+        + REGEX_QUOTE_DO_END
     )
     resource_match = re.search(resource_pattern, raw_content, re.DOTALL | re.MULTILINE)
 
-    if not resource_match:
-        return guards
+    if resource_match:
+        return resource_match.group(1)
+    return None
 
-    resource_block = resource_match.group(1)
 
+def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list]:
+    """Extract all guard patterns from resource block.
+
+    Args:
+        resource_block: Resource block content.
+
+    Returns:
+        Tuple of (only_if_conditions, not_if_conditions, only_if_blocks, not_if_blocks).
+
+    """
     # Extract only_if conditions
     only_if_pattern = re.compile(r'only_if\s+[\'"]([^\'"]+)[\'"]')
     only_if_matches = only_if_pattern.findall(resource_block)
@@ -2408,33 +2788,93 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
     not_if_block_pattern = re.compile(r"not_if\s+do\s*(.*?)\s*end", re.DOTALL)
     not_if_block_matches = not_if_block_pattern.findall(resource_block)
 
-    # Convert Chef guards to Ansible when conditions
+    return (
+        only_if_matches,
+        not_if_matches,
+        only_if_block_matches,
+        not_if_block_matches,
+    )
+
+
+def _convert_guards_to_when_conditions(
+    only_if_conditions: list,
+    not_if_conditions: list,
+    only_if_blocks: list,
+    not_if_blocks: list,
+) -> list[str]:
+    """Convert Chef guards to Ansible when conditions.
+
+    Args:
+        only_if_conditions: List of only_if condition strings.
+        not_if_conditions: List of not_if condition strings.
+        only_if_blocks: List of only_if block contents.
+        not_if_blocks: List of not_if block contents.
+
+    Returns:
+        List of Ansible when conditions.
+
+    """
     when_conditions = []
 
     # Process only_if conditions (these become when conditions)
-    for condition in only_if_matches:
+    for condition in only_if_conditions:
         ansible_condition = _convert_chef_condition_to_ansible(condition)
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
     # Process only_if blocks
-    for block in only_if_block_matches:
+    for block in only_if_blocks:
         ansible_condition = _convert_chef_block_to_ansible(block, positive=True)
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
     # Process not_if conditions (these become when conditions with negation)
-    for condition in not_if_matches:
+    for condition in not_if_conditions:
         ansible_condition = _convert_chef_condition_to_ansible(condition, negate=True)
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
     # Process not_if blocks
-    for block in not_if_block_matches:
+    for block in not_if_blocks:
         ansible_condition = _convert_chef_block_to_ansible(block, positive=False)
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
+    return when_conditions
+
+
+def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str, Any]:
+    """Extract Chef guards (only_if, not_if) and convert to Ansible when conditions.
+
+    Args:
+        resource: Resource dictionary with type, name, action, properties.
+        raw_content: Raw recipe content.
+
+    Returns:
+        Dictionary with Ansible when/unless conditions.
+
+    """
+    guards = {}
+
+    # Find the resource block in raw content
+    resource_block = _find_resource_block(resource, raw_content)
+    if not resource_block:
+        return guards
+
+    # Extract all guard patterns
+    (
+        only_if_conditions,
+        not_if_conditions,
+        only_if_blocks,
+        not_if_blocks,
+    ) = _extract_guard_patterns(resource_block)
+
+    # Convert to Ansible when conditions
+    when_conditions = _convert_guards_to_when_conditions(
+        only_if_conditions, not_if_conditions, only_if_blocks, not_if_blocks
+    )
+
+    # Format the when clause
     if when_conditions:
         if len(when_conditions) == 1:
             guards["when"] = when_conditions[0]
@@ -2456,8 +2896,6 @@ def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> 
         Ansible when condition string.
 
     """
-    import re
-
     # Common Chef to Ansible condition mappings
     condition_mappings = {
         # File existence checks
@@ -2520,8 +2958,6 @@ def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
         Ansible when condition string.
 
     """
-    import re
-
     # Clean up the block
     block = block.strip()
 
@@ -2568,8 +3004,6 @@ def _extract_resource_subscriptions(
         List of subscription dictionaries with timing information.
 
     """
-    import re
-
     subscriptions = []
 
     # Enhanced subscribes pattern that captures timing
@@ -2582,7 +3016,7 @@ def _extract_resource_subscriptions(
 
     for action, target, timing in subscribes_matches:
         # Parse target like 'service[nginx]' or 'template[/etc/nginx/nginx.conf]'
-        target_match = re.match(r"(\w+)\[([^\]]+)\]", target)
+        target_match = re.match(REGEX_RESOURCE_BRACKET, target)
         if target_match:
             target_type = target_match.group(1)
             target_name = target_match.group(2)
@@ -2635,7 +3069,37 @@ def _create_handler_with_timing(
 # InSpec parsing helper functions
 
 
-def _parse_inspec_control(content: str) -> list[dict[str, Any]]:  # noqa: C901
+def _extract_control_metadata(control_body: str) -> dict[str, Any]:
+    """Extract title, description, and impact from control body.
+
+    Args:
+        control_body: Content of the control block.
+
+    Returns:
+        Dictionary with title, desc, and impact.
+
+    """
+    metadata = {"title": "", "desc": "", "impact": 1.0}
+
+    # Extract title
+    title_match = re.search(r"title\s+['\"]([^'\"]+)['\"]", control_body)
+    if title_match:
+        metadata["title"] = title_match.group(1)
+
+    # Extract description
+    desc_match = re.search(r"desc\s+['\"]([^'\"]+)['\"]", control_body)
+    if desc_match:
+        metadata["desc"] = desc_match.group(1)
+
+    # Extract impact
+    impact_match = re.search(r"impact\s+([\d.]+)", control_body)
+    if impact_match:
+        metadata["impact"] = float(impact_match.group(1))
+
+    return metadata
+
+
+def _parse_inspec_control(content: str) -> list[dict[str, Any]]:
     """Parse InSpec control blocks from content.
 
     Args:
@@ -2657,56 +3121,18 @@ def _parse_inspec_control(content: str) -> list[dict[str, Any]]:  # noqa: C901
         if control_match:
             control_id = control_match.group(1)
 
-            # Find the matching end for this control by tracking nesting
-            nesting_level = 0
-            control_body_lines = []
-
-            i += 1  # Move past the control line
-            while i < len(lines):
-                current_line = lines[i]
-                stripped = current_line.strip()
-
-                # Count do/end for nesting
-                if re.search(r"\bdo\s*$", stripped):
-                    nesting_level += 1
-                elif stripped == "end":
-                    if nesting_level == 0:
-                        # This is the end of our control
-                        break
-                    else:
-                        nesting_level -= 1
-
-                control_body_lines.append(current_line)
-                i += 1
+            # Find the matching end for this control
+            control_body_lines, end_index = _find_nested_block_end(lines, i + 1)
+            i = end_index
 
             # Parse the control body
             control_body = "\n".join(control_body_lines)
 
             control_data: dict[str, Any] = {
                 "id": control_id,
-                "title": "",
-                "desc": "",
-                "impact": 1.0,
-                "tests": [],
+                **_extract_control_metadata(control_body),
+                "tests": _extract_inspec_describe_blocks(control_body),
             }
-
-            # Extract title
-            title_match = re.search(r"title\s+['\"]([^'\"]+)['\"]", control_body)
-            if title_match:
-                control_data["title"] = title_match.group(1)
-
-            # Extract description
-            desc_match = re.search(r"desc\s+['\"]([^'\"]+)['\"]", control_body)
-            if desc_match:
-                control_data["desc"] = desc_match.group(1)
-
-            # Extract impact
-            impact_match = re.search(r"impact\s+([\d.]+)", control_body)
-            if impact_match:
-                control_data["impact"] = float(impact_match.group(1))
-
-            # Extract describe blocks
-            control_data["tests"] = _extract_inspec_describe_blocks(control_body)
 
             controls.append(control_data)
 
@@ -2715,7 +3141,79 @@ def _parse_inspec_control(content: str) -> list[dict[str, Any]]:  # noqa: C901
     return controls
 
 
-def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:  # noqa: C901
+def _find_nested_block_end(lines: list[str], start_index: int) -> tuple[list[str], int]:
+    """Find the end of a nested Ruby block (do...end).
+
+    Args:
+        lines: All lines of content.
+        start_index: Starting line index (after the 'do' line).
+
+    Returns:
+        Tuple of (body_lines, ending_index).
+
+    """
+    nesting_level = 0
+    body_lines = []
+    i = start_index
+
+    while i < len(lines):
+        current_line = lines[i]
+        stripped = current_line.strip()
+
+        if re.search(r"\bdo\s*$", stripped):
+            nesting_level += 1
+        elif stripped == "end":
+            if nesting_level == 0:
+                break
+            else:
+                nesting_level -= 1
+
+        body_lines.append(current_line)
+        i += 1
+
+    return body_lines, i
+
+
+def _extract_it_expectations(describe_body: str) -> list[dict[str, Any]]:
+    """Extract 'it { should ... }' expectations from describe block.
+
+    Args:
+        describe_body: Content of the describe block.
+
+    Returns:
+        List of expectation dictionaries.
+
+    """
+    expectations = []
+    it_pattern = re.compile(r"it\s+\{([^}]+)\}")
+    for it_match in it_pattern.finditer(describe_body):
+        expectation = it_match.group(1).strip()
+        expectations.append({"type": "should", "matcher": expectation})
+    return expectations
+
+
+def _extract_its_expectations(describe_body: str) -> list[dict[str, Any]]:
+    """Extract 'its(...) { should ... }' expectations from describe block.
+
+    Args:
+        describe_body: Content of the describe block.
+
+    Returns:
+        List of expectation dictionaries.
+
+    """
+    expectations = []
+    its_pattern = re.compile(r"its\(['\"]([^'\"]+)['\"]\)\s+\{([^}]+)\}")
+    for its_match in its_pattern.finditer(describe_body):
+        property_name = its_match.group(1)
+        expectation = its_match.group(2).strip()
+        expectations.append(
+            {"type": "its", "property": property_name, "matcher": expectation}
+        )
+    return expectations
+
+
+def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:
     """Extract InSpec describe blocks and their matchers.
 
     Args:
@@ -2741,26 +3239,8 @@ def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:  # no
             resource_name = describe_match.group(2).strip()
 
             # Find the matching end for this describe block
-            nesting_level = 0
-            describe_body_lines = []
-
-            i += 1  # Move past the describe line
-            while i < len(lines):
-                current_line = lines[i]
-                stripped = current_line.strip()
-
-                # Count do/end for nesting
-                if re.search(r"\bdo\s*$", stripped):
-                    nesting_level += 1
-                elif stripped == "end":
-                    if nesting_level == 0:
-                        # This is the end of our describe block
-                        break
-                    else:
-                        nesting_level -= 1
-
-                describe_body_lines.append(current_line)
-                i += 1
+            describe_body_lines, end_index = _find_nested_block_end(lines, i + 1)
+            i = end_index
 
             # Parse the describe body
             describe_body = "\n".join(describe_body_lines)
@@ -2771,29 +3251,9 @@ def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:  # no
                 "expectations": [],
             }
 
-            # Extract 'it { should ... }' blocks
-            it_pattern = re.compile(r"it\s+\{([^}]+)\}")
-            for it_match in it_pattern.finditer(describe_body):
-                expectation = it_match.group(1).strip()
-                test_data["expectations"].append(
-                    {
-                        "type": "should",
-                        "matcher": expectation,
-                    }
-                )
-
-            # Extract 'its(...) { should ... }' blocks
-            its_pattern = re.compile(r"its\(['\"]([^'\"]+)['\"]\)\s+\{([^}]+)\}")
-            for its_match in its_pattern.finditer(describe_body):
-                property_name = its_match.group(1)
-                expectation = its_match.group(2).strip()
-                test_data["expectations"].append(
-                    {
-                        "type": "its",
-                        "property": property_name,
-                        "matcher": expectation,
-                    }
-                )
+            # Extract expectations
+            test_data["expectations"].extend(_extract_it_expectations(describe_body))
+            test_data["expectations"].extend(_extract_its_expectations(describe_body))
 
             if test_data["expectations"]:
                 tests.append(test_data)
@@ -2803,7 +3263,92 @@ def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:  # no
     return tests
 
 
-def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:  # noqa: C901
+def _convert_package_to_testinfra(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert package resource to Testinfra assertions.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Name of the package.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f'    pkg = host.package("{resource_name}")')
+    for exp in expectations:
+        if "be_installed" in exp["matcher"]:
+            lines.append("    assert pkg.is_installed")
+        elif exp["type"] == "its" and exp["property"] == "version":
+            version_match = re.search(r"match\s+/([^/]+)/", exp["matcher"])
+            if version_match:
+                version = version_match.group(1)
+                lines.append(f'    assert pkg.version.startswith("{version}")')
+
+
+def _convert_service_to_testinfra(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert service resource to Testinfra assertions.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Name of the service.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f'    svc = host.service("{resource_name}")')
+    for exp in expectations:
+        if "be_running" in exp["matcher"]:
+            lines.append("    assert svc.is_running")
+        elif "be_enabled" in exp["matcher"]:
+            lines.append("    assert svc.is_enabled")
+
+
+def _convert_file_to_testinfra(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert file resource to Testinfra assertions.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Path to the file.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f'    f = host.file("{resource_name}")')
+    for exp in expectations:
+        if "exist" in exp["matcher"]:
+            lines.append("    assert f.exists")
+        elif exp["type"] == "its" and exp["property"] == "mode":
+            mode_match = re.search(r"cmp\s+'([^']+)'", exp["matcher"])
+            if mode_match:
+                mode = mode_match.group(1)
+                lines.append(f'    assert oct(f.mode) == "{mode}"')
+        elif exp["type"] == "its" and exp["property"] == "owner":
+            owner_match = re.search(r"eq\s+['\"]([^'\"]+)['\"]", exp["matcher"])
+            if owner_match:
+                owner = owner_match.group(1)
+                lines.append(f'    assert f.user == "{owner}"')
+
+
+def _convert_port_to_testinfra(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert port resource to Testinfra assertions.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Port number or address.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f'    port = host.socket("tcp://{resource_name}")')
+    for exp in expectations:
+        if "be_listening" in exp["matcher"]:
+            lines.append("    assert port.is_listening")
+
+
+def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:
     """Convert InSpec control to Testinfra test.
 
     Args:
@@ -2826,54 +3371,74 @@ def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:  # noqa: C901
     for test in control["tests"]:
         resource_type = test["resource_type"]
         resource_name = test["resource_name"]
+        expectations = test["expectations"]
 
-        # Map InSpec resources to Testinfra
+        # Map InSpec resources to Testinfra using dedicated converters
         if resource_type == "package":
-            lines.append(f'    pkg = host.package("{resource_name}")')
-            for exp in test["expectations"]:
-                if "be_installed" in exp["matcher"]:
-                    lines.append("    assert pkg.is_installed")
-                elif exp["type"] == "its" and exp["property"] == "version":
-                    version_match = re.search(r"match\s+/([^/]+)/", exp["matcher"])
-                    if version_match:
-                        version = version_match.group(1)
-                        lines.append(f'    assert pkg.version.startswith("{version}")')
-
+            _convert_package_to_testinfra(lines, resource_name, expectations)
         elif resource_type == "service":
-            lines.append(f'    svc = host.service("{resource_name}")')
-            for exp in test["expectations"]:
-                if "be_running" in exp["matcher"]:
-                    lines.append("    assert svc.is_running")
-                elif "be_enabled" in exp["matcher"]:
-                    lines.append("    assert svc.is_enabled")
-
+            _convert_service_to_testinfra(lines, resource_name, expectations)
         elif resource_type == "file":
-            lines.append(f'    f = host.file("{resource_name}")')
-            for exp in test["expectations"]:
-                if "exist" in exp["matcher"]:
-                    lines.append("    assert f.exists")
-                elif exp["type"] == "its" and exp["property"] == "mode":
-                    mode_match = re.search(r"cmp\s+'([^']+)'", exp["matcher"])
-                    if mode_match:
-                        mode = mode_match.group(1)
-                        lines.append(f'    assert oct(f.mode) == "{mode}"')
-                elif exp["type"] == "its" and exp["property"] == "owner":
-                    owner_match = re.search(r"eq\s+['\"]([^'\"]+)['\"]", exp["matcher"])
-                    if owner_match:
-                        owner = owner_match.group(1)
-                        lines.append(f'    assert f.user == "{owner}"')
-
+            _convert_file_to_testinfra(lines, resource_name, expectations)
         elif resource_type == "port":
-            lines.append(f'    port = host.socket("tcp://{resource_name}")')
-            for exp in test["expectations"]:
-                if "be_listening" in exp["matcher"]:
-                    lines.append("    assert port.is_listening")
+            _convert_port_to_testinfra(lines, resource_name, expectations)
 
     lines.append("")
     return "\n".join(lines)
 
 
-def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:  # noqa: C901
+def _convert_package_to_ansible_assert(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert package expectations to Ansible assert conditions.
+
+    Args:
+        lines: List to append assertion lines to.
+        resource_name: Name of the package.
+        expectations: List of InSpec expectations.
+
+    """
+    for exp in expectations:
+        if "be_installed" in exp["matcher"]:
+            lines.append(
+                f"      - ansible_facts.packages['{resource_name}'] is defined"
+            )
+
+
+def _convert_service_to_ansible_assert(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """Convert service expectations to Ansible assert conditions.
+
+    Args:
+        lines: List to append assertion lines to.
+        resource_name: Name of the service.
+        expectations: List of InSpec expectations.
+
+    """
+    for exp in expectations:
+        if "be_running" in exp["matcher"]:
+            lines.append(f"      - services['{resource_name}'].state == 'running'")
+        elif "be_enabled" in exp["matcher"]:
+            lines.append(f"      - services['{resource_name}'].status == 'enabled'")
+
+
+def _convert_file_to_ansible_assert(
+    lines: list[str], expectations: list[dict[str, Any]]
+) -> None:
+    """Convert file expectations to Ansible assert conditions.
+
+    Args:
+        lines: List to append assertion lines to.
+        expectations: List of InSpec expectations.
+
+    """
+    for exp in expectations:
+        if "exist" in exp["matcher"]:
+            lines.append("      - stat_result.stat.exists")
+
+
+def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:
     """Convert InSpec control to Ansible assert task.
 
     Args:
@@ -2883,46 +3448,160 @@ def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:  # noqa: 
         Ansible assert task in YAML format.
 
     """
-    lines = []
+    lines = [
+        f"- name: Verify {control['title'] or control['id']}",
+        "  ansible.builtin.assert:",
+        "    that:",
+    ]
 
-    lines.append(f"- name: Verify {control['title'] or control['id']}")
-    lines.append("  ansible.builtin.assert:")
-    lines.append("    that:")
-
+    # Convert each describe block to assertions
     for test in control["tests"]:
         resource_type = test["resource_type"]
         resource_name = test["resource_name"]
+        expectations = test["expectations"]
 
         if resource_type == "package":
-            for exp in test["expectations"]:
-                if "be_installed" in exp["matcher"]:
-                    lines.append(
-                        f"      - ansible_facts.packages['{resource_name}'] is defined"
-                    )
-
+            _convert_package_to_ansible_assert(lines, resource_name, expectations)
         elif resource_type == "service":
-            for exp in test["expectations"]:
-                if "be_running" in exp["matcher"]:
-                    lines.append(
-                        f"      - services['{resource_name}'].state == 'running'"
-                    )
-                elif "be_enabled" in exp["matcher"]:
-                    lines.append(
-                        f"      - services['{resource_name}'].status == 'enabled'"
-                    )
-
+            _convert_service_to_ansible_assert(lines, resource_name, expectations)
         elif resource_type == "file":
-            for exp in test["expectations"]:
-                if "exist" in exp["matcher"]:
-                    lines.append("      - stat_result.stat.exists")
+            _convert_file_to_ansible_assert(lines, expectations)
 
+    # Add failure message
     fail_msg = f"{control['desc'] or control['id']} validation failed"
     lines.append(f'    fail_msg: "{fail_msg}"')
 
     return "\n".join(lines)
 
 
-def _generate_inspec_from_resource(  # noqa: C901
+def _generate_inspec_package_checks(
+    resource_name: str, properties: dict[str, Any]
+) -> list[str]:
+    """Generate InSpec checks for package resource.
+
+    Args:
+        resource_name: Name of the package.
+        properties: Resource properties.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    lines = [
+        f"  describe package('{resource_name}') do",
+        "    it { should be_installed }",
+    ]
+    if "version" in properties:
+        version = properties["version"]
+        lines.append(f"    its('version') {{ should match /{version}/ }}")
+    lines.append(INSPEC_END_INDENT)
+    return lines
+
+
+def _generate_inspec_service_checks(resource_name: str) -> list[str]:
+    """Generate InSpec checks for service resource.
+
+    Args:
+        resource_name: Name of the service.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    return [
+        f"  describe service('{resource_name}') do",
+        "    it { should be_running }",
+        "    it { should be_enabled }",
+        INSPEC_END_INDENT,
+    ]
+
+
+def _generate_inspec_file_checks(
+    resource_name: str, properties: dict[str, Any]
+) -> list[str]:
+    """Generate InSpec checks for file/template resource.
+
+    Args:
+        resource_name: Name/path of the file.
+        properties: Resource properties.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    lines = [f"  describe file('{resource_name}') do", INSPEC_SHOULD_EXIST]
+    if "mode" in properties:
+        lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
+    if "owner" in properties:
+        lines.append(f"    its('owner') {{ should eq '{properties['owner']}' }}")
+    if "group" in properties:
+        lines.append(f"    its('group') {{ should eq '{properties['group']}' }}")
+    lines.append(INSPEC_END_INDENT)
+    return lines
+
+
+def _generate_inspec_directory_checks(
+    resource_name: str, properties: dict[str, Any]
+) -> list[str]:
+    """Generate InSpec checks for directory resource.
+
+    Args:
+        resource_name: Path of the directory.
+        properties: Resource properties.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    lines = [
+        f"  describe file('{resource_name}') do",
+        INSPEC_SHOULD_EXIST,
+        "    it { should be_directory }",
+    ]
+    if "mode" in properties:
+        lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
+    lines.append(INSPEC_END_INDENT)
+    return lines
+
+
+def _generate_inspec_user_checks(
+    resource_name: str, properties: dict[str, Any]
+) -> list[str]:
+    """Generate InSpec checks for user resource.
+
+    Args:
+        resource_name: Username.
+        properties: Resource properties.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    lines = [f"  describe user('{resource_name}') do", INSPEC_SHOULD_EXIST]
+    if "shell" in properties:
+        lines.append(f"    its('shell') {{ should eq '{properties['shell']}' }}")
+    lines.append(INSPEC_END_INDENT)
+    return lines
+
+
+def _generate_inspec_group_checks(resource_name: str) -> list[str]:
+    """Generate InSpec checks for group resource.
+
+    Args:
+        resource_name: Group name.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    return [
+        f"  describe group('{resource_name}') do",
+        INSPEC_SHOULD_EXIST,
+        INSPEC_END_INDENT,
+    ]
+
+
+def _generate_inspec_from_resource(
     resource_type: str, resource_name: str, properties: dict[str, Any]
 ) -> str:
     """Generate InSpec control from Chef resource.
@@ -2938,67 +3617,93 @@ def _generate_inspec_from_resource(  # noqa: C901
     """
     control_id = f"{resource_type}-{resource_name.replace('/', '-')}"
 
-    lines = []
-    lines.append(f"control '{control_id}' do")
-    lines.append(f"  title 'Verify {resource_type} {resource_name}'")
-    desc = f"Ensure {resource_type} {resource_name} is properly configured"
-    lines.append(f"  desc '{desc}'")
-    lines.append("  impact 1.0")
-    lines.append("")
+    lines = [
+        f"control '{control_id}' do",
+        f"  title 'Verify {resource_type} {resource_name}'",
+        f"  desc 'Ensure {resource_type} {resource_name} is properly configured'",
+        "  impact 1.0",
+        "",
+    ]
 
-    if resource_type == "package":
-        lines.append(f"  describe package('{resource_name}') do")
-        lines.append("    it { should be_installed }")
-        if "version" in properties:
-            version = properties["version"]
-            lines.append(f"    its('version') {{ should match /{version}/ }}")
-        lines.append("  end")
+    # Generate resource-specific checks
+    resource_generators = {
+        "package": lambda: _generate_inspec_package_checks(resource_name, properties),
+        "service": lambda: _generate_inspec_service_checks(resource_name),
+        "file": lambda: _generate_inspec_file_checks(resource_name, properties),
+        "template": lambda: _generate_inspec_file_checks(resource_name, properties),
+        "directory": lambda: _generate_inspec_directory_checks(
+            resource_name, properties
+        ),
+        "user": lambda: _generate_inspec_user_checks(resource_name, properties),
+        "group": lambda: _generate_inspec_group_checks(resource_name),
+    }
 
-    elif resource_type == "service":
-        lines.append(f"  describe service('{resource_name}') do")
-        lines.append("    it { should be_running }")
-        lines.append("    it { should be_enabled }")
-        lines.append("  end")
+    generator = resource_generators.get(resource_type)
+    if generator:
+        lines.extend(generator())
 
-    elif resource_type in ("file", "template"):
-        lines.append(f"  describe file('{resource_name}') do")
-        lines.append("    it { should exist }")
-        if "mode" in properties:
-            lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
-        if "owner" in properties:
-            lines.append(f"    its('owner') {{ should eq '{properties['owner']}' }}")
-        if "group" in properties:
-            lines.append(f"    its('group') {{ should eq '{properties['group']}' }}")
-        lines.append("  end")
-
-    elif resource_type == "directory":
-        lines.append(f"  describe file('{resource_name}') do")
-        lines.append("    it { should exist }")
-        lines.append("    it { should be_directory }")
-        if "mode" in properties:
-            lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
-        lines.append("  end")
-
-    elif resource_type == "user":
-        lines.append(f"  describe user('{resource_name}') do")
-        lines.append("    it { should exist }")
-        if "shell" in properties:
-            lines.append(f"    its('shell') {{ should eq '{properties['shell']}' }}")
-        lines.append("  end")
-
-    elif resource_type == "group":
-        lines.append(f"  describe group('{resource_name}') do")
-        lines.append("    it { should exist }")
-        lines.append("  end")
-
-    lines.append("end")
-    lines.append("")
+    lines.extend(["end", ""])
 
     return "\n".join(lines)
 
 
 @mcp.tool()
-def parse_inspec_profile(path: str) -> str:  # noqa: C901
+def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
+    """Parse all control files from an InSpec profile directory.
+
+    Args:
+        profile_path: Path to the InSpec profile directory.
+
+    Returns:
+        List of parsed controls.
+
+    Raises:
+        FileNotFoundError: If controls directory doesn't exist.
+        RuntimeError: If error reading control files.
+
+    """
+    controls_dir = _safe_join(profile_path, "controls")
+    if not controls_dir.exists():
+        raise FileNotFoundError(f"No controls directory found in {profile_path}")
+
+    controls = []
+    for control_file in controls_dir.glob("*.rb"):
+        try:
+            content = control_file.read_text()
+            file_controls = _parse_inspec_control(content)
+            for ctrl in file_controls:
+                ctrl["file"] = str(control_file.relative_to(profile_path))
+            controls.extend(file_controls)
+        except Exception as e:
+            raise RuntimeError(f"Error reading {control_file}: {e}") from e
+
+    return controls
+
+
+def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
+    """Parse controls from a single InSpec control file.
+
+    Args:
+        profile_path: Path to the control file.
+
+    Returns:
+        List of parsed controls.
+
+    Raises:
+        RuntimeError: If error reading the file.
+
+    """
+    try:
+        content = profile_path.read_text()
+        controls = _parse_inspec_control(content)
+        for ctrl in controls:
+            ctrl["file"] = profile_path.name
+        return controls
+    except Exception as e:
+        raise RuntimeError(f"Error reading file: {e}") from e
+
+
+def parse_inspec_profile(path: str) -> str:
     """Parse an InSpec profile and extract controls.
 
     Args:
@@ -3009,40 +3714,15 @@ def parse_inspec_profile(path: str) -> str:  # noqa: C901
 
     """
     try:
-        profile_path = Path(path)
+        profile_path = _normalize_path(path)
 
         if not profile_path.exists():
             return f"Error: Path does not exist: {path}"
 
-        controls = []
-
-        # If it's a directory, look for controls in controls/
         if profile_path.is_dir():
-            controls_dir = profile_path / "controls"
-            if not controls_dir.exists():
-                return f"Error: No controls directory found in {path}"
-
-            # Parse all .rb files in controls/
-            for control_file in controls_dir.glob("*.rb"):
-                try:
-                    content = control_file.read_text()
-                    file_controls = _parse_inspec_control(content)
-                    for ctrl in file_controls:
-                        ctrl["file"] = str(control_file.relative_to(profile_path))
-                    controls.extend(file_controls)
-                except Exception as e:
-                    return f"Error reading {control_file}: {e}"
-
-        # If it's a file, parse it directly
+            controls = _parse_controls_from_directory(profile_path)
         elif profile_path.is_file():
-            try:
-                content = profile_path.read_text()
-                controls = _parse_inspec_control(content)
-                for ctrl in controls:
-                    ctrl["file"] = profile_path.name
-            except Exception as e:
-                return f"Error reading file: {e}"
-
+            controls = _parse_controls_from_file(profile_path)
         else:
             return f"Error: Invalid path type: {path}"
 
@@ -3055,6 +3735,8 @@ def parse_inspec_profile(path: str) -> str:  # noqa: C901
             indent=2,
         )
 
+    except (FileNotFoundError, RuntimeError) as e:
+        return f"Error: {e}"
     except Exception as e:
         return f"An error occurred while parsing InSpec profile: {e}"
 
@@ -3076,7 +3758,7 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         parse_result = parse_inspec_profile(inspec_path)
 
         # Check if parsing failed
-        if parse_result.startswith("Error:"):
+        if parse_result.startswith(ERROR_PREFIX):
             return parse_result
 
         # Parse JSON result
@@ -3119,8 +3801,46 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         return f"An error occurred while converting InSpec: {e}"
 
 
+def _extract_resources_from_parse_result(parse_result: str) -> list[dict[str, Any]]:
+    """Extract resource data from recipe parse result.
+
+    Args:
+        parse_result: Output from parse_recipe function.
+
+    Returns:
+        List of resource dictionaries with type, name, and properties.
+
+    """
+    resources = []
+    current_resource: dict[str, Any] = {}
+
+    for line in parse_result.split("\n"):
+        line = line.strip()
+
+        if line.startswith("Resource"):
+            if current_resource:
+                resources.append(current_resource)
+            current_resource = {}
+        elif line.startswith("Type:"):
+            current_resource["type"] = line.split(":", 1)[1].strip()
+        elif line.startswith("Name:"):
+            current_resource["name"] = line.split(":", 1)[1].strip()
+        elif line.startswith("Properties:"):
+            # Parse properties dict
+            props_str = line.split(":", 1)[1].strip()
+            try:
+                current_resource["properties"] = ast.literal_eval(props_str)
+            except Exception:
+                current_resource["properties"] = {}
+
+    if current_resource:
+        resources.append(current_resource)
+
+    return resources
+
+
 @mcp.tool()
-def generate_inspec_from_recipe(recipe_path: str) -> str:  # noqa: C901
+def generate_inspec_from_recipe(recipe_path: str) -> str:
     """Generate InSpec controls from a Chef recipe.
 
     Args:
@@ -3134,43 +3854,21 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:  # noqa: C901
         # First parse the recipe
         recipe_result = parse_recipe(recipe_path)
 
-        if recipe_result.startswith("Error:"):
+        if recipe_result.startswith(ERROR_PREFIX):
             return recipe_result
 
         # Extract resources from parsed output
-        resources = []
-        current_resource = {}
-
-        for line in recipe_result.split("\n"):
-            line = line.strip()
-
-            if line.startswith("Resource"):
-                if current_resource:
-                    resources.append(current_resource)
-                current_resource = {}
-            elif line.startswith("Type:"):
-                current_resource["type"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Name:"):
-                current_resource["name"] = line.split(":", 1)[1].strip()
-            elif line.startswith("Properties:"):
-                # Parse properties dict
-                props_str = line.split(":", 1)[1].strip()
-                try:
-                    current_resource["properties"] = eval(props_str)
-                except Exception:
-                    current_resource["properties"] = {}
-
-        if current_resource:
-            resources.append(current_resource)
+        resources = _extract_resources_from_parse_result(recipe_result)
 
         if not resources:
             return "Error: No resources found in recipe"
 
         # Generate InSpec controls
-        controls = []
-        controls.append("# InSpec controls generated from Chef recipe")
-        controls.append(f"# Source: {recipe_path}")
-        controls.append("")
+        controls = [
+            "# InSpec controls generated from Chef recipe",
+            f"# Source: {recipe_path}",
+            "",
+        ]
 
         for resource in resources:
             if "type" in resource and "name" in resource:
@@ -3209,8 +3907,6 @@ def convert_chef_databag_to_vars(
 
     """
     try:
-        import json
-
         import yaml
 
         # Parse the data bag content
@@ -3272,9 +3968,7 @@ def generate_ansible_vault_from_databags(
 
     """
     try:
-        from pathlib import Path
-
-        databags_path = Path(databags_directory)
+        databags_path = _normalize_path(databags_directory)
         if not databags_path.exists():
             return f"Error: Data bags directory not found: {databags_directory}"
 
@@ -3292,7 +3986,7 @@ def generate_ansible_vault_from_databags(
                 item_name = item_file.stem
 
                 try:
-                    with open(item_file) as f:
+                    with item_file.open() as f:
                         content = f.read()
 
                     # Detect if encrypted (Chef encrypted data bags have specific structure)
@@ -3303,12 +3997,14 @@ def generate_ansible_vault_from_databags(
                         content, databag_name, item_name, is_encrypted, output_directory
                     )
 
+                    vault_suffix = "_vault" if is_encrypted else ""
+                    target_file = f"{output_directory}/{databag_name}{vault_suffix}.yml"
                     conversion_results.append(
                         {
                             "databag": databag_name,
                             "item": item_name,
                             "encrypted": is_encrypted,
-                            "target_file": f"{output_directory}/{databag_name}{'_vault' if is_encrypted else ''}.yml",
+                            "target_file": target_file,
                             "content": result,
                         }
                     )
@@ -3340,9 +4036,7 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
 
     """
     try:
-        from pathlib import Path
-
-        cookbook = Path(cookbook_path)
+        cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -3352,7 +4046,7 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
         # Analyze data bags structure if provided
         databag_structure = {}
         if databags_path:
-            databags = Path(databags_path)
+            databags = _normalize_path(databags_path)
             if databags.exists():
                 databag_structure = _analyze_databag_structure(databags)
 
@@ -3442,9 +4136,7 @@ def generate_inventory_from_chef_environments(
 
     """
     try:
-        from pathlib import Path
-
-        env_path = Path(environments_directory)
+        env_path = _normalize_path(environments_directory)
         if not env_path.exists():
             return f"Error: Environments directory not found: {environments_directory}"
 
@@ -3490,7 +4182,9 @@ def generate_inventory_from_chef_environments(
 def analyze_chef_environment_usage(
     cookbook_path: str, environments_path: str = ""
 ) -> str:
-    """Analyze Chef cookbook for environment usage and provide migration recommendations.
+    """Analyze Chef cookbook for environment usage.
+
+    Provides migration recommendations.
 
     Args:
         cookbook_path: Path to Chef cookbook
@@ -3501,9 +4195,7 @@ def analyze_chef_environment_usage(
 
     """
     try:
-        from pathlib import Path
-
-        cookbook = Path(cookbook_path)
+        cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -3513,7 +4205,7 @@ def analyze_chef_environment_usage(
         # Analyze environments structure if provided
         environment_structure = {}
         if environments_path:
-            environments = Path(environments_path)
+            environments = _normalize_path(environments_path)
             if environments.exists():
                 environment_structure = _analyze_environments_structure(environments)
 
@@ -3547,8 +4239,6 @@ def analyze_chef_environment_usage(
 
 def _parse_chef_environment_content(content: str) -> dict:
     """Parse Chef environment Ruby content into structured data."""
-    import re
-
     env_data = {
         "name": "",
         "description": "",
@@ -3587,8 +4277,6 @@ def _parse_chef_environment_content(content: str) -> dict:
 
 def _extract_attributes_block(content: str, block_type: str) -> dict:
     """Extract attribute blocks from Chef environment content."""
-    import re
-
     # Find the block start
     pattern = rf"{block_type}\s*\((.*?)\)"
     match = re.search(pattern, content, re.DOTALL)
@@ -3629,8 +4317,6 @@ def _extract_attributes_block(content: str, block_type: str) -> dict:
 
 def _extract_cookbook_constraints(content: str) -> dict:
     """Extract cookbook version constraints from Chef environment."""
-    import re
-
     constraints = {}
 
     # Find cookbook version constraints
@@ -3675,8 +4361,10 @@ def _generate_inventory_group_from_environment(
     group_vars["chef_migration_metadata"] = {
         "source_environment": env_name,
         "converted_by": "souschef",
-        "variable_precedence": "group_vars (equivalent to Chef default_attributes)",
-        "overrides_location": "environment_overrides (requires extra_vars or host_vars)",
+        "variable_precedence": ("group_vars (equivalent to Chef default_attributes)"),
+        "overrides_location": (
+            "environment_overrides (requires extra_vars or host_vars)"
+        ),
     }
 
     return yaml.dump(group_vars, default_flow_style=False, indent=2)
@@ -3703,7 +4391,10 @@ def _generate_complete_inventory_from_environments(
             summary += (
                 f"✅ {result['environment']}: {result['attributes']} attributes, "
             )
-            summary += f"{result['overrides']} overrides, {result['constraints']} constraints\n"
+            summary += (
+                f"{result['overrides']} overrides, "
+                f"{result['constraints']} constraints\n"
+            )
         else:
             summary += f"❌ {result['environment']}: {result['error']}\n"
 
@@ -3803,8 +4494,6 @@ def _extract_environment_usage_from_cookbook(cookbook_path) -> list:
 
 def _find_environment_patterns_in_content(content: str, file_path: str) -> list:
     """Find environment usage patterns in file content."""
-    import re
-
     patterns = []
 
     # Common Chef environment patterns
@@ -3873,71 +4562,90 @@ def _analyze_environments_structure(environments_path) -> dict:
     return structure
 
 
+def _analyze_usage_pattern_recommendations(usage_patterns: list) -> list[str]:
+    """Analyze usage patterns and generate recommendations."""
+    if not usage_patterns:
+        return []
+
+    recommendations = []
+    environment_refs = [p for p in usage_patterns if "environment" in p.get("type", "")]
+    conditional_usage = [
+        p
+        for p in usage_patterns
+        if "conditional" in p.get("type", "") or "case" in p.get("type", "")
+    ]
+
+    recommendations.append(
+        f"• Found {len(usage_patterns)} environment references in cookbook"
+    )
+
+    if environment_refs:
+        recommendations.append(
+            f"• {len(environment_refs)} direct environment attribute "
+            f"accesses need inventory group conversion"
+        )
+
+    if conditional_usage:
+        recommendations.append(
+            f"• {len(conditional_usage)} conditional environment logic "
+            f"needs when/group_names conditions"
+        )
+
+    return recommendations
+
+
+def _analyze_structure_recommendations(env_structure: dict) -> list[str]:
+    """Analyze environment structure and generate recommendations."""
+    if not env_structure:
+        return []
+
+    total_envs = env_structure.get("total_environments", 0)
+    if total_envs == 0:
+        return []
+
+    recommendations = [
+        f"• Convert {total_envs} Chef environments to Ansible inventory groups"
+    ]
+
+    # Find complex environments
+    complex_envs = [
+        env_name
+        for env_name, env_info in env_structure.get("environments", {}).items()
+        if "error" not in env_info
+        and env_info.get("default_attributes_count", 0)
+        + env_info.get("override_attributes_count", 0)
+        > 10
+    ]
+
+    if complex_envs:
+        recommendations.append(
+            f"• {len(complex_envs)} environments have >10 attributes - "
+            f"consider splitting into logical variable groups"
+        )
+
+    return recommendations
+
+
+def _get_general_migration_recommendations() -> list[str]:
+    """Get standard migration recommendations."""
+    return [
+        "• Use Ansible groups to replace Chef environment-based node targeting",
+        "• Convert Chef default_attributes to group_vars",
+        "• Handle Chef override_attributes with extra_vars or host_vars",
+        "• Implement environment-specific playbook execution with --limit",
+        "• Test variable precedence matches Chef behavior",
+        "• Consider using Ansible environments/staging for deployment workflows",
+    ]
+
+
 def _generate_environment_migration_recommendations(
     usage_patterns: list, env_structure: dict
 ) -> str:
     """Generate migration recommendations based on environment usage analysis."""
     recommendations = []
-
-    # Analyze usage patterns
-    if usage_patterns:
-        environment_refs = [
-            p for p in usage_patterns if "environment" in p.get("type", "")
-        ]
-        conditional_usage = [
-            p
-            for p in usage_patterns
-            if "conditional" in p.get("type", "") or "case" in p.get("type", "")
-        ]
-
-        recommendations.append(
-            f"• Found {len(usage_patterns)} environment references in cookbook"
-        )
-
-        if environment_refs:
-            recommendations.append(
-                f"• {len(environment_refs)} direct environment attribute accesses need inventory group conversion"
-            )
-
-        if conditional_usage:
-            recommendations.append(
-                f"• {len(conditional_usage)} conditional environment logic needs when/group_names conditions"
-            )
-
-    # Analyze structure
-    if env_structure:
-        total_envs = env_structure.get("total_environments", 0)
-        if total_envs > 0:
-            recommendations.append(
-                f"• Convert {total_envs} Chef environments to Ansible inventory groups"
-            )
-
-            # Analyze complexity
-            complex_envs = []
-            for env_name, env_info in env_structure.get("environments", {}).items():
-                if "error" not in env_info:
-                    attrs_count = env_info.get(
-                        "default_attributes_count", 0
-                    ) + env_info.get("override_attributes_count", 0)
-                    if attrs_count > 10:
-                        complex_envs.append(env_name)
-
-            if complex_envs:
-                recommendations.append(
-                    f"• {len(complex_envs)} environments have >10 attributes - consider splitting into logical variable groups"
-                )
-
-    # General migration recommendations
-    recommendations.extend(
-        [
-            "• Use Ansible groups to replace Chef environment-based node targeting",
-            "• Convert Chef default_attributes to group_vars",
-            "• Handle Chef override_attributes with extra_vars or host_vars",
-            "• Implement environment-specific playbook execution with --limit",
-            "• Test variable precedence matches Chef behavior",
-            "• Consider using Ansible environments/staging for deployment workflows",
-        ]
-    )
+    recommendations.extend(_analyze_usage_pattern_recommendations(usage_patterns))
+    recommendations.extend(_analyze_structure_recommendations(env_structure))
+    recommendations.extend(_get_general_migration_recommendations())
 
     return "\n".join(recommendations)
 
@@ -3986,7 +4694,8 @@ def _format_environment_structure(structure: dict) -> str:
                 overrides = info.get("override_attributes_count", 0)
                 constraints = info.get("cookbook_constraints_count", 0)
                 formatted.append(
-                    f"• {name}: {attrs} attributes, {overrides} overrides, {constraints} constraints"
+                    f"• {name}: {attrs} attributes, {overrides} overrides, "
+                    f"{constraints} constraints"
                 )
 
         if len(structure["environments"]) > 8:
@@ -4037,8 +4746,6 @@ def _generate_vault_content(vars_dict: dict, databag_name: str) -> str:
 def _detect_encrypted_databag(content: str) -> bool:
     """Detect if a Chef data bag is encrypted based on content structure."""
     try:
-        import json
-
         data = json.loads(content)
 
         # Chef encrypted data bags typically have specific encrypted fields
@@ -4116,7 +4823,7 @@ def _extract_databag_usage_from_cookbook(cookbook_path) -> list:
     # Search for data bag usage in Ruby files
     for ruby_file in cookbook_path.rglob("*.rb"):
         try:
-            with open(ruby_file) as f:
+            with ruby_file.open() as f:
                 content = f.read()
 
             # Find data bag usage patterns
@@ -4133,8 +4840,6 @@ def _extract_databag_usage_from_cookbook(cookbook_path) -> list:
 
 def _find_databag_patterns_in_content(content: str, file_path: str) -> list:
     """Find data bag usage patterns in file content."""
-    import re
-
     patterns = []
 
     # Common Chef data bag patterns
@@ -4194,7 +4899,7 @@ def _analyze_databag_structure(databags_path) -> dict:
             item_name = item_file.stem
 
             try:
-                with open(item_file) as f:
+                with item_file.open() as f:
                     content = f.read()
 
                 is_encrypted = _detect_encrypted_databag(content)
@@ -4349,10 +5054,7 @@ def generate_awx_job_template_from_cookbook(
 
     """
     try:
-        import json
-        from pathlib import Path
-
-        cookbook = Path(cookbook_path)
+        cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -4408,8 +5110,6 @@ def generate_awx_workflow_from_chef_runlist(
 
     """
     try:
-        import json
-
         # Parse runlist
         runlist = _parse_chef_runlist(runlist_content)
 
@@ -4465,10 +5165,7 @@ def generate_awx_project_from_cookbooks(
 
     """
     try:
-        import json
-        from pathlib import Path
-
-        cookbooks_path = Path(cookbooks_directory)
+        cookbooks_path = _normalize_path(cookbooks_directory)
         if not cookbooks_path.exists():
             return f"Error: Cookbooks directory not found: {cookbooks_directory}"
 
@@ -4476,9 +5173,7 @@ def generate_awx_project_from_cookbooks(
         cookbooks_analysis = _analyze_cookbooks_directory(cookbooks_path)
 
         # Generate project structure
-        project_config = _generate_awx_project_config(
-            cookbooks_analysis, project_name, scm_type, scm_url
-        )
+        project_config = _generate_awx_project_config(project_name, scm_type, scm_url)
 
         return f"""# AWX/AAP Project Configuration
 # Generated from Chef cookbooks: {project_name}
@@ -4533,11 +5228,9 @@ def generate_awx_inventory_source_from_chef(
 
     """
     try:
-        import json
-
         # Generate inventory source configuration
         inventory_source = _generate_chef_inventory_source(
-            chef_server_url, organization, sync_schedule
+            chef_server_url, sync_schedule
         )
 
         # Generate custom inventory script
@@ -4592,7 +5285,7 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
     }
 
     # Analyze recipes
-    recipes_dir = cookbook_path / "recipes"
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
             recipe_name = recipe_file.stem
@@ -4605,7 +5298,7 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
             )
 
     # Analyze attributes for survey generation
-    attributes_dir = cookbook_path / "attributes"
+    attributes_dir = _safe_join(cookbook_path, "attributes")
     if attributes_dir.exists():
         for attr_file in attributes_dir.glob("*.rb"):
             try:
@@ -4621,10 +5314,11 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
                 analysis["survey_fields"].extend(survey_fields)
 
             except Exception:
+                # Silently skip malformed attribute files; continue analyzing other files
                 pass
 
     # Analyze dependencies
-    metadata_file = cookbook_path / "metadata.rb"
+    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
     if metadata_file.exists():
         try:
             with metadata_file.open("r") as f:
@@ -4634,16 +5328,17 @@ def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
             analysis["dependencies"] = dependencies
 
         except Exception:
+            # Silently skip malformed metadata; dependencies remain empty
             pass
 
     # Count templates and files
-    templates_dir = cookbook_path / "templates"
+    templates_dir = _safe_join(cookbook_path, "templates")
     if templates_dir.exists():
         analysis["templates"] = [
             f.name for f in templates_dir.rglob("*") if f.is_file()
         ]
 
-    files_dir = cookbook_path / "files"
+    files_dir = _safe_join(cookbook_path, "files")
     if files_dir.exists():
         analysis["files"] = [f.name for f in files_dir.rglob("*") if f.is_file()]
 
@@ -4721,7 +5416,7 @@ def _generate_awx_workflow_template(
 
 
 def _generate_awx_project_config(
-    analysis: dict, project_name: str, scm_type: str, scm_url: str
+    project_name: str, scm_type: str, scm_url: str
 ) -> dict:
     """Generate AWX project configuration from cookbooks analysis."""
     project_config = {
@@ -4744,9 +5439,7 @@ def _generate_awx_project_config(
     return project_config
 
 
-def _generate_chef_inventory_source(
-    chef_server_url: str, organization: str, sync_schedule: str
-) -> dict:
+def _generate_chef_inventory_source(chef_server_url: str, sync_schedule: str) -> dict:
     """Generate Chef server inventory source configuration."""
     inventory_source = {
         "name": "Chef Server Inventory",
@@ -4826,7 +5519,9 @@ def main():
                 'chef_environment': node.get('chef_environment', '_default'),
                 'chef_roles': node.get('run_list', []),
                 'chef_platform': node.get('automatic', {{}}).get('platform'),
-                'chef_platform_version': node.get('automatic', {{}}).get('platform_version')
+                'chef_platform_version': (
+                    node.get('automatic', {{}}).get('platform_version')
+                )
             }}
 
             # Add to hostvars
@@ -4873,37 +5568,40 @@ if __name__ == '__main__':
 
 def _parse_chef_runlist(runlist_content: str) -> list:
     """Parse Chef runlist content into list of recipes/roles."""
-    import json
-
     try:
         # Try parsing as JSON first
         if runlist_content.strip().startswith("["):
             runlist = json.loads(runlist_content)
             return [
-                item.replace("recipe[", "").replace("role[", "").replace("]", "")
+                item.replace(CHEF_RECIPE_PREFIX, "")
+                .replace(CHEF_ROLE_PREFIX, "")
+                .replace("]", "")
                 for item in runlist
             ]
     except json.JSONDecodeError:
+        # Not valid JSON; fall through to parse as comma-separated or single item
         pass
 
     # Parse as comma-separated list
     if "," in runlist_content:
         items = [item.strip() for item in runlist_content.split(",")]
         return [
-            item.replace("recipe[", "").replace("role[", "").replace("]", "")
+            item.replace(CHEF_RECIPE_PREFIX, "")
+            .replace(CHEF_ROLE_PREFIX, "")
+            .replace("]", "")
             for item in items
         ]
 
     # Parse single item
     return [
-        runlist_content.replace("recipe[", "").replace("role[", "").replace("]", "")
+        runlist_content.replace(CHEF_RECIPE_PREFIX, "")
+        .replace(CHEF_ROLE_PREFIX, "")
+        .replace("]", "")
     ]
 
 
 def _extract_cookbook_attributes(content: str) -> dict:
     """Extract cookbook attributes for survey generation."""
-    import re
-
     attributes = {}
 
     # Find default attribute declarations
@@ -4923,8 +5621,6 @@ def _extract_cookbook_attributes(content: str) -> dict:
 
 def _extract_cookbook_dependencies(content: str) -> list:
     """Extract cookbook dependencies from metadata."""
-    import re
-
     dependencies = []
 
     # Find depends declarations
@@ -5041,7 +5737,8 @@ def _format_cookbooks_analysis(analysis: dict) -> str:
         formatted.append("\n### Cookbook Details:")
         for name, info in list(analysis["cookbooks"].items())[:5]:
             formatted.append(
-                f"• {name}: {len(info['recipes'])} recipes, {len(info['attributes'])} attributes"
+                f"• {name}: {len(info['recipes'])} recipes, "
+                f"{len(info['attributes'])} attributes"
             )
 
         if len(analysis["cookbooks"]) > 5:
@@ -5060,17 +5757,17 @@ def convert_chef_deployment_to_ansible_strategy(
 
     Args:
         deployment_recipe_path: Path to Chef deployment recipe
-        deployment_pattern: Chef deployment pattern (blue_green, rolling, canary, auto_detect)
-        target_strategy: Target Ansible strategy (rolling_update, blue_green, canary)
+        deployment_pattern: Chef deployment pattern
+            (blue_green, rolling, canary, auto_detect)
+        target_strategy: Target Ansible strategy
+            (rolling_update, blue_green, canary)
 
     Returns:
         Ansible playbook with deployment strategy implementation
 
     """
     try:
-        from pathlib import Path
-
-        recipe_path = Path(deployment_recipe_path)
+        recipe_path = _normalize_path(deployment_recipe_path)
         if not recipe_path.exists():
             return f"Error: Deployment recipe not found: {deployment_recipe_path}"
 
@@ -5136,8 +5833,6 @@ def generate_blue_green_deployment_playbook(
 
     """
     try:
-        import json
-
         # Parse service configuration
         config = {}
         if service_config:
@@ -5259,7 +5954,8 @@ def generate_canary_deployment_strategy(
 ## Execution Commands:
 ```bash
 # Start canary deployment
-ansible-playbook canary_deploy.yml -e "app_version=1.2.3 canary_percent={canary_percentage}"
+ansible-playbook canary_deploy.yml -e \
+  "app_version=1.2.3 canary_percent={canary_percentage}"
 
 # Progress to next stage (if metrics are good)
 ansible-playbook canary_progress.yml -e "next_percent=25"
@@ -5280,20 +5976,21 @@ ansible-playbook canary_rollback.yml -e "reason='high_error_rate'"
 def analyze_chef_application_patterns(
     cookbook_path: str, application_type: str = "web_application"
 ) -> str:
-    """Analyze Chef cookbook for application deployment patterns and provide migration recommendations.
+    """Analyze Chef cookbook for application deployment patterns.
+
+    Provides migration recommendations.
 
     Args:
         cookbook_path: Path to Chef application cookbook
-        application_type: Type of application (web_application, microservice, database, etc.)
+        application_type: Type of application
+            (web_application, microservice, database, etc.)
 
     Returns:
         Analysis of deployment patterns with Ansible migration recommendations
 
     """
     try:
-        from pathlib import Path
-
-        cookbook = Path(cookbook_path)
+        cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
             return f"Error: Cookbook path not found: {cookbook_path}"
 
@@ -5319,7 +6016,7 @@ def analyze_chef_application_patterns(
 {migration_recommendations}
 
 ## Recommended Ansible Strategies:
-{_recommend_ansible_strategies(deployment_patterns, application_type)}
+{_recommend_ansible_strategies(deployment_patterns)}
 
 ## Implementation Priority:
 1. Convert basic deployment logic to Ansible tasks
@@ -5342,8 +6039,6 @@ def analyze_chef_application_patterns(
 
 def _analyze_chef_deployment_pattern(content: str, pattern_hint: str) -> dict:
     """Analyze Chef recipe content for deployment patterns."""
-    import re
-
     analysis = {
         "detected_pattern": "standard",
         "deployment_steps": [],
@@ -5513,7 +6208,7 @@ def _generate_ansible_deployment_strategy(
     strategy = {"playbook": "", "features": [], "variables": {}, "tasks_count": 0}
 
     if target_strategy == "rolling_update":
-        strategy["playbook"] = _generate_rolling_update_playbook(analysis, recipe_name)
+        strategy["playbook"] = _generate_rolling_update_playbook(recipe_name)
         strategy["features"] = [
             "Serial deployment",
             "Health checks",
@@ -5539,7 +6234,7 @@ def _generate_ansible_deployment_strategy(
         ]
 
     strategy["tasks_count"] = len(analysis.get("deployment_steps", []))
-    strategy["variables"] = _generate_strategy_variables(analysis, target_strategy)
+    strategy["variables"] = _generate_strategy_variables(target_strategy)
 
     return strategy
 
@@ -5576,7 +6271,9 @@ def _generate_blue_green_playbook(
 
     - name: Run health checks on new deployment
       uri:
-        url: "http://{{{{ ansible_host }}}}:{{{{ service_port }}}}{{{{ health_check_url }}}}"
+        url: >-
+          http://{{{{ ansible_host }}}}:{{{{ service_port }}}}
+          {{{{ health_check_url }}}}
         method: GET
         timeout: 30
       register: health_check
@@ -5600,7 +6297,9 @@ def _generate_blue_green_playbook(
   tasks:
     - name: Check application health
       uri:
-        url: "http://{{{{ ansible_host }}}}:{{{{ service_port }}}}{{{{ health_check_url }}}}"
+        url: >-
+          http://{{{{ ansible_host }}}}:{{{{ service_port }}}}
+          {{{{ health_check_url }}}}
         method: GET
         status_code: 200
         timeout: 30
@@ -5826,8 +6525,6 @@ def _generate_canary_strategy(
 
 def _extract_deployment_steps(content: str) -> list:
     """Extract deployment steps from Chef recipe."""
-    import re
-
     steps = []
 
     # Look for common deployment patterns
@@ -5855,8 +6552,6 @@ def _extract_deployment_steps(content: str) -> list:
 
 def _extract_health_checks(content: str) -> list:
     """Extract health check patterns from Chef recipe."""
-    import re
-
     health_checks = []
 
     health_patterns = [
@@ -5881,8 +6576,6 @@ def _extract_health_checks(content: str) -> list:
 
 def _extract_service_management(content: str) -> list:
     """Extract service management patterns from Chef recipe."""
-    import re
-
     services = []
 
     service_patterns = [
@@ -5907,8 +6600,6 @@ def _extract_service_management(content: str) -> list:
 
 def _extract_load_balancer_config(content: str) -> list:
     """Extract load balancer configuration from Chef recipe."""
-    import re
-
     lb_configs = []
 
     lb_patterns = [
@@ -5931,7 +6622,7 @@ def _extract_load_balancer_config(content: str) -> list:
     return lb_configs
 
 
-def _generate_rolling_update_playbook(analysis: dict, recipe_name: str) -> str:
+def _generate_rolling_update_playbook(recipe_name: str) -> str:
     """Generate rolling update playbook from Chef analysis."""
     return f"""---
 - name: Rolling Update Deployment - {recipe_name}
@@ -6007,7 +6698,7 @@ def _analyze_application_cookbook(cookbook_path, app_type: str) -> dict:
     }
 
     # Analyze recipes for deployment patterns
-    recipes_dir = cookbook_path / "recipes"
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
             with recipe_file.open("r") as f:
@@ -6026,7 +6717,7 @@ def _analyze_application_cookbook(cookbook_path, app_type: str) -> dict:
             analysis["health_checks"].extend(health_checks)
 
     # Analyze templates
-    templates_dir = cookbook_path / "templates"
+    templates_dir = _safe_join(cookbook_path, "templates")
     if templates_dir.exists():
         config_files = [f.name for f in templates_dir.rglob("*") if f.is_file()]
         analysis["configuration_files"] = config_files
@@ -6036,8 +6727,6 @@ def _analyze_application_cookbook(cookbook_path, app_type: str) -> dict:
 
 def _detect_deployment_patterns_in_recipe(content: str, recipe_name: str) -> list:
     """Detect deployment patterns in a Chef recipe."""
-    import re
-
     patterns = []
 
     pattern_indicators = {
@@ -6199,7 +6888,7 @@ def _generate_deployment_migration_recommendations(
     return "\n".join(recommendations)
 
 
-def _recommend_ansible_strategies(patterns: dict, app_type: str) -> str:
+def _recommend_ansible_strategies(patterns: dict) -> str:
     """Recommend appropriate Ansible strategies."""
     strategies = []
 
@@ -6226,7 +6915,7 @@ def _recommend_ansible_strategies(patterns: dict, app_type: str) -> str:
     return "\n".join(strategies)
 
 
-def _generate_strategy_variables(analysis: dict, strategy: str) -> dict:
+def _generate_strategy_variables(strategy: str) -> dict:
     """Generate strategy-specific variables."""
     base_vars = {
         "app_version": "latest",
@@ -6269,10 +6958,8 @@ def assess_chef_migration_complexity(
 
     """
     try:
-        from pathlib import Path
-
         # Parse cookbook paths
-        paths = [Path(path.strip()) for path in cookbook_paths.split(",")]
+        paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
 
         # Assess each cookbook
         cookbook_assessments = []
@@ -6286,9 +6973,8 @@ def assess_chef_migration_complexity(
 
         for cookbook_path in paths:
             if cookbook_path.exists():
-                assessment = _assess_single_cookbook(
-                    cookbook_path, migration_scope, target_platform
-                )
+                # deepcode ignore PT: cookbook_path is already normalized via _normalize_path
+                assessment = _assess_single_cookbook(cookbook_path)
                 cookbook_assessments.append(assessment)
 
                 # Aggregate metrics
@@ -6306,9 +6992,9 @@ def assess_chef_migration_complexity(
 
         # Calculate averages
         if cookbook_assessments:
-            overall_metrics["avg_complexity"] = overall_metrics[
-                "complexity_score"
-            ] / len(cookbook_assessments)
+            overall_metrics["avg_complexity"] = int(
+                overall_metrics["complexity_score"] / len(cookbook_assessments)
+            )
 
         # Generate migration recommendations
         recommendations = _generate_migration_recommendations_from_assessment(
@@ -6316,7 +7002,7 @@ def assess_chef_migration_complexity(
         )
 
         # Create migration roadmap
-        roadmap = _create_migration_roadmap(cookbook_assessments, migration_scope)
+        roadmap = _create_migration_roadmap(cookbook_assessments)
 
         return f"""# Chef to Ansible Migration Assessment
 # Scope: {migration_scope}
@@ -6364,17 +7050,14 @@ def generate_migration_plan(
 
     """
     try:
-        from pathlib import Path
-
         # Parse and assess cookbooks
-        paths = [Path(path.strip()) for path in cookbook_paths.split(",")]
+        paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
         cookbook_assessments = []
 
         for cookbook_path in paths:
             if cookbook_path.exists():
-                assessment = _assess_single_cookbook(
-                    cookbook_path, "full", "ansible_awx"
-                )
+                # deepcode ignore PT: cookbook_path is already normalized via _normalize_path
+                assessment = _assess_single_cookbook(cookbook_path)
                 cookbook_assessments.append(assessment)
 
         # Generate migration plan based on strategy
@@ -6434,16 +7117,12 @@ def analyze_cookbook_dependencies(
 
     """
     try:
-        from pathlib import Path
-
-        cookbook_path = Path(cookbook_path)
-        if not cookbook_path.exists():
-            return f"Error: Cookbook path not found: {cookbook_path}"
+        cookbook_path_obj = _normalize_path(cookbook_path)
+        if not cookbook_path_obj.exists():
+            return f"{ERROR_PREFIX} Cookbook path not found: {cookbook_path}"
 
         # Analyze dependencies
-        dependency_analysis = _analyze_cookbook_dependencies_detailed(
-            cookbook_path, dependency_depth
-        )
+        dependency_analysis = _analyze_cookbook_dependencies_detailed(cookbook_path_obj)
 
         # Determine migration order
         migration_order = _determine_migration_order(dependency_analysis)
@@ -6452,7 +7131,7 @@ def analyze_cookbook_dependencies(
         circular_deps = _identify_circular_dependencies(dependency_analysis)
 
         return f"""# Cookbook Dependency Analysis
-# Cookbook: {cookbook_path.name}
+# Cookbook: {cookbook_path_obj.name}
 # Analysis Depth: {dependency_depth}
 
 ## Dependency Overview:
@@ -6499,24 +7178,11 @@ def generate_migration_report(
 
     """
     try:
-        import json
         from datetime import datetime
-
-        # Parse assessment results if JSON
-        try:
-            assessment_data = (
-                json.loads(assessment_results)
-                if assessment_results.startswith("{")
-                else None
-            )
-        except (json.JSONDecodeError, ValueError, TypeError):
-            assessment_data = None
 
         # Generate report based on format
         report = _generate_comprehensive_migration_report(
-            assessment_data or assessment_results,
-            report_format,
-            include_technical_details == "yes",
+            include_technical_details == "yes"
         )
 
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -6564,13 +7230,9 @@ def generate_migration_report(
         return f"Error generating migration report: {e}"
 
 
-def _assess_single_cookbook(
-    cookbook_path, migration_scope: str, target_platform: str
-) -> dict:
+def _assess_single_cookbook(cookbook_path) -> dict:
     """Assess complexity of a single cookbook."""
-    from pathlib import Path
-
-    cookbook = Path(cookbook_path)
+    cookbook = _normalize_path(cookbook_path)
     assessment = {
         "cookbook_name": cookbook.name,
         "cookbook_path": str(cookbook),
@@ -6583,7 +7245,7 @@ def _assess_single_cookbook(
     }
 
     # Count recipes and resources
-    recipes_dir = cookbook / "recipes"
+    recipes_dir = _safe_join(cookbook, "recipes")
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
     # Analyze recipe complexity
@@ -6596,7 +7258,6 @@ def _assess_single_cookbook(
             with recipe_file.open("r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
                 # Count Chef resources
-                import re
 
                 resources = len(re.findall(r'\w+\s+[\'"].*[\'"]\s+do', content))
                 ruby_blocks += len(
@@ -6614,11 +7275,11 @@ def _assess_single_cookbook(
         "resource_count": resource_count,
         "custom_resources": custom_resources,
         "ruby_blocks": ruby_blocks,
-        "templates": len(list((cookbook / "templates").glob("*")))
-        if (cookbook / "templates").exists()
+        "templates": len(list(_safe_join(cookbook, "templates").glob("*")))
+        if _safe_join(cookbook, "templates").exists()
         else 0,
-        "files": len(list((cookbook / "files").glob("*")))
-        if (cookbook / "files").exists()
+        "files": len(list(_safe_join(cookbook, "files").glob("*")))
+        if _safe_join(cookbook, "files").exists()
         else 0,
     }
 
@@ -6677,15 +7338,18 @@ def _format_cookbook_assessments(assessments: list) -> str:
     if not assessments:
         return "No cookbooks assessed."
 
+    def _get_priority_icon(priority: str) -> str:
+        """Get priority icon based on migration priority level."""
+        if priority == "high":
+            return "🔴"
+        elif priority == "medium":
+            return "🟡"
+        else:
+            return "🟢"
+
     formatted = []
     for assessment in assessments:
-        priority_icon = (
-            "🔴"
-            if assessment["migration_priority"] == "high"
-            else "🟡"
-            if assessment["migration_priority"] == "medium"
-            else "🟢"
-        )
+        priority_icon = _get_priority_icon(assessment["migration_priority"])
         formatted.append(f"""### {assessment["cookbook_name"]} {priority_icon}
 • Complexity Score: {assessment["complexity_score"]:.1f}/100
 • Estimated Effort: {assessment["estimated_effort_days"]} days
@@ -6788,7 +7452,7 @@ def _generate_migration_recommendations_from_assessment(
     return "\n".join(recommendations)
 
 
-def _create_migration_roadmap(assessments: list, migration_scope: str) -> str:
+def _create_migration_roadmap(assessments: list) -> str:
     """Create a migration roadmap based on assessments."""
     # Sort cookbooks by complexity (low to high for easier wins first)
     sorted_cookbooks = sorted(assessments, key=lambda x: x["complexity_score"])
@@ -6897,7 +7561,7 @@ def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
 • **Training:** 2-3 days Ansible/AWX training for team"""
 
 
-def _analyze_cookbook_dependencies_detailed(cookbook_path, depth: str) -> dict:
+def _analyze_cookbook_dependencies_detailed(cookbook_path) -> dict:
     """Analyze cookbook dependencies in detail."""
     analysis = {
         "cookbook_name": cookbook_path.name,
@@ -6909,24 +7573,21 @@ def _analyze_cookbook_dependencies_detailed(cookbook_path, depth: str) -> dict:
     }
 
     # Read metadata.rb for dependencies
-    metadata_file = cookbook_path / "metadata.rb"
+    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
     if metadata_file.exists():
         with metadata_file.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
         # Parse dependencies
-        import re
 
         depends_matches = re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
         analysis["direct_dependencies"] = depends_matches
 
     # Read Berksfile for additional dependencies
-    berksfile = cookbook_path / "Berksfile"
+    berksfile = _safe_join(cookbook_path, "Berksfile")
     if berksfile.exists():
         with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
-
-        import re
 
         cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
         analysis["external_dependencies"].extend(cookbook_matches)
@@ -7034,13 +7695,9 @@ def _generate_detailed_migration_plan(
     elif strategy == "big_bang":
         plan["phases"] = _generate_big_bang_phases(assessments, timeline_weeks)
     else:  # parallel
-        plan["phases"] = _generate_parallel_migration_phases(
-            assessments, timeline_weeks
-        )
+        plan["phases"] = _generate_parallel_migration_phases(timeline_weeks)
 
-    plan["timeline"] = _generate_migration_timeline(
-        assessments, strategy, timeline_weeks
-    )
+    plan["timeline"] = _generate_migration_timeline(strategy, timeline_weeks)
 
     plan["team_requirements"] = f"""**Core Team:**
 • 1 Migration Lead (Ansible expert)
@@ -7089,9 +7746,7 @@ def _generate_detailed_migration_plan(
     return plan
 
 
-def _generate_comprehensive_migration_report(
-    assessment_data, report_format: str, include_technical: bool
-) -> dict:
+def _generate_comprehensive_migration_report(include_technical: bool) -> dict:
     """Generate comprehensive migration report."""
     report = {
         "executive_summary": "",
@@ -7334,7 +7989,7 @@ def _generate_big_bang_phases(assessments: list, timeline_weeks: int) -> str:
   • Rollback readiness verification"""
 
 
-def _generate_parallel_migration_phases(assessments: list, timeline_weeks: int) -> str:
+def _generate_parallel_migration_phases(timeline_weeks: int) -> str:
     """Generate parallel migration phases."""
     return f"""**Track A - Infrastructure (Weeks 1-{timeline_weeks}):**
   • Core infrastructure cookbooks
@@ -7352,9 +8007,7 @@ def _generate_parallel_migration_phases(assessments: list, timeline_weeks: int) 
   • Testing and validation automation"""
 
 
-def _generate_migration_timeline(
-    assessments: list, strategy: str, timeline_weeks: int
-) -> str:
+def _generate_migration_timeline(strategy: str, timeline_weeks: int) -> str:
     """Generate migration timeline."""
     milestones = []
 

@@ -1,51 +1,56 @@
-[project]
+[tool.poetry]
 name = "souschef"
 version = "0.1.0"
 description = "AI-powered MCP server for Chef to Ansible conversion"
 readme = "README.md"
-requires-python = ">=3.14"
-dependencies = [
-    "anthropic>=0.75.0",
-    "click>=8.1.0",
-    "mcp>=1.25.0",
-    "python-dotenv>=1.2.1",
-    "zod>=0.8.0",
-]
+authors = ["SousChef Contributors"]
+license = "MIT"
+packages = [{include = "souschef"}]
 
-[project.scripts]
+[tool.poetry.dependencies]
+python = ">=3.14,<4.0"
+anthropic = ">=0.75.0"
+click = ">=8.1.0"
+mcp = ">=1.25.0"
+python-dotenv = ">=1.2.1"
+zod = ">=0.8.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=9.0.2"
+pytest-cov = ">=7.0.0"
+pytest-benchmark = ">=5.1.0"
+hypothesis = ">=6.125.0"
+ruff = ">=0.14.10"
+pip-audit = ">=2.7.0"
+twine = ">=6.0.0"
+pre-commit = ">=4.5.1"
+mutmut = ">=3.4.0"
+
+[tool.poetry.scripts]
 souschef = "souschef.server:main"
 souschef-cli = "souschef.cli:main"
 
-[tool.uv]
-package = true
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "C90", "I", "N", "D", "UP", "B", "A", "C4", "T20", "SIM", "PTH", "ISC"]
+select = ["E", "F", "W", "C90", "I", "N", "UP", "B", "A", "C4", "T20", "SIM", "PTH", "ISC"]
+# Docstring rules - explicitly select compatible ones
+extend-select = ["D200", "D201", "D202", "D204", "D205", "D206", "D207", "D208", "D209", "D210", "D211", "D214", "D215", "D300", "D301", "D400", "D401", "D402", "D403", "D404", "D405", "D406", "D407", "D408", "D409", "D410", "D411", "D412", "D413", "D414", "D415", "D416", "D417"]
 ignore = ["D100", "D104", "D105", "D107"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"tests/*" = ["S101"]
-"souschef/server.py" = ["T201"]  # Allow print statements in main entry point
+"tests/*" = ["S101", "E501"]  # Allow assert statements, long lines in test data
+"souschef/server.py" = ["T201", "E501"]  # Allow print in main entry, long lines in templates/reports
 
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --cov=souschef --cov-report=term-missing"
 testpaths = [
     "tests",
-]
-
-[dependency-groups]
-dev = [
-    "pytest>=9.0.2",
-    "pytest-cov>=7.0.0",
-    "pytest-benchmark>=5.1.0",
-    "hypothesis>=6.125.0",
-    "mutmut>=3.4.0",
-    "ruff>=0.14.10",
-    "pip-audit>=2.7.0",
-    "twine>=6.0.0",
 ]

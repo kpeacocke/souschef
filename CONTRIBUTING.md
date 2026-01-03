@@ -17,7 +17,7 @@ Thank you for your interest in contributing to SousChef! This guide will help yo
 ### Prerequisites
 
 - **Python 3.14+**: SousChef requires Python 3.14 or newer
-- **uv**: We use `uv` for dependency management
+- **Poetry**: We use Poetry for dependency management
 - **Git**: For version control
 
 ### Development Setup
@@ -30,23 +30,23 @@ Thank you for your interest in contributing to SousChef! This guide will help yo
 
 2. **Install Dependencies**
    ```bash
-   # Install uv if you don't have it
-   curl -LsSf https://astral.sh/uv/install.sh | sh
+   # Install Poetry if you don't have it
+   curl -sSL https://install.python-poetry.org | python3 -
 
    # Install project dependencies
-   uv sync
+   poetry install
    ```
 
 3. **Verify Installation**
    ```bash
    # Run tests to ensure everything works
-   uv run pytest
+   poetry run pytest
 
    # Check linting
-   uv run ruff check .
+   poetry run ruff check .
 
    # Try the CLI
-   uv run souschef-cli --help
+   poetry run souschef-cli --help
    ```
 
 ## 🤝 Contributing Guidelines
@@ -191,18 +191,18 @@ def test_parse_handles_any_input(random_input):
 ### **Running Tests**
 ```bash
 # Run all tests
-uv run pytest
+poetry run pytest
 
 # Run with coverage
-uv run pytest --cov=souschef --cov-report=term-missing
+poetry run pytest --cov=souschef --cov-report=term-missing
 
 # Run specific test types
-uv run pytest tests/test_server.py          # Unit tests
-uv run pytest tests/test_integration.py    # Integration tests
-uv run pytest tests/test_property_based.py # Property-based tests
+poetry run pytest tests/test_server.py          # Unit tests
+poetry run pytest tests/test_integration.py    # Integration tests
+poetry run pytest tests/test_property_based.py # Property-based tests
 
 # Run performance benchmarks
-uv run pytest --benchmark-only
+poetry run pytest --benchmark-only
 ```
 
 ## 🔄 Submitting Changes
@@ -222,14 +222,14 @@ uv run pytest --benchmark-only
 3. **Test Your Changes**
    ```bash
    # Lint and format
-   uv run ruff check .
-   uv run ruff format .
+   poetry run ruff check .
+   poetry run ruff format .
 
    # Run all tests
-   uv run pytest
+   poetry run pytest
 
    # Check coverage
-   uv run pytest --cov=souschef --cov-report=term-missing
+   poetry run pytest --cov=souschef --cov-report=term-missing
    ```
 
 4. **Commit Changes**
@@ -264,9 +264,9 @@ Use conventional commits:
 
 Before submitting your PR, ensure:
 
-- [ ] ✅ No linting errors (`uv run ruff check .`)
-- [ ] ✅ Properly formatted (`uv run ruff format .`)
-- [ ] ✅ All tests pass (`uv run pytest`)
+- [ ] ✅ No linting errors (`poetry run ruff check .`)
+- [ ] ✅ Properly formatted (`poetry run ruff format .`)
+- [ ] ✅ All tests pass (`poetry run pytest`)
 - [ ] ✅ Coverage maintained/improved (`pytest --cov`)
 - [ ] ✅ Unit tests added/updated in `test_server.py`
 - [ ] ✅ Integration tests added/updated in `test_integration.py`

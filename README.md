@@ -145,7 +145,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
 
 ### Prerequisites
 - Python 3.14+
-- [uv](https://github.com/astral-sh/uv) for dependency management
+- [Poetry](https://python-poetry.org/) for dependency management
 - MCP-compatible client (Claude Desktop, VS Code with MCP extension, etc.)
 
 ### Quick Start
@@ -154,7 +154,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
    ```bash
    git clone https://github.com/your-org/souschef
    cd souschef
-   uv sync
+   poetry install
    ```
 
 2. **Configure MCP client** (Claude Desktop example):
@@ -162,7 +162,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
    {
      \"mcpServers\": {
        \"souschef\": {
-         \"command\": \"uv\",
+         \"command\": \"poetry\",
          \"args\": [\"--directory\", \"/path/to/souschef\", \"run\", \"souschef\"],
          \"env\": {}
        }
@@ -205,7 +205,22 @@ souschef-cli inspec-convert controls.rb --format testinfra
 - `inspec-generate` - Generate InSpec validation from recipes
 - `ls` / `cat` - File system operations
 
-### Development Setup\n\n```bash\n# Install dependencies\nuv sync\n\n# Run tests\nuv run pytest\n\n# Run with coverage\nuv run pytest --cov=souschef --cov-report=html\n\n# Lint and format\nuv run ruff check .\nuv run ruff format .\n```
+### Development Setup
+
+```bash
+# Install dependencies
+poetry install
+
+# Run tests
+poetry run pytest
+
+# Run with coverage
+poetry run pytest --cov=souschef --cov-report=html
+
+# Lint and format
+poetry run ruff check .
+poetry run ruff format .
+```
 ## 🏗️ Architecture & Design
 
 ### MCP Protocol Integration
@@ -274,9 +289,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Command-line interface (CLI) for standalone usage
 
 ### In Progress 🔄
-- 🔄 Enhanced error handling and user experience
+- 🔄 Enhanced error handling and user experience improvements
 - 🔄 Documentation website and interactive examples
-- 🔄 Performance optimizations for large-scale migrations
+- 🔄 Performance optimizations for large-scale enterprise migrations
+- 🔄 Technical debt reduction (15 functions tracked in [GitHub Issues](https://github.com/kpeacocke/souschef/issues?q=is%3Aissue+is%3Aopen+label%3Atechnical-debt))
 
 ### Planned 📅
 - 📅 Chef Habitat to containerized deployment conversion
@@ -284,8 +300,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
 - 📅 Jenkins/GitLab CI pipeline generation
-- 📅 Custom resource conversion framework
-- 📅 Advanced templating and variable substitution patterns
+- 📅 Advanced Chef guard handling (only_if, not_if conditions)
+- 📅 Complex attribute precedence and merging logic
+- 📅 Conversion validation and testing framework
 
 ## 🙋‍♀️ Support & Community
 
@@ -406,9 +423,9 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 {
   "mcpServers": {
     "souschef": {
-      "command": "uv",
+      "command": "poetry",
       "args": [
-        "--directory",
+        "-C",
         "/path/to/souschef",
         "run",
         "souschef"
@@ -642,28 +659,28 @@ See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detai
 
 ```bash
 # Run all tests
-uv run pytest
+poetry run pytest
 
 # Run with coverage report
-uv run pytest --cov=souschef --cov-report=term-missing --cov-report=html
+poetry run pytest --cov=souschef --cov-report=term-missing --cov-report=html
 
 # Run only unit tests (mocked)
-uv run pytest tests/test_server.py
+poetry run pytest tests/test_server.py
 
 # Run only integration tests (real files)
-uv run pytest tests/test_integration.py
+poetry run pytest tests/test_integration.py
 
 # Run property-based tests
-uv run pytest tests/test_property_based.py
+poetry run pytest tests/test_property_based.py
 
 # Run with benchmarks
-uv run pytest --benchmark-only
+poetry run pytest --benchmark-only
 
 # Run linting
-uv run ruff check .
+poetry run ruff check .
 
 # Run formatting
-uv run ruff format .
+poetry run ruff format .
 ```
 
 ### Test Types
@@ -696,7 +713,7 @@ The project includes multiple types of tests:
 The project maintains 82% test coverage with a goal of 95%+. Run coverage with HTML report:
 
 ```bash
-uv run pytest --cov=souschef --cov-report=html
+poetry run pytest --cov=souschef --cov-report=html
 open htmlcov/index.html  # View detailed coverage report
 ```
 
@@ -705,8 +722,8 @@ open htmlcov/index.html  # View detailed coverage report
 To verify test quality with mutation testing:
 
 ```bash
-uv run mutmut run
-uv run mutmut results
+poetry run mutmut run
+poetry run mutmut results
 ```
 
 ### VS Code Tasks
@@ -731,14 +748,6 @@ Contributions are welcome! Please ensure:
 
 TBD
 
-## Roadmap
+---
 
-- [x] Add server entry point and runner
-- [x] Implement Chef → Ansible resource conversion (basic)
-- [x] Support template conversion (ERB → Jinja2)
-- [x] Parse custom Chef resources/LWRPs
-- [ ] Generate complete Ansible playbooks from recipes
-- [ ] Handle Chef guards (only_if, not_if) and notifications
-- [ ] Support complex attribute precedence and merging
-- [ ] Add conversion validation and testing
-- [ ] Handle Chef search and data bags
+**SousChef** - *Transforming infrastructure automation, one recipe at a time.* 🍳✨

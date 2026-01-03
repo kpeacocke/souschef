@@ -48,5 +48,6 @@
     "sonarlint.connectedMode.project": {
         "connectionId": "kpeacocke",
         "projectKey": "kpeacocke_souschef"
-    }
+    },
+    "ansible.lightspeed.enabled": false
 }

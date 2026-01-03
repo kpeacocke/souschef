@@ -37,10 +37,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  security-events: write  # Required for security scanning results
-
 env:
   PYTHON_VERSION: "3.14"
 
@@ -48,47 +44,53 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     strategy:
       fail-fast: true
       matrix:
         python-version: ["3.14"]
 
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Cache uv dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
+    - uses: actions/checkout@v6
 
     - name: Set up Python
-      run: uv python install ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v5
+      with:
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: uv sync --all-extras --dev
+      run: poetry install --no-interaction
 
     - name: Lint with ruff
       run: |
-        uv run ruff check .
-        uv run ruff format --check .
+        poetry run ruff check .
+        poetry run ruff format --check .
 
     - name: Test with pytest
       run: |
-        uv run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
+        poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       if: matrix.python-version == '3.14'
       with:
-        file: ./coverage.xml
+        files: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
@@ -97,76 +99,95 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: test
+    permissions:
+      contents: read
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - name: Cache uv dependencies
-      uses: actions/cache@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v5
+      with:
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          ${{ runner.os }}-uv-
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
+          ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: uv sync --all-extras --dev
+      run: poetry install --no-interaction
 
     - name: Test CLI functionality
       run: |
         # Test basic CLI commands
-        uv run souschef-cli --help
+        poetry run souschef-cli --help
 
         # Test with fixture files
-        uv run souschef-cli ls tests/fixtures/sample_cookbook
-        uv run souschef-cli structure tests/fixtures/sample_cookbook
-        uv run souschef-cli metadata tests/fixtures/sample_cookbook/metadata.rb
+        poetry run souschef-cli ls tests/fixtures/sample_cookbook
+        poetry run souschef-cli structure tests/fixtures/sample_cookbook
+        poetry run souschef-cli metadata tests/fixtures/sample_cookbook/metadata.rb
 
         # Test recipe parsing
         if [ -f tests/fixtures/sample_cookbook/recipes/default.rb ]; then
-          uv run souschef-cli recipe tests/fixtures/sample_cookbook/recipes/default.rb
+          poetry run souschef-cli recipe tests/fixtures/sample_cookbook/recipes/default.rb
         fi
 
         # Test template parsing
         TEMPLATE_FILE=$(find tests/fixtures/sample_cookbook/templates/default -name '*.erb' -type f | head -n 1)
         if [ -n "$TEMPLATE_FILE" ]; then
-          uv run souschef-cli template "$TEMPLATE_FILE"
+          poetry run souschef-cli template "$TEMPLATE_FILE"
         fi
 
   security:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0  # Need full history for TruffleHog
 
-    - name: Cache uv dependencies
-      uses: actions/cache@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-
+        python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
       with:
-        version: "latest"
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v5
+      with:
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: uv sync --all-extras --dev
+      run: poetry install --no-interaction
 
     - name: Run security checks
       run: |
         # Check for known vulnerabilities in dependencies
-        uv run pip-audit
+        poetry run pip-audit
 
     - name: Check for secrets
       uses: trufflesecurity/trufflehog@main
@@ -175,39 +196,96 @@ jobs:
         base: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
         head: ${{ github.event.pull_request.head.sha || github.sha }}
 
+  ansible-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install ansible-lint
+      run: pip install ansible-lint
+
+    - name: Create test playbooks from examples
+      run: |
+        mkdir -p .ansible-lint-test
+        # Create a minimal playbook to validate ansible-lint is working
+        cat > .ansible-lint-test/test-playbook.yml << 'EOF'
+        ---
+        - name: Test playbook for linting
+          hosts: localhost
+          gather_facts: false
+          tasks:
+            - name: Debug message
+              ansible.builtin.debug:
+                msg: "Ansible-lint validation working"
+        EOF
+
+    - name: Run ansible-lint on test playbook
+      run: |
+        ansible-lint .ansible-lint-test/
+
+    - name: Lint any generated playbooks in examples
+      run: |
+        # Find and lint any YAML files that look like Ansible playbooks
+        find examples -name '*.yml' -o -name '*.yaml' | while read -r file; do
+          if grep -q 'hosts:' "$file" 2>/dev/null; then
+            echo "Linting potential playbook: $file"
+            ansible-lint "$file" || true  # Don't fail on example files
+          fi
+        done
+      continue-on-error: true
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [test, test-cli, security]
+    needs: [test, test-cli, security, ansible-lint]
+    permissions:
+      contents: read
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - name: Cache uv dependencies
-      uses: actions/cache@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v5
+      with:
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
         restore-keys: |
-          ${{ runner.os }}-uv-
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
-      with:
-        version: "latest"
+          ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: uv sync --all-extras --dev
+      run: poetry install --no-interaction
 
     - name: Build package
-      run: uv build
+      run: poetry build
 
     - name: Check package
       run: |
-        uv run twine check dist/*
+        poetry run twine check dist/*
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: dist-packages
         path: dist/
