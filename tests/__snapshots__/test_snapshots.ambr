@@ -5,7 +5,7 @@
   # Chef data bag converted to Ansible variables
   # Original: data_bags/database/production.json
   # Target: group_vars/database.yml
-
+  
   database_host: db.example.com
   database_metadata:
     converted_by: souschef
@@ -14,12 +14,12 @@
   database_pool_size: 10
   database_port: 5432
   database_username: app_user
-
+  
   '''
 # ---
 # name: test_convert_chef_deployment_strategy_snapshot
   '''
-  Error: Deployment recipe not found:
+  Error: Deployment recipe not found: 
   {
     "strategy": "rolling",
     "batch_size": 5,
@@ -30,7 +30,7 @@
       "timeout": 30
     }
   }
-
+  
   '''
 # ---
 # name: test_convert_chef_environment_to_inventory_snapshot
@@ -39,7 +39,7 @@
   # Chef environment converted to Ansible inventory group
   # Original: environments/production.rb
   # Target: inventory/group_vars/production.yml
-
+  
   chef_migration_metadata:
     converted_by: souschef
     overrides_location: environment_overrides (requires extra_vars or host_vars)
@@ -51,8 +51,8 @@
   environment_description: Production environment
   environment_name: production
   log_level: info
-
-
+  
+  
   ---
   # Add to your Ansible inventory (hosts.yml or hosts.ini):
   # [production]
@@ -60,7 +60,7 @@
   #
   # [all:children]
   # production
-
+  
   '''
 # ---
 # name: test_convert_chef_search_to_inventory_snapshot
@@ -111,7 +111,7 @@
   # Chef data bag converted to Ansible variables
   # Original: data_bags/application/staging.json
   # Target: group_vars/application.yml
-
+  
   application_cache:
     servers:
     - redis1:6379
@@ -127,7 +127,7 @@
     converted_by: souschef
     encrypted: false
     source: data_bags/application/staging.json
-
+  
   '''
 # ---
 # name: test_convert_directory_resource_to_task_snapshot
@@ -196,7 +196,7 @@
     Type: package
     Name: postgresql
     Action: install
-
+  
   Resource 2:
     Type: service
     Name: postgresql
@@ -217,17 +217,17 @@
   Resource 1:
     Type: service
     Name: apache2
-
+  
   Resource 2:
     Type: package
     Name: apache2
     Action: remove
-
+  
   Resource 3:
     Type: package
     Name: nginx
     Action: install
-
+  
   Resource 4:
     Type: service
     Name: nginx
@@ -240,7 +240,7 @@
     Name: /etc/nginx/nginx.conf
     Action: create
     Properties: {'source': 'nginx.conf.erb', 'owner': 'root', 'group': 'root', 'mode': '0644'}
-
+  
   Resource 2:
     Type: service
     Name: nginx
@@ -252,7 +252,7 @@
     Type: package
     Name: nginx
     Action: install
-
+  
   Resource 2:
     Type: template
     Name: /etc/nginx/sites-available/default
@@ -266,7 +266,7 @@
     Type: package
     Name: nginx
     Action: install
-
+  
   Resource 2:
     Type: service
     Name: nginx
