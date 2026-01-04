@@ -1,40 +1,24 @@
-# SousChef 🍳
+# Chef to Ansible migration - SousChef MCP 🍳
 
 An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 
-## Overview
+## Overview - Chef to Ansible features
 
 SousChef is a complete enterprise-grade migration platform with 34 MCP tools organized across 8 major capability areas to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ## 📦 Installation
 
-### PyPI Installation
-
-Install the latest stable release from PyPI:
-
 ```bash
-# Using pip
+# PyPI Installation
 pip install mcp-souschef
 
-# Using Poetry
-poetry add mcp-souschef
-```
-
-### Development Installation
-
-For development or to use the latest features:
-
-```bash
-# Clone the repository
+# Development Installation
 git clone https://github.com/kpeacocke/souschef.git
 cd souschef
-
-# Install with Poetry
 poetry install
-
-# Verify installation
-poetry run souschef-cli --help
 ```
+
+> **📖 For detailed installation instructions, MCP setup, and configuration, see [Installation & Setup](#%EF%B8%8F-installation--setup)**
 
 ## 🚀 Core Capabilities
 
@@ -182,7 +166,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
 
 1. **Clone and setup**:
    ```bash
-   git clone https://github.com/your-org/souschef
+   git clone https://github.com/kpeacocke/souschef
    cd souschef
    poetry install
    ```
@@ -267,7 +251,7 @@ Following enterprise-grade testing standards:
 - **Unit Tests**: Mock-based testing for individual functions (tests/test_server.py)
 - **Integration Tests**: Real cookbook testing with fixtures (tests/test_integration.py)
 - **Property-Based Tests**: Hypothesis fuzz testing for edge cases (tests/test_property_based.py)
-- **82% Coverage**: Comprehensive test coverage with goal of 95% for production readiness
+- **93% Coverage**: Comprehensive test coverage with goal of 95% for production readiness
 
 ### Quality Assurance
 - **Zero Warnings Policy**: All code passes linting without disabling checks
@@ -336,9 +320,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙋‍♀️ Support & Community
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/souschef/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/souschef/discussions)
-- **Documentation**: [Wiki](https://github.com/your-org/souschef/wiki)
+- **Issues**: [GitHub Issues](https://github.com/kpeacocke/souschef/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/kpeacocke/souschef/discussions)
+- **Documentation**: [Wiki](https://github.com/kpeacocke/souschef/wiki)
 
 ---
 
@@ -679,7 +663,7 @@ souschef/
 ### Development Standards
 
 - **Code Quality**: Zero warnings policy, type hints required, Google-style docstrings
-- **Testing**: High test coverage (82%) using pytest with goal of 100%
+- **Testing**: High test coverage (93%) using pytest with goal of 95%
 - **Linting**: Code must pass `ruff check` with no violations
 - **Formatting**: Code must be formatted with `ruff format`
 
@@ -740,7 +724,7 @@ The project includes multiple types of tests:
 
 ### Test Coverage
 
-The project maintains 82% test coverage with a goal of 95%+. Run coverage with HTML report:
+The project maintains 93% test coverage with a goal of 95%+. Run coverage with HTML report:
 
 ```bash
 poetry run pytest --cov=souschef --cov-report=html

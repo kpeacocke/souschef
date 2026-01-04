@@ -27,6 +27,23 @@ jobs:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      - name: Auto-merge Release PR
+        if: ${{ steps.release.outputs.pr }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.release.outputs.pr }}"
+          echo "Auto-merging Release PR #$PR_NUMBER"
+
+          # Wait a moment for CI to start
+          sleep 10
+
+          # Enable auto-merge (will merge when all checks pass)
+          gh pr merge "$PR_NUMBER" --auto --squash --repo ${{ github.repository }}
+
+          echo "✓ Auto-merge enabled for PR #$PR_NUMBER"
+          echo "PR will merge automatically once all status checks pass"
+
       - name: Output release information
         if: ${{ steps.release.outputs.release_created }}
         run: |

@@ -1,39 +1,12 @@
 ---
-name: 📝 Configuration
-about: Issue template configuration
-url: https://github.com/kpeacocke/souschef
----
-
-<!-- This file configures the issue templates for the repository -->
-
-Thank you for contributing to SousChef! 🍳
-
-Please choose the most appropriate template for your issue:
-
-- **🐛 Bug Report**: For reporting bugs, errors, or unexpected behavior
-- **🚀 Feature Request**: For suggesting new features or enhancements
-- **❓ Question / Help**: For usage questions and getting help
-- **🚚 Migration Support**: For help with specific Chef-to-Ansible migration projects
-
-If none of these templates fit your needs, you can [open a blank issue](https://github.com/souschef-dev/souschef/issues/new) instead.
-
-## Before Opening an Issue
-
-- **Search existing issues**: Check if your question or bug has already been reported
-- **Read the documentation**: Review the [README](../README.md) and [Contributing Guide](../CONTRIBUTING.md)
-- **Try the latest version**: Ensure you're using the most recent SousChef release
-
-## Community Guidelines
-
-- Be respectful and constructive
-- Provide clear, detailed information
-- Include code examples when relevant
-- Follow our [Code of Conduct](../CODE_OF_CONDUCT.md)
-
-## Security Issues
-
-For security vulnerabilities, please follow our [Security Policy](../SECURITY.md) instead of opening a public issue.
-
----
-
-**Happy contributing!** 🎉
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/kpeacocke/souschef/discussions
+    about: Ask questions and discuss with the community
+  - name: 📖 Documentation
+    url: https://github.com/kpeacocke/souschef/wiki
+    about: Read the project wiki and documentation
+  - name: 🔒 Security Issue
+    url: https://github.com/kpeacocke/souschef/security/advisories/new
+    about: Report a security vulnerability privately
