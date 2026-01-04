@@ -34,7 +34,7 @@ class TestMemoryUsage:
 
         tracemalloc.start()
         parse_recipe(str(recipe_path))
-        current, peak = tracemalloc.get_traced_memory()
+        _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
         # Should use less than 10MB for a small recipe
@@ -50,7 +50,7 @@ class TestMemoryUsage:
         for _ in range(100):
             parse_recipe(str(recipe_path))
 
-        current, peak = tracemalloc.get_traced_memory()
+        _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
         # Should not accumulate memory excessively
@@ -63,7 +63,7 @@ class TestMemoryUsage:
 
         tracemalloc.start()
         parse_custom_resource(str(resource_path))
-        current, peak = tracemalloc.get_traced_memory()
+        _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
         # Should use less than 5MB for a small resource
@@ -81,7 +81,7 @@ class TestMemoryUsage:
 
         tracemalloc.start()
         parse_template(str(template_path))
-        current, peak = tracemalloc.get_traced_memory()
+        _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
         # Should use less than 5MB for a small template
@@ -93,7 +93,7 @@ class TestMemoryUsage:
 
         tracemalloc.start()
         list_cookbook_structure(str(cookbook_path))
-        current, peak = tracemalloc.get_traced_memory()
+        _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
         # Should use less than 20MB for a full cookbook
@@ -286,13 +286,13 @@ class TestConcurrentProcessing:
 
         # First parse
         parse_recipe(str(recipe_path))
-        first_current, first_peak = tracemalloc.get_traced_memory()
+        _, first_peak = tracemalloc.get_traced_memory()
 
         # Parse 10 more times
         for _ in range(10):
             parse_recipe(str(recipe_path))
 
-        second_current, second_peak = tracemalloc.get_traced_memory()
+        _, second_peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
         # Memory shouldn't grow significantly
