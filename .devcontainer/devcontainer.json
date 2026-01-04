@@ -3,7 +3,8 @@
     "build": {
         "dockerfile": "Dockerfile",
         "args": {
-            "SNYK_VERSION": "latest"
+            "SNYK_VERSION": "latest",
+            "CODEQL_VERSION": "latest"
         }
     },
     "workspaceFolder": "/workspaces/souschef",

@@ -900,6 +900,8 @@ def _format_resources(resources: list[dict[str, str]]) -> str:
     """
     result = []
     for i, resource in enumerate(resources, 1):
+        if i > 1:
+            result.append("")
         result.append(f"Resource {i}:")
         result.append(f"  Type: {resource['type']}")
         result.append(f"  Name: {resource['name']}")
@@ -907,9 +909,8 @@ def _format_resources(resources: list[dict[str, str]]) -> str:
             result.append(f"  Action: {resource['action']}")
         if "properties" in resource:
             result.append(f"  Properties: {resource['properties']}")
-        result.append("")
 
-    return "\n".join(result).rstrip()
+    return "\n".join(result)
 
 
 @mcp.tool()
@@ -3939,12 +3940,14 @@ def convert_chef_databag_to_vars(
         else:
             # Generate regular YAML variables
             yaml_content = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
+            # yaml.dump adds a trailing newline, so we strip it and add back a single newline
             return f"""---
 # Chef data bag converted to Ansible variables
 # Original: data_bags/{databag_name}/{item_name}.json
 # Target: {target_scope}/{databag_name}.yml
 
-{yaml_content}"""
+{yaml_content.rstrip()}
+"""
 
     except Exception as e:
         return f"Error converting data bag to Ansible variables: {e}"
@@ -4106,7 +4109,8 @@ def convert_chef_environment_to_inventory_group(
 # Original: environments/{environment_name}.rb
 # Target: inventory/group_vars/{environment_name}.yml
 
-{inventory_config}
+{inventory_config.rstrip()}
+
 
 ---
 # Add to your Ansible inventory (hosts.yml or hosts.ini):
