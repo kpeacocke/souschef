@@ -186,7 +186,7 @@
       "nginx']['ssl_enabled",
       "ssl_enabled"
     ],
-    "jinja2_template": "\nserver {\n    listen {{ nginx']['port }};\n    server_name {{ nginx']['server_name }};\n    \n    root {{ nginx']['document_root }};\n    index index.html index.htm;\n    \n    {% if node['nginx']['ssl_enabled'] %}\n    ssl on;\n    ssl_certificate {{ nginx']['ssl_cert }};\n    {% endif %}\n    \n    location / {\n        try_files $uri $uri/ =404;\n    }\n}\n"
+    "jinja2_template": "\nserver {\n    listen {{ nginx']['port }};\n    server_name {{ nginx']['server_name }};\n\n    root {{ nginx']['document_root }};\n    index index.html index.htm;\n\n    {% if node['nginx']['ssl_enabled'] %}\n    ssl on;\n    ssl_certificate {{ nginx']['ssl_cert }};\n    {% endif %}\n\n    location / {\n        try_files $uri $uri/ =404;\n    }\n}\n"
   }
   '''
 # ---
