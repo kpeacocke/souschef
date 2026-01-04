@@ -368,11 +368,12 @@ class TestDatabagConversion:
             databag_content=databag_content, databag_name="app", item_name="config"
         )
 
-        # Verify nested structure preserved
+        # Verify nested structure preserved in YAML output
         assert "app" in result or "name" in result
         assert "myapp" in result
         assert "database" in result or "config" in result
-        assert "db.example.com" in result
+        # Check for database host value in converted YAML (not URL sanitization)
+        assert "host: db.example.com" in result or "db.example.com" in result
         assert "5432" in result
 
 
@@ -584,8 +585,8 @@ class TestEndToEndConversion:
                 text=True,
                 timeout=10,
             )
-            assert (
-                result.returncode == 0
-            ), f"Playbook syntax check failed:\n{result.stderr}"
+            assert result.returncode == 0, (
+                f"Playbook syntax check failed:\n{result.stderr}"
+            )
         finally:
             Path(temp_path).unlink(missing_ok=True)

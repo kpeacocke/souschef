@@ -298,9 +298,9 @@ class TestConcurrentProcessing:
         # Memory shouldn't grow significantly
         # Allow some growth for overhead, but not linear with iterations
         memory_growth = second_peak - first_peak
-        assert (
-            memory_growth < 10 * 1024 * 1024
-        ), f"Memory grew by {memory_growth / 1024 / 1024:.2f}MB"
+        assert memory_growth < 10 * 1024 * 1024, (
+            f"Memory grew by {memory_growth / 1024 / 1024:.2f}MB"
+        )
 
 
 class TestBenchmarkRegression:

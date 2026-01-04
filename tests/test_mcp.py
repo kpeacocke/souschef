@@ -137,9 +137,9 @@ async def test_mcp_tools_have_descriptions():
     tools = await mcp.list_tools()
 
     for tool in tools:
-        assert (
-            tool.description and len(tool.description.strip()) > 0
-        ), f"Tool '{tool.name}' has empty description"
+        assert tool.description and len(tool.description.strip()) > 0, (
+            f"Tool '{tool.name}' has empty description"
+        )
 
 
 def test_mcp_server_is_fastmcp_instance():
