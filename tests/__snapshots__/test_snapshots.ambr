@@ -1,0 +1,274 @@
+# serializer version: 1
+# name: test_convert_chef_databag_to_vars_snapshot
+  '''
+  ---
+  # Chef data bag converted to Ansible variables
+  # Original: data_bags/database/production.json
+  # Target: group_vars/database.yml
+  
+  database_host: db.example.com
+  database_metadata:
+    converted_by: souschef
+    encrypted: false
+    source: data_bags/database/production.json
+  database_pool_size: 10
+  database_port: 5432
+  database_username: app_user
+  
+  '''
+# ---
+# name: test_convert_chef_deployment_strategy_snapshot
+  '''
+  Error: Deployment recipe not found: 
+  {
+    "strategy": "rolling",
+    "batch_size": 5,
+    "max_failures": 2,
+    "health_check": {
+      "type": "http",
+      "endpoint": "/health",
+      "timeout": 30
+    }
+  }
+  
+  '''
+# ---
+# name: test_convert_chef_environment_to_inventory_snapshot
+  '''
+  ---
+  # Chef environment converted to Ansible inventory group
+  # Original: environments/production.rb
+  # Target: inventory/group_vars/production.yml
+  
+  chef_migration_metadata:
+    converted_by: souschef
+    overrides_location: environment_overrides (requires extra_vars or host_vars)
+    source_environment: production
+    variable_precedence: group_vars (equivalent to Chef default_attributes)
+  cookbook_version_constraints:
+    nginx: = 2.0.0
+    postgresql: ~> 3.1
+  environment_description: Production environment
+  environment_name: production
+  log_level: info
+  
+  
+  ---
+  # Add to your Ansible inventory (hosts.yml or hosts.ini):
+  # [production]
+  # # Add your hosts here
+  #
+  # [all:children]
+  # production
+  
+  '''
+# ---
+# name: test_convert_chef_search_to_inventory_snapshot
+  '''
+  {
+    "inventory_type": "dynamic",
+    "groups": {
+      "role_webserver": {
+        "hosts": [
+          "# Hosts with role: webserver"
+        ],
+        "vars": {},
+        "children": []
+      },
+      "environment_production": {
+        "hosts": [
+          "# Hosts in environment: production"
+        ],
+        "vars": {
+          "environment": "production"
+        },
+        "children": []
+      },
+      "combined_search_results": {
+        "children": [
+          "role_webserver",
+          "environment_production"
+        ],
+        "vars": {
+          "chef_search_query": "role:webserver AND environment:production"
+        }
+      }
+    },
+    "host_patterns": [],
+    "variables": {
+      "role_webserver_role": "webserver"
+    },
+    "dynamic_script_needed": true
+  }
+  '''
+# ---
+# name: test_convert_cron_resource_to_task_snapshot
+  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+# ---
+# name: test_convert_databag_with_nested_structure_snapshot
+  '''
+  ---
+  # Chef data bag converted to Ansible variables
+  # Original: data_bags/application/staging.json
+  # Target: group_vars/application.yml
+  
+  application_cache:
+    servers:
+    - redis1:6379
+    - redis2:6379
+    type: redis
+  application_database:
+    credentials:
+      password_key: vault/db/password
+      username: app
+    host: localhost
+    port: 5432
+  application_metadata:
+    converted_by: souschef
+    encrypted: false
+    source: data_bags/application/staging.json
+  
+  '''
+# ---
+# name: test_convert_directory_resource_to_task_snapshot
+  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+# ---
+# name: test_convert_execute_resource_to_task_snapshot
+  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+# ---
+# name: test_convert_file_resource_to_task_snapshot
+  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+# ---
+# name: test_convert_group_resource_to_task_snapshot
+  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+# ---
+# name: test_convert_inspec_to_molecule_snapshot
+  'Error: No controls found in InSpec profile'
+# ---
+# name: test_convert_inspec_to_testinfra_snapshot
+  'Error: No controls found in InSpec profile'
+# ---
+# name: test_convert_package_resource_to_task_snapshot
+  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+# ---
+# name: test_convert_service_resource_to_task_snapshot
+  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+# ---
+# name: test_convert_template_resource_to_task_snapshot
+  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+# ---
+# name: test_convert_user_resource_to_task_snapshot
+  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+# ---
+# name: test_parse_complex_erb_template_snapshot
+  '''
+  {
+    "variables": [
+      "description",
+      "feature",
+      "port",
+      "server",
+      "server_name"
+    ],
+    "jinja2_template": "\n# {{ description }}\n# Generated on <%= Time.now.strftime('%Y-%m-%d') %>\n\n[main]\nserver_name = {{ server_name }}\nport = {{ port }}\n\n<% servers.each do |server| -%>\n[server_{{ server['name'] }}]\nhost = {{ server['host'] }}\nport = {{ server['port'] }}\n{% if server['ssl_enabled'] - %}\nssl = true\ncert = {{ server['ssl_cert'] }}\n<% end -%>\n<% end -%>\n\n{% if not disabled_features.empty? - %}\n[disabled]\n<% disabled_features.each do |feature| -%>\n{{ feature }} = false\n<% end -%>\n<% end -%>\n"
+  }
+  '''
+# ---
+# name: test_parse_erb_template_snapshot
+  '''
+  {
+    "variables": [
+      "nginx",
+      "nginx']['document_root",
+      "nginx']['port",
+      "nginx']['server_name",
+      "nginx']['ssl_cert",
+      "nginx']['ssl_enabled",
+      "ssl_enabled"
+    ],
+    "jinja2_template": "\nserver {\n    listen {{ nginx']['port }};\n    server_name {{ nginx']['server_name }};\n\n    root {{ nginx']['document_root }};\n    index index.html index.htm;\n\n    {% if node['nginx']['ssl_enabled'] %}\n    ssl on;\n    ssl_certificate {{ nginx']['ssl_cert }};\n    {% endif %}\n\n    location / {\n        try_files $uri $uri/ =404;\n    }\n}\n"
+  }
+  '''
+# ---
+# name: test_parse_recipe_with_guards_snapshot
+  '''
+  Resource 1:
+    Type: package
+    Name: postgresql
+    Action: install
+  
+  Resource 2:
+    Type: service
+    Name: postgresql
+    Action: start
+  '''
+# ---
+# name: test_parse_recipe_with_include_recipe_snapshot
+  '''
+  Resource 1:
+    Type: template
+    Name: /etc/app/config.yml
+    Action: create
+    Properties: {'source': 'config.yml.erb'}
+  '''
+# ---
+# name: test_parse_recipe_with_multiple_actions_snapshot
+  '''
+  Resource 1:
+    Type: service
+    Name: apache2
+  
+  Resource 2:
+    Type: package
+    Name: apache2
+    Action: remove
+  
+  Resource 3:
+    Type: package
+    Name: nginx
+    Action: install
+  
+  Resource 4:
+    Type: service
+    Name: nginx
+  '''
+# ---
+# name: test_parse_recipe_with_notifies_snapshot
+  '''
+  Resource 1:
+    Type: template
+    Name: /etc/nginx/nginx.conf
+    Action: create
+    Properties: {'source': 'nginx.conf.erb', 'owner': 'root', 'group': 'root', 'mode': '0644'}
+  
+  Resource 2:
+    Type: service
+    Name: nginx
+  '''
+# ---
+# name: test_parse_recipe_with_variables_snapshot
+  '''
+  Resource 1:
+    Type: package
+    Name: nginx
+    Action: install
+  
+  Resource 2:
+    Type: template
+    Name: /etc/nginx/sites-available/default
+    Action: create
+    Properties: {'source': 'default-site.conf.erb'}
+  '''
+# ---
+# name: test_parse_simple_recipe_snapshot
+  '''
+  Resource 1:
+    Type: package
+    Name: nginx
+    Action: install
+  
+  Resource 2:
+    Type: service
+    Name: nginx
+  '''
+# ---

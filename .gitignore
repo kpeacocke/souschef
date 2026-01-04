@@ -30,7 +30,12 @@ MANIFEST
 .pytest_cache/
 .coverage
 coverage.xml
+coverage.json
 htmlcov/
+
+# Mutation testing
+.mutmut-cache
+mutants/
 
 # Snyk
 requirements.txt
@@ -73,3 +78,8 @@ Thumbs.db
 
 # Snyk Security Extension - AI Rules (auto-generated)
 .github/instructions/snyk_rules.instructions.md
+
+# CodeQL Security Scanning
+.codeql-db/
+codeql-results/
+*.sarif

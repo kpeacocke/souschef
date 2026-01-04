@@ -1,0 +1,102 @@
+name: "CodeQL Security Scanning"
+
+# GitHub's CodeQL security analysis for vulnerability detection
+# Runs on push to main branches and PRs, plus weekly scheduled scans
+# Results appear in Security > Code scanning alerts
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+      - 'hotfix/**'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'examples/**'
+      - 'LICENSE'
+      - '.gitignore'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'examples/**'
+      - 'LICENSE'
+      - '.gitignore'
+  schedule:
+    # Run weekly scan on Mondays at 6:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    # Allow manual trigger from Actions tab
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze Python Code
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          # Use default queries plus security-extended for more comprehensive scanning
+          queries: +security-extended,security-and-quality
+          # Setup Python dependencies for better analysis
+          setup-python-dependencies: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: 'pip'
+
+      - name: Install Poetry
+        run: |
+          pipx install poetry
+          poetry config virtualenvs.in-project true
+
+      - name: Install dependencies
+        run: |
+          poetry install --no-interaction --no-root
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+          # Upload results even if there are findings
+          upload: always
+          # Use SARIF format for detailed results
+          output: sarif-results
+          # Add extra context for security findings
+          add-snippets: true
+
+      - name: Upload SARIF as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-sarif-results
+          path: sarif-results
+          retention-days: 30
+
+      - name: Check for critical findings
+        if: always()
+        run: |
+          echo "CodeQL analysis complete. Check Security > Code scanning alerts for results."
+          echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

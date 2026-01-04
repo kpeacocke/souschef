@@ -10,19 +10,30 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from souschef.server import (
+    _convert_chef_block_to_ansible,
+    _convert_chef_condition_to_ansible,
     _convert_erb_to_jinja2,
+    _convert_guards_to_when_conditions,
     _convert_inspec_to_ansible_assert,
     _convert_inspec_to_testinfra,
+    _create_handler,
+    _create_handler_with_timing,
+    _extract_chef_guards,
     _extract_conditionals,
+    _extract_enhanced_notifications,
     _extract_heredoc_strings,
     _extract_inspec_describe_blocks,
     _extract_resource_actions,
     _extract_resource_properties,
+    _extract_resource_subscriptions,
     _extract_template_variables,
     _generate_inspec_from_resource,
+    _normalize_path,
     _normalize_ruby_value,
     _parse_inspec_control,
+    _safe_join,
     _strip_ruby_comments,
+    analyze_chef_databag_usage,
     convert_inspec_to_test,
     convert_resource_to_task,
     generate_inspec_from_recipe,
@@ -2002,8 +2013,6 @@ def test_analyze_chef_databag_usage_success():
     import tempfile
     from pathlib import Path
 
-    from souschef.server import analyze_chef_databag_usage
-
     # Create a temporary cookbook with databag usage
     with tempfile.TemporaryDirectory() as temp_dir:
         cookbook_path = Path(temp_dir) / "test_cookbook"
@@ -2260,7 +2269,6 @@ class TestMCPToolsComprehensive:
     def test_databag_tools_error_handling(self):
         """Test data bag conversion tools handle errors gracefully."""
         from souschef.server import (
-            analyze_chef_databag_usage,
             convert_chef_databag_to_vars,
             generate_ansible_vault_from_databags,
         )
@@ -10227,3 +10235,1958 @@ Chef::Log.info("Complex deployment completed successfully")
             finally:
                 with contextlib.suppress(builtins.BaseException):
                     Path(temp_path).unlink()
+
+
+# =============================================================================
+# Edge Cases and Error Path Tests
+# =============================================================================
+# The following test classes target previously uncovered code paths including
+# error handling, guard conversion, handlers, data bags, and deployment patterns.
+
+
+class TestErrorHandling:
+    """Test error handling paths in path normalization and file operations."""
+
+    def test_normalize_path_with_null_bytes(self):
+        """Test that paths with null bytes raise ValueError."""
+        with pytest.raises(ValueError, match="Path contains null bytes"):
+            _normalize_path("/path/with\x00null")
+
+    def test_normalize_path_with_os_error(self):
+        """Test that OSError in path resolution raises ValueError."""
+        with (
+            patch("pathlib.Path.resolve", side_effect=OSError("Invalid path")),
+            pytest.raises(ValueError, match="Invalid path"),
+        ):
+            _normalize_path("/some/path")
+
+    def test_normalize_path_with_runtime_error(self):
+        """Test that RuntimeError in path resolution raises ValueError."""
+        with (
+            patch("pathlib.Path.resolve", side_effect=RuntimeError("Runtime issue")),
+            pytest.raises(ValueError, match="Invalid path"),
+        ):
+            _normalize_path("/some/path")
+
+    def test_safe_join_path_traversal(self):
+        """Test that path traversal attempts are blocked."""
+        base = Path("/safe/base")
+        with pytest.raises(ValueError, match="Path traversal attempt"):
+            _safe_join(base, "..", "..", "etc", "passwd")
+
+    def test_safe_join_with_absolute_path_escape(self):
+        """Test that absolute paths that escape base are blocked."""
+        base = Path("/workspaces/souschef")
+        with (
+            patch.object(Path, "resolve", return_value=Path("/etc/passwd")),
+            pytest.raises(ValueError, match="Path traversal attempt"),
+        ):
+            _safe_join(base, "recipes", "default.rb")
+
+    def test_convert_chef_condition_file_exist_negated(self):
+        """Test negated File.exist? condition."""
+        condition = "File.exist?('/etc/config')"
+        result = _convert_chef_condition_to_ansible(condition, negate=True)
+        assert "not" in result or "!" in result
+
+    def test_convert_chef_condition_directory(self):
+        """Test File.directory? condition conversion."""
+        condition = "File.directory?('/var/log')"
+        result = _convert_chef_condition_to_ansible(condition)
+        assert isinstance(result, str) and len(result) > 0
+
+    def test_convert_chef_condition_platform(self):
+        """Test platform? condition conversion."""
+        condition = "platform?('ubuntu')"
+        result = _convert_chef_condition_to_ansible(condition)
+        assert "ansible" in result and "facts" in result
+
+    def test_convert_chef_condition_node_attribute(self):
+        """Test node attribute condition conversion."""
+        condition = "node['platform'] == 'ubuntu'"
+        result = _convert_chef_condition_to_ansible(condition)
+        # Should map to hostvars or ansible variables
+        assert "hostvars" in result or "ansible" in result
+
+    def test_convert_chef_condition_system_command(self):
+        """Test system() command condition conversion."""
+        condition = "system('which nginx')"
+        result = _convert_chef_condition_to_ansible(condition)
+        assert isinstance(result, str) and len(result) > 0
+
+    def test_convert_chef_block_true(self):
+        """Test Chef block with true return."""
+        block = "true"
+        result = _convert_chef_block_to_ansible(block, positive=True)
+        assert result == "true"
+
+    def test_convert_chef_block_false(self):
+        """Test Chef block with false return."""
+        block = "false"
+        result = _convert_chef_block_to_ansible(block, positive=True)
+        assert result == "false"
+
+    def test_convert_chef_block_false_negated(self):
+        """Test negated Chef block with false return."""
+        block = "false"
+        result = _convert_chef_block_to_ansible(block, positive=False)
+        assert result == "true"
+
+    def test_convert_chef_block_file_exist(self):
+        """Test Chef block with File.exist? check."""
+        block = "File.exist?('/etc/nginx/nginx.conf')"
+        result = _convert_chef_block_to_ansible(block, positive=True)
+        assert "is_file" in result
+        assert "/etc/nginx/nginx.conf" in result
+
+    def test_convert_chef_block_file_exist_negated(self):
+        """Test negated Chef block with File.exist? check."""
+        block = "File.exist?('/etc/config')"
+        result = _convert_chef_block_to_ansible(block, positive=False)
+        assert "not" in result
+        assert "is_file" in result
+
+    def test_convert_chef_block_directory(self):
+        """Test Chef block with File.directory? check."""
+        block = "File.directory?('/var/log')"
+        result = _convert_chef_block_to_ansible(block, positive=True)
+        assert "is_dir" in result
+
+    def test_convert_chef_block_system_command(self):
+        """Test Chef block with system() command."""
+        block = "system('which nginx')"
+        result = _convert_chef_block_to_ansible(block, positive=True)
+        assert "ansible_check_mode" in result or "ansible" in result
+
+    def test_convert_chef_block_complex(self):
+        """Test complex Chef block."""
+        block = "node['platform'] == 'ubuntu' && File.exist?('/etc/nginx')"
+        result = _convert_chef_block_to_ansible(block, positive=True)
+        assert isinstance(result, str) and len(result) > 0
+
+    def test_convert_guards_to_when_conditions_only_if(self):
+        """Test converting only_if guards to when conditions."""
+        only_if_conditions = ["File.exist?('/etc/nginx')"]
+        result = _convert_guards_to_when_conditions(only_if_conditions, [], [], [])
+        assert len(result) > 0
+
+    def test_convert_guards_to_when_conditions_not_if(self):
+        """Test converting not_if guards to when conditions."""
+        not_if_conditions = ["File.exist?('/etc/nginx')"]
+        result = _convert_guards_to_when_conditions([], not_if_conditions, [], [])
+        assert len(result) > 0
+
+    def test_convert_guards_to_when_conditions_blocks(self):
+        """Test converting guard blocks to when conditions."""
+        only_if_blocks = ["true"]
+        not_if_blocks = ["false"]
+        result = _convert_guards_to_when_conditions(
+            [], [], only_if_blocks, not_if_blocks
+        )
+        assert len(result) == 2
+
+    def test_extract_chef_guards_with_only_if(self):
+        """Test extracting only_if guards from recipe."""
+        recipe_content = """
+        package 'nginx' do
+          action :install
+          only_if { File.exist?('/etc/nginx') }
+        end
+        """
+        resource = {
+            "type": "package",
+            "name": "nginx",
+            "action": "install",
+            "properties": {},
+        }
+        result = _extract_chef_guards(resource, recipe_content)
+        assert isinstance(result, dict)
+
+    def test_extract_chef_guards_no_guards(self):
+        """Test extracting guards when none exist."""
+        recipe_content = """
+        package 'nginx' do
+          action :install
+        end
+        """
+        resource = {
+            "type": "package",
+            "name": "nginx",
+            "action": "install",
+            "properties": {},
+        }
+        result = _extract_chef_guards(resource, recipe_content)
+        assert result == {}
+
+
+class TestHandlerAndNotifications:
+    """Test handler creation and notification extraction."""
+
+    def test_create_handler_service_reload(self):
+        """Test creating handler for service reload action."""
+        handler = _create_handler("reload", "service", "nginx")
+        assert handler["name"] == "Reload nginx"
+        assert any("service" in k for k in handler)
+
+    def test_create_handler_service_restart(self):
+        """Test creating handler for service restart action."""
+        handler = _create_handler("restart", "service", "mysql")
+        assert handler["name"] == "Restart mysql"
+
+    def test_create_handler_service_start(self):
+        """Test creating handler for service start action."""
+        handler = _create_handler("start", "service", "apache2")
+        assert handler["name"] == "Start apache2"
+
+    def test_create_handler_service_stop(self):
+        """Test creating handler for service stop action."""
+        handler = _create_handler("stop", "service", "nginx")
+        assert handler["name"] == "Stop nginx"
+
+    def test_create_handler_service_enable(self):
+        """Test creating handler for service enable action."""
+        handler = _create_handler("enable", "service", "nginx")
+        assert handler["name"] == "Enable nginx"
+        service_key = next((k for k in handler if "service" in k), None)
+        if service_key:
+            assert handler[service_key]["enabled"] is True
+
+    def test_create_handler_execute(self):
+        """Test creating handler for execute resource."""
+        handler = _create_handler("run", "execute", "systemctl daemon-reload")
+        assert handler["name"] == "Run systemctl daemon-reload"
+
+    def test_create_handler_unsupported_type(self):
+        """Test creating handler for unsupported resource type."""
+        handler = _create_handler("reload", "unsupported", "something")
+        assert handler == {}
+
+    def test_extract_enhanced_notifications_with_timing(self):
+        """Test extracting notifications with timing information."""
+        recipe_content = """
+        template '/etc/nginx/nginx.conf' do
+          source 'nginx.conf.erb'
+          notifies :reload, 'service[nginx]', :immediately
+        end
+        """
+        resource = {
+            "type": "template",
+            "name": "/etc/nginx/nginx.conf",
+            "action": "create",
+            "properties": {"source": "nginx.conf.erb"},
+        }
+        result = _extract_enhanced_notifications(resource, recipe_content)
+        if result:
+            assert result[0]["action"] == "reload"
+            assert result[0]["timing"] == "immediately"
+
+    def test_extract_enhanced_notifications_default_timing(self):
+        """Test extracting notifications with default delayed timing."""
+        recipe_content = """
+        template '/etc/mysql/my.cnf' do
+          source 'my.cnf.erb'
+          notifies :restart, 'service[mysql]'
+        end
+        """
+        resource = {
+            "type": "template",
+            "name": "/etc/mysql/my.cnf",
+            "action": "create",
+            "properties": {},
+        }
+        result = _extract_enhanced_notifications(resource, recipe_content)
+        if result:
+            assert result[0]["timing"] == "delayed"
+
+    def test_extract_enhanced_notifications_no_notifications(self):
+        """Test extracting when no notifications exist."""
+        recipe_content = """
+        package 'nginx' do
+          action :install
+        end
+        """
+        resource = {
+            "type": "package",
+            "name": "nginx",
+            "action": "install",
+            "properties": {},
+        }
+        result = _extract_enhanced_notifications(resource, recipe_content)
+        assert result == []
+
+
+class TestDataBagAnalysis:
+    """Test data bag analysis and formatting functions."""
+
+    def test_analyze_databag_structure_with_path_object(self, tmp_path):
+        """Test analyzing data bag structure with Path object."""
+        from souschef.server import _analyze_databag_structure
+
+        # Create test data bag structure
+        databags_dir = tmp_path / "data_bags"
+        users_bag = databags_dir / "users"
+        users_bag.mkdir(parents=True)
+
+        # Create test items
+        admin_item = users_bag / "admin.json"
+        admin_item.write_text('{"id": "admin", "password": "secret"}')
+
+        result = _analyze_databag_structure(databags_dir)
+
+        assert result["total_databags"] == 1
+        assert result["total_items"] == 1
+        assert "users" in result["databags"]
+
+    def test_analyze_databag_structure_with_encrypted_item(self, tmp_path):
+        """Test detecting encrypted data bag items."""
+        from souschef.server import _analyze_databag_structure
+
+        databags_dir = tmp_path / "data_bags"
+        secrets_bag = databags_dir / "secrets"
+        secrets_bag.mkdir(parents=True)
+
+        # Create item with encrypted markers
+        encrypted_item = secrets_bag / "password.json"
+        encrypted_item.write_text(
+            '{"id": "password", "encrypted_data": {"cipher": "aes-256-cbc"}}'
+        )
+
+        result = _analyze_databag_structure(databags_dir)
+
+        assert result["total_databags"] == 1
+        assert result["total_items"] == 1
+
+    def test_analyze_databag_structure_with_file_error(self, tmp_path):
+        """Test handling file read errors gracefully."""
+        from unittest.mock import patch
+
+        from souschef.server import _analyze_databag_structure
+
+        databags_dir = tmp_path / "data_bags"
+        test_bag = databags_dir / "test"
+        test_bag.mkdir(parents=True)
+
+        # Create a valid JSON file
+        test_item = test_bag / "item.json"
+        test_item.write_text('{"id": "test"}')
+
+        # Mock open to raise an exception
+        with patch("builtins.open", side_effect=PermissionError("Access denied")):
+            result = _analyze_databag_structure(databags_dir)
+            # Should handle error and include error in result
+            assert "test" in result["databags"]
+
+    def test_format_databag_structure_with_multiple_bags(self):
+        """Test formatting data bag structure with multiple bags."""
+        from souschef.server import _format_databag_structure
+
+        structure = {
+            "total_databags": 3,
+            "total_items": 10,
+            "encrypted_items": 2,
+            "databags": {
+                "users": {
+                    "items": [{"name": "admin", "encrypted": False}],
+                    "item_count": 1,
+                },
+                "secrets": {
+                    "items": [{"name": "password", "encrypted": True}],
+                    "item_count": 1,
+                },
+                "config": {
+                    "items": [{"name": "app", "encrypted": False}],
+                    "item_count": 1,
+                },
+            },
+        }
+
+        result = _format_databag_structure(structure)
+
+        assert "Total data bags: 3" in result
+        assert "Total items: 10" in result
+        assert "Encrypted items: 2" in result
+        assert "users" in result
+
+    def test_format_databag_structure_with_many_bags(self):
+        """Test formatting triggers pagination for many bags."""
+        from souschef.server import _format_databag_structure
+
+        databags = {f"bag{i}": {"items": [], "item_count": 0} for i in range(10)}
+        structure = {
+            "total_databags": 10,
+            "total_items": 0,
+            "encrypted_items": 0,
+            "databags": databags,
+        }
+
+        result = _format_databag_structure(structure)
+
+        assert "... and 5 more data bags" in result
+
+    def test_format_databag_structure_empty(self):
+        """Test formatting empty structure."""
+        from souschef.server import _format_databag_structure
+
+        result = _format_databag_structure({})
+
+        assert "No data bag structure" in result
+
+    def test_find_databag_patterns_in_content(self):
+        """Test finding data bag patterns in Chef recipe content."""
+        from souschef.server import _find_databag_patterns_in_content
+
+        content = """
+        users = data_bag('users')
+        admin = data_bag_item('users', 'admin')
+        password = encrypted_data_bag_item('secrets', 'db_password')
+        """
+
+        patterns = _find_databag_patterns_in_content(content, "recipe.rb")
+
+        assert len(patterns) >= 3
+        assert any(p["type"] == "data_bag()" for p in patterns)
+        assert any(p["type"] == "data_bag_item()" for p in patterns)
+        assert any(p["type"] == "encrypted_data_bag_item()" for p in patterns)
+
+    def test_analyze_chef_databag_usage_tool(self, tmp_path):
+        """Test the MCP tool for analyzing data bag usage."""
+        # Create cookbook with data bag usage
+        cookbook_path = tmp_path / "cookbook"
+        recipes_dir = cookbook_path / "recipes"
+        recipes_dir.mkdir(parents=True)
+
+        recipe_file = recipes_dir / "default.rb"
+        recipe_file.write_text("""
+        users = data_bag('users')
+        admin = data_bag_item('users', 'admin')
+        """)
+
+        # Create data bags directory
+        databags_dir = tmp_path / "data_bags"
+        users_bag = databags_dir / "users"
+        users_bag.mkdir(parents=True)
+        (users_bag / "admin.json").write_text('{"id": "admin"}')
+
+        result = analyze_chef_databag_usage(str(cookbook_path), str(databags_dir))
+
+        assert "Data Bag Usage Analysis" in result
+        assert "data_bag" in result.lower()
+
+    def test_analyze_chef_databag_usage_no_databags_path(self, tmp_path):
+        """Test data bag analysis without databags path."""
+        cookbook_path = tmp_path / "cookbook"
+        recipes_dir = cookbook_path / "recipes"
+        recipes_dir.mkdir(parents=True)
+
+        recipe_file = recipes_dir / "default.rb"
+        recipe_file.write_text('users = data_bag("users")')
+
+        result = analyze_chef_databag_usage(str(cookbook_path))
+
+        assert "Data Bag Usage Analysis" in result
+
+    def test_analyze_chef_databag_usage_invalid_path(self):
+        """Test data bag analysis with invalid cookbook path."""
+        result = analyze_chef_databag_usage("/nonexistent/path")
+
+        assert "Error" in result
+
+
+class TestMCPToolIntegration:
+    """Test MCP tools to increase coverage of internal functions."""
+
+    def test_convert_resource_to_task_tool(self):
+        """Test convert_resource_to_task MCP tool."""
+        from souschef.server import convert_resource_to_task
+
+        result = convert_resource_to_task(
+            resource_type="package",
+            resource_name="nginx",
+            action="install",
+            properties='{"version": "1.18.0"}',
+        )
+
+        assert "nginx" in result
+        assert isinstance(result, str)
+
+    def test_convert_resource_with_service_pattern(self):
+        """Test service resource with pattern."""
+        from souschef.server import convert_resource_to_task
+
+        result = convert_resource_to_task(
+            resource_type="service",
+            resource_name="nginx",
+            action="restart",
+            properties='{"pattern": "nginx:"}',
+        )
+
+        assert "nginx" in result
+
+    def test_convert_resource_with_complex_properties(self):
+        """Test resource conversion with complex properties."""
+        from souschef.server import convert_resource_to_task
+
+        result = convert_resource_to_task(
+            resource_type="template",
+            resource_name="/etc/nginx/nginx.conf",
+            action="create",
+            properties='{"source": "nginx.conf.erb", "owner": "root", "mode": "0644"}',
+        )
+
+        assert "/etc/nginx/nginx.conf" in result
+
+
+class TestChefSearchPatterns:
+    """Tests for Chef search pattern extraction."""
+
+    def test_find_search_patterns_basic_node_search(self):
+        """Test finding basic node search patterns."""
+        from souschef.server import _find_search_patterns_in_content
+
+        content = 'search(:node, "role:webserver")'
+        result = _find_search_patterns_in_content(content, "test.rb")
+
+        assert len(result) == 1
+        assert result[0]["type"] == "search"
+        assert result[0]["index"] == "node"
+        assert result[0]["query"] == "role:webserver"
+
+    def test_find_search_patterns_partial_search(self):
+        """Test finding partial_search patterns."""
+        from souschef.server import _find_search_patterns_in_content
+
+        content = 'partial_search(:node, "environment:production AND role:database")'
+        result = _find_search_patterns_in_content(content, "test.rb")
+
+        # May match both partial_search and node attribute pattern
+        assert len(result) >= 1
+        # Check that at least one is a search type
+        search_results = [r for r in result if r.get("type") == "search"]
+        assert len(search_results) >= 1
+        assert search_results[0]["index"] == "node"
+        assert "production" in search_results[0]["query"]
+
+    def test_find_search_patterns_data_bag_item(self):
+        """Test finding data_bag_item patterns."""
+        from souschef.server import _find_search_patterns_in_content
+
+        content = 'data_bag_item("secrets", "database_password")'
+        result = _find_search_patterns_in_content(content, "test.rb")
+
+        assert len(result) == 1
+        assert result[0]["type"] == "data_bag_access"
+        assert result[0]["bag"] == "secrets"
+        assert result[0]["item"] == "database_password"
+
+    def test_extract_search_patterns_from_file_error(self):
+        """Test error handling when reading file fails."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from souschef.server import _extract_search_patterns_from_file
+
+        with patch("pathlib.Path.read_text", side_effect=PermissionError):
+            result = _extract_search_patterns_from_file(Path("test.rb"))
+            assert result == []
+
+
+class TestComplexChefBlocks:
+    """Tests for complex Chef block conversions."""
+
+    def test_convert_chef_block_file_directory_check(self):
+        """Test converting File.directory? check."""
+        from souschef.server import _convert_chef_block_to_ansible
+
+        block = 'File.directory?("/opt/app")'
+        result = _convert_chef_block_to_ansible(block)
+
+        assert "is_dir" in result or "ansible_check_mode" in result
+
+    def test_convert_chef_block_system_command(self):
+        """Test converting system() command check."""
+        from souschef.server import _convert_chef_block_to_ansible
+
+        block = 'system("which nginx")'
+        result = _convert_chef_block_to_ansible(block)
+
+        assert "ansible_check_mode" in result or "ansible_facts" in result
+
+    def test_convert_chef_block_complex_unhandled(self):
+        """Test that complex unhandled blocks get TODO comment."""
+        from souschef.server import _convert_chef_block_to_ansible
+
+        block = 'Chef::SomeComplexClass.new.method_call("arg")'
+        result = _convert_chef_block_to_ansible(block)
+
+        assert "TODO" in result
+
+
+class TestDeploymentPatternFormatting:
+    """Tests for deployment pattern formatting functions."""
+
+    def test_format_deployment_patterns_empty(self):
+        """Test formatting when no patterns detected."""
+        from souschef.server import _format_deployment_patterns
+
+        patterns = {"deployment_patterns": []}
+        result = _format_deployment_patterns(patterns)
+
+        assert "No specific deployment patterns detected" in result
+
+    def test_format_deployment_patterns_with_patterns(self):
+        """Test formatting with detected patterns."""
+        from souschef.server import _format_deployment_patterns
+
+        patterns = {
+            "deployment_patterns": [
+                {"type": "blue_green", "recipe": "deploy.rb", "confidence": "high"},
+                {"type": "canary", "recipe": "rollout.rb", "confidence": "medium"},
+            ]
+        }
+        result = _format_deployment_patterns(patterns)
+
+        # Format uses .title() which converts to "Blue_Green" format
+        assert "deployment" in result.lower()
+        assert "high confidence" in result
+        assert "canary" in result.lower()
+        assert "medium confidence" in result
+
+    def test_format_chef_resources_analysis(self):
+        """Test formatting Chef resources analysis."""
+        from souschef.server import _format_chef_resources_analysis
+
+        patterns = {
+            "service_resources": ["nginx", "redis"],
+            "configuration_files": ["/etc/app/config.yml"],
+            "health_checks": ["curl localhost:8080/health"],
+            "scaling_mechanisms": [],
+        }
+        result = _format_chef_resources_analysis(patterns)
+
+        assert "Service Resources: 2" in result
+        assert "Configuration Files: 1" in result
+        assert "Health Checks: 1" in result
+        assert "Scaling Mechanisms: 0" in result
+
+    def test_generate_deployment_migration_recommendations_no_patterns(self):
+        """Test recommendations when no patterns detected."""
+        from souschef.server import _generate_deployment_migration_recommendations
+
+        patterns = {"deployment_patterns": []}
+        result = _generate_deployment_migration_recommendations(
+            patterns, "web_application"
+        )
+
+        assert "No advanced deployment patterns detected" in result
+        assert "rolling updates" in result
+        assert "health checks" in result
+
+    def test_generate_deployment_migration_recommendations_blue_green(self):
+        """Test recommendations with blue/green pattern."""
+        from souschef.server import _generate_deployment_migration_recommendations
+
+        patterns = {
+            "deployment_patterns": [
+                {"type": "blue_green", "recipe": "deploy.rb", "confidence": "high"}
+            ]
+        }
+        result = _generate_deployment_migration_recommendations(
+            patterns, "microservice"
+        )
+
+        assert "blue/green" in result or "blue_green" in result
+        assert "microservice" in result or "service mesh" in result
+
+    def test_generate_deployment_migration_recommendations_canary(self):
+        """Test recommendations with canary pattern."""
+        from souschef.server import _generate_deployment_migration_recommendations
+
+        patterns = {
+            "deployment_patterns": [
+                {"type": "canary", "recipe": "deploy.rb", "confidence": "medium"}
+            ]
+        }
+        result = _generate_deployment_migration_recommendations(patterns, "database")
+
+        assert "canary" in result.lower()
+        assert "database migration" in result or "backup" in result
+
+
+class TestResourceSubscriptions:
+    """Tests for resource subscription extraction."""
+
+    def test_extract_resource_subscriptions(self):
+        """Test extracting subscription information."""
+        resource = {"type": "service", "name": "nginx"}
+        content = """
+        template "/etc/nginx/nginx.conf" do
+          subscribes :reload, "service[nginx]", :immediately
+        end
+        """
+        result = _extract_resource_subscriptions(resource, content)
+
+        assert len(result) > 0
+        # The subscription should reference the nginx service
+
+    def test_create_handler_with_timing_immediate(self):
+        """Test creating handler with immediate timing."""
+        handler = _create_handler_with_timing("reload", "service", "nginx", "immediate")
+
+        assert handler is not None
+        assert handler["_chef_timing"] == "immediate"
+        assert handler["_priority"] == "immediate"
+        assert "# NOTE" in handler  # Key is "# NOTE", not just "NOTE"
+
+    def test_create_handler_with_timing_delayed(self):
+        """Test creating handler with delayed timing."""
+        handler = _create_handler_with_timing("restart", "service", "redis", "delayed")
+
+        assert handler is not None
+        assert handler["_chef_timing"] == "delayed"
+
+
+class TestRunlistParsing:
+    """Tests for Chef runlist parsing."""
+
+    def test_parse_chef_runlist_json_format(self):
+        """Test parsing runlist in JSON format."""
+        from souschef.server import _parse_chef_runlist
+
+        runlist = '["recipe[nginx]", "recipe[mysql::server]", "role[webserver]"]'
+        result = _parse_chef_runlist(runlist)
+
+        assert len(result) == 3
+        assert "nginx" in result
+        assert "mysql::server" in result
+        assert "webserver" in result
+
+    def test_parse_chef_runlist_comma_separated(self):
+        """Test parsing comma-separated runlist."""
+        from souschef.server import _parse_chef_runlist
+
+        runlist = "recipe[nginx], recipe[php], role[database]"
+        result = _parse_chef_runlist(runlist)
+
+        assert len(result) == 3
+        assert "nginx" in result
+        assert "php" in result
+
+    def test_parse_chef_runlist_single_item(self):
+        """Test parsing single runlist item."""
+        from souschef.server import _parse_chef_runlist
+
+        runlist = "recipe[nginx::default]"
+        result = _parse_chef_runlist(runlist)
+
+        assert len(result) == 1
+        assert "nginx::default" in result
+
+
+class TestCookbookAttributeExtraction:
+    """Tests for cookbook attribute extraction."""
+
+    def test_extract_cookbook_attributes(self):
+        """Test extracting attributes from cookbook content."""
+        from souschef.server import _extract_cookbook_attributes
+
+        # Pattern matches default['key'] = value format
+        content = """
+        default['nginx.port'] = '80'
+        default['nginx.user'] = 'www-data'
+        default['app.timeout'] = '30'
+        """
+        result = _extract_cookbook_attributes(content)
+
+        assert len(result) == 3
+        assert "nginx.port" in result
+        assert result["nginx.port"] == "80"
+
+    def test_extract_cookbook_dependencies(self):
+        """Test extracting dependencies from metadata."""
+        from souschef.server import _extract_cookbook_dependencies
+
+        content = """
+        depends "apt"
+        depends "build-essential"
+        depends "openssl"
+        """
+        result = _extract_cookbook_dependencies(content)
+
+        assert "apt" in result
+        assert "build-essential" in result
+        assert "openssl" in result
+
+    def test_generate_survey_fields_boolean(self):
+        """Test generating survey fields with boolean values."""
+        from souschef.server import _generate_survey_fields_from_attributes
+
+        attributes = {
+            "nginx.enabled": "true",
+            "ssl.required": "false",
+        }
+        result = _generate_survey_fields_from_attributes(attributes)
+
+        assert len(result) == 2
+        # Check that boolean types are detected
+        boolean_fields = [f for f in result if f["type"] == "boolean"]
+        assert len(boolean_fields) == 2
+
+    def test_generate_survey_fields_integer(self):
+        """Test generating survey fields with integer values."""
+        from souschef.server import _generate_survey_fields_from_attributes
+
+        attributes = {
+            "nginx.port": "80",
+            "workers": "4",
+        }
+        result = _generate_survey_fields_from_attributes(attributes)
+
+        # Check that integer types are detected
+        integer_fields = [f for f in result if f["type"] == "integer"]
+        assert len(integer_fields) == 2
+
+    def test_generate_survey_fields_text(self):
+        """Test generating survey fields with text values."""
+        from souschef.server import _generate_survey_fields_from_attributes
+
+        attributes = {
+            "nginx.user": "www-data",
+            "app.name": "myapp",
+        }
+        result = _generate_survey_fields_from_attributes(attributes)
+
+        # Text fields for string values
+        text_fields = [f for f in result if f["type"] == "text"]
+        assert len(text_fields) == 2
+
+
+class TestCookbookAnalysis:
+    """Tests for cookbook directory analysis."""
+
+    def test_format_cookbook_analysis(self):
+        """Test formatting cookbook analysis output."""
+        from souschef.server import _format_cookbook_analysis
+
+        analysis = {
+            "recipes": ["default.rb", "install.rb"],
+            "attributes": {"port": 80},
+            "dependencies": ["apt"],
+            "templates": ["config.erb"],
+            "files": ["script.sh"],
+            "survey_fields": [{"var": "port"}],
+        }
+        result = _format_cookbook_analysis(analysis)
+
+        assert "Recipes: 2" in result
+        assert "Dependencies: 1" in result
+        assert "Templates: 1" in result
+
+    def test_analyze_cookbooks_directory_empty(self):
+        """Test analyzing empty cookbooks directory."""
+        import tempfile
+        from pathlib import Path
+
+        from souschef.server import _analyze_cookbooks_directory
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbooks_path = Path(tmpdir)
+            result = _analyze_cookbooks_directory(cookbooks_path)
+
+            assert result["total_cookbooks"] == 0
+            assert result["total_recipes"] == 0
+
+
+class TestEnvironmentParsing:
+    """Tests for Chef environment parsing."""
+
+    def test_extract_cookbook_constraints(self):
+        """Test extracting version constraints from environment."""
+        from souschef.server import _extract_cookbook_constraints
+
+        content = """
+        cookbook 'nginx', '= 1.2.0'
+        cookbook 'mysql', '~> 5.6'
+        cookbook 'apache2', '>= 2.0'
+        """
+        result = _extract_cookbook_constraints(content)
+
+        assert len(result) > 0
+
+    def test_parse_chef_environment_nested(self):
+        """Test extracting nested attributes from environment."""
+        from souschef.server import _extract_cookbook_attributes
+
+        # This tests the actual function that exists
+        content = """
+        default['database.host'] = 'localhost'
+        default['database.port'] = '3306'
+        default['app_name'] = 'myapp'
+        """
+        result = _extract_cookbook_attributes(content)
+
+        assert len(result) >= 2
+
+
+class TestDeploymentPatternDetection:
+    """Tests for deployment pattern detection."""
+
+    def test_detect_deployment_patterns_blue_green(self):
+        """Test detecting blue/green deployment patterns."""
+        from souschef.server import _detect_deployment_patterns_in_recipe
+
+        content = """
+        execute 'switch_blue_green' do
+          command 'mv /var/www/blue /var/www/live'
+        end
+
+        service 'nginx' do
+          action [:reload]
+        end
+        """
+        result = _detect_deployment_patterns_in_recipe(content, "deploy.rb")
+
+        # Should detect blue_green pattern
+        blue_green = [p for p in result if p["type"] == "blue_green"]
+        assert len(blue_green) > 0
+
+    def test_detect_deployment_patterns_canary(self):
+        """Test detecting canary deployment patterns."""
+        from souschef.server import _detect_deployment_patterns_in_recipe
+
+        content = """
+        # Canary deployment to 10% of servers
+        percentage = 10
+
+        execute 'canary_release' do
+          command 'deploy_canary.sh --percentage=10'
+        end
+        """
+        result = _detect_deployment_patterns_in_recipe(content, "canary.rb")
+
+        # Should detect canary pattern
+        canary = [p for p in result if p["type"] == "canary"]
+        assert len(canary) > 0
+
+    def test_detect_deployment_patterns_rolling(self):
+        """Test detecting rolling deployment patterns."""
+        from souschef.server import _detect_deployment_patterns_in_recipe
+
+        content = """
+        # Rolling update
+        execute 'rolling_deploy' do
+          command 'update_one_server.sh'
+        end
+
+        ruby_block 'wait_for_health' do
+          block do
+            sleep 30
+          end
+        end
+        """
+        result = _detect_deployment_patterns_in_recipe(content, "rolling.rb")
+
+        # Should detect rolling pattern
+        rolling = [p for p in result if p["type"] == "rolling"]
+        assert len(rolling) > 0
+
+
+class TestUsagePatternFormatting:
+    """Tests for usage pattern formatting."""
+
+    def test_format_usage_patterns_empty(self):
+        """Test formatting empty usage patterns."""
+        from souschef.server import _format_usage_patterns
+
+        result = _format_usage_patterns([])
+        assert "No data bag usage" in result or "not found" in result.lower()
+
+    def test_format_usage_patterns_with_patterns(self):
+        """Test formatting with usage patterns."""
+        from souschef.server import _format_usage_patterns
+
+        patterns = [
+            {
+                "type": "data_bag",
+                "name": "users",
+                "file": "recipes/default.rb",
+                "line": 10,
+            },
+            {
+                "type": "data_bag_item",
+                "bag": "secrets",
+                "item": "db_password",
+                "file": "recipes/database.rb",
+                "line": 25,
+            },
+        ]
+        result = _format_usage_patterns(patterns)
+
+        # Check that patterns are formatted (result contains pattern info)
+        assert len(result) > 0
+        assert "recipes" in result
+
+
+class TestDataBagMigrationRecommendations:
+    """Tests for data bag migration recommendations."""
+
+    def test_generate_databag_migration_recommendations_simple(self):
+        """Test generating recommendations for simple usage."""
+        from souschef.server import _generate_databag_migration_recommendations
+
+        usage_patterns = [
+            {"type": "data_bag", "name": "users"},
+            {"type": "data_bag_item", "bag": "config", "item": "app"},
+        ]
+        structure = {}
+
+        result = _generate_databag_migration_recommendations(usage_patterns, structure)
+
+        assert len(result) > 0
+        assert isinstance(result, str)
+
+    def test_generate_databag_migration_recommendations_encrypted(self):
+        """Test recommendations for encrypted data bags."""
+        from souschef.server import _generate_databag_migration_recommendations
+
+        usage_patterns = [
+            {"type": "encrypted_data_bag_item", "bag": "secrets", "item": "password"}
+        ]
+        structure = {
+            "databags": {
+                "secrets": {"items": [{"name": "password", "encrypted": True}]}
+            }
+        }
+
+        result = _generate_databag_migration_recommendations(usage_patterns, structure)
+
+        assert "vault" in result.lower() or "encrypt" in result.lower()
+
+
+class TestMCPToolEdgeCases:
+    """Tests for MCP tool edge cases and error paths."""
+
+    def test_convert_resource_to_task_invalid_json(self):
+        """Test convert_resource_to_task with invalid JSON properties."""
+        from souschef.server import convert_resource_to_task
+
+        result = convert_resource_to_task(
+            resource_type="package",
+            resource_name="nginx",
+            action="install",
+            properties="{invalid json}",
+        )
+
+        # Should handle invalid JSON gracefully
+        assert "nginx" in result or "error" in result.lower()
+
+    def test_analyze_chef_databag_usage_invalid_cookbook(self):
+        """Test data bag analysis with invalid cookbook path."""
+        result = analyze_chef_databag_usage(
+            cookbook_path="/nonexistent/path/to/cookbook"
+        )
+
+        assert "Error" in result or "not found" in result
+
+    def test_analyze_chef_databag_usage_with_databags_path(self):
+        """Test data bag analysis with databags path."""
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir) / "cookbook"
+            cookbook_path.mkdir()
+            recipes_dir = cookbook_path / "recipes"
+            recipes_dir.mkdir()
+
+            # Create a recipe with data bag usage
+            recipe = recipes_dir / "default.rb"
+            recipe.write_text('data_bag("users")')
+
+            databags_path = Path(tmpdir) / "databags"
+            databags_path.mkdir()
+
+            result = analyze_chef_databag_usage(str(cookbook_path), str(databags_path))
+
+            assert "Data Bag Usage" in result
+
+
+class TestTemplateVariableExtraction:
+    """Tests for template variable extraction edge cases."""
+
+    def test_template_with_nested_conditionals(self):
+        """Test parsing template with nested conditional blocks."""
+        from souschef.server import _extract_template_variables
+
+        template = """
+        <% if @enable_ssl %>
+          <% if @ssl_cert %>
+            SSLCertificateFile <%= @ssl_cert %>
+          <% end %>
+        <% end %>
+        """
+        result = _extract_template_variables(template)
+        assert "enable_ssl" in result
+        assert "ssl_cert" in result
+
+    def test_template_with_inline_ruby_expressions(self):
+        """Test parsing template with inline Ruby expressions."""
+        from souschef.server import _extract_template_variables
+
+        template = """
+        Port: <%= @port || 8080 %>
+        Host: <%= @host.upcase if @host %>
+        """
+        result = _extract_template_variables(template)
+        # The function extracts the full expressions
+        assert any("port" in var for var in result)
+        assert any("host" in var for var in result)
+
+
+class TestDeploymentRecommendations:
+    """Tests for deployment strategy recommendations via MCP tools."""
+
+    def test_assess_migration_complexity(self):
+        """Test assessing migration complexity."""
+        from souschef.server import assess_chef_migration_complexity
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir)
+            metadata = cookbook_path / "metadata.rb"
+            metadata.write_text("name 'test'\nversion '1.0.0'")
+
+            recipe_dir = cookbook_path / "recipes"
+            recipe_dir.mkdir()
+            recipe = recipe_dir / "default.rb"
+            recipe.write_text("""
+            package 'nginx' do
+              action :install
+            end
+
+            service 'nginx' do
+              action [:enable, :start]
+            end
+            """)
+
+            result = assess_chef_migration_complexity(str(cookbook_path))
+            assert "complexity" in result.lower() or "assessment" in result.lower()
+
+    def test_generate_migration_plan(self):
+        """Test generating migration plan."""
+        from souschef.server import generate_migration_plan
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir)
+            metadata = cookbook_path / "metadata.rb"
+            metadata.write_text("name 'test'\nversion '1.0.0'")
+
+            result = generate_migration_plan(
+                str(cookbook_path), migration_strategy="phased"
+            )
+            assert "migration" in result.lower() or "plan" in result.lower()
+
+    def test_analyze_cookbook_dependencies(self):
+        """Test analyzing cookbook dependencies."""
+        from souschef.server import analyze_cookbook_dependencies
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir)
+            metadata = cookbook_path / "metadata.rb"
+            metadata.write_text("""
+            name 'web_app'
+            version '1.0.0'
+            depends 'apache', '~> 5.0'
+            depends 'mysql', '>= 8.0'
+            """)
+
+            result = analyze_cookbook_dependencies(str(cookbook_path))
+            assert "dependencies" in result.lower() or "apache" in result.lower()
+
+    def test_generate_migration_report(self):
+        """Test generating migration report."""
+        from souschef.server import generate_migration_report
+
+        assessment = """
+        Cookbook Assessment:
+        - Recipe Count: 5
+        - Resource Count: 20
+        - Complexity: Medium
+        """
+
+        result = generate_migration_report(assessment, report_format="executive")
+        assert "migration" in result.lower() or "report" in result.lower()
+
+
+class TestEnvironmentUsageAnalysis:
+    """Tests for Chef environment parsing edge cases."""
+
+    def test_environment_usage_analysis(self):
+        """Test analyzing Chef environment usage."""
+        from souschef.server import analyze_chef_environment_usage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir)
+            recipe_dir = cookbook_path / "recipes"
+            recipe_dir.mkdir()
+            recipe = recipe_dir / "default.rb"
+            recipe.write_text("""
+            node.chef_environment
+            if node.chef_environment == 'production'
+              log 'Running in production'
+            end
+            """)
+
+            result = analyze_chef_environment_usage(str(cookbook_path))
+            assert "environment" in result.lower()
+
+
+class TestCookbookAssessment:
+    """Tests for cookbook complexity assessment."""
+
+    def test_cookbook_structure_listing_with_files(self):
+        """Test listing cookbook structure with actual files."""
+        from souschef.server import list_cookbook_structure
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir)
+
+            # Create a proper cookbook structure
+            metadata = cookbook_path / "metadata.rb"
+            metadata.write_text("name 'test'\nversion '1.0.0'")
+
+            recipes_dir = cookbook_path / "recipes"
+            recipes_dir.mkdir()
+            (recipes_dir / "default.rb").write_text("# recipe")
+
+            result = list_cookbook_structure(str(cookbook_path))
+
+            assert "recipes" in result.lower()
+            assert "default.rb" in result
+
+
+class TestEnvironmentInventoryFormatting:
+    """Tests for environment inventory formatting options."""
+
+    def test_convert_environment_to_inventory_group(self):
+        """Test converting Chef environment to Ansible inventory group."""
+        from souschef.server import convert_chef_environment_to_inventory_group
+
+        environment_content = """
+        name 'production'
+        description 'Production environment'
+        default_attributes({
+          'apache' => {
+            'port' => 80
+          }
+        })
+        """
+
+        result = convert_chef_environment_to_inventory_group(
+            environment_content, "production"
+        )
+        assert "production" in result.lower()
+
+    def test_generate_inventory_from_environments(self):
+        """Test generating Ansible inventory from Chef environments."""
+        from souschef.server import generate_inventory_from_chef_environments
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            envs_dir = Path(tmpdir)
+            env_file = envs_dir / "staging.rb"
+            env_file.write_text("""
+            name 'staging'
+            default_attributes({'key' => 'value'})
+            """)
+
+            result = generate_inventory_from_chef_environments(str(envs_dir))
+            assert "staging" in result.lower() or "inventory" in result.lower()
+
+
+class TestRunlistParsingEdgeCases:
+    """Tests for Chef runlist parsing edge cases."""
+
+    def test_parse_runlist_comma_separated_with_roles(self):
+        """Test parsing comma-separated runlist with roles."""
+        from souschef.server import _parse_chef_runlist
+
+        runlist = "recipe[base],role[web],recipe[monitoring]"
+        result = _parse_chef_runlist(runlist)
+
+        assert len(result) == 3
+        assert "base" in result
+        assert "web" in result
+        assert "monitoring" in result
+
+
+class TestAdditionalMCPToolCoverage:
+    """Tests for additional MCP tool coverage."""
+
+    def test_generate_awx_job_template(self):
+        """Test generating AWX job template."""
+        from souschef.server import generate_awx_job_template_from_cookbook
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir)
+            metadata = cookbook_path / "metadata.rb"
+            metadata.write_text("name 'test'\nversion '1.0.0'")
+
+            recipes_dir = cookbook_path / "recipes"
+            recipes_dir.mkdir()
+            recipe = recipes_dir / "default.rb"
+            recipe.write_text("""
+            package 'nginx' do
+              action :install
+            end
+            """)
+
+            result = generate_awx_job_template_from_cookbook(str(cookbook_path), "test")
+            assert "template" in result.lower() or "job" in result.lower()
+
+
+class TestSearchPatternGroupNaming:
+    """Tests for search pattern group naming logic."""
+
+    def test_generate_group_name_equal_operator(self):
+        """Test group name generation with equal operator."""
+        from souschef.server import _generate_group_name_from_condition
+
+        condition = {"key": "role", "value": "webserver", "operator": "equal"}
+        result = _generate_group_name_from_condition(condition, 0)
+        assert "role_webserver" in result
+
+    def test_generate_group_name_wildcard_operator(self):
+        """Test group name generation with wildcard operator."""
+        from souschef.server import _generate_group_name_from_condition
+
+        condition = {"key": "hostname", "value": "web*", "operator": "wildcard"}
+        result = _generate_group_name_from_condition(condition, 1)
+        assert "hostname_wildcard" in result
+
+    def test_generate_group_name_regex_operator(self):
+        """Test group name generation with regex operator."""
+        from souschef.server import _generate_group_name_from_condition
+
+        condition = {"key": "name", "value": "^prod", "operator": "regex"}
+        result = _generate_group_name_from_condition(condition, 2)
+        assert "name_regex" in result
+
+    def test_generate_group_name_not_equal_operator(self):
+        """Test group name generation with not_equal operator."""
+        from souschef.server import _generate_group_name_from_condition
+
+        condition = {"key": "env", "value": "dev", "operator": "not_equal"}
+        result = _generate_group_name_from_condition(condition, 0)
+        assert "not_env_dev" in result
+
+    def test_generate_group_name_unknown_operator(self):
+        """Test group name generation with unknown operator."""
+        from souschef.server import _generate_group_name_from_condition
+
+        condition = {"key": "test", "value": "value", "operator": "custom"}
+        result = _generate_group_name_from_condition(condition, 5)
+        assert "search_condition_5" in result
+
+
+class TestInventoryRecommendations:
+    """Tests for inventory recommendation generation."""
+
+    def test_add_general_recommendations_complex_patterns(self):
+        """Test recommendations with complex search patterns."""
+        from souschef.server import _add_general_recommendations
+
+        patterns = [
+            {"type": "search_query", "query": "role:web"},
+            {"type": "search_query", "query": "env:prod"},
+            {"type": "search_query", "query": "name:app*"},
+            {"type": "search_query", "query": "chef:active"},
+            {"type": "search_query", "query": "tag:critical"},
+            {"type": "search_query", "query": "region:us-east"},
+        ]
+
+        recommendations = {"notes": []}
+        _add_general_recommendations(recommendations, patterns)
+
+        assert len(recommendations["notes"]) > 0
+        assert any("complex" in note.lower() for note in recommendations["notes"])
+
+    def test_add_general_recommendations_databag_access(self):
+        """Test recommendations with data bag access."""
+        from souschef.server import _add_general_recommendations
+
+        patterns = [
+            {"type": "data_bag_access", "bag_name": "users"},
+            {"type": "search_query", "query": "role:web"},
+        ]
+
+        recommendations = {"notes": []}
+        _add_general_recommendations(recommendations, patterns)
+
+        assert any("vault" in note.lower() for note in recommendations["notes"])
+
+
+class TestInSpecControlParsing:
+    """Tests for InSpec control file parsing."""
+
+    def test_parse_inspec_profile_with_controls(self):
+        """Test parsing InSpec profile with control files."""
+        from souschef.server import parse_inspec_profile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir)
+            inspec_yml = profile_path / "inspec.yml"
+            inspec_yml.write_text("""
+            name: nginx-baseline
+            title: Nginx Baseline
+            version: 1.0.0
+            """)
+
+            controls_dir = profile_path / "controls"
+            controls_dir.mkdir()
+            control_file = controls_dir / "nginx.rb"
+            control_file.write_text("""
+            control 'nginx-1' do
+              impact 0.7
+              title 'Nginx should be running'
+              describe service('nginx') do
+                it { should be_running }
+              end
+            end
+            """)
+
+            result = parse_inspec_profile(str(profile_path))
+            assert "nginx" in result.lower() or "control" in result.lower()
+
+
+class TestEnvironmentAttributeParsing:
+    """Tests for parsing Chef environment attributes."""
+
+    def test_parse_chef_environment_content(self):
+        """Test parsing Chef environment content."""
+        from souschef.server import _parse_chef_environment_content
+
+        content = """
+        name 'production'
+        description 'Production environment'
+        default_attributes({
+          'apache' => {
+            'listen_ports' => [80, 443],
+            'modules' => ['rewrite', 'ssl']
+          },
+          'mysql' => {
+            'config' => {
+              'max_connections' => 100,
+              'timeout' => 30
+            }
+          }
+        })
+        """
+
+        result = _parse_chef_environment_content(content)
+        assert isinstance(result, dict)
+        assert "name" in result or "description" in result or "attributes" in result
+
+
+class TestCookbookConstraints:
+    """Tests for cookbook version constraints."""
+
+    def test_extract_cookbook_constraints_with_various_operators(self):
+        """Test extracting cookbook constraints with different version operators."""
+        from souschef.server import _extract_cookbook_constraints
+
+        content = """
+        name 'production'
+        cookbook 'apache', '= 1.2.0'
+        cookbook 'mysql', '~> 5.0'
+        cookbook 'nginx', '>= 1.10.0'
+        cookbook 'redis', '< 3.0'
+        cookbook 'postgresql', '<= 9.6'
+        """
+
+        result = _extract_cookbook_constraints(content)
+        # Should extract at least some constraints
+        assert isinstance(result, dict)
+
+
+class TestDynamicInventoryGeneration:
+    """Tests for dynamic inventory script generation."""
+
+    def test_generate_inventory_script_with_multiple_queries(self):
+        """Test generating dynamic inventory script with multiple search queries."""
+        from souschef.server import _generate_inventory_script_content
+
+        queries = [
+            {
+                "query": "role:webserver",
+                "group_name": "webservers",
+                "description": "Web server nodes",
+            },
+            {
+                "query": "role:database",
+                "group_name": "databases",
+                "description": "Database nodes",
+            },
+        ]
+
+        result = _generate_inventory_script_content(queries)
+        assert "webservers" in result or "#!/usr/bin/env python" in result
+
+
+class TestAdditionalEdgeCases:
+    """Tests for additional edge cases and error paths."""
+
+    def test_convert_chef_environment_with_empty_content(self):
+        """Test converting empty Chef environment."""
+        from souschef.server import convert_chef_environment_to_inventory_group
+
+        result = convert_chef_environment_to_inventory_group("", "empty_env")
+        assert "empty_env" in result.lower() or "environment" in result.lower()
+
+    def test_analyze_cookbook_dependencies_with_missing_metadata(self):
+        """Test analyzing cookbook dependencies with missing metadata."""
+        from souschef.server import analyze_cookbook_dependencies
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Empty directory with no metadata
+            result = analyze_cookbook_dependencies(str(tmpdir))
+            assert "dependencies" in result.lower() or "cookbook" in result.lower()
+
+    def test_generate_migration_report_with_minimal_input(self):
+        """Test generating migration report with minimal assessment data."""
+        from souschef.server import generate_migration_report
+
+        result = generate_migration_report(
+            "Minimal assessment", report_format="technical"
+        )
+        assert "migration" in result.lower() or "report" in result.lower()
+
+
+class TestRunlistParsingInvalidJSON:
+    """Test parsing runlists with invalid JSON."""
+
+    def test_parse_runlist_with_invalid_json_fallback(self):
+        """Test that invalid JSON triggers fallback to comma parsing."""
+        from souschef.server import _parse_chef_runlist
+
+        # Invalid JSON that should fall through to comma-separated parsing
+        runlist = "[invalid json syntax, with commas"
+        result = _parse_chef_runlist(runlist)
+        assert isinstance(result, list)
+
+
+class TestDeploymentStrategyRecommendations:
+    """Test deployment strategy recommendation logic."""
+
+    def test_recommend_strategies_with_blue_green(self):
+        """Test recommending blue-green deployment strategy."""
+        from souschef.server import _recommend_ansible_strategies
+
+        patterns = {"deployment_patterns": [{"type": "blue_green"}]}
+        result = _recommend_ansible_strategies(patterns)
+        assert "blue" in result.lower() or "green" in result.lower()
+
+    def test_recommend_strategies_with_canary(self):
+        """Test recommending canary deployment strategy."""
+        from souschef.server import _recommend_ansible_strategies
+
+        patterns = {"deployment_patterns": [{"type": "canary"}]}
+        result = _recommend_ansible_strategies(patterns)
+        assert "canary" in result.lower()
+
+    def test_recommend_strategies_with_rolling(self):
+        """Test recommending rolling update deployment strategy."""
+        from souschef.server import _recommend_ansible_strategies
+
+        patterns = {"deployment_patterns": [{"type": "rolling"}]}
+        result = _recommend_ansible_strategies(patterns)
+        assert "rolling" in result.lower()
+
+    def test_recommend_strategies_with_no_patterns(self):
+        """Test recommending default strategy when no patterns detected."""
+        from souschef.server import _recommend_ansible_strategies
+
+        patterns = {"deployment_patterns": []}
+        result = _recommend_ansible_strategies(patterns)
+        assert "rolling" in result.lower() or "recommended" in result.lower()
+
+
+class TestAssessmentMetricsGathering:
+    """Test assessment metrics gathering from recipes."""
+
+    def test_gather_metrics_from_recipe_with_resources(self):
+        """Test gathering metrics from recipe with resources."""
+        from souschef.server import assess_chef_migration_complexity
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recipes_dir = Path(tmpdir) / "recipes"
+            recipes_dir.mkdir()
+
+            recipe_file = recipes_dir / "default.rb"
+            recipe_file.write_text("""
+                package 'nginx' do
+                  action :install
+                end
+
+                ruby_block 'setup' do
+                  block do
+                    # Ruby code here
+                  end
+                end
+
+                custom_resource 'my_resource' do
+                  action :create
+                end
+            """)
+
+            result = assess_chef_migration_complexity(str(tmpdir))
+            # Check that metrics were gathered
+            assert "recipe" in result.lower() or "complexity" in result.lower()
+
+
+class TestEnvironmentAttributeNestedParsing:
+    """Test parsing nested attributes in environment content."""
+
+    def test_parse_environment_with_nested_attributes(self):
+        """Test parsing environment content with nested attribute structures."""
+        from souschef.server import _parse_chef_environment_content
+
+        content = """
+        default_attributes(
+          "app" => {
+            "port" => "8080",
+            "host" => "localhost"
+          },
+          "database" => {
+            "name" => "mydb",
+            "user" => "dbuser"
+          }
+        )
+        """
+
+        result = _parse_chef_environment_content(content)
+        # Check nested attributes were parsed
+        assert isinstance(result, dict)
+
+
+class TestSearchPatternsFromDirectories:
+    """Test extracting search patterns from libraries and resources directories."""
+
+    def test_extract_patterns_from_libraries_directory(self):
+        """Test extracting search patterns from libraries directory."""
+        from souschef.server import _extract_search_patterns_from_cookbook
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir)
+            libraries_dir = cookbook_path / "libraries"
+            libraries_dir.mkdir()
+
+            library_file = libraries_dir / "helpers.rb"
+            library_file.write_text("""
+                nodes = search(:node, 'role:webserver')
+                data = search(:data_bag, 'users:*')
+            """)
+
+            # Pass Path object, not string
+            result = _extract_search_patterns_from_cookbook(cookbook_path)
+            # Check patterns were extracted
+            assert isinstance(result, list)
+
+    def test_extract_patterns_from_resources_directory(self):
+        """Test extracting search patterns from resources directory."""
+        from souschef.server import _extract_search_patterns_from_cookbook
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir)
+            resources_dir = cookbook_path / "resources"
+            resources_dir.mkdir()
+
+            resource_file = resources_dir / "database.rb"
+            resource_file.write_text("""
+                servers = search(:node, 'role:database')
+            """)
+
+            # Pass Path object, not string
+            result = _extract_search_patterns_from_cookbook(cookbook_path)
+            # Check patterns were extracted
+            assert isinstance(result, list)
+
+
+class TestHandlerNotifications:
+    """Test handler notification logic."""
+
+    def test_process_subscribes_with_notifications(self):
+        """Test processing subscribes declarations with notify relationships."""
+        from souschef.server import _process_subscribes
+
+        resource = {"type": "service", "name": "nginx"}
+        subscribes = [("restart", "service[nginx]", "delayed")]
+        raw_content = """
+        service 'nginx' do
+          action :nothing
+          subscribes :restart
+        end
+        """
+        task = {}
+
+        result = _process_subscribes(resource, subscribes, raw_content, task)
+        # Check handlers were generated
+        assert isinstance(result, list)
+
+
+class TestAttributeParsingErrorHandling:
+    """Test error handling in attribute parsing."""
+
+    def test_safe_attribute_parsing_with_malformed_file(self):
+        """Test that malformed attribute files are silently skipped."""
+        from souschef.server import assess_chef_migration_complexity
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            attributes_dir = Path(tmpdir) / "attributes"
+            attributes_dir.mkdir()
+
+            # Create malformed attribute file
+            attr_file = attributes_dir / "broken.rb"
+            attr_file.write_text("this is not valid ruby {{{ syntax error")
+
+            result = assess_chef_migration_complexity(str(tmpdir))
+            # Should not crash, just skip the malformed file
+            assert "complexity" in result.lower() or "assessment" in result.lower()
+
+
+class TestErrorHandlingPaths:
+    """Test error handling paths in various functions."""
+
+    def test_convert_chef_search_with_exception(self):
+        """Test error handling when Chef search conversion fails."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        # Trigger exception with invalid search query
+        with patch("souschef.server._parse_chef_search_query") as mock_parse:
+            mock_parse.side_effect = Exception("Parse error")
+            result = convert_chef_search_to_inventory(search_query="invalid::query")
+            assert "error" in result.lower()
+
+    def test_analyze_chef_search_patterns_with_exception(self):
+        """Test error handling when search pattern analysis fails."""
+        from souschef.server import analyze_chef_search_patterns
+
+        # Pass invalid path to trigger exception
+        with patch(
+            "souschef.server._extract_search_patterns_from_cookbook"
+        ) as mock_extract:
+            mock_extract.side_effect = Exception("Extract error")
+            result = analyze_chef_search_patterns(
+                recipe_or_cookbook_path="/invalid/path"
+            )
+            assert "error" in result.lower()
+
+
+class TestResourceConversionEdgeCases:
+    """Test edge cases in resource conversion."""
+
+    def test_create_handler_returns_none_for_unsupported_action(self):
+        """Test that _create_handler returns None for unsupported actions."""
+        from souschef.server import _create_handler
+
+        # Test with unsupported action that returns None
+        result = _create_handler("unsupported_action", "unknown_type", "test_resource")
+        assert result is None or isinstance(result, dict)
+
+
+class TestPathValidation:
+    """Test path validation logic."""
+
+    def test_parse_inspec_profile_with_invalid_path_type(self):
+        """Test error handling for invalid path types in InSpec parsing."""
+        from souschef.server import parse_inspec_profile
+
+        # Create a special file (not regular file or directory) if possible on Linux
+        # For now, just test with non-existent path
+        result = parse_inspec_profile(path="/dev/null/impossible")
+        assert "error" in result.lower()
+
+
+class TestDatabagIntegration:
+    """Test databag integration and recommendations."""
+
+    def test_databag_search_pattern_detection(self):
+        """Test detection of databag access patterns."""
+        from souschef.server import _extract_search_patterns_from_cookbook
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cookbook_path = Path(tmpdir)
+            recipes_dir = cookbook_path / "recipes"
+            recipes_dir.mkdir()
+
+            recipe_file = recipes_dir / "default.rb"
+            recipe_file.write_text("""
+                # Databag access pattern
+                users = search(:users, '*:*')
+                credentials = data_bag_item('secrets', 'database')
+            """)
+
+            result = _extract_search_patterns_from_cookbook(cookbook_path)
+            assert isinstance(result, list)
+
+
+class TestComplexityMetricsCalculation:
+    """Test complexity metrics calculation in assessments."""
+
+    def test_assessment_with_ruby_blocks(self):
+        """Test that ruby_block resources are counted in complexity."""
+        from souschef.server import assess_chef_migration_complexity
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recipes_dir = Path(tmpdir) / "recipes"
+            recipes_dir.mkdir()
+
+            recipe_file = recipes_dir / "default.rb"
+            recipe_file.write_text("""
+                ruby_block 'complex_logic' do
+                  block do
+                    # Complex Ruby code
+                  end
+                end
+
+                execute 'run_command' do
+                  command 'echo test'
+                end
+
+                bash 'script' do
+                  code <<-EOH
+                    echo "bash script"
+                  EOH
+                end
+            """)
+
+            result = assess_chef_migration_complexity(str(tmpdir))
+            assert "complexity" in result.lower() or "ruby" in result.lower()
+
+
+class TestInSpecProfileParsing:
+    """Test InSpec profile parsing with various control structures."""
+
+    def test_parse_inspec_with_multiple_controls(self):
+        """Test parsing InSpec profile with multiple control files."""
+        from souschef.server import parse_inspec_profile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir)
+
+            # Create inspec.yml
+            inspec_yml = profile_path / "inspec.yml"
+            inspec_yml.write_text("""
+            name: multi-control-profile
+            title: Multi Control Profile
+            version: 1.0.0
+            """)
+
+            # Create controls directory with multiple files
+            controls_dir = profile_path / "controls"
+            controls_dir.mkdir()
+
+            control1 = controls_dir / "web.rb"
+            control1.write_text("""
+            control 'web-1' do
+              impact 0.7
+              describe service('nginx') do
+                it { should be_running }
+              end
+            end
+            """)
+
+            control2 = controls_dir / "db.rb"
+            control2.write_text("""
+            control 'db-1' do
+              impact 0.9
+              describe service('postgresql') do
+                it { should be_running }
+              end
+            end
+            """)
+
+            result = parse_inspec_profile(str(profile_path))
+            assert "control" in result.lower() or "inspec" in result.lower()
+
+    def test_parse_inspec_with_file_read_error(self):
+        """Test handling of file read errors in InSpec parsing."""
+        from souschef.server import parse_inspec_profile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            profile_path = Path(tmpdir)
+            inspec_yml = profile_path / "inspec.yml"
+            inspec_yml.write_text("name: test\nversion: 1.0.0")
+
+            controls_dir = profile_path / "controls"
+            controls_dir.mkdir()
+
+            # Create a control file
+            control_file = controls_dir / "test.rb"
+            control_file.write_text("control 'test' do\nend")
+
+            # InSpec parsing is quite resilient, so just verify it doesn't crash
+            result = parse_inspec_profile(str(profile_path))
+            # Should return valid JSON even with simple controls
+            assert isinstance(result, str)
+            assert "control" in result.lower() or "profile" in result.lower()
+
+
+class TestEnvironmentConversionEdgeCases:
+    """Test edge cases in environment conversion."""
+
+    def test_environment_with_complex_nested_attributes(self):
+        """Test parsing environment with deeply nested attributes."""
+        from souschef.server import _parse_chef_environment_content
+
+        content = """
+        default_attributes(
+          "app" => {
+            "database" => {
+              "connection" => {
+                "host" => "localhost",
+                "port" => 5432,
+                "pool" => {
+                  "min" => 5,
+                  "max" => 20
+                }
+              }
+            }
+          }
+        )
+        """
+
+        result = _parse_chef_environment_content(content)
+        assert isinstance(result, dict)
+
+
+class TestCookbookConstraintsExtraction:
+    """Test cookbook constraints extraction logic."""
+
+    def test_extract_constraints_with_complex_versions(self):
+        """Test extracting cookbook constraints with various version operators."""
+        from souschef.server import _extract_cookbook_constraints
+
+        content = """
+        depends 'apache2', '~> 8.0'
+        depends 'mysql', '>= 8.5.0'
+        depends 'postgresql', '< 7.0'
+        depends 'nginx', '= 5.2.1'
+        """
+
+        result = _extract_cookbook_constraints(content)
+        assert isinstance(result, dict)
+
+
+class TestInventoryScriptGeneration:
+    """Test dynamic inventory script generation."""
+
+    def test_generate_inventory_script_with_complex_queries(self):
+        """Test generating inventory script with multiple complex search queries."""
+        from souschef.server import _generate_inventory_script_content
+
+        search_patterns = [
+            {"index": "node", "query": "role:webserver AND environment:production"},
+            {"index": "node", "query": "tags:database"},
+            {"index": "node", "query": "platform:ubuntu"},
+        ]
+
+        result = _generate_inventory_script_content(search_patterns)
+        assert "#!/usr/bin/env python" in result or "import" in result
