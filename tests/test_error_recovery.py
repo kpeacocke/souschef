@@ -92,7 +92,7 @@ def test_parse_recipe_only_comments():
 def test_parse_recipe_with_very_long_lines():
     """Test that parse_recipe handles extremely long lines."""
     long_line_recipe = f"""
-package "{'nginx' * 1000}" do
+package "{"nginx" * 1000}" do
   action :install
 end
 """
