@@ -252,13 +252,56 @@ poetry run pytest --benchmark-only
 
 ### **Commit Message Format**
 
-Use conventional commits:
-- `feat:` - New features
-- `fix:` - Bug fixes
-- `docs:` - Documentation changes
+We use [Conventional Commits](https://www.conventionalcommits.org/) for automated versioning and changelog generation:
+
+**Format**: `<type>(<scope>): <subject>`
+
+**Types**:
+- `feat:` - New features (triggers minor version bump)
+- `fix:` - Bug fixes (triggers patch version bump)
+- `docs:` - Documentation changes only
 - `test:` - Test additions or changes
-- `refactor:` - Code refactoring
+- `refactor:` - Code refactoring without feature changes
 - `perf:` - Performance improvements
+- `chore:` - Maintenance tasks, dependency updates
+- `ci:` - CI/CD configuration changes
+- `style:` - Code style/formatting changes
+
+**Breaking Changes**: Add `BREAKING CHANGE:` in the commit body or use `!` after type (triggers major version bump):
+
+```bash
+feat!: change MCP tool parameter names
+
+BREAKING CHANGE: Renamed 'path' parameter to 'file_path' for consistency
+```
+
+**Examples**:
+
+```bash
+# Feature (bumps 0.1.0 → 0.2.0)
+feat: add support for Chef Policyfiles
+
+# Bug fix (bumps 0.1.0 → 0.1.1)
+fix: handle empty recipe files without crashing
+
+# Documentation (no version bump)
+docs: update installation instructions for PyPI
+
+# Breaking change in pre-1.0.0 (bumps 0.1.0 → 0.2.0)
+feat!: redesign MCP tool parameter structure
+
+BREAKING CHANGE: All tools now use standardized parameter names
+
+# Note: Breaking changes only bump major version after reaching 1.0.0
+# Before 1.0.0, breaking changes bump the minor version (0.x.y → 0.(x+1).0)
+# After 1.0.0, breaking changes bump the major version (1.x.y → 2.0.0)
+```
+
+**Why Conventional Commits?**
+- Automated semantic versioning
+- Auto-generated changelogs
+- Clear communication of changes
+- Standardized git history
 
 ### **PR Checklist**
 

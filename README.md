@@ -6,6 +6,36 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 SousChef is a complete enterprise-grade migration platform with 34 MCP tools organized across 8 major capability areas to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, SousChef provides everything needed for a successful infrastructure automation migration.
 
+## 📦 Installation
+
+### PyPI Installation
+
+Install the latest stable release from PyPI:
+
+```bash
+# Using pip
+pip install mcp-souschef
+
+# Using Poetry
+poetry add mcp-souschef
+```
+
+### Development Installation
+
+For development or to use the latest features:
+
+```bash
+# Clone the repository
+git clone https://github.com/kpeacocke/souschef.git
+cd souschef
+
+# Install with Poetry
+poetry install
+
+# Verify installation
+poetry run souschef-cli --help
+```
+
 ## 🚀 Core Capabilities
 
 ### 1. Chef Cookbook Analysis & Parsing
