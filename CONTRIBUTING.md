@@ -287,10 +287,14 @@ fix: handle empty recipe files without crashing
 # Documentation (no version bump)
 docs: update installation instructions for PyPI
 
-# Breaking change (bumps 0.1.0 → 1.0.0)
+# Breaking change in pre-1.0.0 (bumps 0.1.0 → 0.2.0)
 feat!: redesign MCP tool parameter structure
 
 BREAKING CHANGE: All tools now use standardized parameter names
+
+# Note: Breaking changes only bump major version after reaching 1.0.0
+# Before 1.0.0, breaking changes bump the minor version (0.x.y → 0.(x+1).0)
+# After 1.0.0, breaking changes bump the major version (1.x.y → 2.0.0)
 ```
 
 **Why Conventional Commits?**
