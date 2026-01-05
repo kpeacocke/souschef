@@ -14,7 +14,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  # Wait for CI to pass before running Release Please
+  # Wait for CI and security checks to pass before running Release Please
   wait-for-ci:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -25,7 +25,34 @@ jobs:
           ref: ${{ github.sha }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           running-workflow-name: wait-for-ci
-          check-name: test  # The main CI job name
+          check-regexp: ^test\s  # Matches "test (3.14)" etc.
+          allowed-conclusions: success
+
+      - name: Wait for CodeQL to complete
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          running-workflow-name: wait-for-ci
+          check-regexp: ^Analyze  # Matches "Analyze Python Code"
+          allowed-conclusions: success
+
+      - name: Wait for Snyk to complete
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          running-workflow-name: wait-for-ci
+          check-name: snyk-code  # Snyk code scanning job
+          allowed-conclusions: success
+
+      - name: Wait for SonarCloud to complete
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          running-workflow-name: wait-for-ci
+          check-name: sonarcloud  # SonarCloud job name
           allowed-conclusions: success
 
   release-please:
