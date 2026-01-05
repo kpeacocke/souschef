@@ -43,9 +43,10 @@ def test_recipe_command_json_format(runner):
         assert len(result.output) > 0
 
 
-def test_recipe_command_nonexistent_file(runner):
+def test_recipe_command_nonexistent_file(runner, tmp_path):
     """Test recipe command with nonexistent file."""
-    result = runner.invoke(cli, ["recipe", "/nonexistent/file.rb"])
+    nonexistent = tmp_path / "nonexistent" / "file.rb"
+    result = runner.invoke(cli, ["recipe", str(nonexistent)])
 
     assert result.exit_code != 0
     assert "does not exist" in result.output.lower()
@@ -119,9 +120,10 @@ def test_ls_command(runner):
     assert "default.rb" in result.output
 
 
-def test_ls_command_nonexistent_dir(runner):
+def test_ls_command_nonexistent_dir(runner, tmp_path):
     """Test ls command with nonexistent directory."""
-    result = runner.invoke(cli, ["ls", "/nonexistent/directory"])
+    nonexistent = tmp_path / "nonexistent" / "directory"
+    result = runner.invoke(cli, ["ls", str(nonexistent)])
 
     assert result.exit_code != 0
 
@@ -187,10 +189,11 @@ def test_cookbook_command_with_dry_run(runner):
     assert "Analyzing cookbook" in result.output
 
 
-def test_cookbook_command_with_output(runner):
+def test_cookbook_command_with_output(runner, tmp_path):
     """Test cookbook analysis with output directory."""
+    output_dir = tmp_path / "output"
     result = runner.invoke(
-        cli, ["cookbook", str(FIXTURES_DIR), "--output", "/tmp/output"]
+        cli, ["cookbook", str(FIXTURES_DIR), "--output", str(output_dir)]
     )
 
     assert result.exit_code == 0
@@ -233,18 +236,19 @@ def test_invalid_command(runner):
 
 
 @pytest.mark.parametrize(
-    "command,args",
+    "command,filename",
     [
-        ("recipe", ["/nonexistent.rb"]),
-        ("template", ["/nonexistent.erb"]),
-        ("attributes", ["/nonexistent.rb"]),
-        ("resource", ["/nonexistent.rb"]),
-        ("metadata", ["/nonexistent.rb"]),
+        ("recipe", "nonexistent.rb"),
+        ("template", "nonexistent.erb"),
+        ("attributes", "nonexistent.rb"),
+        ("resource", "nonexistent.rb"),
+        ("metadata", "nonexistent.rb"),
     ],
 )
-def test_commands_with_nonexistent_files(runner, command, args):
+def test_commands_with_nonexistent_files(runner, tmp_path, command, filename):
     """Test various commands with nonexistent files."""
-    result = runner.invoke(cli, [command] + args)
+    nonexistent = tmp_path / "nonexistent" / filename
+    result = runner.invoke(cli, [command, str(nonexistent)])
 
     assert result.exit_code != 0
     assert "does not exist" in result.output.lower()
@@ -316,13 +320,14 @@ def test_template_command_extracts_variables(runner):
     )
 
 
-def test_convert_command_multiple_resources(runner):
+def test_convert_command_multiple_resources(runner, tmp_path):
     """Test converting different resource types."""
+    test_file = tmp_path / "test.txt"
     test_cases = [
         ("package", "nginx", "install"),
         ("service", "nginx", "start"),
         ("template", "/etc/nginx.conf", "create"),
-        ("file", "/tmp/test.txt", "create"),
+        ("file", str(test_file), "create"),
     ]
 
     for resource_type, name, action in test_cases:

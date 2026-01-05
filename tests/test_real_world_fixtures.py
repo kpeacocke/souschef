@@ -1,4 +1,5 @@
-"""Tests for real-world cookbook fixtures.
+"""
+Tests for real-world cookbook fixtures.
 
 This module tests parsing and conversion of real-world Chef cookbooks
 representing different Chef versions and common patterns.

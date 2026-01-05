@@ -18,7 +18,7 @@ cd souschef
 poetry install
 ```
 
-> **📖 For detailed installation instructions, MCP setup, and configuration, see [Installation & Setup](#%EF%B8%8F-installation--setup)**
+> **📖 For detailed installation instructions, MCP setup, and configuration, see [Installation & Setup](#installation--setup)**
 
 ## 🚀 Core Capabilities
 
@@ -760,8 +760,8 @@ Contributions are welcome! Please ensure:
 
 ## License
 
-TBD
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-**SousChef** - *Transforming infrastructure automation, one recipe at a time.* 🍳✨
+**SousChef** - *Ansible automation, one recipe at a time.* 🍳✨

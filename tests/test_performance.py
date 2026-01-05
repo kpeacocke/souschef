@@ -1,4 +1,5 @@
-"""Performance and load tests for SousChef MCP server.
+"""
+Performance and load tests for SousChef MCP server.
 
 This module tests memory usage, concurrent processing, large file handling,
 and performance regression prevention.

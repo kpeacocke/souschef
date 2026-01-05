@@ -841,7 +841,9 @@ def test_main():
 
 def test_convert_package_to_task():
     """Test converting a Chef package resource to Ansible task."""
-    result = convert_resource_to_task("package", "nginx", "install")
+    result = convert_resource_to_task(
+        resource_type="package", resource_name="nginx", action="install"
+    )
 
     assert "name: Install package nginx" in result
     assert "ansible.builtin.package:" in result
@@ -851,7 +853,9 @@ def test_convert_package_to_task():
 
 def test_convert_service_to_task():
     """Test converting a Chef service resource to Ansible task."""
-    result = convert_resource_to_task("service", "nginx", "start")
+    result = convert_resource_to_task(
+        resource_type="service", resource_name="nginx", action="start"
+    )
 
     assert "name: Start service nginx" in result
     assert "ansible.builtin.service:" in result
@@ -862,7 +866,9 @@ def test_convert_service_to_task():
 
 def test_convert_file_to_task():
     """Test converting a Chef file resource to Ansible task."""
-    result = convert_resource_to_task("file", "/etc/config.txt", "create")
+    result = convert_resource_to_task(
+        resource_type="file", resource_name="/etc/config.txt", action="create"
+    )
 
     assert "name: Create file /etc/config.txt" in result
     assert "ansible.builtin.file:" in result
@@ -873,7 +879,9 @@ def test_convert_file_to_task():
 
 def test_convert_directory_to_task():
     """Test converting a Chef directory resource to Ansible task."""
-    result = convert_resource_to_task("directory", "/var/www", "create")
+    result = convert_resource_to_task(
+        resource_type="directory", resource_name="/var/www", action="create"
+    )
 
     assert "name: Create directory /var/www" in result
     assert "ansible.builtin.file:" in result
@@ -884,7 +892,9 @@ def test_convert_directory_to_task():
 
 def test_convert_template_to_task():
     """Test converting a Chef template resource to Ansible task."""
-    result = convert_resource_to_task("template", "nginx.conf.erb", "create")
+    result = convert_resource_to_task(
+        resource_type="template", resource_name="nginx.conf.erb", action="create"
+    )
 
     assert "name: Create template nginx.conf.erb" in result
     assert "ansible.builtin.template:" in result
@@ -895,7 +905,9 @@ def test_convert_template_to_task():
 
 def test_convert_execute_to_task():
     """Test converting a Chef execute resource to Ansible task."""
-    result = convert_resource_to_task("execute", "systemctl daemon-reload", "run")
+    result = convert_resource_to_task(
+        resource_type="execute", resource_name="systemctl daemon-reload", action="run"
+    )
 
     assert "name: Run execute systemctl daemon-reload" in result
     assert "ansible.builtin.command:" in result
@@ -976,7 +988,7 @@ def test_convert_with_exception():
 def test_parse_template_success():
     """Test that parse_template successfully parses ERB file."""
     mock_path = MagicMock(spec=Path)
-    mock_path.__str__ = lambda self: "/path/to/template.erb"
+    mock_path.__str__ = lambda: "/path/to/template.erb"
     erb_content = "Hello <%= @name %>!"
     mock_path.read_text.return_value = erb_content
 
@@ -1130,7 +1142,7 @@ def test_convert_erb_to_jinja2_multiple_outputs():
 def test_parse_custom_resource_success():
     """Test that parse_custom_resource successfully parses resource file."""
     mock_path = MagicMock(spec=Path)
-    mock_path.__str__ = lambda self: "/path/to/resource.rb"
+    mock_path.__str__ = lambda: "/path/to/resource.rb"
     mock_path.stem = "app_config"
     resource_content = """
 property :name, String, name_property: true
@@ -2543,7 +2555,7 @@ end
         finally:
             Path(temp_path).unlink()
 
-    def test_read_file_error_cases(self):
+    def test_read_file_error_cases(self, tmp_path):
         """Test read_file error handling."""
         from souschef.server import read_file
 
@@ -2552,7 +2564,7 @@ end
         assert "Error: File not found" in result
 
         # Test with directory instead of file
-        result = read_file("/tmp")
+        result = read_file(str(tmp_path))
         assert "Error:" in result and "directory" in result
 
         # Test with permission denied (try /root if it exists)
@@ -2560,12 +2572,12 @@ end
             result = read_file("/root")
             assert "Error:" in result
 
-    def test_list_directory_success_cases(self):
+    def test_list_directory_success_cases(self, tmp_path):
         """Test list_directory with real directories."""
         from souschef.server import list_directory
 
         # Test with existing directory
-        result = list_directory("/tmp")
+        result = list_directory(str(tmp_path))
         assert isinstance(result, (list, str))
 
         # Test with workspace directory
@@ -3180,13 +3192,13 @@ class TestInDepthFunctionCoverage:
                 assert isinstance(result, str)
                 # Should handle errors gracefully
 
-    def test_directory_operations_comprehensive(self):
+    def test_directory_operations_comprehensive(self, tmp_path):
         """Test directory operations comprehensively."""
         from souschef.server import list_cookbook_structure, list_directory
 
         # Test with various directory types
         test_dirs = [
-            "/tmp",  # Writable directory
+            str(tmp_path),  # Writable directory
             "/usr",  # System directory
             "/proc",  # Virtual filesystem
         ]
@@ -4455,7 +4467,7 @@ server {
             finally:
                 Path(temp_path).unlink()
 
-    def test_error_edge_cases_comprehensive(self):
+    def test_error_edge_cases_comprehensive(self, tmp_path):
         """Test error handling and edge cases comprehensively."""
         from souschef.server import (
             list_cookbook_structure,
@@ -4485,7 +4497,7 @@ server {
             "",  # Empty path
             "relative/path/file.rb",  # Relative path
             "/etc/passwd",  # System file that exists but isn't a recipe
-            "/tmp",  # Directory instead of file (for file functions)
+            str(tmp_path),  # Directory instead of file (for file functions)
         ]
 
         for func in functions_to_test:
@@ -5311,7 +5323,7 @@ end""",
                 "name:" in result.lower() or "-" in result or "task" in result.lower()
             )
 
-    def test_error_conditions_exhaustive(self):
+    def test_error_conditions_exhaustive(self, tmp_path):
         """Test exhaustive error conditions for maximum coverage."""
         from souschef.server import (
             list_cookbook_structure,
@@ -5330,7 +5342,7 @@ end""",
             "/dev/null/impossible",  # Not a directory
             "/root/restricted"
             if Path("/root").exists()
-            else "/tmp",  # Permission issues
+            else str(tmp_path),  # Permission issues
             "",  # Empty string
             None,  # None value (might cause TypeError)
             123,  # Wrong type (might cause TypeError)
@@ -5620,7 +5632,7 @@ end
 class TestCoverageBoosterFunctions:
     """Additional functions to boost coverage to 95%."""
 
-    def test_all_mcp_tools_with_realistic_inputs(self):
+    def test_all_mcp_tools_with_realistic_inputs(self, tmp_path):
         """Test all MCP tools with more realistic inputs."""
         # Import as many MCP tools as possible and test them
         mcp_functions = []
@@ -5645,7 +5657,7 @@ class TestCoverageBoosterFunctions:
 
         # Test each function with various inputs
         test_inputs = [
-            "/tmp/test-input",
+            str(tmp_path / "test-input"),
             "/nonexistent/path",
             "",
         ]
@@ -5725,7 +5737,7 @@ class TestCoverageBoosterFunctions:
             # Functions might not exist, that's okay
             pass
 
-    def test_cookbook_structure_comprehensive(self):
+    def test_cookbook_structure_comprehensive(self, tmp_path):
         """Test cookbook structure analysis comprehensively."""
         from souschef.server import list_cookbook_structure
 
@@ -5741,7 +5753,7 @@ class TestCoverageBoosterFunctions:
         assert isinstance(result, str)
 
         # Test with various system directories
-        system_dirs = ["/etc", "/usr", "/var", "/tmp"]
+        system_dirs = ["/etc", "/usr", "/var", str(tmp_path)]
         for sys_dir in system_dirs:
             if Path(sys_dir).exists():
                 result = list_cookbook_structure(sys_dir)
@@ -7134,7 +7146,7 @@ end""",
             result = _extract_resource_actions(content)
             assert isinstance(result, dict)
 
-    def test_conversion_helper_functions(self):
+    def test_conversion_helper_functions(self, tmp_path):
         """Test conversion helper functions."""
         try:
             from souschef.server import (
@@ -7160,7 +7172,7 @@ end""",
         # Test _get_file_params
         file_tests = [
             ("/etc/nginx/nginx.conf", "create", {"owner": "root", "mode": "0644"}),
-            ("/tmp/test", "delete", {}),
+            (str(tmp_path / "test"), "delete", {}),
             ("", "", {}),
         ]
 
@@ -9433,7 +9445,7 @@ version '0.1.0' """,
             result = _extract_metadata(pattern)
             assert isinstance(result, dict)
 
-    def test_conversion_functions_comprehensive(self):
+    def test_conversion_functions_comprehensive(self, tmp_path):
         """Test all conversion and helper functions exhaustively."""
         from souschef.server import (
             _convert_chef_resource_to_ansible,
@@ -9476,7 +9488,7 @@ version '0.1.0' """,
                 {"owner": "root", "group": "root", "mode": "0644"},
             ),
             ("/var/log/app.log", "create", {"owner": "app", "mode": "0664"}),
-            ("/tmp/temp", "delete", {}),
+            (str(tmp_path / "temp"), "delete", {}),
             (
                 "/opt/app/config.json",
                 "create",

@@ -91,8 +91,8 @@ jobs:
           # Feature branches must target develop
           if [[ "$SOURCE_BRANCH" =~ ^feature/.+ ]]; then
             if [[ "$TARGET_BRANCH" != "develop" ]]; then
-              echo "✗ Feature branches must target 'develop'," \
-                   "not '$TARGET_BRANCH'"
+              echo "✗ Feature branches must target 'develop',"
+              echo "   not '$TARGET_BRANCH'"
               exit 1
             fi
             echo "✓ Feature branch correctly targets develop"
@@ -101,8 +101,8 @@ jobs:
           # Bugfix branches must target develop
           if [[ "$SOURCE_BRANCH" =~ ^bugfix/.+ ]]; then
             if [[ "$TARGET_BRANCH" != "develop" ]]; then
-              echo "✗ Bugfix branches must target 'develop'," \
-                   "not '$TARGET_BRANCH'"
+              echo "✗ Bugfix branches must target 'develop',"
+              echo "   not '$TARGET_BRANCH'"
               exit 1
             fi
             echo "✓ Bugfix branch correctly targets develop"
@@ -112,8 +112,8 @@ jobs:
           if [[ "$SOURCE_BRANCH" =~ ^support/.+ ]]; then
             if [[ "$TARGET_BRANCH" != "develop" ]] && \
                [[ "$TARGET_BRANCH" != "main" ]]; then
-              echo "✗ Support must target 'develop' or 'main'," \
-                   "not '$TARGET_BRANCH'"
+              echo "✗ Support must target 'develop' or 'main',"
+              echo "   not '$TARGET_BRANCH'"
               exit 1
             fi
             echo "✓ Support branch correctly targets $TARGET_BRANCH"
@@ -122,8 +122,8 @@ jobs:
           # Release branches must target main
           if [[ "$SOURCE_BRANCH" =~ ^release/.+ ]]; then
             if [[ "$TARGET_BRANCH" != "main" ]]; then
-              echo "✗ Release branches must target 'main'," \
-                   "not '$TARGET_BRANCH'"
+              echo "✗ Release branches must target 'main',"
+              echo "   not '$TARGET_BRANCH'"
               exit 1
             fi
             echo "✓ Release branch correctly targets main"
@@ -132,8 +132,8 @@ jobs:
           # Hotfix branches must target main
           if [[ "$SOURCE_BRANCH" =~ ^hotfix/.+ ]]; then
             if [[ "$TARGET_BRANCH" != "main" ]]; then
-              echo "✗ Hotfix branches must target 'main'," \
-                   "not '$TARGET_BRANCH'"
+              echo "✗ Hotfix branches must target 'main',"
+              echo "   not '$TARGET_BRANCH'"
               exit 1
             fi
             echo "✓ Hotfix branch correctly targets main"
@@ -142,8 +142,8 @@ jobs:
           # Develop can merge to main
           if [[ "$SOURCE_BRANCH" == "develop" ]]; then
             if [[ "$TARGET_BRANCH" != "main" ]]; then
-              echo "✗ Develop can only merge to 'main'," \
-                   "not '$TARGET_BRANCH'"
+              echo "✗ Develop can only merge to 'main',"
+              echo "   not '$TARGET_BRANCH'"
               exit 1
             fi
             echo "✓ Develop correctly targets main"
@@ -152,9 +152,7 @@ jobs:
   comment-pr-guidance:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: |
-      github.event_name == 'pull_request' &&
-      github.event.action == 'opened'
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
     permissions:
       pull-requests: write
 
@@ -180,31 +178,34 @@ jobs:
               branchType = 'develop';
 
             const guidance = {
-              'feature': '🌟 **Feature**: Merge to `develop`,' +
-                         ' then delete branch.',
-              'bugfix': '🐛 **Bugfix**: Merge to `develop`,' +
-                        ' then delete branch.',
-              'release': '🚀 **Release**: Merge to `main`,' +
-                         ' merge back to `develop`, tag release.',
-              'hotfix': '🔥 **Hotfix**: Merge to `main`,' +
-                        ' merge back to `develop`, tag release.',
-              'develop': '🔄 **Develop → Main**: Release only.' +
-                         ' Ensure all tests pass!'
+              'feature': '🌟 **Feature**: Merge to `develop`, ' +
+                         'then delete branch.',
+              'bugfix': '🐛 **Bugfix**: Merge to `develop`, ' +
+                        'then delete branch.',
+              'release': '🚀 **Release**: Merge to `main`, ' +
+                         'merge back to `develop`, tag release.',
+              'hotfix': '🔥 **Hotfix**: Merge to `main`, ' +
+                        'merge back to `develop`, tag release.',
+              'develop': '🔄 **Develop → Main**: Release only. ' +
+                         'Ensure all tests pass!'
             };
 
             if (guidance[branchType]) {
-              const body = `## Gitflow Validation\n\n` +
-                `${guidance[branchType]}\n\n` +
-                `### Checklist:\n` +
-                `- [ ] All tests passing\n` +
-                `- [ ] Code reviewed\n` +
-                `- [ ] Documentation updated\n` +
-                `- [ ] Changelog updated (if applicable)\n\n` +
-                `---\n` +
-                `*Automated gitflow guidance message.*`;
+              const body = \`## Gitflow Validation
+
+            \${guidance[branchType]}
+
+            ### Checklist:
+            - [ ] All tests passing
+            - [ ] Code reviewed
+            - [ ] Documentation updated
+            - [ ] Changelog updated (if applicable)
+
+            ---
+            _Automated gitflow guidance message._\`;
 
               await github.rest.issues.createComment({
-                issue_number: context.issue.number,
+                issue_number: pr.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 body: body

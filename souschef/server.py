@@ -13,7 +13,8 @@ mcp = FastMCP("souschef")
 
 
 def _normalize_path(path_str: str) -> Path:
-    """Normalize a file path for safe filesystem operations.
+    """
+    Normalize a file path for safe filesystem operations.
 
     This function resolves relative paths and symlinks to absolute paths,
     preventing path traversal attacks (CWE-23). Note: This MCP server
@@ -42,7 +43,8 @@ def _normalize_path(path_str: str) -> Path:
 
 
 def _safe_join(base_path: Path, *parts: str) -> Path:
-    """Safely join path components ensuring result stays within base directory.
+    """
+    Safely join path components ensuring result stays within base directory.
 
     Args:
         base_path: Normalized base path.
@@ -68,7 +70,7 @@ ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"
 METADATA_FILENAME = "metadata.rb"
 ERROR_PREFIX = "Error:"
 REGEX_WHITESPACE_QUOTE = r"\s+['\"]?"
-REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*(.*?)\nend"
+REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*([^\n]{0,20000})\nend"
 REGEX_RESOURCE_BRACKET = r"(\w+)\[([^\]]+)\]"
 INSPEC_END_INDENT = "  end"
 INSPEC_SHOULD_EXIST = "    it { should exist }"
@@ -135,7 +137,8 @@ ERB_PATTERNS = {
 
 @mcp.tool()
 def parse_template(path: str) -> str:
-    """Parse a Chef ERB template file and convert to Jinja2.
+    """
+    Parse a Chef ERB template file and convert to Jinja2.
 
     Args:
         path: Path to the ERB template file.
@@ -175,7 +178,8 @@ def parse_template(path: str) -> str:
 
 
 def _strip_ruby_comments(content: str) -> str:
-    """Remove Ruby comments from code.
+    """
+    Remove Ruby comments from code.
 
     Args:
         content: Ruby code content.
@@ -205,7 +209,8 @@ def _strip_ruby_comments(content: str) -> str:
 
 
 def _extract_output_variables(content: str, variables: set[str]) -> None:
-    """Extract variables from <%= %> output tags.
+    """
+    Extract variables from <%= %> output tags.
 
     Args:
         content: Raw ERB template content.
@@ -230,7 +235,8 @@ def _extract_output_variables(content: str, variables: set[str]) -> None:
 
 
 def _extract_node_attribute_path(node_ref: str) -> str:
-    """Extract attribute path from a node reference.
+    """
+    Extract attribute path from a node reference.
 
     Args:
         node_ref: Node reference like "node['attr']['subattr']".
@@ -253,7 +259,8 @@ def _extract_node_attribute_path(node_ref: str) -> str:
 
 
 def _extract_interpolated_variables(code: str, variables: set[str]) -> None:
-    """Extract variables from Ruby string interpolation.
+    """
+    Extract variables from Ruby string interpolation.
 
     Args:
         code: Code block content.
@@ -268,7 +275,8 @@ def _extract_interpolated_variables(code: str, variables: set[str]) -> None:
 
 
 def _extract_node_attributes(code: str, variables: set[str]) -> None:
-    """Extract node attribute references from code.
+    """
+    Extract node attribute references from code.
 
     Args:
         code: Code block content.
@@ -284,7 +292,8 @@ def _extract_node_attributes(code: str, variables: set[str]) -> None:
 
 
 def _extract_conditional_variables(code: str, variables: set[str]) -> None:
-    """Extract variables from conditional statements.
+    """
+    Extract variables from conditional statements.
 
     Args:
         code: Code block content.
@@ -299,7 +308,8 @@ def _extract_conditional_variables(code: str, variables: set[str]) -> None:
 
 
 def _extract_iterator_variables(code: str, variables: set[str]) -> None:
-    """Extract variables from .each iterators.
+    """
+    Extract variables from .each iterators.
 
     Args:
         code: Code block content.
@@ -314,7 +324,8 @@ def _extract_iterator_variables(code: str, variables: set[str]) -> None:
 
 
 def _extract_code_block_variables(content: str, variables: set[str]) -> None:
-    """Extract variables from <% %> code blocks.
+    """
+    Extract variables from <% %> code blocks.
 
     Args:
         content: Raw ERB template content.
@@ -330,7 +341,8 @@ def _extract_code_block_variables(content: str, variables: set[str]) -> None:
 
 
 def _extract_template_variables(content: str) -> set[str]:
-    """Extract all variables used in an ERB template.
+    """
+    Extract all variables used in an ERB template.
 
     Args:
         content: Raw ERB template content.
@@ -351,7 +363,8 @@ def _extract_template_variables(content: str) -> set[str]:
 
 
 def _convert_erb_to_jinja2(content: str) -> str:
-    """Convert ERB template syntax to Jinja2.
+    """
+    Convert ERB template syntax to Jinja2.
 
     Args:
         content: Raw ERB template content.
@@ -416,7 +429,8 @@ def _convert_erb_to_jinja2(content: str) -> str:
 
 
 def _extract_heredoc_strings(content: str) -> dict[str, str]:
-    """Extract heredoc strings from Ruby code.
+    """
+    Extract heredoc strings from Ruby code.
 
     Args:
         content: Ruby code content.
@@ -436,7 +450,8 @@ def _extract_heredoc_strings(content: str) -> dict[str, str]:
 
 
 def _normalize_ruby_value(value: str) -> str:
-    """Normalize Ruby value representation.
+    """
+    Normalize Ruby value representation.
 
     Args:
         value: Raw Ruby value string.
@@ -457,7 +472,8 @@ def _normalize_ruby_value(value: str) -> str:
 
 
 def _extract_common_property_options(options: str, info: dict[str, Any]) -> None:
-    """Extract common property options (default, required, name_property).
+    """
+    Extract common property options (default, required, name_property).
 
     Args:
         options: Options string from property/attribute definition.
@@ -479,7 +495,8 @@ def _extract_common_property_options(options: str, info: dict[str, Any]) -> None
 
 
 def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
-    """Extract property definitions from custom resource.
+    """
+    Extract property definitions from custom resource.
 
     Args:
         content: Raw content of custom resource file.
@@ -526,7 +543,8 @@ def _extract_resource_properties(content: str) -> list[dict[str, Any]]:
 
 
 def _extract_resource_actions(content: str) -> dict[str, Any]:
-    """Extract action definitions from custom resource.
+    """
+    Extract action definitions from custom resource.
 
     Args:
         content: Raw content of custom resource file.
@@ -565,7 +583,8 @@ def _extract_resource_actions(content: str) -> dict[str, Any]:
 
 @mcp.tool()
 def parse_custom_resource(path: str) -> str:
-    """Parse a Chef custom resource or LWRP file.
+    """
+    Parse a Chef custom resource or LWRP file.
 
     Args:
         path: Path to the custom resource (.rb) file.
@@ -612,7 +631,8 @@ def parse_custom_resource(path: str) -> str:
 
 @mcp.tool()
 def list_directory(path: str) -> list[str] | str:
-    """List the contents of a directory.
+    """
+    List the contents of a directory.
 
     Args:
         path: The path to the directory to list.
@@ -638,7 +658,8 @@ def list_directory(path: str) -> list[str] | str:
 
 @mcp.tool()
 def read_file(path: str) -> str:
-    """Read the contents of a file.
+    """
+    Read the contents of a file.
 
     Args:
         path: The path to the file to read.
@@ -664,7 +685,8 @@ def read_file(path: str) -> str:
 
 @mcp.tool()
 def read_cookbook_metadata(path: str) -> str:
-    """Parse Chef cookbook metadata.rb file.
+    """
+    Parse Chef cookbook metadata.rb file.
 
     Args:
         path: Path to the metadata.rb file.
@@ -697,7 +719,8 @@ def read_cookbook_metadata(path: str) -> str:
 
 
 def _extract_metadata(content: str) -> dict[str, str | list[str]]:
-    """Extract metadata fields from cookbook content.
+    """
+    Extract metadata fields from cookbook content.
 
     Args:
         content: Raw content of metadata.rb file.
@@ -732,7 +755,8 @@ def _extract_metadata(content: str) -> dict[str, str | list[str]]:
 
 
 def _format_metadata(metadata: dict[str, str | list[str]]) -> str:
-    """Format metadata dictionary as a readable string.
+    """
+    Format metadata dictionary as a readable string.
 
     Args:
         metadata: Dictionary of metadata fields.
@@ -753,7 +777,8 @@ def _format_metadata(metadata: dict[str, str | list[str]]) -> str:
 
 @mcp.tool()
 def parse_recipe(path: str) -> str:
-    """Parse a Chef recipe file and extract resources.
+    """
+    Parse a Chef recipe file and extract resources.
 
     Args:
         path: Path to the recipe (.rb) file.
@@ -786,7 +811,8 @@ def parse_recipe(path: str) -> str:
 
 
 def _extract_resources(content: str) -> list[dict[str, str]]:
-    """Extract Chef resources from recipe content.
+    """
+    Extract Chef resources from recipe content.
 
     Args:
         content: Raw content of recipe file.
@@ -804,7 +830,7 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
     # 2. With parentheses: package('nginx') do ... end
     # 3. Multi-line strings: package 'nginx' do\n  content <<-EOH\n  ...\n  EOH\nend
     # Use a more robust pattern that handles nested blocks
-    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do(.*?)^end"
+    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do([\s\S]{0,20000}?)^end"
 
     for match in re.finditer(pattern, clean_content, re.DOTALL | re.MULTILINE):
         resource_type = match.group(1)
@@ -837,7 +863,8 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
 
 
 def _extract_conditionals(content: str) -> list[dict[str, str]]:
-    """Extract Ruby conditionals from recipe code.
+    """
+    Extract Ruby conditionals from recipe code.
 
     Args:
         content: Ruby code content.
@@ -849,7 +876,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
     conditionals = []
 
     # Match case/when statements
-    case_pattern = r"case\s+([^\n]+)\n(.*?)^end"
+    case_pattern = r"case\s+([^\n]+)\n([\s\S]{0,5000}?)^end"
     for match in re.finditer(case_pattern, content, re.DOTALL | re.MULTILINE):
         case_expr = match.group(1).strip()
         case_body = match.group(2)
@@ -889,7 +916,8 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
 
 
 def _format_resources(resources: list[dict[str, str]]) -> str:
-    """Format resources list as a readable string.
+    """
+    Format resources list as a readable string.
 
     Args:
         resources: List of resource dictionaries.
@@ -915,7 +943,8 @@ def _format_resources(resources: list[dict[str, str]]) -> str:
 
 @mcp.tool()
 def parse_attributes(path: str) -> str:
-    """Parse a Chef attributes file and extract attribute definitions.
+    """
+    Parse a Chef attributes file and extract attribute definitions.
 
     Args:
         path: Path to the attributes (.rb) file.
@@ -948,7 +977,8 @@ def parse_attributes(path: str) -> str:
 
 
 def _extract_attributes(content: str) -> list[dict[str, str]]:
-    """Extract Chef attributes from attributes file content.
+    """
+    Extract Chef attributes from attributes file content.
 
     Args:
         content: Raw content of attributes file.
@@ -993,7 +1023,8 @@ def _extract_attributes(content: str) -> list[dict[str, str]]:
 
 
 def _format_attributes(attributes: list[dict[str, str]]) -> str:
-    """Format attributes list as a readable string.
+    """
+    Format attributes list as a readable string.
 
     Args:
         attributes: List of attribute dictionaries.
@@ -1011,7 +1042,8 @@ def _format_attributes(attributes: list[dict[str, str]]) -> str:
 
 @mcp.tool()
 def list_cookbook_structure(path: str) -> str:
-    """List the structure of a Chef cookbook directory.
+    """
+    List the structure of a Chef cookbook directory.
 
     Args:
         path: Path to the cookbook root directory.
@@ -1062,7 +1094,8 @@ def list_cookbook_structure(path: str) -> str:
 
 
 def _format_cookbook_structure(structure: dict[str, list[str]]) -> str:
-    """Format cookbook structure as a readable string.
+    """
+    Format cookbook structure as a readable string.
 
     Args:
         structure: Dictionary mapping directory names to file lists.
@@ -1085,7 +1118,8 @@ def _format_cookbook_structure(structure: dict[str, list[str]]) -> str:
 def convert_resource_to_task(
     resource_type: str, resource_name: str, action: str = "create", properties: str = ""
 ) -> str:
-    """Convert a Chef resource to an Ansible task.
+    """
+    Convert a Chef resource to an Ansible task.
 
     Args:
         resource_type: The Chef resource type (e.g., 'package', 'service').
@@ -1108,7 +1142,8 @@ def convert_resource_to_task(
 
 
 def _get_service_params(resource_name: str, action: str) -> dict[str, Any]:
-    """Get Ansible service module parameters.
+    """
+    Get Ansible service module parameters.
 
     Args:
         resource_name: Service name.
@@ -1133,7 +1168,8 @@ def _get_service_params(resource_name: str, action: str) -> dict[str, Any]:
 def _get_file_params(
     resource_name: str, action: str, resource_type: str
 ) -> dict[str, Any]:
-    """Get Ansible file module parameters.
+    """
+    Get Ansible file module parameters.
 
     Args:
         resource_name: File/directory path.
@@ -1170,7 +1206,8 @@ def _get_file_params(
 def _convert_chef_resource_to_ansible(
     resource_type: str, resource_name: str, action: str, properties: str
 ) -> dict[str, Any]:
-    """Convert Chef resource to Ansible task dictionary.
+    """
+    Convert Chef resource to Ansible task dictionary.
 
     Args:
         resource_type: The Chef resource type.
@@ -1231,7 +1268,8 @@ def _format_dict_value(key: str, value: dict[str, Any]) -> list[str]:
 
 
 def _format_ansible_task(task: dict[str, Any]) -> str:
-    """Format an Ansible task dictionary as YAML.
+    """
+    Format an Ansible task dictionary as YAML.
 
     Args:
         task: Dictionary representing an Ansible task.
@@ -1255,7 +1293,8 @@ def _format_ansible_task(task: dict[str, Any]) -> str:
 
 @mcp.tool()
 def generate_playbook_from_recipe(recipe_path: str) -> str:
-    """Generate a complete Ansible playbook from a Chef recipe.
+    """
+    Generate a complete Ansible playbook from a Chef recipe.
 
     Args:
         recipe_path: Path to the Chef recipe (.rb) file.
@@ -1291,7 +1330,8 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
 
 @mcp.tool()
 def convert_chef_search_to_inventory(search_query: str) -> str:
-    """Convert a Chef search query to Ansible inventory patterns and groups.
+    """
+    Convert a Chef search query to Ansible inventory patterns and groups.
 
     Args:
         search_query: Chef search query (e.g., "role:web AND environment:production").
@@ -1315,7 +1355,8 @@ def convert_chef_search_to_inventory(search_query: str) -> str:
 
 @mcp.tool()
 def generate_dynamic_inventory_script(search_queries: str) -> str:
-    """Generate a Python dynamic inventory script from Chef search queries.
+    """
+    Generate a Python dynamic inventory script from Chef search queries.
 
     Args:
         search_queries: JSON string containing Chef search queries and group names.
@@ -1340,7 +1381,8 @@ def generate_dynamic_inventory_script(search_queries: str) -> str:
 
 @mcp.tool()
 def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
-    """Analyze Chef recipes/cookbooks to extract search patterns for inventory planning.
+    """
+    Analyze Chef recipes/cookbooks to extract search patterns for inventory planning.
 
     Args:
         recipe_or_cookbook_path: Path to Chef recipe file or cookbook directory.
@@ -1377,7 +1419,8 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
 
 
 def _determine_search_index(normalized_query: str) -> str:
-    """Determine the search index from the query.
+    """
+    Determine the search index from the query.
 
     Args:
         normalized_query: Normalized query string.
@@ -1398,7 +1441,8 @@ def _determine_search_index(normalized_query: str) -> str:
 def _extract_query_parts(
     normalized_query: str,
 ) -> tuple[list[dict[str, str]], list[str]]:
-    """Extract conditions and operators from query.
+    """
+    Extract conditions and operators from query.
 
     Args:
         normalized_query: Normalized query string.
@@ -1428,7 +1472,8 @@ def _extract_query_parts(
 def _determine_query_complexity(
     conditions: list[dict[str, str]], operators: list[str]
 ) -> str:
-    """Determine query complexity level.
+    """
+    Determine query complexity level.
 
     Args:
         conditions: List of parsed conditions.
@@ -1446,7 +1491,8 @@ def _determine_query_complexity(
 
 
 def _parse_chef_search_query(query: str) -> dict[str, Any]:
-    """Parse a Chef search query into structured components.
+    """
+    Parse a Chef search query into structured components.
 
     Args:
         query: Chef search query string.
@@ -1475,7 +1521,8 @@ def _parse_chef_search_query(query: str) -> dict[str, Any]:
 
 
 def _parse_search_condition(condition: str) -> dict[str, str]:
-    """Parse a single search condition.
+    """
+    Parse a single search condition.
 
     Args:
         condition: Single condition string.
@@ -1535,7 +1582,8 @@ def _parse_search_condition(condition: str) -> dict[str, str]:
 
 
 def _should_use_dynamic_inventory(search_info: dict[str, Any]) -> bool:
-    """Determine if dynamic inventory is needed based on search complexity.
+    """
+    Determine if dynamic inventory is needed based on search complexity.
 
     Args:
         search_info: Parsed Chef search information.
@@ -1557,7 +1605,8 @@ def _should_use_dynamic_inventory(search_info: dict[str, Any]) -> bool:
 def _create_group_config_for_equal_condition(
     condition: dict[str, str],
 ) -> dict[str, Any]:
-    """Create group configuration for equal operator conditions.
+    """
+    Create group configuration for equal operator conditions.
 
     Args:
         condition: Condition with 'equal' operator.
@@ -1592,7 +1641,8 @@ def _create_group_config_for_equal_condition(
 def _create_group_config_for_pattern_condition(
     condition: dict[str, str],
 ) -> dict[str, Any]:
-    """Create group configuration for wildcard/regex conditions.
+    """
+    Create group configuration for wildcard/regex conditions.
 
     Args:
         condition: Condition with 'wildcard' or 'regex' operator.
@@ -1615,7 +1665,8 @@ def _create_group_config_for_pattern_condition(
 def _process_search_condition(
     condition: dict[str, str], index: int, inventory_config: dict[str, Any]
 ) -> None:
-    """Process a single search condition and update inventory config.
+    """
+    Process a single search condition and update inventory config.
 
     Args:
         condition: Search condition to process.
@@ -1642,7 +1693,8 @@ def _process_search_condition(
 def _generate_ansible_inventory_from_search(
     search_info: dict[str, Any],
 ) -> dict[str, Any]:
-    """Generate Ansible inventory structure from parsed Chef search.
+    """
+    Generate Ansible inventory structure from parsed Chef search.
 
     Args:
         search_info: Parsed Chef search information.
@@ -1680,7 +1732,8 @@ def _generate_ansible_inventory_from_search(
 
 
 def _generate_group_name_from_condition(condition: dict[str, str], index: int) -> str:
-    """Generate an Ansible group name from a search condition.
+    """
+    Generate an Ansible group name from a search condition.
 
     Args:
         condition: Parsed search condition.
@@ -1713,7 +1766,8 @@ def _generate_group_name_from_condition(condition: dict[str, str], index: int) -
 
 
 def _generate_inventory_script_content(queries_data: list[dict[str, str]]) -> str:
-    """Generate Python dynamic inventory script content.
+    """
+    Generate Python dynamic inventory script content.
 
     Args:
         queries_data: List of query/group mappings.
@@ -1851,7 +1905,8 @@ if __name__ == "__main__":
 
 
 def _extract_search_patterns_from_file(file_path: Path) -> list[dict[str, str]]:
-    """Extract Chef search patterns from a single recipe file.
+    """
+    Extract Chef search patterns from a single recipe file.
 
     Args:
         file_path: Path to the recipe file.
@@ -1868,7 +1923,8 @@ def _extract_search_patterns_from_file(file_path: Path) -> list[dict[str, str]]:
 
 
 def _extract_search_patterns_from_cookbook(cookbook_path: Path) -> list[dict[str, str]]:
-    """Extract Chef search patterns from all files in a cookbook.
+    """
+    Extract Chef search patterns from all files in a cookbook.
 
     Args:
         cookbook_path: Path to the cookbook directory.
@@ -1906,7 +1962,8 @@ def _extract_search_patterns_from_cookbook(cookbook_path: Path) -> list[dict[str
 def _find_search_patterns_in_content(
     content: str, file_path: str
 ) -> list[dict[str, str]]:
-    """Find Chef search patterns in file content.
+    """
+    Find Chef search patterns in file content.
 
     Args:
         content: File content to search.
@@ -1977,7 +2034,8 @@ def _find_search_patterns_in_content(
 
 
 def _extract_context(content: str, match: re.Match[str]) -> str:
-    """Extract context around a regex match.
+    """
+    Extract context around a regex match.
 
     Args:
         content: Full content.
@@ -2002,7 +2060,8 @@ def _extract_context(content: str, match: re.Match[str]) -> str:
 
 
 def _count_pattern_types(patterns: list[dict[str, str]]) -> dict[str, int]:
-    """Count pattern types from list of patterns.
+    """
+    Count pattern types from list of patterns.
 
     Args:
         patterns: List of discovered search patterns.
@@ -2036,7 +2095,8 @@ def _extract_groups_from_query(query: str) -> tuple[str | None, str | None]:
 def _extract_role_and_environment_groups(
     patterns: list[dict[str, str]],
 ) -> tuple[set[str], set[str]]:
-    """Extract role and environment groups from patterns.
+    """
+    Extract role and environment groups from patterns.
 
     Args:
         patterns: List of discovered search patterns.
@@ -2065,7 +2125,8 @@ def _add_group_recommendations(
     role_groups: set[str],
     environment_groups: set[str],
 ) -> None:
-    """Add group recommendations based on discovered groups.
+    """
+    Add group recommendations based on discovered groups.
 
     Args:
         recommendations: Recommendations dict to update.
@@ -2089,7 +2150,8 @@ def _add_group_recommendations(
 def _add_general_recommendations(
     recommendations: dict[str, Any], patterns: list[dict[str, str]]
 ) -> None:
-    """Add general migration recommendations based on patterns.
+    """
+    Add general migration recommendations based on patterns.
 
     Args:
         recommendations: Recommendations dict to update.
@@ -2110,7 +2172,8 @@ def _add_general_recommendations(
 def _generate_inventory_recommendations(
     patterns: list[dict[str, str]],
 ) -> dict[str, Any]:
-    """Generate inventory structure recommendations from search patterns.
+    """
+    Generate inventory structure recommendations from search patterns.
 
     Args:
         patterns: List of discovered search patterns.
@@ -2145,7 +2208,8 @@ def _generate_inventory_recommendations(
 
 
 def _build_playbook_header(recipe_name: str) -> list[str]:
-    """Build playbook header with metadata.
+    """
+    Build playbook header with metadata.
 
     Args:
         recipe_name: Name of the recipe file.
@@ -2170,7 +2234,8 @@ def _build_playbook_header(recipe_name: str) -> list[str]:
 
 
 def _add_playbook_variables(playbook_lines: list[str], raw_content: str) -> None:
-    """Extract and add variables section to playbook.
+    """
+    Extract and add variables section to playbook.
 
     Args:
         playbook_lines: Playbook lines list to append to.
@@ -2190,7 +2255,8 @@ def _add_playbook_variables(playbook_lines: list[str], raw_content: str) -> None
 def _convert_and_collect_resources(
     parsed_content: str, raw_content: str
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Convert Chef resources to Ansible tasks and collect handlers.
+    """
+    Convert Chef resources to Ansible tasks and collect handlers.
 
     Args:
         parsed_content: Parsed recipe content from parse_recipe.
@@ -2231,7 +2297,8 @@ def _add_formatted_items(
     items: list[dict[str, Any]],
     default_message: str,
 ) -> None:
-    """Add formatted tasks or handlers to playbook.
+    """
+    Add formatted tasks or handlers to playbook.
 
     Args:
         playbook_lines: Playbook lines list to append to.
@@ -2252,7 +2319,8 @@ def _add_formatted_items(
 def _generate_playbook_structure(
     parsed_content: str, raw_content: str, recipe_name: str
 ) -> str:
-    """Generate complete playbook structure from parsed recipe content.
+    """
+    Generate complete playbook structure from parsed recipe content.
 
     Args:
         parsed_content: Parsed recipe content from parse_recipe.
@@ -2288,7 +2356,8 @@ def _get_current_timestamp() -> str:
 
 
 def _extract_version_variable(raw_content: str) -> dict[str, str]:
-    """Extract version specification from recipe content.
+    """
+    Extract version specification from recipe content.
 
     Args:
         raw_content: Raw Chef recipe file content.
@@ -2305,7 +2374,8 @@ def _extract_version_variable(raw_content: str) -> dict[str, str]:
 
 
 def _extract_content_variables(raw_content: str) -> dict[str, str]:
-    """Extract content and source specifications from recipe content.
+    """
+    Extract content and source specifications from recipe content.
 
     Args:
         raw_content: Raw Chef recipe file content.
@@ -2332,7 +2402,8 @@ def _extract_content_variables(raw_content: str) -> dict[str, str]:
 
 
 def _extract_ownership_variables(raw_content: str) -> dict[str, str]:
-    """Extract owner and group specifications from recipe content.
+    """
+    Extract owner and group specifications from recipe content.
 
     Args:
         raw_content: Raw Chef recipe file content.
@@ -2359,7 +2430,8 @@ def _extract_ownership_variables(raw_content: str) -> dict[str, str]:
 
 
 def _extract_mode_variables(raw_content: str) -> dict[str, str]:
-    """Extract mode specifications from recipe content.
+    """
+    Extract mode specifications from recipe content.
 
     Args:
         raw_content: Raw Chef recipe file content.
@@ -2381,7 +2453,8 @@ def _extract_mode_variables(raw_content: str) -> dict[str, str]:
 
 
 def _extract_recipe_variables(raw_content: str) -> dict[str, str]:
-    """Extract variables from Chef recipe content.
+    """
+    Extract variables from Chef recipe content.
 
     Args:
         raw_content: Raw Chef recipe file content.
@@ -2434,7 +2507,8 @@ def _parse_resource_block(block: str) -> dict[str, str] | None:
 
 
 def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str, str]]:
-    """Extract resource information from parsed recipe content.
+    """
+    Extract resource information from parsed recipe content.
 
     Args:
         parsed_content: Parsed content from parse_recipe function.
@@ -2455,7 +2529,8 @@ def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str
 def _extract_notify_declarations(
     resource: dict[str, str], raw_content: str
 ) -> list[tuple[str, str, str]]:
-    """Extract notifies declarations from a resource block.
+    """
+    Extract notifies declarations from a resource block.
 
     Args:
         resource: Resource dictionary with type, name, action, properties.
@@ -2486,7 +2561,8 @@ def _extract_notify_declarations(
 
 
 def _extract_subscribe_declarations(raw_content: str) -> list[tuple[str, str, str]]:
-    """Extract subscribes declarations from raw content.
+    """
+    Extract subscribes declarations from raw content.
 
     Args:
         raw_content: Raw recipe content.
@@ -2505,7 +2581,8 @@ def _process_notifications(
     notifications: list[tuple[str, str, str]],
     task: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Process notification declarations and create handlers.
+    """
+    Process notification declarations and create handlers.
 
     Args:
         notifications: List of (action, target, timing) tuples.
@@ -2538,7 +2615,8 @@ def _process_subscribes(
     raw_content: str,
     task: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Process subscribes declarations and create handlers.
+    """
+    Process subscribes declarations and create handlers.
 
     Args:
         resource: Resource dictionary.
@@ -2582,7 +2660,8 @@ def _process_subscribes(
 def _convert_resource_to_task_dict(
     resource: dict[str, str], raw_content: str
 ) -> dict[str, Any]:
-    """Convert a Chef resource to an Ansible task dictionary with handlers.
+    """
+    Convert a Chef resource to an Ansible task dictionary with handlers.
 
     Args:
         resource: Resource dictionary with type, name, action, properties.
@@ -2639,7 +2718,8 @@ def _convert_resource_to_task_dict(
 def _create_handler(
     action: str, resource_type: str, resource_name: str
 ) -> dict[str, Any]:
-    """Create an Ansible handler from Chef notification.
+    """
+    Create an Ansible handler from Chef notification.
 
     Args:
         action: The Chef action (e.g., 'reload', 'restart').
@@ -2686,7 +2766,8 @@ def _create_handler(
 def _extract_enhanced_notifications(
     resource: dict[str, str], raw_content: str
 ) -> list[dict[str, str]]:
-    """Extract notification information with timing constraints for a resource.
+    """
+    Extract notification information with timing constraints for a resource.
 
     Args:
         resource: Resource dictionary.
@@ -2738,7 +2819,8 @@ def _extract_enhanced_notifications(
 
 
 def _find_resource_block(resource: dict[str, str], raw_content: str) -> str | None:
-    """Find the resource block in raw content.
+    """
+    Find the resource block in raw content.
 
     Args:
         resource: Resource dictionary with type and name.
@@ -2764,7 +2846,8 @@ def _find_resource_block(resource: dict[str, str], raw_content: str) -> str | No
 
 
 def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list]:
-    """Extract all guard patterns from resource block.
+    """
+    Extract all guard patterns from resource block.
 
     Args:
         resource_block: Resource block content.
@@ -2782,11 +2865,15 @@ def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list
     not_if_matches = not_if_pattern.findall(resource_block)
 
     # Extract only_if blocks (Ruby code blocks)
-    only_if_block_pattern = re.compile(r"only_if\s+do\s*(.*?)\s*end", re.DOTALL)
+    only_if_block_pattern = re.compile(
+        r"only_if\s+do\s*([\s\S]{0,1000}?)\s*end", re.DOTALL
+    )
     only_if_block_matches = only_if_block_pattern.findall(resource_block)
 
     # Extract not_if blocks (Ruby code blocks)
-    not_if_block_pattern = re.compile(r"not_if\s+do\s*(.*?)\s*end", re.DOTALL)
+    not_if_block_pattern = re.compile(
+        r"not_if\s+do\s*([\s\S]{0,1000}?)\s*end", re.DOTALL
+    )
     not_if_block_matches = not_if_block_pattern.findall(resource_block)
 
     return (
@@ -2803,7 +2890,8 @@ def _convert_guards_to_when_conditions(
     only_if_blocks: list,
     not_if_blocks: list,
 ) -> list[str]:
-    """Convert Chef guards to Ansible when conditions.
+    """
+    Convert Chef guards to Ansible when conditions.
 
     Args:
         only_if_conditions: List of only_if condition strings.
@@ -2845,7 +2933,8 @@ def _convert_guards_to_when_conditions(
 
 
 def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str, Any]:
-    """Extract Chef guards (only_if, not_if) and convert to Ansible when conditions.
+    """
+    Extract Chef guards (only_if, not_if) and convert to Ansible when conditions.
 
     Args:
         resource: Resource dictionary with type, name, action, properties.
@@ -2887,7 +2976,8 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
 
 
 def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> str:
-    """Convert a Chef condition string to Ansible when condition.
+    """
+    Convert a Chef condition string to Ansible when condition.
 
     Args:
         condition: Chef condition string.
@@ -2949,7 +3039,8 @@ def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> 
 
 
 def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
-    """Convert a Chef condition block to Ansible when condition.
+    """
+    Convert a Chef condition block to Ansible when condition.
 
     Args:
         block: Chef Ruby code block.
@@ -2995,7 +3086,8 @@ def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
 def _extract_resource_subscriptions(
     resource: dict[str, str], raw_content: str
 ) -> list[dict[str, str]]:
-    """Extract subscription information with timing constraints for a resource.
+    """
+    Extract subscription information with timing constraints for a resource.
 
     Args:
         resource: Resource dictionary.
@@ -3040,7 +3132,8 @@ def _extract_resource_subscriptions(
 def _create_handler_with_timing(
     action: str, resource_type: str, resource_name: str, timing: str
 ) -> dict[str, Any]:
-    """Create an Ansible handler with timing considerations.
+    """
+    Create an Ansible handler with timing considerations.
 
     Args:
         action: The Chef action (e.g., 'reload', 'restart').
@@ -3071,7 +3164,8 @@ def _create_handler_with_timing(
 
 
 def _extract_control_metadata(control_body: str) -> dict[str, Any]:
-    """Extract title, description, and impact from control body.
+    """
+    Extract title, description, and impact from control body.
 
     Args:
         control_body: Content of the control block.
@@ -3101,7 +3195,8 @@ def _extract_control_metadata(control_body: str) -> dict[str, Any]:
 
 
 def _parse_inspec_control(content: str) -> list[dict[str, Any]]:
-    """Parse InSpec control blocks from content.
+    """
+    Parse InSpec control blocks from content.
 
     Args:
         content: InSpec profile content.
@@ -3143,7 +3238,8 @@ def _parse_inspec_control(content: str) -> list[dict[str, Any]]:
 
 
 def _find_nested_block_end(lines: list[str], start_index: int) -> tuple[list[str], int]:
-    """Find the end of a nested Ruby block (do...end).
+    """
+    Find the end of a nested Ruby block (do...end).
 
     Args:
         lines: All lines of content.
@@ -3176,7 +3272,8 @@ def _find_nested_block_end(lines: list[str], start_index: int) -> tuple[list[str
 
 
 def _extract_it_expectations(describe_body: str) -> list[dict[str, Any]]:
-    """Extract 'it { should ... }' expectations from describe block.
+    """
+    Extract 'it { should ... }' expectations from describe block.
 
     Args:
         describe_body: Content of the describe block.
@@ -3194,7 +3291,8 @@ def _extract_it_expectations(describe_body: str) -> list[dict[str, Any]]:
 
 
 def _extract_its_expectations(describe_body: str) -> list[dict[str, Any]]:
-    """Extract 'its(...) { should ... }' expectations from describe block.
+    """
+    Extract 'its(...) { should ... }' expectations from describe block.
 
     Args:
         describe_body: Content of the describe block.
@@ -3215,7 +3313,8 @@ def _extract_its_expectations(describe_body: str) -> list[dict[str, Any]]:
 
 
 def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:
-    """Extract InSpec describe blocks and their matchers.
+    """
+    Extract InSpec describe blocks and their matchers.
 
     Args:
         content: Content to parse for describe blocks.
@@ -3267,7 +3366,8 @@ def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:
 def _convert_package_to_testinfra(
     lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
 ) -> None:
-    """Convert package resource to Testinfra assertions.
+    """
+    Convert package resource to Testinfra assertions.
 
     Args:
         lines: List to append test lines to.
@@ -3289,7 +3389,8 @@ def _convert_package_to_testinfra(
 def _convert_service_to_testinfra(
     lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
 ) -> None:
-    """Convert service resource to Testinfra assertions.
+    """
+    Convert service resource to Testinfra assertions.
 
     Args:
         lines: List to append test lines to.
@@ -3308,7 +3409,8 @@ def _convert_service_to_testinfra(
 def _convert_file_to_testinfra(
     lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
 ) -> None:
-    """Convert file resource to Testinfra assertions.
+    """
+    Convert file resource to Testinfra assertions.
 
     Args:
         lines: List to append test lines to.
@@ -3335,7 +3437,8 @@ def _convert_file_to_testinfra(
 def _convert_port_to_testinfra(
     lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
 ) -> None:
-    """Convert port resource to Testinfra assertions.
+    """
+    Convert port resource to Testinfra assertions.
 
     Args:
         lines: List to append test lines to.
@@ -3350,7 +3453,8 @@ def _convert_port_to_testinfra(
 
 
 def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:
-    """Convert InSpec control to Testinfra test.
+    """
+    Convert InSpec control to Testinfra test.
 
     Args:
         control: Parsed InSpec control dictionary.
@@ -3391,7 +3495,8 @@ def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:
 def _convert_package_to_ansible_assert(
     lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
 ) -> None:
-    """Convert package expectations to Ansible assert conditions.
+    """
+    Convert package expectations to Ansible assert conditions.
 
     Args:
         lines: List to append assertion lines to.
@@ -3409,7 +3514,8 @@ def _convert_package_to_ansible_assert(
 def _convert_service_to_ansible_assert(
     lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
 ) -> None:
-    """Convert service expectations to Ansible assert conditions.
+    """
+    Convert service expectations to Ansible assert conditions.
 
     Args:
         lines: List to append assertion lines to.
@@ -3427,7 +3533,8 @@ def _convert_service_to_ansible_assert(
 def _convert_file_to_ansible_assert(
     lines: list[str], expectations: list[dict[str, Any]]
 ) -> None:
-    """Convert file expectations to Ansible assert conditions.
+    """
+    Convert file expectations to Ansible assert conditions.
 
     Args:
         lines: List to append assertion lines to.
@@ -3440,7 +3547,8 @@ def _convert_file_to_ansible_assert(
 
 
 def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:
-    """Convert InSpec control to Ansible assert task.
+    """
+    Convert InSpec control to Ansible assert task.
 
     Args:
         control: Parsed InSpec control dictionary.
@@ -3478,7 +3586,8 @@ def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:
 def _generate_inspec_package_checks(
     resource_name: str, properties: dict[str, Any]
 ) -> list[str]:
-    """Generate InSpec checks for package resource.
+    """
+    Generate InSpec checks for package resource.
 
     Args:
         resource_name: Name of the package.
@@ -3500,7 +3609,8 @@ def _generate_inspec_package_checks(
 
 
 def _generate_inspec_service_checks(resource_name: str) -> list[str]:
-    """Generate InSpec checks for service resource.
+    """
+    Generate InSpec checks for service resource.
 
     Args:
         resource_name: Name of the service.
@@ -3520,7 +3630,8 @@ def _generate_inspec_service_checks(resource_name: str) -> list[str]:
 def _generate_inspec_file_checks(
     resource_name: str, properties: dict[str, Any]
 ) -> list[str]:
-    """Generate InSpec checks for file/template resource.
+    """
+    Generate InSpec checks for file/template resource.
 
     Args:
         resource_name: Name/path of the file.
@@ -3544,7 +3655,8 @@ def _generate_inspec_file_checks(
 def _generate_inspec_directory_checks(
     resource_name: str, properties: dict[str, Any]
 ) -> list[str]:
-    """Generate InSpec checks for directory resource.
+    """
+    Generate InSpec checks for directory resource.
 
     Args:
         resource_name: Path of the directory.
@@ -3568,7 +3680,8 @@ def _generate_inspec_directory_checks(
 def _generate_inspec_user_checks(
     resource_name: str, properties: dict[str, Any]
 ) -> list[str]:
-    """Generate InSpec checks for user resource.
+    """
+    Generate InSpec checks for user resource.
 
     Args:
         resource_name: Username.
@@ -3586,7 +3699,8 @@ def _generate_inspec_user_checks(
 
 
 def _generate_inspec_group_checks(resource_name: str) -> list[str]:
-    """Generate InSpec checks for group resource.
+    """
+    Generate InSpec checks for group resource.
 
     Args:
         resource_name: Group name.
@@ -3605,7 +3719,8 @@ def _generate_inspec_group_checks(resource_name: str) -> list[str]:
 def _generate_inspec_from_resource(
     resource_type: str, resource_name: str, properties: dict[str, Any]
 ) -> str:
-    """Generate InSpec control from Chef resource.
+    """
+    Generate InSpec control from Chef resource.
 
     Args:
         resource_type: Type of Chef resource.
@@ -3650,7 +3765,8 @@ def _generate_inspec_from_resource(
 
 @mcp.tool()
 def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
-    """Parse all control files from an InSpec profile directory.
+    """
+    Parse all control files from an InSpec profile directory.
 
     Args:
         profile_path: Path to the InSpec profile directory.
@@ -3682,7 +3798,8 @@ def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
 
 
 def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
-    """Parse controls from a single InSpec control file.
+    """
+    Parse controls from a single InSpec control file.
 
     Args:
         profile_path: Path to the control file.
@@ -3705,7 +3822,8 @@ def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
 
 
 def parse_inspec_profile(path: str) -> str:
-    """Parse an InSpec profile and extract controls.
+    """
+    Parse an InSpec profile and extract controls.
 
     Args:
         path: Path to InSpec profile directory or control file (.rb).
@@ -3744,7 +3862,8 @@ def parse_inspec_profile(path: str) -> str:
 
 @mcp.tool()
 def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -> str:
-    """Convert InSpec controls to Ansible test format.
+    """
+    Convert InSpec controls to Ansible test format.
 
     Args:
         inspec_path: Path to InSpec profile or control file.
@@ -3803,7 +3922,8 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
 
 
 def _extract_resources_from_parse_result(parse_result: str) -> list[dict[str, Any]]:
-    """Extract resource data from recipe parse result.
+    """
+    Extract resource data from recipe parse result.
 
     Args:
         parse_result: Output from parse_recipe function.
@@ -3842,7 +3962,8 @@ def _extract_resources_from_parse_result(parse_result: str) -> list[dict[str, An
 
 @mcp.tool()
 def generate_inspec_from_recipe(recipe_path: str) -> str:
-    """Generate InSpec controls from a Chef recipe.
+    """
+    Generate InSpec controls from a Chef recipe.
 
     Args:
         recipe_path: Path to Chef recipe file.
@@ -3894,7 +4015,8 @@ def convert_chef_databag_to_vars(
     is_encrypted: bool = False,
     target_scope: str = "group_vars",
 ) -> str:
-    """Convert Chef data bag to Ansible variables format.
+    """
+    Convert Chef data bag to Ansible variables format.
 
     Args:
         databag_content: JSON content of the Chef data bag
@@ -3959,7 +4081,8 @@ def generate_ansible_vault_from_databags(
     output_directory: str = "group_vars",
     encryption_key_hint: str = "",
 ) -> str:
-    """Generate Ansible Vault files from Chef data bags directory.
+    """
+    Generate Ansible Vault files from Chef data bags directory.
 
     Args:
         databags_directory: Path to Chef data_bags directory
@@ -4028,7 +4151,8 @@ def generate_ansible_vault_from_databags(
 
 @mcp.tool()
 def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> str:
-    """Analyze Chef cookbook for data bag usage and provide migration recommendations.
+    """
+    Analyze Chef cookbook for data bag usage and provide migration recommendations.
 
     Args:
         cookbook_path: Path to Chef cookbook
@@ -4084,7 +4208,8 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
 def convert_chef_environment_to_inventory_group(
     environment_content: str, environment_name: str, include_constraints: bool = True
 ) -> str:
-    """Convert Chef environment to Ansible inventory group with variables.
+    """
+    Convert Chef environment to Ansible inventory group with variables.
 
     Args:
         environment_content: Ruby content of the Chef environment file
@@ -4129,7 +4254,8 @@ def convert_chef_environment_to_inventory_group(
 def generate_inventory_from_chef_environments(
     environments_directory: str, output_format: str = "yaml"
 ) -> str:
-    """Generate complete Ansible inventory from Chef environments directory.
+    """
+    Generate complete Ansible inventory from Chef environments directory.
 
     Args:
         environments_directory: Path to Chef environments directory
@@ -4186,7 +4312,8 @@ def generate_inventory_from_chef_environments(
 def analyze_chef_environment_usage(
     cookbook_path: str, environments_path: str = ""
 ) -> str:
-    """Analyze Chef cookbook for environment usage.
+    """
+    Analyze Chef cookbook for environment usage.
 
     Provides migration recommendations.
 
@@ -4252,12 +4379,12 @@ def _parse_chef_environment_content(content: str) -> dict:
     }
 
     # Extract name
-    name_match = re.search(r"name\s+[\'\"](.*?)[\'\"]", content)
+    name_match = re.search(r"name\s+['\"]([^'\"\n]{0,200})['\"]", content)
     if name_match:
         env_data["name"] = name_match.group(1)
 
     # Extract description
-    desc_match = re.search(r"description\s+[\'\"](.*?)[\'\"]", content)
+    desc_match = re.search(r"description\s+['\"]([^'\"\n]{0,500})['\"]", content)
     if desc_match:
         env_data["description"] = desc_match.group(1)
 
@@ -4282,7 +4409,7 @@ def _parse_chef_environment_content(content: str) -> dict:
 def _extract_attributes_block(content: str, block_type: str) -> dict:
     """Extract attribute blocks from Chef environment content."""
     # Find the block start
-    pattern = rf"{block_type}\s*\((.*?)\)"
+    pattern = rf"{block_type}\s*\(([\s\S]{{0,5000}}?)\)"
     match = re.search(pattern, content, re.DOTALL)
 
     if not match:
@@ -4295,17 +4422,21 @@ def _extract_attributes_block(content: str, block_type: str) -> dict:
     attributes = {}
 
     # Parse simple key-value pairs
-    key_value_pattern = r"[\'\"](.*?)[\'\"][:\s]*=>[:\s]*[\'\"](.*?)[\'\"]"
+    key_value_pattern = (
+        r"['\"]([^'\"]{0,100})['\"][\s:]*=>[\s:]*['\"]([^'\"]{0,200})['\"]"
+    )
     for match in re.finditer(key_value_pattern, block_content):
         key = match.group(1)
         value = match.group(2)
         attributes[key] = value
 
     # Parse nested structures (basic support)
-    nested_pattern = r"[\'\"](.*?)[\'\"][:\s]*=>[:\s]*\{(.*?)\}"
+    nested_pattern = (
+        r"['\"](([^'\"\n]{0,100}))['\"](\\s|:)*=>(\\s|:)*\\{([^}]{0,1000})\\}"
+    )
     for match in re.finditer(nested_pattern, block_content):
         key = match.group(1)
-        nested_content = match.group(2)
+        nested_content = match.group(5)
         nested_attrs = {}
 
         for nested_match in re.finditer(key_value_pattern, nested_content):
@@ -4324,7 +4455,9 @@ def _extract_cookbook_constraints(content: str) -> dict:
     constraints = {}
 
     # Find cookbook version constraints
-    cookbook_pattern = r"cookbook\s+[\'\"](.*?)[\'\"],\s*[\'\"](.*?)[\'\"]"
+    cookbook_pattern = (
+        r"cookbook\s+['\"]([^'\"\n]{0,100})['\"]\,\s*['\"]([^'\"\n]{0,50})['\"]"
+    )
     for match in re.finditer(cookbook_pattern, content):
         cookbook = match.group(1)
         version = match.group(2)
@@ -4503,10 +4636,10 @@ def _find_environment_patterns_in_content(content: str, file_path: str) -> list:
     # Common Chef environment patterns
     environment_patterns = [
         (r"node\.chef_environment", "node.chef_environment"),
-        (r"node\[[\'\"]environment[\'\"]\]", 'node["environment"]'),
-        (r"environment\s+[\'\"](.*?)[\'\"]", "environment declaration"),
+        (r"node\[['\"]\environment['\"]\]", 'node["environment"]'),
+        (r"environment\s+['\"]([^'\"\n]{0,100})['\"]", "environment declaration"),
         (
-            r"if\s+node\.chef_environment\s*==\s*[\'\"](.*?)[\'\"]",
+            r"if\s+node\.chef_environment\s*==\s*['\"]([^'\"\n]{0,100})['\"]",
             "environment conditional",
         ),
         (r"case\s+node\.chef_environment", "environment case statement"),
@@ -5045,7 +5178,8 @@ def generate_awx_job_template_from_cookbook(
     target_environment: str = "production",
     include_survey: bool = True,
 ) -> str:
-    """Generate AWX/AAP job template configuration from Chef cookbook.
+    """
+    Generate AWX/AAP job template configuration from Chef cookbook.
 
     Args:
         cookbook_path: Path to Chef cookbook directory
@@ -5102,7 +5236,8 @@ awx-cli job_templates create \\
 def generate_awx_workflow_from_chef_runlist(
     runlist_content: str, workflow_name: str, environment: str = "production"
 ) -> str:
-    """Generate AWX/AAP workflow template from Chef runlist.
+    """
+    Generate AWX/AAP workflow template from Chef runlist.
 
     Args:
         runlist_content: Chef runlist content (JSON or comma-separated)
@@ -5156,7 +5291,8 @@ def generate_awx_project_from_cookbooks(
     scm_type: str = "git",
     scm_url: str = "",
 ) -> str:
-    """Generate AWX/AAP project configuration from Chef cookbooks directory.
+    """
+    Generate AWX/AAP project configuration from Chef cookbooks directory.
 
     Args:
         cookbooks_directory: Path to Chef cookbooks directory
@@ -5220,7 +5356,8 @@ def generate_awx_project_from_cookbooks(
 def generate_awx_inventory_source_from_chef(
     chef_server_url: str, organization: str = "Default", sync_schedule: str = "daily"
 ) -> str:
-    """Generate AWX/AAP inventory source from Chef server configuration.
+    """
+    Generate AWX/AAP inventory source from Chef server configuration.
 
     Args:
         chef_server_url: Chef server URL for inventory sync
@@ -5757,7 +5894,8 @@ def convert_chef_deployment_to_ansible_strategy(
     deployment_pattern: str = "auto_detect",
     target_strategy: str = "rolling_update",
 ) -> str:
-    """Convert Chef application deployment recipe to Ansible deployment strategy.
+    """
+    Convert Chef application deployment recipe to Ansible deployment strategy.
 
     Args:
         deployment_recipe_path: Path to Chef deployment recipe
@@ -5825,7 +5963,8 @@ ansible-playbook -i inventory monitor_deployment.yml \\
 def generate_blue_green_deployment_playbook(
     app_name: str, service_config: str = "", health_check_url: str = "/health"
 ) -> str:
-    """Generate Ansible blue/green deployment playbook from application configuration.
+    """
+    Generate Ansible blue/green deployment playbook from application configuration.
 
     Args:
         app_name: Name of the application to deploy
@@ -5903,7 +6042,8 @@ ansible-playbook blue_green_rollback.yml -e "rollback_to=blue"
 def generate_canary_deployment_strategy(
     app_name: str, canary_percentage: int = 10, rollout_steps: str = "10,25,50,100"
 ) -> str:
-    """Generate Ansible canary deployment strategy with gradual rollout.
+    """
+    Generate Ansible canary deployment strategy with gradual rollout.
 
     Args:
         app_name: Name of the application for canary deployment
@@ -5980,7 +6120,8 @@ ansible-playbook canary_rollback.yml -e "reason='high_error_rate'"
 def analyze_chef_application_patterns(
     cookbook_path: str, application_type: str = "web_application"
 ) -> str:
-    """Analyze Chef cookbook for application deployment patterns.
+    """
+    Analyze Chef cookbook for application deployment patterns.
 
     Provides migration recommendations.
 
@@ -6103,7 +6244,8 @@ def _analyze_chef_deployment_pattern(content: str, pattern_hint: str) -> dict:
 
 
 def _generate_blue_green_conversion_playbook(analysis: dict, recipe_name: str) -> str:
-    """Generate blue/green deployment playbook from Chef analysis.
+    """
+    Generate blue/green deployment playbook from Chef analysis.
 
     Args:
         analysis: Chef deployment analysis data
@@ -6152,7 +6294,8 @@ def _generate_blue_green_conversion_playbook(analysis: dict, recipe_name: str) -
 
 
 def _generate_canary_conversion_playbook(analysis: dict, recipe_name: str) -> str:
-    """Generate canary deployment playbook from Chef analysis.
+    """
+    Generate canary deployment playbook from Chef analysis.
 
     Args:
         analysis: Chef deployment analysis data
@@ -6950,7 +7093,8 @@ def assess_chef_migration_complexity(
     migration_scope: str = "full",
     target_platform: str = "ansible_awx",
 ) -> str:
-    """Assess the complexity of migrating Chef cookbooks to Ansible with detailed analysis.
+    """
+    Assess the complexity of migrating Chef cookbooks to Ansible with detailed analysis.
 
     Args:
         cookbook_paths: Comma-separated paths to Chef cookbooks or cookbook directory
@@ -7042,7 +7186,8 @@ def assess_chef_migration_complexity(
 def generate_migration_plan(
     cookbook_paths: str, migration_strategy: str = "phased", timeline_weeks: int = 12
 ) -> str:
-    """Generate a detailed migration plan from Chef to Ansible with timeline and milestones.
+    """
+    Generate a detailed migration plan from Chef to Ansible with timeline and milestones.
 
     Args:
         cookbook_paths: Comma-separated paths to Chef cookbooks
@@ -7110,7 +7255,8 @@ def generate_migration_plan(
 def analyze_cookbook_dependencies(
     cookbook_path: str, dependency_depth: str = "direct"
 ) -> str:
-    """Analyze cookbook dependencies and identify migration order requirements.
+    """
+    Analyze cookbook dependencies and identify migration order requirements.
 
     Args:
         cookbook_path: Path to Chef cookbook or cookbooks directory
@@ -7170,7 +7316,8 @@ def generate_migration_report(
     report_format: str = "executive",
     include_technical_details: str = "yes",
 ) -> str:
-    """Generate comprehensive migration report from assessment results.
+    """
+    Generate comprehensive migration report from assessment results.
 
     Args:
         assessment_results: JSON string or summary of assessment results
@@ -8035,7 +8182,8 @@ def _generate_migration_timeline(strategy: str, timeline_weeks: int) -> str:
 
 
 def main() -> None:
-    """Run the SousChef MCP server.
+    """
+    Run the SousChef MCP server.
 
     This is the main entry point for running the server.
     """

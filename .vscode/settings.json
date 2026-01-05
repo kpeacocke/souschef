@@ -8,13 +8,17 @@
         "--cov-report=term-missing"
     ],
     "python.testing.cwd": "${workspaceFolder}",
-    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.typeCheckingMode": "standard",
     "python.analysis.diagnosticSeverityOverrides": {
-        "reportUnknownParameterType": "none",
+        "reportUnknownParameterType": "warning",
         "reportUnknownVariableType": "none",
         "reportUnknownArgumentType": "none",
-        "reportMissingParameterType": "none"
+        "reportMissingParameterType": "warning",
+        "reportGeneralTypeIssues": "warning",
+        "reportOptionalMemberAccess": "warning"
     },
+    "python.analysis.inlayHints.functionReturnTypes": true,
+    "python.analysis.inlayHints.variableTypes": false,
     "[python]": {
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "charliermarsh.ruff",

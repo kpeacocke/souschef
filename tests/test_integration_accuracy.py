@@ -1,4 +1,5 @@
-"""Integration accuracy tests for Chef-to-Ansible conversions.
+"""
+Integration accuracy tests for Chef-to-Ansible conversions.
 
 Tests validate that generated Ansible code is:
 1. Syntactically valid (passes ansible-lint)
@@ -26,7 +27,8 @@ from souschef.server import (
 
 
 def run_ansible_lint(yaml_content: str) -> tuple[bool, str]:
-    """Run ansible-lint on a YAML string.
+    """
+    Run ansible-lint on a YAML string.
 
     Args:
         yaml_content: YAML content to validate.

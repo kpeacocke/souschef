@@ -1,4 +1,5 @@
-"""Command-line interface for SousChef.
+"""
+Command-line interface for SousChef.
 
 Provides easy access to Chef cookbook parsing and conversion tools.
 """
@@ -29,7 +30,8 @@ from souschef.server import (
 @click.group()
 @click.version_option(version="0.1.0", prog_name="souschef")
 def cli() -> None:
-    """SousChef - Chef to Ansible conversion toolkit.
+    """
+    SousChef - Chef to Ansible conversion toolkit.
 
     Parse Chef cookbooks and convert resources to Ansible playbooks.
     """
@@ -44,7 +46,8 @@ def cli() -> None:
     default="text",
 )
 def recipe(path: str, output_format: str) -> None:
-    """Parse a Chef recipe file and extract resources.
+    """
+    Parse a Chef recipe file and extract resources.
 
     PATH: Path to the recipe (.rb) file
     """
@@ -61,7 +64,8 @@ def recipe(path: str, output_format: str) -> None:
     default="json",
 )
 def template(path: str, output_format: str) -> None:
-    """Parse a Chef ERB template and convert to Jinja2.
+    """
+    Parse a Chef ERB template and convert to Jinja2.
 
     PATH: Path to the template (.erb) file
     """
@@ -78,7 +82,8 @@ def template(path: str, output_format: str) -> None:
     default="text",
 )
 def attributes(path: str, output_format: str) -> None:
-    """Parse Chef attributes file.
+    """
+    Parse Chef attributes file.
 
     PATH: Path to the attributes (.rb) file
     """
@@ -95,7 +100,8 @@ def attributes(path: str, output_format: str) -> None:
     default="json",
 )
 def resource(path: str, output_format: str) -> None:
-    """Parse a custom resource or LWRP file.
+    """
+    Parse a custom resource or LWRP file.
 
     PATH: Path to the custom resource (.rb) file
     """
@@ -106,7 +112,8 @@ def resource(path: str, output_format: str) -> None:
 @cli.command()
 @click.argument("path", type=click.Path(exists=True))
 def metadata(path: str) -> None:
-    """Parse cookbook metadata.rb file.
+    """
+    Parse cookbook metadata.rb file.
 
     PATH: Path to the metadata.rb file
     """
@@ -117,7 +124,8 @@ def metadata(path: str) -> None:
 @cli.command()
 @click.argument("path", type=click.Path(exists=True))
 def structure(path: str) -> None:
-    """List the structure of a Chef cookbook.
+    """
+    List the structure of a Chef cookbook.
 
     PATH: Path to the cookbook root directory
     """
@@ -128,7 +136,8 @@ def structure(path: str) -> None:
 @cli.command()
 @click.argument("path", type=click.Path(exists=True))
 def ls(path: str) -> None:
-    """List contents of a directory.
+    """
+    List contents of a directory.
 
     PATH: Path to the directory
     """
@@ -144,7 +153,8 @@ def ls(path: str) -> None:
 @cli.command()
 @click.argument("path", type=click.Path(exists=True))
 def cat(path: str) -> None:
-    """Read and display file contents.
+    """
+    Read and display file contents.
 
     PATH: Path to the file
     """
@@ -174,7 +184,8 @@ def convert(
     properties: str,
     output_format: str,
 ) -> None:
-    """Convert a Chef resource to Ansible task.
+    """
+    Convert a Chef resource to Ansible task.
 
     RESOURCE_TYPE: Chef resource type (e.g., package, service, template)
 
@@ -217,7 +228,8 @@ def convert(
 )
 @click.option("--dry-run", is_flag=True, help="Show what would be done")
 def cookbook(cookbook_path: str, output: str | None, dry_run: bool) -> None:  # noqa: C901
-    """Analyze an entire Chef cookbook.
+    """
+    Analyze an entire Chef cookbook.
 
     COOKBOOK_PATH: Path to the cookbook root directory
 
@@ -307,7 +319,8 @@ def cookbook(cookbook_path: str, output: str | None, dry_run: bool) -> None:  # 
     default="json",
 )
 def inspec_parse(path: str, output_format: str) -> None:
-    """Parse an InSpec profile or control file.
+    """
+    Parse an InSpec profile or control file.
 
     PATH: Path to InSpec profile directory or .rb control file
     """
@@ -325,7 +338,8 @@ def inspec_parse(path: str, output_format: str) -> None:
     help="Output format for converted tests",
 )
 def inspec_convert(path: str, output_format: str) -> None:
-    """Convert InSpec controls to test format.
+    """
+    Convert InSpec controls to test format.
 
     PATH: Path to InSpec profile directory or .rb control file
     """
@@ -342,7 +356,8 @@ def inspec_convert(path: str, output_format: str) -> None:
     default="text",
 )
 def inspec_generate(path: str, output_format: str) -> None:
-    """Generate InSpec controls from Chef recipe.
+    """
+    Generate InSpec controls from Chef recipe.
 
     PATH: Path to Chef recipe (.rb) file
     """
@@ -351,7 +366,8 @@ def inspec_generate(path: str, output_format: str) -> None:
 
 
 def _output_result(result: str, output_format: str) -> None:
-    """Output result in specified format.
+    """
+    Output result in specified format.
 
     Args:
         result: Result string (may be JSON or plain text).
