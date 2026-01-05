@@ -33,6 +33,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      pull-requests: write
 
     steps:
     - uses: actions/checkout@v6
@@ -51,8 +52,7 @@ jobs:
 
     - name: Check poetry.lock is in sync with pyproject.toml
       run: |
-        poetry check
-        poetry lock --check
+        poetry check --lock
 
     - name: Comment on PR if out of sync
       if: failure() && github.event_name == 'pull_request'
