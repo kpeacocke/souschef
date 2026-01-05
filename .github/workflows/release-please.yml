@@ -18,11 +18,9 @@ permissions:
   pull-requests: write
 
 jobs:
-  # Only proceed if CI was successful
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only run if CI passed
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -30,29 +28,22 @@ jobs:
         uses: googleapis/release-please-action@v4
         id: release
         with:
-          # Use manifest-based configuration
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - name: Display release PR information
+      - name: Enable auto-merge on release PR
         if: ${{ steps.release.outputs.prs_created == 'true' }}
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
-          # Extract PR number from JSON output
           PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
-          PR_URL=$(echo "$PR_JSON" | jq -r '.html_url // empty')
-          if [ -z "$PR_URL" ]; then
-            PR_URL="https://github.com/${{ github.repository }}/pull/$PR_NUMBER"
-          fi
-          echo "✓ Release PR #$PR_NUMBER created"
-          echo "  URL: $PR_URL"
-          echo "  Please review and merge when ready to publish the release."
+          echo "Enabling auto-merge for release PR #$PR_NUMBER..."
+          gh pr merge "$PR_NUMBER" --auto --squash --repo ${{ github.repository }}
+          echo "✓ Auto-merge enabled - PR will merge when checks pass"
 
-      - name: Display published release information
+      - name: Log release created
         if: ${{ steps.release.outputs.release_created }}
         run: |
-          echo "Release created!"
-          echo "Release URL: ${{ steps.release.outputs.html_url }}"
-          echo "Tag: v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }}"
-          echo "Upload URL: ${{ steps.release.outputs.upload_url }}"
+          echo "✓ Release v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }} created"
+          echo "  Tag: ${{ steps.release.outputs.tag_name }}"
