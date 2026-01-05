@@ -36,6 +36,12 @@ jobs:
             exit 0
           fi
 
+          # Allow dependabot branches (automated dependency updates)
+          if [[ "$BRANCH_NAME" =~ ^dependabot/.+ ]]; then
+            echo "✓ Valid dependabot branch: $BRANCH_NAME"
+            exit 0
+          fi
+
           # Validate gitflow branch naming
           if [[ "$BRANCH_NAME" =~ ^feature/.+ ]]; then
             echo "✓ Valid feature branch: $BRANCH_NAME"
@@ -56,6 +62,7 @@ jobs:
             echo "  - release/<version>      (for release prep)"
             echo "  - hotfix/<version>       (for production fixes)"
             echo "  - support/<description>  (for support branches)"
+            echo "  - dependabot/*           (automated dependency updates)"
             echo ""
             echo "Examples:"
             echo "  - feature/add-ansible-support"
