@@ -39,18 +39,23 @@ jobs:
 
     - name: Determine release tag
       id: get-tag
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        RELEASE_TAG: ${{ github.event.release.tag_name }}
+        EVENT_NAME: ${{ github.event_name }}
       run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          TAG="${{ inputs.tag }}"
+        if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          TAG="$INPUT_TAG"
         else
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="$RELEASE_TAG"
         fi
         echo "tag=$TAG" >> $GITHUB_OUTPUT
         echo "Using tag: $TAG"
 
     - name: Validate release is on main branch
+      env:
+        TAG: ${{ steps.get-tag.outputs.tag }}
       run: |
-        TAG="${{ steps.get-tag.outputs.tag }}"
         if ! git branch -r --contains "$TAG" 2>/dev/null | grep -q 'origin/main'; then
           echo "Error: Release tag must be on main branch"
           git branch -r --contains "$TAG" 2>/dev/null || echo "Tag not found"
@@ -59,8 +64,9 @@ jobs:
         echo "✓ Release tag is on main branch"
 
     - name: Validate semver tag
+      env:
+        TAG: ${{ steps.get-tag.outputs.tag }}
       run: |
-        TAG="${{ steps.get-tag.outputs.tag }}"
         if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
           echo "Error: Tag '$TAG' does not follow semver format (vX.Y.Z)"
           exit 1
@@ -68,9 +74,10 @@ jobs:
         echo "✓ Tag '$TAG' is valid semver"
 
     - name: Verify tag version matches pyproject.toml
+      env:
+        TAG: ${{ steps.get-tag.outputs.tag }}
       run: |
-        TAG_VERSION="${{ steps.get-tag.outputs.tag }}"
-        TAG_VERSION="${TAG_VERSION#v}"
+        TAG_VERSION="${TAG#v}"
         PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
           echo "Error: Tag version ($TAG_VERSION) != pyproject.toml version ($PYPROJECT_VERSION)"
@@ -163,7 +170,8 @@ jobs:
     - name: Upload packages to GitHub Release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ needs.validate.outputs.tag }}
+        REPO: ${{ github.repository }}
       run: |
-        TAG="${{ needs.validate.outputs.tag }}"
         echo "Attaching packages to release $TAG..."
-        gh release upload "$TAG" dist/* --repo ${{ github.repository }}
+        gh release upload "$TAG" dist/* --repo "$REPO"
