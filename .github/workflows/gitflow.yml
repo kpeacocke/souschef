@@ -22,7 +22,7 @@ jobs:
       contents: read
 
     steps:
-      - name: Check branch naming convention
+      - name: Validate branch name follows gitflow convention
         env:
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
@@ -80,7 +80,7 @@ jobs:
       contents: read
 
     steps:
-      - name: Validate PR target branch
+      - name: Validate PR target branch matches gitflow rules
         env:
           SOURCE_BRANCH: ${{ github.head_ref }}
           TARGET_BRANCH: ${{ github.base_ref }}

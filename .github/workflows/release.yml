@@ -29,12 +29,13 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout repository
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
         ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
-    - name: Get tag name
+    - name: Determine release tag
       id: get-tag
       run: |
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -64,7 +65,7 @@ jobs:
         fi
         echo "✓ Tag '$TAG' is valid semver"
 
-    - name: Check version matches tag
+    - name: Verify tag version matches pyproject.toml
       run: |
         TAG_VERSION="${{ steps.get-tag.outputs.tag }}"
         TAG_VERSION="${TAG_VERSION#v}"
@@ -83,7 +84,8 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout repository
+      uses: actions/checkout@v6
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -108,13 +110,13 @@ jobs:
     - name: Install dependencies
       run: poetry install --no-interaction
 
-    - name: Build package
+    - name: Build Python package
       run: poetry build
 
-    - name: Check built packages
+    - name: Validate package with twine
       run: poetry run twine check dist/*
 
-    - name: Upload build artifacts
+    - name: Upload package artifacts
       uses: actions/upload-artifact@v6
       with:
         name: release-packages
@@ -131,13 +133,13 @@ jobs:
       id-token: write
 
     steps:
-    - name: Download build artifacts
+    - name: Download package artifacts
       uses: actions/download-artifact@v4
       with:
         name: release-packages
         path: dist/
 
-    - name: Publish to PyPI
+    - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@67339c736fd9354cd4f8cb0b744f2b82a74b5c70  # v1.12.3
       with:
         attestations: true
@@ -150,13 +152,13 @@ jobs:
       contents: write
 
     steps:
-    - name: Download build artifacts
+    - name: Download package artifacts
       uses: actions/download-artifact@v4
       with:
         name: release-packages
         path: dist/
 
-    - name: Attach packages to GitHub Release
+    - name: Upload packages to GitHub Release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |

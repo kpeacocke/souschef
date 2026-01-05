@@ -26,7 +26,7 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: Run Release Please
+      - name: Create or update release PR
         uses: googleapis/release-please-action@v4
         id: release
         with:
@@ -34,7 +34,7 @@ jobs:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - name: Output Release PR information
+      - name: Display release PR information
         if: ${{ steps.release.outputs.prs_created == 'true' }}
         env:
           PR_JSON: ${{ steps.release.outputs.pr }}
@@ -49,7 +49,7 @@ jobs:
           echo "  URL: $PR_URL"
           echo "  Please review and merge when ready to publish the release."
 
-      - name: Output release information
+      - name: Display published release information
         if: ${{ steps.release.outputs.release_created }}
         run: |
           echo "Release created!"
