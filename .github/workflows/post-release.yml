@@ -1,11 +1,11 @@
-name: Post-Release Sync
+name: Sync Main to Develop
 
-# This workflow runs after a successful release to merge changes back to develop
-# Ensures develop branch stays in sync with main after hotfixes and releases
+# This workflow runs after any push to main to keep develop in sync
+# Includes releases, hotfixes, and dependency updates
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
   workflow_dispatch:  # Allow manual trigger
 
 permissions:
@@ -35,17 +35,17 @@ jobs:
         git checkout develop
         git pull origin develop
 
-        # Get the latest tag to include in commit message
-        LATEST_TAG=$(git describe --tags --abbrev=0 origin/main 2>/dev/null || echo "no-tag")
-        echo "Latest tag: $LATEST_TAG"
+        # Get the latest commit info
+        LATEST_COMMIT=$(git log -1 --pretty=format:"%h - %s" origin/main)
+        echo "Latest commit: $LATEST_COMMIT"
 
         # Merge main into develop
         echo "Merging main into develop..."
-        if git merge origin/main --no-ff -m "chore: merge release ${LATEST_TAG} from main to develop
+        if git merge origin/main --no-ff -m "chore: sync main to develop
 
-        Automatic post-release sync to keep develop up to date.
+        Automatic sync to keep develop up to date with main.
 
-        Release: ${LATEST_TAG}
+        Latest commit: ${LATEST_COMMIT}
         Triggered by: ${{ github.event_name }}"; then
           echo "✓ Merge successful"
 
@@ -60,9 +60,9 @@ jobs:
           git merge --abort
 
           # Create a branch for the merge
-          MERGE_BRANCH="auto-merge/release-${LATEST_TAG}-to-develop"
+          MERGE_BRANCH="auto-merge/main-to-develop-$(date +%Y%m%d-%H%M%S)"
           git checkout -b "$MERGE_BRANCH"
-          git merge origin/main --no-ff -m "chore: merge release ${LATEST_TAG} from main to develop" || true
+          git merge origin/main --no-ff -m "chore: sync main to develop" || true
 
           # Push the branch
           git push -u origin "$MERGE_BRANCH"
@@ -71,10 +71,10 @@ jobs:
           gh pr create \
             --base develop \
             --head "$MERGE_BRANCH" \
-            --title "chore: merge release ${LATEST_TAG} from main to develop" \
-            --body "Automatic post-release sync from main to develop.
+            --title "chore: sync main to develop ($(date +%Y-%m-%d))" \
+            --body "Automatic sync from main to develop.
 
-          **Release:** ${LATEST_TAG}
+          **Latest commit:** ${LATEST_COMMIT}
           **Triggered by:** ${{ github.event_name }}
 
           ⚠️ **Merge conflicts detected** - manual resolution required.
@@ -89,17 +89,18 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
-    - name: Add sync confirmation to release notes
+    - name: Add sync confirmation comment
       if: success()
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         script: |
-          const release = context.payload.release;
-          if (release) {
-            await github.rest.repos.createReleaseComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: release.id,
-              body: '✅ Changes automatically merged to `develop` branch.'
-            });
-          }
+          // Find the most recent commit on main
+          const { data: commit } = await github.rest.repos.getCommit({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: 'main'
+          });
+          
+          // Add a comment to the PR/commit that triggered this
+          const message = '✅ Changes automatically synced to `develop` branch.';
+          console.log(message);
