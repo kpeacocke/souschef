@@ -5,6 +5,12 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g., v2.0.0)'
+        required: true
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,19 +32,25 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
+        ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
     - name: Get tag name
       id: get-tag
       run: |
-        TAG="${{ github.event.release.tag_name }}"
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          TAG="${{ inputs.tag }}"
+        else
+          TAG="${{ github.event.release.tag_name }}"
+        fi
         echo "tag=$TAG" >> $GITHUB_OUTPUT
         echo "Using tag: $TAG"
 
     - name: Validate release is on main branch
       run: |
-        if ! git branch -r --contains ${{ github.sha }} | grep -q 'origin/main'; then
+        TAG="${{ steps.get-tag.outputs.tag }}"
+        if ! git branch -r --contains "$TAG" 2>/dev/null | grep -q 'origin/main'; then
           echo "Error: Release tag must be on main branch"
-          git branch -r --contains ${{ github.sha }}
+          git branch -r --contains "$TAG" 2>/dev/null || echo "Tag not found"
           exit 1
         fi
         echo "✓ Release tag is on main branch"
