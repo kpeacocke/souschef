@@ -1954,15 +1954,14 @@ def test_generate_awx_inventory_source_from_chef_success():
     """Test generate_awx_inventory_source_from_chef with valid parameters."""
     from souschef.server import generate_awx_inventory_source_from_chef
 
+    chef_server_url = "https://chef.example.com"
     result = generate_awx_inventory_source_from_chef(
-        "https://chef.example.com", "production", "web_servers"
+        chef_server_url, "production", "web_servers"
     )
 
     assert "AWX/AAP Inventory Source" in result
-    # Test verifies output contains expected URL - not security sanitization
-    assert (
-        "https://chef.example.com" in result
-    )  # lgtm[py/incomplete-url-substring-sanitization]
+    # Verify the function echoes back the provided Chef server URL in its output
+    assert chef_server_url in result
     assert "Inventory" in result
 
 
