@@ -267,57 +267,77 @@ class TestChefToAnsibleConversion:
     def test_convert_package_preserves_action_semantics(self):
         """Test that package actions map correctly to Ansible states."""
         # Install → present
-        result = convert_resource_to_task("package", "nginx", "install")
+        result = convert_resource_to_task(
+            resource_type="package", resource_name="nginx", action="install"
+        )
         assert 'state: "present"' in result
 
         # Upgrade → latest
-        result = convert_resource_to_task("package", "nginx", "upgrade")
+        result = convert_resource_to_task(
+            resource_type="package", resource_name="nginx", action="upgrade"
+        )
         assert 'state: "latest"' in result
 
         # Remove → absent
-        result = convert_resource_to_task("package", "nginx", "remove")
+        result = convert_resource_to_task(
+            resource_type="package", resource_name="nginx", action="remove"
+        )
         assert 'state: "absent"' in result
 
     def test_convert_service_handles_multiple_actions(self):
         """Test that service actions include both enabled and state."""
         # Start should enable and start
-        result = convert_resource_to_task("service", "nginx", "start")
+        result = convert_resource_to_task(
+            resource_type="service", resource_name="nginx", action="start"
+        )
         assert "enabled: true" in result
         assert 'state: "started"' in result
 
         # Stop should disable and stop
-        result = convert_resource_to_task("service", "nginx", "stop")
+        result = convert_resource_to_task(
+            resource_type="service", resource_name="nginx", action="stop"
+        )
         assert "enabled: false" in result
         assert 'state: "stopped"' in result
 
         # Restart
-        result = convert_resource_to_task("service", "nginx", "restart")
+        result = convert_resource_to_task(
+            resource_type="service", resource_name="nginx", action="restart"
+        )
         assert 'state: "restarted"' in result
 
     def test_convert_template_strips_erb_extension(self):
         """Test that .erb extension is removed from template dest."""
-        result = convert_resource_to_task("template", "nginx.conf.erb", "create")
+        result = convert_resource_to_task(
+            resource_type="template", resource_name="nginx.conf.erb", action="create"
+        )
 
         assert 'src: "nginx.conf.erb"' in result
         assert 'dest: "nginx.conf"' in result
 
     def test_convert_directory_sets_correct_state(self):
         """Test that directory resources set state to directory."""
-        result = convert_resource_to_task("directory", "/var/www/html", "create")
+        result = convert_resource_to_task(
+            resource_type="directory", resource_name="/var/www/html", action="create"
+        )
 
         assert 'state: "directory"' in result
         assert 'path: "/var/www/html"' in result
 
     def test_convert_execute_adds_changed_when(self):
         """Test that execute resources include changed_when for idempotency."""
-        result = convert_resource_to_task("execute", "echo test", "run")
+        result = convert_resource_to_task(
+            resource_type="execute", resource_name="echo test", action="run"
+        )
 
         assert "ansible.builtin.command:" in result
         assert 'changed_when: "false"' in result
 
     def test_conversion_produces_valid_yaml_structure(self):
         """Test that converted tasks have valid YAML structure."""
-        result = convert_resource_to_task("package", "nginx", "install")
+        result = convert_resource_to_task(
+            resource_type="package", resource_name="nginx", action="install"
+        )
 
         # Should start with task name
         assert result.startswith("- name:")
@@ -687,7 +707,7 @@ class TestInSpecIntegration:
         )
         assert nginx_pkg is not None
         assert nginx_pkg["title"] == "NGINX Package Installation"
-        assert nginx_pkg["impact"] == 1.0
+        assert nginx_pkg["impact"] == pytest.approx(1.0)
         assert len(nginx_pkg["tests"]) == 1
 
         test = nginx_pkg["tests"][0]

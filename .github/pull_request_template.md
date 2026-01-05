@@ -110,9 +110,9 @@ For changes that might have security implications:
 ## 🧹 Code Quality
 
 ### Checklist (verify before submitting)
-- [ ] ✅ Code passes linting (`uv run ruff check .`)
-- [ ] ✅ Code is properly formatted (`uv run ruff format .`)
-- [ ] ✅ All tests pass (`uv run pytest`)
+- [ ] ✅ Code passes linting (`poetry run ruff check .`)
+- [ ] ✅ Code is properly formatted (`poetry run ruff format .`)
+- [ ] ✅ All tests pass (`poetry run pytest`)
 - [ ] ✅ Type hints are complete and accurate
 - [ ] ✅ Docstrings follow Google style format
 - [ ] ✅ No warnings introduced (zero warnings policy)
@@ -190,8 +190,8 @@ Add any additional context, screenshots, or information that reviewers should kn
 
 Before submitting this PR, I have verified:
 
-- [ ] 🧪 All tests pass locally (`uv run pytest`)
-- [ ] 🎨 Code is linted and formatted (`uv run ruff check . && uv run ruff format .`)
+- [ ] 🧪 All tests pass locally (`poetry run pytest`)
+- [ ] 🎨 Code is linted and formatted (`poetry run ruff check . && poetry run ruff format .`)
 - [ ] 📊 Test coverage is maintained or improved
 - [ ] 📖 Documentation is updated where needed
 - [ ] 🔍 I have self-reviewed my code changes

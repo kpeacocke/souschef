@@ -1,0 +1,53 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Run Release Please
+        uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          # Use manifest-based configuration
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Auto-merge Release PR
+        if: ${{ steps.release.outputs.pr }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.release.outputs.pr }}"
+          echo "Auto-merging Release PR #$PR_NUMBER"
+
+          # Wait a moment for CI to start
+          sleep 10
+
+          # Enable auto-merge (will merge when all checks pass)
+          gh pr merge "$PR_NUMBER" --auto --squash --repo ${{ github.repository }}
+
+          echo "✓ Auto-merge enabled for PR #$PR_NUMBER"
+          echo "PR will merge automatically once all status checks pass"
+
+      - name: Output release information
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          echo "Release created!"
+          echo "Release URL: ${{ steps.release.outputs.html_url }}"
+          echo "Tag: v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }}"
+          echo "Upload URL: ${{ steps.release.outputs.upload_url }}"

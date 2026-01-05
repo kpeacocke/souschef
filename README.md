@@ -1,10 +1,34 @@
-# SousChef 🍳
+# Chef to Ansible migration - SousChef MCP 🍳
 
 An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 
-## Overview
+[![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
+[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Test Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](htmlcov/index.html)
+[![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
+
+## Overview - Chef to Ansible features
 
 SousChef is a complete enterprise-grade migration platform with 34 MCP tools organized across 8 major capability areas to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, SousChef provides everything needed for a successful infrastructure automation migration.
+
+## 📦 Installation
+
+```bash
+# PyPI Installation
+pip install mcp-souschef
+
+# Development Installation
+git clone https://github.com/kpeacocke/souschef.git
+cd souschef
+poetry install
+```
+
+> **📖 For detailed installation instructions, MCP setup, and configuration, see [Installation & Setup](#installation--setup)**
 
 ## 🚀 Core Capabilities
 
@@ -145,33 +169,33 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
 
 ### Prerequisites
 - Python 3.14+
-- [uv](https://github.com/astral-sh/uv) for dependency management
+- [Poetry](https://python-poetry.org/) for dependency management
 - MCP-compatible client (Claude Desktop, VS Code with MCP extension, etc.)
 
 ### Quick Start
 
-1. **Clone and setup**:
+1. **Install SousChef**:
    ```bash
-   git clone https://github.com/your-org/souschef
-   cd souschef
-   uv sync
+   pip install mcp-souschef
    ```
 
-2. **Configure MCP client** (Claude Desktop example):
-   ```json
-   {
-     \"mcpServers\": {
-       \"souschef\": {
-         \"command\": \"uv\",
-         \"args\": [\"--directory\", \"/path/to/souschef\", \"run\", \"souschef\"],
-         \"env\": {}
-       }
-     }
-   }
+2. **Configure MCP Client**:
+
+   **🎯 Quick Setup - Use Pre-configured Files:**
+   ```bash
+   # Claude Desktop (macOS)
+   cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+
+   # VS Code Copilot (macOS/Linux)
+   mkdir -p ~/.config/Code/User/globalStorage/github.copilot-chat
+   cp config/vscode-copilot.json ~/.config/Code/User/globalStorage/github.copilot-chat/mcp.json
    ```
+
+   See [config/README.md](config/README.md) for detailed setup instructions, development configs, and troubleshooting.
 
 3. **Start using SousChef**:
-   Ask your MCP client: "Analyze the cookbook at /path/to/my/cookbook" or "Convert this Chef recipe to an Ansible playbook"
+   - **Claude Desktop**: Restart Claude, then ask: "What tools does souschef provide?"
+   - **VS Code Copilot**: Reload window, then use: `@souschef analyze this cookbook`
 
 ### Command Line Interface (CLI)
 
@@ -205,7 +229,53 @@ souschef-cli inspec-convert controls.rb --format testinfra
 - `inspec-generate` - Generate InSpec validation from recipes
 - `ls` / `cat` - File system operations
 
-### Development Setup\n\n```bash\n# Install dependencies\nuv sync\n\n# Run tests\nuv run pytest\n\n# Run with coverage\nuv run pytest --cov=souschef --cov-report=html\n\n# Lint and format\nuv run ruff check .\nuv run ruff format .\n```
+### Development Setup
+
+```bash
+# Install dependencies
+poetry install
+
+# Install pre-commit hooks (one-time - auto-handles poetry.lock)
+poetry run pre-commit install
+
+# Run tests
+poetry run pytest
+
+# Run with coverage
+poetry run pytest --cov=souschef --cov-report=html
+
+# Lint and format
+poetry run ruff check .
+poetry run ruff format .
+
+# Type check
+poetry run mypy souschef
+```
+
+### **Dependency Management**
+
+Poetry manages dependencies with **automatic lock file synchronization**:
+
+```bash
+# Add dependencies
+poetry add package-name              # Production
+poetry add --group dev package-name  # Development
+
+# Update lock file after manual pyproject.toml edits
+poetry lock  # Poetry 2.x preserves versions automatically
+
+# Update dependencies
+poetry update package-name  # Specific package
+poetry update              # All packages
+```
+
+**Automated Systems:**
+- ✅ Pre-commit hooks auto-update `poetry.lock` when `pyproject.toml` changes
+- ✅ CI validates lock file on every PR
+- ✅ Dependabot sends weekly dependency updates
+
+See [CONTRIBUTING.md](CONTRIBUTING.md#-managing-dependencies) for detailed dependency management guide.
+
 ## 🏗️ Architecture & Design
 
 ### MCP Protocol Integration
@@ -222,7 +292,7 @@ Following enterprise-grade testing standards:
 - **Unit Tests**: Mock-based testing for individual functions (tests/test_server.py)
 - **Integration Tests**: Real cookbook testing with fixtures (tests/test_integration.py)
 - **Property-Based Tests**: Hypothesis fuzz testing for edge cases (tests/test_property_based.py)
-- **82% Coverage**: Comprehensive test coverage with goal of 95% for production readiness
+- **92% Coverage**: Comprehensive test coverage exceeding the 90% target for production readiness
 
 ### Quality Assurance
 - **Zero Warnings Policy**: All code passes linting without disabling checks
@@ -274,9 +344,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Command-line interface (CLI) for standalone usage
 
 ### In Progress 🔄
-- 🔄 Enhanced error handling and user experience
+- 🔄 Enhanced error handling and user experience improvements
 - 🔄 Documentation website and interactive examples
-- 🔄 Performance optimizations for large-scale migrations
+- 🔄 Performance optimizations for large-scale enterprise migrations
+- 🔄 Technical debt reduction (15 functions tracked in [GitHub Issues](https://github.com/kpeacocke/souschef/issues?q=is%3Aissue+is%3Aopen+label%3Atechnical-debt))
 
 ### Planned 📅
 - 📅 Chef Habitat to containerized deployment conversion
@@ -284,14 +355,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
 - 📅 Jenkins/GitLab CI pipeline generation
-- 📅 Custom resource conversion framework
-- 📅 Advanced templating and variable substitution patterns
+- 📅 Advanced Chef guard handling (only_if, not_if conditions)
+- 📅 Complex attribute precedence and merging logic
+- 📅 Conversion validation and testing framework
 
 ## 🙋‍♀️ Support & Community
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/souschef/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/souschef/discussions)
-- **Documentation**: [Wiki](https://github.com/your-org/souschef/wiki)
+- **Issues**: [GitHub Issues](https://github.com/kpeacocke/souschef/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/kpeacocke/souschef/discussions)
+- **Documentation**: [Wiki](https://github.com/kpeacocke/souschef/wiki)
 
 ---
 
@@ -406,9 +478,9 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 {
   "mcpServers": {
     "souschef": {
-      "command": "uv",
+      "command": "poetry",
       "args": [
-        "--directory",
+        "-C",
         "/path/to/souschef",
         "run",
         "souschef"
@@ -631,10 +703,33 @@ souschef/
 
 ### Development Standards
 
-- **Code Quality**: Zero warnings policy, type hints required, Google-style docstrings
-- **Testing**: High test coverage (82%) using pytest with goal of 100%
-- **Linting**: Code must pass `ruff check` with no violations
-- **Formatting**: Code must be formatted with `ruff format`
+SousChef uses a modern Python toolchain for code quality:
+
+- **Ruff**: Primary linter and formatter (replaces Black, isort, flake8)
+  ```bash
+  poetry run ruff check .    # Lint code
+  poetry run ruff format .   # Format code
+  ```
+
+- **mypy**: Static type checking for CI/CD
+  ```bash
+  poetry run mypy souschef   # Type check source code
+  ```
+
+- **Pylance**: Real-time VS Code type checking and intellisense
+  - Configured in `.vscode/settings.json`
+  - Provides immediate feedback during development
+
+- **pytest**: Testing framework with coverage reporting
+  ```bash
+  poetry run pytest --cov=souschef --cov-report=term-missing
+  ```
+
+**Quality Requirements:**
+- Zero warnings from all tools (Ruff, mypy, Pylance)
+- Type hints required for all functions
+- Google-style docstrings
+- 92% test coverage (exceeds 90% target)
 
 See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detailed development guidelines.
 
@@ -642,28 +737,27 @@ See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detai
 
 ```bash
 # Run all tests
-uv run pytest
+poetry run pytest
 
 # Run with coverage report
-uv run pytest --cov=souschef --cov-report=term-missing --cov-report=html
+poetry run pytest --cov=souschef --cov-report=term-missing --cov-report=html
 
 # Run only unit tests (mocked)
-uv run pytest tests/test_server.py
+poetry run pytest tests/test_server.py
 
 # Run only integration tests (real files)
-uv run pytest tests/test_integration.py
+poetry run pytest tests/test_integration.py
 
 # Run property-based tests
-uv run pytest tests/test_property_based.py
+poetry run pytest tests/test_property_based.py
 
 # Run with benchmarks
-uv run pytest --benchmark-only
+poetry run pytest --benchmark-only
 
-# Run linting
-uv run ruff check .
-
-# Run formatting
-uv run ruff format .
+# Check code quality
+poetry run ruff check .        # Linting
+poetry run ruff format .       # Formatting
+poetry run mypy souschef       # Type checking
 ```
 
 ### Test Types
@@ -693,10 +787,10 @@ The project includes multiple types of tests:
 
 ### Test Coverage
 
-The project maintains 82% test coverage with a goal of 95%+. Run coverage with HTML report:
+The project maintains 92% test coverage, exceeding the 90% target. Run coverage with HTML report:
 
 ```bash
-uv run pytest --cov=souschef --cov-report=html
+poetry run pytest --cov=souschef --cov-report=html
 open htmlcov/index.html  # View detailed coverage report
 ```
 
@@ -705,8 +799,8 @@ open htmlcov/index.html  # View detailed coverage report
 To verify test quality with mutation testing:
 
 ```bash
-uv run mutmut run
-uv run mutmut results
+poetry run mutmut run
+poetry run mutmut results
 ```
 
 ### VS Code Tasks
@@ -722,23 +816,15 @@ The project includes several VS Code tasks:
 
 Contributions are welcome! Please ensure:
 1. All tests pass
-2. Code coverage remains at 100%
+2. Code coverage maintained at 90%+
 3. Code passes ruff linting
 4. All functions have type hints and docstrings
 5. Follow the development standards in `.github/copilot-instructions.md`
 
 ## License
 
-TBD
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Roadmap
+---
 
-- [x] Add server entry point and runner
-- [x] Implement Chef → Ansible resource conversion (basic)
-- [x] Support template conversion (ERB → Jinja2)
-- [x] Parse custom Chef resources/LWRPs
-- [ ] Generate complete Ansible playbooks from recipes
-- [ ] Handle Chef guards (only_if, not_if) and notifications
-- [ ] Support complex attribute precedence and merging
-- [ ] Add conversion validation and testing
-- [ ] Handle Chef search and data bags
+**SousChef** - *Ansible automation, one recipe at a time.* 🍳✨

@@ -30,47 +30,64 @@ jobs:
   sonarcloud:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && secrets.SONAR_TOKEN != ''
+    # Note: secrets check is done in steps; job-level if cannot use secrets context
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Check for SONAR_TOKEN
+      id: check-token
+      run: |
+        if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+          echo "SONAR_TOKEN is not set. Skipping SonarCloud analysis."
+          echo "has_token=false" >> $GITHUB_OUTPUT
+        else
+          echo "has_token=true" >> $GITHUB_OUTPUT
+        fi
+
+    - uses: actions/checkout@v6
+      if: steps.check-token.outputs.has_token == 'true'
       with:
         fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
-    - name: Cache uv dependencies
-      uses: actions/cache@v4
+    - name: Set up Python
+      if: steps.check-token.outputs.has_token == 'true'
+      uses: actions/setup-python@v5
       with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-uv-
+        python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v4
+    - name: Install Poetry
+      if: steps.check-token.outputs.has_token == 'true'
+      uses: snok/install-poetry@v1
       with:
-        version: "latest"
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
+      if: steps.check-token.outputs.has_token == 'true'
+      uses: actions/cache@v5
+      with:
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: uv sync --all-extras --dev
+      if: steps.check-token.outputs.has_token == 'true'
+      run: poetry install --no-interaction
 
     - name: Run tests with coverage
+      if: steps.check-token.outputs.has_token == 'true'
       run: |
-        uv run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
+        poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
       continue-on-error: true
 
     - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@master
+      if: steps.check-token.outputs.has_token == 'true'
+      uses: SonarSource/sonarqube-scan-action@v6
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      with:
-        args: >
-          -Dsonar.projectKey=kpeacocke_souschef
-          -Dsonar.organization=kpeacocke
-          -Dsonar.sources=souschef
-          -Dsonar.tests=tests
-          -Dsonar.python.coverage.reportPaths=coverage.xml
-          -Dsonar.python.version=3.14
-          -Dsonar.exclusions=**/__pycache__/**,**/htmlcov/**,**/.pytest_cache/**,**/souschef.egg-info/**
-          -Dsonar.test.inclusions=tests/**
-          -Dsonar.coverage.exclusions=tests/**,**/__init__.py
+      # Configuration is in sonar-project.properties
+      # Note: Disable "Automatic Analysis" in SonarCloud project settings
+      # (Administration > Analysis Method) to avoid conflicts with CI analysis

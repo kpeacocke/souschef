@@ -1,0 +1,19 @@
+# Snyk Policy File
+# https://docs.snyk.io/snyk-cli/using-a-snyk-config-file
+
+version: v1.25.0
+
+# Ignore rules for known issues
+ignore: {}
+
+# Patch rules
+patch: {}
+
+# Exclude paths from scanning
+exclude:
+  global:
+    - tests/fixtures/**
+    - examples/**
+    - htmlcov/**
+    - "**/__pycache__/**"
+    - "**/*.egg-info/**"

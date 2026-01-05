@@ -5,9 +5,14 @@
         "charliermarsh.ruff",
         "GitHub.copilot",
         "GitHub.copilot-chat",
+        "GitHub.vscode-codeql",
         "editorconfig.editorconfig",
         "ms-vscode-remote.remote-containers",
         "redhat.vscode-yaml",
-        "Shopify.ruby-lsp"
+        "Shopify.ruby-lsp",
+        "snyk-security.snyk-vulnerability-scanner",
+        "SonarSource.sonarlint-vscode",
+        "Progress.chef",
+        "redhat.ansible"
     ]
 }

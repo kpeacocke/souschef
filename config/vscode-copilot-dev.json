@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "souschef-dev": {
+      "command": "poetry",
+      "args": [
+        "--directory",
+        "/absolute/path/to/souschef",
+        "run",
+        "souschef"
+      ]
+    }
+  }
+}

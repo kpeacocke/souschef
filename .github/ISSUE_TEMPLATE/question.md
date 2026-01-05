@@ -88,7 +88,7 @@ What result are you hoping to achieve?
 - **SousChef Version**: [e.g., 0.1.0]
 - **Python Version**: [e.g., 3.14.1]
 - **Operating System**: [e.g., Ubuntu 22.04]
-- **Installation Method**: [e.g., uv, pip]
+- **Installation Method**: [e.g., poetry, pip]
 
 ## 📚 Additional Resources
 

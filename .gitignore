@@ -29,13 +29,25 @@ MANIFEST
 # pytest
 .pytest_cache/
 .coverage
+coverage.xml
+coverage.json
 htmlcov/
+
+# Mutation testing
+.mutmut-cache
+mutants/
+
+# Snyk
+requirements.txt
 
 # Hypothesis
 .hypothesis/
 
 # ruff
 .ruff_cache/
+
+# Ruby LSP
+.ruby-lsp/
 
 # Virtualenv
 .venv/
@@ -63,3 +75,11 @@ Thumbs.db
 
 # Virtual environments
 .venv
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.github/instructions/snyk_rules.instructions.md
+
+# CodeQL Security Scanning
+.codeql-db/
+codeql-results/
+*.sarif

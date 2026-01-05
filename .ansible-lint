@@ -1,0 +1,31 @@
+# Ansible-lint configuration
+# https://ansible.readthedocs.io/projects/lint/configuring/
+
+profile: production
+
+# Exclude paths from linting
+exclude_paths:
+  - .git/
+  - .venv/
+  - htmlcov/
+  - tests/fixtures/  # Chef fixtures, not Ansible
+
+# Skip specific rules if needed
+skip_list:
+  - yaml[line-length]  # Allow long lines in generated playbooks
+
+# Enable additional rules
+enable_list:
+  - args
+  - empty-string-compare
+  - no-log-password
+  - no-same-owner
+
+# Offline mode - don't try to install collections
+offline: true
+
+# Strict mode - treat warnings as errors
+strict: false
+
+# Verbosity
+verbosity: 1

@@ -1,6 +1,14 @@
 {
     "name": "SousChef",
-    "image": "mcr.microsoft.com/devcontainers/python:3.14",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "args": {
+            "SNYK_VERSION": "latest",
+            "CODEQL_VERSION": "latest"
+        }
+    },
+    "workspaceFolder": "/workspaces/souschef",
+    "shutdownAction": "stopContainer",
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
             "installZsh": true,
@@ -14,15 +22,26 @@
             "version": "latest",
             "ppa": true
         },
+        "ghcr.io/devcontainers/features/github-cli:1": {
+            "version": "latest"
+        },
         "ghcr.io/devcontainers/features/ruby:1": {
             "version": "3.1",
             "installGems": "chef"
+        },
+        "ghcr.io/devcontainers/features/java:1": {
+            "version": "17",
+            "installMaven": false,
+            "installGradle": false
+        },
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "lts"
         }
     },
-    "onCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc",
     "customizations": {
         "vscode": {
             "settings": {
+                // Python environment configuration
                 "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
                 "python.testing.pytestEnabled": true,
                 "python.testing.unittestEnabled": false,
@@ -31,6 +50,13 @@
                     "--cov=souschef",
                     "--cov-report=term-missing"
                 ],
+
+                // Pylance: Real-time type checking and intellisense
+                "python.analysis.typeCheckingMode": "standard",
+                "python.analysis.autoImportCompletions": true,
+                "python.analysis.completeFunctionParens": true,
+
+                // Ruff: Primary linter and formatter (replaces Black, isort, flake8)
                 "[python]": {
                     "editor.formatOnSave": true,
                     "editor.defaultFormatter": "charliermarsh.ruff",
@@ -39,12 +65,19 @@
                         "source.organizeImports": "explicit"
                     }
                 },
+                "ruff.enable": true,
+                "ruff.lint.enable": true,
+                "ruff.organizeImports": true,
+
+                // Editor settings
                 "files.eol": "\n",
                 "files.insertFinalNewline": true,
                 "files.trimTrailingWhitespace": true,
                 "editor.rulers": [88],
                 "editor.tabSize": 4,
                 "editor.insertSpaces": true,
+
+                // Terminal configuration
                 "terminal.integrated.defaultProfile.linux": "zsh",
                 "terminal.integrated.profiles.linux": {
                     "zsh": {
@@ -62,14 +95,21 @@
                 "GitHub.copilot-chat",
                 "editorconfig.editorconfig",
                 "redhat.vscode-yaml",
-                "Shopify.ruby-lsp"
+                "Shopify.ruby-lsp",
+                "snyk-security.snyk-vulnerability-scanner",
+                "SonarSource.sonarlint-vscode",
+                "Progress.chef",
+                "redhat.ansible",
+                "zbr.vscode-ansible",
+                "ms-vscode.test-adapter-converter"
             ]
         }
     },
-    "postCreateC: "vscode",
+    "onCreateCommand": "curl -sSL https://install.python-poetry.org | python3 - && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc",
+    "postCreateCommand": "chmod +x .devcontainer/post-create.sh && .devcontainer/post-create.sh",
+    "remoteUser": "vscode",
     "mounts": [
-        "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
-        "source=${localEnv:HOME}/.gnupg,target=/home/vscode/.gnupg,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig.host,type=bind,consistency=cached",
         "source=souschef-zsh-history,target=/home/vscode/.zsh_history,type=volume"
     ]
 }
