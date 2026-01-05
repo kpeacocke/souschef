@@ -80,7 +80,7 @@ jobs:
 
     - name: Run SonarCloud analysis
       if: steps.check-token.outputs.has_token == 'true'
-      uses: SonarSource/sonarqube-scan-action@v6
+      uses: SonarSource/sonarqube-scan-action@v7
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
