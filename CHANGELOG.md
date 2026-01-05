@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1](https://github.com/kpeacocke/souschef/compare/v2.1.0...v2.1.1) (2026-01-05)
+
+
+### Bug Fixes
+
+* Merge pull request [#43](https://github.com/kpeacocke/souschef/issues/43) from kpeacocke/develop ([6d73b29](https://github.com/kpeacocke/souschef/commit/6d73b29d8814f6fd16802ba5f686caeb009cf85d))
+* use push trigger for release-please to create releases ([6d73b29](https://github.com/kpeacocke/souschef/commit/6d73b29d8814f6fd16802ba5f686caeb009cf85d))
+* use push trigger for release-please to create releases ([49b05c6](https://github.com/kpeacocke/souschef/commit/49b05c6afb421ee8e99d81d79ec554d5056bcf89))
+
 ## [2.1.0](https://github.com/kpeacocke/souschef/compare/v2.0.1...v2.1.0) (2026-01-05)
 
 
