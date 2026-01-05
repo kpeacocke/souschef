@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0](https://github.com/kpeacocke/souschef/compare/v2.0.1...v2.1.0) (2026-01-05)
+
+
+### Features
+
+* auto-merge release PRs when checks pass ([7fd9f3f](https://github.com/kpeacocke/souschef/commit/7fd9f3f2b11f8c05b36b58eb55498b74693df6ed))
+
+
+### Bug Fixes
+
+* Merge pull request [#41](https://github.com/kpeacocke/souschef/issues/41) from kpeacocke/develop ([d539fc7](https://github.com/kpeacocke/souschef/commit/d539fc73cc6e04f9dd6d2e360aec05fd18fd0fa9))
+* pass release tag through job outputs for workflow_dispatch ([ed7c74f](https://github.com/kpeacocke/souschef/commit/ed7c74fb27df93da42e8dbfe7ffb7b03409ee017))
+* simplify release automation with auto-merge ([d539fc7](https://github.com/kpeacocke/souschef/commit/d539fc73cc6e04f9dd6d2e360aec05fd18fd0fa9))
+* use env vars instead of direct input interpolation in run blocks ([c608150](https://github.com/kpeacocke/souschef/commit/c608150512eda51d62c428b88638d03262000303))
+
 ## [2.0.1](https://github.com/kpeacocke/souschef/compare/v2.0.0...v2.0.1) (2026-01-05)
 
 
