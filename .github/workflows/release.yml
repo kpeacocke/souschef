@@ -27,6 +27,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+    outputs:
+      tag: ${{ steps.get-tag.outputs.tag }}
 
     steps:
     - name: Checkout repository
@@ -147,7 +149,7 @@ jobs:
   attach-to-release:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: build
+    needs: [validate, build]
     permissions:
       contents: write
 
@@ -162,5 +164,6 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo "Attaching packages to release..."
-        gh release upload ${{ github.event.release.tag_name }} dist/* --repo ${{ github.repository }}
+        TAG="${{ needs.validate.outputs.tag }}"
+        echo "Attaching packages to release $TAG..."
+        gh release upload "$TAG" dist/* --repo ${{ github.repository }}
