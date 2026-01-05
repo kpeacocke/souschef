@@ -100,7 +100,7 @@ jobs:
             repo: context.repo.repo,
             ref: 'main'
           });
-          
+
           // Add a comment to the PR/commit that triggered this
           const message = '✅ Changes automatically synced to `develop` branch.';
           console.log(message);
