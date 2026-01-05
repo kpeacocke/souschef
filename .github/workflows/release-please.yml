@@ -14,7 +14,22 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Wait for CI to pass before running Release Please
+  wait-for-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Wait for CI workflow to complete
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          running-workflow-name: wait-for-ci
+          check-name: test  # The main CI job name
+          allowed-conclusions: success
+
   release-please:
+    needs: wait-for-ci
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
