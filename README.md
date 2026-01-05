@@ -49,6 +49,12 @@ Advanced resource-to-task conversion with intelligent module selection:
 
 - **convert_resource_to_task** - Transform individual Chef resources to Ansible tasks
 - **generate_playbook_from_recipe** - Generate complete Ansible playbooks from Chef recipes
+- **Enhanced Guard Handling** - Convert complex Chef guards to Ansible when/unless conditions
+  - Array-based guards: `only_if ['condition1', 'condition2']`
+  - Lambda/proc syntax: `only_if { ::File.exist?('/path') }`
+  - Do-end blocks: `not_if do ... end`
+  - Multiple guard types per resource with proper AND/OR logic
+  - Platform checks, node attributes, file/directory existence, and command execution
 
 ### 3. Chef Search & Inventory Integration
 Convert Chef search patterns to dynamic Ansible inventory:
@@ -342,6 +348,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Migration complexity assessment and planning tools
 - ✅ Comprehensive testing suite (unit, integration, property-based)
 - ✅ Command-line interface (CLI) for standalone usage
+- ✅ Enhanced Chef guard handling (arrays, lambda syntax, complex nested conditions)
 
 ### In Progress 🔄
 - 🔄 Enhanced error handling and user experience improvements
@@ -355,7 +362,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
 - 📅 Jenkins/GitLab CI pipeline generation
-- 📅 Enhanced Chef guard handling (complex nested conditions)
 - 📅 Advanced attribute precedence and merging logic (all priority levels)
 - 📅 Automated conversion validation and testing framework
 

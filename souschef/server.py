@@ -2846,15 +2846,18 @@ def _find_resource_block(resource: dict[str, str], raw_content: str) -> str | No
     return None
 
 
-def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list]:
+def _extract_guard_patterns(
+    resource_block: str,
+) -> tuple[list[str], list[str], list[str], list[str], list[str], list[str]]:
     """
-    Extract all guard patterns from resource block.
+    Extract all guard patterns from resource block including enhanced support.
 
     Args:
         resource_block: Resource block content.
 
     Returns:
-        Tuple of (only_if_conditions, not_if_conditions, only_if_blocks, not_if_blocks).
+        Tuple of (only_if_conditions, not_if_conditions, only_if_blocks,
+                 not_if_blocks, only_if_arrays, not_if_arrays).
 
     """
     # Extract only_if conditions
@@ -2867,40 +2870,60 @@ def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list
 
     # Extract only_if blocks (Ruby code blocks)
     # Use simple pattern - extract block and filter in Python to avoid ReDoS
-    only_if_block_pattern = re.compile(
-        r"only_if\s+do\b([^e]|e[^n]|en[^d]){0,500}\bend", re.DOTALL
-    )
+    only_if_block_pattern = re.compile(r"only_if\s+do\b(.*?)\bend", re.DOTALL)
     only_if_block_matches = only_if_block_pattern.findall(resource_block)
 
     # Extract not_if blocks (Ruby code blocks)
     # Use simple pattern - extract block and filter in Python to avoid ReDoS
-    not_if_block_pattern = re.compile(
-        r"not_if\s+do\b([^e]|e[^n]|en[^d]){0,500}\bend", re.DOTALL
-    )
+    not_if_block_pattern = re.compile(r"not_if\s+do\b(.*?)\bend", re.DOTALL)
     not_if_block_matches = not_if_block_pattern.findall(resource_block)
+
+    # Extract only_if with curly brace blocks (lambda/proc syntax)
+    only_if_lambda_pattern = re.compile(r"only_if\s+\{([^}]{1,500})\}", re.DOTALL)
+    only_if_lambda_matches = only_if_lambda_pattern.findall(resource_block)
+    only_if_block_matches.extend(only_if_lambda_matches)
+
+    # Extract not_if with curly brace blocks (lambda/proc syntax)
+    not_if_lambda_pattern = re.compile(r"not_if\s+\{([^}]{1,500})\}", re.DOTALL)
+    not_if_lambda_matches = not_if_lambda_pattern.findall(resource_block)
+    not_if_block_matches.extend(not_if_lambda_matches)
+
+    # Extract only_if arrays [condition1, condition2]
+    only_if_array_pattern = re.compile(r"only_if\s+\[([^\]]{1,500})\]", re.DOTALL)
+    only_if_array_matches = only_if_array_pattern.findall(resource_block)
+
+    # Extract not_if arrays [condition1, condition2]
+    not_if_array_pattern = re.compile(r"not_if\s+\[([^\]]{1,500})\]", re.DOTALL)
+    not_if_array_matches = not_if_array_pattern.findall(resource_block)
 
     return (
         only_if_matches,
         not_if_matches,
         only_if_block_matches,
         not_if_block_matches,
+        only_if_array_matches,
+        not_if_array_matches,
     )
 
 
-def _convert_guards_to_when_conditions(
-    only_if_conditions: list,
-    not_if_conditions: list,
-    only_if_blocks: list,
-    not_if_blocks: list,
+def _convert_guards_to_when_conditions(  # noqa: C901
+    only_if_conditions: list[str],
+    not_if_conditions: list[str],
+    only_if_blocks: list[str],
+    not_if_blocks: list[str],
+    only_if_arrays: list[str],
+    not_if_arrays: list[str],
 ) -> list[str]:
     """
-    Convert Chef guards to Ansible when conditions.
+    Convert Chef guards to Ansible when conditions with enhanced support.
 
     Args:
         only_if_conditions: List of only_if condition strings.
         not_if_conditions: List of not_if condition strings.
         only_if_blocks: List of only_if block contents.
         not_if_blocks: List of not_if block contents.
+        only_if_arrays: List of only_if array contents.
+        not_if_arrays: List of not_if array contents.
 
     Returns:
         List of Ansible when conditions.
@@ -2920,6 +2943,11 @@ def _convert_guards_to_when_conditions(
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
+    # Process only_if arrays (multiple conditions with AND logic)
+    for array_content in only_if_arrays:
+        array_conditions = _parse_guard_array(array_content, negate=False)
+        when_conditions.extend(array_conditions)
+
     # Process not_if conditions (these become when conditions with negation)
     for condition in not_if_conditions:
         ansible_condition = _convert_chef_condition_to_ansible(condition, negate=True)
@@ -2931,6 +2959,11 @@ def _convert_guards_to_when_conditions(
         ansible_condition = _convert_chef_block_to_ansible(block, positive=False)
         if ansible_condition:
             when_conditions.append(ansible_condition)
+
+    # Process not_if arrays (multiple conditions with AND logic, negated)
+    for array_content in not_if_arrays:
+        array_conditions = _parse_guard_array(array_content, negate=True)
+        when_conditions.extend(array_conditions)
 
     return when_conditions
 
@@ -2960,11 +2993,18 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
         not_if_conditions,
         only_if_blocks,
         not_if_blocks,
+        only_if_arrays,
+        not_if_arrays,
     ) = _extract_guard_patterns(resource_block)
 
     # Convert to Ansible when conditions
     when_conditions = _convert_guards_to_when_conditions(
-        only_if_conditions, not_if_conditions, only_if_blocks, not_if_blocks
+        only_if_conditions,
+        not_if_conditions,
+        only_if_blocks,
+        not_if_blocks,
+        only_if_arrays,
+        not_if_arrays,
     )
 
     # Format the when clause
@@ -2976,6 +3016,91 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
             guards["when"] = when_conditions
 
     return guards
+
+
+def _parse_guard_array(array_content: str, negate: bool = False) -> list[str]:  # noqa: C901
+    """
+    Parse Chef guard array content and convert to Ansible conditions.
+
+    Args:
+        array_content: Content within guard array brackets.
+        negate: Whether to negate conditions (for not_if arrays).
+
+    Returns:
+        List of Ansible when conditions.
+
+    """
+    conditions = []
+
+    # Split by commas, handling quoted strings and blocks
+    parts = []
+    current_part = ""
+    in_quotes = False
+    in_block = 0
+    quote_char = None
+
+    for char in array_content:
+        if char in ['"', "'"] and not in_block:
+            if not in_quotes:
+                in_quotes = True
+                quote_char = char
+            elif char == quote_char:
+                in_quotes = False
+                quote_char = None
+        elif char == "{" and not in_quotes:
+            in_block += 1
+        elif char == "}" and not in_quotes:
+            in_block -= 1
+        elif char == "," and not in_quotes and in_block == 0:
+            parts.append(current_part.strip())
+            current_part = ""
+            continue
+
+        current_part += char
+
+    if current_part.strip():
+        parts.append(current_part.strip())
+
+    # Process each part
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+
+        # Handle string conditions
+        if part.startswith(("'", '"')) and part.endswith(("'", '"')):
+            condition_str = part[1:-1]
+            ansible_condition = _convert_chef_condition_to_ansible(
+                condition_str, negate=negate
+            )
+            conditions.append(ansible_condition)
+        # Handle block conditions
+        elif part.startswith("{") and part.endswith("}"):
+            block_content = part[1:-1].strip()
+            ansible_condition = _convert_chef_block_to_ansible(
+                block_content, positive=not negate
+            )
+            conditions.append(ansible_condition)
+        # Handle lambda syntax
+        elif part.startswith("lambda") or part.startswith("->"):
+            # Extract lambda body
+            lambda_body = part
+            if "->" in part:
+                lambda_body = part.split("->", 1)[1].strip()
+            elif "lambda" in part:
+                lambda_body = (
+                    part.split("{", 1)[1].rsplit("}", 1)[0].strip()
+                    if "{" in part
+                    else ""
+                )
+
+            if lambda_body:
+                ansible_condition = _convert_chef_block_to_ansible(
+                    lambda_body, positive=not negate
+                )
+                conditions.append(ansible_condition)
+
+    return conditions
 
 
 def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> str:
@@ -3041,7 +3166,7 @@ def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> 
     return converted
 
 
-def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
+def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:  # noqa: C901
     """
     Convert a Chef condition block to Ansible when condition.
 
@@ -3061,24 +3186,78 @@ def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
         result = block.lower() == "true"
         return str(result if positive else not result).lower()
 
-    # Handle file existence patterns in blocks
-    file_exist_pattern = re.search(r'File\.exist\?\([\'"]([^\'"]+)[\'"]\)', block)
-    if file_exist_pattern:
-        path = file_exist_pattern.group(1)
-        condition = f'ansible_check_mode or {{ "{path}" | is_file }}'
-        return condition if positive else f"not ({condition})"
+    # Handle ::File prefix (Chef's scope resolution)
+    block = re.sub(r"::File\.", "File.", block)
+
+    # Handle file existence patterns in blocks - with variable interpolation
+    file_exist_patterns = [
+        r'File\.exist\?\([\'"]([^\'"]+)[\'"]\)',
+        r'File\.exists\?\([\'"]([^\'"]+)[\'"]\)',
+        r'File\.exist\?\("([^"]+)"\)',
+        r'File\.exist\?\((["\'])?#\{([^}]+)\}\1\)',  # Handle #{var} interpolation
+    ]
+
+    for pattern in file_exist_patterns:
+        file_match = re.search(pattern, block)
+        if file_match:
+            path = file_match.group(1) if len(file_match.groups()) >= 1 else ""
+            # Handle variable interpolation
+            if "#{" in path:
+                path = re.sub(r"#\{([^}]+)\}", r"{{ \1 }}", path)
+            condition = f'ansible_check_mode or {{ "{path}" is file }}'
+            return condition if positive else f"not ({condition})"
 
     # Handle directory existence patterns
-    dir_exist_pattern = re.search(r'File\.directory\?\([\'"]([^\'"]+)[\'"]\)', block)
-    if dir_exist_pattern:
-        path = dir_exist_pattern.group(1)
-        condition = f'ansible_check_mode or {{ "{path}" | is_dir }}'
-        return condition if positive else f"not ({condition})"
+    dir_patterns = [
+        r'File\.directory\?\([\'"]([^\'"]+)[\'"]\)',
+        r'File\.directory\?\("([^"]+)"\)',
+    ]
+
+    for pattern in dir_patterns:
+        dir_match = re.search(pattern, block)
+        if dir_match:
+            path = dir_match.group(1)
+            if "#{" in path:
+                path = re.sub(r"#\{([^}]+)\}", r"{{ \1 }}", path)
+            condition = f'ansible_check_mode or {{ "{path}" is directory }}'
+            return condition if positive else f"not ({condition})"
 
     # Handle command execution patterns
-    system_pattern = re.search(r'system\([\'"]([^\'"]+)[\'"]\)', block)
-    if system_pattern:
-        condition = "ansible_check_mode or {{ ansible_facts.env.PATH is defined }}"
+    system_patterns = [
+        r'system\([\'"]([^\'"]+)[\'"]\)',
+        r"`([^`]+)`",  # Backtick command execution
+    ]
+
+    for pattern in system_patterns:
+        system_match = re.search(pattern, block)
+        if system_match:
+            cmd = system_match.group(1)
+            # For 'which' commands, convert to package check
+            if cmd.startswith("which "):
+                pkg = cmd.split()[1]
+                condition = (
+                    f"ansible_check_mode or ansible_facts.packages['{pkg}'] is defined"
+                )
+            else:
+                condition = "ansible_check_mode or true  # TODO: Review shell command"
+            return condition if positive else f"not ({condition})"
+
+    # Handle node attribute checks
+    if "node[" in block or "node." in block:
+        # Convert node['attr'] or node.attr to Ansible variable
+        converted = re.sub(
+            r"node\[['\"]([^'\"]+)['\"]\]", r"hostvars[inventory_hostname]['\1']", block
+        )
+        converted = re.sub(
+            r"node\.([a-zA-Z_][a-zA-Z0-9_]*)",
+            r"hostvars[inventory_hostname]['\1']",
+            converted,
+        )
+        return converted if positive else f"not ({converted})"
+
+    # Handle platform checks
+    if "platform?" in block.lower() or "platform_family?" in block.lower():
+        condition = "ansible_facts.os_family is defined"
         return condition if positive else f"not ({condition})"
 
     # For complex blocks, create a comment indicating manual review needed

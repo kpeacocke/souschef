@@ -10324,7 +10324,7 @@ class TestErrorHandling:
         """Test Chef block with File.exist? check."""
         block = "File.exist?('/etc/nginx/nginx.conf')"
         result = _convert_chef_block_to_ansible(block, positive=True)
-        assert "is_file" in result
+        assert "is file" in result
         assert "/etc/nginx/nginx.conf" in result
 
     def test_convert_chef_block_file_exist_negated(self):
@@ -10332,13 +10332,13 @@ class TestErrorHandling:
         block = "File.exist?('/etc/config')"
         result = _convert_chef_block_to_ansible(block, positive=False)
         assert "not" in result
-        assert "is_file" in result
+        assert "is file" in result
 
     def test_convert_chef_block_directory(self):
         """Test Chef block with File.directory? check."""
         block = "File.directory?('/var/log')"
         result = _convert_chef_block_to_ansible(block, positive=True)
-        assert "is_dir" in result
+        assert "is directory" in result
 
     def test_convert_chef_block_system_command(self):
         """Test Chef block with system() command."""
@@ -10355,13 +10355,17 @@ class TestErrorHandling:
     def test_convert_guards_to_when_conditions_only_if(self):
         """Test converting only_if guards to when conditions."""
         only_if_conditions = ["File.exist?('/etc/nginx')"]
-        result = _convert_guards_to_when_conditions(only_if_conditions, [], [], [])
+        result = _convert_guards_to_when_conditions(
+            only_if_conditions, [], [], [], [], []
+        )
         assert len(result) > 0
 
     def test_convert_guards_to_when_conditions_not_if(self):
         """Test converting not_if guards to when conditions."""
         not_if_conditions = ["File.exist?('/etc/nginx')"]
-        result = _convert_guards_to_when_conditions([], not_if_conditions, [], [])
+        result = _convert_guards_to_when_conditions(
+            [], not_if_conditions, [], [], [], []
+        )
         assert len(result) > 0
 
     def test_convert_guards_to_when_conditions_blocks(self):
@@ -10369,7 +10373,7 @@ class TestErrorHandling:
         only_if_blocks = ["true"]
         not_if_blocks = ["false"]
         result = _convert_guards_to_when_conditions(
-            [], [], only_if_blocks, not_if_blocks
+            [], [], only_if_blocks, not_if_blocks, [], []
         )
         assert len(result) == 2
 
