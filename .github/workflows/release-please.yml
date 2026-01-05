@@ -25,7 +25,7 @@ jobs:
           ref: ${{ github.sha }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           running-workflow-name: wait-for-ci
-          check-name: test  # The main CI job name
+          check-regexp: ^test\s  # Matches "test (3.14)" etc.
           allowed-conclusions: success
 
       - name: Wait for CodeQL to complete
@@ -34,7 +34,7 @@ jobs:
           ref: ${{ github.sha }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           running-workflow-name: wait-for-ci
-          check-name: analyze  # CodeQL job name
+          check-regexp: ^Analyze  # Matches "Analyze Python Code"
           allowed-conclusions: success
 
       - name: Wait for Snyk to complete
