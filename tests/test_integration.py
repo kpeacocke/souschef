@@ -823,11 +823,8 @@ class TestPlaybookGenerationEdgeCases:
         temp_file = tmp_path / "test_recipe.rb"
         temp_file.write_text("package 'nginx'")
 
-        try:
-            result = server.generate_playbook_from_recipe(str(temp_file))
-            assert "Error:" in result
-        finally:
-            pass
+        result = server.generate_playbook_from_recipe(str(temp_file))
+        assert "Error:" in result
 
     def test_generate_playbook_with_exception(self, monkeypatch, tmp_path):
         """Test playbook generation with unexpected exception."""
