@@ -1,7 +1,11 @@
 name: Release Please
 
+# Trigger after CI workflow completes on main (not concurrently)
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches:
       - main
 
@@ -14,51 +18,12 @@ permissions:
   pull-requests: write
 
 jobs:
-  # Wait for CI and security checks to pass before running Release Please
-  wait-for-ci:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Wait for CI workflow to complete
-        uses: lewagon/wait-on-check-action@v1.3.4
-        with:
-          ref: ${{ github.sha }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          running-workflow-name: wait-for-ci
-          check-regexp: ^test\s  # Matches "test (3.14)" etc.
-          allowed-conclusions: success
-
-      - name: Wait for CodeQL to complete
-        uses: lewagon/wait-on-check-action@v1.3.4
-        with:
-          ref: ${{ github.sha }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          running-workflow-name: wait-for-ci
-          check-regexp: ^Analyze  # Matches "Analyze Python Code"
-          allowed-conclusions: success
-
-      - name: Wait for Snyk to complete
-        uses: lewagon/wait-on-check-action@v1.3.4
-        with:
-          ref: ${{ github.sha }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          running-workflow-name: wait-for-ci
-          check-name: snyk-code  # Snyk code scanning job
-          allowed-conclusions: success
-
-      - name: Wait for SonarCloud to complete
-        uses: lewagon/wait-on-check-action@v1.3.4
-        with:
-          ref: ${{ github.sha }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          running-workflow-name: wait-for-ci
-          check-name: sonarcloud  # SonarCloud job name
-          allowed-conclusions: success
-
+  # Only proceed if CI was successful
   release-please:
-    needs: wait-for-ci
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Only run if CI passed
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Run Release Please
