@@ -707,7 +707,7 @@ class TestInSpecIntegration:
         )
         assert nginx_pkg is not None
         assert nginx_pkg["title"] == "NGINX Package Installation"
-        assert abs(nginx_pkg["impact"] - 1.0) < 0.001
+        assert nginx_pkg["impact"] == pytest.approx(1.0)
         assert len(nginx_pkg["tests"]) == 1
 
         test = nginx_pkg["tests"][0]

@@ -7938,7 +7938,7 @@ end""",
             # Mount resources
             (
                 # Test fixture with fake credentials for Chef resource parsing
-                # lgtm[py/hardcoded-credentials] NOSONAR
+                # NOSONAR
                 """mount "/mnt/shared" do
   device "//server/share"
   fstype "cifs"
