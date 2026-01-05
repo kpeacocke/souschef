@@ -18,17 +18,18 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout main branch
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0  # Need full history for merging
-        ref: main  # Start from main branch
+        ref: main
 
-    - name: Configure Git
+    - name: Configure Git identity
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
-    - name: Merge main to develop
+    - name: Merge main into develop
       run: |
         # Checkout develop
         git checkout develop
@@ -88,7 +89,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
-    - name: Comment on release
+    - name: Add sync confirmation to release notes
       if: success()
       uses: actions/github-script@v7
       with:

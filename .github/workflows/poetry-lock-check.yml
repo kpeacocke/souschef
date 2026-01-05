@@ -36,9 +36,10 @@ jobs:
       pull-requests: write
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout repository
+      uses: actions/checkout@v6
 
-    - name: Set up Python
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
@@ -50,11 +51,11 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
 
-    - name: Check poetry.lock is in sync with pyproject.toml
+    - name: Verify poetry.lock is in sync with pyproject.toml
       run: |
         poetry check --lock
 
-    - name: Comment on PR if out of sync
+    - name: Comment on PR if lock file is out of sync
       if: failure() && github.event_name == 'pull_request'
       uses: actions/github-script@v7
       with:

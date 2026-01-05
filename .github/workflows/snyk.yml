@@ -41,9 +41,10 @@ jobs:
       actions: read
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout repository
+      uses: actions/checkout@v6
 
-    - name: Set up Python
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
@@ -72,7 +73,7 @@ jobs:
     - name: Export requirements.txt for Snyk
       run: poetry export -f requirements.txt --output requirements.txt --without-hashes
 
-    - name: Run Snyk to check for vulnerabilities
+    - name: Run Snyk dependency vulnerability scan
       uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
       continue-on-error: true
       env:
@@ -80,7 +81,7 @@ jobs:
       with:
         args: --severity-threshold=high --file=requirements.txt --sarif-file-output=snyk-sca.sarif
 
-    - name: Ensure SARIF file exists
+    - name: Create empty SARIF if missing
       if: always()
       run: |
         if [ ! -f snyk-sca.sarif ] || [ ! -s snyk-sca.sarif ]; then
@@ -104,18 +105,19 @@ jobs:
       actions: read
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout repository
+      uses: actions/checkout@v6
 
-    - name: Set up Snyk CLI
+    - name: Install Snyk CLI
       uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
 
-    - name: Run Snyk Code (SAST)
+    - name: Run Snyk Code analysis (SAST)
       continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: snyk code test --sarif-file-output=snyk-code.sarif
 
-    - name: Ensure SARIF file exists
+    - name: Create empty SARIF if missing
       if: always()
       run: |
         if [ ! -f snyk-code.sarif ] || [ ! -s snyk-code.sarif ]; then
@@ -139,12 +141,13 @@ jobs:
       actions: read
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout repository
+      uses: actions/checkout@v6
 
-    - name: Set up Snyk CLI
+    - name: Install Snyk CLI
       uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
 
-    - name: Run Snyk IaC scan
+    - name: Scan Infrastructure as Code files
       continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -152,7 +155,7 @@ jobs:
         # Scan any Ansible playbooks in examples
         snyk iac test examples/ --sarif-file-output=snyk-iac.sarif || true
 
-    - name: Ensure SARIF file exists
+    - name: Create empty SARIF if missing
       if: always()
       run: |
         if [ ! -f snyk-iac.sarif ] || [ ! -s snyk-iac.sarif ]; then
@@ -175,9 +178,10 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@v6
+    - name: Checkout repository
+      uses: actions/checkout@v6
 
-    - name: Set up Python
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
@@ -206,7 +210,7 @@ jobs:
     - name: Export requirements.txt for Snyk
       run: poetry export -f requirements.txt --output requirements.txt --without-hashes
 
-    - name: Run Snyk monitor
+    - name: Register project with Snyk monitoring
       uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
