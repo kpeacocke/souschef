@@ -28,11 +28,13 @@ jobs:
           manifest-file: .release-please-manifest.json
 
       - name: Auto-merge Release PR
-        if: ${{ steps.release.outputs.pr }}
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
-          PR_NUMBER="${{ steps.release.outputs.pr }}"
+          # Extract PR number from JSON output
+          PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
           echo "Auto-merging Release PR #$PR_NUMBER"
 
           # Wait a moment for CI to start
