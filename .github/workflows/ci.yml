@@ -16,22 +16,10 @@ on:
       - 'bugfix/**'
       - 'release/**'
       - 'hotfix/**'
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'examples/**'
-      - 'LICENSE'
-      - '.gitignore'
   pull_request:
     branches:
       - main
       - develop
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'examples/**'
-      - 'LICENSE'
-      - '.gitignore'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

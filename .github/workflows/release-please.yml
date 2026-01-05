@@ -1,12 +1,11 @@
 name: Release Please
 
-# Run on every push to main to:
-# 1. Create/update release PR when unreleased commits exist
-# 2. Create GitHub Release when release PR is merged
+# Run after CI completes on main
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,6 +19,8 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Only run if CI passed
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Create or update release PR / Create release
@@ -29,13 +30,15 @@ jobs:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      - name: Log release PR created
+      - name: Auto-merge release PR
         if: ${{ steps.release.outputs.prs_created == 'true' }}
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
-          echo "✓ Release PR #$PR_NUMBER created - merge it to publish"
+          echo "Enabling auto-merge for release PR #$PR_NUMBER..."
+          gh pr merge "$PR_NUMBER" --auto --squash --repo ${{ github.repository }}
 
       - name: Log release created
         if: ${{ steps.release.outputs.release_created }}

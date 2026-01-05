@@ -355,9 +355,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
 - 📅 Jenkins/GitLab CI pipeline generation
-- 📅 Advanced Chef guard handling (only_if, not_if conditions)
-- 📅 Complex attribute precedence and merging logic
-- 📅 Conversion validation and testing framework
+- 📅 Enhanced Chef guard handling (complex nested conditions)
+- 📅 Advanced attribute precedence and merging logic (all priority levels)
+- 📅 Automated conversion validation and testing framework
 
 ## 🙋‍♀️ Support & Community
 
