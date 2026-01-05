@@ -11964,18 +11964,6 @@ class TestErrorHandlingPaths:
             assert "error" in result.lower()
 
 
-class TestResourceConversionEdgeCases:
-    """Test edge cases in resource conversion."""
-
-    def test_create_handler_returns_none_for_unsupported_action(self):
-        """Test that _create_handler returns None for unsupported actions."""
-        from souschef.server import _create_handler
-
-        # Test with unsupported action that returns None
-        result = _create_handler("unsupported_action", "unknown_type", "test_resource")
-        assert result is None or isinstance(result, dict)
-
-
 class TestPathValidation:
     """Test path validation logic."""
 
@@ -12175,3 +12163,349 @@ class TestInventoryScriptGeneration:
 
         result = _generate_inventory_script_content(search_patterns)
         assert "#!/usr/bin/env python" in result or "import" in result
+
+
+class TestResourceConversionEdgeCases:
+    """Test edge cases in resource conversion."""
+
+    def test_create_handler_returns_none_for_unsupported_action(self):
+        """Test that _create_handler returns None for unsupported actions."""
+        from souschef.server import _create_handler
+
+        result = _create_handler("unsupported_action", "unknown_type", "test_resource")
+        assert result is None or isinstance(result, dict)
+
+    def test_convert_file_resource_with_create_action(self):
+        """Test converting file resource with create action."""
+        result = convert_resource_to_task(
+            resource_type="file",
+            resource_name="/etc/config.conf",
+            action="create",
+            properties='{"content": "test"}',
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "state:" in result
+        assert "/etc/config.conf" in result
+
+    def test_convert_file_resource_with_other_action(self, tmp_path):
+        """Test converting file resource with non-create action."""
+        test_file = tmp_path / "test.txt"
+        result = convert_resource_to_task(
+            resource_type="file",
+            resource_name=str(test_file),
+            action="delete",
+            properties="",
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "state:" in result
+
+    def test_convert_directory_resource_with_create(self):
+        """Test converting directory resource with create action."""
+        result = convert_resource_to_task(
+            resource_type="directory",
+            resource_name="/var/log/app",
+            action="create",
+            properties="",
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "directory" in result
+        assert "/var/log/app" in result
+
+    def test_convert_directory_resource_with_delete(self, tmp_path):
+        """Test converting directory resource with delete action."""
+        old_dir = tmp_path / "olddir"
+        result = convert_resource_to_task(
+            resource_type="directory",
+            resource_name=str(old_dir),
+            action="delete",
+            properties="",
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "state:" in result
+
+
+class TestAdditionalResourceTypes:
+    """Test additional resource type conversions."""
+
+    def test_convert_execute_resource(self):
+        """Test converting execute resource."""
+        result = convert_resource_to_task(
+            resource_type="execute",
+            resource_name="systemctl restart nginx",
+            action="run",
+            properties="",
+        )
+
+        assert "ansible.builtin.command" in result or "ansible.builtin.shell" in result
+        assert "systemctl restart nginx" in result
+
+    def test_convert_cron_resource(self):
+        """Test converting cron resource."""
+        result = convert_resource_to_task(
+            resource_type="cron",
+            resource_name="daily_backup",
+            action="create",
+            properties='{"minute": "0", "hour": "2", "command": "/usr/local/bin/backup.sh"}',
+        )
+
+        assert "ansible.builtin.cron" in result
+        assert "daily_backup" in result
+
+    def test_convert_user_resource(self):
+        """Test converting user resource."""
+        result = convert_resource_to_task(
+            resource_type="user",
+            resource_name="appuser",
+            action="create",
+            properties='{"uid": "1001", "shell": "/bin/bash"}',
+        )
+
+        assert "ansible.builtin.user" in result
+        assert "appuser" in result
+
+    def test_convert_group_resource(self):
+        """Test converting group resource."""
+        result = convert_resource_to_task(
+            resource_type="group",
+            resource_name="appgroup",
+            action="create",
+            properties='{"gid": "1001"}',
+        )
+
+        assert "ansible.builtin.group" in result
+        assert "appgroup" in result
+
+    def test_convert_mount_resource(self):
+        """Test converting mount resource."""
+        result = convert_resource_to_task(
+            resource_type="mount",
+            resource_name="/mnt/data",
+            action="mount",
+            properties='{"device": "/dev/sdb1", "fstype": "ext4"}',
+        )
+
+        assert "ansible.builtin.mount" in result or "mount" in result.lower()
+        assert "/mnt/data" in result
+
+    def test_convert_link_resource(self):
+        """Test converting link resource."""
+        result = convert_resource_to_task(
+            resource_type="link",
+            resource_name="/usr/bin/node",
+            action="create",
+            properties='{"to": "/usr/local/bin/node"}',
+        )
+
+        assert isinstance(result, str)
+        assert "/usr/bin/node" in result
+
+    def test_convert_git_resource(self):
+        """Test converting git resource."""
+        result = convert_resource_to_task(
+            resource_type="git",
+            resource_name="/opt/myapp",
+            action="sync",
+            properties='{"repository": "https://github.com/user/repo.git", "revision": "main"}',
+        )
+
+        assert "ansible.builtin.git" in result
+        assert "/opt/myapp" in result
+
+    def test_convert_apt_package_resource(self):
+        """Test converting apt_package resource."""
+        result = convert_resource_to_task(
+            resource_type="apt_package",
+            resource_name="nginx",
+            action="install",
+            properties="",
+        )
+
+        assert "ansible.builtin.apt" in result
+        assert "nginx" in result
+
+    def test_convert_yum_package_resource(self):
+        """Test converting yum_package resource."""
+        result = convert_resource_to_task(
+            resource_type="yum_package",
+            resource_name="httpd",
+            action="install",
+            properties="",
+        )
+
+        assert "ansible.builtin.yum" in result
+        assert "httpd" in result
+
+    def test_convert_bash_resource(self):
+        """Test converting bash resource."""
+        result = convert_resource_to_task(
+            resource_type="bash",
+            resource_name="configure_system",
+            action="run",
+            properties='{"code": "echo \'test\'"}',
+        )
+
+        assert "ansible.builtin.shell" in result
+
+    def test_convert_script_resource(self, tmp_path):
+        """Test converting script resource."""
+        script_file = tmp_path / "setup.sh"
+        result = convert_resource_to_task(
+            resource_type="script",
+            resource_name=str(script_file),
+            action="run",
+            properties="",
+        )
+
+        assert "ansible.builtin.script" in result
+        assert str(script_file) in result
+
+
+class TestComplexPropertyHandling:
+    """Test handling of complex properties in resource conversion."""
+
+    def test_convert_with_array_property(self):
+        """Test converting resource with array properties."""
+        result = convert_resource_to_task(
+            resource_type="package",
+            resource_name="nginx",
+            action="install",
+            properties='{"options": ["--no-install-recommends", "--quiet"]}',
+        )
+
+        assert "ansible.builtin.package" in result
+        assert "nginx" in result
+
+    def test_convert_with_hash_property(self):
+        """Test converting resource with hash/dict properties."""
+        result = convert_resource_to_task(
+            resource_type="template",
+            resource_name="/etc/nginx/nginx.conf",
+            action="create",
+            properties='{"source": "nginx.conf.erb", "variables": {"port": 80, "worker_processes": 4}}',
+        )
+
+        assert "ansible.builtin.template" in result
+        assert "/etc/nginx/nginx.conf" in result
+
+    def test_convert_with_boolean_properties(self):
+        """Test converting resource with boolean properties."""
+        result = convert_resource_to_task(
+            resource_type="service",
+            resource_name="nginx",
+            action="start",
+            properties='{"enabled": true, "reload": false}',
+        )
+
+        assert "ansible.builtin.service" in result
+        assert "nginx" in result
+
+    def test_convert_with_numeric_properties(self):
+        """Test converting resource with numeric properties."""
+        result = convert_resource_to_task(
+            resource_type="file",
+            resource_name="/var/log/app.log",
+            action="create",
+            properties='{"mode": 644, "size": 1024}',
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "/var/log/app.log" in result
+
+
+class TestChefSearchConversion:
+    """Test Chef search query conversion to Ansible inventory."""
+
+    def test_convert_chef_search_with_wildcard(self):
+        """Test converting Chef search with wildcard to inventory."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("hostname:web-*")
+        assert len(result) > 0
+
+    def test_convert_chef_search_with_regex(self):
+        """Test converting Chef search with regex to inventory."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("name:/^db-\\d+$/")
+        assert len(result) > 0
+
+    def test_convert_chef_search_with_not_equal(self):
+        """Test converting Chef search with NOT operator."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("environment:!staging")
+        assert len(result) > 0
+
+    def test_convert_chef_search_with_range(self):
+        """Test converting Chef search with range."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("memory:[2048 TO 8192]")
+        assert len(result) > 0
+
+    def test_convert_chef_search_with_tag(self):
+        """Test converting Chef search with tags."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("tags:webserver")
+        assert "tag" in result.lower() or "webserver" in result.lower()
+
+
+class TestSearchComplexity:
+    """Test search query complexity analysis."""
+
+    def test_determine_search_complexity_patterns(self):
+        """Test _determine_query_complexity with various operators."""
+        from souschef.server import _determine_query_complexity
+
+        # Test intermediate complexity with regex operator
+        result = _determine_query_complexity(
+            [{"field": "name", "operator": "~", "value": "web.*"}], []
+        )
+        assert result == "intermediate"
+
+        # Test intermediate complexity with != operator
+        result = _determine_query_complexity(
+            [{"field": "status", "operator": "!=", "value": "stopped"}], []
+        )
+        assert result == "intermediate"
+
+        # Test simple with single condition
+        result = _determine_query_complexity(
+            [{"field": "a", "operator": "=", "value": "1"}], []
+        )
+        assert result == "simple"
+
+        # Test complex with multiple conditions
+        result = _determine_query_complexity(
+            [
+                {"field": "a", "operator": "=", "value": "1"},
+                {"field": "b", "operator": "=", "value": "2"},
+            ],
+            [],
+        )
+        assert result == "complex"
+
+        # Test complex with operators
+        result = _determine_query_complexity(
+            [{"field": "a", "operator": "=", "value": "1"}], ["AND"]
+        )
+        assert result == "complex"
+
+
+class TestUtilityFunctions:
+    """Test utility and helper functions."""
+
+    def test_get_current_timestamp(self):
+        """Test timestamp generation for playbooks."""
+        from souschef.server import _get_current_timestamp
+
+        timestamp = _get_current_timestamp()
+        assert isinstance(timestamp, str)
+        assert len(timestamp) > 0
+        assert "-" in timestamp
+        assert ":" in timestamp
