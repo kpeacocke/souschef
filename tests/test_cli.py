@@ -573,8 +573,10 @@ def test_cookbook_command_with_json_decode_error(runner, tmp_path, monkeypatch):
     assert "Analyzing cookbook" in result.output
 
 
-def test_cookbook_command_template_json_decode_error(runner, tmp_path, monkeypatch):
-    """Test cookbook command when template parsing returns invalid JSON."""
+def test_cookbook_command_template_parse_returns_plain_text(
+    runner, tmp_path, monkeypatch
+):
+    """Test cookbook command when template parsing returns plain text instead of JSON."""
     import souschef.server
 
     # Create a test cookbook
@@ -587,7 +589,7 @@ def test_cookbook_command_template_json_decode_error(runner, tmp_path, monkeypat
     templates_dir.mkdir(parents=True)
     (templates_dir / "config.erb").write_text("port: <%= @port %>")
 
-    # Mock parse_template to return invalid JSON
+    # Mock parse_template to return plain text (not JSON)
     def mock_parse_template(*args, **kwargs):
         return "This is not valid JSON!"
 
@@ -595,7 +597,7 @@ def test_cookbook_command_template_json_decode_error(runner, tmp_path, monkeypat
 
     result = runner.invoke(cli, ["cookbook", str(cookbook)])
 
-    # Should handle the error gracefully
+    # Should handle plain text output gracefully
     assert result.exit_code == 0
     assert "Analyzing cookbook" in result.output
 
@@ -669,3 +671,194 @@ def test_cookbook_command_with_templates_having_many_variables(
     # Should show "... and X more" for variables > 5
     assert result.exit_code == 0
     assert "... and " in result.output or "Variables:" in result.output
+
+
+def test_convert_command_json_output_yaml_parse_exception(runner, monkeypatch):
+    """Test convert command with JSON output when YAML parsing fails."""
+    from unittest.mock import patch
+
+    # Patch yaml.safe_load to raise an exception
+    with patch("yaml.safe_load") as mock_yaml:
+        mock_yaml.side_effect = Exception("Parse error")
+
+        result = runner.invoke(
+            cli,
+            [
+                "convert",
+                "package",
+                "nginx",
+                "--action",
+                "install",
+                "--format",
+                "json",
+            ],
+        )
+
+        # Should fall back to text output when YAML parsing fails
+        assert result.exit_code == 0
+        # Should contain the result (either JSON output or YAML)
+
+
+def test_convert_command_json_output_no_pyyaml(runner, monkeypatch):
+    """Test convert command with JSON output when PyYAML is not installed."""
+    import sys
+
+    import souschef.server
+
+    # Mock the convert function
+    def mock_convert(*args, **kwargs):
+        return "name: nginx\nstate: present"
+
+    monkeypatch.setattr(souschef.server, "convert_resource_to_task", mock_convert)
+
+    # Temporarily hide yaml module
+    yaml_module = sys.modules.get("yaml")
+    if yaml_module:
+        monkeypatch.setitem(sys.modules, "yaml", None)
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert",
+            "package",
+            "nginx",
+            "--action",
+            "install",
+            "--format",
+            "json",
+        ],
+    )
+
+    # Should show warning about PyYAML
+    assert result.exit_code == 0
+    # Output should contain the YAML result or warning
+    assert "name: nginx" in result.output or "Warning" in result.output
+
+
+def test_cookbook_command_resource_json_decode_error(runner, tmp_path, monkeypatch):
+    """Test cookbook command when resource parsing returns invalid JSON."""
+    from unittest.mock import patch
+
+    # Create a test cookbook
+    cookbook = tmp_path / "test_cookbook"
+    cookbook.mkdir()
+    (cookbook / "metadata.rb").write_text("name 'test'\nversion '1.0.0'")
+
+    # Create custom resources directory
+    resources_dir = cookbook / "resources"
+    resources_dir.mkdir(parents=True)
+    (resources_dir / "app.rb").write_text("property :name, String")
+
+    # Patch json.loads to raise JSONDecodeError for resources
+    with patch("souschef.cli.json.loads") as mock_json:
+        mock_json.side_effect = [
+            {"name": "test", "version": "1.0.0"},  # metadata succeeds
+            json.JSONDecodeError("error", "", 0),  # resource fails
+        ]
+
+        result = runner.invoke(cli, ["cookbook", str(cookbook)])
+
+        # Should handle JSON decode error gracefully
+        assert result.exit_code == 0
+        assert "app.rb" in result.output
+
+
+def test_cookbook_command_template_json_decode_error(runner, tmp_path, monkeypatch):
+    """Test cookbook command when template parsing returns invalid JSON."""
+    from unittest.mock import patch
+
+    # Create a test cookbook
+    cookbook = tmp_path / "test_cookbook"
+    cookbook.mkdir()
+    (cookbook / "metadata.rb").write_text("name 'test'\nversion '1.0.0'")
+
+    # Create templates directory
+    templates_dir = cookbook / "templates" / "default"
+    templates_dir.mkdir(parents=True)
+    (templates_dir / "config.erb").write_text("port: <%= @port %>")
+
+    # Patch json.loads to raise JSONDecodeError for templates
+    with patch("souschef.cli.json.loads") as mock_json:
+        mock_json.side_effect = [
+            {"name": "test", "version": "1.0.0"},  # metadata succeeds
+            json.JSONDecodeError("error", "", 0),  # template fails
+        ]
+
+        result = runner.invoke(cli, ["cookbook", str(cookbook)])
+
+        # Should handle JSON decode error gracefully
+        assert result.exit_code == 0
+        assert "config.erb" in result.output
+
+
+def test_cookbook_command_with_output_path(runner, tmp_path, monkeypatch):
+    """Test cookbook command with output directory specified."""
+    # Create a test cookbook
+    cookbook = tmp_path / "test_cookbook"
+    cookbook.mkdir()
+    (cookbook / "metadata.rb").write_text("name 'test'\nversion '1.0.0'")
+
+    output_dir = tmp_path / "output"
+
+    result = runner.invoke(
+        cli, ["cookbook", str(cookbook), "--output", str(output_dir)]
+    )
+
+    # Should mention output path
+    assert result.exit_code == 0
+    assert str(output_dir) in result.output or "Would save" in result.output
+
+
+def test_main_entry_point(monkeypatch):
+    """Test the main() entry point function."""
+    import sys
+
+    from souschef.cli import main
+
+    # Mock sys.exit to capture the call
+    exit_called = []
+
+    def mock_exit(code):
+        exit_called.append(code)
+        raise SystemExit(code)
+
+    def mock_cli():
+        """Mock CLI function that does nothing."""
+        pass
+
+    monkeypatch.setattr(sys, "exit", mock_exit)
+    monkeypatch.setattr("souschef.cli.cli", mock_cli)
+
+    # main() should call cli() and then sys.exit(0)
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 0
+    assert exit_called == [0]
+
+
+def test_convert_command_json_decode_error_in_result(runner, monkeypatch):
+    """Test convert command when result JSON parsing fails."""
+    from unittest.mock import patch
+
+    # Patch yaml.safe_load to raise JSONDecodeError (actually returned from yaml)
+    with patch("yaml.safe_load") as mock_yaml:
+        mock_yaml.side_effect = json.JSONDecodeError("error", "", 0)
+
+        result = runner.invoke(
+            cli,
+            [
+                "convert",
+                "service",
+                "apache",
+                "--action",
+                "start",
+                "--format",
+                "json",
+            ],
+        )
+
+        # Should output result even if JSON parsing fails (falls back to YAML output)
+        assert result.exit_code == 0
+        # Will output YAML because JSON parsing failed
+        assert len(result.output) > 0

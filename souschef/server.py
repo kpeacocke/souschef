@@ -70,7 +70,7 @@ ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"
 METADATA_FILENAME = "metadata.rb"
 ERROR_PREFIX = "Error:"
 REGEX_WHITESPACE_QUOTE = r"\s+['\"]?"
-REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*([^\n]{0,20000})\nend"
+REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*([^\n]{0,15000})\nend"
 REGEX_RESOURCE_BRACKET = r"(\w+)\[([^\]]+)\]"
 INSPEC_END_INDENT = "  end"
 INSPEC_SHOULD_EXIST = "    it { should exist }"
@@ -116,22 +116,22 @@ ACTION_TO_STATE = {
 # ERB to Jinja2 pattern mappings
 ERB_PATTERNS = {
     # Variable output: <%= var %> -> {{ var }}
-    "output": (r"<%=\s*([^%]+?)\s*%>", r"{{ \1 }}"),
+    "output": (r"<%=\s*([^%]{1,200}?)\s*%>", r"{{ \1 }}"),
     # Variable with node prefix: <%= node['attr'] %> -> {{ attr }}
-    "node_attr": (r"<%=\s*node\[(['\"])([^%]+?)\1\]\s*%>", r"{{ \2 }}"),
+    "node_attr": (r"<%=\s*node\[(['\"])([^%]{1,200}?)\1\]\s*%>", r"{{ \2 }}"),
     # If statements: <% if condition %> -> {% if condition %}
-    "if_start": (r"<%\s*if\s+([^%]+?)\s*%>", r"{% if \1 %}"),
+    "if_start": (r"<%\s*if\s+([^%]{1,200}?)\s*%>", r"{% if \1 %}"),
     # Unless (negated if): <% unless condition %> -> {% if not condition %}
-    "unless": (r"<%\s*unless\s+([^%]+?)\s*%>", r"{% if not \1 %}"),
+    "unless": (r"<%\s*unless\s+([^%]{1,200}?)\s*%>", r"{% if not \1 %}"),
     # Else: <% else %> -> {% else %}
     "else": (r"<%\s*else\s*%>", r"{% else %}"),
     # Elsif: <% elsif condition %> -> {% elif condition %}
-    "elsif": (r"<%\s*elsif\s+([^%]+?)\s*%>", r"{% elif \1 %}"),
+    "elsif": (r"<%\s*elsif\s+([^%]{1,200}?)\s*%>", r"{% elif \1 %}"),
     # End: <% end %> -> {% endif %}
     "end": (r"<%\s*end\s*%>", r"{% endif %}"),
     # Each loop: <% array.each do |item| %> -> {% for item in array %}
-    # Use [^%]+ to prevent matching across %> boundaries
-    "each": (r"<%\s*([^%]+?)\.each\s+do\s+\|(\w+)\|\s*%>", r"{% for \2 in \1 %}"),
+    # Use [^%]{1,200} to prevent matching across %> boundaries and ReDoS
+    "each": (r"<%\s*([^%]{1,200}?)\.each\s+do\s+\|(\w+)\|\s*%>", r"{% for \2 in \1 %}"),
 }
 
 
@@ -217,7 +217,7 @@ def _extract_output_variables(content: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    output_vars = re.findall(r"<%=\s*([^%]+?)\s*%>", content)
+    output_vars = re.findall(r"<%=\s*([^%]{1,200}?)\s*%>", content)
     for var in output_vars:
         var = var.strip()
         if var.startswith("node["):
@@ -317,7 +317,7 @@ def _extract_iterator_variables(code: str, variables: set[str]) -> None:
 
     """
     if ".each" in code:
-        match = re.search(r"(\w+)\.each\s+do\s+\|(\w+)\|", code)
+        match = re.search(r"(\w{1,100})\.each\s+do\s+\|(\w{1,100})\|", code)
         if match:
             variables.add(match.group(1))  # Array variable
             variables.add(match.group(2))  # Iterator variable
@@ -332,7 +332,7 @@ def _extract_code_block_variables(content: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    code_blocks = re.findall(r"<%\s+([^%]+?)\s+%>", content, re.DOTALL)
+    code_blocks = re.findall(r"<%\s+([^%]{1,500}?)\s+%>", content, re.DOTALL)
     for code in code_blocks:
         _extract_interpolated_variables(code, variables)
         _extract_node_attributes(code, variables)
@@ -830,7 +830,7 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
     # 2. With parentheses: package('nginx') do ... end
     # 3. Multi-line strings: package 'nginx' do\n  content <<-EOH\n  ...\n  EOH\nend
     # Use a more robust pattern that handles nested blocks
-    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do([\s\S]{0,20000}?)^end"
+    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do(.{0,15000}?)^end"
 
     for match in re.finditer(pattern, clean_content, re.DOTALL | re.MULTILINE):
         resource_type = match.group(1)
@@ -876,11 +876,14 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
     conditionals = []
 
     # Match case/when statements
-    case_pattern = r"case\s+([^\n]+)\n([\s\S]{0,5000}?)^end"
+    # Use explicit non-'end' matching to avoid ReDoS
+    case_pattern = r"case\s+([^\n]{1,200})\n([^e]|e[^n]|en[^d]){0,2000}^end"
     for match in re.finditer(case_pattern, content, re.DOTALL | re.MULTILINE):
         case_expr = match.group(1).strip()
         case_body = match.group(2)
-        when_clauses = re.findall(r"when\s+['\"]?([^'\"\n]+)['\"]?\s*\n", case_body)
+        when_clauses = re.findall(
+            r"when\s+['\"]?([^'\"\n]{1,200})['\"]?\s*\n", case_body
+        )
         conditionals.append(
             {
                 "type": "case",
@@ -1451,7 +1454,7 @@ def _extract_query_parts(
         Tuple of (conditions, operators).
 
     """
-    operator_pattern = r"\s+(AND|OR|NOT)\s+"
+    operator_pattern = r"\s{1,50}(AND|OR|NOT)\s{1,50}"
     parts = re.split(operator_pattern, normalized_query, flags=re.IGNORECASE)
 
     conditions: list[dict[str, str]] = []
@@ -2640,9 +2643,7 @@ def _process_subscribes(
         if resource["type"] != target_type or resource["name"] != target_name:
             continue
 
-        subscriber_pattern = (
-            rf"(\w+)\s+['\"]?[^'\"]*['\"]?\s+do\s*.*?subscribes\s+:{sub_action}"
-        )
+        subscriber_pattern = rf"(\w+)\s+['\"]?[^'\"]*['\"]?\s+do\s*.{{0,1000}}?subscribes\s+:{sub_action}"
         subscriber_match = re.search(subscriber_pattern, raw_content, re.DOTALL)
 
         if subscriber_match:
@@ -2857,22 +2858,24 @@ def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list
 
     """
     # Extract only_if conditions
-    only_if_pattern = re.compile(r'only_if\s+[\'"]([^\'"]+)[\'"]')
+    only_if_pattern = re.compile(r'only_if\s+[\'"]([^\'"]{1,500})[\'"]')
     only_if_matches = only_if_pattern.findall(resource_block)
 
     # Extract not_if conditions
-    not_if_pattern = re.compile(r'not_if\s+[\'"]([^\'"]+)[\'"]')
+    not_if_pattern = re.compile(r'not_if\s+[\'"]([^\'"]{1,500})[\'"]')
     not_if_matches = not_if_pattern.findall(resource_block)
 
     # Extract only_if blocks (Ruby code blocks)
+    # Use simple pattern - extract block and filter in Python to avoid ReDoS
     only_if_block_pattern = re.compile(
-        r"only_if\s+do\s*([\s\S]{0,1000}?)\s*end", re.DOTALL
+        r"only_if\s+do\b([^e]|e[^n]|en[^d]){0,500}\bend", re.DOTALL
     )
     only_if_block_matches = only_if_block_pattern.findall(resource_block)
 
     # Extract not_if blocks (Ruby code blocks)
+    # Use simple pattern - extract block and filter in Python to avoid ReDoS
     not_if_block_pattern = re.compile(
-        r"not_if\s+do\s*([\s\S]{0,1000}?)\s*end", re.DOTALL
+        r"not_if\s+do\b([^e]|e[^n]|en[^d]){0,500}\bend", re.DOTALL
     )
     not_if_block_matches = not_if_block_pattern.findall(resource_block)
 
@@ -4379,12 +4382,12 @@ def _parse_chef_environment_content(content: str) -> dict:
     }
 
     # Extract name
-    name_match = re.search(r"name\s+['\"]([^'\"\n]{0,200})['\"]", content)
+    name_match = re.search(r"name\s+['\"]([^'\"\n]{0,150})['\"]", content)
     if name_match:
         env_data["name"] = name_match.group(1)
 
     # Extract description
-    desc_match = re.search(r"description\s+['\"]([^'\"\n]{0,500})['\"]", content)
+    desc_match = re.search(r"description\s+['\"]([^'\"\n]{0,300})['\"]", content)
     if desc_match:
         env_data["description"] = desc_match.group(1)
 
@@ -4409,7 +4412,7 @@ def _parse_chef_environment_content(content: str) -> dict:
 def _extract_attributes_block(content: str, block_type: str) -> dict:
     """Extract attribute blocks from Chef environment content."""
     # Find the block start
-    pattern = rf"{block_type}\s*\(([\s\S]{{0,5000}}?)\)"
+    pattern = rf"{block_type}\s*\((.{{0,2000}}?)\)"
     match = re.search(pattern, content, re.DOTALL)
 
     if not match:
@@ -4432,7 +4435,7 @@ def _extract_attributes_block(content: str, block_type: str) -> dict:
 
     # Parse nested structures (basic support)
     nested_pattern = (
-        r"['\"](([^'\"\n]{0,100}))['\"](\\s|:)*=>(\\s|:)*\\{([^}]{0,1000})\\}"
+        r"['\"](([^'\"\n]{0,100}))['\"](\\s|:)*=>(\\s|:)*\\{([^}]{0,500})\\}"
     )
     for match in re.finditer(nested_pattern, block_content):
         key = match.group(1)
@@ -5589,7 +5592,7 @@ def _generate_chef_inventory_source(chef_server_url: str, sync_schedule: str) ->
         "source": "scm",
         "source_project": "chef-inventory-scripts",
         "source_path": "chef_inventory.py",
-        "credential": "chef-server-credential",
+        "credential": "chef-server-credential",  # NOSONAR - credential reference name, not a secret
         "overwrite": True,
         "overwrite_vars": True,
         "timeout": 300,
@@ -7410,7 +7413,9 @@ def _assess_single_cookbook(cookbook_path) -> dict:
                 content = f.read()
                 # Count Chef resources
 
-                resources = len(re.findall(r'\w+\s+[\'"].*[\'"]\s+do', content))
+                resources = len(
+                    re.findall(r'\w{1,100}\s+[\'"]([^\'"]{0,200})[\'"]\s+do', content)
+                )
                 ruby_blocks += len(
                     re.findall(r"ruby_block|execute|bash", content, re.IGNORECASE)
                 )

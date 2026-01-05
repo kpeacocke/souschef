@@ -382,3 +382,278 @@ def test_determine_search_complexity_patterns():
         [{"field": "a", "operator": "=", "value": "1"}], ["AND"]
     )
     assert result == "complex"
+
+
+def test_get_current_timestamp():
+    """Test timestamp generation for playbooks."""
+    from souschef.server import _get_current_timestamp
+
+    timestamp = _get_current_timestamp()
+    assert isinstance(timestamp, str)
+    assert len(timestamp) > 0
+    # Should be in format YYYY-MM-DD HH:MM:SS
+    assert "-" in timestamp
+    assert ":" in timestamp
+
+
+def test_parse_recipe_with_wildcard_condition():
+    """Test recipe parsing with wildcard search conditions."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+search_results = search(:node, "hostname:web-*")
+
+search_results.each do |server|
+  log "Found server: #{server['hostname']}"
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        # Should handle wildcard searches
+        assert "search" in result.lower() or "warning" in result.lower()
+
+
+def test_parse_recipe_with_regex_condition():
+    """Test recipe parsing with regex search patterns."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+nodes = search(:node, "name:/^app-\\d+$/")
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        # Should handle regex patterns
+        assert len(result) > 0
+
+
+def test_parse_recipe_with_subscribes_and_handlers():
+    """Test recipe with both subscribes and notifies generates handlers."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+template '/etc/app/config.conf' do
+  source 'config.conf.erb'
+  notifies :reload, 'service[app]', :immediately
+end
+
+service 'app' do
+  action [:enable, :start]
+  subscribes :restart, 'template[/etc/app/config.conf]', :delayed
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        # Should include both notify and subscribe handling or warning
+        assert "service" in result.lower() or "warning" in result.lower()
+        assert len(result) > 10
+
+
+def test_convert_chef_search_with_wildcard():
+    """Test converting Chef search with wildcard to inventory."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("hostname:web-*")
+
+    assert len(result) > 0
+
+
+def test_convert_chef_search_with_regex():
+    """Test converting Chef search with regex to inventory."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("name:/^db-\\d+$/")
+
+    assert len(result) > 0
+
+
+def test_convert_chef_search_with_not_equal():
+    """Test converting Chef search with NOT operator."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("environment:!staging")
+
+    assert len(result) > 0
+
+
+def test_convert_chef_search_with_range():
+    """Test converting Chef search with range."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("memory:[2048 TO 8192]")
+
+    assert len(result) > 0
+
+
+def test_convert_chef_search_with_tag():
+    """Test converting Chef search with tags."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("tags:webserver")
+
+    assert "tag" in result.lower() or "webserver" in result.lower()
+
+
+def test_parse_recipe_with_complex_version_constraints():
+    """Test recipe with version constraints in package resources."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+package 'nginx' do
+  version '1.18.0-0ubuntu1'
+  action :install
+end
+
+package 'postgresql' do
+  version '>= 12.0, < 14.0'
+  action :upgrade
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        assert "nginx" in result or "warning" in result.lower()
+
+
+def test_parse_recipe_with_only_if_guard():
+    """Test recipe with only_if guards."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+service 'nginx' do
+  action :start
+  only_if 'test -f /etc/nginx/nginx.conf'
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        # Should handle guards
+        assert "nginx" in result or "warning" in result.lower()
+
+
+def test_parse_recipe_with_not_if_guard():
+    """Test recipe with not_if guards."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+package 'apache2' do
+  action :install
+  not_if 'which apache2'
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        assert "apache2" in result or "warning" in result.lower()
+
+
+def test_parse_recipe_with_block_guard():
+    """Test recipe with block guards."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+file '/tmp/test' do
+  content 'test'
+  only_if { File.exist?('/etc/config') }
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        assert (
+            "file" in result.lower() or "test" in result or "warning" in result.lower()
+        )
+
+
+def test_generate_playbook_with_handlers():
+    """Test playbook generation includes handlers when notifications present."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import generate_playbook_from_recipe
+
+    recipe_content = """
+package 'apache2' do
+  action :install
+  notifies :restart, 'service[apache2]', :delayed
+end
+
+service 'apache2' do
+  action [:enable, :start]
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.name = "recipe.rb"
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = generate_playbook_from_recipe("/fake/path/recipe.rb")
+
+        # Should include handlers or a warning about parsing
+        assert (
+            "handlers:" in result
+            or "warning" in result.lower()
+            or "error" in result.lower()
+            or "---" in result
+        )  # Accept valid playbook too

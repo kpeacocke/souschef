@@ -988,7 +988,7 @@ def test_convert_with_exception():
 def test_parse_template_success():
     """Test that parse_template successfully parses ERB file."""
     mock_path = MagicMock(spec=Path)
-    mock_path.__str__ = lambda: "/path/to/template.erb"
+    mock_path.__str__ = MagicMock(return_value="/path/to/template.erb")
     erb_content = "Hello <%= @name %>!"
     mock_path.read_text.return_value = erb_content
 
@@ -1142,7 +1142,7 @@ def test_convert_erb_to_jinja2_multiple_outputs():
 def test_parse_custom_resource_success():
     """Test that parse_custom_resource successfully parses resource file."""
     mock_path = MagicMock(spec=Path)
-    mock_path.__str__ = lambda: "/path/to/resource.rb"
+    mock_path.__str__ = MagicMock(return_value="/path/to/resource.rb")
     mock_path.stem = "app_config"
     resource_content = """
 property :name, String, name_property: true
@@ -1986,8 +1986,11 @@ def test_convert_chef_databag_to_vars_success():
     from souschef.server import convert_chef_databag_to_vars
 
     # Create databag content
-    # deepcode ignore NoHardcodedPasswords/test: test password>
-    databag_data = {"id": "database", "password": "secret123", "host": "db.example.com"}
+    databag_data = {
+        "id": "database",
+        "password": "secret123",  # NOSONAR - Test data only, not a real password
+        "host": "db.example.com",
+    }
     databag_content = json.dumps(databag_data)
 
     result = convert_chef_databag_to_vars(databag_content, "secrets", "database")
@@ -2013,7 +2016,10 @@ def test_generate_ansible_vault_from_databags_success():
 
         # Create sample databag files
         secrets_file = secrets_dir / "database.json"
-        secrets_data = {"id": "database", "password": {"encrypted_data": "abc123"}}
+        secrets_data = {
+            "id": "database",
+            "password": {"encrypted_data": "abc123"},
+        }  # NOSONAR - Test data for encrypted databag conversion
         secrets_file.write_text(json.dumps(secrets_data))
 
         result = generate_ansible_vault_from_databags(str(databags_path))
@@ -4805,7 +4811,7 @@ class TestSpecificFunctionCoverage:
             "\t",
             # Special characters
             "file:///path/to/file",
-            "http://example.com:8080/path",
+            "http://example.com:8080/path",  # NOSONAR - Test data showing URL patterns, not actual HTTP connections
             "/usr/bin/nginx --config=/etc/nginx.conf",
         ]
 
@@ -6283,7 +6289,7 @@ db_servers = search(:node, "role:database")
                 "fqdn": "complex.example.com",
                 "platform": "ubuntu",
                 "platform_version": "20.04",
-                "ipaddress": "10.0.1.100",
+                "ipaddress": "10.0.1.100",  # NOSONAR - RFC 1918 private IP in test data for Chef node search
             },
         ]
 
@@ -6542,7 +6548,7 @@ control 'mysql-config' do
     its('log-bin') { should_not be_nil }
   end
 
-  describe mysql_session('root', 'password').query('SELECT user FROM mysql.user;') do
+  describe mysql_session('root', 'password').query('SELECT user FROM mysql.user;') do  # NOSONAR - InSpec test syntax example, not real credentials
     its('stdout') { should_not match /^$/ }
     its('exit_status') { should eq 0 }
   end
@@ -8272,8 +8278,8 @@ end""",
             "/proc/version",  # Proc filesystem
             "/sys/kernel/version",  # Sys filesystem
             "file:///etc/passwd",  # File URI
-            "http://example.com/file",  # HTTP URL
-            "ftp://example.com/file",  # FTP URL
+            "http://example.com/file",  # NOSONAR - Test data for URL parsing, not actual HTTP connections
+            "ftp://example.com/file",  # NOSONAR - Test data for URL parsing, not actual FTP connections
             "C:\\Windows\\System32",  # Windows path on Unix
             "COM1",  # Windows device name
             "NUL",  # Windows null device
@@ -8332,6 +8338,7 @@ end""",
 
 def _test_parsing_with_temp_file(content, suffix, parser_func):
     """Test parser with temporary file containing content."""
+    temp_path = None
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", suffix=suffix, delete=False
     ) as f:
@@ -8343,8 +8350,9 @@ def _test_parsing_with_temp_file(content, suffix, parser_func):
         except UnicodeError:
             pass  # Unicode errors are acceptable
         finally:
-            with contextlib.suppress(builtins.BaseException):
-                Path(temp_path).unlink()
+            if temp_path:
+                with contextlib.suppress(builtins.BaseException):
+                    Path(temp_path).unlink()
 
 
 def _test_helper_function_with_input(helper_func, test_input):
@@ -8460,6 +8468,7 @@ class TestLargeFileHandling:
         ]
 
         for filename, content in large_content_scenarios:
+            temp_path = None
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=f"_{filename}", delete=False
             ) as f:
@@ -8486,8 +8495,9 @@ class TestLargeFileHandling:
                     # Large files might cause memory issues, that's acceptable
                     pass
                 finally:
-                    with contextlib.suppress(builtins.BaseException):
-                        Path(temp_path).unlink()
+                    if temp_path:
+                        with contextlib.suppress(builtins.BaseException):
+                            Path(temp_path).unlink()
 
     def test_concurrent_operations_simulation(self):
         """Simulate concurrent operations to test thread safety."""
@@ -9751,7 +9761,7 @@ version '0.1.0' """,
                 "chef_environment": "staging",
                 "platform": "ubuntu",
                 "platform_version": "20.04",
-                "ipaddress": "10.0.1.100",
+                "ipaddress": "10.0.1.100",  # NOSONAR - RFC 1918 private IP in test data for Chef node fixture
                 "memory": {"total": 8388608},
                 "cpu": {"total": 4},
                 "nginx": {"version": "1.18.0"},

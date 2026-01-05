@@ -1,0 +1,67 @@
+name: Poetry Lock Check
+
+# Validates that poetry.lock is in sync with pyproject.toml
+# Runs on all branches to catch issues early
+
+on:
+  pull_request:
+    paths:
+      - 'pyproject.toml'
+      - 'poetry.lock'
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'bugfix/**'
+      - 'release/**'
+      - 'hotfix/**'
+    paths:
+      - 'pyproject.toml'
+      - 'poetry.lock'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  check-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@76e04a911780d5b312d6f04b3e4c912e5a3198f4  # v1.4.1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Check poetry.lock is in sync with pyproject.toml
+      run: |
+        poetry check
+        poetry lock --check
+
+    - name: Comment on PR if out of sync
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '⚠️ **Poetry lock file is out of sync**\n\nRun `poetry lock` locally and commit the updated `poetry.lock` file.\n\nPoetry 2.x automatically preserves versions without a flag.'
+          })
