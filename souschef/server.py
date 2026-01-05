@@ -862,7 +862,7 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
     return resources
 
 
-def _extract_conditionals(content: str) -> list[dict[str, str]]:
+def _extract_conditionals(content: str) -> list[dict[str, Any]]:
     """
     Extract Ruby conditionals from recipe code.
 
@@ -918,7 +918,7 @@ def _extract_conditionals(content: str) -> list[dict[str, str]]:
     return conditionals
 
 
-def _format_resources(resources: list[dict[str, str]]) -> str:
+def _format_resources(resources: list[dict[str, Any]]) -> str:
     """
     Format resources list as a readable string.
 
@@ -1308,7 +1308,7 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
     """
     try:
         # First, parse the recipe to extract resources
-        recipe_content = parse_recipe(recipe_path)
+        recipe_content: str = parse_recipe(recipe_path)
 
         if recipe_content.startswith(ERROR_PREFIX):
             return recipe_content
@@ -1321,7 +1321,7 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
         raw_content = recipe_file.read_text()
 
         # Generate playbook structure
-        playbook = _generate_playbook_structure(
+        playbook: str = _generate_playbook_structure(
             recipe_content, raw_content, recipe_file.name
         )
 
@@ -1506,7 +1506,7 @@ def _parse_chef_search_query(query: str) -> dict[str, Any]:
     """
     normalized_query = query.strip()
 
-    search_info = {
+    search_info: dict[str, Any] = {
         "original_query": query,
         "index": _determine_search_index(normalized_query),
         "conditions": [],
@@ -1618,7 +1618,7 @@ def _create_group_config_for_equal_condition(
         Group configuration dictionary.
 
     """
-    group_config = {"hosts": [], "vars": {}, "children": []}
+    group_config: dict[str, Any] = {"hosts": [], "vars": {}, "children": []}
     key = condition["key"]
     value = condition["value"]
 
@@ -1706,7 +1706,7 @@ def _generate_ansible_inventory_from_search(
         Dictionary with Ansible inventory configuration.
 
     """
-    inventory_config = {
+    inventory_config: dict[str, Any] = {
         "inventory_type": "static",
         "groups": {},
         "host_patterns": [],
@@ -2185,7 +2185,7 @@ def _generate_inventory_recommendations(
         Dictionary with recommended inventory structure.
 
     """
-    recommendations = {
+    recommendations: dict[str, Any] = {
         "groups": {},
         "structure": "static",  # vs dynamic
         "variables": {},
@@ -2744,7 +2744,7 @@ def _create_handler(
     if resource_type == "service":
         ansible_state = action_mappings.get(action, action)
 
-        handler = {
+        handler: dict[str, Any] = {
             "name": f"{action.capitalize()} {resource_name}",
             ANSIBLE_SERVICE_MODULE: {"name": resource_name, "state": ansible_state},
         }
@@ -2947,7 +2947,7 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
         Dictionary with Ansible when/unless conditions.
 
     """
-    guards = {}
+    guards: dict[str, Any] = {}
 
     # Find the resource block in raw content
     resource_block = _find_resource_block(resource, raw_content)
@@ -3977,7 +3977,7 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:
     """
     try:
         # First parse the recipe
-        recipe_result = parse_recipe(recipe_path)
+        recipe_result: str = parse_recipe(recipe_path)
 
         if recipe_result.startswith(ERROR_PREFIX):
             return recipe_result
@@ -3997,7 +3997,7 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:
 
         for resource in resources:
             if "type" in resource and "name" in resource:
-                control_code = _generate_inspec_from_resource(
+                control_code: str = _generate_inspec_from_resource(
                     resource["type"],
                     resource["name"],
                     resource.get("properties", {}),
@@ -4475,7 +4475,7 @@ def _generate_inventory_group_from_environment(
     """Generate Ansible inventory group configuration from environment data."""
     import yaml
 
-    group_vars = {}
+    group_vars: dict[str, Any] = {}
 
     # Add environment metadata
     group_vars["environment_name"] = env_name
@@ -4542,7 +4542,7 @@ def _generate_complete_inventory_from_environments(
         summary += "\n## YAML Inventory Structure:\n\n```yaml\n"
 
         # Generate YAML inventory
-        inventory = {"all": {"children": {}}}
+        inventory: dict[str, Any] = {"all": {"children": {}}}
 
         for env_name, env_data in environments.items():
             inventory["all"]["children"][env_name] = {
@@ -4671,7 +4671,7 @@ def _find_environment_patterns_in_content(content: str, file_path: str) -> list:
 
 def _analyze_environments_structure(environments_path) -> dict:
     """Analyze the structure of Chef environments directory."""
-    structure = {"total_environments": 0, "environments": {}}
+    structure: dict[str, Any] = {"total_environments": 0, "environments": {}}
 
     for env_file in environments_path.glob("*.rb"):
         structure["total_environments"] += 1
@@ -5019,7 +5019,7 @@ def _find_databag_patterns_in_content(content: str, file_path: str) -> list:
 
 def _analyze_databag_structure(databags_path) -> dict:
     """Analyze the structure of Chef data bags directory."""
-    structure = {
+    structure: dict[str, Any] = {
         "total_databags": 0,
         "total_items": 0,
         "encrypted_items": 0,
@@ -5418,7 +5418,7 @@ def generate_awx_inventory_source_from_chef(
 
 def _analyze_cookbook_for_awx(cookbook_path, cookbook_name: str) -> dict:
     """Analyze Chef cookbook structure for AWX job template generation."""
-    analysis = {
+    analysis: dict[str, Any] = {
         "name": cookbook_name,
         "recipes": [],
         "attributes": {},
@@ -5531,7 +5531,7 @@ def _generate_awx_workflow_template(
     runlist: list, workflow_name: str, environment: str
 ) -> dict:
     """Generate AWX workflow template from Chef runlist."""
-    workflow_template = {
+    workflow_template: dict[str, Any] = {
         "name": f"{workflow_name}-{environment}",
         "description": f"Execute {workflow_name} runlist in {environment}",
         "organization": "Default",
@@ -5804,7 +5804,7 @@ def _generate_survey_fields_from_attributes(attributes: dict) -> list:
 
 def _analyze_cookbooks_directory(cookbooks_path) -> dict:
     """Analyze entire cookbooks directory structure."""
-    analysis = {
+    analysis: dict[str, Any] = {
         "total_cookbooks": 0,
         "cookbooks": {},
         "total_recipes": 0,
@@ -7387,7 +7387,7 @@ def generate_migration_report(
 def _assess_single_cookbook(cookbook_path) -> dict:
     """Assess complexity of a single cookbook."""
     cookbook = _normalize_path(cookbook_path)
-    assessment = {
+    assessment: dict[str, Any] = {
         "cookbook_name": cookbook.name,
         "cookbook_path": str(cookbook),
         "metrics": {},
@@ -7536,7 +7536,7 @@ def _format_complexity_analysis(assessments: list) -> str:
 
 def _identify_top_challenges(assessments: list) -> str:
     """Identify the most common migration challenges."""
-    challenge_counts = {}
+    challenge_counts: dict[str, int] = {}
     for assessment in assessments:
         for challenge in assessment["challenges"]:
             challenge_counts[challenge] = challenge_counts.get(challenge, 0) + 1

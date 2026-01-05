@@ -7984,7 +7984,7 @@ end""",
   device_type :device
   enabled true
   supports [:remount]
-end""",
+end""",  # NOSONAR - Test fixture with fake credentials for Chef resource parsing
                 "mount",
             ),
             # Link resources

@@ -191,9 +191,9 @@ jobs:
             };
 
             if (guidance[branchType]) {
-              const body = \`## Gitflow Validation
+              const body = `## Gitflow Validation
 
-            \${guidance[branchType]}
+            ${guidance[branchType]}
 
             ### Checklist:
             - [ ] All tests passing
@@ -202,7 +202,7 @@ jobs:
             - [ ] Changelog updated (if applicable)
 
             ---
-            _Automated gitflow guidance message._\`;
+            _Automated gitflow guidance message._`;
 
               await github.rest.issues.createComment({
                 issue_number: pr.number,
