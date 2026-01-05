@@ -142,9 +142,6 @@ def test_generate_migration_plan_success():
 
 def test_analyze_cookbook_dependencies_success():
     """Test analyze_cookbook_dependencies with valid cookbook."""
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import analyze_cookbook_dependencies
 
     # Create a temporary cookbook structure
@@ -199,9 +196,6 @@ def test_generate_migration_report_success():
 
 def test_convert_chef_deployment_to_ansible_strategy_success():
     """Test convert_chef_deployment_to_ansible_strategy with valid recipe."""
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import convert_chef_deployment_to_ansible_strategy
 
     # Create a temporary deployment recipe
@@ -255,9 +249,6 @@ def test_generate_canary_deployment_strategy_success():
 
 def test_analyze_chef_application_patterns_success():
     """Test analyze_chef_application_patterns with valid cookbook."""
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import analyze_chef_application_patterns
 
     # Create a temporary cookbook structure
@@ -1899,9 +1890,6 @@ def test_generate_inspec_from_recipe_error():
 # Tests for AWX/AAP integration tools
 def test_generate_awx_job_template_from_cookbook_success():
     """Test generate_awx_job_template_from_cookbook with valid cookbook."""
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import generate_awx_job_template_from_cookbook
 
     # Create a temporary cookbook structure
@@ -1939,9 +1927,6 @@ def test_generate_awx_workflow_from_chef_runlist_success():
 
 def test_generate_awx_project_from_cookbooks_success():
     """Test generate_awx_project_from_cookbooks with valid cookbooks."""
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import generate_awx_project_from_cookbooks
 
     # Create a temporary cookbooks directory structure
@@ -1974,15 +1959,16 @@ def test_generate_awx_inventory_source_from_chef_success():
     )
 
     assert "AWX/AAP Inventory Source" in result
-    assert "https://chef.example.com" in result
+    # Test verifies output contains expected URL - not security sanitization
+    assert (
+        "https://chef.example.com" in result
+    )  # lgtm[py/incomplete-url-substring-sanitization]
     assert "Inventory" in result
 
 
 # Tests for data bag conversion tools
 def test_convert_chef_databag_to_vars_success():
     """Test convert_chef_databag_to_vars with valid data bag."""
-    import json
-
     from souschef.server import convert_chef_databag_to_vars
 
     # Create databag content
@@ -1999,10 +1985,6 @@ def test_convert_chef_databag_to_vars_success():
 
 def test_generate_ansible_vault_from_databags_success():
     """Test generate_ansible_vault_from_databags with encrypted data bags."""
-    import json
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import generate_ansible_vault_from_databags
 
     # Create a temporary databags directory
@@ -2028,9 +2010,6 @@ def test_generate_ansible_vault_from_databags_success():
 
 def test_analyze_chef_databag_usage_success():
     """Test analyze_chef_databag_usage with cookbook and data bags."""
-    import tempfile
-    from pathlib import Path
-
     # Create a temporary cookbook with databag usage
     with tempfile.TemporaryDirectory() as temp_dir:
         cookbook_path = Path(temp_dir) / "test_cookbook"
@@ -2072,9 +2051,6 @@ default_attributes(
 
 def test_generate_inventory_from_chef_environments_success():
     """Test generate_inventory_from_chef_environments with multiple environments."""
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import generate_inventory_from_chef_environments
 
     # Create a temporary environments directory
@@ -2092,9 +2068,6 @@ def test_generate_inventory_from_chef_environments_success():
 
 def test_analyze_chef_environment_usage_success():
     """Test analyze_chef_environment_usage with cookbook path."""
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import analyze_chef_environment_usage
 
     # Create a temporary cookbook with environment usage
@@ -2141,9 +2114,6 @@ def test_generate_dynamic_inventory_script_success():
 
 def test_analyze_chef_search_patterns_success():
     """Test analyze_chef_search_patterns with cookbook containing searches."""
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import analyze_chef_search_patterns
 
     # Create a temporary cookbook with search patterns
@@ -2167,9 +2137,6 @@ db_host = search(:node, "role:database").first["ipaddress"]
 # Tests for playbook generation
 def test_generate_playbook_from_recipe_success():
     """Test generate_playbook_from_recipe with valid recipe."""
-    import tempfile
-    from pathlib import Path
-
     from souschef.server import generate_playbook_from_recipe
 
     # Create a temporary recipe file
@@ -2404,8 +2371,6 @@ class TestMCPToolsWithFixtures:
 
     def test_basic_operations_with_fixtures(self):
         """Test basic file operations with real fixtures."""
-        from pathlib import Path
-
         from souschef.server import list_cookbook_structure, list_directory
 
         fixtures_dir = Path(__file__).parent / "fixtures"
@@ -4545,7 +4510,7 @@ server {
                 Path(temp_file).chmod(0o644)  # Restore permissions to clean up
                 Path(temp_file).unlink()
             except OSError:
-                pass
+                pass  # Cleanup is best-effort; file may already be deleted or inaccessible
 
     def test_unicode_and_encoding_scenarios(self):
         """Test Unicode and encoding scenarios."""
@@ -5659,7 +5624,7 @@ class TestCoverageBoosterFunctions:
                 ]
             )
         except ImportError:
-            pass
+            pass  # Optional functions may not be available in all configurations
 
         # Test each function with various inputs
         test_inputs = [
@@ -7973,6 +7938,8 @@ end""",
             ),
             # Mount resources
             (
+                # Test fixture with fake credentials for Chef resource parsing
+                # lgtm[py/hardcoded-credentials] NOSONAR
                 """mount "/mnt/shared" do
   device "//server/share"
   fstype "cifs"
@@ -7984,7 +7951,7 @@ end""",
   device_type :device
   enabled true
   supports [:remount]
-end""",  # NOSONAR - Test fixture with fake credentials for Chef resource parsing
+end""",
                 "mount",
             ),
             # Link resources
@@ -10802,7 +10769,6 @@ class TestChefSearchPatterns:
 
     def test_extract_search_patterns_from_file_error(self):
         """Test error handling when reading file fails."""
-        from pathlib import Path
         from unittest.mock import patch
 
         from souschef.server import _extract_search_patterns_from_file
@@ -11105,9 +11071,6 @@ class TestCookbookAnalysis:
 
     def test_analyze_cookbooks_directory_empty(self):
         """Test analyzing empty cookbooks directory."""
-        import tempfile
-        from pathlib import Path
-
         from souschef.server import _analyze_cookbooks_directory
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -11311,9 +11274,6 @@ class TestMCPToolEdgeCases:
 
     def test_analyze_chef_databag_usage_with_databags_path(self):
         """Test data bag analysis with databags path."""
-        import tempfile
-        from pathlib import Path
-
         with tempfile.TemporaryDirectory() as tmpdir:
             cookbook_path = Path(tmpdir) / "cookbook"
             cookbook_path.mkdir()
