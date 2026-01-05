@@ -53,7 +53,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: python
           # Use default queries plus security-extended for more comprehensive scanning
@@ -77,7 +77,7 @@ jobs:
           poetry install --no-interaction --no-root
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:python"
           # Upload results even if there are findings
