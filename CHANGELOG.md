@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1](https://github.com/kpeacocke/souschef/compare/v2.0.0...v2.0.1) (2026-01-05)
+
+
+### Bug Fixes
+
+* Enhance release workflows to support manual triggering with tag input… ([0b3df0f](https://github.com/kpeacocke/souschef/commit/0b3df0f6ddd29d744fa1457faa4cdedf6e21077b))
+* use check-regexp for CI and CodeQL check names ([3f56080](https://github.com/kpeacocke/souschef/commit/3f560808b4d1932113d34f9117100a51c48bfe18))
+
 ## [2.0.0](https://github.com/kpeacocke/souschef/compare/v1.0.0...v2.0.0) (2026-01-05)
 
 
