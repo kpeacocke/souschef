@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use SousChef in your research or project, please cite it as below."
+title: "SousChef: AI-Powered Chef to Ansible Migration Platform"
+abstract: "An enterprise-grade MCP (Model Context Protocol) server providing comprehensive Chef-to-Ansible migration capabilities with 34 specialized tools for cookbook analysis, resource conversion, and AWX/AAP integration."
+authors:
+  - name: "SousChef Contributors"
+type: software
+repository-code: "https://github.com/kpeacocke/souschef"
+url: "https://github.com/kpeacocke/souschef"
+keywords:
+  - chef
+  - ansible
+  - migration
+  - infrastructure-as-code
+  - automation
+  - mcp
+  - model-context-protocol
+  - devops
+  - configuration-management
+license: MIT
+version: 1.0.0
+date-released: 2026-01-04

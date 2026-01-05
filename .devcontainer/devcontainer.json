@@ -41,7 +41,7 @@
     "customizations": {
         "vscode": {
             "settings": {
-
+                // Python environment configuration
                 "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
                 "python.testing.pytestEnabled": true,
                 "python.testing.unittestEnabled": false,
@@ -50,19 +50,34 @@
                     "--cov=souschef",
                     "--cov-report=term-missing"
                 ],
+
+                // Pylance: Real-time type checking and intellisense
+                "python.analysis.typeCheckingMode": "standard",
+                "python.analysis.autoImportCompletions": true,
+                "python.analysis.completeFunctionParens": true,
+
+                // Ruff: Primary linter and formatter (replaces Black, isort, flake8)
                 "[python]": {
                     "editor.formatOnSave": true,
+                    "editor.defaultFormatter": "charliermarsh.ruff",
                     "editor.codeActionsOnSave": {
                         "source.fixAll": "explicit",
                         "source.organizeImports": "explicit"
                     }
                 },
+                "ruff.enable": true,
+                "ruff.lint.enable": true,
+                "ruff.organizeImports": true,
+
+                // Editor settings
                 "files.eol": "\n",
                 "files.insertFinalNewline": true,
                 "files.trimTrailingWhitespace": true,
                 "editor.rulers": [88],
                 "editor.tabSize": 4,
                 "editor.insertSpaces": true,
+
+                // Terminal configuration
                 "terminal.integrated.defaultProfile.linux": "zsh",
                 "terminal.integrated.profiles.linux": {
                     "zsh": {

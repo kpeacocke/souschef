@@ -103,7 +103,12 @@
   '''
 # ---
 # name: test_convert_cron_resource_to_task_snapshot
-  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+  '''
+  - name: Create cron daily_backup
+    ansible.builtin.cron:
+      name: "daily_backup"
+      state: "present"
+  '''
 # ---
 # name: test_convert_databag_with_nested_structure_snapshot
   '''
@@ -131,16 +136,38 @@
   '''
 # ---
 # name: test_convert_directory_resource_to_task_snapshot
-  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+  '''
+  - name: Create directory /var/www/html
+    ansible.builtin.file:
+      path: "/var/www/html"
+      state: "directory"
+      mode: "0755"
+  '''
 # ---
 # name: test_convert_execute_resource_to_task_snapshot
-  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+  '''
+  - name: Run execute reload-systemd
+    changed_when: "false"
+    ansible.builtin.command:
+      cmd: "reload-systemd"
+  '''
 # ---
 # name: test_convert_file_resource_to_task_snapshot
-  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+  '''
+  - name: Create file /etc/app/config.json
+    ansible.builtin.file:
+      path: "/etc/app/config.json"
+      state: "file"
+      mode: "0644"
+  '''
 # ---
 # name: test_convert_group_resource_to_task_snapshot
-  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+  '''
+  - name: Create group appgroup
+    ansible.builtin.group:
+      name: "appgroup"
+      state: "present"
+  '''
 # ---
 # name: test_convert_inspec_to_molecule_snapshot
   'Error: No controls found in InSpec profile'
@@ -149,16 +176,38 @@
   'Error: No controls found in InSpec profile'
 # ---
 # name: test_convert_package_resource_to_task_snapshot
-  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+  '''
+  - name: Install package nginx
+    ansible.builtin.package:
+      name: "nginx"
+      state: "present"
+  '''
 # ---
 # name: test_convert_service_resource_to_task_snapshot
-  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+  '''
+  - name: Start service nginx
+    ansible.builtin.service:
+      name: "nginx"
+      enabled: true
+      state: "started"
+  '''
 # ---
 # name: test_convert_template_resource_to_task_snapshot
-  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+  '''
+  - name: Create template /etc/nginx/nginx.conf
+    ansible.builtin.template:
+      src: "/etc/nginx/nginx.conf"
+      dest: "/etc/nginx/nginx.conf"
+      mode: "0644"
+  '''
 # ---
 # name: test_convert_user_resource_to_task_snapshot
-  "An error occurred during conversion: cannot use 'dict' as a dict key (unhashable type: 'dict')"
+  '''
+  - name: Create user appuser
+    ansible.builtin.user:
+      name: "appuser"
+      state: "present"
+  '''
 # ---
 # name: test_parse_complex_erb_template_snapshot
   '''

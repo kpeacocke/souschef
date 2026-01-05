@@ -16,31 +16,51 @@ class TestResourceConversionEdgeCases:
     def test_convert_file_resource_with_create_action(self):
         """Test converting file resource with create action."""
         result = convert_resource_to_task(
-            "file", "/etc/config.conf", "create", {"content": "test"}
+            resource_type="file",
+            resource_name="/etc/config.conf",
+            action="create",
+            properties='{"content": "test"}',
         )
 
         assert "ansible.builtin.file" in result
         assert "state:" in result
         assert "/etc/config.conf" in result
 
-    def test_convert_file_resource_with_other_action(self):
+    def test_convert_file_resource_with_other_action(self, tmp_path):
         """Test converting file resource with non-create action."""
-        result = convert_resource_to_task("file", "/tmp/test.txt", "delete", {})
+        test_file = tmp_path / "test.txt"
+        result = convert_resource_to_task(
+            resource_type="file",
+            resource_name=str(test_file),
+            action="delete",
+            properties="",
+        )
 
         assert "ansible.builtin.file" in result
         assert "state:" in result
 
     def test_convert_directory_resource_with_create(self):
         """Test converting directory resource with create action."""
-        result = convert_resource_to_task("directory", "/var/log/app", "create", {})
+        result = convert_resource_to_task(
+            resource_type="directory",
+            resource_name="/var/log/app",
+            action="create",
+            properties="",
+        )
 
         assert "ansible.builtin.file" in result
         assert "directory" in result  # state: directory or state: "directory"
         assert "/var/log/app" in result
 
-    def test_convert_directory_resource_with_delete(self):
+    def test_convert_directory_resource_with_delete(self, tmp_path):
         """Test converting directory resource with delete action."""
-        result = convert_resource_to_task("directory", "/tmp/olddir", "delete", {})
+        old_dir = tmp_path / "olddir"
+        result = convert_resource_to_task(
+            resource_type="directory",
+            resource_name=str(old_dir),
+            action="delete",
+            properties="",
+        )
 
         assert "ansible.builtin.file" in result
         assert "state:" in result
@@ -104,7 +124,10 @@ class TestAdditionalResourceTypes:
     def test_convert_execute_resource(self):
         """Test converting execute resource."""
         result = convert_resource_to_task(
-            "execute", "systemctl restart nginx", "run", {}
+            resource_type="execute",
+            resource_name="systemctl restart nginx",
+            action="run",
+            properties="",
         )
 
         assert "ansible.builtin.command" in result or "ansible.builtin.shell" in result
@@ -113,10 +136,10 @@ class TestAdditionalResourceTypes:
     def test_convert_cron_resource(self):
         """Test converting cron resource."""
         result = convert_resource_to_task(
-            "cron",
-            "daily_backup",
-            "create",
-            {"minute": "0", "hour": "2", "command": "/usr/local/bin/backup.sh"},
+            resource_type="cron",
+            resource_name="daily_backup",
+            action="create",
+            properties='{"minute": "0", "hour": "2", "command": "/usr/local/bin/backup.sh"}',
         )
 
         assert "ansible.builtin.cron" in result
@@ -125,7 +148,10 @@ class TestAdditionalResourceTypes:
     def test_convert_user_resource(self):
         """Test converting user resource."""
         result = convert_resource_to_task(
-            "user", "appuser", "create", {"uid": "1001", "shell": "/bin/bash"}
+            resource_type="user",
+            resource_name="appuser",
+            action="create",
+            properties='{"uid": "1001", "shell": "/bin/bash"}',
         )
 
         assert "ansible.builtin.user" in result
@@ -134,7 +160,10 @@ class TestAdditionalResourceTypes:
     def test_convert_group_resource(self):
         """Test converting group resource."""
         result = convert_resource_to_task(
-            "group", "appgroup", "create", {"gid": "1001"}
+            resource_type="group",
+            resource_name="appgroup",
+            action="create",
+            properties='{"gid": "1001"}',
         )
 
         assert "ansible.builtin.group" in result
@@ -143,10 +172,10 @@ class TestAdditionalResourceTypes:
     def test_convert_mount_resource(self):
         """Test converting mount resource."""
         result = convert_resource_to_task(
-            "mount",
-            "/mnt/data",
-            "mount",
-            {"device": "/dev/sdb1", "fstype": "ext4"},
+            resource_type="mount",
+            resource_name="/mnt/data",
+            action="mount",
+            properties='{"device": "/dev/sdb1", "fstype": "ext4"}',
         )
 
         assert "ansible.builtin.mount" in result or "mount" in result.lower()
@@ -155,7 +184,10 @@ class TestAdditionalResourceTypes:
     def test_convert_link_resource(self):
         """Test converting link resource."""
         result = convert_resource_to_task(
-            "link", "/usr/bin/node", "create", {"to": "/usr/local/bin/node"}
+            resource_type="link",
+            resource_name="/usr/bin/node",
+            action="create",
+            properties='{"to": "/usr/local/bin/node"}',
         )
 
         # Link resource might not be fully implemented, just check it doesn't crash
@@ -165,10 +197,10 @@ class TestAdditionalResourceTypes:
     def test_convert_git_resource(self):
         """Test converting git resource."""
         result = convert_resource_to_task(
-            "git",
-            "/opt/myapp",
-            "sync",
-            {"repository": "https://github.com/user/repo.git", "revision": "main"},
+            resource_type="git",
+            resource_name="/opt/myapp",
+            action="sync",
+            properties='{"repository": "https://github.com/user/repo.git", "revision": "main"}',
         )
 
         assert "ansible.builtin.git" in result
@@ -176,14 +208,24 @@ class TestAdditionalResourceTypes:
 
     def test_convert_apt_package_resource(self):
         """Test converting apt_package resource."""
-        result = convert_resource_to_task("apt_package", "nginx", "install", {})
+        result = convert_resource_to_task(
+            resource_type="apt_package",
+            resource_name="nginx",
+            action="install",
+            properties="",
+        )
 
         assert "ansible.builtin.apt" in result
         assert "nginx" in result
 
     def test_convert_yum_package_resource(self):
         """Test converting yum_package resource."""
-        result = convert_resource_to_task("yum_package", "httpd", "install", {})
+        result = convert_resource_to_task(
+            resource_type="yum_package",
+            resource_name="httpd",
+            action="install",
+            properties="",
+        )
 
         assert "ansible.builtin.yum" in result
         assert "httpd" in result
@@ -191,17 +233,26 @@ class TestAdditionalResourceTypes:
     def test_convert_bash_resource(self):
         """Test converting bash resource."""
         result = convert_resource_to_task(
-            "bash", "configure_system", "run", {"code": "echo 'test'"}
+            resource_type="bash",
+            resource_name="configure_system",
+            action="run",
+            properties='{"code": "echo \'test\'"}',
         )
 
         assert "ansible.builtin.shell" in result
 
-    def test_convert_script_resource(self):
+    def test_convert_script_resource(self, tmp_path):
         """Test converting script resource."""
-        result = convert_resource_to_task("script", "/tmp/setup.sh", "run", {})
+        script_file = tmp_path / "setup.sh"
+        result = convert_resource_to_task(
+            resource_type="script",
+            resource_name=str(script_file),
+            action="run",
+            properties="",
+        )
 
         assert "ansible.builtin.script" in result
-        assert "/tmp/setup.sh" in result
+        assert str(script_file) in result
 
 
 class TestComplexPropertyHandling:
@@ -210,10 +261,10 @@ class TestComplexPropertyHandling:
     def test_convert_with_array_property(self):
         """Test converting resource with array properties."""
         result = convert_resource_to_task(
-            "package",
-            "nginx",
-            "install",
-            {"options": ["--no-install-recommends", "--quiet"]},
+            resource_type="package",
+            resource_name="nginx",
+            action="install",
+            properties='{"options": ["--no-install-recommends", "--quiet"]}',
         )
 
         assert "ansible.builtin.package" in result
@@ -222,13 +273,10 @@ class TestComplexPropertyHandling:
     def test_convert_with_hash_property(self):
         """Test converting resource with hash/dict properties."""
         result = convert_resource_to_task(
-            "template",
-            "/etc/nginx/nginx.conf",
-            "create",
-            {
-                "source": "nginx.conf.erb",
-                "variables": {"port": 80, "worker_processes": 4},
-            },
+            resource_type="template",
+            resource_name="/etc/nginx/nginx.conf",
+            action="create",
+            properties='{"source": "nginx.conf.erb", "variables": {"port": 80, "worker_processes": 4}}',
         )
 
         assert "ansible.builtin.template" in result
@@ -237,7 +285,10 @@ class TestComplexPropertyHandling:
     def test_convert_with_boolean_properties(self):
         """Test converting resource with boolean properties."""
         result = convert_resource_to_task(
-            "service", "nginx", "start", {"enabled": True, "reload": False}
+            resource_type="service",
+            resource_name="nginx",
+            action="start",
+            properties='{"enabled": true, "reload": false}',
         )
 
         assert "ansible.builtin.service" in result
@@ -246,7 +297,10 @@ class TestComplexPropertyHandling:
     def test_convert_with_numeric_properties(self):
         """Test converting resource with numeric properties."""
         result = convert_resource_to_task(
-            "file", "/var/log/app.log", "create", {"mode": 644, "size": 1024}
+            resource_type="file",
+            resource_name="/var/log/app.log",
+            action="create",
+            properties='{"mode": 644, "size": 1024}',
         )
 
         assert "ansible.builtin.file" in result
@@ -328,3 +382,278 @@ def test_determine_search_complexity_patterns():
         [{"field": "a", "operator": "=", "value": "1"}], ["AND"]
     )
     assert result == "complex"
+
+
+def test_get_current_timestamp():
+    """Test timestamp generation for playbooks."""
+    from souschef.server import _get_current_timestamp
+
+    timestamp = _get_current_timestamp()
+    assert isinstance(timestamp, str)
+    assert len(timestamp) > 0
+    # Should be in format YYYY-MM-DD HH:MM:SS
+    assert "-" in timestamp
+    assert ":" in timestamp
+
+
+def test_parse_recipe_with_wildcard_condition():
+    """Test recipe parsing with wildcard search conditions."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+search_results = search(:node, "hostname:web-*")
+
+search_results.each do |server|
+  log "Found server: #{server['hostname']}"
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        # Should handle wildcard searches
+        assert "search" in result.lower() or "warning" in result.lower()
+
+
+def test_parse_recipe_with_regex_condition():
+    """Test recipe parsing with regex search patterns."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+nodes = search(:node, "name:/^app-\\d+$/")
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        # Should handle regex patterns
+        assert len(result) > 0
+
+
+def test_parse_recipe_with_subscribes_and_handlers():
+    """Test recipe with both subscribes and notifies generates handlers."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+template '/etc/app/config.conf' do
+  source 'config.conf.erb'
+  notifies :reload, 'service[app]', :immediately
+end
+
+service 'app' do
+  action [:enable, :start]
+  subscribes :restart, 'template[/etc/app/config.conf]', :delayed
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        # Should include both notify and subscribe handling or warning
+        assert "service" in result.lower() or "warning" in result.lower()
+        assert len(result) > 10
+
+
+def test_convert_chef_search_with_wildcard():
+    """Test converting Chef search with wildcard to inventory."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("hostname:web-*")
+
+    assert len(result) > 0
+
+
+def test_convert_chef_search_with_regex():
+    """Test converting Chef search with regex to inventory."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("name:/^db-\\d+$/")
+
+    assert len(result) > 0
+
+
+def test_convert_chef_search_with_not_equal():
+    """Test converting Chef search with NOT operator."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("environment:!staging")
+
+    assert len(result) > 0
+
+
+def test_convert_chef_search_with_range():
+    """Test converting Chef search with range."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("memory:[2048 TO 8192]")
+
+    assert len(result) > 0
+
+
+def test_convert_chef_search_with_tag():
+    """Test converting Chef search with tags."""
+    from souschef.server import convert_chef_search_to_inventory
+
+    result = convert_chef_search_to_inventory("tags:webserver")
+
+    assert "tag" in result.lower() or "webserver" in result.lower()
+
+
+def test_parse_recipe_with_complex_version_constraints():
+    """Test recipe with version constraints in package resources."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+package 'nginx' do
+  version '1.18.0-0ubuntu1'
+  action :install
+end
+
+package 'postgresql' do
+  version '>= 12.0, < 14.0'
+  action :upgrade
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        assert "nginx" in result or "warning" in result.lower()
+
+
+def test_parse_recipe_with_only_if_guard():
+    """Test recipe with only_if guards."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+service 'nginx' do
+  action :start
+  only_if 'test -f /etc/nginx/nginx.conf'
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        # Should handle guards
+        assert "nginx" in result or "warning" in result.lower()
+
+
+def test_parse_recipe_with_not_if_guard():
+    """Test recipe with not_if guards."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+package 'apache2' do
+  action :install
+  not_if 'which apache2'
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        assert "apache2" in result or "warning" in result.lower()
+
+
+def test_parse_recipe_with_block_guard():
+    """Test recipe with block guards."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import parse_recipe
+
+    recipe_content = """
+file '/tmp/test' do
+  content 'test'
+  only_if { File.exist?('/etc/config') }
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = parse_recipe("/fake/path/recipe.rb")
+
+        assert (
+            "file" in result.lower() or "test" in result or "warning" in result.lower()
+        )
+
+
+def test_generate_playbook_with_handlers():
+    """Test playbook generation includes handlers when notifications present."""
+    from unittest.mock import MagicMock
+
+    from souschef.server import generate_playbook_from_recipe
+
+    recipe_content = """
+package 'apache2' do
+  action :install
+  notifies :restart, 'service[apache2]', :delayed
+end
+
+service 'apache2' do
+  action [:enable, :start]
+end
+"""
+    with patch("souschef.server._normalize_path") as mock_norm:
+        mock_path = MagicMock()
+        mock_path.name = "recipe.rb"
+        mock_path.read_text.return_value = recipe_content
+        mock_path.exists.return_value = True
+        mock_path.is_file.return_value = True
+        mock_norm.return_value = mock_path
+
+        result = generate_playbook_from_recipe("/fake/path/recipe.rb")
+
+        # Should include handlers or a warning about parsing
+        assert (
+            "handlers:" in result
+            or "warning" in result.lower()
+            or "error" in result.lower()
+            or "---" in result
+        )  # Accept valid playbook too

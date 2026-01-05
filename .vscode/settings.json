@@ -8,13 +8,22 @@
         "--cov-report=term-missing"
     ],
     "python.testing.cwd": "${workspaceFolder}",
-    "python.analysis.typeCheckingMode": "basic",
+    // Pylance: Real-time type checking and intellisense in VS Code
+    // Note: mypy runs in CI for stricter checks; Pylance provides immediate feedback
+    "python.analysis.typeCheckingMode": "standard",
     "python.analysis.diagnosticSeverityOverrides": {
         "reportUnknownParameterType": "none",
         "reportUnknownVariableType": "none",
         "reportUnknownArgumentType": "none",
-        "reportMissingParameterType": "none"
+        "reportMissingParameterType": "none",
+        "reportGeneralTypeIssues": "warning",
+        "reportOptionalMemberAccess": "warning"
     },
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.completeFunctionParens": true,
+    "python.analysis.inlayHints.functionReturnTypes": true,
+    "python.analysis.inlayHints.variableTypes": false,
+    // Ruff: Primary linter and formatter (replaces Black, isort, flake8)
     "[python]": {
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "charliermarsh.ruff",
@@ -23,6 +32,9 @@
             "source.organizeImports": "explicit"
         }
     },
+    "ruff.enable": true,
+    "ruff.lint.enable": true,
+    "ruff.organizeImports": true,
     "files.eol": "\n",
     "files.insertFinalNewline": true,
     "files.trimTrailingWhitespace": true,

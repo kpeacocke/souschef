@@ -95,10 +95,50 @@ We welcome several types of contributions:
 
 SousChef maintains high code quality standards:
 
+### 🔧 **Development Tools**
+
+SousChef uses a modern Python toolchain for quality and consistency:
+
+#### **Ruff** (Linting & Formatting)
+- **Purpose**: Primary code quality tool - combines linting + formatting
+- **Replaces**: Black, isort, flake8, pycodestyle, and many others
+- **Usage**:
+  ```bash
+  poetry run ruff check .     # Lint code
+  poetry run ruff format .    # Format code
+  ```
+- **Config**: See `[tool.ruff]` in `pyproject.toml`
+- **VS Code**: Runs automatically on save via the Ruff extension
+
+#### **mypy** (Static Type Checking)
+- **Purpose**: Strict type checking for CI/CD and command line
+- **Usage**:
+  ```bash
+  poetry run mypy souschef    # Type check source code
+  ```
+- **Config**: See `[tool.mypy]` in `pyproject.toml`
+- **CI**: Runs automatically in GitHub Actions
+
+#### **Pylance** (VS Code Language Server)
+- **Purpose**: Real-time type checking, intellisense, and code navigation in VS Code
+- **How it works**: Provides immediate feedback as you type
+- **Config**: See `.vscode/settings.json` for Pylance settings
+- **Note**: Complements mypy - Pylance for development speed, mypy for CI strictness
+
+#### **pytest** (Testing Framework)
+- **Purpose**: Test runner with coverage reporting
+- **Usage**:
+  ```bash
+  poetry run pytest                                      # Run all tests
+  poetry run pytest --cov=souschef --cov-report=html    # With coverage
+  ```
+- **Config**: See `[tool.pytest.ini_options]` in `pyproject.toml`
+
 ### ✅ **Zero Warnings Policy**
-- All code must be free of errors and warnings
+- All code must be free of errors and warnings from **all tools** (Ruff, mypy, Pylance)
 - Do not disable linting warnings without fixing the underlying issue
-- Use `ruff` for linting and formatting
+- Ruff handles formatting automatically - use `poetry run ruff format`
+- mypy runs in CI for strict type checking - ensure types are correct locally with Pylance
 
 ### 🏷️ **Type Hints**
 - All function signatures in `souschef/` must have type hints
@@ -184,7 +224,7 @@ def test_parse_handles_any_input(random_input):
 ```
 
 ### **Test Coverage Goals**
-- **Current**: 82% test coverage
+- **Current**: 93% test coverage
 - **Goal**: 95%+ coverage for production readiness
 - **Requirement**: All new features must include comprehensive tests
 
@@ -205,7 +245,88 @@ poetry run pytest tests/test_property_based.py # Property-based tests
 poetry run pytest --benchmark-only
 ```
 
-## 🔄 Submitting Changes
+## � Managing Dependencies
+
+SousChef uses **Poetry** for dependency management with automated lock file synchronization.
+
+### **Adding Dependencies**
+
+```bash
+# Add a production dependency
+poetry add package-name
+
+# Add a development dependency
+poetry add --group dev package-name
+
+# Add with version constraints
+poetry add "package-name>=1.0.0,<2.0.0"
+
+# Update a specific package
+poetry update package-name
+
+# Update all dependencies
+poetry update
+```
+
+### **Keeping poetry.lock in Sync**
+
+The project uses **three layers** of automation to prevent lock file issues:
+
+#### **1. Pre-commit Hooks** (Automatic ✅)
+- `poetry-check`: Validates lock file is in sync before every commit
+- `poetry-lock`: Auto-regenerates lock when pyproject.toml changes
+- **Setup**: `poetry run pre-commit install` (one-time setup)
+
+#### **2. GitHub Actions** (CI Validation ✅)
+- `poetry-lock-check.yml`: Validates lock file in all PRs
+- Posts helpful comments if out of sync
+- Prevents merging with outdated lock files
+
+#### **3. Dependabot** (Automated Updates ✅)
+- Weekly dependency updates (Mondays 9am UTC)
+- Groups minor/patch updates together
+- Auto-creates PRs with updated lock files
+- Already configured in `.github/dependabot.yml`
+
+### **Manual Lock File Update**
+
+If you manually edit `pyproject.toml`:
+
+```bash
+# Update lock file (Poetry 2.x preserves versions automatically)
+poetry lock
+
+# Commit both files together
+git add pyproject.toml poetry.lock
+git commit -m "chore: update dependencies"
+```
+
+### **Troubleshooting**
+
+**Error: "poetry.lock out of sync"**
+```bash
+# Fix it:
+poetry lock
+
+# Verify:
+poetry check
+```
+
+**Pre-commit hook not running?**
+```bash
+# Install hooks:
+poetry run pre-commit install
+
+# Test manually:
+poetry run pre-commit run --all-files
+```
+
+**Poetry 2.x Changes:**
+- `poetry lock` now preserves versions by default (no `--no-update` flag needed)
+- Updates lock file hashes without upgrading versions
+- Use `poetry update` when you actually want to upgrade packages
+
+## �🔄 Submitting Changes
 
 ### Pull Request Process
 
@@ -224,6 +345,9 @@ poetry run pytest --benchmark-only
    # Lint and format
    poetry run ruff check .
    poetry run ruff format .
+
+   # Type check
+   poetry run mypy souschef
 
    # Run all tests
    poetry run pytest
@@ -309,6 +433,7 @@ Before submitting your PR, ensure:
 
 - [ ] ✅ No linting errors (`poetry run ruff check .`)
 - [ ] ✅ Properly formatted (`poetry run ruff format .`)
+- [ ] ✅ No type errors (`poetry run mypy souschef`)
 - [ ] ✅ All tests pass (`poetry run pytest`)
 - [ ] ✅ Coverage maintained/improved (`pytest --cov`)
 - [ ] ✅ Unit tests added/updated in `test_server.py`
@@ -319,6 +444,120 @@ Before submitting your PR, ensure:
 - [ ] ✅ Docstrings are present and clear
 - [ ] ✅ Error cases are handled
 - [ ] ✅ Cross-platform compatible
+
+## 🚀 Release Process
+
+SousChef uses automated releases powered by Release Please and follows the Gitflow branching model.
+
+### **Branching Strategy**
+
+- **`main`**: Production releases only (protected)
+- **`develop`**: Integration branch for upcoming releases (protected)
+- **`feature/*`**: Feature development branches
+- **`bugfix/*`**: Bug fix branches
+- **`release/*`**: Release preparation branches (if needed)
+- **`hotfix/*`**: Emergency production fixes
+
+### **How Releases Work**
+
+1. **Develop Features**
+   - Create feature branches from `develop`
+   - Use conventional commits for all changes
+   - Submit PRs targeting `develop`
+
+2. **Accumulate on Develop**
+   - Multiple features/fixes accumulate on `develop`
+   - This is your "staging" branch for batching changes
+   - Test everything thoroughly on `develop`
+
+3. **Release When Ready**
+   - Create PR: `develop` → `main`
+   - Once merged, Release Please automatically:
+     - Analyzes conventional commits since last release
+     - Creates a Release PR with version bump and CHANGELOG
+     - Auto-merges the Release PR when CI passes
+     - Publishes the release with Git tag
+     - Builds and publishes package to PyPI
+
+### **Automated Release Flow**
+
+```
+feature/x ──┐
+            ├─→ develop ──→ main ──→ [Release Please] ──→ PyPI
+feature/y ──┘                         ↓
+                                   Release PR
+                                   (auto-merges)
+```
+
+**Key Points:**
+- ✅ **Develop is your control point** - merge here to batch changes
+- ✅ **Main triggers releases** - every merge to main creates a release
+- ✅ **Fully automatic** - Release PR auto-merges when CI passes
+- ✅ **Conventional commits required** - they determine version bumps
+- ✅ **CHANGELOG auto-generated** - from commit messages
+
+### **Version Bumping Rules**
+
+Based on conventional commit types:
+
+- **Patch (0.0.x)**: `fix:`, `docs:`, `test:`, `chore:`, `refactor:`, `style:`
+- **Minor (0.x.0)**: `feat:`, breaking changes in pre-1.0 (`feat!:`, `BREAKING CHANGE`)
+- **Major (x.0.0)**: Breaking changes after 1.0.0 only
+
+**Example:**
+```bash
+# These commits on develop...
+git commit -m "feat: add Chef Policyfile support"
+git commit -m "fix: handle empty attribute files"
+git commit -m "docs: update CLI examples"
+
+# ...will create a minor version bump (0.x.0)
+# when merged to main because of the feat: commit
+```
+
+### **Manual Release Override**
+
+If you need to release immediately without auto-merge:
+
+1. Merge `develop` → `main`
+2. Wait for Release Please to create Release PR
+3. Review the Release PR (version, CHANGELOG)
+4. Manually merge it if auto-merge fails
+
+### **Hotfix Process**
+
+For emergency production fixes:
+
+```bash
+# Create hotfix from main
+git checkout main
+git checkout -b hotfix/critical-bug-fix
+
+# Make fix and commit
+git commit -m "fix: resolve critical security issue"
+
+# PR directly to main
+# Release happens automatically
+```
+
+### **Pre-Release Validation**
+
+Before merging `develop` → `main`:
+
+```bash
+# Ensure everything passes
+poetry run ruff check .
+poetry run ruff format .
+poetry run mypy souschef
+poetry run pytest --cov=souschef
+poetry run pytest --benchmark-only
+
+# Review accumulated commits
+git log main..develop --oneline
+
+# Verify conventional commits
+git log main..develop --pretty=format:"%s" | grep -E "^(feat|fix|docs|test|refactor|perf|chore|ci|style)(\(.*\))?:"
+```
 
 ## 🔧 Adding New MCP Tools
 

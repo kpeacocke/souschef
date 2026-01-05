@@ -1,9 +1,8 @@
 name: Release
 
+# Only trigger on release published (created by Release Please)
+# Don't trigger on tag push to avoid duplicate runs
 on:
-  push:
-    tags:
-      - 'v*'
   release:
     types: [published]
 
@@ -15,97 +14,34 @@ env:
   PYTHON_VERSION: "3.14"
 
 jobs:
-  test:
+  # Skip tests - they already passed in CI before merge to main
+  # This workflow focuses on building and publishing the release
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
       contents: read
 
     steps:
     - uses: actions/checkout@v6
       with:
-        fetch-depth: 0  # Need full history for branch validation
+        fetch-depth: 0
 
     - name: Get tag name
       id: get-tag
       run: |
-        if [ "${{ github.event_name }}" = "release" ]; then
-          # Release Please flow - get tag from release
-          TAG="${{ github.event.release.tag_name }}"
-        else
-          # Direct tag push flow
-          TAG="${{ github.ref_name }}"
-        fi
+        TAG="${{ github.event.release.tag_name }}"
         echo "tag=$TAG" >> $GITHUB_OUTPUT
         echo "Using tag: $TAG"
 
     - name: Validate release is on main branch
       run: |
-        # Check that tag is on main branch
         if ! git branch -r --contains ${{ github.sha }} | grep -q 'origin/main'; then
           echo "Error: Release tag must be on main branch"
-          echo "Current branches containing this commit:"
           git branch -r --contains ${{ github.sha }}
           exit 1
         fi
         echo "✓ Release tag is on main branch"
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: latest
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-
-    - name: Cache Poetry dependencies
-      uses: actions/cache@v5
-      with:
-        path: .venv
-        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-poetry-
-
-    - name: Install dependencies
-      run: poetry install --no-interaction
-
-    - name: Run tests
-      run: poetry run pytest --cov=souschef
-
-    - name: Lint
-      run: |
-        poetry run ruff check .
-        poetry run ruff format --check .
-
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: test
-    permissions:
-      contents: read
-    outputs:
-      version: ${{ steps.get-version.outputs.version }}
-      tag: ${{ steps.get-tag.outputs.tag }}
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - name: Get tag name
-      id: get-tag
-      run: |
-        if [ "${{ github.event_name }}" = "release" ]; then
-          # Release Please flow - get tag from release
-          TAG="${{ github.event.release.tag_name }}"
-        else
-          # Direct tag push flow
-          TAG="${{ github.ref_name }}"
-        fi
-        echo "tag=$TAG" >> $GITHUB_OUTPUT
-        echo "Using tag: $TAG"
 
     - name: Validate semver tag
       run: |
@@ -114,21 +50,28 @@ jobs:
           echo "Error: Tag '$TAG' does not follow semver format (vX.Y.Z)"
           exit 1
         fi
-        echo "Tag '$TAG' is valid semver"
+        echo "✓ Tag '$TAG' is valid semver"
 
     - name: Check version matches tag
-      id: get-version
       run: |
         TAG_VERSION="${{ steps.get-tag.outputs.tag }}"
-        TAG_VERSION="${TAG_VERSION#v}"  # Remove 'v' prefix
+        TAG_VERSION="${TAG_VERSION#v}"
         PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-
         if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
-          echo "Error: Tag version ($TAG_VERSION) does not match pyproject.toml version ($PYPROJECT_VERSION)"
+          echo "Error: Tag version ($TAG_VERSION) != pyproject.toml version ($PYPROJECT_VERSION)"
           exit 1
         fi
-        echo "Version $TAG_VERSION matches pyproject.toml"
-        echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
+        echo "✓ Version $TAG_VERSION matches pyproject.toml"
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v6
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -136,7 +79,7 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install Poetry
-      uses: snok/install-poetry@v1
+      uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a  # v1.4.1
       with:
         version: latest
         virtualenvs-create: true
@@ -156,76 +99,20 @@ jobs:
     - name: Build package
       run: poetry build
 
+    - name: Check built packages
+      run: poetry run twine check dist/*
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v6
       with:
         name: release-packages
         path: dist/
-
-  release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: build
-    # Skip this job if triggered by Release Please (release already created)
-    if: github.event_name != 'release'
-    permissions:
-      contents: write
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: release-packages
-        path: dist/
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ needs.build.outputs.tag }}
-        files: dist/*
-        generate_release_notes: true
-        draft: false
-        prerelease: false
-        body: |
-          ## What's Changed
-
-          This release includes new features, bug fixes, and improvements to SousChef's Chef-to-Ansible migration capabilities.
-
-          ### Installation
-
-          ```bash
-          # Install via pip
-          pip install mcp-souschef==${{ needs.build.outputs.version }}
-
-          # Install via Poetry
-          poetry add mcp-souschef==${{ needs.build.outputs.version }}
-          ```
-
-          ### Usage
-
-          ```bash
-          # CLI usage
-          souschef-cli --help
-          souschef-cli recipe path/to/recipe.rb
-
-          # MCP server
-          souschef
-          ```
-
-          For complete documentation, see the [README](https://github.com/kpeacocke/souschef/blob/main/README.md).
-
-          ### Security
-
-          Please report security vulnerabilities following our [Security Policy](https://github.com/kpeacocke/souschef/blob/main/SECURITY.md).
+        retention-days: 7
 
   publish-pypi:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [build, release]
-    # Run if release job completed or was skipped (Release Please flow)
-    if: always() && (needs.release.result == 'success' || needs.release.result == 'skipped')
+    needs: build
     environment: pypi
     permissions:
       contents: read
@@ -239,6 +126,27 @@ jobs:
         path: dist/
 
     - name: Publish to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
+      uses: pypa/gh-action-pypi-publish@67339c736fd9354cd4f8cb0b744f2b82a74b5c70  # v1.12.3
       with:
         attestations: true
+
+  attach-to-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: release-packages
+        path: dist/
+
+    - name: Attach packages to GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Attaching packages to release..."
+        gh release upload ${{ github.event.release.tag_name }} dist/* --repo ${{ github.repository }}

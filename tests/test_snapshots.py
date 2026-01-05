@@ -1,4 +1,5 @@
-"""Snapshot tests for Chef-to-Ansible conversion outputs.
+"""
+Snapshot tests for Chef-to-Ansible conversion outputs.
 
 These tests ensure that the conversion logic produces consistent output
 and helps prevent regressions in the generated Ansible playbooks and templates.
@@ -20,78 +21,67 @@ from souschef.server import (
 
 def test_convert_package_resource_to_task_snapshot(snapshot):
     """Snapshot test for package resource conversion."""
-    resource = {
-        "type": "package",
-        "name": "nginx",
-        "action": "install",
-        "properties": {"version": "1.18.0"},
-    }
-    result = convert_resource_to_task(resource, "")
+    result = convert_resource_to_task(
+        resource_type="package",
+        resource_name="nginx",
+        action="install",
+        properties='{"version": "1.18.0"}',
+    )
     assert result == snapshot
 
 
 def test_convert_service_resource_to_task_snapshot(snapshot):
     """Snapshot test for service resource conversion."""
-    resource = {
-        "type": "service",
-        "name": "nginx",
-        "action": "start",
-        "properties": {"enabled": "true"},
-    }
-    result = convert_resource_to_task(resource, "")
+    result = convert_resource_to_task(
+        resource_type="service",
+        resource_name="nginx",
+        action="start",
+        properties='{"enabled": "true"}',
+    )
     assert result == snapshot
 
 
 def test_convert_template_resource_to_task_snapshot(snapshot):
     """Snapshot test for template resource conversion."""
-    resource = {
-        "type": "template",
-        "name": "/etc/nginx/nginx.conf",
-        "action": "create",
-        "properties": {
-            "source": "nginx.conf.erb",
-            "owner": "root",
-            "group": "root",
-            "mode": "0644",
-        },
-    }
-    result = convert_resource_to_task(resource, "")
+    result = convert_resource_to_task(
+        resource_type="template",
+        resource_name="/etc/nginx/nginx.conf",
+        action="create",
+        properties='{"source": "nginx.conf.erb", "owner": "root", "group": "root", "mode": "0644"}',
+    )
     assert result == snapshot
 
 
 def test_convert_file_resource_to_task_snapshot(snapshot):
     """Snapshot test for file resource conversion."""
-    resource = {
-        "type": "file",
-        "name": "/etc/app/config.json",
-        "action": "create",
-        "properties": {"content": '{"key": "value"}', "mode": "0600"},
-    }
-    result = convert_resource_to_task(resource, "")
+    result = convert_resource_to_task(
+        resource_type="file",
+        resource_name="/etc/app/config.json",
+        action="create",
+        properties='{"content": "{\\"key\\": \\"value\\"}", "mode": "0600"}',
+    )
     assert result == snapshot
 
 
 def test_convert_directory_resource_to_task_snapshot(snapshot):
     """Snapshot test for directory resource conversion."""
-    resource = {
-        "type": "directory",
-        "name": "/var/www/html",
-        "action": "create",
-        "properties": {"owner": "www-data", "group": "www-data", "mode": "0755"},
-    }
-    result = convert_resource_to_task(resource, "")
+    result = convert_resource_to_task(
+        resource_type="directory",
+        resource_name="/var/www/html",
+        action="create",
+        properties='{"owner": "www-data", "group": "www-data", "mode": "0755"}',
+    )
     assert result == snapshot
 
 
 def test_convert_execute_resource_to_task_snapshot(snapshot):
     """Snapshot test for execute resource conversion."""
-    resource = {
-        "type": "execute",
-        "name": "reload-systemd",
-        "action": "run",
-        "properties": {"command": "systemctl daemon-reload"},
-    }
-    result = convert_resource_to_task(resource, "")
+    result = convert_resource_to_task(
+        resource_type="execute",
+        resource_name="reload-systemd",
+        action="run",
+        properties='{"command": "systemctl daemon-reload"}',
+    )
     assert result == snapshot
 
 
@@ -402,47 +392,34 @@ cert = <%= server['ssl_cert'] %>
 
 def test_convert_user_resource_to_task_snapshot(snapshot):
     """Snapshot test for user resource conversion."""
-    resource = {
-        "type": "user",
-        "name": "appuser",
-        "action": "create",
-        "properties": {
-            "uid": "1001",
-            "gid": "1001",
-            "shell": "/bin/bash",
-            "home": "/home/appuser",
-        },
-    }
-    result = convert_resource_to_task(resource, "")
+    result = convert_resource_to_task(
+        resource_type="user",
+        resource_name="appuser",
+        action="create",
+        properties='{"uid": "1001", "gid": "1001", "shell": "/bin/bash", "home": "/home/appuser"}',
+    )
     assert result == snapshot
 
 
 def test_convert_group_resource_to_task_snapshot(snapshot):
     """Snapshot test for group resource conversion."""
-    resource = {
-        "type": "group",
-        "name": "appgroup",
-        "action": "create",
-        "properties": {"gid": "1001"},
-    }
-    result = convert_resource_to_task(resource, "")
+    result = convert_resource_to_task(
+        resource_type="group",
+        resource_name="appgroup",
+        action="create",
+        properties='{"gid": "1001"}',
+    )
     assert result == snapshot
 
 
 def test_convert_cron_resource_to_task_snapshot(snapshot):
     """Snapshot test for cron resource conversion."""
-    resource = {
-        "type": "cron",
-        "name": "daily_backup",
-        "action": "create",
-        "properties": {
-            "minute": "0",
-            "hour": "2",
-            "command": "/usr/local/bin/backup.sh",
-            "user": "root",
-        },
-    }
-    result = convert_resource_to_task(resource, "")
+    result = convert_resource_to_task(
+        resource_type="cron",
+        resource_name="daily_backup",
+        action="create",
+        properties='{"minute": "0", "hour": "2", "command": "/usr/local/bin/backup.sh", "user": "root"}',
+    )
     assert result == snapshot
 
 

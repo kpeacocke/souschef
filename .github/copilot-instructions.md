@@ -6,11 +6,33 @@ SousChef is an AI-powered MCP (Model Context Protocol) server that assists with 
 ## Development Standards
 
 ### Code Quality
-- **Zero warnings policy**: All code must be free of errors and warnings without disabling them
+- **Zero warnings policy**: All code must be free of errors and warnings from **all tools** (Ruff, mypy, Pylance) without disabling them
 - **Type hints**: Use Python type hints for all function signatures in source code (`souschef/`). For test files, pytest fixtures (`tmp_path`, `benchmark`) and parameterized test parameters can omit type hints for brevity
 - **Docstrings**: Every function, class, and module must have clear docstrings following Google style
-- **Linting**: Code must pass `ruff` linting checks with no violations
+- **Linting**: Code must pass `ruff check` with no violations
 - **Formatting**: Code must be formatted with `ruff format`
+- **Type checking**: Code must pass `mypy` type checking with no errors
+
+### Development Tools
+SousChef uses a modern Python toolchain:
+
+- **Ruff**: Primary linter and formatter (replaces Black, isort, flake8, etc.)
+  - Runs in CI and on save in VS Code
+  - Use: `poetry run ruff check .` and `poetry run ruff format .`
+
+- **mypy**: Static type checker for CI/CD and command line
+  - Runs in CI for strict type validation
+  - Use: `poetry run mypy souschef`
+  - Config: `[tool.mypy]` in `pyproject.toml`
+
+- **Pylance**: VS Code language server for real-time feedback
+  - Provides immediate type checking as you code
+  - Complements mypy - Pylance for dev speed, mypy for CI strictness
+  - Config: `.vscode/settings.json`
+
+- **pytest**: Testing framework with coverage reporting
+  - Use: `poetry run pytest --cov=souschef`
+  - Config: `[tool.pytest.ini_options]` in `pyproject.toml`
 
 ### Testing Requirements
 - **100% coverage goal**: Aim for as close to 100% test coverage as possible
@@ -79,16 +101,17 @@ The project maintains three types of tests - ensure all are updated when adding 
 Before suggesting code, ensure:
 1. ✅ No linting errors (`ruff check`)
 2. ✅ Properly formatted (`ruff format`)
-3. ✅ All tests pass (`pytest`)
-4. ✅ Coverage maintained/improved (`pytest --cov`)
-5. ✅ Unit tests added/updated in `test_server.py`
-6. ✅ Integration tests added/updated in `test_integration.py`
-7. ✅ Property-based tests added if applicable in `test_property_based.py`
-8. ✅ Test fixtures updated if new parsing features added
-9. ✅ Type hints are complete
-10. ✅ Docstrings are present and clear
-11. ✅ Error cases are handled
-12. ✅ Cross-platform compatible
+3. ✅ No type errors (`mypy souschef`)
+4. ✅ All tests pass (`pytest`)
+5. ✅ Coverage maintained at 90%+ (`pytest --cov`)
+6. ✅ Unit tests added/updated in `test_server.py`
+7. ✅ Integration tests added/updated in `test_integration.py`
+8. ✅ Property-based tests added if applicable in `test_property_based.py`
+9. ✅ Test fixtures updated if new parsing features added
+10. ✅ Type hints are complete
+11. ✅ Docstrings are present and clear
+12. ✅ Error cases are handled
+13. ✅ Cross-platform compatible
 
 ## Preferred Patterns
 
