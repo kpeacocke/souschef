@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - main
-      - develop
-      - 'feature/**'
-      - 'bugfix/**'
-      - 'release/**'
-      - 'hotfix/**'
   pull_request:
     types: [opened, synchronize, reopened]
     branches:
