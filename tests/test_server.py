@@ -7935,22 +7935,22 @@ end""",
 end""",
                 "create",
             ),
-            # Mount resources
+            # Mount resources - Test fixture uses fake credentials for Chef parsing
             (
-                # Test fixture with fake credentials for Chef resource parsing
-                # NOSONAR
-                """mount "/mnt/shared" do
-  device "//server/share"
-  fstype "cifs"
-  options "username=user,password=pass,uid=1000,gid=1000"
-  dump 0
-  pass 0
-  action [:mount, :enable]
-  mount_point "/mnt/shared"
-  device_type :device
-  enabled true
-  supports [:remount]
-end""",
+                (
+                    'mount "/mnt/shared" do\n'
+                    '  device "//server/share"\n'
+                    '  fstype "cifs"\n'
+                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'  # noqa: S106 # Test fixture with fake credentials
+                    "  dump 0\n"
+                    "  pass 0\n"
+                    "  action [:mount, :enable]\n"
+                    '  mount_point "/mnt/shared"\n'
+                    "  device_type :device\n"
+                    "  enabled true\n"
+                    "  supports [:remount]\n"
+                    "end"
+                ),
                 "mount",
             ),
             # Link resources
