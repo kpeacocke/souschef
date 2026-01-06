@@ -41,7 +41,7 @@ Complete cookbook introspection and analysis tools:
 - **read_file** - Read cookbook files with error handling
 - **read_cookbook_metadata** - Parse metadata.rb files for dependencies and cookbook information
 - **parse_recipe** - Analyze Chef recipes and extract resources, actions, and properties
-- **parse_attributes** - Parse attribute files (default, override, normal) with precedence analysis
+- **parse_attributes** - Parse attribute files with **advanced precedence resolution** (6 levels: default, force_default, normal, override, force_override, automatic)
 - **list_cookbook_structure** - Display complete cookbook directory hierarchy
 
 ### 2. Chef-to-Ansible Conversion Engine
@@ -542,16 +542,58 @@ parse_recipe("/path/to/cookbook/recipes/default.rb")
 #   Action: install
 ```
 
-#### `parse_attributes(path: str)`
-Parse a Chef attributes file and extract attribute definitions.
+#### `parse_attributes(path: str, resolve_precedence: bool = True)`
+Parse a Chef attributes file and extract attribute definitions with precedence analysis.
+
+**Chef Attribute Precedence** (lowest to highest):
+1. `default` - Normal default value
+2. `force_default` - Forced default, higher than regular default
+3. `normal` - Normal attribute set by cookbook
+4. `override` - Override values
+5. `force_override` - Forced override, cannot be overridden
+6. `automatic` - Automatically detected by Ohai (highest precedence)
+
+When multiple attributes with the same path exist at different precedence levels, the highest precedence wins. The tool automatically resolves conflicts and reports which values were overridden.
+
+**Parameters:**
+- `path`: Path to the attributes (.rb) file
+- `resolve_precedence`: If True (default), resolves conflicts and shows only winning values. If False, shows all attributes.
 
 **Example:**
 ```python
+# With precedence resolution (default)
 parse_attributes("/path/to/cookbook/attributes/default.rb")
 # Returns:
+# Resolved Attributes (with precedence):
+# ==================================================
+#
+# Attribute: nginx.port
+#   Value: 443
+#   Precedence: force_override (level 5)
+#   ⚠️  Overridden values: default=80, normal=8080
+#
+# Attribute: nginx.ssl_port
+#   Value: 443
+#   Precedence: default (level 1)
+#
+# ==================================================
+# Total attributes: 2
+# Attributes with precedence conflicts: 1
+
+# Without precedence resolution (show all)
+parse_attributes("/path/to/cookbook/attributes/default.rb", resolve_precedence=False)
+# Returns:
 # default[nginx.port] = 80
+# normal[nginx.port] = 8080
+# force_override[nginx.port] = 443
 # default[nginx.ssl_port] = 443
 ```
+
+**Use Cases:**
+- Understanding attribute conflicts in complex cookbooks
+- Debugging which attributes will actually be applied
+- Planning attribute migrations to Ansible variables
+- Identifying force_override attributes that need special handling
 
 #### `list_cookbook_structure(path: str)`
 List the structure of a Chef cookbook directory.

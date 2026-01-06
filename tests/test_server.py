@@ -626,10 +626,13 @@ default['nginx']['user'] = 'www-data'
 
         result = parse_attributes("/cookbook/attributes/default.rb")
 
-        assert "default[nginx.port] = 80" in result
-        assert "default[nginx.ssl_port] = 443" in result
-        assert "override[nginx.worker_processes] = 4" in result
-        assert "default[nginx.user] = 'www-data'" in result
+        # By default, resolved format is returned
+        assert "Resolved Attributes" in result
+        assert "nginx.port" in result
+        assert "80" in result
+        assert "443" in result
+        assert "4" in result
+        assert "www-data" in result
 
 
 def test_parse_attributes_empty():
@@ -705,6 +708,176 @@ def test_parse_attributes_other_exception():
         result = parse_attributes("/some/path/attributes.rb")
 
         assert "An error occurred: Unexpected" in result
+
+
+def test_parse_attributes_with_precedence_resolution(tmp_path):
+    """Test parse_attributes resolves precedence conflicts correctly."""
+    attr_file = tmp_path / "attributes.rb"
+    attr_file.write_text(
+        """
+        default['nginx']['port'] = 80
+        override['nginx']['port'] = 8080
+        normal['nginx']['port'] = 9000
+        force_override['nginx']['port'] = 443
+        """
+    )
+
+    result = parse_attributes(str(attr_file), resolve_precedence=True)
+
+    # force_override should win (highest precedence)
+    assert "443" in result
+    assert "Precedence: force_override" in result
+    assert "level 5" in result
+    assert "Overridden values:" in result
+    assert "Attributes with precedence conflicts: 1" in result
+
+
+def test_parse_attributes_without_precedence_resolution(tmp_path):
+    """Test parse_attributes shows all attributes when resolve_precedence=False."""
+    attr_file = tmp_path / "attributes.rb"
+    attr_file.write_text(
+        """
+        default['nginx']['port'] = 80
+        override['nginx']['port'] = 8080
+        """
+    )
+
+    result = parse_attributes(str(attr_file), resolve_precedence=False)
+
+    # Should show both attributes
+    assert "default[nginx.port] = 80" in result
+    assert "override[nginx.port] = 8080" in result
+
+
+def test_parse_attributes_all_precedence_levels(tmp_path):
+    """Test parse_attributes with all Chef precedence levels."""
+    attr_file = tmp_path / "attributes.rb"
+    attr_file.write_text(
+        """
+        default['app']['setting1'] = 'value1'
+        force_default['app']['setting2'] = 'value2'
+        normal['app']['setting3'] = 'value3'
+        override['app']['setting4'] = 'value4'
+        force_override['app']['setting5'] = 'value5'
+        automatic['app']['setting6'] = 'value6'
+        """
+    )
+
+    result = parse_attributes(str(attr_file))
+
+    # Check all precedence levels are recognized
+    assert "default" in result
+    assert "force_default" in result
+    assert "normal" in result
+    assert "override" in result
+    assert "force_override" in result
+    assert "automatic" in result
+    assert "Total attributes: 6" in result
+
+
+def test_get_precedence_level():
+    """Test _get_precedence_level returns correct numeric levels."""
+    from souschef.server import _get_precedence_level
+
+    assert _get_precedence_level("default") == 1
+    assert _get_precedence_level("force_default") == 2
+    assert _get_precedence_level("normal") == 3
+    assert _get_precedence_level("override") == 4
+    assert _get_precedence_level("force_override") == 5
+    assert _get_precedence_level("automatic") == 6
+    assert _get_precedence_level("unknown") == 1  # Default fallback
+
+
+def test_resolve_attribute_precedence():
+    """Test _resolve_attribute_precedence resolves conflicts correctly."""
+    from souschef.server import _resolve_attribute_precedence
+
+    attributes = [
+        {"precedence": "default", "path": "app.port", "value": "80"},
+        {"precedence": "override", "path": "app.port", "value": "8080"},
+        {"precedence": "normal", "path": "app.timeout", "value": "30"},
+    ]
+
+    resolved = _resolve_attribute_precedence(attributes)
+
+    # override should win for app.port
+    assert resolved["app.port"]["value"] == "8080"
+    assert resolved["app.port"]["precedence"] == "override"
+    assert resolved["app.port"]["has_conflict"] == "True"
+    assert "default=80" in resolved["app.port"]["overridden_values"]
+
+    # app.timeout should have no conflict
+    assert resolved["app.timeout"]["value"] == "30"
+    assert resolved["app.timeout"]["has_conflict"] == "False"
+    assert resolved["app.timeout"]["overridden_values"] == ""
+
+
+def test_resolve_attribute_precedence_multiple_conflicts():
+    """Test _resolve_attribute_precedence with multiple conflicting values."""
+    from souschef.server import _resolve_attribute_precedence
+
+    attributes = [
+        {"precedence": "default", "path": "db.host", "value": "localhost"},
+        {"precedence": "normal", "path": "db.host", "value": "db.local"},
+        {"precedence": "override", "path": "db.host", "value": "db.prod"},
+        {"precedence": "force_override", "path": "db.host", "value": "db.final"},
+    ]
+
+    resolved = _resolve_attribute_precedence(attributes)
+
+    # force_override should win
+    assert resolved["db.host"]["value"] == "db.final"
+    assert resolved["db.host"]["precedence"] == "force_override"
+    assert resolved["db.host"]["precedence_level"] == "5"
+    assert resolved["db.host"]["has_conflict"] == "True"
+
+    # Check all lower precedence values are listed
+    overridden = resolved["db.host"]["overridden_values"]
+    assert "default=localhost" in overridden
+    assert "normal=db.local" in overridden
+    assert "override=db.prod" in overridden
+
+
+def test_format_resolved_attributes():
+    """Test _format_resolved_attributes produces readable output."""
+    from souschef.server import _format_resolved_attributes
+
+    resolved = {
+        "app.port": {
+            "value": "8080",
+            "precedence": "override",
+            "precedence_level": "4",
+            "has_conflict": "True",
+            "overridden_values": "default=80",
+        },
+        "app.name": {
+            "value": "myapp",
+            "precedence": "default",
+            "precedence_level": "1",
+            "has_conflict": "False",
+            "overridden_values": "",
+        },
+    }
+
+    result = _format_resolved_attributes(resolved)
+
+    assert "Resolved Attributes" in result
+    assert "app.name" in result
+    assert "app.port" in result
+    assert "Value: 8080" in result
+    assert "Precedence: override (level 4)" in result
+    assert "⚠️  Overridden values: default=80" in result
+    assert "Total attributes: 2" in result
+    assert "Attributes with precedence conflicts: 1" in result
+
+
+def test_format_resolved_attributes_empty():
+    """Test _format_resolved_attributes with empty dictionary."""
+    from souschef.server import _format_resolved_attributes
+
+    result = _format_resolved_attributes({})
+
+    assert result == "No attributes found."
 
 
 def test_list_cookbook_structure_success():
