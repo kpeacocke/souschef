@@ -9684,6 +9684,60 @@ def _extract_default_port(port_name: str) -> str:
     return ""
 
 
+def _validate_docker_network_name(network_name: str) -> bool:
+    """
+    Validate Docker network name format.
+
+    Validates that network_name matches expected Docker naming patterns to prevent
+    YAML injection or malformed compose files.
+
+    Args:
+        network_name: Docker network name to validate.
+
+    Returns:
+        True if valid, False otherwise.
+
+    """
+    if not network_name or not isinstance(network_name, str):
+        return False
+
+    # Docker network names must:
+    # - Start with alphanumeric character
+    # - Contain only alphanumeric, hyphens, underscores, or dots
+    # - Not contain spaces or special characters that could break YAML
+    import re
+
+    # Pattern: starts with alphanumeric, followed by alphanumeric/hyphen/underscore/dot
+    pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+
+    if not re.match(pattern, network_name):
+        return False
+
+    # Reject dangerous characters that could break YAML structure
+    dangerous_chars = [
+        "\n",
+        "\r",
+        ":",
+        "[",
+        "]",
+        "{",
+        "}",
+        "#",
+        "|",
+        ">",
+        "&",
+        "*",
+        "!",
+        "%",
+        "@",
+    ]
+    if any(char in network_name for char in dangerous_chars):
+        return False
+
+    # Validate reasonable length (Docker network names should be < 64 chars)
+    return len(network_name) <= 63
+
+
 def _validate_docker_image_name(base_image: str) -> bool:
     """
     Validate Docker image name format.
@@ -9712,7 +9766,7 @@ def _validate_docker_image_name(base_image: str) -> bool:
     # - Optional namespace(s): [namespace/]*
     # - Required repository name
     # - Optional tag or digest: [:tag] or [@sha256:digest]
-    pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._-]*(?::[0-9]+)?(?:/[a-zA-Z0-9._-]+)*(?::[a-zA-Z0-9._-]+)?(?:@sha256:[a-fA-F0-9]{64})?$"
+    pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._-]*(?::\d+)?(?:/[a-zA-Z0-9._-]+)*(?::[a-zA-Z0-9._-]+)?(?:@sha256:[a-fA-F0-9]{64})?$"
 
     if not re.match(pattern, base_image):
         return False
@@ -9723,7 +9777,7 @@ def _validate_docker_image_name(base_image: str) -> bool:
         return False
 
     # Validate reasonable length (Docker image names are typically < 256 chars)
-    return not len(base_image) > 256
+    return len(base_image) <= 256
 
 
 def _build_dockerfile_header(
@@ -9762,11 +9816,15 @@ def _build_dockerfile_header(
         "",
     ]
     if plan["package"].get("maintainer"):
-        lines.append(f'LABEL maintainer="{plan["package"]["maintainer"]}"')
+        # Use json.dumps to properly escape quotes and special characters
+        escaped_maintainer = json.dumps(plan["package"]["maintainer"])
+        lines.append(f"LABEL maintainer={escaped_maintainer}")
     if plan["package"].get("version"):
-        lines.append(f'LABEL version="{plan["package"]["version"]}"')
+        escaped_version = json.dumps(plan["package"]["version"])
+        lines.append(f"LABEL version={escaped_version}")
     if plan["package"].get("description"):
-        lines.append(f'LABEL description="{plan["package"]["description"]}"')
+        escaped_description = json.dumps(plan["package"]["description"])
+        lines.append(f"LABEL description={escaped_description}")
     if lines[-1].startswith("LABEL"):
         lines.append("")
     return lines
@@ -9779,8 +9837,9 @@ def _add_dockerfile_deps(lines: list[str], plan: dict[str, Any]) -> None:
         all_deps = set(plan["dependencies"]["build"] + plan["dependencies"]["runtime"])
         apt_packages = _map_habitat_deps_to_apt(list(all_deps))
         if apt_packages:
+            safe_apt_packages = [shlex.quote(pkg) for pkg in apt_packages]
             lines.append("RUN apt-get update && \\")
-            lines.append(f"    apt-get install -y {' '.join(apt_packages)} && \\")
+            lines.append(f"    apt-get install -y {' '.join(safe_apt_packages)} && \\")
             lines.append("    rm -rf /var/lib/apt/lists/*")
             lines.append("")
 
@@ -9791,6 +9850,11 @@ def _process_callback_lines(
     """
     Process callback lines for Dockerfile.
 
+    Security Note: This function processes shell commands from Habitat plans
+    and embeds them directly into Dockerfile RUN commands. Only use this
+    with trusted Habitat plans from known sources. Malicious commands in
+    untrusted plans will be executed during Docker image builds.
+
     Args:
         callback_content: Raw callback content to process.
         replace_vars: Whether to replace Habitat variables with paths.
@@ -9800,9 +9864,28 @@ def _process_callback_lines(
 
     """
     processed = []
+    # Patterns that might indicate malicious or dangerous commands
+    dangerous_patterns = [
+        r"curl.*\|.*sh",  # Piping curl to shell
+        r"wget.*\|.*sh",  # Piping wget to shell
+        r"eval",  # eval commands
+        r"\$\(curl",  # Command substitution with curl
+        r"\$\(wget",  # Command substitution with wget
+    ]
+
     for line in callback_content.split("\n"):
         line = line.strip()
         if line and not line.startswith("#"):
+            # Check for potentially dangerous patterns
+            for pattern in dangerous_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    # Add a warning comment but still include the command
+                    # Users should review their Dockerfiles before building
+                    processed.append(
+                        "# WARNING: Potentially dangerous command pattern detected"
+                    )
+                    break
+
             if replace_vars:
                 line = (
                     line.replace("$pkg_prefix", "/usr/local")
@@ -9824,7 +9907,9 @@ def _add_dockerfile_build(lines: list[str], plan: dict[str, Any]) -> None:
         lines.append("")
     if "do_install" in plan["callbacks"]:
         lines.append("# Install steps")
-        lines.extend(_process_callback_lines(plan["callbacks"]["do_install"]))
+        lines.extend(
+            _process_callback_lines(plan["callbacks"]["do_install"], replace_vars=True)
+        )
         lines.append("")
     if "do_init" in plan["callbacks"]:
         lines.append("# Initialization steps")
@@ -9851,10 +9936,8 @@ def _add_dockerfile_runtime(lines: list[str], plan: dict[str, Any]) -> None:
     if plan["service"].get("run"):
         run_cmd = plan["service"]["run"]
         cmd_parts = shlex.split(run_cmd)
-        if len(cmd_parts) > 1:
+        if cmd_parts:
             lines.append(f"CMD {json.dumps(cmd_parts)}")
-        else:
-            lines.append(f'CMD ["{run_cmd}"]')
 
 
 @mcp.tool()
@@ -9865,6 +9948,11 @@ def convert_habitat_to_dockerfile(
     Convert a Chef Habitat plan to a Dockerfile.
 
     Creates a Dockerfile that replicates Habitat plan configuration.
+
+    Security Warning: This tool processes shell commands from Habitat plans
+    and includes them in the generated Dockerfile. Only use with trusted
+    Habitat plans from known sources. Review generated Dockerfiles before
+    building images, especially if the plan source is untrusted.
 
     Args:
         plan_path: Path to the plan.sh file
@@ -9948,7 +10036,14 @@ def _build_compose_service(plan: dict[str, Any], pkg_name: str) -> dict[str, Any
 
 
 def _add_service_build(lines: list[str], service: dict[str, Any]) -> None:
-    """Add build configuration to service lines."""
+    """
+    Add build configuration to service lines.
+
+    Args:
+        lines: List of YAML lines to append to.
+        service: Service dictionary containing optional 'build' configuration.
+
+    """
     if "build" in service:
         lines.append("    build:")
         lines.append(f"      context: {service['build']['context']}")
@@ -9956,7 +10051,14 @@ def _add_service_build(lines: list[str], service: dict[str, Any]) -> None:
 
 
 def _add_service_ports(lines: list[str], service: dict[str, Any]) -> None:
-    """Add ports configuration to service lines."""
+    """
+    Add ports configuration to service lines.
+
+    Args:
+        lines: List of YAML lines to append to.
+        service: Service dictionary containing optional 'ports' configuration.
+
+    """
     if "ports" in service:
         lines.append("    ports:")
         for port in service["ports"]:
@@ -9966,7 +10068,15 @@ def _add_service_ports(lines: list[str], service: dict[str, Any]) -> None:
 def _add_service_volumes(
     lines: list[str], service: dict[str, Any], volumes_used: set[str]
 ) -> None:
-    """Add volumes configuration to service lines."""
+    """
+    Add volumes configuration to service lines.
+
+    Args:
+        lines: List of YAML lines to append to.
+        service: Service dictionary containing optional 'volumes' configuration.
+        volumes_used: Set to track volume names for top-level volumes section.
+
+    """
     if "volumes" in service:
         lines.append("    volumes:")
         for volume in service["volumes"]:
@@ -9975,7 +10085,14 @@ def _add_service_volumes(
 
 
 def _add_service_environment(lines: list[str], service: dict[str, Any]) -> None:
-    """Add environment configuration to service lines."""
+    """
+    Add environment configuration to service lines.
+
+    Args:
+        lines: List of YAML lines to append to.
+        service: Service dictionary containing optional 'environment' configuration.
+
+    """
     if "environment" in service:
         lines.append("    environment:")
         for env in service["environment"]:
@@ -9983,7 +10100,14 @@ def _add_service_environment(lines: list[str], service: dict[str, Any]) -> None:
 
 
 def _add_service_dependencies(lines: list[str], service: dict[str, Any]) -> None:
-    """Add depends_on and networks configuration to service lines."""
+    """
+    Add depends_on and networks configuration to service lines.
+
+    Args:
+        lines: List of YAML lines to append to.
+        service: Service dictionary containing optional 'depends_on' and 'networks' configuration.
+
+    """
     if "depends_on" in service:
         lines.append("    depends_on:")
         for dep in service["depends_on"]:
@@ -9995,7 +10119,27 @@ def _add_service_dependencies(lines: list[str], service: dict[str, Any]) -> None
 
 
 def _format_compose_yaml(services: dict[str, Any], network_name: str) -> str:
-    """Format services as docker-compose YAML."""
+    """
+    Format services as docker-compose YAML.
+
+    Args:
+        services: Dictionary of service configurations.
+        network_name: Docker network name (validated).
+
+    Returns:
+        docker-compose.yml content as string.
+
+    Raises:
+        ValueError: If network_name format is invalid.
+
+    """
+    # Validate network_name to prevent YAML injection
+    if not _validate_docker_network_name(network_name):
+        raise ValueError(
+            f"Invalid Docker network name: {network_name}. "
+            "Expected format: alphanumeric with hyphens, underscores, or dots"
+        )
+
     lines = ["version: '3.8'", "", "services:"]
     volumes_used: set[str] = set()
     for name, service in services.items():
@@ -10034,6 +10178,13 @@ def generate_compose_from_habitat(
 
     """
     try:
+        # Validate network_name to prevent YAML injection
+        if not _validate_docker_network_name(network_name):
+            return (
+                f"Invalid Docker network name: {network_name}. "
+                "Expected format: alphanumeric with hyphens, underscores, or dots"
+            )
+
         paths = [p.strip() for p in plan_paths.split(",")]
         # Validate and normalize all paths to prevent path traversal
         validated_paths = []
