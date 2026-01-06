@@ -38,14 +38,17 @@ from souschef.server import (
     _safe_join,
     _strip_ruby_comments,
     analyze_chef_databag_usage,
+    convert_habitat_to_dockerfile,
     convert_inspec_to_test,
     convert_resource_to_task,
+    generate_compose_from_habitat,
     generate_inspec_from_recipe,
     list_cookbook_structure,
     list_directory,
     main,
     parse_attributes,
     parse_custom_resource,
+    parse_habitat_plan,
     parse_inspec_profile,
     parse_recipe,
     parse_template,
@@ -13122,3 +13125,354 @@ def test_function(
         errors = [r for r in engine.results if r.level == ValidationLevel.ERROR]
         assert len(errors) > 0
         assert any("syntax" in e.message.lower() for e in errors)
+
+
+class TestHabitatConversion:
+    """Test suite for Habitat to container conversion tools."""
+
+    def test_parse_habitat_plan_success(self):
+        """Test parsing a valid Habitat plan file."""
+        with patch("souschef.server._normalize_path") as mock_normalize:
+            mock_file = MagicMock(spec=Path)
+            mock_file.exists.return_value = True
+            mock_file.is_dir.return_value = False
+            mock_file.read_text.return_value = """
+pkg_name=nginx
+pkg_origin=core
+pkg_version="1.25.3"
+pkg_maintainer="Test <test@example.com>"
+pkg_license=('BSD-2-Clause')
+pkg_description="Test package"
+pkg_upstream_url="https://example.com"
+pkg_source="https://example.com/nginx.tar.gz"
+pkg_build_deps=(
+  core/gcc
+  core/make
+)
+pkg_deps=(
+  core/glibc
+  core/openssl
+)
+pkg_exports=(
+  [port]=http.port
+  [ssl-port]=http.ssl_port
+)
+pkg_binds_optional=(
+  [backend]="port"
+)
+pkg_svc_run="nginx -g 'daemon off;'"
+pkg_svc_user="hab"
+pkg_svc_group="hab"
+
+do_build() {
+  ./configure --prefix=/usr/local
+  make
+}
+
+do_install() {
+  make install
+}
+"""
+            mock_normalize.return_value = mock_file
+
+            result = parse_habitat_plan("/fake/plan.sh")
+
+            # Should return valid JSON
+            assert not result.startswith("Error")
+            plan = json.loads(result)
+            assert plan["package"]["name"] == "nginx"
+            assert plan["package"]["version"] == "1.25.3"
+            assert "gcc" in str(plan["dependencies"]["build"])
+            assert len(plan["ports"]) == 2
+            assert "do_build" in plan["callbacks"]
+
+    def test_parse_habitat_plan_file_not_found(self):
+        """Test parsing a non-existent Habitat plan."""
+        with patch("souschef.server._normalize_path") as mock_normalize:
+            mock_file = MagicMock(spec=Path)
+            mock_file.exists.return_value = False
+            mock_normalize.return_value = mock_file
+
+            result = parse_habitat_plan("/nonexistent/plan.sh")
+
+            assert result.startswith("Error: File not found")
+
+    def test_parse_habitat_plan_is_directory(self):
+        """Test parsing when path is a directory."""
+        with patch("souschef.server._normalize_path") as mock_normalize:
+            mock_file = MagicMock(spec=Path)
+            mock_file.exists.return_value = True
+            mock_file.is_dir.return_value = True
+            mock_normalize.return_value = mock_file
+
+            result = parse_habitat_plan("/fake/directory")
+
+            assert result.startswith("Error:")
+            assert "directory" in result.lower()
+
+    def test_extract_plan_var(self):
+        """Test extracting variables from Habitat plan."""
+        content = """
+pkg_name=nginx
+pkg_version="1.25.3"
+pkg_maintainer='Test User'
+"""
+        from souschef.server import _extract_plan_var
+
+        assert _extract_plan_var(content, "pkg_name") == "nginx"
+        assert _extract_plan_var(content, "pkg_version") == "1.25.3"
+        assert _extract_plan_var(content, "pkg_maintainer") == "Test User"
+        assert _extract_plan_var(content, "pkg_nonexistent") == ""
+
+    def test_extract_plan_array(self):
+        """Test extracting arrays from Habitat plan."""
+        content = """
+pkg_build_deps=(
+  core/gcc
+  core/make
+  core/openssl
+)
+pkg_empty=()
+"""
+        from souschef.server import _extract_plan_array
+
+        deps = _extract_plan_array(content, "pkg_build_deps")
+        assert "core/gcc" in deps
+        assert "core/make" in deps
+        assert len(deps) == 3
+
+        empty = _extract_plan_array(content, "pkg_empty")
+        assert len(empty) == 0
+
+    def test_extract_plan_exports(self):
+        """Test extracting port exports from Habitat plan."""
+        content = """
+pkg_exports=(
+  [port]=http.port
+  [ssl-port]=http.ssl_port
+  [admin]=admin.port
+)
+"""
+        from souschef.server import _extract_plan_exports
+
+        exports = _extract_plan_exports(content, "pkg_exports")
+        assert len(exports) == 3
+        assert any(e["name"] == "port" for e in exports)
+        assert any(e["value"] == "http.ssl_port" for e in exports)
+
+    def test_extract_plan_function(self):
+        """Test extracting function bodies from Habitat plan."""
+        content = """
+do_build() {
+  ./configure --prefix=/usr/local
+  make
+}
+
+do_install() {
+  make install
+}
+"""
+        from souschef.server import _extract_plan_function
+
+        build = _extract_plan_function(content, "do_build")
+        assert "./configure" in build
+        assert "make" in build
+
+        install = _extract_plan_function(content, "do_install")
+        assert "make install" in install
+
+        nonexistent = _extract_plan_function(content, "do_nonexistent")
+        assert nonexistent == ""
+
+    def test_convert_habitat_to_dockerfile_success(self):
+        """Test converting a Habitat plan to Dockerfile."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "nginx",
+                        "origin": "core",
+                        "version": "1.25.3",
+                        "maintainer": "Test <test@example.com>",
+                        "description": "Test nginx package",
+                        "source": "https://example.com/nginx-1.25.3.tar.gz",
+                    },
+                    "dependencies": {
+                        "build": ["core/gcc", "core/make"],
+                        "runtime": ["core/glibc", "core/openssl"],
+                    },
+                    "ports": [
+                        {"name": "port", "value": "http.port"},
+                        {"name": "ssl-port", "value": "http.ssl_port"},
+                    ],
+                    "binds": [],
+                    "service": {
+                        "run": "nginx -g 'daemon off;'",
+                        "user": "hab",
+                        "group": "hab",
+                    },
+                    "callbacks": {
+                        "do_build": "./configure --prefix=/usr/local\nmake",
+                        "do_install": "make install",
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh", "ubuntu:22.04")
+
+            # Should generate a valid Dockerfile
+            assert "FROM ubuntu:22.04" in result
+            assert "LABEL maintainer=" in result
+            assert "LABEL version=" in result
+            assert "RUN apt-get" in result
+            assert "./configure" in result
+            assert "make install" in result
+            assert "EXPOSE 80" in result
+            assert "EXPOSE 443" in result
+            assert "USER hab" in result
+            assert "CMD" in result
+
+    def test_convert_habitat_to_dockerfile_parse_error(self):
+        """Test Dockerfile conversion when plan parsing fails."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = "Error: File not found"
+
+            result = convert_habitat_to_dockerfile("/nonexistent/plan.sh")
+
+            assert result.startswith("Error: File not found")
+
+    def test_map_habitat_deps_to_apt(self):
+        """Test mapping Habitat dependencies to apt packages."""
+        from souschef.server import _map_habitat_deps_to_apt
+
+        deps = [
+            "core/gcc",
+            "core/make",
+            "core/openssl",
+            "core/unknown-package",
+        ]
+        apt_packages = _map_habitat_deps_to_apt(deps)
+
+        assert "gcc" in apt_packages
+        assert "make" in apt_packages
+        assert "libssl-dev" in apt_packages
+        assert "unknown-package" in apt_packages
+
+    def test_extract_default_port(self):
+        """Test extracting default port numbers."""
+        from souschef.server import _extract_default_port
+
+        assert _extract_default_port("http") == "80"
+        assert _extract_default_port("https") == "443"
+        assert _extract_default_port("ssl-port") == "443"
+        assert _extract_default_port("port") == "8080"
+        assert _extract_default_port("postgresql") == "5432"
+        assert _extract_default_port("unknown") == ""
+
+    def test_generate_compose_from_habitat_single_service(self):
+        """Test generating docker-compose.yml from a single Habitat plan."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {"name": "nginx", "version": "1.25.3"},
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [{"name": "port", "value": "http.port"}],
+                    "binds": [],
+                    "service": {"run": "nginx -g 'daemon off;'"},
+                    "callbacks": {},
+                }
+            )
+
+            result = generate_compose_from_habitat("/fake/plan.sh", "test_net")
+
+            # Should generate valid docker-compose.yml
+            assert "version: '3.8'" in result
+            assert "services:" in result
+            assert "nginx:" in result
+            assert "build:" in result
+            assert "dockerfile: Dockerfile.nginx" in result
+            assert "ports:" in result
+            assert '"8080:8080"' in result  # "port" maps to 8080 by default
+            assert "networks:" in result
+            assert "test_net:" in result
+            assert "driver: bridge" in result
+
+    def test_generate_compose_from_habitat_multiple_services(self):
+        """Test generating docker-compose.yml from multiple Habitat plans."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+
+            def mock_parse_side_effect(path):
+                if "nginx" in path:
+                    return json.dumps(
+                        {
+                            "package": {"name": "nginx"},
+                            "dependencies": {"build": [], "runtime": []},
+                            "ports": [{"name": "port", "value": "http.port"}],
+                            "binds": [{"name": "backend", "value": "port"}],
+                            "service": {"run": "nginx"},
+                            "callbacks": {},
+                        }
+                    )
+                elif "postgresql" in path:
+                    return json.dumps(
+                        {
+                            "package": {"name": "postgresql"},
+                            "dependencies": {"build": [], "runtime": []},
+                            "ports": [{"name": "port", "value": "postgresql.port"}],
+                            "binds": [],
+                            "service": {"run": "postgres -D /var/lib/app/pgdata"},
+                            "callbacks": {},
+                        }
+                    )
+                return json.dumps({})
+
+            mock_parse.side_effect = mock_parse_side_effect
+
+            result = generate_compose_from_habitat(
+                "/fake/nginx/plan.sh,/fake/postgresql/plan.sh", "app_net"
+            )
+
+            # Should have both services
+            assert "nginx:" in result
+            assert "postgresql:" in result
+            assert "depends_on:" in result
+            assert "backend" in result
+            assert "volumes:" in result
+            assert "postgresql_data:" in result
+
+    def test_generate_compose_from_habitat_parse_error(self):
+        """Test docker-compose generation when plan parsing fails."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = "Error: File not found"
+
+            result = generate_compose_from_habitat("/nonexistent/plan.sh")
+
+            assert result.startswith("Error parsing")
+            assert "File not found" in result
+
+    def test_habitat_plan_with_init_callback(self):
+        """Test Dockerfile generation with init callback."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "postgresql",
+                        "origin": "core",
+                        "version": "14.5",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "postgres", "user": "postgres"},
+                    "callbacks": {
+                        "do_init": "mkdir -p /var/lib/app/pgdata\ninitdb -D /var/lib/app/pgdata",
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Should include init steps
+            assert "# Initialization steps" in result
+            assert "mkdir -p /var/lib/app/pgdata" in result
+            assert "initdb" in result

@@ -399,12 +399,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Automated conversion validation and testing framework
 
 ### In Progress 🔄
+- 🔄 Chef Habitat to containerized deployment conversion (test infrastructure complete)
 - 🔄 Enhanced error handling and user experience improvements
 - 🔄 Documentation website and interactive examples
 - 🔄 Performance optimizations for large-scale enterprise migrations
+- 🔄 Technical debt reduction (15 functions tracked in [GitHub Issues](https://github.com/kpeacocke/souschef/issues?q=is%3Aissue+is%3Aopen+label%3Atechnical-debt))
 
 ### Planned 📅
-- 📅 Chef Habitat to containerized deployment conversion
 - 📅 Integration with additional test frameworks (ServerSpec, Goss)
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
