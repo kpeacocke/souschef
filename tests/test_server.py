@@ -27,14 +27,18 @@ from souschef.server import (
     _extract_enhanced_notifications,
     _extract_heredoc_strings,
     _extract_inspec_describe_blocks,
+    _extract_node_attribute_path,
     _extract_resource_actions,
     _extract_resource_properties,
     _extract_resource_subscriptions,
     _extract_template_variables,
+    _format_resolved_attributes,
     _generate_inspec_from_resource,
+    _get_precedence_level,
     _normalize_path,
     _normalize_ruby_value,
     _parse_inspec_control,
+    _resolve_attribute_precedence,
     _safe_join,
     _strip_ruby_comments,
     analyze_chef_databag_usage,
@@ -785,8 +789,6 @@ def test_parse_attributes_all_precedence_levels(tmp_path):
 
 def test_get_precedence_level():
     """Test _get_precedence_level returns correct numeric levels."""
-    from souschef.server import _get_precedence_level
-
     assert _get_precedence_level("default") == 1
     assert _get_precedence_level("force_default") == 2
     assert _get_precedence_level("normal") == 3
@@ -798,8 +800,6 @@ def test_get_precedence_level():
 
 def test_resolve_attribute_precedence():
     """Test _resolve_attribute_precedence resolves conflicts correctly."""
-    from souschef.server import _resolve_attribute_precedence
-
     attributes = [
         {"precedence": "default", "path": "app.port", "value": "80"},
         {"precedence": "override", "path": "app.port", "value": "8080"},
@@ -822,8 +822,6 @@ def test_resolve_attribute_precedence():
 
 def test_resolve_attribute_precedence_multiple_conflicts():
     """Test _resolve_attribute_precedence with multiple conflicting values."""
-    from souschef.server import _resolve_attribute_precedence
-
     attributes = [
         {"precedence": "default", "path": "db.host", "value": "localhost"},
         {"precedence": "normal", "path": "db.host", "value": "db.local"},
@@ -848,8 +846,6 @@ def test_resolve_attribute_precedence_multiple_conflicts():
 
 def test_format_resolved_attributes():
     """Test _format_resolved_attributes produces readable output."""
-    from souschef.server import _format_resolved_attributes
-
     resolved = {
         "app.port": {
             "value": "8080",
@@ -881,8 +877,6 @@ def test_format_resolved_attributes():
 
 def test_format_resolved_attributes_empty():
     """Test _format_resolved_attributes with empty dictionary."""
-    from souschef.server import _format_resolved_attributes
-
     result = _format_resolved_attributes({})
 
     assert result == "No attributes found."
@@ -2645,8 +2639,6 @@ class TestAdvancedParsingFunctions:
 
     def test_extract_node_attribute_path_comprehensive(self):
         """Test node attribute path extraction with various patterns."""
-        from souschef.server import _extract_node_attribute_path
-
         # Test simple path
         simple = "node['apache']['port']"
         result = _extract_node_attribute_path(simple)
@@ -8717,7 +8709,6 @@ class TestUltimateCoverageTarget:
         """Test all internal parsing functions with edge cases."""
         from souschef.server import (
             _extract_code_block_variables,
-            _extract_node_attribute_path,
             _extract_output_variables,
             _extract_template_variables,
         )
