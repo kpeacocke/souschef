@@ -67,10 +67,13 @@ class TestRealFileOperations:
         """Test parsing a real attributes file."""
         result = parse_attributes(str(SAMPLE_COOKBOOK / "attributes" / "default.rb"))
 
-        assert "default[nginx.port] = 80" in result
-        assert "default[nginx.ssl_port] = 443" in result
-        assert "override[nginx.worker_rlimit_nofile] = 65536" in result
-        assert "normal[nginx.server_tokens] = 'off'" in result
+        # By default, resolved format is returned
+        assert "Resolved Attributes" in result
+        assert "nginx.port" in result
+        assert "80" in result
+        assert "443" in result
+        assert "65536" in result
+        assert "'off'" in result
         # Test nested attributes
         assert "nginx.ssl.protocols" in result
 
@@ -901,3 +904,113 @@ class TestAnalyzeSearchPatternsEdgeCases:
 
                 result = analyze_chef_search_patterns("some_recipe.rb")
                 assert "Error analyzing Chef search patterns" in result
+
+
+class TestAttributePrecedenceIntegration:
+    """Integration tests for Chef attribute precedence with real fixtures."""
+
+    def test_parse_attributes_with_real_cookbook_fixture(self):
+        """Test parsing attributes from real sample cookbook."""
+        result = parse_attributes(str(SAMPLE_COOKBOOK / "attributes" / "default.rb"))
+
+        # Should contain actual attributes from the fixture
+        assert "nginx" in result
+        assert "Resolved Attributes" in result
+
+    def test_parse_attributes_precedence_with_multiple_files(self, tmp_path):
+        """Test attribute precedence with multiple attribute files."""
+        # Create a temporary attributes directory
+        attrs_dir = tmp_path / "attributes"
+        attrs_dir.mkdir()
+
+        # Create default attributes
+        default_file = attrs_dir / "default.rb"
+        default_file.write_text(
+            """
+            default['app']['port'] = 3000
+            default['app']['workers'] = 2
+            default['app']['timeout'] = 30
+            """
+        )
+
+        # Create override attributes
+        override_file = attrs_dir / "override.rb"
+        override_file.write_text(
+            """
+            override['app']['port'] = 8080
+            force_override['app']['workers'] = 4
+            """
+        )
+
+        # Parse both files
+        default_result = parse_attributes(str(default_file))
+        override_result = parse_attributes(str(override_file))
+
+        # Verify both files parsed correctly
+        assert "3000" in default_result
+        assert "8080" in override_result
+        assert "force_override" in override_result
+
+    def test_parse_attributes_complex_nested_paths(self, tmp_path):
+        """Test attribute precedence with deeply nested attribute paths."""
+        attr_file = tmp_path / "complex.rb"
+        attr_file.write_text(
+            """
+            default['nginx']['config']['ssl']['protocols'] = 'TLSv1.2'
+            override['nginx']['config']['ssl']['protocols'] = 'TLSv1.3'
+            normal['nginx']['config']['worker']['connections'] = 1024
+            force_override['nginx']['config']['worker']['connections'] = 2048
+            """
+        )
+
+        result = parse_attributes(str(attr_file), resolve_precedence=True)
+
+        # Verify complex paths are parsed and resolved correctly
+        assert "TLSv1.3" in result  # override should win
+        assert "2048" in result  # force_override should win
+        assert "Attributes with precedence conflicts: 2" in result
+
+    def test_parse_attributes_with_ruby_values(self, tmp_path):
+        """Test parsing attributes with various Ruby value types."""
+        attr_file = tmp_path / "values.rb"
+        attr_file.write_text(
+            """
+            default['app']['enabled'] = true
+            default['app']['disabled'] = false
+            default['app']['count'] = 42
+            default['app']['ratio'] = 1.5
+            default['app']['name'] = 'my-app'
+            default['app']['tags'] = ['web', 'production']
+            default['app']['config'] = { 'key' => 'value' }
+            """
+        )
+
+        result = parse_attributes(str(attr_file))
+
+        # Verify various value types are captured
+        assert "true" in result
+        assert "false" in result
+        assert "42" in result
+        assert "1.5" in result
+        assert "my-app" in result
+        assert "['web', 'production']" in result or "web" in result
+
+    def test_parse_attributes_no_conflicts(self, tmp_path):
+        """Test attribute parsing when there are no precedence conflicts."""
+        attr_file = tmp_path / "no_conflicts.rb"
+        attr_file.write_text(
+            """
+            default['app']['port'] = 3000
+            default['app']['host'] = 'localhost'
+            default['app']['debug'] = true
+            """
+        )
+
+        result = parse_attributes(str(attr_file), resolve_precedence=True)
+
+        # Should not mention conflicts when there are none
+        assert "Total attributes: 3" in result
+        assert (
+            "Attributes with precedence conflicts" not in result
+            or "conflicts: 0" in result
+        )
