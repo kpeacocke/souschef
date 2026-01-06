@@ -349,12 +349,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Comprehensive testing suite (unit, integration, property-based)
 - ✅ Command-line interface (CLI) for standalone usage
 - ✅ Enhanced Chef guard handling (arrays, lambda syntax, complex nested conditions)
+- ✅ Advanced attribute precedence resolution (all 6 Chef precedence levels with conflict detection)
+- ✅ Automated release management with Release Please
+- ✅ Automated branch cleanup for release PRs
 
 ### In Progress 🔄
 - 🔄 Enhanced error handling and user experience improvements
 - 🔄 Documentation website and interactive examples
 - 🔄 Performance optimizations for large-scale enterprise migrations
-- 🔄 Technical debt reduction (15 functions tracked in [GitHub Issues](https://github.com/kpeacocke/souschef/issues?q=is%3Aissue+is%3Aopen+label%3Atechnical-debt))
 
 ### Planned 📅
 - 📅 Chef Habitat to containerized deployment conversion
@@ -362,7 +364,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
 - 📅 Jenkins/GitLab CI pipeline generation
-- 📅 Advanced attribute precedence and merging logic (all priority levels)
 - 📅 Automated conversion validation and testing framework
 
 ## 🙋‍♀️ Support & Community
