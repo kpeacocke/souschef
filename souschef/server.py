@@ -9811,12 +9811,12 @@ def _validate_docker_image_name(base_image: str) -> bool:
     pattern = (
         r"^"
         # Optional registry (with optional port), must be followed by a slash.
-        r"(?:(?:[a-zA-Z0-9][a-zA-Z0-9._-]*"
-        r"(?:\.[a-zA-Z0-9][a-zA-Z0-9._-]*)*"
+        r"(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?"
+        r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?)*"
         r"(?::\d+)?)/)?"
         # Repository path components (one or more), no colons here.
-        r"(?:[a-zA-Z0-9]+[a-zA-Z0-9._-]*"
-        r"(?:/[a-zA-Z0-9]+[a-zA-Z0-9._-]*)*)"
+        r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?"
+        r"(?:/[a-zA-Z0-9](?:[a-zA-Z0-9._-]*[a-zA-Z0-9])?)*)"
         # Optional tag or digest at the end.
         r"(?::[a-zA-Z0-9._-]+|@sha256:[a-fA-F0-9]{64})?"
         r"$"
