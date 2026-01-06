@@ -337,7 +337,11 @@ class ValidationEngine:
         """
         try:
             import yaml
+        except ImportError:
+            # YAML library nailable, skip validation
+            return
 
+        try:
             yaml.safe_load(yaml_content)
         except yaml.YAMLError as e:
             self._add_result(
@@ -346,9 +350,6 @@ class ValidationEngine:
                 f"Invalid YAML syntax: {e}",
                 suggestion="Check YAML indentation and structure",
             )
-        except ImportError:
-            # YAML library not available, skip validation
-            pass
 
     def _validate_ansible_module_exists(self, task: str) -> None:
         """
