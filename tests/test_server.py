@@ -13249,6 +13249,8 @@ pkg_exports=(
         exports = _extract_plan_exports(content, "pkg_exports")
         assert len(exports) == 3
         assert any(e["name"] == "port" for e in exports)
+        assert any(e["name"] == "ssl-port" for e in exports)
+        assert any(e["name"] == "admin" for e in exports)
         assert any(e["value"] == "http.ssl_port" for e in exports)
 
     def test_extract_plan_function(self):
@@ -13332,6 +13334,31 @@ do_install() {
 
             assert result.startswith("Error: File not found")
 
+    def test_convert_habitat_to_dockerfile_with_quoted_cmd(self):
+        """Test Dockerfile conversion with quoted arguments in run command."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            # Mock plan with command containing quoted strings
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "nginx",
+                        "origin": "core",
+                        "version": "1.25.3",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "nginx -g 'daemon off;'"},
+                    "callbacks": {},
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Verify that shlex.split() correctly handled the quoted string
+            # Should be ["nginx", "-g", "daemon off;"] not ["nginx", "-g", "'daemon", "off;'"]
+            assert '["nginx", "-g", "daemon off;"]' in result
+
     def test_map_habitat_deps_to_apt(self):
         """Test mapping Habitat dependencies to apt packages."""
         from souschef.server import _map_habitat_deps_to_apt
@@ -13359,6 +13386,44 @@ do_install() {
         assert _extract_default_port("port") == "8080"
         assert _extract_default_port("postgresql") == "5432"
         assert _extract_default_port("unknown") == ""
+
+    def test_needs_data_volume(self):
+        """Test detecting when a service needs a data volume."""
+        from souschef.server import _needs_data_volume
+
+        # Should detect volume need from do_init callback
+        plan_with_init = {
+            "package": {"name": "nginx"},
+            "callbacks": {"do_init": "mkdir -p /var/lib/app/data"},
+        }
+        assert _needs_data_volume(plan_with_init) is True
+
+        # Should detect volume need from database package names
+        plan_postgres = {
+            "package": {"name": "postgresql"},
+            "callbacks": {},
+        }
+        assert _needs_data_volume(plan_postgres) is True
+
+        plan_mysql = {
+            "package": {"name": "mysql"},
+            "callbacks": {},
+        }
+        assert _needs_data_volume(plan_mysql) is True
+
+        # Should not detect volume need for simple service
+        plan_simple = {
+            "package": {"name": "nginx"},
+            "callbacks": {},
+        }
+        assert _needs_data_volume(plan_simple) is False
+
+        # Should detect pgdata in init callback
+        plan_pgdata = {
+            "package": {"name": "app"},
+            "callbacks": {"do_init": "mkdir -p /pgdata/db"},
+        }
+        assert _needs_data_volume(plan_pgdata) is True
 
     def test_generate_compose_from_habitat_single_service(self):
         """Test generating docker-compose.yml from a single Habitat plan."""

@@ -3,6 +3,7 @@
 import ast
 import json
 import re
+import shlex
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -9335,8 +9336,21 @@ def _extract_plan_array(content: str, var_name: str) -> list[str]:
     match = re.search(pattern, content, re.DOTALL)
     if not match:
         return []
-    elements = re.findall(r'["\']?([^"\')\s]+)["\']?', match.group(1))
-    return [elem for elem in elements if elem and not elem.startswith("#")]
+
+    # Split by newlines and process each line
+    elements = []
+    for line in match.group(1).strip().split("\n"):
+        # Remove inline comments
+        line = line.split("#")[0].strip()
+        if not line:
+            continue
+
+        # Remove quotes and whitespace
+        line = line.strip("\"'").strip()
+        if line:
+            elements.append(line)
+
+    return elements
 
 
 def _extract_plan_exports(content: str, var_name: str) -> list[dict[str, str]]:
@@ -9572,7 +9586,7 @@ def _add_dockerfile_runtime(lines: list[str], plan: dict[str, Any]) -> None:
     lines.append("")
     if plan["service"].get("run"):
         run_cmd = plan["service"]["run"]
-        cmd_parts = run_cmd.split()
+        cmd_parts = shlex.split(run_cmd)
         if len(cmd_parts) > 1:
             lines.append(f"CMD {json.dumps(cmd_parts)}")
         else:
@@ -9610,6 +9624,33 @@ def convert_habitat_to_dockerfile(
         return f"Error converting Habitat plan to Dockerfile: {e}"
 
 
+def _needs_data_volume(plan: dict[str, Any]) -> bool:
+    """
+    Detect if a service needs a data volume.
+
+    Checks for data-related patterns in callbacks (like do_init creating
+    directories with mkdir) rather than relying on fragile keyword matching
+    in run commands.
+
+    Args:
+        plan: Parsed Habitat plan dictionary.
+
+    Returns:
+        True if the service needs a data volume.
+
+    """
+    # Check if do_init callback creates data directories
+    if "do_init" in plan["callbacks"]:
+        init_code = plan["callbacks"]["do_init"]
+        # Look for mkdir commands creating data directories
+        if "mkdir" in init_code and ("data" in init_code or "pgdata" in init_code):
+            return True
+
+    # Check for database-related package names (common use case)
+    pkg_name = plan["package"].get("name", "")
+    return pkg_name in ["postgresql", "mysql", "mongodb", "redis"]
+
+
 def _build_compose_service(plan: dict[str, Any], pkg_name: str) -> dict[str, Any]:
     """Build a docker-compose service definition."""
     service: dict[str, Any] = {
@@ -9623,9 +9664,7 @@ def _build_compose_service(plan: dict[str, Any], pkg_name: str) -> dict[str, Any
             port_num = _extract_default_port(port["name"])
             if port_num:
                 service["ports"].append(f"{port_num}:{port_num}")
-    if plan["service"].get("run") and (
-        "data" in plan["service"]["run"] or "pgdata" in plan["service"]["run"]
-    ):
+    if _needs_data_volume(plan):
         service["volumes"] = [f"{pkg_name}_data:/var/lib/app"]
     service["environment"] = []
     for port in plan["ports"]:
