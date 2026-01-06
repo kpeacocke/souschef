@@ -76,10 +76,24 @@ REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*([^\n]{0,15000})\nend"
 REGEX_RESOURCE_BRACKET = r"(\w+)\[([^\]]+)\]"
 REGEX_ERB_OUTPUT = r"<%=\s*([^%]{1,200}?)\s*%>"
 REGEX_ERB_CONDITION = r"[^%]{1,200}?"
+REGEX_ERB_NODE_ATTR = rf"<%=\s*node\[(['\"])({r'[^%]{1,200}?'})\1\]\s*%>"
+REGEX_ERB_IF_START = rf"<%\s*if\s+({r'[^%]{1,200}?'})\s*%>"
+REGEX_ERB_UNLESS = rf"<%\s*unless\s+({r'[^%]{1,200}?'})\s*%>"
+REGEX_ERB_ELSE = r"<%\s*else\s*%>"
+REGEX_ERB_ELSIF = rf"<%\s*elsif\s+({r'[^%]{1,200}?'})\s*%>"
+REGEX_ERB_END = r"<%\s*end\s*%>"
+REGEX_ERB_EACH = rf"<%\s*({r'[^%]{1,200}?'})\.each\s+do\s+\|(\w+)\|\s*%>"
 REGEX_WORD_SYMBOLS = r"[\w.\[\]'\"]+"
 REGEX_RUBY_INTERPOLATION = r"#\{([^}]+)\}"
 NODE_PREFIX = "node["
 JINJA2_VAR_REPLACEMENT = r"{{ \1 }}"
+JINJA2_NODE_ATTR_REPLACEMENT = r"{{ \2 }}"
+JINJA2_IF_START = r"{% if \1 %}"
+JINJA2_IF_NOT = r"{% if not \1 %}"
+JINJA2_ELSE = r"{% else %}"
+JINJA2_ELIF = r"{% elif \1 %}"
+JINJA2_ENDIF = r"{% endif %}"
+JINJA2_FOR = r"{% for \2 in \1 %}"
 INSPEC_END_INDENT = "  end"
 INSPEC_SHOULD_EXIST = "    it { should exist }"
 CHEF_RECIPE_PREFIX = "recipe["
@@ -339,7 +353,7 @@ class ValidationEngine:
         try:
             import yaml
         except ImportError:
-            # YAML library nailable, skip validation
+            # YAML library unavailable, skip validation
             return
 
         try:
@@ -674,26 +688,20 @@ ERB_PATTERNS = {
     # Variable output: <%= var %> -> {{ var }}
     "output": (REGEX_ERB_OUTPUT, JINJA2_VAR_REPLACEMENT),
     # Variable with node prefix: <%= node['attr'] %> -> {{ attr }}
-    "node_attr": (
-        rf"<%=\s*node\[(['\"])({REGEX_ERB_CONDITION})\1\]\s*%>",
-        r"{{ \2 }}",
-    ),
+    "node_attr": (REGEX_ERB_NODE_ATTR, JINJA2_NODE_ATTR_REPLACEMENT),
     # If statements: <% if condition %> -> {% if condition %}
-    "if_start": (rf"<%\s*if\s+({REGEX_ERB_CONDITION})\s*%>", r"{% if \1 %}"),
+    "if_start": (REGEX_ERB_IF_START, JINJA2_IF_START),
     # Unless (negated if): <% unless condition %> -> {% if not condition %}
-    "unless": (rf"<%\s*unless\s+({REGEX_ERB_CONDITION})\s*%>", r"{% if not \1 %}"),
+    "unless": (REGEX_ERB_UNLESS, JINJA2_IF_NOT),
     # Else: <% else %> -> {% else %}
-    "else": (r"<%\s*else\s*%>", r"{% else %}"),
+    "else": (REGEX_ERB_ELSE, JINJA2_ELSE),
     # Elsif: <% elsif condition %> -> {% elif condition %}
-    "elsif": (rf"<%\s*elsif\s+({REGEX_ERB_CONDITION})\s*%>", r"{% elif \1 %}"),
+    "elsif": (REGEX_ERB_ELSIF, JINJA2_ELIF),
     # End: <% end %> -> {% endif %}
-    "end": (r"<%\s*end\s*%>", r"{% endif %}"),
+    "end": (REGEX_ERB_END, JINJA2_ENDIF),
     # Each loop: <% array.each do |item| %> -> {% for item in array %}
     # Use [^%]{1,200} to prevent matching across %> boundaries and ReDoS
-    "each": (
-        rf"<%\s*({REGEX_ERB_CONDITION})\.each\s+do\s+\|(\w+)\|\s*%>",
-        r"{% for \2 in \1 %}",
-    ),
+    "each": (REGEX_ERB_EACH, JINJA2_FOR),
 }
 
 
@@ -3612,7 +3620,85 @@ def _extract_guard_patterns(
     )
 
 
-def _convert_guards_to_when_conditions(  # noqa: C901
+def _process_only_if_guards(
+    only_if_conditions: list[str],
+    only_if_blocks: list[str],
+    only_if_arrays: list[str],
+) -> list[str]:
+    """
+    Process only_if guards and convert to Ansible when conditions.
+
+    Args:
+        only_if_conditions: List of only_if condition strings.
+        only_if_blocks: List of only_if block contents.
+        only_if_arrays: List of only_if array contents.
+
+    Returns:
+        List of Ansible when conditions.
+
+    """
+    when_conditions = []
+
+    # Process only_if conditions
+    for condition in only_if_conditions:
+        ansible_condition = _convert_chef_condition_to_ansible(condition)
+        if ansible_condition:
+            when_conditions.append(ansible_condition)
+
+    # Process only_if blocks
+    for block in only_if_blocks:
+        ansible_condition = _convert_chef_block_to_ansible(block, positive=True)
+        if ansible_condition:
+            when_conditions.append(ansible_condition)
+
+    # Process only_if arrays (multiple conditions with AND logic)
+    for array_content in only_if_arrays:
+        array_conditions = _parse_guard_array(array_content, negate=False)
+        when_conditions.extend(array_conditions)
+
+    return when_conditions
+
+
+def _process_not_if_guards(
+    not_if_conditions: list[str],
+    not_if_blocks: list[str],
+    not_if_arrays: list[str],
+) -> list[str]:
+    """
+    Process not_if guards and convert to Ansible when conditions.
+
+    Args:
+        not_if_conditions: List of not_if condition strings.
+        not_if_blocks: List of not_if block contents.
+        not_if_arrays: List of not_if array contents.
+
+    Returns:
+        List of Ansible when conditions (negated).
+
+    """
+    when_conditions = []
+
+    # Process not_if conditions (these become when conditions with negation)
+    for condition in not_if_conditions:
+        ansible_condition = _convert_chef_condition_to_ansible(condition, negate=True)
+        if ansible_condition:
+            when_conditions.append(ansible_condition)
+
+    # Process not_if blocks
+    for block in not_if_blocks:
+        ansible_condition = _convert_chef_block_to_ansible(block, positive=False)
+        if ansible_condition:
+            when_conditions.append(ansible_condition)
+
+    # Process not_if arrays (multiple conditions with AND logic, negated)
+    for array_content in not_if_arrays:
+        array_conditions = _parse_guard_array(array_content, negate=True)
+        when_conditions.extend(array_conditions)
+
+    return when_conditions
+
+
+def _convert_guards_to_when_conditions(
     only_if_conditions: list[str],
     not_if_conditions: list[str],
     only_if_blocks: list[str],
@@ -3637,39 +3723,15 @@ def _convert_guards_to_when_conditions(  # noqa: C901
     """
     when_conditions = []
 
-    # Process only_if conditions (these become when conditions)
-    for condition in only_if_conditions:
-        ansible_condition = _convert_chef_condition_to_ansible(condition)
-        if ansible_condition:
-            when_conditions.append(ansible_condition)
+    # Process only_if guards
+    when_conditions.extend(
+        _process_only_if_guards(only_if_conditions, only_if_blocks, only_if_arrays)
+    )
 
-    # Process only_if blocks
-    for block in only_if_blocks:
-        ansible_condition = _convert_chef_block_to_ansible(block, positive=True)
-        if ansible_condition:
-            when_conditions.append(ansible_condition)
-
-    # Process only_if arrays (multiple conditions with AND logic)
-    for array_content in only_if_arrays:
-        array_conditions = _parse_guard_array(array_content, negate=False)
-        when_conditions.extend(array_conditions)
-
-    # Process not_if conditions (these become when conditions with negation)
-    for condition in not_if_conditions:
-        ansible_condition = _convert_chef_condition_to_ansible(condition, negate=True)
-        if ansible_condition:
-            when_conditions.append(ansible_condition)
-
-    # Process not_if blocks
-    for block in not_if_blocks:
-        ansible_condition = _convert_chef_block_to_ansible(block, positive=False)
-        if ansible_condition:
-            when_conditions.append(ansible_condition)
-
-    # Process not_if arrays (multiple conditions with AND logic, negated)
-    for array_content in not_if_arrays:
-        array_conditions = _parse_guard_array(array_content, negate=True)
-        when_conditions.extend(array_conditions)
+    # Process not_if guards
+    when_conditions.extend(
+        _process_not_if_guards(not_if_conditions, not_if_blocks, not_if_arrays)
+    )
 
     return when_conditions
 
@@ -3858,13 +3920,13 @@ def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> 
     condition_mappings = {
         # File existence checks
         r'File\.exist\?\([\'"]([^\'"]+)[\'"]\)': (
-            r'ansible_check_mode or {{ "\1" | is_file }}'
+            r'ansible_check_mode or {{ "\1" is file }}'
         ),
         r'File\.directory\?\([\'"]([^\'"]+)[\'"]\)': (
-            r'ansible_check_mode or {{ "\1" | is_dir }}'
+            r'ansible_check_mode or {{ "\1" is directory }}'
         ),
         r'File\.executable\?\([\'"]([^\'"]+)[\'"]\)': (
-            r'ansible_check_mode or {{ "\1" | is_executable }}'
+            r'ansible_check_mode or {{ "\1" is executable }}'
         ),
         # Package checks
         r'system\([\'"]which\s+(\w+)[\'"]\)': (
@@ -3930,7 +3992,8 @@ def _handle_file_existence_block(block: str, positive: bool) -> str | None:
             path = file_match.group(1) if len(file_match.groups()) >= 1 else ""
             if "#{" in path:
                 path = re.sub(REGEX_RUBY_INTERPOLATION, JINJA2_VAR_REPLACEMENT, path)
-            condition = f'ansible_check_mode or {{ "{path}" is file }}'
+            # Use shell test command for file existence in Ansible when clause
+            condition = f'ansible_check_mode or lookup("pipe", "test -f {path} && echo true || echo false") == "true"'
             return condition if positive else f"not ({condition})"
 
     return None
@@ -3959,7 +4022,8 @@ def _handle_directory_existence_block(block: str, positive: bool) -> str | None:
             path = dir_match.group(1)
             if "#{" in path:
                 path = re.sub(REGEX_RUBY_INTERPOLATION, JINJA2_VAR_REPLACEMENT, path)
-            condition = f'ansible_check_mode or {{ "{path}" is directory }}'
+            # Use shell test command for directory existence in Ansible when clause
+            condition = f'ansible_check_mode or lookup("pipe", "test -d {path} && echo true || echo false") == "true"'
             return condition if positive else f"not ({condition})"
 
     return None
