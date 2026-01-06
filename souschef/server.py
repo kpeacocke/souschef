@@ -9319,6 +9319,427 @@ def validate_conversion(
         return f"Error during validation: {e}"
 
 
+# Habitat Conversion Tools
+
+
+def _extract_plan_var(content: str, var_name: str) -> str:
+    """Extract a variable value from a Habitat plan."""
+    pattern = rf'^{var_name}=["\']?([^"\'\n]+)["\']?'
+    match = re.search(pattern, content, re.MULTILINE)
+    return match.group(1).strip() if match else ""
+
+
+def _extract_plan_array(content: str, var_name: str) -> list[str]:
+    """Extract an array variable from a Habitat plan."""
+    pattern = rf"{var_name}=\(\s*([^)]+)\)"
+    match = re.search(pattern, content, re.DOTALL)
+    if not match:
+        return []
+    elements = re.findall(r'["\']?([^"\')\s]+)["\']?', match.group(1))
+    return [elem for elem in elements if elem and not elem.startswith("#")]
+
+
+def _extract_plan_exports(content: str, var_name: str) -> list[dict[str, str]]:
+    """Extract port exports or bindings from a Habitat plan."""
+    pattern = rf"{var_name}=\(\s*([^)]+)\)"
+    match = re.search(pattern, content, re.DOTALL)
+    if not match:
+        return []
+    exports = []
+    for line in match.group(1).strip().split("\n"):
+        export_match = re.search(r"\[([^\]]+)\]=([^\s]+)", line)
+        if export_match:
+            exports.append(
+                {"name": export_match.group(1), "value": export_match.group(2)}
+            )
+    return exports
+
+
+def _extract_plan_function(content: str, func_name: str) -> str:
+    """Extract a function body from a Habitat plan."""
+    pattern = rf"{func_name}\(\)\s*{{\s*\n(.*?)\n}}"
+    match = re.search(pattern, content, re.DOTALL)
+    return match.group(1).strip() if match else ""
+
+
+@mcp.tool()
+def parse_habitat_plan(plan_path: str) -> str:
+    """
+    Parse a Chef Habitat plan file (plan.sh) and extract package metadata.
+
+    Analyzes Habitat plans to extract package information, dependencies,
+    ports, services, and build callbacks for container conversion.
+
+    Args:
+        plan_path: Path to the plan.sh file
+
+    Returns:
+        JSON string with parsed plan metadata
+
+    """
+    try:
+        normalized_path = _normalize_path(plan_path)
+        if not normalized_path.exists():
+            return ERROR_FILE_NOT_FOUND.format(path=normalized_path)
+        if normalized_path.is_dir():
+            return ERROR_IS_DIRECTORY.format(path=normalized_path)
+
+        content = normalized_path.read_text(encoding="utf-8")
+        metadata: dict[str, Any] = {
+            "package": {},
+            "dependencies": {"build": [], "runtime": []},
+            "ports": [],
+            "binds": [],
+            "service": {},
+            "callbacks": {},
+        }
+
+        # Extract package info
+        metadata["package"]["name"] = _extract_plan_var(content, "pkg_name")
+        metadata["package"]["origin"] = _extract_plan_var(content, "pkg_origin")
+        metadata["package"]["version"] = _extract_plan_var(content, "pkg_version")
+        metadata["package"]["maintainer"] = _extract_plan_var(content, "pkg_maintainer")
+        metadata["package"]["license"] = _extract_plan_array(content, "pkg_license")
+        metadata["package"]["description"] = _extract_plan_var(
+            content, "pkg_description"
+        )
+        metadata["package"]["upstream_url"] = _extract_plan_var(
+            content, "pkg_upstream_url"
+        )
+        metadata["package"]["source"] = _extract_plan_var(content, "pkg_source")
+
+        # Extract dependencies
+        metadata["dependencies"]["build"] = _extract_plan_array(
+            content, "pkg_build_deps"
+        )
+        metadata["dependencies"]["runtime"] = _extract_plan_array(content, "pkg_deps")
+
+        # Extract ports and bindings
+        metadata["ports"] = _extract_plan_exports(content, "pkg_exports")
+        metadata["binds"] = _extract_plan_exports(content, "pkg_binds_optional")
+
+        # Extract service config
+        metadata["service"]["run"] = _extract_plan_var(content, "pkg_svc_run")
+        metadata["service"]["user"] = _extract_plan_var(content, "pkg_svc_user")
+        metadata["service"]["group"] = _extract_plan_var(content, "pkg_svc_group")
+
+        # Extract callbacks
+        for callback in ["do_build", "do_install", "do_init", "do_setup_environment"]:
+            callback_content = _extract_plan_function(content, callback)
+            if callback_content:
+                metadata["callbacks"][callback] = callback_content
+
+        return json.dumps(metadata, indent=2)
+    except PermissionError:
+        return ERROR_PERMISSION_DENIED.format(path=plan_path)
+    except Exception as e:
+        return f"Error parsing Habitat plan: {e}"
+
+
+def _map_habitat_deps_to_apt(habitat_deps: list[str]) -> list[str]:
+    """Map Habitat package dependencies to apt package names."""
+    dep_mapping = {
+        "core/gcc": "gcc",
+        "core/make": "make",
+        "core/openssl": "libssl-dev",
+        "core/pcre": "libpcre3-dev",
+        "core/zlib": "zlib1g-dev",
+        "core/glibc": "libc6-dev",
+        "core/readline": "libreadline-dev",
+        "core/curl": "curl",
+        "core/wget": "wget",
+        "core/git": "git",
+        "core/python": "python3",
+        "core/ruby": "ruby",
+        "core/perl": "perl",
+    }
+    apt_packages = []
+    for dep in habitat_deps:
+        if dep in dep_mapping:
+            apt_packages.append(dep_mapping[dep])
+        elif "/" in dep:
+            apt_packages.append(dep.split("/")[-1])
+    return apt_packages
+
+
+def _extract_default_port(port_name: str) -> str:
+    """Extract default port number based on common port names."""
+    port_defaults = {
+        "http": "80",
+        "https": "443",
+        "port": "8080",
+        "ssl-port": "443",
+        "postgresql": "5432",
+        "mysql": "3306",
+        "redis": "6379",
+        "mongodb": "27017",
+    }
+    if port_name in port_defaults:
+        return port_defaults[port_name]
+    for key, value in port_defaults.items():
+        if key in port_name.lower():
+            return value
+    return ""
+
+
+def _build_dockerfile_header(
+    plan: dict[str, Any], plan_path: str, base_image: str
+) -> list[str]:
+    """Build Dockerfile header with metadata."""
+    lines = [
+        "# Dockerfile generated from Habitat plan",
+        f"# Original plan: {Path(plan_path).name}",
+        f"# Package: {plan['package'].get('origin', 'unknown')}/{plan['package'].get('name', 'unknown')}",
+        f"# Version: {plan['package'].get('version', 'unknown')}",
+        "",
+        f"FROM {base_image}",
+        "",
+    ]
+    if plan["package"].get("maintainer"):
+        lines.append(f'LABEL maintainer="{plan["package"]["maintainer"]}"')
+    if plan["package"].get("version"):
+        lines.append(f'LABEL version="{plan["package"]["version"]}"')
+    if plan["package"].get("description"):
+        lines.append(f'LABEL description="{plan["package"]["description"]}"')
+    if lines[-1].startswith("LABEL"):
+        lines.append("")
+    return lines
+
+
+def _add_dockerfile_deps(lines: list[str], plan: dict[str, Any]) -> None:
+    """Add dependency installation to Dockerfile."""
+    if plan["dependencies"]["build"] or plan["dependencies"]["runtime"]:
+        lines.append("# Install dependencies")
+        all_deps = set(plan["dependencies"]["build"] + plan["dependencies"]["runtime"])
+        apt_packages = _map_habitat_deps_to_apt(list(all_deps))
+        if apt_packages:
+            lines.append("RUN apt-get update && \\")
+            lines.append(f"    apt-get install -y {' '.join(apt_packages)} && \\")
+            lines.append("    rm -rf /var/lib/apt/lists/*")
+            lines.append("")
+
+
+def _add_dockerfile_build(lines: list[str], plan: dict[str, Any]) -> None:
+    """Add build and install steps to Dockerfile."""
+    if "do_build" in plan["callbacks"]:
+        lines.append("# Build steps")
+        for line in plan["callbacks"]["do_build"].split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                dockerfile_line = (
+                    line.replace("$pkg_prefix", "/usr/local")
+                    .replace("$pkg_svc_config_path", "/etc/app")
+                    .replace("$pkg_svc_data_path", "/var/lib/app")
+                    .replace("$pkg_svc_var_path", "/var/run/app")
+                )
+                lines.append(f"RUN {dockerfile_line}")
+        lines.append("")
+    if "do_install" in plan["callbacks"]:
+        lines.append("# Install steps")
+        for line in plan["callbacks"]["do_install"].split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                lines.append(f"RUN {line}")
+        lines.append("")
+    if "do_init" in plan["callbacks"]:
+        lines.append("# Initialization steps")
+        for line in plan["callbacks"]["do_init"].split("\n"):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                dockerfile_line = (
+                    line.replace("$pkg_prefix", "/usr/local")
+                    .replace("$pkg_svc_config_path", "/etc/app")
+                    .replace("$pkg_svc_data_path", "/var/lib/app")
+                    .replace("$pkg_svc_var_path", "/var/run/app")
+                )
+                lines.append(f"RUN {dockerfile_line}")
+        lines.append("")
+
+
+def _add_dockerfile_runtime(lines: list[str], plan: dict[str, Any]) -> None:
+    """Add runtime configuration to Dockerfile."""
+    if plan["ports"]:
+        lines.append("# Expose ports")
+        for port in plan["ports"]:
+            port_num = _extract_default_port(port["name"])
+            if port_num:
+                lines.append(f"EXPOSE {port_num}")
+        lines.append("")
+    if plan["service"].get("user") and plan["service"]["user"] != "root":
+        lines.append(f"USER {plan['service']['user']}")
+        lines.append("")
+    lines.append("WORKDIR /usr/local")
+    lines.append("")
+    if plan["service"].get("run"):
+        run_cmd = plan["service"]["run"]
+        cmd_parts = run_cmd.split()
+        if len(cmd_parts) > 1:
+            lines.append(f"CMD {json.dumps(cmd_parts)}")
+        else:
+            lines.append(f'CMD ["{run_cmd}"]')
+
+
+@mcp.tool()
+def convert_habitat_to_dockerfile(
+    plan_path: str, base_image: str = "ubuntu:22.04"
+) -> str:
+    """
+    Convert a Chef Habitat plan to a Dockerfile.
+
+    Creates a Dockerfile that replicates Habitat plan configuration.
+
+    Args:
+        plan_path: Path to the plan.sh file
+        base_image: Base Docker image (default: ubuntu:22.04)
+
+    Returns:
+        Dockerfile content as a string
+
+    """
+    try:
+        plan_json: str = parse_habitat_plan(plan_path)
+        if plan_json.startswith(ERROR_PREFIX):
+            return plan_json
+        plan: dict[str, Any] = json.loads(plan_json)
+        lines = _build_dockerfile_header(plan, plan_path, base_image)
+        _add_dockerfile_deps(lines, plan)
+        _add_dockerfile_build(lines, plan)
+        _add_dockerfile_runtime(lines, plan)
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error converting Habitat plan to Dockerfile: {e}"
+
+
+def _build_compose_service(plan: dict[str, Any], pkg_name: str) -> dict[str, Any]:
+    """Build a docker-compose service definition."""
+    service: dict[str, Any] = {
+        "build": {"context": ".", "dockerfile": f"Dockerfile.{pkg_name}"},
+        "container_name": pkg_name,
+        "networks": [],
+    }
+    if plan["ports"]:
+        service["ports"] = []
+        for port in plan["ports"]:
+            port_num = _extract_default_port(port["name"])
+            if port_num:
+                service["ports"].append(f"{port_num}:{port_num}")
+    if plan["service"].get("run") and (
+        "data" in plan["service"]["run"] or "pgdata" in plan["service"]["run"]
+    ):
+        service["volumes"] = [f"{pkg_name}_data:/var/lib/app"]
+    service["environment"] = []
+    for port in plan["ports"]:
+        port_num = _extract_default_port(port["name"])
+        if port_num:
+            service["environment"].append(f"{port['name'].upper()}={port_num}")
+    if plan["binds"]:
+        service["depends_on"] = [bind["name"] for bind in plan["binds"]]
+    return service
+
+
+def _add_service_build(lines: list[str], service: dict[str, Any]) -> None:
+    """Add build configuration to service lines."""
+    if "build" in service:
+        lines.append("    build:")
+        lines.append(f"      context: {service['build']['context']}")
+        lines.append(f"      dockerfile: {service['build']['dockerfile']}")
+
+
+def _add_service_ports(lines: list[str], service: dict[str, Any]) -> None:
+    """Add ports configuration to service lines."""
+    if "ports" in service:
+        lines.append("    ports:")
+        for port in service["ports"]:
+            lines.append(f'      - "{port}"')
+
+
+def _add_service_volumes(
+    lines: list[str], service: dict[str, Any], volumes_used: set[str]
+) -> None:
+    """Add volumes configuration to service lines."""
+    if "volumes" in service:
+        lines.append("    volumes:")
+        for volume in service["volumes"]:
+            lines.append(f"      - {volume}")
+            volumes_used.add(volume.split(":")[0])
+
+
+def _add_service_environment(lines: list[str], service: dict[str, Any]) -> None:
+    """Add environment configuration to service lines."""
+    if "environment" in service:
+        lines.append("    environment:")
+        for env in service["environment"]:
+            lines.append(f"      - {env}")
+
+
+def _add_service_dependencies(lines: list[str], service: dict[str, Any]) -> None:
+    """Add depends_on and networks configuration to service lines."""
+    if "depends_on" in service:
+        lines.append("    depends_on:")
+        for dep in service["depends_on"]:
+            lines.append(f"      - {dep}")
+    if "networks" in service:
+        lines.append("    networks:")
+        for net in service["networks"]:
+            lines.append(f"      - {net}")
+
+
+def _format_compose_yaml(services: dict[str, Any], network_name: str) -> str:
+    """Format services as docker-compose YAML."""
+    lines = ["version: '3.8'", "", "services:"]
+    volumes_used: set[str] = set()
+    for name, service in services.items():
+        lines.append(f"  {name}:")
+        if "container_name" in service:
+            lines.append(f"    container_name: {service['container_name']}")
+        _add_service_build(lines, service)
+        _add_service_ports(lines, service)
+        _add_service_volumes(lines, service, volumes_used)
+        _add_service_environment(lines, service)
+        _add_service_dependencies(lines, service)
+        lines.append("")
+    lines.extend(["networks:", f"  {network_name}:", "    driver: bridge"])
+    if volumes_used:
+        lines.extend(["", "volumes:"])
+        for vol in sorted(volumes_used):
+            lines.append(f"  {vol}:")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def generate_compose_from_habitat(
+    plan_paths: str, network_name: str = "habitat_net"
+) -> str:
+    """
+    Generate docker-compose.yml from Habitat plans.
+
+    Creates Docker Compose configuration for multiple services.
+
+    Args:
+        plan_paths: Comma-separated paths to plan.sh files
+        network_name: Docker network name
+
+    Returns:
+        docker-compose.yml content
+
+    """
+    try:
+        paths = [p.strip() for p in plan_paths.split(",")]
+        services: dict[str, Any] = {}
+        for plan_path in paths:
+            plan_json = parse_habitat_plan(plan_path)
+            if plan_json.startswith(ERROR_PREFIX):
+                return f"Error parsing {plan_path}: {plan_json}"
+            plan: dict[str, Any] = json.loads(plan_json)
+            pkg_name = plan["package"].get("name", "unknown")
+            service = _build_compose_service(plan, pkg_name)
+            service["networks"] = [network_name]
+            services[pkg_name] = service
+        return _format_compose_yaml(services, network_name)
+    except Exception as e:
+        return f"Error generating docker-compose.yml: {e}"
+
+
 def main() -> None:
     """
     Run the SousChef MCP server.
