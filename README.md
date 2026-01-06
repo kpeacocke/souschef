@@ -127,7 +127,6 @@ Comprehensive validation of Chef-to-Ansible conversions:
 # Validate a resource conversion
 validate_conversion(
     conversion_type="resource",
-    source_content="package 'nginx'",
     result_content="""- name: Install nginx
   ansible.builtin.package:
     name: "nginx"

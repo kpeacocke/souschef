@@ -212,14 +212,13 @@ class ValidationEngine:
         self.results: list[ValidationResult] = []
 
     def validate_conversion(
-        self, conversion_type: str, source: str, result: str
+        self, conversion_type: str, result: str
     ) -> list[ValidationResult]:
         """
         Validate a Chef-to-Ansible conversion.
 
         Args:
             conversion_type: Type of conversion (e.g., 'recipe', 'resource', 'template').
-            source: Source Chef code or configuration.
             result: Resulting Ansible code or configuration.
 
         Returns:
@@ -229,13 +228,13 @@ class ValidationEngine:
         self.results = []
 
         if conversion_type == "resource":
-            self._validate_resource_conversion(source, result)
+            self._validate_resource_conversion(result)
         elif conversion_type == "recipe":
-            self._validate_recipe_conversion(source, result)
+            self._validate_recipe_conversion(result)
         elif conversion_type == "template":
-            self._validate_template_conversion(source, result)
+            self._validate_template_conversion(result)
         elif conversion_type == "inspec":
-            self._validate_inspec_conversion(source, result)
+            self._validate_inspec_conversion(result)
         else:
             self.results.append(
                 ValidationResult(
@@ -270,12 +269,11 @@ class ValidationEngine:
             ValidationResult(level, category, message, location, suggestion)
         )
 
-    def _validate_resource_conversion(self, source: str, result: str) -> None:
+    def _validate_resource_conversion(self, result: str) -> None:
         """
         Validate Chef resource to Ansible task conversion.
 
         Args:
-            source: Source Chef resource.
             result: Resulting Ansible task.
 
         """
@@ -291,12 +289,11 @@ class ValidationEngine:
         self._validate_task_naming(result)
         self._validate_module_usage(result)
 
-    def _validate_recipe_conversion(self, source: str, result: str) -> None:
+    def _validate_recipe_conversion(self, result: str) -> None:
         """
         Validate Chef recipe to Ansible playbook conversion.
 
         Args:
-            source: Source Chef recipe.
             result: Resulting Ansible playbook.
 
         """
@@ -310,12 +307,11 @@ class ValidationEngine:
         # Best practice validation
         self._validate_playbook_structure(result)
 
-    def _validate_template_conversion(self, source: str, result: str) -> None:
+    def _validate_template_conversion(self, result: str) -> None:
         """
         Validate Chef template to Jinja2 conversion.
 
         Args:
-            source: Source ERB template.
             result: Resulting Jinja2 template.
 
         """
@@ -325,12 +321,11 @@ class ValidationEngine:
         # Semantic validation
         self._validate_variable_references(result)
 
-    def _validate_inspec_conversion(self, source: str, result: str) -> None:
+    def _validate_inspec_conversion(self, result: str) -> None:
         """
         Validate InSpec to test framework conversion.
 
         Args:
-            source: Source InSpec controls.
             result: Resulting test code.
 
         """
@@ -502,7 +497,7 @@ class ValidationEngine:
 
         """
         # Check for undefined variables (basic check)
-        var_pattern = r"\{\{\s*([\w._]+)\s*\}\}"
+        var_pattern = r"\{\{\s*([\w.]+)\s*\}\}"
         variables = set(re.findall(var_pattern, content))
 
         # Check for common issues
@@ -595,7 +590,7 @@ class ValidationEngine:
 
         """
         # Check for undefined variable patterns
-        var_pattern = r"\{\{\s*([\w._]+)\s*\}\}"
+        var_pattern = r"\{\{\s*([\w.]+)\s*\}\}"
         variables = set(re.findall(var_pattern, template))
 
         # Check for potential issues
@@ -9339,7 +9334,6 @@ def _format_validation_results_summary(
 @mcp.tool()
 def validate_conversion(
     conversion_type: str,
-    source_content: str,
     result_content: str,
     output_format: str = "text",
 ) -> str:
@@ -9356,7 +9350,6 @@ def validate_conversion(
     Args:
         conversion_type: Type of conversion to validate
             ('resource', 'recipe', 'template', 'inspec')
-        source_content: Original Chef code or configuration
         result_content: Converted Ansible code or configuration
         output_format: Output format ('text', 'json', 'summary')
 
@@ -9366,9 +9359,7 @@ def validate_conversion(
     """
     try:
         engine = ValidationEngine()
-        results = engine.validate_conversion(
-            conversion_type, source_content, result_content
-        )
+        results = engine.validate_conversion(conversion_type, result_content)
         summary = engine.get_summary()
 
         if output_format == "json":
@@ -9631,40 +9622,52 @@ def _add_dockerfile_deps(lines: list[str], plan: dict[str, Any]) -> None:
             lines.append("")
 
 
+def _process_callback_lines(
+    callback_content: str, replace_vars: bool = False
+) -> list[str]:
+    """
+    Process callback lines for Dockerfile.
+
+    Args:
+        callback_content: Raw callback content to process.
+        replace_vars: Whether to replace Habitat variables with paths.
+
+    Returns:
+        List of processed RUN commands.
+
+    """
+    processed = []
+    for line in callback_content.split("\n"):
+        line = line.strip()
+        if line and not line.startswith("#"):
+            if replace_vars:
+                line = (
+                    line.replace("$pkg_prefix", "/usr/local")
+                    .replace("$pkg_svc_config_path", "/etc/app")
+                    .replace("$pkg_svc_data_path", "/var/lib/app")
+                    .replace("$pkg_svc_var_path", "/var/run/app")
+                )
+            processed.append(f"RUN {line}")
+    return processed
+
+
 def _add_dockerfile_build(lines: list[str], plan: dict[str, Any]) -> None:
     """Add build and install steps to Dockerfile."""
     if "do_build" in plan["callbacks"]:
         lines.append("# Build steps")
-        for line in plan["callbacks"]["do_build"].split("\n"):
-            line = line.strip()
-            if line and not line.startswith("#"):
-                dockerfile_line = (
-                    line.replace("$pkg_prefix", "/usr/local")
-                    .replace("$pkg_svc_config_path", "/etc/app")
-                    .replace("$pkg_svc_data_path", "/var/lib/app")
-                    .replace("$pkg_svc_var_path", "/var/run/app")
-                )
-                lines.append(f"RUN {dockerfile_line}")
+        lines.extend(
+            _process_callback_lines(plan["callbacks"]["do_build"], replace_vars=True)
+        )
         lines.append("")
     if "do_install" in plan["callbacks"]:
         lines.append("# Install steps")
-        for line in plan["callbacks"]["do_install"].split("\n"):
-            line = line.strip()
-            if line and not line.startswith("#"):
-                lines.append(f"RUN {line}")
+        lines.extend(_process_callback_lines(plan["callbacks"]["do_install"]))
         lines.append("")
     if "do_init" in plan["callbacks"]:
         lines.append("# Initialization steps")
-        for line in plan["callbacks"]["do_init"].split("\n"):
-            line = line.strip()
-            if line and not line.startswith("#"):
-                dockerfile_line = (
-                    line.replace("$pkg_prefix", "/usr/local")
-                    .replace("$pkg_svc_config_path", "/etc/app")
-                    .replace("$pkg_svc_data_path", "/var/lib/app")
-                    .replace("$pkg_svc_var_path", "/var/run/app")
-                )
-                lines.append(f"RUN {dockerfile_line}")
+        lines.extend(
+            _process_callback_lines(plan["callbacks"]["do_init"], replace_vars=True)
+        )
         lines.append("")
 
 
@@ -9862,8 +9865,17 @@ def generate_compose_from_habitat(
     """
     try:
         paths = [p.strip() for p in plan_paths.split(",")]
+        # Validate and normalize all paths to prevent path traversal
+        validated_paths = []
+        for path_str in paths:
+            try:
+                normalized = _normalize_path(path_str)
+                validated_paths.append(str(normalized))
+            except ValueError as e:
+                return f"Invalid path {path_str}: {e}"
+
         services: dict[str, Any] = {}
-        for plan_path in paths:
+        for plan_path in validated_paths:
             plan_json = parse_habitat_plan(plan_path)
             if plan_json.startswith(ERROR_PREFIX):
                 return f"Error parsing {plan_path}: {plan_json}"
