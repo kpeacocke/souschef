@@ -14,7 +14,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview - Chef to Ansible features
 
-SousChef is a complete enterprise-grade migration platform with 34 MCP tools organized across 8 major capability areas to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with 38 MCP tools organized across 9 major capability areas to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerized deployments, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ## 📦 Installation
 
@@ -92,14 +92,21 @@ Enterprise AWX/AAP configuration generation:
 - **generate_awx_project_from_cookbooks** - Generate AWX projects from cookbook collections
 - **generate_awx_inventory_source_from_chef** - Create dynamic inventory sources from Chef server
 
-### 8. Advanced Deployment Patterns & Migration Assessment
+### 8. Chef Habitat to Container Conversion
+Modernize Habitat applications to containerized deployments:
+
+- **parse_habitat_plan** - Parse Chef Habitat plan files (plan.sh) and extract package metadata, dependencies, build/install hooks, and service configuration
+- **convert_habitat_to_dockerfile** - Convert Chef Habitat plans to production-ready Dockerfiles with security validation
+- **generate_compose_from_habitat** - Generate docker-compose.yml from multiple Habitat plans for multi-service deployments
+
+### 9. Advanced Deployment Patterns & Migration Assessment
 Modern deployment strategies and migration planning:
 
 - **convert_chef_deployment_to_ansible_strategy** - Convert deployment recipes to Ansible strategies
 - **generate_blue_green_deployment_playbook** - Create blue/green deployment playbooks
 - **generate_canary_deployment_strategy** - Generate canary deployment configurations
 
-### 9. Conversion Validation Framework
+### 10. Conversion Validation Framework
 Comprehensive validation of Chef-to-Ansible conversions:
 
 - **validate_conversion** - Validate conversions across multiple dimensions
@@ -127,7 +134,6 @@ Comprehensive validation of Chef-to-Ansible conversions:
 # Validate a resource conversion
 validate_conversion(
     conversion_type="resource",
-    source_content="package 'nginx'",
     result_content="""- name: Install nginx
   ansible.builtin.package:
     name: "nginx"
@@ -186,7 +192,19 @@ generate_awx_workflow_from_chef_runlist \"recipe[app::deploy]\" workflow_name
 generate_awx_inventory_source_from_chef https://chef.example.com production web_servers
 ```
 
-### Phase 4: Validation & Testing
+### Phase 4: Habitat to Container Migration
+```bash
+# Parse Habitat plan
+parse_habitat_plan /path/to/plan.sh
+
+# Convert to Dockerfile
+convert_habitat_to_dockerfile /path/to/plan.sh ubuntu:22.04
+
+# Generate docker-compose for multiple services
+generate_compose_from_habitat "/path/to/plan1.sh,/path/to/plan2.sh" my_network
+```
+
+### Phase 5: Validation & Testing
 ```bash
 # Generate InSpec validation
 generate_inspec_from_recipe /path/to/recipe.rb
@@ -208,6 +226,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
 - **Canary Releases**: Gradual rollout configurations
 - **Application Patterns**: Modern containerized and cloud-native deployment patterns
 - **Rollback Strategies**: Automated failure recovery procedures
+- **Habitat to Container**: Convert Chef Habitat plans to Docker and Docker Compose configurations
 
 ### Enterprise Integration
 - **AWX/AAP Ready**: Native Ansible Automation Platform integration
@@ -331,17 +350,20 @@ See [CONTRIBUTING.md](CONTRIBUTING.md#-managing-dependencies) for detailed depen
 ### MCP Protocol Integration
 SousChef leverages the Model Context Protocol (MCP) to provide seamless integration with AI assistants and development environments:
 
-- **34 Specialized Tools**: Each migration capability exposed as dedicated MCP tool
+- **38 Specialized Tools**: Each migration capability exposed as dedicated MCP tool
 - **Type-Safe Interfaces**: Full Python type hints for reliable AI interactions
 - **Comprehensive Error Handling**: Graceful degradation and helpful error messages
 - **Streaming Support**: Efficient handling of large cookbook conversions
 
 ### Testing Strategy
-Following enterprise-grade testing standards:
+Following enterprise-grade testing standards with comprehensive test coverage:
 
-- **Unit Tests**: Mock-based testing for individual functions (tests/test_server.py)
-- **Integration Tests**: Real cookbook testing with fixtures (tests/test_integration.py)
-- **Property-Based Tests**: Hypothesis fuzz testing for edge cases (tests/test_property_based.py)
+- **Unit Tests**: Mock-based testing for individual functions (test_server.py, test_cli.py, test_mcp.py)
+- **Integration Tests**: Real cookbook testing with fixtures (test_integration.py, test_integration_accuracy.py)
+- **Property-Based Tests**: Hypothesis fuzz testing for edge cases (test_property_based.py)
+- **Specialized Tests**: Enhanced guards (test_enhanced_guards.py), error handling (test_error_paths.py, test_error_recovery.py), real-world fixtures (test_real_world_fixtures.py)
+- **Performance Tests**: Benchmarking and optimization validation (test_performance.py)
+- **Snapshot Tests**: Regression testing for output stability (test_snapshots.py)
 - **92% Coverage**: Comprehensive test coverage exceeding the 90% target for production readiness
 
 ### Quality Assurance
@@ -397,14 +419,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Automated release management with Release Please
 - ✅ Automated branch cleanup for release PRs
 - ✅ Automated conversion validation and testing framework
+- ✅ Chef Habitat to containerized deployment conversion (parse_habitat_plan, convert_habitat_to_dockerfile, generate_compose_from_habitat)
 
 ### In Progress 🔄
 - 🔄 Enhanced error handling and user experience improvements
 - 🔄 Documentation website and interactive examples
 - 🔄 Performance optimizations for large-scale enterprise migrations
+- 🔄 Technical debt reduction (15 functions tracked in [GitHub Issues](https://github.com/kpeacocke/souschef/issues?q=is%3Aissue+is%3Aopen+label%3Atechnical-debt))
 
 ### Planned 📅
-- 📅 Chef Habitat to containerized deployment conversion
 - 📅 Integration with additional test frameworks (ServerSpec, Goss)
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
@@ -775,6 +798,207 @@ convert_resource_to_task("template", "/etc/nginx/nginx.conf.erb", "create")
 - `group` → `ansible.builtin.group`
 - And more...
 
+#### `parse_habitat_plan(plan_path: str)`
+Parse a Chef Habitat plan file (plan.sh) and extract package metadata, dependencies, build/install hooks, and service configuration.
+
+**Example:**
+```python
+parse_habitat_plan("/path/to/habitat/plan.sh")
+# Returns JSON with:
+# {
+#   "package": {
+#     "name": "nginx",
+#     "origin": "core",
+#     "version": "1.25.3",
+#     "maintainer": "The Habitat Maintainers",
+#     "description": "High-performance HTTP server"
+#   },
+#   "dependencies": {
+#     "build": ["core/gcc", "core/make"],
+#     "runtime": ["core/glibc", "core/openssl"]
+#   },
+#   "ports": [
+#     {"name": "http", "value": "http.port"},
+#     {"name": "https", "value": "http.ssl_port"}
+#   ],
+#   "binds": [
+#     {"name": "database", "value": "postgresql.default"}
+#   ],
+#   "service": {
+#     "run": "nginx -g 'daemon off;'",
+#     "user": "nginx"
+#   },
+#   "callbacks": {
+#     "do_build": "./configure --prefix=/usr/local\nmake",
+#     "do_install": "make install",
+#     "do_init": "mkdir -p /var/lib/nginx"
+#   }
+# }
+```
+
+**Extracted Information:**
+- **Package metadata**: name, origin, version, maintainer, description
+- **Dependencies**: Build-time and runtime package dependencies
+- **Ports**: Exported port configurations for service discovery
+- **Binds**: Service bindings to other Habitat services
+- **Service configuration**: Run command, user, and initialization scripts
+- **Build callbacks**: do_build, do_install, do_init, and other lifecycle hooks
+
+**Use Cases:**
+- Understanding Habitat application structure before containerization
+- Extracting dependencies for Docker base image selection
+- Planning port mappings for docker-compose configurations
+- Analyzing service dependencies and orchestration needs
+
+#### `convert_habitat_to_dockerfile(plan_path: str, base_image: str = "ubuntu:22.04")`
+Convert a Chef Habitat plan to a production-ready Dockerfile with security validation.
+
+**Example:**
+```python
+convert_habitat_to_dockerfile("/path/to/habitat/plan.sh", "ubuntu:22.04")
+# Returns:
+# # Dockerfile generated from Habitat plan
+# # Original plan: plan.sh
+# # Package: core/nginx
+# # Version: 1.25.3
+#
+# FROM ubuntu:22.04
+#
+# LABEL maintainer="The Habitat Maintainers"
+# LABEL version="1.25.3"
+#
+# # Install dependencies
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     gcc \
+#     make \
+#     libssl-dev \
+#     && rm -rf /var/lib/apt/lists/*
+#
+# # Build steps
+# WORKDIR /usr/local/src
+# RUN ./configure --prefix=/usr/local && \
+#     make
+#
+# # Install steps
+# RUN make install
+#
+# # Initialization steps
+# RUN mkdir -p /var/lib/nginx
+#
+# # Runtime configuration
+# EXPOSE 80
+# EXPOSE 443
+# USER nginx
+# WORKDIR /usr/local
+#
+# CMD ["nginx", "-g", "daemon off;"]
+```
+
+**Parameters:**
+- `plan_path`: Path to the Habitat plan.sh file
+- `base_image`: Docker base image (default: ubuntu:22.04). Validated for security
+
+**Features:**
+- **Dependency mapping**: Converts Habitat dependencies to apt packages
+- **Build optimization**: Multi-stage builds when applicable
+- **Security scanning**: Detects dangerous patterns (curl|sh, eval, etc.)
+- **Metadata preservation**: LABEL instructions for package info
+- **User configuration**: Non-root user setup when specified
+- **Port exposure**: Automatic EXPOSE directives from plan ports
+
+**Security Warnings:**
+The tool processes shell commands from Habitat plans and includes them in the Dockerfile. Only use with trusted Habitat plans from known sources. Review generated Dockerfiles before building images.
+
+#### `generate_compose_from_habitat(plan_paths: str, network_name: str = "habitat_net")`
+Generate docker-compose.yml from multiple Habitat plans for multi-service deployments.
+
+**Example:**
+```python
+# Single service
+generate_compose_from_habitat("/path/to/nginx/plan.sh", "myapp_network")
+# Returns:
+# version: '3.8'
+# services:
+#   nginx:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.nginx
+#     container_name: nginx
+#     ports:
+#       - "80:80"
+#       - "443:443"
+#     environment:
+#       - HTTP=80
+#       - HTTPS=443
+#     networks:
+#       - myapp_network
+#
+# networks:
+#   myapp_network:
+#     driver: bridge
+
+# Multiple services with dependencies
+generate_compose_from_habitat(
+    "/path/to/backend/plan.sh,/path/to/postgres/plan.sh",
+    "app_network"
+)
+# Returns:
+# version: '3.8'
+# services:
+#   backend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.backend
+#     container_name: backend
+#     ports:
+#       - "8080:8080"
+#     environment:
+#       - PORT=8080
+#     depends_on:
+#       - postgres
+#     networks:
+#       - app_network
+#
+#   postgres:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.postgres
+#     container_name: postgres
+#     ports:
+#       - "5432:5432"
+#     environment:
+#       - POSTGRESQL=5432
+#     volumes:
+#       - postgres_data:/var/lib/app
+#     networks:
+#       - app_network
+#
+# networks:
+#   app_network:
+#     driver: bridge
+#
+# volumes:
+#   postgres_data:
+```
+
+**Parameters:**
+- `plan_paths`: Comma-separated paths to plan.sh files for multiple services
+- `network_name`: Docker network name for service communication (default: habitat_net)
+
+**Features:**
+- **Multi-service orchestration**: Combines multiple Habitat plans into one compose file
+- **Automatic dependencies**: Creates depends_on from Habitat service binds
+- **Volume detection**: Identifies services needing persistent storage from do_init callbacks
+- **Network isolation**: Configures bridge networks for service communication
+- **Port management**: Maps ports from Habitat exports to Docker compose
+- **Environment variables**: Generates environment configuration from port definitions
+
+**Use Cases:**
+- Converting multi-service Habitat applications to Docker Compose
+- Creating development environments from production Habitat plans
+- Simplifying container orchestration for local testing
+- Migration path from Habitat to Kubernetes (via docker-compose)
+
 ## Development
 
 ### Project Structure
@@ -835,14 +1059,19 @@ poetry run pytest
 # Run with coverage report
 poetry run pytest --cov=souschef --cov-report=term-missing --cov-report=html
 
-# Run only unit tests (mocked)
-poetry run pytest tests/test_server.py
-
-# Run only integration tests (real files)
-poetry run pytest tests/test_integration.py
-
-# Run property-based tests
-poetry run pytest tests/test_property_based.py
+# Run specific test suites
+poetry run pytest tests/test_server.py              # Core unit tests
+poetry run pytest tests/test_cli.py                 # CLI tests
+poetry run pytest tests/test_mcp.py                 # MCP protocol tests
+poetry run pytest tests/test_integration.py         # Integration tests
+poetry run pytest tests/test_integration_accuracy.py # Accuracy validation
+poetry run pytest tests/test_enhanced_guards.py     # Guard conversion tests
+poetry run pytest tests/test_error_paths.py         # Error handling
+poetry run pytest tests/test_error_recovery.py      # Error recovery
+poetry run pytest tests/test_real_world_fixtures.py # Real-world cookbooks
+poetry run pytest tests/test_property_based.py      # Hypothesis fuzz tests
+poetry run pytest tests/test_performance.py         # Performance benchmarks
+poetry run pytest tests/test_snapshots.py           # Snapshot regression tests
 
 # Run with benchmarks
 poetry run pytest --benchmark-only
@@ -855,28 +1084,37 @@ poetry run mypy souschef       # Type checking
 
 ### Test Types
 
-The project includes multiple types of tests:
+The project includes comprehensive test coverage across multiple dimensions:
 
-1. **Unit Tests** (`test_server.py`)
+1. **Unit Tests** (`test_server.py`, `test_cli.py`, `test_mcp.py`)
    - Mock-based tests for individual functions
    - Test error handling and edge cases
    - Fast execution, isolated from filesystem
+   - MCP protocol compliance testing
 
-2. **Integration Tests** (`test_integration.py`)
+2. **Integration Tests** (`test_integration.py`, `test_integration_accuracy.py`)
    - Real file operations with test fixtures
    - Validate parsing with actual Chef cookbook files
    - Parameterized tests for various scenarios
-   - Performance benchmarks with pytest-benchmark
+   - Accuracy validation for conversions
 
 3. **Property-Based Tests** (`test_property_based.py`)
    - Uses Hypothesis for fuzz testing
    - Generates random inputs to find edge cases
    - Ensures functions handle any input gracefully
 
-4. **Test Fixtures**
-   - Sample Chef cookbook in `tests/fixtures/sample_cookbook/`
-   - Real-world metadata, recipes, and attributes
-   - Used for integration testing
+4. **Specialized Test Suites**
+   - **Enhanced Guards** (`test_enhanced_guards.py`): Complex guard condition conversion
+   - **Error Handling** (`test_error_paths.py`, `test_error_recovery.py`): Comprehensive error scenarios
+   - **Real-World Fixtures** (`test_real_world_fixtures.py`): Production cookbook patterns
+   - **Performance** (`test_performance.py`): Benchmarking and optimization
+   - **Snapshots** (`test_snapshots.py`): Regression testing for output stability
+
+5. **Test Fixtures**
+   - Sample Chef cookbooks in `tests/fixtures/`
+   - Multiple cookbook types: apache2, docker, mysql, nodejs, legacy Chef 12, Habitat plans
+   - Real-world metadata, recipes, attributes, and resources
+   - Used across integration and accuracy testing
 
 ### Test Coverage
 

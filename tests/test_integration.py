@@ -7,13 +7,16 @@ from unittest.mock import patch
 import pytest
 
 from souschef.server import (
+    convert_habitat_to_dockerfile,
     convert_inspec_to_test,
     convert_resource_to_task,
+    generate_compose_from_habitat,
     generate_inspec_from_recipe,
     list_cookbook_structure,
     list_directory,
     parse_attributes,
     parse_custom_resource,
+    parse_habitat_plan,
     parse_inspec_profile,
     parse_recipe,
     parse_template,
@@ -1014,3 +1017,124 @@ class TestAttributePrecedenceIntegration:
             "Attributes with precedence conflicts" not in result
             or "conflicts: 0" in result
         )
+
+
+class TestHabitatIntegration:
+    """Integration tests for Habitat conversion with real fixtures."""
+
+    def test_parse_real_habitat_plan(self):
+        """Test parsing a real Habitat plan fixture."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        result = parse_habitat_plan(str(plan_path))
+
+        # Should parse successfully
+        assert not result.startswith("Error")
+
+        import json
+
+        plan = json.loads(result)
+        assert plan["package"]["name"] == "nginx"
+        assert plan["package"]["version"] == "1.25.3"
+        assert plan["package"]["origin"] == "core"
+        assert "BSD-2-Clause" in str(plan["package"]["license"])
+        assert len(plan["dependencies"]["build"]) > 0
+        assert len(plan["dependencies"]["runtime"]) > 0
+        assert len(plan["ports"]) == 2
+        assert "do_build" in plan["callbacks"]
+        assert "do_install" in plan["callbacks"]
+
+    def test_parse_postgres_habitat_plan(self):
+        """Test parsing PostgreSQL Habitat plan fixture."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan_postgres.sh"
+        result = parse_habitat_plan(str(plan_path))
+
+        # Should parse successfully
+        assert not result.startswith("Error")
+
+        import json
+
+        plan = json.loads(result)
+        assert plan["package"]["name"] == "postgresql"
+        assert plan["package"]["version"] == "14.5"
+        assert "do_init" in plan["callbacks"]
+        assert "initdb" in plan["callbacks"]["do_init"]
+
+    def test_convert_real_habitat_to_dockerfile(self):
+        """Test converting a real Habitat plan to Dockerfile."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        result = convert_habitat_to_dockerfile(str(plan_path), "ubuntu:22.04")
+
+        # Should generate valid Dockerfile
+        assert "FROM ubuntu:22.04" in result
+        assert "LABEL maintainer=" in result
+        assert 'LABEL version="1.25.3"' in result
+        assert "LABEL description=" in result
+        assert "RUN apt-get update" in result
+        # Build dependencies from plan.sh: core/gcc -> gcc, core/make -> make
+        assert "gcc" in result
+        assert "make" in result
+        # Runtime dependencies should also be present
+        assert "libssl-dev" in result  # from core/openssl
+        assert "libpcre3-dev" in result  # from core/pcre
+        assert "./configure" in result
+        assert "EXPOSE 80" in result
+        assert "EXPOSE 443" in result
+        assert "CMD" in result
+        assert "nginx" in result
+
+    def test_generate_compose_from_real_habitat_plans(self):
+        """Test generating docker-compose from real Habitat plans."""
+        nginx_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        postgres_path = FIXTURES_DIR / "habitat_package" / "plan_postgres.sh"
+
+        result = generate_compose_from_habitat(
+            f"{nginx_path},{postgres_path}", "habitat_net"
+        )
+
+        # Should generate valid docker-compose.yml
+        assert "version: '3.8'" in result
+        assert "services:" in result
+        assert "nginx:" in result
+        assert "postgresql:" in result
+        assert "build:" in result
+        assert "Dockerfile.nginx" in result
+        assert "Dockerfile.postgresql" in result
+        assert "ports:" in result
+        assert "networks:" in result
+        assert "habitat_net:" in result
+        assert "driver: bridge" in result
+        assert "volumes:" in result
+
+    def test_dockerfile_structure_validity(self):
+        """Test that generated Dockerfile has correct structure."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        result = convert_habitat_to_dockerfile(str(plan_path))
+
+        lines = result.split("\n")
+
+        # Check Dockerfile structure
+        assert any(line.startswith("FROM") for line in lines)
+        assert any(line.startswith("LABEL") for line in lines)
+        assert any(line.startswith("RUN") for line in lines)
+        assert any(line.startswith("EXPOSE") for line in lines)
+        assert any(
+            line.startswith("CMD") or line.startswith("ENTRYPOINT") for line in lines
+        )
+
+        # Should not have syntax errors
+        assert not any("$pkg_" in line for line in lines if line.startswith("CMD"))
+
+    def test_compose_with_single_service(self):
+        """Test docker-compose generation with single service."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        result = generate_compose_from_habitat(str(plan_path), "test_net")
+
+        # Should generate minimal compose file
+        assert "services:" in result
+        assert "nginx:" in result
+        assert "build:" in result
+        assert "networks:" in result
+        assert "test_net:" in result
+
+        # Verify basic structure is present
+        assert result.count("nginx:") > 0

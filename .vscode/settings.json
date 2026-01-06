@@ -61,5 +61,12 @@
         "connectionId": "kpeacocke",
         "projectKey": "kpeacocke_souschef"
     },
-    "ansible.lightspeed.enabled": false
+    "ansible.lightspeed.enabled": false,
+    "chat.mcp.serverSampling": {
+        "souschef/.vscode/mcp.json: souschef": {
+            "allowedModels": [
+                "copilot/claude-sonnet-4.5"
+            ]
+        }
+    }
 }
