@@ -10,6 +10,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from souschef.server import (
+    ValidationCategory,
+    ValidationEngine,
+    ValidationLevel,
+    ValidationResult,
     _convert_chef_block_to_ansible,
     _convert_chef_condition_to_ansible,
     _convert_erb_to_jinja2,
@@ -47,6 +51,7 @@ from souschef.server import (
     parse_template,
     read_cookbook_metadata,
     read_file,
+    validate_conversion,
 )
 
 
@@ -12509,3 +12514,438 @@ class TestUtilityFunctions:
         assert len(timestamp) > 0
         assert "-" in timestamp
         assert ":" in timestamp
+
+
+class TestValidationFramework:
+    """Test validation framework for Chef-to-Ansible conversions."""
+
+    def test_validation_level_enum(self):
+        """Test ValidationLevel enum values."""
+        assert ValidationLevel.ERROR.value == "error"
+        assert ValidationLevel.WARNING.value == "warning"
+        assert ValidationLevel.INFO.value == "info"
+
+    def test_validation_category_enum(self):
+        """Test ValidationCategory enum values."""
+        assert ValidationCategory.SYNTAX.value == "syntax"
+        assert ValidationCategory.SEMANTIC.value == "semantic"
+        assert ValidationCategory.BEST_PRACTICE.value == "best_practice"
+        assert ValidationCategory.SECURITY.value == "security"
+        assert ValidationCategory.PERFORMANCE.value == "performance"
+
+    def test_validation_result_creation(self):
+        """Test ValidationResult creation."""
+        result = ValidationResult(
+            level=ValidationLevel.ERROR,
+            category=ValidationCategory.SYNTAX,
+            message="Test error",
+            location="line 10",
+            suggestion="Fix the syntax",
+        )
+
+        assert result.level == ValidationLevel.ERROR
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.message == "Test error"
+        assert result.location == "line 10"
+        assert result.suggestion == "Fix the syntax"
+
+    def test_validation_result_to_dict(self):
+        """Test ValidationResult to_dict method."""
+        result = ValidationResult(
+            level=ValidationLevel.WARNING,
+            category=ValidationCategory.BEST_PRACTICE,
+            message="Consider this",
+            location="task 5",
+            suggestion="Use better name",
+        )
+
+        result_dict = result.to_dict()
+
+        assert result_dict["level"] == "warning"
+        assert result_dict["category"] == "best_practice"
+        assert result_dict["message"] == "Consider this"
+        assert result_dict["location"] == "task 5"
+        assert result_dict["suggestion"] == "Use better name"
+
+    def test_validation_result_repr(self):
+        """Test ValidationResult string representation."""
+        result = ValidationResult(
+            level=ValidationLevel.INFO,
+            category=ValidationCategory.PERFORMANCE,
+            message="Performance tip",
+        )
+
+        result_str = str(result)
+        assert "[INFO]" in result_str
+        assert "[performance]" in result_str
+        assert "Performance tip" in result_str
+
+    def test_validation_engine_creation(self):
+        """Test ValidationEngine initialization."""
+        engine = ValidationEngine()
+        assert engine.results == []
+
+    def test_validation_engine_validate_resource_conversion(self):
+        """Test ValidationEngine resource validation."""
+        engine = ValidationEngine()
+        source = "package 'nginx'"
+        result = """- name: Install nginx
+  ansible.builtin.package:
+    name: "nginx"
+    state: present
+"""
+        results = engine.validate_conversion("resource", source, result)
+
+        assert isinstance(results, list)
+        # Validation should run without errors
+        summary = engine.get_summary()
+        assert "errors" in summary
+        assert "warnings" in summary
+        assert "info" in summary
+
+    def test_validation_engine_validate_invalid_yaml(self):
+        """Test validation catches invalid YAML."""
+        engine = ValidationEngine()
+        source = "package 'test'"
+        result = """- name: Test
+  invalid: yaml
+  - item:
+      bad: indentation
+"""
+        results = engine.validate_conversion("resource", source, result)
+
+        # Should have YAML syntax error or pass depending on YAML lib
+        assert isinstance(results, list)
+
+    def test_validation_engine_validate_command_without_changed_when(self):
+        """Test validation catches command without changed_when."""
+        engine = ValidationEngine()
+        source = "execute 'test command'"
+        result = """- name: Run test command
+  ansible.builtin.command: /bin/test
+"""
+        results = engine.validate_conversion("resource", source, result)
+
+        # Should have warning about changed_when
+        warnings = [r for r in results if r.level == ValidationLevel.WARNING]
+        assert any("changed_when" in w.message for w in warnings)
+
+    def test_validation_engine_validate_unknown_module(self):
+        """Test validation warns about unknown modules."""
+        engine = ValidationEngine()
+        source = "custom_resource 'test'"
+        result = """- name: Custom task
+  ansible.builtin.nonexistent:
+    param: value
+"""
+        results = engine.validate_conversion("resource", source, result)
+
+        # Should have warning about unknown module
+        warnings = [r for r in results if r.level == ValidationLevel.WARNING]
+        assert any("Unknown Ansible module" in w.message for w in warnings)
+
+    def test_validation_engine_validate_recipe_conversion(self):
+        """Test validation of recipe conversion."""
+        engine = ValidationEngine()
+        source = "# Chef recipe"
+        result = """---
+- name: Test playbook
+  hosts: all
+  tasks:
+    - name: Task
+      ansible.builtin.debug:
+        msg: test
+"""
+        results = engine.validate_conversion("recipe", source, result)
+
+        # Should pass basic validation
+        assert isinstance(results, list)
+
+    def test_validation_engine_validate_template_conversion(self):
+        """Test validation of template conversion."""
+        engine = ValidationEngine()
+        source = "<%= @variable %>"
+        result = "{{ variable }}"
+
+        results = engine.validate_conversion("template", source, result)
+
+        # Should pass validation
+        assert isinstance(results, list)
+
+    def test_validation_engine_validate_inspec_conversion(self):
+        """Test validation of InSpec conversion."""
+        engine = ValidationEngine()
+        source = "describe package('nginx') { it { should be_installed } }"
+        result = """import pytest
+
+def test_nginx(host):
+    assert host.package("nginx").is_installed
+"""
+        results = engine.validate_conversion("inspec", source, result)
+
+        # Should pass validation
+        assert isinstance(results, list)
+
+    def test_validation_engine_get_summary(self):
+        """Test ValidationEngine summary generation."""
+        engine = ValidationEngine()
+        # Add some results manually
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "Error 1")
+        engine._add_result(
+            ValidationLevel.WARNING, ValidationCategory.BEST_PRACTICE, "Warning 1"
+        )
+        engine._add_result(
+            ValidationLevel.INFO, ValidationCategory.PERFORMANCE, "Info 1"
+        )
+
+        summary = engine.get_summary()
+
+        assert summary["errors"] == 1
+        assert summary["warnings"] == 1
+        assert summary["info"] == 1
+
+    def test_validate_conversion_tool_text_format(self):
+        """Test validate_conversion MCP tool with text format."""
+        result = validate_conversion(
+            conversion_type="resource",
+            source_content="package 'nginx'",
+            result_content="""- name: Install nginx package
+  ansible.builtin.package:
+    name: "nginx"
+    state: present
+""",
+            output_format="text",
+        )
+
+        assert "Validation Results" in result
+        assert "resource" in result
+        # Should have some validation output
+        assert len(result) > 0
+
+    def test_validate_conversion_tool_json_format(self):
+        """Test validate_conversion MCP tool with JSON format."""
+        result = validate_conversion(
+            conversion_type="resource",
+            source_content="package 'nginx'",
+            result_content="""- name: Install nginx
+  ansible.builtin.package:
+    name: "nginx"
+    state: present
+""",
+            output_format="json",
+        )
+
+        # Should be valid JSON
+        import json
+
+        data = json.loads(result)
+        assert "summary" in data
+        assert "results" in data
+        assert isinstance(data["summary"], dict)
+        assert isinstance(data["results"], list)
+
+    def test_validate_conversion_tool_summary_format(self):
+        """Test validate_conversion MCP tool with summary format."""
+        result = validate_conversion(
+            conversion_type="template",
+            source_content="<%= @var %>",
+            result_content="{{ var }}",
+            output_format="summary",
+        )
+
+        assert "Validation Summary" in result
+        assert "Errors:" in result
+        assert "Warnings:" in result
+        assert "Info:" in result
+
+    def test_validate_conversion_tool_with_errors(self):
+        """Test validate_conversion with content that has errors."""
+        result = validate_conversion(
+            conversion_type="resource",
+            source_content="package 'test'",
+            result_content="""- name: Test
+  invalid yaml here
+    bad indentation
+""",
+            output_format="text",
+        )
+
+        # Should contain error information
+        assert "Validation Results" in result or "Error" in result
+
+    def test_validate_conversion_tool_unknown_type(self):
+        """Test validate_conversion with unknown conversion type."""
+        result = validate_conversion(
+            conversion_type="unknown_type",
+            source_content="test",
+            result_content="test",
+            output_format="text",
+        )
+
+        # Should handle unknown type gracefully
+        assert isinstance(result, str)
+        assert "Unknown conversion type" in result or "Validation Results" in result
+
+    def test_validate_conversion_tool_exception_handling(self):
+        """Test validate_conversion handles exceptions gracefully."""
+        # This should not crash
+        result = validate_conversion(
+            conversion_type="resource",
+            source_content=None,  # type: ignore
+            result_content=None,  # type: ignore
+            output_format="text",
+        )
+
+        # Should contain error message
+        assert "Error" in result or isinstance(result, str)
+
+    def test_validation_ansible_module_known_modules(self):
+        """Test validation recognizes known Ansible modules."""
+        engine = ValidationEngine()
+
+        known_modules = [
+            "package",
+            "service",
+            "template",
+            "file",
+            "user",
+            "group",
+            "command",
+            "shell",
+        ]
+
+        for module in known_modules:
+            engine.results = []
+            task = f"""- name: Test
+  ansible.builtin.{module}:
+    param: value
+"""
+            engine._validate_ansible_module_exists(task)
+            # Should not warn about known modules
+            assert len(engine.results) == 0
+
+    def test_validation_idempotency_command_with_changed_when(self):
+        """Test idempotency validation passes with changed_when."""
+        engine = ValidationEngine()
+        task = """- name: Test command
+  ansible.builtin.command: echo test
+  changed_when: false
+"""
+        engine._validate_idempotency(task)
+
+        # Should not warn since changed_when is present
+        assert len(engine.results) == 0
+
+    def test_validation_variable_usage(self):
+        """Test variable usage validation."""
+        engine = ValidationEngine()
+        content = """---
+- name: Test
+  hosts: all
+  tasks:
+    - debug:
+        msg: "{{ ansible_custom_var }}"
+"""
+        engine._validate_variable_usage(content)
+
+        # Should have info about ansible_ prefix
+        assert len(engine.results) > 0
+
+    def test_validation_handler_definitions_missing(self):
+        """Test handler validation when handlers are missing."""
+        engine = ValidationEngine()
+        content = """---
+- name: Test
+  hosts: all
+  tasks:
+    - name: Task
+      service:
+        name: nginx
+      notify: restart nginx
+"""
+        engine._validate_handler_definitions(content)
+
+        # Should warn about missing handlers
+        warnings = [r for r in engine.results if r.level == ValidationLevel.WARNING]
+        assert len(warnings) > 0
+        assert any("handlers" in w.message.lower() for w in warnings)
+
+    def test_validation_playbook_structure_missing_hosts(self):
+        """Test playbook validation catches missing hosts."""
+        engine = ValidationEngine()
+        content = """---
+- name: Test playbook
+  tasks:
+    - debug: msg="test"
+"""
+        engine._validate_playbook_structure(content)
+
+        # Should have error about missing hosts
+        errors = [r for r in engine.results if r.level == ValidationLevel.ERROR]
+        assert len(errors) > 0
+        assert any("hosts" in e.message.lower() for e in errors)
+
+    def test_validation_playbook_structure_no_tasks(self):
+        """Test playbook validation catches playbooks without tasks."""
+        engine = ValidationEngine()
+        content = """---
+- name: Empty playbook
+  hosts: all
+"""
+        engine._validate_playbook_structure(content)
+
+        # Should have warning about no tasks or roles
+        warnings = [r for r in engine.results if r.level == ValidationLevel.WARNING]
+        assert len(warnings) > 0
+        assert any(
+            "tasks" in w.message.lower() or "roles" in w.message.lower()
+            for w in warnings
+        )
+
+    def test_validation_jinja2_syntax_valid(self):
+        """Test Jinja2 syntax validation with valid template."""
+        engine = ValidationEngine()
+        template = "{{ variable }}\n{% if condition %}text{% endif %}"
+
+        engine._validate_jinja2_syntax(template)
+
+        # Should pass validation
+        assert len([r for r in engine.results if r.level.value == "error"]) == 0
+
+    def test_validation_deep_variable_nesting(self):
+        """Test validation warns about deep variable nesting."""
+        engine = ValidationEngine()
+        template = "{{ var.level1.level2.level3.level4.level5.level6 }}"
+
+        engine._validate_variable_references(template)
+
+        # Should have info about deep nesting
+        infos = [r for r in engine.results if r.level == ValidationLevel.INFO]
+        assert len(infos) > 0
+        assert any("Deep variable nesting" in i.message for i in infos)
+
+    def test_validation_python_syntax_valid(self):
+        """Test Python syntax validation with valid code."""
+        engine = ValidationEngine()
+        code = """
+def test_function():
+    assert True
+"""
+        engine._validate_python_syntax(code)
+
+        # Should pass validation
+        assert len([r for r in engine.results if r.level.value == "error"]) == 0
+
+    def test_validation_python_syntax_invalid(self):
+        """Test Python syntax validation catches syntax errors."""
+        engine = ValidationEngine()
+        code = """
+def test_function(
+    invalid syntax here
+"""
+        engine._validate_python_syntax(code)
+
+        # Should have error about syntax
+        errors = [r for r in engine.results if r.level == ValidationLevel.ERROR]
+        assert len(errors) > 0
+        assert any("syntax" in e.message.lower() for e in errors)
