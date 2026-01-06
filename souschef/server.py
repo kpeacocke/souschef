@@ -1092,7 +1092,7 @@ def _get_precedence_level(precedence: str) -> int:
 
 def _resolve_attribute_precedence(
     attributes: list[dict[str, str]],
-) -> dict[str, dict[str, str | bool]]:
+) -> dict[str, dict[str, str | bool | int]]:
     """
     Resolve attribute precedence conflicts based on Chef's precedence rules.
 
@@ -1116,7 +1116,7 @@ def _resolve_attribute_precedence(
         path_groups[path].append(attr)
 
     # Resolve precedence for each path
-    resolved: dict[str, dict[str, str | bool]] = {}
+    resolved: dict[str, dict[str, str | bool | int]] = {}
     for path, attrs in path_groups.items():
         # Find attribute with highest precedence
         winning_attr = max(attrs, key=lambda a: _get_precedence_level(a["precedence"]))
@@ -1136,7 +1136,7 @@ def _resolve_attribute_precedence(
         resolved[path] = {
             "value": winning_attr["value"],
             "precedence": winning_attr["precedence"],
-            "precedence_level": str(_get_precedence_level(winning_attr["precedence"])),
+            "precedence_level": _get_precedence_level(winning_attr["precedence"]),
             "has_conflict": has_conflict,
             "overridden_values": ", ".join(conflict_info) if conflict_info else "",
         }
@@ -1162,7 +1162,9 @@ def _format_attributes(attributes: list[dict[str, str]]) -> str:
     return "\n".join(result)
 
 
-def _format_resolved_attributes(resolved: dict[str, dict[str, str | bool]]) -> str:
+def _format_resolved_attributes(
+    resolved: dict[str, dict[str, str | bool | int]],
+) -> str:
     """
     Format resolved attributes with precedence information.
 

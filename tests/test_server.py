@@ -828,7 +828,7 @@ def test_resolve_attribute_precedence_multiple_conflicts():
     # force_override should win
     assert resolved["db.host"]["value"] == "db.final"
     assert resolved["db.host"]["precedence"] == "force_override"
-    assert resolved["db.host"]["precedence_level"] == "5"
+    assert resolved["db.host"]["precedence_level"] == 5
     assert resolved["db.host"]["has_conflict"] is True
 
     # Check all lower precedence values are listed
@@ -846,14 +846,14 @@ def test_format_resolved_attributes():
         "app.port": {
             "value": "8080",
             "precedence": "override",
-            "precedence_level": "4",
+            "precedence_level": 4,
             "has_conflict": True,
             "overridden_values": "default=80",
         },
         "app.name": {
             "value": "myapp",
             "precedence": "default",
-            "precedence_level": "1",
+            "precedence_level": 1,
             "has_conflict": False,
             "overridden_values": "",
         },
