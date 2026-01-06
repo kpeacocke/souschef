@@ -113,6 +113,84 @@ def test_parse_attributes_with_generated_attributes(precedence, key1, key2, valu
 
 
 @given(
+    precedence=st.sampled_from(
+        [
+            "default",
+            "force_default",
+            "normal",
+            "override",
+            "force_override",
+            "automatic",
+        ]
+    ),
+    key=st.text(
+        alphabet=st.characters(
+            whitelist_categories=("Lu", "Ll", "Nd"),
+            min_codepoint=65,
+            max_codepoint=122,
+        ),
+        min_size=1,
+        max_size=20,
+    ),
+    value=st.integers(min_value=1, max_value=10000),
+)
+@settings(max_examples=50)
+def test_parse_attributes_all_precedence_levels(precedence, key, value):
+    """Test attribute parsing with all Chef precedence levels."""
+    attr_content = f"{precedence}['{key}'] = {value}\n"
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        try:
+            f.write(attr_content)
+            f.flush()
+
+            result = parse_attributes(f.name, resolve_precedence=True)
+
+            # Should parse and recognize the precedence level
+            assert precedence in result
+            assert str(value) in result
+            assert "Resolved Attributes" in result
+        finally:
+            Path(f.name).unlink(missing_ok=True)
+
+
+@given(
+    values=st.lists(
+        st.tuples(
+            st.sampled_from(["default", "normal", "override", "force_override"]),
+            st.integers(min_value=1, max_value=100),
+        ),
+        min_size=2,
+        max_size=5,
+    )
+)
+@settings(max_examples=50)
+def test_precedence_resolution_property(values):
+    """Property test: highest precedence always wins."""
+    from souschef.server import _get_precedence_level, _resolve_attribute_precedence
+
+    # Create attributes with same path but different precedences
+    attributes = [
+        {"precedence": prec, "path": "test.value", "value": str(val)}
+        for prec, val in values
+    ]
+
+    resolved = _resolve_attribute_precedence(attributes)
+
+    # Find the attribute with highest precedence in input
+    expected_winner = max(values, key=lambda x: _get_precedence_level(x[0]))
+
+    # Verify the winner was selected
+    assert resolved["test.value"]["precedence"] == expected_winner[0]
+    assert resolved["test.value"]["value"] == str(expected_winner[1])
+
+    # If multiple precedences, should have conflict
+    unique_precedences = len({prec for prec, _ in values})
+    if unique_precedences > 1:
+        assert resolved["test.value"]["has_conflict"] is True
+
+
+@given(
     resource_type=st.sampled_from(
         ["package", "service", "template", "file", "directory", "user", "group"]
     ),
