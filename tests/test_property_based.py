@@ -186,7 +186,7 @@ def test_precedence_resolution_property(values):
     # If multiple precedences, should have conflict
     unique_precedences = len({prec for prec, _ in values})
     if unique_precedences > 1:
-        assert resolved["test.value"]["has_conflict"] == "True"
+        assert resolved["test.value"]["has_conflict"] is True
 
 
 @given(

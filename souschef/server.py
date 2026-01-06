@@ -1092,7 +1092,7 @@ def _get_precedence_level(precedence: str) -> int:
 
 def _resolve_attribute_precedence(
     attributes: list[dict[str, str]],
-) -> dict[str, dict[str, str]]:
+) -> dict[str, dict[str, str | bool]]:
     """
     Resolve attribute precedence conflicts based on Chef's precedence rules.
 
@@ -1116,7 +1116,7 @@ def _resolve_attribute_precedence(
         path_groups[path].append(attr)
 
     # Resolve precedence for each path
-    resolved: dict[str, dict[str, str]] = {}
+    resolved: dict[str, dict[str, str | bool]] = {}
     for path, attrs in path_groups.items():
         # Find attribute with highest precedence
         winning_attr = max(attrs, key=lambda a: _get_precedence_level(a["precedence"]))
@@ -1137,7 +1137,7 @@ def _resolve_attribute_precedence(
             "value": winning_attr["value"],
             "precedence": winning_attr["precedence"],
             "precedence_level": str(_get_precedence_level(winning_attr["precedence"])),
-            "has_conflict": str(has_conflict),
+            "has_conflict": has_conflict,
             "overridden_values": ", ".join(conflict_info) if conflict_info else "",
         }
 
@@ -1162,7 +1162,7 @@ def _format_attributes(attributes: list[dict[str, str]]) -> str:
     return "\n".join(result)
 
 
-def _format_resolved_attributes(resolved: dict[str, dict[str, str]]) -> str:
+def _format_resolved_attributes(resolved: dict[str, dict[str, str | bool]]) -> str:
     """
     Format resolved attributes with precedence information.
 
@@ -1187,15 +1187,13 @@ def _format_resolved_attributes(resolved: dict[str, dict[str, str]]) -> str:
             f"  Precedence: {info['precedence']} (level {info['precedence_level']})"
         )
 
-        if info["has_conflict"] == "True":
+        if info["has_conflict"]:
             result.append(f"  ⚠️  Overridden values: {info['overridden_values']}")
 
         result.append("")  # Blank line between attributes
 
     # Add summary
-    conflict_count = sum(
-        1 for info in resolved.values() if info["has_conflict"] == "True"
-    )
+    conflict_count = sum(1 for info in resolved.values() if info["has_conflict"])
     result.append("=" * 50)
     result.append(f"Total attributes: {len(resolved)}")
     if conflict_count > 0:

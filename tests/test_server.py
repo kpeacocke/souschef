@@ -803,12 +803,12 @@ def test_resolve_attribute_precedence():
     # override should win for app.port
     assert resolved["app.port"]["value"] == "8080"
     assert resolved["app.port"]["precedence"] == "override"
-    assert resolved["app.port"]["has_conflict"] == "True"
+    assert resolved["app.port"]["has_conflict"] is True
     assert "default=80" in resolved["app.port"]["overridden_values"]
 
     # app.timeout should have no conflict
     assert resolved["app.timeout"]["value"] == "30"
-    assert resolved["app.timeout"]["has_conflict"] == "False"
+    assert resolved["app.timeout"]["has_conflict"] is False
     assert resolved["app.timeout"]["overridden_values"] == ""
 
 
@@ -829,7 +829,7 @@ def test_resolve_attribute_precedence_multiple_conflicts():
     assert resolved["db.host"]["value"] == "db.final"
     assert resolved["db.host"]["precedence"] == "force_override"
     assert resolved["db.host"]["precedence_level"] == "5"
-    assert resolved["db.host"]["has_conflict"] == "True"
+    assert resolved["db.host"]["has_conflict"] is True
 
     # Check all lower precedence values are listed
     overridden = resolved["db.host"]["overridden_values"]
@@ -847,14 +847,14 @@ def test_format_resolved_attributes():
             "value": "8080",
             "precedence": "override",
             "precedence_level": "4",
-            "has_conflict": "True",
+            "has_conflict": True,
             "overridden_values": "default=80",
         },
         "app.name": {
             "value": "myapp",
             "precedence": "default",
             "precedence_level": "1",
-            "has_conflict": "False",
+            "has_conflict": False,
             "overridden_values": "",
         },
     }
