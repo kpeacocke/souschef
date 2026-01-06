@@ -9705,7 +9705,6 @@ def _validate_docker_network_name(network_name: str) -> bool:
     # - Start with alphanumeric character
     # - Contain only alphanumeric, hyphens, underscores, or dots
     # - Not contain spaces or special characters that could break YAML
-    import re
 
     # Pattern: starts with alphanumeric, followed by alphanumeric/hyphen/underscore/dot
     pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
@@ -9759,7 +9758,6 @@ def _validate_docker_image_name(base_image: str) -> bool:
     # Examples: ubuntu:22.04, docker.io/library/nginx:latest, myregistry.com:5000/myimage:v1
     # Allow alphanumeric, hyphens, underscores, dots, colons, slashes, and @ for digests
     # Reject newlines, semicolons, pipes, and other shell metacharacters
-    import re
 
     # Pattern breakdown:
     # - Optional registry with port: [hostname[:port]/]
