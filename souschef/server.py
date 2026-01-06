@@ -571,7 +571,7 @@ class ValidationEngine:
         try:
             from jinja2 import Environment
 
-            env = Environment()
+            env = Environment(autoescape=True)
             env.parse(template)
         except Exception as e:
             self._add_result(

@@ -201,11 +201,11 @@ class TestChefBlockConversion:
 
     def test_convert_directory_check_block(self) -> None:
         """Test conversion of File.directory? in blocks."""
-        block = "File.directory?('/tmp/cache')"
+        block = "File.directory?('/var/cache/app')"
         result = _convert_chef_block_to_ansible(block, positive=True)
 
         assert "test -d" in result
-        assert "/tmp/cache" in result
+        assert "/var/cache/app" in result
 
     def test_convert_system_command_block(self) -> None:
         """Test conversion of system() calls in blocks."""
