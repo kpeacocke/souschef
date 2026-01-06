@@ -1,6 +1,7 @@
 """Chef cookbook parsers."""
 
 from souschef.parsers.attributes import parse_attributes
+from souschef.parsers.habitat import parse_habitat_plan
 from souschef.parsers.inspec import (
     convert_inspec_to_test,
     generate_inspec_from_chef,
@@ -21,4 +22,5 @@ __all__ = [
     "parse_inspec_profile",
     "convert_inspec_to_test",
     "generate_inspec_from_chef",
+    "parse_habitat_plan",
 ]
