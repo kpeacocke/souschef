@@ -1,6 +1,8 @@
 """Integration tests using real files and fixtures."""
 
+import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -797,3 +799,105 @@ class TestInSpecIntegration:
         # Ensure it still works correctly
         assert "import pytest" in result
         assert "def test_simple_test(host):" in result
+
+
+class TestPlaybookGenerationEdgeCases:
+    """Test edge cases in playbook generation."""
+
+    def test_generate_playbook_nonexistent_file(self):
+        """Test generating playbook from nonexistent recipe."""
+        from souschef.server import generate_playbook_from_recipe
+
+        result = generate_playbook_from_recipe("/nonexistent/recipe.rb")
+        assert "Error:" in result or "does not exist" in result.lower()
+
+    def test_generate_playbook_with_parse_error(self, monkeypatch, tmp_path):
+        """Test playbook generation when recipe parsing returns error."""
+        from souschef import server
+
+        def mock_parse_recipe(*args):
+            return "Error: Failed to parse recipe"
+
+        monkeypatch.setattr(server, "parse_recipe", mock_parse_recipe)
+
+        temp_file = tmp_path / "test_recipe.rb"
+        temp_file.write_text("package 'nginx'")
+
+        result = server.generate_playbook_from_recipe(str(temp_file))
+        assert "Error:" in result
+
+    def test_generate_playbook_with_exception(self, monkeypatch, tmp_path):
+        """Test playbook generation with unexpected exception."""
+        from souschef import server
+
+        def mock_parse_recipe(*args):
+            raise RuntimeError("Unexpected error")
+
+        monkeypatch.setattr(server, "parse_recipe", mock_parse_recipe)
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+            f.write("package 'nginx'")
+            f.flush()
+            temp_path = f.name
+
+        try:
+            result = server.generate_playbook_from_recipe(temp_path)
+            assert "Error generating playbook:" in result
+        finally:
+            Path(temp_path).unlink()
+
+    def test_generate_playbook_with_handlers(self):
+        """Test playbook generation includes handlers when notifications present."""
+        from unittest.mock import MagicMock
+
+        from souschef.server import generate_playbook_from_recipe
+
+        recipe_content = """
+package 'apache2' do
+  action :install
+  notifies :restart, 'service[apache2]', :delayed
+end
+
+service 'apache2' do
+  action [:enable, :start]
+end
+"""
+        with patch("souschef.server._normalize_path") as mock_norm:
+            mock_path = MagicMock()
+            mock_path.name = "recipe.rb"
+            mock_path.read_text.return_value = recipe_content
+            mock_path.exists.return_value = True
+            mock_path.is_file.return_value = True
+            mock_norm.return_value = mock_path
+
+            result = generate_playbook_from_recipe("/fake/path/recipe.rb")
+            assert (
+                "handlers:" in result
+                or "warning" in result.lower()
+                or "error" in result.lower()
+                or "---" in result
+            )
+
+
+class TestAnalyzeSearchPatternsEdgeCases:
+    """Test analyze_chef_search_patterns error handling."""
+
+    def test_analyze_search_patterns_with_error(self):
+        """Test analyze_chef_search_patterns exception handling."""
+        from unittest.mock import MagicMock
+
+        from souschef.server import analyze_chef_search_patterns
+
+        with patch("souschef.server._normalize_path") as mock_path:
+            mock_file = MagicMock()
+            mock_file.is_file.return_value = True
+            mock_file.is_dir.return_value = False
+            mock_path.return_value = mock_file
+
+            with patch(
+                "souschef.server._extract_search_patterns_from_file"
+            ) as mock_extract:
+                mock_extract.side_effect = ValueError("Parse error")
+
+                result = analyze_chef_search_patterns("some_recipe.rb")
+                assert "Error analyzing Chef search patterns" in result

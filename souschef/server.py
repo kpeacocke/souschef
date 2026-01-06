@@ -72,10 +72,21 @@ ERROR_PREFIX = "Error:"
 REGEX_WHITESPACE_QUOTE = r"\s+['\"]?"
 REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*([^\n]{0,15000})\nend"
 REGEX_RESOURCE_BRACKET = r"(\w+)\[([^\]]+)\]"
+REGEX_ERB_OUTPUT = r"<%=\s*([^%]{1,200}?)\s*%>"
+REGEX_ERB_CONDITION = r"[^%]{1,200}?"
+REGEX_WORD_SYMBOLS = r"[\w.\[\]'\"]+"
+REGEX_RUBY_INTERPOLATION = r"#\{([^}]+)\}"
+NODE_PREFIX = "node["
+JINJA2_VAR_REPLACEMENT = r"{{ \1 }}"
 INSPEC_END_INDENT = "  end"
 INSPEC_SHOULD_EXIST = "    it { should exist }"
 CHEF_RECIPE_PREFIX = "recipe["
 CHEF_ROLE_PREFIX = "role["
+
+# Error message templates
+ERROR_FILE_NOT_FOUND = "Error: File not found at {path}"
+ERROR_IS_DIRECTORY = "Error: {path} is a directory, not a file"
+ERROR_PERMISSION_DENIED = "Error: Permission denied for {path}"
 
 # Chef resource to Ansible module mappings
 RESOURCE_MAPPINGS = {
@@ -116,22 +127,28 @@ ACTION_TO_STATE = {
 # ERB to Jinja2 pattern mappings
 ERB_PATTERNS = {
     # Variable output: <%= var %> -> {{ var }}
-    "output": (r"<%=\s*([^%]{1,200}?)\s*%>", r"{{ \1 }}"),
+    "output": (REGEX_ERB_OUTPUT, JINJA2_VAR_REPLACEMENT),
     # Variable with node prefix: <%= node['attr'] %> -> {{ attr }}
-    "node_attr": (r"<%=\s*node\[(['\"])([^%]{1,200}?)\1\]\s*%>", r"{{ \2 }}"),
+    "node_attr": (
+        rf"<%=\s*node\[(['\"])({REGEX_ERB_CONDITION})\1\]\s*%>",
+        r"{{ \2 }}",
+    ),
     # If statements: <% if condition %> -> {% if condition %}
-    "if_start": (r"<%\s*if\s+([^%]{1,200}?)\s*%>", r"{% if \1 %}"),
+    "if_start": (rf"<%\s*if\s+({REGEX_ERB_CONDITION})\s*%>", r"{% if \1 %}"),
     # Unless (negated if): <% unless condition %> -> {% if not condition %}
-    "unless": (r"<%\s*unless\s+([^%]{1,200}?)\s*%>", r"{% if not \1 %}"),
+    "unless": (rf"<%\s*unless\s+({REGEX_ERB_CONDITION})\s*%>", r"{% if not \1 %}"),
     # Else: <% else %> -> {% else %}
     "else": (r"<%\s*else\s*%>", r"{% else %}"),
     # Elsif: <% elsif condition %> -> {% elif condition %}
-    "elsif": (r"<%\s*elsif\s+([^%]{1,200}?)\s*%>", r"{% elif \1 %}"),
+    "elsif": (rf"<%\s*elsif\s+({REGEX_ERB_CONDITION})\s*%>", r"{% elif \1 %}"),
     # End: <% end %> -> {% endif %}
     "end": (r"<%\s*end\s*%>", r"{% endif %}"),
     # Each loop: <% array.each do |item| %> -> {% for item in array %}
     # Use [^%]{1,200} to prevent matching across %> boundaries and ReDoS
-    "each": (r"<%\s*([^%]{1,200}?)\.each\s+do\s+\|(\w+)\|\s*%>", r"{% for \2 in \1 %}"),
+    "each": (
+        rf"<%\s*({REGEX_ERB_CONDITION})\.each\s+do\s+\|(\w+)\|\s*%>",
+        r"{% for \2 in \1 %}",
+    ),
 }
 
 
@@ -166,11 +183,11 @@ def parse_template(path: str) -> str:
         return json.dumps(result, indent=2)
 
     except FileNotFoundError:
-        return f"Error: File not found at {path}"
+        return ERROR_FILE_NOT_FOUND.format(path=path)
     except IsADirectoryError:
-        return f"Error: {path} is a directory, not a file"
+        return ERROR_IS_DIRECTORY.format(path=path)
     except PermissionError:
-        return f"Error: Permission denied for {path}"
+        return ERROR_PERMISSION_DENIED.format(path=path)
     except UnicodeDecodeError:
         return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
@@ -217,10 +234,10 @@ def _extract_output_variables(content: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    output_vars = re.findall(r"<%=\s*([^%]{1,200}?)\s*%>", content)
+    output_vars = re.findall(REGEX_ERB_OUTPUT, content)
     for var in output_vars:
         var = var.strip()
-        if var.startswith("node["):
+        if var.startswith(NODE_PREFIX):
             attr_path = _extract_node_attribute_path(var)
             if attr_path:
                 variables.add(attr_path)
@@ -267,9 +284,9 @@ def _extract_interpolated_variables(code: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    interpolated = re.findall(r"#\{([^}]+)\}", code)
+    interpolated = re.findall(REGEX_RUBY_INTERPOLATION, code)
     for expr in interpolated:
-        var_match = re.match(r"[\w.\[\]'\"]+", expr.strip())
+        var_match = re.match(REGEX_WORD_SYMBOLS, expr.strip())
         if var_match:
             variables.add(var_match.group())
 
@@ -283,7 +300,7 @@ def _extract_node_attributes(code: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    if "node[" in code:
+    if NODE_PREFIX in code:
         node_matches = re.finditer(r"node\[.+\]", code)
         for match in node_matches:
             attr_path = _extract_node_attribute_path(match.group())
@@ -421,7 +438,7 @@ def _convert_erb_to_jinja2(content: str) -> str:
     result = re.sub(ERB_PATTERNS["output"][0], ERB_PATTERNS["output"][1], result)
 
     # Clean up instance variables: @var -> var
-    result = re.sub(r"\{\{\s*@(\w+)\s*\}\}", r"{{ \1 }}", result)
+    result = re.sub(r"\{\{\s*@(\w+)\s*\}\}", JINJA2_VAR_REPLACEMENT, result)
     # Clean up @var in conditionals and other control structures
     result = re.sub(r"@(\w+)", r"\1", result)
 
@@ -618,11 +635,11 @@ def parse_custom_resource(path: str) -> str:
         return json.dumps(result, indent=2)
 
     except FileNotFoundError:
-        return f"Error: File not found at {path}"
+        return ERROR_FILE_NOT_FOUND.format(path=path)
     except IsADirectoryError:
-        return f"Error: {path} is a directory, not a file"
+        return ERROR_IS_DIRECTORY.format(path=path)
     except PermissionError:
-        return f"Error: Permission denied for {path}"
+        return ERROR_PERMISSION_DENIED.format(path=path)
     except UnicodeDecodeError:
         return f"Error: Unable to decode {path} as UTF-8 text"
     except Exception as e:
@@ -651,7 +668,7 @@ def list_directory(path: str) -> list[str] | str:
     except NotADirectoryError:
         return f"Error: {path} is not a directory"
     except PermissionError:
-        return f"Error: Permission denied for {path}"
+        return ERROR_PERMISSION_DENIED.format(path=path)
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -674,11 +691,11 @@ def read_file(path: str) -> str:
     except ValueError as e:
         return f"Error: {e}"
     except FileNotFoundError:
-        return f"Error: File not found at {path}"
+        return ERROR_FILE_NOT_FOUND.format(path=path)
     except IsADirectoryError:
-        return f"Error: {path} is a directory, not a file"
+        return ERROR_IS_DIRECTORY.format(path=path)
     except PermissionError:
-        return f"Error: Permission denied for {path}"
+        return ERROR_PERMISSION_DENIED.format(path=path)
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -709,11 +726,11 @@ def read_cookbook_metadata(path: str) -> str:
     except ValueError as e:
         return f"Error: {e}"
     except FileNotFoundError:
-        return f"Error: File not found at {path}"
+        return ERROR_FILE_NOT_FOUND.format(path=path)
     except IsADirectoryError:
-        return f"Error: {path} is a directory, not a file"
+        return ERROR_IS_DIRECTORY.format(path=path)
     except PermissionError:
-        return f"Error: Permission denied for {path}"
+        return ERROR_PERMISSION_DENIED.format(path=path)
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -801,11 +818,11 @@ def parse_recipe(path: str) -> str:
     except ValueError as e:
         return f"Error: {e}"
     except FileNotFoundError:
-        return f"Error: File not found at {path}"
+        return ERROR_FILE_NOT_FOUND.format(path=path)
     except IsADirectoryError:
-        return f"Error: {path} is a directory, not a file"
+        return ERROR_IS_DIRECTORY.format(path=path)
     except PermissionError:
-        return f"Error: Permission denied for {path}"
+        return ERROR_PERMISSION_DENIED.format(path=path)
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -970,11 +987,11 @@ def parse_attributes(path: str) -> str:
     except ValueError as e:
         return f"Error: {e}"
     except FileNotFoundError:
-        return f"Error: File not found at {path}"
+        return ERROR_FILE_NOT_FOUND.format(path=path)
     except IsADirectoryError:
-        return f"Error: {path} is a directory, not a file"
+        return ERROR_IS_DIRECTORY.format(path=path)
     except PermissionError:
-        return f"Error: Permission denied for {path}"
+        return ERROR_PERMISSION_DENIED.format(path=path)
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -1091,7 +1108,7 @@ def list_cookbook_structure(path: str) -> str:
         return _format_cookbook_structure(structure)
 
     except PermissionError:
-        return f"Error: Permission denied for {path}"
+        return ERROR_PERMISSION_DENIED.format(path=path)
     except Exception as e:
         return f"An error occurred: {e}"
 
@@ -2846,15 +2863,18 @@ def _find_resource_block(resource: dict[str, str], raw_content: str) -> str | No
     return None
 
 
-def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list]:
+def _extract_guard_patterns(
+    resource_block: str,
+) -> tuple[list[str], list[str], list[str], list[str], list[str], list[str]]:
     """
-    Extract all guard patterns from resource block.
+    Extract all guard patterns from resource block including enhanced support.
 
     Args:
         resource_block: Resource block content.
 
     Returns:
-        Tuple of (only_if_conditions, not_if_conditions, only_if_blocks, not_if_blocks).
+        Tuple of (only_if_conditions, not_if_conditions, only_if_blocks,
+                 not_if_blocks, only_if_arrays, not_if_arrays).
 
     """
     # Extract only_if conditions
@@ -2867,40 +2887,60 @@ def _extract_guard_patterns(resource_block: str) -> tuple[list, list, list, list
 
     # Extract only_if blocks (Ruby code blocks)
     # Use simple pattern - extract block and filter in Python to avoid ReDoS
-    only_if_block_pattern = re.compile(
-        r"only_if\s+do\b([^e]|e[^n]|en[^d]){0,500}\bend", re.DOTALL
-    )
+    only_if_block_pattern = re.compile(r"only_if\s+do\b(.*?)\bend", re.DOTALL)
     only_if_block_matches = only_if_block_pattern.findall(resource_block)
 
     # Extract not_if blocks (Ruby code blocks)
     # Use simple pattern - extract block and filter in Python to avoid ReDoS
-    not_if_block_pattern = re.compile(
-        r"not_if\s+do\b([^e]|e[^n]|en[^d]){0,500}\bend", re.DOTALL
-    )
+    not_if_block_pattern = re.compile(r"not_if\s+do\b(.*?)\bend", re.DOTALL)
     not_if_block_matches = not_if_block_pattern.findall(resource_block)
+
+    # Extract only_if with curly brace blocks (lambda/proc syntax)
+    only_if_lambda_pattern = re.compile(r"only_if\s+\{([^}]{1,500})\}", re.DOTALL)
+    only_if_lambda_matches = only_if_lambda_pattern.findall(resource_block)
+    only_if_block_matches.extend(only_if_lambda_matches)
+
+    # Extract not_if with curly brace blocks (lambda/proc syntax)
+    not_if_lambda_pattern = re.compile(r"not_if\s+\{([^}]{1,500})\}", re.DOTALL)
+    not_if_lambda_matches = not_if_lambda_pattern.findall(resource_block)
+    not_if_block_matches.extend(not_if_lambda_matches)
+
+    # Extract only_if arrays [condition1, condition2]
+    only_if_array_pattern = re.compile(r"only_if\s+\[([^\]]{1,500})\]", re.DOTALL)
+    only_if_array_matches = only_if_array_pattern.findall(resource_block)
+
+    # Extract not_if arrays [condition1, condition2]
+    not_if_array_pattern = re.compile(r"not_if\s+\[([^\]]{1,500})\]", re.DOTALL)
+    not_if_array_matches = not_if_array_pattern.findall(resource_block)
 
     return (
         only_if_matches,
         not_if_matches,
         only_if_block_matches,
         not_if_block_matches,
+        only_if_array_matches,
+        not_if_array_matches,
     )
 
 
-def _convert_guards_to_when_conditions(
-    only_if_conditions: list,
-    not_if_conditions: list,
-    only_if_blocks: list,
-    not_if_blocks: list,
+def _convert_guards_to_when_conditions(  # noqa: C901
+    only_if_conditions: list[str],
+    not_if_conditions: list[str],
+    only_if_blocks: list[str],
+    not_if_blocks: list[str],
+    only_if_arrays: list[str],
+    not_if_arrays: list[str],
 ) -> list[str]:
     """
-    Convert Chef guards to Ansible when conditions.
+    Convert Chef guards to Ansible when conditions with enhanced support.
 
     Args:
         only_if_conditions: List of only_if condition strings.
         not_if_conditions: List of not_if condition strings.
         only_if_blocks: List of only_if block contents.
         not_if_blocks: List of not_if block contents.
+        only_if_arrays: List of only_if array contents.
+        not_if_arrays: List of not_if array contents.
 
     Returns:
         List of Ansible when conditions.
@@ -2920,6 +2960,11 @@ def _convert_guards_to_when_conditions(
         if ansible_condition:
             when_conditions.append(ansible_condition)
 
+    # Process only_if arrays (multiple conditions with AND logic)
+    for array_content in only_if_arrays:
+        array_conditions = _parse_guard_array(array_content, negate=False)
+        when_conditions.extend(array_conditions)
+
     # Process not_if conditions (these become when conditions with negation)
     for condition in not_if_conditions:
         ansible_condition = _convert_chef_condition_to_ansible(condition, negate=True)
@@ -2931,6 +2976,11 @@ def _convert_guards_to_when_conditions(
         ansible_condition = _convert_chef_block_to_ansible(block, positive=False)
         if ansible_condition:
             when_conditions.append(ansible_condition)
+
+    # Process not_if arrays (multiple conditions with AND logic, negated)
+    for array_content in not_if_arrays:
+        array_conditions = _parse_guard_array(array_content, negate=True)
+        when_conditions.extend(array_conditions)
 
     return when_conditions
 
@@ -2960,11 +3010,18 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
         not_if_conditions,
         only_if_blocks,
         not_if_blocks,
+        only_if_arrays,
+        not_if_arrays,
     ) = _extract_guard_patterns(resource_block)
 
     # Convert to Ansible when conditions
     when_conditions = _convert_guards_to_when_conditions(
-        only_if_conditions, not_if_conditions, only_if_blocks, not_if_blocks
+        only_if_conditions,
+        not_if_conditions,
+        only_if_blocks,
+        not_if_blocks,
+        only_if_arrays,
+        not_if_arrays,
     )
 
     # Format the when clause
@@ -2976,6 +3033,124 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
             guards["when"] = when_conditions
 
     return guards
+
+
+def _split_guard_array_parts(array_content: str) -> list[str]:
+    """
+    Split array content by commas, respecting quotes and blocks.
+
+    Args:
+        array_content: Content within guard array brackets.
+
+    Returns:
+        List of array parts split by top-level commas.
+
+    """
+    parts = []
+    current_part = ""
+    in_quotes = False
+    in_block = 0
+    quote_char = None
+
+    for char in array_content:
+        if char in ['"', "'"] and not in_block:
+            if not in_quotes:
+                in_quotes = True
+                quote_char = char
+            elif char == quote_char:
+                in_quotes = False
+                quote_char = None
+        elif char == "{" and not in_quotes:
+            in_block += 1
+        elif char == "}" and not in_quotes:
+            in_block -= 1
+        elif char == "," and not in_quotes and in_block == 0:
+            parts.append(current_part.strip())
+            current_part = ""
+            continue
+
+        current_part += char
+
+    if current_part.strip():
+        parts.append(current_part.strip())
+
+    return parts
+
+
+def _extract_lambda_body(part: str) -> str:
+    """
+    Extract lambda body from lambda syntax.
+
+    Args:
+        part: Lambda expression string.
+
+    Returns:
+        Extracted lambda body content.
+
+    """
+    if "->" in part:
+        return part.split("->", 1)[1].strip()
+    if "lambda" in part and "{" in part:
+        return part.split("{", 1)[1].rsplit("}", 1)[0].strip()
+    return ""
+
+
+def _process_guard_array_part(part: str, negate: bool) -> str | None:
+    """
+    Process a single guard array part and convert to Ansible condition.
+
+    Args:
+        part: Guard array part to process.
+        negate: Whether to negate conditions (for not_if arrays).
+
+    Returns:
+        Ansible condition string, or None if part is empty.
+
+    """
+    part = part.strip()
+    if not part:
+        return None
+
+    # Handle string conditions
+    if part.startswith(("'", '"')) and part.endswith(("'", '"')):
+        condition_str = part[1:-1]
+        return _convert_chef_condition_to_ansible(condition_str, negate=negate)
+
+    # Handle block conditions
+    if part.startswith("{") and part.endswith("}"):
+        block_content = part[1:-1].strip()
+        return _convert_chef_block_to_ansible(block_content, positive=not negate)
+
+    # Handle lambda syntax
+    if part.startswith("lambda") or part.startswith("->"):
+        lambda_body = _extract_lambda_body(part)
+        if lambda_body:
+            return _convert_chef_block_to_ansible(lambda_body, positive=not negate)
+
+    return None
+
+
+def _parse_guard_array(array_content: str, negate: bool = False) -> list[str]:
+    """
+    Parse Chef guard array content and convert to Ansible conditions.
+
+    Args:
+        array_content: Content within guard array brackets.
+        negate: Whether to negate conditions (for not_if arrays).
+
+    Returns:
+        List of Ansible when conditions.
+
+    """
+    parts = _split_guard_array_parts(array_content)
+    conditions = []
+
+    for part in parts:
+        condition = _process_guard_array_part(part, negate)
+        if condition:
+            conditions.append(condition)
+
+    return conditions
 
 
 def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> str:
@@ -3041,6 +3216,144 @@ def _convert_chef_condition_to_ansible(condition: str, negate: bool = False) -> 
     return converted
 
 
+def _handle_file_existence_block(block: str, positive: bool) -> str | None:
+    """
+    Handle File.exist? patterns in Chef blocks.
+
+    Args:
+        block: Chef block content.
+        positive: True for only_if, False for not_if.
+
+    Returns:
+        Ansible condition if pattern matches, None otherwise.
+
+    """
+    file_exist_patterns = [
+        r'File\.exist\?\([\'"]([^\'"]+)[\'"]\)',
+        r'File\.exists\?\([\'"]([^\'"]+)[\'"]\)',
+        r'File\.exist\?\("([^"]+)"\)',
+        r'File\.exist\?\((["\'])?#\{([^}]+)\}\1\)',
+    ]
+
+    for pattern in file_exist_patterns:
+        file_match = re.search(pattern, block)
+        if file_match:
+            path = file_match.group(1) if len(file_match.groups()) >= 1 else ""
+            if "#{" in path:
+                path = re.sub(REGEX_RUBY_INTERPOLATION, JINJA2_VAR_REPLACEMENT, path)
+            condition = f'ansible_check_mode or {{ "{path}" is file }}'
+            return condition if positive else f"not ({condition})"
+
+    return None
+
+
+def _handle_directory_existence_block(block: str, positive: bool) -> str | None:
+    """
+    Handle File.directory? patterns in Chef blocks.
+
+    Args:
+        block: Chef block content.
+        positive: True for only_if, False for not_if.
+
+    Returns:
+        Ansible condition if pattern matches, None otherwise.
+
+    """
+    dir_patterns = [
+        r'File\.directory\?\([\'"]([^\'"]+)[\'"]\)',
+        r'File\.directory\?\("([^"]+)"\)',
+    ]
+
+    for pattern in dir_patterns:
+        dir_match = re.search(pattern, block)
+        if dir_match:
+            path = dir_match.group(1)
+            if "#{" in path:
+                path = re.sub(REGEX_RUBY_INTERPOLATION, JINJA2_VAR_REPLACEMENT, path)
+            condition = f'ansible_check_mode or {{ "{path}" is directory }}'
+            return condition if positive else f"not ({condition})"
+
+    return None
+
+
+def _handle_command_execution_block(block: str, positive: bool) -> str | None:
+    """
+    Handle system() and backtick command execution patterns.
+
+    Args:
+        block: Chef block content.
+        positive: True for only_if, False for not_if.
+
+    Returns:
+        Ansible condition if pattern matches, None otherwise.
+
+    """
+    system_patterns = [
+        r'system\([\'"]([^\'"]+)[\'"]\)',
+        r"`([^`]+)`",
+    ]
+
+    for pattern in system_patterns:
+        system_match = re.search(pattern, block)
+        if system_match:
+            cmd = system_match.group(1)
+            if cmd.startswith("which "):
+                pkg = cmd.split()[1]
+                condition = (
+                    f"ansible_check_mode or ansible_facts.packages['{pkg}'] is defined"
+                )
+            else:
+                condition = "ansible_check_mode or true  # TODO: Review shell command"
+            return condition if positive else f"not ({condition})"
+
+    return None
+
+
+def _handle_node_attribute_block(block: str, positive: bool) -> str | None:
+    """
+    Handle node attribute checks in Chef blocks.
+
+    Args:
+        block: Chef block content.
+        positive: True for only_if, False for not_if.
+
+    Returns:
+        Ansible condition if pattern matches, None otherwise.
+
+    """
+    if NODE_PREFIX in block or "node." in block:
+        converted = re.sub(
+            r"node\[['\"]([^'\"]+)['\"]\]", r"hostvars[inventory_hostname]['\1']", block
+        )
+        converted = re.sub(
+            r"node\.([a-zA-Z_]\w*)",
+            r"hostvars[inventory_hostname]['\1']",
+            converted,
+        )
+        return converted if positive else f"not ({converted})"
+
+    return None
+
+
+def _handle_platform_check_block(block: str, positive: bool) -> str | None:
+    """
+    Handle platform? and platform_family? checks.
+
+    Args:
+        block: Chef block content.
+        positive: True for only_if, False for not_if.
+
+    Returns:
+        Ansible condition if pattern matches, None otherwise.
+
+    """
+    if "platform?" in block.lower() or "platform_family?" in block.lower():
+        condition = "ansible_facts.os_family is defined"
+        return condition if positive else f"not ({condition})"
+
+    return None
+
+
 def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
     """
     Convert a Chef condition block to Ansible when condition.
@@ -3053,37 +3366,32 @@ def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
         Ansible when condition string.
 
     """
-    # Clean up the block
     block = block.strip()
 
     # Handle simple boolean returns
     if block.lower() in ["true", "false"]:
-        result = block.lower() == "true"
-        return str(result if positive else not result).lower()
+        is_true = block.lower() == "true"
+        return str(is_true if positive else not is_true).lower()
 
-    # Handle file existence patterns in blocks
-    file_exist_pattern = re.search(r'File\.exist\?\([\'"]([^\'"]+)[\'"]\)', block)
-    if file_exist_pattern:
-        path = file_exist_pattern.group(1)
-        condition = f'ansible_check_mode or {{ "{path}" | is_file }}'
-        return condition if positive else f"not ({condition})"
+    # Handle ::File prefix (Chef's scope resolution)
+    block = block.replace("::File.", "File.")
 
-    # Handle directory existence patterns
-    dir_exist_pattern = re.search(r'File\.directory\?\([\'"]([^\'"]+)[\'"]\)', block)
-    if dir_exist_pattern:
-        path = dir_exist_pattern.group(1)
-        condition = f'ansible_check_mode or {{ "{path}" | is_dir }}'
-        return condition if positive else f"not ({condition})"
+    # Try each handler in sequence
+    handlers = [
+        _handle_file_existence_block,
+        _handle_directory_existence_block,
+        _handle_command_execution_block,
+        _handle_node_attribute_block,
+        _handle_platform_check_block,
+    ]
 
-    # Handle command execution patterns
-    system_pattern = re.search(r'system\([\'"]([^\'"]+)[\'"]\)', block)
-    if system_pattern:
-        condition = "ansible_check_mode or {{ ansible_facts.env.PATH is defined }}"
-        return condition if positive else f"not ({condition})"
+    for handler in handlers:
+        condition = handler(block, positive)
+        if condition is not None:
+            return condition
 
     # For complex blocks, create a comment indicating manual review needed
-    condition = f"# TODO: Review Chef block condition: {block[:50]}..."
-    return condition
+    return f"# TODO: Review Chef block condition: {block[:50]}..."
 
 
 def _extract_resource_subscriptions(
