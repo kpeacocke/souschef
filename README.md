@@ -798,6 +798,207 @@ convert_resource_to_task("template", "/etc/nginx/nginx.conf.erb", "create")
 - `group` → `ansible.builtin.group`
 - And more...
 
+#### `parse_habitat_plan(plan_path: str)`
+Parse a Chef Habitat plan file (plan.sh) and extract package metadata, dependencies, build/install hooks, and service configuration.
+
+**Example:**
+```python
+parse_habitat_plan("/path/to/habitat/plan.sh")
+# Returns JSON with:
+# {
+#   "package": {
+#     "name": "nginx",
+#     "origin": "core",
+#     "version": "1.25.3",
+#     "maintainer": "The Habitat Maintainers",
+#     "description": "High-performance HTTP server"
+#   },
+#   "dependencies": {
+#     "build": ["core/gcc", "core/make"],
+#     "runtime": ["core/glibc", "core/openssl"]
+#   },
+#   "ports": [
+#     {"name": "http", "value": "http.port"},
+#     {"name": "https", "value": "http.ssl_port"}
+#   ],
+#   "binds": [
+#     {"name": "database", "value": "postgresql.default"}
+#   ],
+#   "service": {
+#     "run": "nginx -g 'daemon off;'",
+#     "user": "nginx"
+#   },
+#   "callbacks": {
+#     "do_build": "./configure --prefix=/usr/local\nmake",
+#     "do_install": "make install",
+#     "do_init": "mkdir -p /var/lib/nginx"
+#   }
+# }
+```
+
+**Extracted Information:**
+- **Package metadata**: name, origin, version, maintainer, description
+- **Dependencies**: Build-time and runtime package dependencies
+- **Ports**: Exported port configurations for service discovery
+- **Binds**: Service bindings to other Habitat services
+- **Service configuration**: Run command, user, and initialization scripts
+- **Build callbacks**: do_build, do_install, do_init, and other lifecycle hooks
+
+**Use Cases:**
+- Understanding Habitat application structure before containerization
+- Extracting dependencies for Docker base image selection
+- Planning port mappings for docker-compose configurations
+- Analyzing service dependencies and orchestration needs
+
+#### `convert_habitat_to_dockerfile(plan_path: str, base_image: str = "ubuntu:22.04")`
+Convert a Chef Habitat plan to a production-ready Dockerfile with security validation.
+
+**Example:**
+```python
+convert_habitat_to_dockerfile("/path/to/habitat/plan.sh", "ubuntu:22.04")
+# Returns:
+# # Dockerfile generated from Habitat plan
+# # Original plan: plan.sh
+# # Package: core/nginx
+# # Version: 1.25.3
+#
+# FROM ubuntu:22.04
+#
+# LABEL maintainer="The Habitat Maintainers"
+# LABEL version="1.25.3"
+#
+# # Install dependencies
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     gcc \
+#     make \
+#     libssl-dev \
+#     && rm -rf /var/lib/apt/lists/*
+#
+# # Build steps
+# WORKDIR /usr/local/src
+# RUN ./configure --prefix=/usr/local && \
+#     make
+#
+# # Install steps
+# RUN make install
+#
+# # Initialization steps
+# RUN mkdir -p /var/lib/nginx
+#
+# # Runtime configuration
+# EXPOSE 80
+# EXPOSE 443
+# USER nginx
+# WORKDIR /usr/local
+#
+# CMD ["nginx", "-g", "daemon off;"]
+```
+
+**Parameters:**
+- `plan_path`: Path to the Habitat plan.sh file
+- `base_image`: Docker base image (default: ubuntu:22.04). Validated for security
+
+**Features:**
+- **Dependency mapping**: Converts Habitat dependencies to apt packages
+- **Build optimization**: Multi-stage builds when applicable
+- **Security scanning**: Detects dangerous patterns (curl|sh, eval, etc.)
+- **Metadata preservation**: LABEL instructions for package info
+- **User configuration**: Non-root user setup when specified
+- **Port exposure**: Automatic EXPOSE directives from plan ports
+
+**Security Warnings:**
+The tool processes shell commands from Habitat plans and includes them in the Dockerfile. Only use with trusted Habitat plans from known sources. Review generated Dockerfiles before building images.
+
+#### `generate_compose_from_habitat(plan_paths: str, network_name: str = "habitat_net")`
+Generate docker-compose.yml from multiple Habitat plans for multi-service deployments.
+
+**Example:**
+```python
+# Single service
+generate_compose_from_habitat("/path/to/nginx/plan.sh", "myapp_network")
+# Returns:
+# version: '3.8'
+# services:
+#   nginx:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.nginx
+#     container_name: nginx
+#     ports:
+#       - "80:80"
+#       - "443:443"
+#     environment:
+#       - HTTP=80
+#       - HTTPS=443
+#     networks:
+#       - myapp_network
+#
+# networks:
+#   myapp_network:
+#     driver: bridge
+
+# Multiple services with dependencies
+generate_compose_from_habitat(
+    "/path/to/backend/plan.sh,/path/to/postgres/plan.sh",
+    "app_network"
+)
+# Returns:
+# version: '3.8'
+# services:
+#   backend:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.backend
+#     container_name: backend
+#     ports:
+#       - "8080:8080"
+#     environment:
+#       - PORT=8080
+#     depends_on:
+#       - postgres
+#     networks:
+#       - app_network
+#
+#   postgres:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile.postgres
+#     container_name: postgres
+#     ports:
+#       - "5432:5432"
+#     environment:
+#       - POSTGRESQL=5432
+#     volumes:
+#       - postgres_data:/var/lib/app
+#     networks:
+#       - app_network
+#
+# networks:
+#   app_network:
+#     driver: bridge
+#
+# volumes:
+#   postgres_data:
+```
+
+**Parameters:**
+- `plan_paths`: Comma-separated paths to plan.sh files for multiple services
+- `network_name`: Docker network name for service communication (default: habitat_net)
+
+**Features:**
+- **Multi-service orchestration**: Combines multiple Habitat plans into one compose file
+- **Automatic dependencies**: Creates depends_on from Habitat service binds
+- **Volume detection**: Identifies services needing persistent storage from do_init callbacks
+- **Network isolation**: Configures bridge networks for service communication
+- **Port management**: Maps ports from Habitat exports to Docker compose
+- **Environment variables**: Generates environment configuration from port definitions
+
+**Use Cases:**
+- Converting multi-service Habitat applications to Docker Compose
+- Creating development environments from production Habitat plans
+- Simplifying container orchestration for local testing
+- Migration path from Habitat to Kubernetes (via docker-compose)
+
 ## Development
 
 ### Project Structure

@@ -9414,14 +9414,35 @@ def _extract_plan_var(content: str, var_name: str) -> str:
 
 def _extract_plan_array(content: str, var_name: str) -> list[str]:
     """Extract an array variable from a Habitat plan."""
-    pattern = rf"{var_name}=\(\s*([^)]+)\)"
-    match = re.search(pattern, content, re.DOTALL)
+    # Find the start of the array declaration
+    pattern = rf"{var_name}=\("
+    match = re.search(pattern, content)
     if not match:
         return []
 
+    # Manually parse to handle nested parentheses correctly
+    start_pos = match.end()
+    paren_count = 1
+    end_pos = start_pos
+
+    # Find the matching closing parenthesis
+    while end_pos < len(content) and paren_count > 0:
+        if content[end_pos] == "(":
+            paren_count += 1
+        elif content[end_pos] == ")":
+            paren_count -= 1
+        end_pos += 1
+
+    if paren_count != 0:
+        # Unmatched parentheses
+        return []
+
+    # Extract the content between parentheses (excluding the final closing paren)
+    array_content = content[start_pos : end_pos - 1]
+
     # Split by newlines and process each line
     elements = []
-    for line in match.group(1).strip().split("\n"):
+    for line in array_content.strip().split("\n"):
         # Remove inline comments
         line = line.split("#")[0].strip()
         if not line:
@@ -9437,12 +9458,34 @@ def _extract_plan_array(content: str, var_name: str) -> list[str]:
 
 def _extract_plan_exports(content: str, var_name: str) -> list[dict[str, str]]:
     """Extract port exports or bindings from a Habitat plan."""
-    pattern = rf"{var_name}=\(\s*([^)]+)\)"
-    match = re.search(pattern, content, re.DOTALL)
+    # Find the start of the array declaration
+    pattern = rf"{var_name}=\("
+    match = re.search(pattern, content)
     if not match:
         return []
+
+    # Manually parse to handle nested parentheses correctly
+    start_pos = match.end()
+    paren_count = 1
+    end_pos = start_pos
+
+    # Find the matching closing parenthesis
+    while end_pos < len(content) and paren_count > 0:
+        if content[end_pos] == "(":
+            paren_count += 1
+        elif content[end_pos] == ")":
+            paren_count -= 1
+        end_pos += 1
+
+    if paren_count != 0:
+        # Unmatched parentheses
+        return []
+
+    # Extract the content between parentheses (excluding the final closing paren)
+    exports_content = content[start_pos : end_pos - 1]
+
     exports = []
-    for line in match.group(1).strip().split("\n"):
+    for line in exports_content.strip().split("\n"):
         export_match = re.search(r"\[([^\]]+)\]=([^\s]+)", line)
         if export_match:
             exports.append(
@@ -9756,15 +9799,28 @@ def _validate_docker_image_name(base_image: str) -> bool:
 
     # Docker image format: [registry/][namespace/]repository[:tag|@digest]
     # Examples: ubuntu:22.04, docker.io/library/nginx:latest, myregistry.com:5000/myimage:v1
-    # Allow alphanumeric, hyphens, underscores, dots, colons, slashes, and @ for digests
-    # Reject newlines, semicolons, pipes, and other shell metacharacters
+    # Allow alphanumeric, hyphens, underscores, dots, colons (only in specific positions),
+    # slashes, and @ for digests. Reject shell metacharacters.
 
     # Pattern breakdown:
-    # - Optional registry with port: [hostname[:port]/]
-    # - Optional namespace(s): [namespace/]*
-    # - Required repository name
-    # - Optional tag or digest: [:tag] or [@sha256:digest]
-    pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._-]*(?::\d+)?(?:/[a-zA-Z0-9._-]+)*(?::[a-zA-Z0-9._-]+)?(?:@sha256:[a-fA-F0-9]{64})?$"
+    # - Optional registry (with optional port), must be followed by a slash: [hostname[:port]/]
+    #   - Hostname allows dots: "myregistry.com", "registry.local"
+    # - One or more repository path components (may include namespaces): [namespace/]*repository
+    #   - Path components do not contain colons
+    # - Optional tag or digest at the end: [:tag] or [@sha256:digest]
+    pattern = (
+        r"^"
+        # Optional registry (with optional port), must be followed by a slash.
+        r"(?:(?:[a-zA-Z0-9][a-zA-Z0-9._-]*"
+        r"(?:\.[a-zA-Z0-9][a-zA-Z0-9._-]*)*"
+        r"(?::\d+)?)/)?"
+        # Repository path components (one or more), no colons here.
+        r"(?:[a-zA-Z0-9]+[a-zA-Z0-9._-]*"
+        r"(?:/[a-zA-Z0-9]+[a-zA-Z0-9._-]*)*)"
+        # Optional tag or digest at the end.
+        r"(?::[a-zA-Z0-9._-]+|@sha256:[a-fA-F0-9]{64})?"
+        r"$"
+    )
 
     if not re.match(pattern, base_image):
         return False

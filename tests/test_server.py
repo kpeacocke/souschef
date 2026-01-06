@@ -13286,6 +13286,133 @@ do_install() {
         nonexistent = _extract_plan_function(content, "do_nonexistent")
         assert nonexistent == ""
 
+    def test_update_quote_state_single_quotes(self):
+        """Test _update_quote_state with single quotes."""
+        from souschef.server import _update_quote_state
+
+        # Entering single quote
+        result = _update_quote_state("'", False, False, False, False)
+        assert result == (True, False, False, False)  # in_single_quote becomes True
+
+        # Exiting single quote
+        result = _update_quote_state("'", True, False, False, False)
+        assert result == (False, False, False, False)  # in_single_quote becomes False
+
+        # Single quote ignored when in double quotes
+        result = _update_quote_state("'", False, True, False, False)
+        assert result == (False, True, False, False)  # no change
+
+        # Single quote ignored when in backticks
+        result = _update_quote_state("'", False, False, True, False)
+        assert result == (False, False, True, False)  # no change
+
+    def test_update_quote_state_double_quotes(self):
+        """Test _update_quote_state with double quotes."""
+        from souschef.server import _update_quote_state
+
+        # Entering double quote
+        result = _update_quote_state('"', False, False, False, False)
+        assert result == (False, True, False, False)  # in_double_quote becomes True
+
+        # Exiting double quote
+        result = _update_quote_state('"', False, True, False, False)
+        assert result == (False, False, False, False)  # in_double_quote becomes False
+
+        # Double quote ignored when in single quotes
+        result = _update_quote_state('"', True, False, False, False)
+        assert result == (True, False, False, False)  # no change
+
+        # Double quote ignored when in backticks
+        result = _update_quote_state('"', False, False, True, False)
+        assert result == (False, False, True, False)  # no change
+
+    def test_update_quote_state_backticks(self):
+        """Test _update_quote_state with backticks."""
+        from souschef.server import _update_quote_state
+
+        # Entering backtick
+        result = _update_quote_state("`", False, False, False, False)
+        assert result == (False, False, True, False)  # in_backtick becomes True
+
+        # Exiting backtick
+        result = _update_quote_state("`", False, False, True, False)
+        assert result == (False, False, False, False)  # in_backtick becomes False
+
+        # Backtick ignored when in single quotes
+        result = _update_quote_state("`", True, False, False, False)
+        assert result == (True, False, False, False)  # no change
+
+        # Backtick ignored when in double quotes
+        result = _update_quote_state("`", False, True, False, False)
+        assert result == (False, True, False, False)  # no change
+
+    def test_update_quote_state_escape_sequences(self):
+        """Test _update_quote_state with escape sequences."""
+        from souschef.server import _update_quote_state
+
+        # Backslash sets escape_next flag
+        result = _update_quote_state("\\", False, False, False, False)
+        assert result == (False, False, False, True)  # escape_next becomes True
+
+        # Next character after escape is ignored
+        result = _update_quote_state('"', False, False, False, True)
+        assert result == (
+            False,
+            False,
+            False,
+            False,
+        )  # escape consumed, quotes not changed
+
+        result = _update_quote_state("'", False, False, False, True)
+        assert result == (False, False, False, False)  # escape consumed
+
+        result = _update_quote_state("n", False, False, False, True)
+        assert result == (False, False, False, False)  # escape consumed
+
+    def test_update_quote_state_nested_scenarios(self):
+        """Test _update_quote_state with nested quote scenarios."""
+        from souschef.server import _update_quote_state
+
+        # Parse: echo "It's a test"
+        # Start with no quotes
+        states = [(False, False, False, False)]
+
+        # Process: echo "It's a test"
+        for ch in '"It\'s a test"':
+            prev = states[-1]
+            states.append(_update_quote_state(ch, *prev))
+
+        # After opening ", in double quotes
+        assert states[1] == (False, True, False, False)
+        # Single quote inside double quotes doesn't change state
+        assert states[5] == (False, True, False, False)  # After '
+        # After closing ", back to no quotes
+        assert states[-1] == (False, False, False, False)
+
+    def test_update_quote_state_regular_characters(self):
+        """Test _update_quote_state with regular characters."""
+        from souschef.server import _update_quote_state
+
+        # Regular characters don't change quote state
+        result = _update_quote_state("a", False, False, False, False)
+        assert result == (False, False, False, False)
+
+        result = _update_quote_state("1", False, False, False, False)
+        assert result == (False, False, False, False)
+
+        result = _update_quote_state(" ", False, False, False, False)
+        assert result == (False, False, False, False)
+
+        # Regular characters maintain existing quote state
+        result = _update_quote_state("a", True, False, False, False)
+        assert result == (True, False, False, False)
+
+        result = _update_quote_state("a", False, True, False, False)
+        assert result == (False, True, False, False)
+
+        result = _update_quote_state("a", False, False, True, False)
+        assert result == (False, False, True, False)
+
     def test_convert_habitat_to_dockerfile_success(self):
         """Test converting a Habitat plan to Dockerfile."""
         with patch("souschef.server.parse_habitat_plan") as mock_parse:
@@ -13812,3 +13939,410 @@ do_install() {
             assert "# Initialization steps" in result
             assert "mkdir -p /var/lib/app/pgdata" in result
             assert "initdb" in result
+
+    def test_build_compose_service_basic(self):
+        """Test _build_compose_service with basic service configuration."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "nginx", "version": "1.25.3"},
+            "ports": [],
+            "binds": [],
+            "callbacks": {},
+        }
+
+        service = _build_compose_service(plan, "nginx")
+
+        # Verify basic structure
+        assert service["container_name"] == "nginx"
+        assert service["build"]["context"] == "."
+        assert service["build"]["dockerfile"] == "Dockerfile.nginx"
+        assert service["networks"] == []
+        assert service["environment"] == []
+
+    def test_build_compose_service_with_ports(self):
+        """Test _build_compose_service with port configuration."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "web", "version": "1.0.0"},
+            "ports": [
+                {"name": "http", "value": "http.port"},
+                {"name": "https", "value": "http.ssl_port"},
+            ],
+            "binds": [],
+            "callbacks": {},
+        }
+
+        service = _build_compose_service(plan, "web")
+
+        # Verify ports are configured
+        assert "ports" in service
+        assert "80:80" in service["ports"]
+        assert "443:443" in service["ports"]
+
+        # Verify environment variables for ports
+        assert "HTTP=80" in service["environment"]
+        assert "HTTPS=443" in service["environment"]
+
+    def test_build_compose_service_with_volumes(self):
+        """Test _build_compose_service detects need for data volumes."""
+        from souschef.server import _build_compose_service
+
+        # Plan with do_init that creates data directories
+        plan = {
+            "package": {"name": "postgres", "version": "14.5"},
+            "ports": [{"name": "postgresql", "value": "postgres.port"}],
+            "binds": [],
+            "callbacks": {
+                "do_init": "mkdir -p /var/lib/app/pgdata\ninitdb -D /var/lib/app/pgdata"
+            },
+        }
+
+        service = _build_compose_service(plan, "postgres")
+
+        # Verify volume is created
+        assert "volumes" in service
+        assert "postgres_data:/var/lib/app" in service["volumes"]
+
+    def test_build_compose_service_with_dependencies(self):
+        """Test _build_compose_service with service dependencies."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "backend", "version": "2.0.0"},
+            "ports": [{"name": "port", "value": "app.port"}],
+            "binds": [
+                {"name": "postgresql", "value": "database"},
+                {"name": "redis", "value": "cache"},
+            ],
+            "callbacks": {},
+        }
+
+        service = _build_compose_service(plan, "backend")
+
+        # Verify dependencies are configured
+        assert "depends_on" in service
+        assert "postgresql" in service["depends_on"]
+        assert "redis" in service["depends_on"]
+        assert len(service["depends_on"]) == 2
+
+    def test_build_compose_service_complete(self):
+        """Test _build_compose_service with all features."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "myapp", "version": "3.1.4"},
+            "ports": [
+                {"name": "http", "value": "server.port"},
+                {"name": "admin", "value": "admin.port"},
+            ],
+            "binds": [{"name": "database", "value": "db"}],
+            "callbacks": {"do_init": "mkdir -p /var/lib/app/data"},
+        }
+
+        service = _build_compose_service(plan, "myapp")
+
+        # Verify all components are present
+        assert service["container_name"] == "myapp"
+        assert service["build"]["dockerfile"] == "Dockerfile.myapp"
+        assert "ports" in service
+        assert "80:80" in service["ports"]
+        assert "volumes" in service
+        assert "myapp_data:/var/lib/app" in service["volumes"]
+        assert "depends_on" in service
+        assert "database" in service["depends_on"]
+        assert "HTTP=80" in service["environment"]
+
+    def test_build_compose_service_custom_port(self):
+        """Test _build_compose_service with custom port mapping."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "custom", "version": "1.0.0"},
+            "ports": [{"name": "port", "value": "custom.port"}],
+            "binds": [],
+            "callbacks": {},
+        }
+
+        service = _build_compose_service(plan, "custom")
+
+        # Default port should be 8080
+        assert "ports" in service
+        assert "8080:8080" in service["ports"]
+        assert "PORT=8080" in service["environment"]
+
+    def test_build_compose_service_no_volumes_without_init(self):
+        """Test _build_compose_service doesn't add volumes without data needs."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "stateless", "version": "1.0.0"},
+            "ports": [{"name": "http", "value": "app.port"}],
+            "binds": [],
+            "callbacks": {"do_build": "make"},  # No do_init with mkdir
+        }
+
+        service = _build_compose_service(plan, "stateless")
+
+        # Should not have volumes
+        assert "volumes" not in service
+
+    def test_add_service_build_with_context(self):
+        """Test _add_service_build with build configuration."""
+        from souschef.server import _add_service_build
+
+        lines = []
+        service = {"build": {"context": ".", "dockerfile": "Dockerfile.myapp"}}
+
+        _add_service_build(lines, service)
+
+        assert "    build:" in lines
+        assert "      context: ." in lines
+        assert "      dockerfile: Dockerfile.myapp" in lines
+        assert len(lines) == 3
+
+    def test_add_service_build_without_config(self):
+        """Test _add_service_build without build configuration."""
+        from souschef.server import _add_service_build
+
+        lines = []
+        service = {}
+
+        _add_service_build(lines, service)
+
+        # Should not add anything
+        assert len(lines) == 0
+
+    def test_add_service_ports_single(self):
+        """Test _add_service_ports with single port."""
+        from souschef.server import _add_service_ports
+
+        lines = []
+        service = {"ports": ["80:80"]}
+
+        _add_service_ports(lines, service)
+
+        assert "    ports:" in lines
+        assert '      - "80:80"' in lines
+        assert len(lines) == 2
+
+    def test_add_service_ports_multiple(self):
+        """Test _add_service_ports with multiple ports."""
+        from souschef.server import _add_service_ports
+
+        lines = []
+        service = {"ports": ["80:80", "443:443", "8080:8080"]}
+
+        _add_service_ports(lines, service)
+
+        assert "    ports:" in lines
+        assert '      - "80:80"' in lines
+        assert '      - "443:443"' in lines
+        assert '      - "8080:8080"' in lines
+        assert len(lines) == 4
+
+    def test_add_service_ports_empty_list(self):
+        """Test _add_service_ports with empty port list."""
+        from souschef.server import _add_service_ports
+
+        lines = []
+        service = {"ports": []}
+
+        _add_service_ports(lines, service)
+
+        # Should add header but no ports
+        assert "    ports:" in lines
+        assert len(lines) == 1
+
+    def test_add_service_ports_without_config(self):
+        """Test _add_service_ports without ports configuration."""
+        from souschef.server import _add_service_ports
+
+        lines = []
+        service = {}
+
+        _add_service_ports(lines, service)
+
+        # Should not add anything
+        assert len(lines) == 0
+
+    def test_add_service_volumes_with_tracking(self):
+        """Test _add_service_volumes tracks volume names."""
+        from souschef.server import _add_service_volumes
+
+        lines = []
+        volumes_used = set()
+        service = {
+            "volumes": ["postgres_data:/var/lib/postgresql", "config_data:/etc/config"]
+        }
+
+        _add_service_volumes(lines, service, volumes_used)
+
+        assert "    volumes:" in lines
+        assert "      - postgres_data:/var/lib/postgresql" in lines
+        assert "      - config_data:/etc/config" in lines
+        # Check volume names are tracked
+        assert "postgres_data" in volumes_used
+        assert "config_data" in volumes_used
+        assert len(volumes_used) == 2
+
+    def test_add_service_volumes_without_config(self):
+        """Test _add_service_volumes without volumes configuration."""
+        from souschef.server import _add_service_volumes
+
+        lines = []
+        volumes_used = set()
+        service = {}
+
+        _add_service_volumes(lines, service, volumes_used)
+
+        # Should not add anything
+        assert len(lines) == 0
+        assert len(volumes_used) == 0
+
+    def test_add_service_environment_single(self):
+        """Test _add_service_environment with single variable."""
+        from souschef.server import _add_service_environment
+
+        lines = []
+        service = {"environment": ["NODE_ENV=production"]}
+
+        _add_service_environment(lines, service)
+
+        assert "    environment:" in lines
+        assert "      - NODE_ENV=production" in lines
+        assert len(lines) == 2
+
+    def test_add_service_environment_multiple(self):
+        """Test _add_service_environment with multiple variables."""
+        from souschef.server import _add_service_environment
+
+        lines = []
+        service = {
+            "environment": [
+                "NODE_ENV=production",
+                "PORT=8080",
+                "DATABASE_URL=postgres://localhost/db",
+            ]
+        }
+
+        _add_service_environment(lines, service)
+
+        assert "    environment:" in lines
+        assert "      - NODE_ENV=production" in lines
+        assert "      - PORT=8080" in lines
+        assert "      - DATABASE_URL=postgres://localhost/db" in lines
+        assert len(lines) == 4
+
+    def test_add_service_environment_without_config(self):
+        """Test _add_service_environment without environment configuration."""
+        from souschef.server import _add_service_environment
+
+        lines = []
+        service = {}
+
+        _add_service_environment(lines, service)
+
+        # Should not add anything
+        assert len(lines) == 0
+
+    def test_add_service_dependencies_with_both(self):
+        """Test _add_service_dependencies with both depends_on and networks."""
+        from souschef.server import _add_service_dependencies
+
+        lines = []
+        service = {
+            "depends_on": ["database", "redis"],
+            "networks": ["backend", "frontend"],
+        }
+
+        _add_service_dependencies(lines, service)
+
+        assert "    depends_on:" in lines
+        assert "      - database" in lines
+        assert "      - redis" in lines
+        assert "    networks:" in lines
+        assert "      - backend" in lines
+        assert "      - frontend" in lines
+        assert len(lines) == 6
+
+    def test_add_service_dependencies_only_depends_on(self):
+        """Test _add_service_dependencies with only depends_on."""
+        from souschef.server import _add_service_dependencies
+
+        lines = []
+        service = {"depends_on": ["postgres", "cache"]}
+
+        _add_service_dependencies(lines, service)
+
+        assert "    depends_on:" in lines
+        assert "      - postgres" in lines
+        assert "      - cache" in lines
+        assert "    networks:" not in lines
+        assert len(lines) == 3
+
+    def test_add_service_dependencies_only_networks(self):
+        """Test _add_service_dependencies with only networks."""
+        from souschef.server import _add_service_dependencies
+
+        lines = []
+        service = {"networks": ["app_network"]}
+
+        _add_service_dependencies(lines, service)
+
+        assert "    depends_on:" not in lines
+        assert "    networks:" in lines
+        assert "      - app_network" in lines
+        assert len(lines) == 2
+
+    def test_add_service_dependencies_without_config(self):
+        """Test _add_service_dependencies without any configuration."""
+        from souschef.server import _add_service_dependencies
+
+        lines = []
+        service = {}
+
+        _add_service_dependencies(lines, service)
+
+        # Should not add anything
+        assert len(lines) == 0
+
+    def test_yaml_formatting_indentation(self):
+        """Test all YAML helpers use consistent indentation."""
+        from souschef.server import (
+            _add_service_build,
+            _add_service_dependencies,
+            _add_service_environment,
+            _add_service_ports,
+            _add_service_volumes,
+        )
+
+        # Test that all top-level items use 4 spaces
+        # and sub-items use 6 spaces
+
+        lines = []
+        service = {
+            "build": {"context": ".", "dockerfile": "Dockerfile.test"},
+            "ports": ["80:80"],
+            "volumes": ["data:/var/lib/data"],
+            "environment": ["ENV=test"],
+            "depends_on": ["db"],
+            "networks": ["net"],
+        }
+        volumes_used = set()
+
+        _add_service_build(lines, service)
+        _add_service_ports(lines, service)
+        _add_service_volumes(lines, service, volumes_used)
+        _add_service_environment(lines, service)
+        _add_service_dependencies(lines, service)
+
+        # Verify consistent indentation
+        for line in lines:
+            if line.endswith(":") and not line.strip().startswith("-"):
+                # Section headers should have 4 spaces
+                assert line.startswith("    ")
+            elif line.strip().startswith("-") or ":" in line.split()[-1]:
+                # List items and key-value pairs should have 6 spaces
+                assert line.startswith("      ")
