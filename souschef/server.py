@@ -76,13 +76,13 @@ REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*([^\n]{0,15000})\nend"
 REGEX_RESOURCE_BRACKET = r"(\w+)\[([^\]]+)\]"
 REGEX_ERB_OUTPUT = r"<%=\s*([^%]{1,200}?)\s*%>"
 REGEX_ERB_CONDITION = r"[^%]{1,200}?"
-REGEX_ERB_NODE_ATTR = rf"<%=\s*node\[(['\"])({r'[^%]{1,200}?'})\1\]\s*%>"
-REGEX_ERB_IF_START = rf"<%\s*if\s+({r'[^%]{1,200}?'})\s*%>"
-REGEX_ERB_UNLESS = rf"<%\s*unless\s+({r'[^%]{1,200}?'})\s*%>"
+REGEX_ERB_NODE_ATTR = rf"<%=\s*node\[(['\"])({REGEX_ERB_CONDITION})\1\]\s*%>"
+REGEX_ERB_IF_START = rf"<%\s*if\s+({REGEX_ERB_CONDITION})\s*%>"
+REGEX_ERB_UNLESS = rf"<%\s*unless\s+({REGEX_ERB_CONDITION})\s*%>"
 REGEX_ERB_ELSE = r"<%\s*else\s*%>"
-REGEX_ERB_ELSIF = rf"<%\s*elsif\s+({r'[^%]{1,200}?'})\s*%>"
+REGEX_ERB_ELSIF = rf"<%\s*elsif\s+({REGEX_ERB_CONDITION})\s*%>"
 REGEX_ERB_END = r"<%\s*end\s*%>"
-REGEX_ERB_EACH = rf"<%\s*({r'[^%]{1,200}?'})\.each\s+do\s+\|(\w+)\|\s*%>"
+REGEX_ERB_EACH = rf"<%\s*({REGEX_ERB_CONDITION})\.each\s+do\s+\|(\w+)\|\s*%>"
 REGEX_WORD_SYMBOLS = r"[\w.\[\]'\"]+"
 REGEX_RUBY_INTERPOLATION = r"#\{([^}]+)\}"
 NODE_PREFIX = "node["
@@ -3993,7 +3993,9 @@ def _handle_file_existence_block(block: str, positive: bool) -> str | None:
             if "#{" in path:
                 path = re.sub(REGEX_RUBY_INTERPOLATION, JINJA2_VAR_REPLACEMENT, path)
             # Use shell test command for file existence in Ansible when clause
-            condition = f'ansible_check_mode or lookup("pipe", "test -f {path} && echo true || echo false") == "true"'
+            # Escape path to prevent command injection
+            escaped_path = shlex.quote(path)
+            condition = f'ansible_check_mode or lookup("pipe", "test -f {escaped_path} && echo true || echo false") == "true"'
             return condition if positive else f"not ({condition})"
 
     return None
@@ -4023,7 +4025,9 @@ def _handle_directory_existence_block(block: str, positive: bool) -> str | None:
             if "#{" in path:
                 path = re.sub(REGEX_RUBY_INTERPOLATION, JINJA2_VAR_REPLACEMENT, path)
             # Use shell test command for directory existence in Ansible when clause
-            condition = f'ansible_check_mode or lookup("pipe", "test -d {path} && echo true || echo false") == "true"'
+            # Escape path to prevent command injection
+            escaped_path = shlex.quote(path)
+            condition = f'ansible_check_mode or lookup("pipe", "test -d {escaped_path} && echo true || echo false") == "true"'
             return condition if positive else f"not ({condition})"
 
     return None
@@ -9515,7 +9519,16 @@ def parse_habitat_plan(plan_path: str) -> str:
 
 
 def _map_habitat_deps_to_apt(habitat_deps: list[str]) -> list[str]:
-    """Map Habitat package dependencies to apt package names."""
+    """
+    Map Habitat package dependencies to apt package names.
+
+    Args:
+        habitat_deps: List of Habitat package identifiers (e.g., 'core/gcc', 'custom/org/package').
+
+    Returns:
+        List of apt package names. Unknown dependencies are included with basic validation.
+
+    """
     dep_mapping = {
         "core/gcc": "gcc",
         "core/make": "make",
@@ -9533,10 +9546,31 @@ def _map_habitat_deps_to_apt(habitat_deps: list[str]) -> list[str]:
     }
     apt_packages = []
     for dep in habitat_deps:
+        if not dep or not dep.strip():
+            continue
+
+        dep = dep.strip()
+
+        # Check known mappings first
         if dep in dep_mapping:
             apt_packages.append(dep_mapping[dep])
         elif "/" in dep:
-            apt_packages.append(dep.split("/")[-1])
+            # Extract package name from Habitat identifier (e.g., 'core/gcc' -> 'gcc')
+            # For multi-segment paths like 'custom/org/package', take the last component
+            pkg_name = dep.split("/")[-1]
+
+            # Basic validation: package name should be alphanumeric with hyphens/underscores
+            if pkg_name and re.match(
+                r"^[a-z0-9][a-z0-9._+-]*$", pkg_name, re.IGNORECASE
+            ):
+                apt_packages.append(pkg_name)
+            # If invalid, skip but don't fail - let apt handle the error later
+        else:
+            # Dependency without slash - might be a direct apt package name
+            # Validate it looks like a package name before including
+            if re.match(r"^[a-z0-9][a-z0-9._+-]*$", dep, re.IGNORECASE):
+                apt_packages.append(dep)
+
     return apt_packages
 
 

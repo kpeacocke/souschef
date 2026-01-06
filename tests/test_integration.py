@@ -1070,9 +1070,13 @@ class TestHabitatIntegration:
         assert 'LABEL version="1.25.3"' in result
         assert "LABEL description=" in result
         assert "RUN apt-get update" in result
-        assert "gcc" in result or "build-essential" in result
+        # Build dependencies from plan.sh: core/gcc -> gcc, core/make -> make
+        assert "gcc" in result
+        assert "make" in result
+        # Runtime dependencies should also be present
+        assert "libssl-dev" in result  # from core/openssl
+        assert "libpcre3-dev" in result  # from core/pcre
         assert "./configure" in result
-        assert "make" in result or "do_build" in result
         assert "EXPOSE 80" in result
         assert "EXPOSE 443" in result
         assert "CMD" in result

@@ -10498,7 +10498,6 @@ class TestErrorHandling:
         result = _convert_chef_block_to_ansible(block, positive=True)
         assert "test -f" in result
         assert "/etc/nginx/nginx.conf" in result
-        assert "/etc/nginx/nginx.conf" in result
 
     def test_convert_chef_block_file_exist_negated(self):
         """Test negated Chef block with File.exist? check."""
@@ -13360,7 +13359,12 @@ do_install() {
 
             # Verify that shlex.split() correctly handled the quoted string
             # Should be ["nginx", "-g", "daemon off;"] not ["nginx", "-g", "'daemon", "off;'"]
-            assert '["nginx", "-g", "daemon off;"]' in result
+            cmd_line = next(
+                line for line in result.splitlines() if line.lstrip().startswith("CMD ")
+            )
+            cmd_json = cmd_line.lstrip()[len("CMD ") :].strip()
+            cmd_args = json.loads(cmd_json)
+            assert cmd_args == ["nginx", "-g", "daemon off;"]
 
     def test_map_habitat_deps_to_apt(self):
         """Test mapping Habitat dependencies to apt packages."""

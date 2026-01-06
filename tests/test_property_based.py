@@ -761,11 +761,7 @@ def test_parse_habitat_plan_handles_any_content(content):
 
 @given(
     pkg_name=st.text(
-        alphabet=st.characters(
-            whitelist_categories=("Lu", "Ll", "Nd"),
-            min_codepoint=97,
-            max_codepoint=122,
-        ),
+        alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd")),
         min_size=1,
         max_size=20,
     ),
