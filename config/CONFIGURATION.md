@@ -65,6 +65,110 @@ cp config/vscode-copilot-dev.json ~/.config/Code/User/globalStorage/github.copil
 code ~/.config/Code/User/globalStorage/github.copilot-chat/mcp.json
 ```
 
+## 🤖 Model Provider Support
+
+**SousChef is completely model-agnostic!** It works with any MCP-compatible client regardless of what AI model they use.
+
+### Supported Configurations
+
+#### ✅ Red Hat AI / IBM Watsonx / Enterprise Models
+
+To use SousChef with Red Hat AI, Watsonx, or custom enterprise models, you need an MCP client that supports your model provider. Example configuration structure:
+
+```json
+{
+  "mcpServers": {
+    "souschef": {
+      "command": "uvx",
+      "args": ["mcp-souschef"]
+    }
+  },
+  "modelProvider": "red-hat-ai",
+  "modelConfig": {
+    "endpoint": "https://your-ai-endpoint.example.com",
+    "model": "llama-3-70b"
+  }
+}
+```
+
+**Note:** The `modelProvider` and `modelConfig` sections depend on your MCP client implementation. SousChef connects the same way regardless of the model.
+
+#### ✅ OpenAI (GPT-4, GPT-3.5)
+
+For OpenAI models, use an MCP client that supports OpenAI:
+
+```json
+{
+  "mcpServers": {
+    "souschef": {
+      "command": "uvx",
+      "args": ["mcp-souschef"]
+    }
+  },
+  "modelProvider": "openai",
+  "modelConfig": {
+    "apiKey": "${OPENAI_API_KEY}",
+    "model": "gpt-4-turbo"
+  }
+}
+```
+
+#### ✅ Local Models (Ollama, llama.cpp)
+
+Run models locally with MCP clients that support local inference:
+
+```json
+{
+  "mcpServers": {
+    "souschef": {
+      "command": "uvx",
+      "args": ["mcp-souschef"]
+    }
+  },
+  "modelProvider": "ollama",
+  "modelConfig": {
+    "endpoint": "http://localhost:11434",
+    "model": "llama3:70b"
+  }
+}
+```
+
+#### ✅ Claude (Anthropic)
+
+The provided example configs use Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "souschef": {
+      "command": "uvx",
+      "args": ["mcp-souschef"]
+    }
+  }
+}
+```
+
+#### ✅ GitHub Copilot (VS Code)
+
+The provided VS Code configs work with Copilot:
+
+```json
+{
+  "souschef": {
+    "command": "uvx",
+    "args": ["mcp-souschef"]
+  }
+}
+```
+
+### Key Principle: Client vs Server
+
+**🎯 Important:** 
+- **MCP Server (SousChef)** = Provides the Chef/Ansible tools
+- **MCP Client** = Runs your chosen AI model
+- The client configuration determines which model you use
+- SousChef configuration is the same for all models
+
 ## 🔧 Configuration Options
 
 ### Using uvx (Recommended for Production)

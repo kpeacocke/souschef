@@ -16,6 +16,21 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 SousChef is a complete enterprise-grade migration platform with 38 MCP tools organized across 9 major capability areas to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerized deployments, SousChef provides everything needed for a successful infrastructure automation migration.
 
+## 🤖 Model Agnostic - Works with Any AI Model
+
+**SousChef works with ANY AI model through the Model Context Protocol (MCP)**. The MCP architecture separates tools from models:
+
+- **✅ Red Hat AI** (Llama, IBM models)
+- **✅ Claude** (Anthropic)
+- **✅ GPT-4/GPT-3.5** (OpenAI)
+- **✅ GitHub Copilot** (Microsoft/OpenAI)
+- **✅ Local Models** (Ollama, llama.cpp, etc.)
+- **✅ Custom Enterprise Models**
+
+**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 38 specialized tools. The model calls these tools to help with your migration.
+
+> 📖 See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
+
 ## 📦 Installation
 
 ```bash
@@ -248,23 +263,25 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
    pip install mcp-souschef
    ```
 
-2. **Configure MCP Client**:
+2. **Configure Your MCP Client**:
 
-   **🎯 Quick Setup - Use Pre-configured Files:**
+   Use the pre-configured files in the `config/` directory for quick setup with Claude Desktop, VS Code Copilot, or other MCP clients.
+
    ```bash
-   # Claude Desktop (macOS)
+   # Example: Claude Desktop (macOS)
    cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
-
-   # VS Code Copilot (macOS/Linux)
-   mkdir -p ~/.config/Code/User/globalStorage/github.copilot-chat
-   cp config/vscode-copilot.json ~/.config/Code/User/globalStorage/github.copilot-chat/mcp.json
    ```
 
-   See [config/README.md](config/README.md) for detailed setup instructions, development configs, and troubleshooting.
+   **📖 See [config/CONFIGURATION.md](config/CONFIGURATION.md) for:**
+   - Platform-specific setup (macOS/Linux/Windows)
+   - Model provider configurations (Red Hat AI, OpenAI, local models)
+   - Development setup
+   - Troubleshooting
 
-3. **Start using SousChef**:
-   - **Claude Desktop**: Restart Claude, then ask: "What tools does souschef provide?"
-   - **VS Code Copilot**: Reload window, then use: `@souschef analyze this cookbook`
+3. **Start Using SousChef**:
+   - Restart your MCP client
+   - Ask: "What Chef migration tools are available?"
+   - Begin analyzing your cookbooks!
 
 ### Command Line Interface (CLI)
 
