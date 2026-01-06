@@ -1,5 +1,9 @@
 """Chef to Ansible converters."""
 
+from souschef.converters.habitat import (
+    convert_habitat_to_dockerfile,
+    generate_compose_from_habitat,
+)
 from souschef.converters.playbook import (
     analyze_chef_search_patterns,
     convert_chef_search_to_inventory,
@@ -14,4 +18,6 @@ __all__ = [
     "convert_chef_search_to_inventory",
     "generate_dynamic_inventory_script",
     "analyze_chef_search_patterns",
+    "convert_habitat_to_dockerfile",
+    "generate_compose_from_habitat",
 ]
