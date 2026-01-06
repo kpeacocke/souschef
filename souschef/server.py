@@ -1660,7 +1660,7 @@ def _resolve_attribute_precedence(
         path_groups[path].append(attr)
 
     # Resolve precedence for each path
-    resolved: dict[str, dict[str, str | bool | int]] = {}
+    resolved: dict[str, dict[str, Any]] = {}
     for path, attrs in path_groups.items():
         # Find attribute with highest precedence
         winning_attr = max(attrs, key=lambda a: _get_precedence_level(a["precedence"]))
