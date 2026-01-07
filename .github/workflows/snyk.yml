@@ -84,7 +84,7 @@ jobs:
         EXIT_CODE=$?
 
         # Check if rate limit was hit
-        if grep -q "test limit" snyk-sca-output.log || grep -q "rate limit" snyk-sca-output.log || grep -q "monthly limit" snyk-sca-output.log; then
+        if grep -qi "test limit\|rate limit\|monthly limit" snyk-sca-output.log; then
           echo "⚠️ Snyk SCA test limit reached. Skipping scan for this run."
           echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
           exit 0
@@ -197,7 +197,7 @@ jobs:
         EXIT_CODE=$?
 
         # Check if rate limit was hit
-        if grep -q "test limit" snyk-iac-output.log || grep -q "rate limit" snyk-iac-output.log || grep -q "monthly limit" snyk-iac-output.log; then
+        if grep -qi "test limit\|rate limit\|monthly limit" snyk-iac-output.log; then
           echo "⚠️ Snyk IaC test limit reached. Skipping scan for this run."
           echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
           exit 0
