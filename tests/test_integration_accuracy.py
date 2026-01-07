@@ -433,10 +433,10 @@ end
             temp_path = f.name
 
         try:
+            # Function expects cookbook path, using parent directory
             result = convert_chef_deployment_to_ansible_strategy(
-                deployment_recipe_path=temp_path,
+                cookbook_path=str(Path(temp_path).parent),
                 deployment_pattern="rolling",
-                target_strategy="rolling_update",
             )
 
             # Verify Ansible rolling strategy
@@ -458,10 +458,10 @@ end
             temp_path = f.name
 
         try:
+            # Function expects cookbook path, using parent directory
             result = convert_chef_deployment_to_ansible_strategy(
-                deployment_recipe_path=temp_path,
+                cookbook_path=str(Path(temp_path).parent),
                 deployment_pattern="blue_green",
-                target_strategy="blue_green",
             )
 
             # Verify blue-green strategy mentions color groups

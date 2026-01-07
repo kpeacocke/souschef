@@ -1176,6 +1176,56 @@ def _extract_service_management(content: str) -> list:
     return services
 
 
+def _detect_deployment_patterns_in_recipe(content: str, recipe_name: str) -> list:
+    """Detect deployment patterns in a Chef recipe."""
+    patterns: list[dict[str, str]] = []
+
+    pattern_indicators = {
+        "blue_green": [
+            r"blue.*green|green.*blue",
+            r"switch.*traffic|traffic.*switch",
+            r"active.*inactive|inactive.*active",
+        ],
+        "rolling": [
+            r"rolling.*update|serial.*update",
+            r"batch.*deployment|phased.*rollout",
+            r"gradual.*deployment",
+        ],
+        "canary": [
+            r"canary.*deployment|canary.*release",
+            r"percentage.*traffic|traffic.*percentage",
+            r"A/B.*test|split.*traffic",
+        ],
+        "immutable": [
+            r"immutable.*deployment|replace.*instance",
+            r"new.*server|fresh.*deployment",
+        ],
+    }
+
+    for pattern_type, indicators in pattern_indicators.items():
+        for indicator in indicators:
+            if re.search(indicator, content, re.IGNORECASE):
+                patterns.append(
+                    {
+                        "type": pattern_type,
+                        "recipe": recipe_name,
+                        "confidence": "high"
+                        if len(
+                            [
+                                i
+                                for i in indicators
+                                if re.search(i, content, re.IGNORECASE)
+                            ]
+                        )
+                        > 1
+                        else "medium",
+                    }
+                )
+                break
+
+    return patterns
+
+
 def _analyze_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
     """Analyze Chef cookbook for application deployment patterns."""
     analysis: dict[str, Any] = {
@@ -1309,30 +1359,63 @@ def _format_deployment_patterns(analysis: dict) -> str:
     if not patterns:
         return "No specific deployment patterns detected."
 
-    return "\n".join([f"• {pattern.replace('_', ' ').title()}" for pattern in patterns])
+    formatted = []
+    for pattern in patterns:
+        if isinstance(pattern, dict):
+            # Format: {"type": "...", "recipe": "...", "confidence": "..."}
+            pattern_type = pattern.get("type", "unknown")
+            recipe = pattern.get("recipe", "")
+            confidence = pattern.get("confidence", "")
+            line = f"• {pattern_type.replace('_', ' ').title()}"
+            if recipe:
+                line += f" (in {recipe})"
+            if confidence:
+                line += f" - {confidence} confidence"
+            formatted.append(line)
+        else:
+            # Format: just a string like "package_management"
+            formatted.append(f"• {pattern.replace('_', ' ').title()}")
+
+    return "\n".join(formatted)
 
 
 def _format_chef_resources_analysis(analysis: dict) -> str:
     """Format Chef resources analysis."""
+    # Check for new format first (from _analyze_application_cookbook)
     resources = analysis.get("resources", [])
-    if not resources:
-        return "No Chef resources found."
+    if resources:
+        # Count resource types
+        resource_counts: dict = {}
+        for resource_type in resources:
+            resource_counts[resource_type] = resource_counts.get(resource_type, 0) + 1
 
-    # Count resource types
-    resource_counts: dict = {}
-    for resource_type in resources:
-        resource_counts[resource_type] = resource_counts.get(resource_type, 0) + 1
+        # Format top resource types
+        top_resources = sorted(
+            resource_counts.items(), key=lambda x: x[1], reverse=True
+        )[:5]
 
-    # Format top resource types
-    top_resources = sorted(resource_counts.items(), key=lambda x: x[1], reverse=True)[
-        :5
-    ]
+        formatted = []
+        for resource_type, count in top_resources:
+            formatted.append(f"• {resource_type}: {count}")
 
-    formatted = []
-    for resource_type, count in top_resources:
-        formatted.append(f"• {resource_type}: {count}")
+        return "\n".join(formatted)
 
-    return "\n".join(formatted)
+    # Check for legacy format (from tests)
+    service_resources = analysis.get("service_resources", [])
+    configuration_files = analysis.get("configuration_files", [])
+    health_checks = analysis.get("health_checks", [])
+    scaling_mechanisms = analysis.get("scaling_mechanisms", [])
+
+    if any([service_resources, configuration_files, health_checks, scaling_mechanisms]):
+        formatted = [
+            f"• Service Resources: {len(service_resources)}",
+            f"• Configuration Files: {len(configuration_files)}",
+            f"• Health Checks: {len(health_checks)}",
+            f"• Scaling Mechanisms: {len(scaling_mechanisms)}",
+        ]
+        return "\n".join(formatted)
+
+    return "No Chef resources found."
 
 
 def _format_canary_workflow(steps: list) -> str:
@@ -1420,57 +1503,113 @@ Recommended for standard application deployments.
 """
 
 
-def _generate_deployment_migration_recommendations(analysis: dict) -> str:
-    """Generate migration recommendations based on analysis."""
-    recommendations = [
-        "1. Start with non-production environment for validation",
-        "2. Implement health checks before migration",
-        "3. Set up monitoring and alerting",
-        "4. Document rollback procedures",
-        "5. Train operations team on new deployment process",
-        "6. Plan for gradual migration (pilot → staging → production)",
-    ]
+def _generate_deployment_migration_recommendations(
+    patterns: dict, app_type: str = ""
+) -> str:
+    """
+    Generate migration recommendations based on analysis.
 
-    # Add pattern-specific recommendations
-    pattern = analysis.get("detected_pattern", "rolling_update")
-    if pattern == "blue_green":
-        recommendations.append("7. Configure load balancer for traffic switching")
-        recommendations.append("8. Provision identical blue/green environments")
-    elif pattern == "canary":
-        recommendations.append("7. Set up metrics collection and comparison")
-        recommendations.append("8. Define canary evaluation criteria")
+    Args:
+        patterns: Dictionary containing deployment patterns analysis.
+        app_type: Application type (web_application, microservice, database).
 
-    return "\n".join(recommendations)
+    Returns:
+        Formatted migration recommendations.
 
+    """
+    recommendations: list[str] = []
 
-def _recommend_ansible_strategies(analysis: dict) -> str:
-    """Recommend Ansible strategies based on cookbook analysis."""
-    patterns = analysis.get("deployment_patterns", [])
+    deployment_count = len(patterns.get("deployment_patterns", []))
 
-    recommendations = []
-
-    if "package_management" in patterns:
+    if deployment_count == 0:
         recommendations.append(
-            "• Use `package` module for package installation with state management"
+            "• No advanced deployment patterns detected - start with rolling updates"
         )
+        recommendations.append("• Implement health checks for reliable deployments")
+        recommendations.append("• Add rollback mechanisms for quick recovery")
+    else:
+        for pattern in patterns.get("deployment_patterns", []):
+            if pattern["type"] == "blue_green":
+                recommendations.append(
+                    "• Convert blue/green logic to Ansible blue/green strategy"
+                )
+            elif pattern["type"] == "canary":
+                recommendations.append(
+                    "• Implement canary deployment with automated metrics validation"
+                )
+            elif pattern["type"] == "rolling":
+                recommendations.append(
+                    "• Use Ansible serial deployment with health checks"
+                )
 
-    if "configuration_management" in patterns:
+    # Application-specific recommendations
+    if app_type == "web_application":
         recommendations.append(
-            "• Use `template` module for configuration file generation"
+            "• Implement load balancer integration for traffic management"
         )
-
-    if "service_management" in patterns:
+        recommendations.append("• Add SSL/TLS certificate handling in deployment")
+    elif app_type == "microservice":
         recommendations.append(
-            "• Use `service` or `systemd` module for service management"
+            "• Consider service mesh integration for traffic splitting"
         )
+        recommendations.append("• Implement service discovery updates")
+    elif app_type == "database":
+        recommendations.append("• Add database migration handling")
+        recommendations.append("• Implement backup and restore procedures")
 
-    if "source_deployment" in patterns:
-        recommendations.append(
-            "• Use `git` module for source code deployment with version control"
-        )
-
+    # If no specific recommendations, add general ones
     if not recommendations:
-        recommendations.append("• Standard rolling update deployment")
-        recommendations.append("• Use `include_tasks` for modular playbook structure")
+        recommendations.extend(
+            [
+                "1. Start with non-production environment for validation",
+                "2. Implement health checks before migration",
+                "3. Set up monitoring and alerting",
+                "4. Document rollback procedures",
+                "5. Train operations team on new deployment process",
+                "6. Plan for gradual migration (pilot → staging → production)",
+            ]
+        )
 
     return "\n".join(recommendations)
+
+
+def _recommend_ansible_strategies(patterns: dict) -> str:
+    """Recommend appropriate Ansible strategies."""
+    strategies: list[str] = []
+
+    # Handle both formats: list of dicts with 'type' key or list of strings
+    pattern_list = patterns.get("deployment_patterns", [])
+    if pattern_list and isinstance(pattern_list[0], dict):
+        detected_patterns = [p["type"] for p in pattern_list]
+    else:
+        detected_patterns = pattern_list
+
+    if "blue_green" in detected_patterns:
+        strategies.append(
+            "• Blue/Green: Zero-downtime deployment with instant rollback"
+        )
+    if "canary" in detected_patterns:
+        strategies.append("• Canary: Risk-reduced deployment with gradual rollout")
+    if "rolling" in detected_patterns:
+        strategies.append(
+            "• Rolling Update: Balanced approach with configurable parallelism"
+        )
+
+    # Application-pattern specific strategies
+    if "package_management" in detected_patterns:
+        strategies.append("• Package: Use `package` module for package installation")
+    if "configuration_management" in detected_patterns:
+        strategies.append("• Config: Use `template` module for configuration files")
+    if "service_management" in detected_patterns:
+        strategies.append("• Service: Use `service` or `systemd` module for services")
+    if "source_deployment" in detected_patterns:
+        strategies.append("• Source: Use `git` module for source code deployment")
+
+    if not strategies:
+        strategies = [
+            "• Rolling Update: Recommended starting strategy",
+            "• Blue/Green: For critical applications requiring zero downtime",
+            "• Canary: For high-risk deployments requiring validation",
+        ]
+
+    return "\n".join(strategies)

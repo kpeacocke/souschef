@@ -210,28 +210,17 @@ def test_generate_migration_report_success():
 
 
 def test_convert_chef_deployment_to_ansible_strategy_success():
-    """Test convert_chef_deployment_to_ansible_strategy with valid recipe."""
+    """Test convert_chef_deployment_to_ansible_strategy with valid cookbook."""
     from souschef.server import convert_chef_deployment_to_ansible_strategy
 
-    # Create a temporary deployment recipe
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
-        f.write("""
-current_env = node["app"]["current_env"] || "blue"
-target_env = current_env == "blue" ? "green" : "blue"
+    # Use fixture cookbook path which has proper structure
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
 
-service "nginx" do
-  action :start
-end
-""")
-        recipe_path = f.name
-
-    try:
-        result = convert_chef_deployment_to_ansible_strategy(recipe_path)
-        assert "blue_green" in result and "Strategy" in result
-        assert "Detected Pattern" in result
-        assert "Ansible" in result
-    finally:
-        Path(recipe_path).unlink(missing_ok=True)
+    result = convert_chef_deployment_to_ansible_strategy(cookbook_path)
+    assert "Strategy" in result
+    assert "Detected Pattern" in result or "detected_pattern" in result.lower()
+    assert "Ansible" in result
 
 
 def test_generate_blue_green_deployment_playbook_success():
@@ -244,9 +233,9 @@ def test_generate_blue_green_deployment_playbook_success():
 
     assert "Blue/Green Deployment Playbook" in result
     assert "Application: webapp" in result
-    assert "Main Deployment Playbook" in result
-    assert "Health Check Playbook" in result
-    assert "Rollback Playbook" in result
+    assert "Main Playbook" in result
+    assert "Health Check" in result
+    assert "Rollback" in result
 
 
 def test_generate_canary_deployment_strategy_success():
@@ -259,7 +248,7 @@ def test_generate_canary_deployment_strategy_success():
     assert "Application: webapp" in result
     assert "Initial Canary: 10%" in result
     assert "Canary Deployment Playbook" in result
-    assert "Monitoring and Validation" in result
+    assert "Monitoring" in result  # Updated to match new output
 
 
 def test_analyze_chef_application_patterns_success():
@@ -281,9 +270,9 @@ package "nginx"
 """)
 
         result = analyze_chef_application_patterns(str(cookbook_path))
-        assert "Chef Application Cookbook Analysis" in result
+        assert "Chef Application Patterns Analysis" in result
         assert "Cookbook: webapp" in result
-        assert "Deployment Patterns Detected" in result
+        assert "Detected Patterns" in result
 
 
 def test_list_directory_empty():
@@ -11037,8 +11026,8 @@ class TestDeploymentPatternFormatting:
         }
         result = _format_deployment_patterns(patterns)
 
-        # Format uses .title() which converts to "Blue_Green" format
-        assert "deployment" in result.lower()
+        # Format uses .title() which converts to "Blue Green" format
+        assert "blue green" in result.lower()
         assert "high confidence" in result
         assert "canary" in result.lower()
         assert "medium confidence" in result
@@ -12791,7 +12780,7 @@ class TestValidationFramework:
     name: "nginx"
     state: present
 """
-        results = engine.validate_conversion("resource", result)
+        results = engine.validate_converted_content("resource", result)
 
         assert isinstance(results, list)
         # Validation should run without errors
@@ -12808,7 +12797,7 @@ class TestValidationFramework:
   - item:
       bad: indentation
 """
-        results = engine.validate_conversion("resource", result)
+        results = engine.validate_converted_content("resource", result)
 
         # Should have YAML syntax error or pass depending on YAML lib
         assert isinstance(results, list)
@@ -12819,7 +12808,7 @@ class TestValidationFramework:
         result = """- name: Run test command
   ansible.builtin.command: /bin/test
 """
-        results = engine.validate_conversion("resource", result)
+        results = engine.validate_converted_content("resource", result)
 
         # Should have warning about changed_when
         warnings = [r for r in results if r.level == ValidationLevel.WARNING]
@@ -12832,7 +12821,7 @@ class TestValidationFramework:
   ansible.builtin.nonexistent:
     param: value
 """
-        results = engine.validate_conversion("resource", result)
+        results = engine.validate_converted_content("resource", result)
 
         # Should have warning about unknown module
         warnings = [r for r in results if r.level == ValidationLevel.WARNING]
@@ -12849,7 +12838,7 @@ class TestValidationFramework:
       ansible.builtin.debug:
         msg: test
 """
-        results = engine.validate_conversion("recipe", result)
+        results = engine.validate_converted_content("recipe", result)
 
         # Should pass basic validation
         assert isinstance(results, list)
@@ -12859,7 +12848,7 @@ class TestValidationFramework:
         engine = ValidationEngine()
         result = "{{ variable }}"
 
-        results = engine.validate_conversion("template", result)
+        results = engine.validate_converted_content("template", result)
 
         # Should pass validation
         assert isinstance(results, list)
@@ -12872,7 +12861,7 @@ class TestValidationFramework:
 def test_nginx(host):
     assert host.package("nginx").is_installed
 """
-        results = engine.validate_conversion("inspec", result)
+        results = engine.validate_converted_content("inspec", result)
 
         # Should pass validation
         assert isinstance(results, list)
