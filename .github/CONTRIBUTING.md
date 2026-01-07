@@ -57,12 +57,12 @@ git push -u origin feature/your-feature-name
 
 ### Before Submitting PR
 
-- ✅ All tests pass (`poetry run pytest`)
-- ✅ Code is linted (`poetry run ruff check .`)
-- ✅ Code is formatted (`poetry run ruff format .`)
-- ✅ Documentation updated if needed
-- ✅ Branch follows naming convention (`feature/*`, `bugfix/*`, etc.)
-- ✅ PR targets correct base branch
+-  All tests pass (`poetry run pytest`)
+-  Code is linted (`poetry run ruff check .`)
+-  Code is formatted (`poetry run ruff format .`)
+-  Documentation updated if needed
+-  Branch follows naming convention (`feature/*`, `bugfix/*`, etc.)
+-  PR targets correct base branch
 
 ---
 
@@ -76,24 +76,24 @@ SousChef follows the **Gitflow** branching model for organized, scalable develop
 
 **`main`** - Production-ready code only
 - Merges from: `release/*`, `hotfix/*`
-- Direct commits: ❌ Never
+- Direct commits:  Never
 - Triggers: Release workflow on tags
 - Protection: Requires PR approval + all status checks
 
 **`develop`** - Integration branch for ongoing development
 - Merges from: `feature/*`, `bugfix/*`, `release/*` (backmerge), `hotfix/*` (backmerge)
 - Merges to: `main` (via release branches)
-- Direct commits: ❌ Rarely
+- Direct commits:  Rarely
 - Protection: Requires PR approval + status checks
 
 ### Branch Types
 
 | Branch Type | From | To | Naming | Example | Delete After |
 |------------|------|-----|--------|---------|--------------|
-| Feature | `develop` | `develop` | `feature/*` | `feature/add-parser` | ✅ Yes |
-| Bugfix | `develop` | `develop` | `bugfix/*` | `bugfix/fix-template` | ✅ Yes |
-| Release | `develop` | `main` + `develop` | `release/*` | `release/1.2.0` | ✅ Yes |
-| Hotfix | `main` | `main` + `develop` | `hotfix/*` | `hotfix/1.1.1` | ✅ Yes |
+| Feature | `develop` | `develop` | `feature/*` | `feature/add-parser` |  Yes |
+| Bugfix | `develop` | `develop` | `bugfix/*` | `bugfix/fix-template` |  Yes |
+| Release | `develop` | `main` + `develop` | `release/*` | `release/1.2.0` |  Yes |
+| Hotfix | `main` | `main` + `develop` | `hotfix/*` | `hotfix/1.1.1` |  Yes |
 
 #### Feature Branches (`feature/*`)
 
@@ -299,12 +299,12 @@ Follow [Semantic Versioning](https://semver.org/) (SemVer):
 - `comment-pr-guidance` - Posts automated guidance on new PRs (timeout: 5 min)
 
 **Enhanced Validation Rules**:
-- ✅ `feature/*`, `bugfix/*` → must target `develop`
-- ✅ `release/*`, `hotfix/*` → must target `main`
-- ✅ `support/*` → can target `develop` or `main`
-- ✅ `develop` → can only merge to `main`
-- ✅ `main` → blocked as source branch (wrong merge direction)
-- ✅ Branch names follow conventions
+-  `feature/*`, `bugfix/*` → must target `develop`
+-  `release/*`, `hotfix/*` → must target `main`
+-  `support/*` → can target `develop` or `main`
+-  `develop` → can only merge to `main`
+-  `main` → blocked as source branch (wrong merge direction)
+-  Branch names follow conventions
 
 **Pipeline Protections**:
 - Concurrency control: Cancels outdated validation runs
@@ -408,12 +408,12 @@ Settings → Environments → New environment
 
 | Workflow | Push | PR | Scheduled | Manual |
 |----------|------|-----|-----------|--------|
-| CI | ✅ | ✅ | ❌ | ❌ |
-| Gitflow | ✅ | ✅ | ❌ | ❌ |
-| Snyk | ✅ | ✅ | ✅ Weekly | ✅ |
-| SonarQube | ✅ | ✅ | ❌ | ✅ |
-| Release | Tag only | ❌ | ❌ | ❌ |
-| Dependabot | ❌ | ❌ | ✅ Weekly | ❌ |
+| CI |  |  |  |  |
+| Gitflow |  |  |  |  |
+| Snyk |  |  |  Weekly |  |
+| SonarQube |  |  |  |  |
+| Release | Tag only |  |  |  |
+| Dependabot |  |  |  Weekly |  |
 
 ### Release Process
 
@@ -609,14 +609,14 @@ All contributions must follow the project's coding standards outlined in [copilo
 
 ### Key Requirements
 
-- ✅ **Zero warnings policy**: No errors or warnings without fixing them
-- ✅ **Type hints**: All function signatures (except pytest fixtures)
-- ✅ **Docstrings**: Google style for all functions, classes, modules
-- ✅ **Linting**: Pass `ruff check` with no violations
-- ✅ **Formatting**: Code formatted with `ruff format`
-- ✅ **100% coverage goal**: Aim for comprehensive test coverage
-- ✅ **Three test types**: Unit, integration, property-based
-- ✅ **Cross-platform**: Use `pathlib.Path` for file operations
+-  **Zero warnings policy**: No errors or warnings without fixing them
+-  **Type hints**: All function signatures (except pytest fixtures)
+-  **Docstrings**: Google style for all functions, classes, modules
+-  **Linting**: Pass `ruff check` with no violations
+-  **Formatting**: Code formatted with `ruff format`
+-  **100% coverage goal**: Aim for comprehensive test coverage
+-  **Three test types**: Unit, integration, property-based
+-  **Cross-platform**: Use `pathlib.Path` for file operations
 
 ### Before Submitting
 
@@ -763,9 +763,9 @@ git push --force-with-lease
 ### Getting Help
 
 - 🐛 **Bug reports**: Open an issue with the bug template
-- 💡 **Feature requests**: Open an issue with the feature template
+-  **Feature requests**: Open an issue with the feature template
 - 💬 **Questions**: Use GitHub Discussions
-- 🔒 **Security issues**: Follow [SECURITY.md](../SECURITY.md)
+-  **Security issues**: Follow [SECURITY.md](../SECURITY.md)
 
 ---
 

@@ -28,27 +28,17 @@ def generate_awx_job_template_from_cookbook(
     include_survey: bool = True,
 ) -> str:
     """
-    Generate AWX/AAP job template configuration from Chef cookbook.
+    Generate AWX/AAP job template from Chef cookbook.
 
-    Args:
-        cookbook_path: Path to Chef cookbook directory.
-        cookbook_name: Name of the cookbook for job template.
-        target_environment: Target environment for the job template.
-        include_survey: Whether to include survey spec for cookbook attributes.
-
-    Returns:
-        AWX/AAP job template JSON configuration.
-
+    Analyzes cookbook structure and generates importable AWX configuration.
+    Survey specs auto-generated from cookbook attributes when include_survey=True.
     """
     try:
         cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
-            return f"Error: Cookbook path not found: {cookbook_path}"
+            return f"Cookbook not found at {cookbook_path}"
 
-        # Analyze cookbook structure
         cookbook_analysis = _analyze_cookbook_for_awx(cookbook, cookbook_name)
-
-        # Generate job template
         job_template = _generate_awx_job_template(
             cookbook_analysis, cookbook_name, target_environment, include_survey
         )
@@ -76,25 +66,18 @@ awx-cli job_templates create \\
 ## Cookbook Analysis Summary:
 {_format_cookbook_analysis(cookbook_analysis)}
 """
-
     except Exception as e:
-        return f"Error generating AWX job template from cookbook: {e}"
+        return f"AWX template generation failed for {cookbook_name}: {e}"
 
 
 def generate_awx_workflow_from_chef_runlist(
     runlist_content: str, workflow_name: str, environment: str = "production"
 ) -> str:
     """
-    Generate AWX/AAP workflow template from Chef runlist.
+    Generate AWX workflow from Chef runlist.
 
-    Args:
-        runlist_content: Chef runlist content (JSON or comma-separated).
-        workflow_name: Name for the workflow template.
-        environment: Target environment for workflow execution.
-
-    Returns:
-        AWX/AAP workflow template configuration with job dependencies.
-
+    Handles JSON arrays, comma-separated, or single recipe/role items.
+    Workflows preserve runlist execution order with success/failure paths.
     """
     try:
         # Parse runlist
@@ -127,9 +110,8 @@ def generate_awx_workflow_from_chef_runlist(
 3. Configure workflow node dependencies
 4. Test execution with survey parameters
 """
-
     except Exception as e:
-        return f"Error generating AWX workflow from Chef runlist: {e}"
+        return f"Workflow generation failed: {e}"
 
 
 def generate_awx_project_from_cookbooks(
@@ -194,9 +176,8 @@ def generate_awx_project_from_cookbooks(
 4. Configure job templates for each converted cookbook
 5. Set up inventories and credentials
 """
-
     except Exception as e:
-        return f"Error generating AWX project from cookbooks: {e}"
+        return f"Project configuration failed: {e}"
 
 
 def generate_awx_inventory_source_from_chef(
@@ -254,9 +235,8 @@ def generate_awx_inventory_source_from_chef(
 - CHEF_NODE_NAME: ${{{{chef_node_name}}}}
 - CHEF_CLIENT_KEY: ${{{{chef_client_key}}}}
 """
-
     except Exception as e:
-        return f"Error generating AWX inventory source from Chef: {e}"
+        return f"Inventory source generation failed: {e}"
 
 
 # Deployment Strategy Functions
@@ -266,15 +246,10 @@ def convert_chef_deployment_to_ansible_strategy(
     cookbook_path: str, deployment_pattern: str = "auto"
 ) -> str:
     """
-    Convert Chef deployment pattern to Ansible deployment strategy.
+    Convert Chef deployment patterns to Ansible strategies.
 
-    Args:
-        cookbook_path: Path to Chef cookbook with deployment pattern.
-        deployment_pattern: Deployment pattern (auto, blue_green, canary, rolling).
-
-    Returns:
-        Recommended Ansible deployment strategy with implementation details.
-
+    Auto-detects blue/green, canary, or rolling patterns from recipe content.
+    Override auto-detection by specifying explicit pattern.
     """
     try:
         cookbook = _normalize_path(cookbook_path)
@@ -309,9 +284,8 @@ def convert_chef_deployment_to_ansible_strategy(
 ## Migration Recommendations:
 {_generate_deployment_migration_recommendations(pattern_analysis)}
 """
-
     except Exception as e:
-        return f"Error converting Chef deployment to Ansible strategy: {e}"
+        return f"Deployment pattern conversion failed: {e}"
 
 
 def generate_blue_green_deployment_playbook(
@@ -331,9 +305,7 @@ def generate_blue_green_deployment_playbook(
     """
     try:
         # Generate main deployment playbook
-        playbook = _generate_blue_green_playbook(
-            app_name, service_config, health_check_url
-        )
+        playbook = _generate_blue_green_playbook(app_name, health_check_url)
 
         return f"""# Blue/Green Deployment Playbook
 # Application: {app_name}
@@ -371,25 +343,18 @@ def generate_blue_green_deployment_playbook(
 - Health check endpoint available
 - Blue and green environments provisioned
 """
-
     except Exception as e:
-        return f"Error generating blue/green deployment playbook: {e}"
+        return f"Failed to generate blue/green playbook: {e}"
 
 
 def generate_canary_deployment_strategy(
     app_name: str, canary_percentage: int = 10, rollout_steps: str = "10,25,50,100"
 ) -> str:
     """
-    Generate canary deployment strategy with progressive rollout.
+    Generate canary deployment with progressive rollout.
 
-    Args:
-        app_name: Application name for deployment.
-        canary_percentage: Initial canary traffic percentage.
-        rollout_steps: Comma-separated rollout percentages.
-
-    Returns:
-        Canary deployment playbook with monitoring and automated rollback.
-
+    Starts at canary_percentage, progresses through rollout_steps.
+    Includes monitoring checks and automatic rollback on failure.
     """
     try:
         # Parse rollout steps
@@ -445,24 +410,18 @@ def generate_canary_deployment_strategy(
 - Failed health checks
 - Manual trigger
 """
-
     except Exception as e:
-        return f"Error generating canary deployment strategy: {e}"
+        return f"Canary deployment generation failed: {e}"
 
 
 def analyze_chef_application_patterns(
     cookbook_path: str, application_type: str = "web_application"
 ) -> str:
     """
-    Analyze Chef cookbook for application deployment patterns.
+    Analyze cookbook deployment patterns and recommend Ansible strategies.
 
-    Args:
-        cookbook_path: Path to Chef cookbook directory.
-        application_type: Type of application (web, database, service, etc.).
-
-    Returns:
-        Analysis of deployment patterns with migration recommendations.
-
+    Detects blue/green, canary, rolling, or custom deployment approaches.
+    Application type helps tune recommendations for web/database/service workloads.
     """
     try:
         cookbook = _normalize_path(cookbook_path)
@@ -497,9 +456,8 @@ def analyze_chef_application_patterns(
 4. Execute pilot migration with one environment
 5. Document lessons learned and iterate
 """
-
     except Exception as e:
-        return f"Error analyzing Chef application patterns: {e}"
+        return f"Couldn't analyze cookbook patterns: {e}"
 
 
 # AWX Helper Functions
@@ -517,7 +475,7 @@ def _analyze_cookbook_for_awx(cookbook_path: Path, cookbook_name: str) -> dict:
         "survey_fields": [],
     }
 
-    # Analyze recipes
+    # Check for recipes to convert into AWX job steps
     recipes_dir = _safe_join(cookbook_path, "recipes")
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
@@ -717,7 +675,6 @@ def _generate_chef_inventory_script(chef_server_url: str) -> str:
 
 Connects to Chef server and generates Ansible inventory.
 """
-
 import json
 import os
 import sys
@@ -984,10 +941,15 @@ def _generate_ansible_deployment_strategy(analysis: dict, pattern: str) -> str:
         return _generate_rolling_update_playbook(analysis)
 
 
-def _generate_blue_green_playbook(
-    app_name: str, service_config: str, health_check_url: str
-) -> dict:
-    """Generate blue/green deployment playbook structure."""
+def _generate_blue_green_playbook(app_name: str, health_check_url: str) -> dict:
+    """
+    Generate blue/green deployment playbook structure.
+
+    Args:
+        app_name: Name of the application.
+        health_check_url: URL for health checks.
+
+    """
     main_playbook = f"""---
 # Blue/Green Deployment for {app_name}
 - name: Deploy {app_name} (Blue/Green)
@@ -1009,7 +971,6 @@ def _generate_blue_green_playbook(
       include_tasks: switch_traffic.yml
       when: health_check_passed
 """
-
     health_check = """---
 # Health Check Playbook
 - name: Verify application health
@@ -1027,7 +988,6 @@ def _generate_blue_green_playbook(
   set_fact:
     health_check_passed: "{{ health_check_result.status == 200 }}"
 """
-
     rollback = f"""---
 # Rollback Playbook
 - name: Rollback {app_name} deployment
@@ -1042,7 +1002,6 @@ def _generate_blue_green_playbook(
     - name: Verify rollback health
       include_tasks: health_check.yml
 """
-
     load_balancer_config = """---
 # Load Balancer Configuration
 - name: Update load balancer configuration
@@ -1056,7 +1015,6 @@ def _generate_blue_green_playbook(
     name: nginx
     state: reloaded
 """
-
     return {
         "main_playbook": main_playbook,
         "health_check": health_check,
@@ -1087,7 +1045,6 @@ def _generate_canary_strategy(app_name: str, canary_pct: int, steps: list) -> di
     - name: Monitor canary metrics
       include_tasks: monitor_metrics.yml
 """
-
     monitoring = """---
 # Monitoring Playbook
 - name: Collect canary metrics
@@ -1108,7 +1065,6 @@ def _generate_canary_strategy(app_name: str, canary_pct: int, steps: list) -> di
   set_fact:
     canary_passed: "{{ canary_metrics.error_rate < stable_metrics.error_rate * 1.05 }}"
 """
-
     progressive_rollout = _format_canary_workflow(steps)
 
     rollback = f"""---
@@ -1126,7 +1082,6 @@ def _generate_canary_strategy(app_name: str, canary_pct: int, steps: list) -> di
     - name: Verify stable operation
       include_tasks: health_check.yml
 """
-
     return {
         "canary_playbook": canary_playbook,
         "monitoring": monitoring,
@@ -1226,6 +1181,29 @@ def _detect_deployment_patterns_in_recipe(content: str, recipe_name: str) -> lis
     return patterns
 
 
+def _detect_patterns_from_content(content: str) -> list[str]:
+    """Detect deployment patterns from recipe content."""
+    patterns = []
+    if "package" in content:
+        patterns.append("package_management")
+    if "template" in content:
+        patterns.append("configuration_management")
+    if "service" in content:
+        patterns.append("service_management")
+    if "git" in content:
+        patterns.append("source_deployment")
+    return patterns
+
+
+def _assess_complexity_from_resource_count(resource_count: int) -> tuple[str, str, str]:
+    """Assess complexity, effort, and risk based on resource count."""
+    if resource_count > 50:
+        return "high", "4-6 weeks", "high"
+    elif resource_count < 20:
+        return "low", "1-2 weeks", "low"
+    return "medium", "2-3 weeks", "medium"
+
+
 def _analyze_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
     """Analyze Chef cookbook for application deployment patterns."""
     analysis: dict[str, Any] = {
@@ -1250,14 +1228,8 @@ def _analyze_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
                 analysis["resources"].extend(resource_types)
 
                 # Detect patterns
-                if "package" in content:
-                    analysis["deployment_patterns"].append("package_management")
-                if "template" in content:
-                    analysis["deployment_patterns"].append("configuration_management")
-                if "service" in content:
-                    analysis["deployment_patterns"].append("service_management")
-                if "git" in content:
-                    analysis["deployment_patterns"].append("source_deployment")
+                patterns = _detect_patterns_from_content(content)
+                analysis["deployment_patterns"].extend(patterns)
 
             except Exception:
                 # Silently skip malformed files
@@ -1265,14 +1237,10 @@ def _analyze_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
 
     # Assess complexity
     resource_count = len(analysis["resources"])
-    if resource_count > 50:
-        analysis["complexity"] = "high"
-        analysis["effort_estimate"] = "4-6 weeks"
-        analysis["risk_level"] = "high"
-    elif resource_count < 20:
-        analysis["complexity"] = "low"
-        analysis["effort_estimate"] = "1-2 weeks"
-        analysis["risk_level"] = "low"
+    complexity, effort, risk = _assess_complexity_from_resource_count(resource_count)
+    analysis["complexity"] = complexity
+    analysis["effort_estimate"] = effort
+    analysis["risk_level"] = risk
 
     return analysis
 
@@ -1429,7 +1397,6 @@ def _format_canary_workflow(steps: list) -> str:
     rollout_steps: """
     workflow += str(steps)
     workflow += """
-
   tasks:
     - name: Execute progressive rollout
       include_tasks: rollout_step.yml
@@ -1437,11 +1404,10 @@ def _format_canary_workflow(steps: list) -> str:
       loop_control:
         loop_var: target_percentage
 """
-
     return workflow
 
 
-def _generate_blue_green_conversion_playbook(analysis: dict) -> str:
+def _generate_blue_green_conversion_playbook(_analysis: dict) -> str:
     """Generate blue/green playbook from Chef pattern analysis."""
     return """## Blue/Green Deployment Strategy
 
@@ -1459,7 +1425,7 @@ Use `generate_blue_green_deployment_playbook` tool for complete playbooks.
 """
 
 
-def _generate_canary_conversion_playbook(analysis: dict) -> str:
+def _generate_canary_conversion_playbook(_analysis: dict) -> str:
     """Generate canary playbook from Chef pattern analysis."""
     return """## Canary Deployment Strategy
 
@@ -1476,7 +1442,7 @@ Use `generate_canary_deployment_strategy` tool for complete playbooks.
 """
 
 
-def _generate_rolling_update_playbook(analysis: dict) -> str:
+def _generate_rolling_update_playbook(_analysis: dict) -> str:
     """Generate rolling update playbook from Chef pattern analysis."""
     return """## Rolling Update Strategy
 

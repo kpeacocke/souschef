@@ -106,7 +106,6 @@ def assess_chef_migration_complexity(
 ## Resource Requirements:
 {_estimate_resource_requirements(overall_metrics, target_platform)}
 """
-
     except Exception as e:
         return f"Error assessing migration complexity: {e}"
 
@@ -174,7 +173,6 @@ def generate_migration_plan(
 ## Post-Migration Tasks:
 {migration_plan["post_migration"]}
 """
-
     except Exception as e:
         return f"Error generating migration plan: {e}"
 
@@ -232,13 +230,12 @@ def analyze_cookbook_dependencies(
 ## Migration Impact Analysis:
 {_analyze_dependency_migration_impact(dependency_analysis)}
 """
-
     except Exception as e:
         return f"Error analyzing cookbook dependencies: {e}"
 
 
 def generate_migration_report(
-    assessment_results: str,
+    _assessment_results: str,
     report_format: str = "executive",
     include_technical_details: str = "yes",
 ) -> str:
@@ -246,7 +243,7 @@ def generate_migration_report(
     Generate comprehensive migration report from assessment results.
 
     Args:
-        assessment_results: JSON string or summary of assessment results
+        _assessment_results: JSON string or summary of assessment results (reserved for future use)
         report_format: Report format (executive, technical, combined)
         include_technical_details: Include detailed technical analysis (yes/no)
 
@@ -302,7 +299,6 @@ def generate_migration_report(
 ## Appendices
 {report["appendices"]}
 """
-
     except Exception as e:
         return f"Error generating migration report: {e}"
 
@@ -840,7 +836,6 @@ def _generate_detailed_migration_plan(
 • Chef cookbook understanding
 • Infrastructure as Code principles
 • CI/CD pipeline experience"""
-
     plan["prerequisites"] = """• AWX/AAP environment setup and configured
 • Git repository structure established
 • CI/CD pipelines created for Ansible playbooks
@@ -848,7 +843,6 @@ def _generate_detailed_migration_plan(
 • Team training on Ansible best practices completed
 • Chef cookbook inventory and documentation review
 • Stakeholder alignment on migration approach"""
-
     plan["testing_strategy"] = """**Testing Phases:**
 1. **Unit Testing:** Ansible syntax validation and linting
 2. **Integration Testing:** Playbook execution in test environments
@@ -861,7 +855,6 @@ def _generate_detailed_migration_plan(
 • molecule for role testing
 • testinfra for infrastructure testing
 • Custom validation scripts for Chef parity"""
-
     plan[
         "success_criteria"
     ] = """• All Chef cookbooks successfully converted to Ansible playbooks
@@ -871,7 +864,6 @@ def _generate_detailed_migration_plan(
 • Team trained and comfortable with new Ansible workflows
 • Documentation complete and accessible
 • Rollback procedures tested and documented"""
-
     return plan
 
 
@@ -900,7 +892,6 @@ def _generate_comprehensive_migration_report(include_technical: bool) -> dict:
 • Estimated 8-16 week timeline depending on approach
 • Significant long-term cost savings and operational improvements
 • Low-to-medium risk with proper planning and execution"""
-
     # Scope and Objectives
     report["scope_objectives"] = """**Migration Scope:**
 • All production Chef cookbooks and recipes
@@ -914,7 +905,6 @@ def _generate_comprehensive_migration_report(include_technical: bool) -> dict:
 • Reduce operational overhead and complexity
 • Enhance security and compliance capabilities
 • Standardize on Red Hat ecosystem tools"""
-
     # Current State Analysis
     report["current_state"] = """**Current Chef Infrastructure:**
 • Chef Server managing X nodes across multiple environments
@@ -928,7 +918,6 @@ def _generate_comprehensive_migration_report(include_technical: bool) -> dict:
 • Limited workflow orchestration capabilities
 • Dependency management challenges
 • Scaling limitations with current architecture"""
-
     # Target State Architecture
     report["target_state"] = """**Target Ansible/AWX Architecture:**
 • Red Hat Ansible Automation Platform (AWX/AAP)
@@ -943,7 +932,6 @@ def _generate_comprehensive_migration_report(include_technical: bool) -> dict:
 • Rich workflow orchestration capabilities
 • Better integration with CI/CD tools
 • Enhanced scalability and performance"""
-
     if include_technical:
         report["technical_details"] = """## Technical Implementation Approach
 
@@ -963,7 +951,6 @@ def _generate_comprehensive_migration_report(include_technical: bool) -> dict:
 • **Functional Testing:** molecule framework for role testing
 • **Integration Testing:** testinfra for infrastructure validation
 • **Performance Testing:** Execution time and resource usage comparison"""
-
     return report
 
 
@@ -1179,7 +1166,6 @@ def _format_validation_results_text(
 
 ✅ All validation checks passed! No issues found.
 """
-
     output_lines = [
         f"# Validation Results for {conversion_type} Conversion",
         "",

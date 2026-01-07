@@ -1,8 +1,8 @@
-# Contributing to SousChef 🍳
+# Contributing to SousChef
 
 Thank you for your interest in contributing to SousChef! This guide will help you get started with contributing to our Chef-to-Ansible migration platform.
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
@@ -12,7 +12,7 @@ Thank you for your interest in contributing to SousChef! This guide will help yo
 - [Submitting Changes](#submitting-changes)
 - [Community](#community)
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -49,25 +49,25 @@ Thank you for your interest in contributing to SousChef! This guide will help yo
    poetry run souschef-cli --help
    ```
 
-## 🤝 Contributing Guidelines
+## Contributing Guidelines
 
 ### Types of Contributions
 
 We welcome several types of contributions:
 
-#### 🔧 **Code Contributions**
+####  **Code Contributions**
 - New MCP tools for Chef-to-Ansible conversion
 - Bug fixes and performance improvements
 - CLI enhancements and new commands
 - Enhanced parsing for additional Chef constructs
 
-#### 📚 **Documentation**
+####  **Documentation**
 - API documentation improvements
 - Usage examples and tutorials
 - Migration best practices guides
 - README and setup documentation
 
-#### 🧪 **Testing**
+####  **Testing**
 - Unit tests for new features
 - Integration tests with real cookbook fixtures
 - Property-based tests for edge case coverage
@@ -78,7 +78,7 @@ We welcome several types of contributions:
 - Edge case discoveries
 - Performance issue identification
 
-#### 💡 **Feature Requests**
+####  **Feature Requests**
 - New Chef resource type support
 - Ansible module mappings
 - CLI command suggestions
@@ -91,11 +91,11 @@ We welcome several types of contributions:
 3. **Understand the Architecture**: Review the MCP server pattern and tool organization
 4. **Review Code Standards**: Follow our development standards (below)
 
-## 🎯 Code Standards
+## Code Standards
 
 SousChef maintains high code quality standards:
 
-### 🔧 **Development Tools**
+### **Development Tools**
 
 SousChef uses a modern Python toolchain for quality and consistency:
 
@@ -134,35 +134,35 @@ SousChef uses a modern Python toolchain for quality and consistency:
   ```
 - **Config**: See `[tool.pytest.ini_options]` in `pyproject.toml`
 
-### ✅ **Zero Warnings Policy**
+### **Zero Warnings Policy**
 - All code must be free of errors and warnings from **all tools** (Ruff, mypy, Pylance)
 - Do not disable linting warnings without fixing the underlying issue
 - Ruff handles formatting automatically - use `poetry run ruff format`
 - mypy runs in CI for strict type checking - ensure types are correct locally with Pylance
 
-### 🏷️ **Type Hints**
+### **Type Hints**
 - All function signatures in `souschef/` must have type hints
 - Test files can omit type hints for pytest fixtures and parameterized test parameters
 - Use Python's built-in types and `typing` module appropriately
 
-### 📖 **Documentation**
+### **Documentation**
 - Every function, class, and module must have docstrings
 - Follow Google-style docstring format
 - Include parameter descriptions and return value documentation
 
-### 🗂️ **File Organization**
+### **File Organization**
 - Source code in `souschef/`
 - Tests in `tests/` mirroring source structure
 - Test fixtures in `tests/fixtures/`
 - Follow established patterns for new modules
 
-### 🔒 **Security**
+### **Security**
 - Validate all file paths to prevent directory traversal
 - Sanitize user inputs, especially Chef cookbook content
 - Never commit secrets or credentials
 - Review security implications of new features
 
-## 🧪 Testing Requirements
+## Testing Requirements
 
 SousChef maintains comprehensive test coverage with three types of tests:
 
@@ -224,7 +224,7 @@ def test_parse_handles_any_input(random_input):
 ```
 
 ### **Test Coverage Goals**
-- **Current**: 93% test coverage
+- **Current**: 91% test coverage (913 tests passing)
 - **Goal**: 95%+ coverage for production readiness
 - **Requirement**: All new features must include comprehensive tests
 
@@ -245,7 +245,7 @@ poetry run pytest tests/test_property_based.py # Property-based tests
 poetry run pytest --benchmark-only
 ```
 
-## � Managing Dependencies
+## Managing Dependencies
 
 SousChef uses **Poetry** for dependency management with automated lock file synchronization.
 
@@ -272,17 +272,17 @@ poetry update
 
 The project uses **three layers** of automation to prevent lock file issues:
 
-#### **1. Pre-commit Hooks** (Automatic ✅)
+#### **1. Pre-commit Hooks** (Automatic)
 - `poetry-check`: Validates lock file is in sync before every commit
 - `poetry-lock`: Auto-regenerates lock when pyproject.toml changes
 - **Setup**: `poetry run pre-commit install` (one-time setup)
 
-#### **2. GitHub Actions** (CI Validation ✅)
+#### **2. GitHub Actions** (CI Validation)
 - `poetry-lock-check.yml`: Validates lock file in all PRs
 - Posts helpful comments if out of sync
 - Prevents merging with outdated lock files
 
-#### **3. Dependabot** (Automated Updates ✅)
+#### **3. Dependabot** (Automated Updates)
 - Weekly dependency updates (Mondays 9am UTC)
 - Groups minor/patch updates together
 - Auto-creates PRs with updated lock files
@@ -326,7 +326,7 @@ poetry run pre-commit run --all-files
 - Updates lock file hashes without upgrading versions
 - Use `poetry update` when you actually want to upgrade packages
 
-## �🔄 Submitting Changes
+## Submitting Changes
 
 ### Pull Request Process
 
@@ -431,21 +431,21 @@ BREAKING CHANGE: All tools now use standardized parameter names
 
 Before submitting your PR, ensure:
 
-- [ ] ✅ No linting errors (`poetry run ruff check .`)
-- [ ] ✅ Properly formatted (`poetry run ruff format .`)
-- [ ] ✅ No type errors (`poetry run mypy souschef`)
-- [ ] ✅ All tests pass (`poetry run pytest`)
-- [ ] ✅ Coverage maintained/improved (`pytest --cov`)
-- [ ] ✅ Unit tests added/updated in `test_server.py`
-- [ ] ✅ Integration tests added/updated in `test_integration.py`
-- [ ] ✅ Property-based tests added if applicable in `test_property_based.py`
-- [ ] ✅ Test fixtures updated if new parsing features added
-- [ ] ✅ Type hints are complete
-- [ ] ✅ Docstrings are present and clear
-- [ ] ✅ Error cases are handled
-- [ ] ✅ Cross-platform compatible
+- [ ] No linting errors (`poetry run ruff check .`)
+- [ ] Properly formatted (`poetry run ruff format .`)
+- [ ] No type errors (`poetry run mypy souschef`)
+- [ ] All tests pass (`poetry run pytest`)
+- [ ] Coverage maintained/improved (`pytest --cov`)
+- [ ] Unit tests added/updated in `test_server.py`
+- [ ] Integration tests added/updated in `test_integration.py`
+- [ ] Property-based tests added if applicable in `test_property_based.py`
+- [ ] Test fixtures updated if new parsing features added
+- [ ] Type hints are complete
+- [ ] Docstrings are present and clear
+- [ ] Error cases are handled
+- [ ] Cross-platform compatible
 
-## 🚀 Release Process
+## Release Process
 
 SousChef uses automated releases powered by Release Please and follows the Gitflow branching model.
 
@@ -490,11 +490,11 @@ feature/y ──┘                         ↓
 ```
 
 **Key Points:**
-- ✅ **Develop is your control point** - merge here to batch changes
-- ✅ **Main triggers releases** - every merge to main creates a release
-- ✅ **Fully automatic** - Release PR auto-merges when CI passes
-- ✅ **Conventional commits required** - they determine version bumps
-- ✅ **CHANGELOG auto-generated** - from commit messages
+- **Develop is your control point** - merge here to batch changes
+- **Main triggers releases** - every merge to main creates a release
+- **Fully automatic** - Release PR auto-merges when CI passes
+- **Conventional commits required** - they determine version bumps
+- **CHANGELOG auto-generated** - from commit messages
 
 ### **Version Bumping Rules**
 
@@ -559,7 +559,7 @@ git log main..develop --oneline
 git log main..develop --pretty=format:"%s" | grep -E "^(feat|fix|docs|test|refactor|perf|chore|ci|style)(\(.*\))?:"
 ```
 
-## 🔧 Adding New MCP Tools
+## Adding New MCP Tools
 
 When adding new MCP tools to SousChef:
 
@@ -606,7 +606,7 @@ def your_command(parameter: str) -> None:
 - Update CLI documentation if applicable
 - Include usage examples
 
-## 🌟 Development Tips
+## Development Tips
 
 ### **Working with Chef Cookbook Fixtures**
 - Add realistic Chef content to `tests/fixtures/sample_cookbook/`
@@ -636,15 +636,15 @@ print(result)
 - Avoid OS-specific code
 - Test on multiple Python versions if possible
 
-## � Security Scanning
+## Security Scanning
 
 ### **Automatic CodeQL Scanning (GitHub Actions)**
 
 CodeQL security scanning runs automatically - already set up in `.github/workflows/codeql.yml`:
-- ✅ Runs on push to main/develop/release/hotfix branches
-- ✅ Runs on all pull requests
-- ✅ Weekly scheduled scans (Mondays 6am UTC)
-- ✅ Results appear in Security → Code scanning alerts
+- Runs on push to main/develop/release/hotfix branches
+- Runs on all pull requests
+- Weekly scheduled scans (Mondays 6am UTC)
+- Results appear in Security → Code scanning alerts
 
 **No action needed** - this runs automatically on every PR and push!
 
@@ -652,13 +652,13 @@ CodeQL security scanning runs automatically - already set up in `.github/workflo
 
 The devcontainer automatically installs CodeQL CLI when supported. **Works on x86_64 Linux, Windows, and macOS (Intel/Apple Silicon).**
 
-#### ⚠️ ARM64 Linux Limitation
+#### ARM64 Linux Limitation
 
 **CodeQL CLI does not officially support ARM64 Linux.** If you're developing on ARM64 (e.g., Raspberry Pi, AWS Graviton, Oracle Cloud ARM):
 
-- ✅ **GitHub Actions still work** - automated scanning continues on every push/PR
-- ✅ **CI/CD is unaffected** - all security checks run in GitHub's infrastructure
-- ❌ **Local VS Code extension won't work** - CLI can't run natively on ARM64 Linux
+- **GitHub Actions still work** - automated scanning continues on every push/PR
+- **CI/CD is unaffected** - all security checks run in GitHub's infrastructure
+- **Local VS Code extension won't work** - CLI can't run natively on ARM64 Linux
 
 **Alternatives for ARM64 users:**
 1. Rely on GitHub Actions for all CodeQL scanning (already configured)
@@ -724,7 +724,7 @@ The same security queries as GitHub Actions:
 - **Run before pushing** to catch issues early
 - **Explore queries** - right-click results to see query source code
 
-## 📖 Resources
+## Resources
 
 ### **Learning Resources**
 - [Chef Documentation](https://docs.chef.io/)
@@ -739,7 +739,7 @@ The same security queries as GitHub Actions:
 - [Security Policy](SECURITY.md) - Security guidelines
 - [Code of Conduct](CODE_OF_CONDUCT.md) - Community guidelines
 
-## 🤔 Getting Help
+## Getting Help
 
 ### **Where to Ask Questions**
 - **GitHub Issues**: For bugs, feature requests, and general questions
@@ -753,19 +753,19 @@ The same security queries as GitHub Actions:
 - Minimal reproduction example
 - What you expected vs. what happened
 
-## 🎉 Recognition
+## Recognition
 
 Contributors are recognized in:
 - GitHub contributors list
 - Release notes for significant contributions
 - README acknowledgments section (coming soon)
 
-## 📜 License
+## License
 
 By contributing to SousChef, you agree that your contributions will be licensed under the MIT License.
 
 ---
 
-**Happy Contributing!** 🚀
+**Happy Contributing!**
 
 We're excited to have you as part of the SousChef community. Every contribution, no matter how small, helps make infrastructure migrations easier for everyone.

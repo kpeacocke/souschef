@@ -24,7 +24,7 @@ souschef/
 │   ├── attributes.py    # Attribute file parsing
 │   ├── habitat.py       # Habitat plan parsing
 │   ├── inspec.py        # InSpec profile parsing
-│   ├── metadata.py      # Cookbook metadata parsing
+│   ├── metadata.rb      # Cookbook metadata parsing
 │   ├── recipe.py        # Recipe parsing
 │   ├── resource.py      # Custom resource parsing
 │   └── template.py      # ERB template parsing
@@ -49,7 +49,12 @@ souschef/
    - `assessment.py`: High-level migration planning
    - `deployment.py`: AWX integration and deployment strategies
 
-4. **Mock Patching Rule**: When testing, patch functions where they are **used** (imported), not where they are **defined**. Example:
+4. **When to Keep Functions Together vs. Modularize**:
+   - Keep tightly coupled MCP tools in `server.py` when they share significant context (e.g., databag/environment functions ~1,180 lines)
+   - Extract when reusable across multiple tools or testable in isolation
+   - Module size isn't the primary driver - cohesion and coupling are
+
+5. **Mock Patching Rule**: When testing, patch functions where they are **used** (imported), not where they are **defined**. Example:
    ```python
    # Function defined in souschef/parsers/recipe.py
    # Used in souschef/converters/playbook.py
@@ -88,7 +93,8 @@ SousChef uses a modern Python toolchain:
   - Config: `[tool.pytest.ini_options]` in `pyproject.toml`
 
 ### Testing Requirements
-- **100% coverage goal**: Aim for as close to 100% test coverage as possible
+- **Current coverage**: 91% (913 tests passing across 13 test files)
+- **Coverage goal**: Maintain 90%+ for production readiness, aim for 95%+
 - **Test framework**: Use `pytest` for all tests
 - **Test structure**: Tests should be organized in `tests/` directory mirroring the source structure
 - **Test naming**: Test functions should clearly describe what they test (e.g., `test_list_directory_success`)
@@ -152,19 +158,19 @@ The project maintains three types of tests - ensure all are updated when adding 
 
 ## Code Review Checklist
 Before suggesting code, ensure:
-1. ✅ No linting errors (`ruff check`)
-2. ✅ Properly formatted (`ruff format`)
-3. ✅ No type errors (`mypy souschef`)
-4. ✅ All tests pass (`pytest`)
-5. ✅ Coverage maintained at 90%+ (`pytest --cov`)
-6. ✅ Unit tests added/updated in `test_server.py`
-7. ✅ Integration tests added/updated in `test_integration.py`
-8. ✅ Property-based tests added if applicable in `test_property_based.py`
-9. ✅ Test fixtures updated if new parsing features added
-10. ✅ Type hints are complete
-11. ✅ Docstrings are present and clear
-12. ✅ Error cases are handled
-13. ✅ Cross-platform compatible
+1.  No linting errors (`ruff check`)
+2.  Properly formatted (`ruff format`)
+3.  No type errors (`mypy souschef`)
+4.  All tests pass (`pytest`)
+5.  Coverage maintained at 90%+ (`pytest --cov`)
+6.  Unit tests added/updated in `test_server.py`
+7.  Integration tests added/updated in `test_integration.py`
+8.  Property-based tests added if applicable in `test_property_based.py`
+9.  Test fixtures updated if new parsing features added
+10.  Type hints are complete
+11.  Docstrings are present and clear
+12.  Error cases are handled
+13.  Cross-platform compatible
 
 ## Preferred Patterns
 
@@ -248,13 +254,13 @@ def test_handles_any_input(random_input):
 ```
 
 ## Anti-Patterns to Avoid
-- ❌ Disabling linting warnings without fixing the underlying issue
-- ❌ Missing type hints
-- ❌ Untested code paths
-- ❌ Platform-specific path handling
-- ❌ Bare `except:` clauses
-- ❌ Missing docstrings
-- ❌ Hardcoded file paths
+-  Disabling linting warnings without fixing the underlying issue
+-  Missing type hints
+-  Untested code paths
+-  Platform-specific path handling
+-  Bare `except:` clauses
+-  Missing docstrings
+-  Hardcoded file paths
 
 ## Documentation Maintenance
 - **README updates**: When adding new tools, features, or changing functionality, update README.md to reflect the changes

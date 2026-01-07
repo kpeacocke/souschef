@@ -11,7 +11,7 @@ assignees: ''
 
 What would you like help with? Please be as specific as possible.
 
-## 🍳 Context
+## Context
 
 **What are you trying to do?**
 - [ ] Convert a specific Chef cookbook to Ansible
@@ -28,7 +28,7 @@ What would you like help with? Please be as specific as possible.
 - [ ] Experienced with Ansible, new to Chef
 - [ ] Experienced with both
 
-## 📋 Details
+## Details
 
 ### Chef Information (if applicable)
 **Chef Version**: [e.g., 17.x, 18.x]
@@ -69,7 +69,7 @@ souschef-cli recipe my-recipe.rb
 # What output are you getting?
 ```
 
-## 🎯 Expected Outcome
+## Expected Outcome
 
 What result are you hoping to achieve?
 
@@ -90,7 +90,7 @@ What result are you hoping to achieve?
 - **Operating System**: [e.g., Ubuntu 22.04]
 - **Installation Method**: [e.g., poetry, pip]
 
-## 📚 Additional Resources
+## Additional Resources
 
 Are there specific resources you've consulted?
 

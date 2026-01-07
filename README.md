@@ -1,4 +1,4 @@
-# Chef to Ansible migration - SousChef MCP 🍳
+# Chef to Ansible migration - SousChef MCP 
 
 An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 
@@ -16,22 +16,22 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 SousChef is a complete enterprise-grade migration platform with 38 MCP tools organized across 9 major capability areas to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerized deployments, SousChef provides everything needed for a successful infrastructure automation migration.
 
-## 🤖 Model Agnostic - Works with Any AI Model
+## Model Agnostic - Works with Any AI Model
 
 **SousChef works with ANY AI model through the Model Context Protocol (MCP)**. The MCP architecture separates tools from models:
 
-- **✅ Red Hat AI** (Llama, IBM models)
-- **✅ Claude** (Anthropic)
-- **✅ GPT-4/GPT-3.5** (OpenAI)
-- **✅ GitHub Copilot** (Microsoft/OpenAI)
-- **✅ Local Models** (Ollama, llama.cpp, etc.)
-- **✅ Custom Enterprise Models**
+- **Red Hat AI** (Llama, IBM models)
+- **Claude** (Anthropic)
+- **GPT-4/GPT-3.5** (OpenAI)
+- **GitHub Copilot** (Microsoft/OpenAI)
+- **Local Models** (Ollama, llama.cpp, etc.)
+- **Custom Enterprise Models**
 
 **How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 38 specialized tools. The model calls these tools to help with your migration.
 
-> 📖 See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
+> See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
 
-## 📦 Installation
+## Installation
 
 ```bash
 # PyPI Installation
@@ -43,9 +43,9 @@ cd souschef
 poetry install
 ```
 
-> **📖 For detailed installation instructions, MCP setup, and configuration, see [Installation & Setup](#installation--setup)**
+> **For detailed installation instructions, MCP setup, and configuration, see [Installation & Setup](#installation--setup)**
 
-## 🚀 Core Capabilities
+## Core Capabilities
 
 ### 1. Chef Cookbook Analysis & Parsing
 Complete cookbook introspection and analysis tools:
@@ -169,7 +169,7 @@ Output formats:
 - **analyze_cookbook_dependencies** - Analyze dependencies and migration order
 - **generate_migration_report** - Generate executive and technical migration reports
 
-## 🎯 Migration Workflow
+## Migration Workflow
 
 ### Phase 1: Discovery & Assessment
 ```bash
@@ -228,7 +228,7 @@ generate_inspec_from_recipe /path/to/recipe.rb
 convert_inspec_to_test /path/to/inspec_profile testinfra
 ```
 
-## 📊 Enterprise Features
+## Enterprise Features
 
 ### Migration Assessment & Reporting
 - **Complexity Analysis**: Automated assessment of migration effort and risk factors
@@ -249,7 +249,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
 - **Secrets Management**: Secure data bag to Vault conversion
 - **Multi-Environment**: Production-ready inventory and variable management
 
-## 🛠️ Installation & Setup
+## Installation & Setup
 
 ### Prerequisites
 - Python 3.14+
@@ -272,7 +272,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
    cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
    ```
 
-   **📖 See [config/CONFIGURATION.md](config/CONFIGURATION.md) for:**
+   ** See [config/CONFIGURATION.md](config/CONFIGURATION.md) for:**
    - Platform-specific setup (macOS/Linux/Windows)
    - Model provider configurations (Red Hat AI, OpenAI, local models)
    - Development setup
@@ -356,13 +356,13 @@ poetry update              # All packages
 ```
 
 **Automated Systems:**
-- ✅ Pre-commit hooks auto-update `poetry.lock` when `pyproject.toml` changes
-- ✅ CI validates lock file on every PR
-- ✅ Dependabot sends weekly dependency updates
+-  Pre-commit hooks auto-update `poetry.lock` when `pyproject.toml` changes
+-  CI validates lock file on every PR
+-  Dependabot sends weekly dependency updates
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#-managing-dependencies) for detailed dependency management guide.
 
-## 🏗️ Architecture & Design
+## Architecture & Design
 
 ### MCP Protocol Integration
 SousChef leverages the Model Context Protocol (MCP) to provide seamless integration with AI assistants and development environments:
@@ -389,7 +389,7 @@ Following enterprise-grade testing standards with comprehensive test coverage:
 - **Automated Testing**: CI/CD pipeline with comprehensive test suites
 - **Documentation**: Detailed docstrings and usage examples
 
-## 📚 Documentation
+## Documentation
 
 ### Tool Reference
 Each MCP tool includes comprehensive documentation:
@@ -417,32 +417,32 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🚀 Roadmap
+## Roadmap
 
-### Completed ✅
-- ✅ Complete Chef cookbook parsing (recipes, attributes, metadata, templates)
-- ✅ InSpec profile parsing and conversion to Testinfra/Ansible tests
-- ✅ Chef resource to Ansible task conversion with module mapping
-- ✅ Data bags to Ansible Vault conversion
-- ✅ Chef environments to Ansible inventory conversion
-- ✅ Chef search patterns to dynamic inventory conversion
-- ✅ AWX/AAP job templates, workflows, and project generation
-- ✅ Blue/green and canary deployment pattern generation
-- ✅ Migration complexity assessment and planning tools
-- ✅ Comprehensive testing suite (unit, integration, property-based)
-- ✅ Command-line interface (CLI) for standalone usage
-- ✅ Enhanced Chef guard handling (arrays, lambda syntax, complex nested conditions)
-- ✅ Advanced attribute precedence resolution (6 levels with conflict detection)
-- ✅ Automated release management with Release Please
-- ✅ Automated branch cleanup for release PRs
-- ✅ Automated conversion validation and testing framework
-- ✅ Chef Habitat to containerized deployment conversion (parse_habitat_plan, convert_habitat_to_dockerfile, generate_compose_from_habitat)
+### Completed 
+-  Complete Chef cookbook parsing (recipes, attributes, metadata, templates)
+-  InSpec profile parsing and conversion to Testinfra/Ansible tests
+-  Chef resource to Ansible task conversion with module mapping
+-  Data bags to Ansible Vault conversion
+-  Chef environments to Ansible inventory conversion
+-  Chef search patterns to dynamic inventory conversion
+-  AWX/AAP job templates, workflows, and project generation
+-  Blue/green and canary deployment pattern generation
+-  Migration complexity assessment and planning tools
+-  Comprehensive testing suite (unit, integration, property-based)
+-  Command-line interface (CLI) for standalone usage
+-  Enhanced Chef guard handling (arrays, lambda syntax, complex nested conditions)
+-  Advanced attribute precedence resolution (6 levels with conflict detection)
+-  Automated release management with Release Please
+-  Automated branch cleanup for release PRs
+-  Automated conversion validation and testing framework
+-  Chef Habitat to containerized deployment conversion (parse_habitat_plan, convert_habitat_to_dockerfile, generate_compose_from_habitat)
 
-### In Progress 🔄
-- 🔄 Enhanced error handling and user experience improvements
-- 🔄 Documentation website and interactive examples
-- 🔄 Performance optimizations for large-scale enterprise migrations
-- 🔄 Technical debt reduction (15 functions tracked in [GitHub Issues](https://github.com/kpeacocke/souschef/issues?q=is%3Aissue+is%3Aopen+label%3Atechnical-debt))
+### In Progress 
+-  Enhanced error handling and user experience improvements
+-  Documentation website and interactive examples
+-  Performance optimizations for large-scale enterprise migrations
+-  Technical debt reduction (15 functions tracked in [GitHub Issues](https://github.com/kpeacocke/souschef/issues?q=is%3Aissue+is%3Aopen+label%3Atechnical-debt))
 
 ### Planned 📅
 - 📅 Integration with additional test frameworks (ServerSpec, Goss)
@@ -458,7 +458,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**SousChef** - *Transforming infrastructure automation, one recipe at a time.* 🍳✨
+**SousChef** - *Transforming infrastructure automation, one recipe at a time.* ✨
   desc 'Ensure package nginx is properly configured'
   impact 1.0
 
@@ -655,7 +655,7 @@ parse_attributes("/path/to/cookbook/attributes/default.rb")
 # Attribute: nginx.port
 #   Value: 443
 #   Precedence: force_override (level 5)
-#   ⚠️  Overridden values: default=80, normal=8080
+#     Overridden values: default=80, normal=8080
 #
 # Attribute: nginx.ssl_port
 #   Value: 443
@@ -1175,4 +1175,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**SousChef** - *Ansible automation, one recipe at a time.* 🍳✨
+**SousChef** - *Ansible automation, one recipe at a time.* ✨

@@ -422,7 +422,6 @@ Generated from Chef search queries by SousChef
 This script converts Chef search queries to Ansible inventory groups.
 Requires: python-requests (for Chef server API)
 """
-
 import json
 import sys
 import argparse

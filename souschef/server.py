@@ -67,7 +67,9 @@ from souschef.converters.playbook import (  # noqa: F401
     _generate_group_name_from_condition,
     _generate_inventory_script_content,
     _get_current_timestamp,
+    _parse_chef_search_query,
     _parse_guard_array,
+    _parse_search_condition,
     _process_subscribes,
 )
 
@@ -381,16 +383,16 @@ class ValidationResult:
             Dictionary representation of the validation result.
 
         """
-        result = {
+        validation_dict = {
             "level": self.level.value,
             "category": self.category.value,
             "message": self.message,
         }
         if self.location:
-            result["location"] = self.location
+            validation_dict["location"] = self.location
         if self.suggestion:
-            result["suggestion"] = self.suggestion
-        return result
+            validation_dict["suggestion"] = self.suggestion
+        return validation_dict
 
     def __repr__(self) -> str:
         """
@@ -414,7 +416,6 @@ class ValidationEngine:
 
     Provides validation across syntax, semantics, best practices, security,
     and performance categories.
-
     """
 
     def __init__(self) -> None:
@@ -1362,13 +1363,13 @@ def convert_chef_databag_to_vars(
 
         # Parse the data bag content
         try:
-            data = json.loads(databag_content)
+            parsed_databag = json.loads(databag_content)
         except json.JSONDecodeError as e:
             return f"Error: Invalid JSON format in data bag: {e}"
 
         # Convert to Ansible variables format
         ansible_vars = _convert_databag_to_ansible_vars(
-            data, databag_name, item_name, is_encrypted
+            parsed_databag, databag_name, item_name, is_encrypted
         )
 
         if is_encrypted:
@@ -1398,7 +1399,6 @@ def convert_chef_databag_to_vars(
 
 {yaml_content.rstrip()}
 """
-
     except Exception as e:
         return f"Error converting data bag to Ansible variables: {e}"
 
@@ -1527,9 +1527,8 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
 3. Update playbooks to reference new variable files
 4. Encrypt sensitive data with ansible-vault
 """
-
     except Exception as e:
-        return f"Error analyzing data bag usage: {e}"
+        return f"Data bag parsing failed: {e}"
 
 
 @mcp.tool()
@@ -1573,9 +1572,8 @@ def convert_chef_environment_to_inventory_group(
 # [all:children]
 # {environment_name}
 """
-
     except Exception as e:
-        return f"Error converting Chef environment to inventory group: {e}"
+        return f"Environment conversion failed: {e}"
 
 
 @mcp.tool()
@@ -1691,7 +1689,6 @@ def analyze_chef_environment_usage(
 4. Implement variable precedence hierarchy in Ansible
 5. Test environment-specific deployments with new inventory structure
 """
-
     except Exception as e:
         return f"Error analyzing Chef environment usage: {e}"
 
@@ -1746,17 +1743,18 @@ def _extract_attributes_block(content: str, block_type: str) -> dict:
     block_content = match.group(1).strip()
 
     # Simple parsing of Ruby hash-like structure
-    # This is a simplified parser - real implementation might need more robust parsing
+    # Ruby attribute hashes use => syntax, which we convert to Python dict
+    # This is intentionally simple - complex Chef DSL needs full Ruby parser
     attributes = {}
 
-    # Parse simple key-value pairs
+    # Parse simple key-value pairs like 'port' => '8080'
     key_value_pattern = (
         r"['\"]([^'\"]{0,100})['\"][\s:]*=>[\s:]*['\"]([^'\"]{0,200})['\"]"
     )
     for match in re.finditer(key_value_pattern, block_content):
-        key = match.group(1)
-        value = match.group(2)
-        attributes[key] = value
+        attr_key = match.group(1)
+        attr_value = match.group(2)
+        attributes[attr_key] = attr_value
 
     # Parse nested structures (basic support)
     nested_pattern = (
@@ -1850,7 +1848,6 @@ def _generate_complete_inventory_from_environments(
 
 ## Environment Details:
 """
-
     for result in results:
         if result["status"] == "success":
             summary += (
@@ -1901,7 +1898,6 @@ def _generate_complete_inventory_from_environments(
 
 ## File Structure to Create:
 """
-
     for env_name in environments:
         summary += f"- inventory/group_vars/{env_name}.yml\n"
 
@@ -2211,18 +2207,19 @@ def _generate_vault_content(vars_dict: dict, databag_name: str) -> str:
 def _detect_encrypted_databag(content: str) -> bool:
     """Detect if a Chef data bag is encrypted based on content structure."""
     try:
-        data = json.loads(content)
+        databag_json = json.loads(content)
 
-        # Chef encrypted data bags typically have specific encrypted fields
+        # Chef encrypted data bags have specific fields (encrypted_data, cipher, iv, version)
+        # These aren't in plaintext bags, so their presence confirms encryption
         encrypted_indicators = ["encrypted_data", "cipher", "iv", "version"]
 
         # Check if any encrypted indicators are present
         for indicator in encrypted_indicators:
-            if indicator in data:
+            if indicator in databag_json:
                 return True
 
         # Check for encrypted field patterns
-        for _key, value in data.items():
+        for _key, value in databag_json.items():
             if isinstance(value, dict) and "encrypted_data" in value:
                 return True
 
@@ -2248,7 +2245,6 @@ def _generate_databag_conversion_summary(results: list, output_dir: str) -> str:
 
 ## Generated Files:
 """
-
     files_created = set()
     for result in results:
         if "error" not in result:
@@ -2277,7 +2273,6 @@ def _generate_databag_conversion_summary(results: list, output_dir: str) -> str:
 4. Test variable access in playbooks
 5. Remove original Chef data bags after validation
 """
-
     return summary
 
 

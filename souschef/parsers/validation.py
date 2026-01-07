@@ -103,7 +103,6 @@ class ValidationEngine:
 
     Provides validation across syntax, semantics, best practices, security,
     and performance categories.
-
     """
 
     def __init__(self) -> None:
