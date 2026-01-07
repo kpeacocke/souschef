@@ -4,6 +4,9 @@
 #
 # Complete nginx web server setup with SSL, custom resources, and platform awareness
 
+# Constants
+NGINX_SERVICE = 'service[nginx]'
+
 # Create nginx user and group
 group node['nginx']['group'] do
   action :create
@@ -56,7 +59,7 @@ template "#{node['nginx']['conf_dir']}/nginx.conf" do
     access_log: node['nginx']['access_log']
   )
   action :create
-  notifies :reload, 'service[nginx]', :delayed
+  notifies :reload, NGINX_SERVICE, :delayed
 end
 
 # SSL setup (only if enabled)
@@ -106,14 +109,14 @@ template "#{node['nginx']['conf_dir']}/sites-available/default" do
     ssl_key: node['nginx']['ssl']['key_path']
   )
   action :create
-  notifies :reload, 'service[nginx]', :delayed
+  notifies :reload, NGINX_SERVICE, :delayed
 end
 
 # Enable default site
 link "#{node['nginx']['conf_dir']}/sites-enabled/default" do
   to "#{node['nginx']['conf_dir']}/sites-available/default"
   action :create
-  notifies :reload, 'service[nginx]', :delayed
+  notifies :reload, NGINX_SERVICE, :delayed
 end
 
 # Default index page
@@ -200,6 +203,11 @@ when 'rhel'
     command 'firewall-cmd --reload'
     action :nothing
   end
+else
+  log 'firewall-not-configured' do
+    message "Firewall configuration not implemented for platform family: #{node['platform_family']}"
+    level :warn
+  end
 end
 
 # Monitoring script
@@ -227,7 +235,7 @@ bash 'optimize-nginx-workers' do
   BASH
   action :run
   only_if { node['nginx']['worker_processes'] == 'auto' }
-  notifies :reload, 'service[nginx]', :delayed
+  notifies :reload, NGINX_SERVICE, :delayed
 end
 
 log 'nginx-setup-complete' do

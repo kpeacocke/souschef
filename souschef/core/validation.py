@@ -144,6 +144,9 @@ class ValidationEngine:
 
         return self.results
 
+    # Alias for backward compatibility
+    validate_converted_content = validate_conversion
+
     def _add_result(
         self,
         level: ValidationLevel,

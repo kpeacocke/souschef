@@ -33,14 +33,7 @@ default['nginx']['gzip']['enabled'] = true
 default['nginx']['gzip']['comp_level'] = 6
 default['nginx']['gzip']['types'] = 'text/plain text/css application/json application/javascript text/xml'
 
-# Platform-specific
-case node['platform_family']
-when 'debian'
-  default['nginx']['package_name'] = 'nginx'
-  default['nginx']['service_name'] = 'nginx'
-  default['nginx']['conf_dir'] = '/etc/nginx'
-when 'rhel'
-  default['nginx']['package_name'] = 'nginx'
-  default['nginx']['service_name'] = 'nginx'
-  default['nginx']['conf_dir'] = '/etc/nginx'
-end
+# Platform-specific (same across all platforms)
+default['nginx']['package_name'] = 'nginx'
+default['nginx']['service_name'] = 'nginx'
+default['nginx']['conf_dir'] = '/etc/nginx'

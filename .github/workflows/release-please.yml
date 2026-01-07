@@ -1,9 +1,9 @@
 name: Release Please
 
-# Run after CI completes on main
+# Run after CI and SonarQube complete on main
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["CI", "SonarQube Analysis"]
     types: [completed]
     branches: [main]
 
@@ -14,12 +14,13 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only run if CI passed
+    # Only run if both CI and SonarQube passed
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
