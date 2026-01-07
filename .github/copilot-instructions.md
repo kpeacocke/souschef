@@ -70,6 +70,7 @@ souschef/
 - **Linting**: Code must pass `ruff check` with no violations
 - **Formatting**: Code must be formatted with `ruff format`
 - **Type checking**: Code must pass `mypy` type checking with no errors
+- **Import cleanup**: ALWAYS respect `# noqa: F401` markers - these indicate intentional re-exports for backward compatibility with tests. Never remove imports marked with `# noqa: F401` even if they appear unused in the file itself
 
 ### Development Tools
 SousChef uses a modern Python toolchain:

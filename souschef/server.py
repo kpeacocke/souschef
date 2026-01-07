@@ -113,7 +113,7 @@ from souschef.core.ruby_utils import (  # noqa: F401
 # Re-exports of deployment internal functions for backward compatibility (tests)
 # Public re-exports of deployment functions for test backward compatibility
 # Note: MCP tool wrappers exist for some of these, but tests import directly
-from souschef.deployment import (  # noqa: F401  # noqa: F401
+from souschef.deployment import (  # noqa: F401
     _analyze_cookbook_for_awx,
     _analyze_cookbooks_directory,
     _detect_deployment_patterns_in_recipe,
