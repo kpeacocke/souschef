@@ -6,16 +6,16 @@
 **Target branch**: `[base branch]`
 
 Please verify your branch follows gitflow conventions:
-- ✅ `feature/*` → targets `develop`
-- ✅ `bugfix/*` → targets `develop`
-- ✅ `release/*` → targets `main`
-- ✅ `hotfix/*` → targets `main`
+-  `feature/*` → targets `develop`
+-  `bugfix/*` → targets `develop`
+-  `release/*` → targets `main`
+-  `hotfix/*` → targets `main`
 
 _The gitflow workflow will automatically validate this._
 
 ---
 
-## 📋 Summary
+## Summary
 
 Brief description of what this PR does and why.
 
@@ -23,19 +23,19 @@ Brief description of what this PR does and why.
 - [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
 - [ ] ✨ New feature (non-breaking change that adds functionality)
 - [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] 📚 Documentation update
-- [ ] 🧪 Test improvements
-- [ ] 🔧 Refactoring (no functional changes)
-- [ ] 📦 Dependencies update
-- [ ] 🚀 Performance improvement
+- [ ]  Documentation update
+- [ ]  Test improvements
+- [ ]  Refactoring (no functional changes)
+- [ ]  Dependencies update
+- [ ]  Performance improvement
 
-## 🎯 Related Issues
+## Related Issues
 
 Closes #[issue number]
 Relates to #[issue number]
 Fixes #[issue number]
 
-## 🔧 Changes Made
+## Changes Made
 
 ### Core Changes
 - List the main changes made
@@ -49,7 +49,7 @@ Fixes #[issue number]
 - `tests/test_*.py` - [description of test changes]
 - `README.md` - [description of documentation changes]
 
-## 🧪 Testing
+## Testing
 
 ### Test Coverage
 - [ ] Unit tests added/updated for new functionality
@@ -81,7 +81,7 @@ Resource 1: package[nginx]
 - [ ] Performance with large inputs
 - [ ] Integration with existing features
 
-## 📊 Performance Impact
+## Performance Impact
 
 If applicable, describe performance implications:
 
@@ -89,7 +89,7 @@ If applicable, describe performance implications:
 - **Processing time**: Benchmarks show X% improvement/regression
 - **Scalability**: Handles larger cookbooks / No impact
 
-## 🔒 Security Considerations
+## Security Considerations
 
 For changes that might have security implications:
 
@@ -99,7 +99,7 @@ For changes that might have security implications:
 - [ ] Error messages don't leak sensitive information
 - [ ] Dependencies updated to secure versions
 
-## 📖 Documentation
+## Documentation
 
 - [ ] README.md updated if needed
 - [ ] CLI help text updated
@@ -110,14 +110,14 @@ For changes that might have security implications:
 ## 🧹 Code Quality
 
 ### Checklist (verify before submitting)
-- [ ] ✅ Code passes linting (`poetry run ruff check .`)
-- [ ] ✅ Code is properly formatted (`poetry run ruff format .`)
-- [ ] ✅ All tests pass (`poetry run pytest`)
-- [ ] ✅ Type hints are complete and accurate
-- [ ] ✅ Docstrings follow Google style format
-- [ ] ✅ No warnings introduced (zero warnings policy)
-- [ ] ✅ Code follows existing patterns and style
-- [ ] ✅ Error handling is comprehensive
+- [ ]  Code passes linting (`poetry run ruff check .`)
+- [ ]  Code is properly formatted (`poetry run ruff format .`)
+- [ ]  All tests pass (`poetry run pytest`)
+- [ ]  Type hints are complete and accurate
+- [ ]  Docstrings follow Google style format
+- [ ]  No warnings introduced (zero warnings policy)
+- [ ]  Code follows existing patterns and style
+- [ ]  Error handling is comprehensive
 
 ### Code Review Areas
 Please pay special attention to:
@@ -127,7 +127,7 @@ Please pay special attention to:
 - [ ] Error messages and user experience
 - [ ] Test coverage and edge cases
 
-## 🎨 UI/UX Changes
+## UI/UX Changes
 
 For CLI or output changes:
 
@@ -141,7 +141,7 @@ For CLI or output changes:
 # New CLI output or behavior
 ```
 
-## ⚠️ Breaking Changes
+## Breaking Changes
 
 If this PR introduces breaking changes, describe:
 
@@ -150,7 +150,7 @@ If this PR introduces breaking changes, describe:
 3. **Deprecation period**: Timeline for removing old functionality
 4. **Documentation**: Where migration info is documented
 
-## 🚀 Deployment Notes
+## Deployment Notes
 
 Any special considerations for deployment:
 
@@ -160,7 +160,7 @@ Any special considerations for deployment:
 - [ ] Dependencies updated
 - [ ] Version bump required
 
-## 📝 Additional Context
+## Additional Context
 
 Add any additional context, screenshots, or information that reviewers should know:
 
@@ -169,7 +169,7 @@ Add any additional context, screenshots, or information that reviewers should kn
 - Alternative approaches considered
 - Future work this enables
 
-## 🔄 Reviewer Guidance
+## Reviewer Guidance
 
 **Focus Areas for Review**:
 - Code correctness and edge case handling
@@ -186,18 +186,18 @@ Add any additional context, screenshots, or information that reviewers should kn
 
 ---
 
-## 📋 Pre-Submit Checklist
+## Pre-Submit Checklist
 
 Before submitting this PR, I have verified:
 
-- [ ] 🧪 All tests pass locally (`poetry run pytest`)
-- [ ] 🎨 Code is linted and formatted (`poetry run ruff check . && poetry run ruff format .`)
-- [ ] 📊 Test coverage is maintained or improved
-- [ ] 📖 Documentation is updated where needed
+- [ ]  All tests pass locally (`poetry run pytest`)
+- [ ]  Code is linted and formatted (`poetry run ruff check . && poetry run ruff format .`)
+- [ ]  Test coverage is maintained or improved
+- [ ]  Documentation is updated where needed
 - [ ] 🔍 I have self-reviewed my code changes
 - [ ] 💭 Complex logic has explanatory comments
 - [ ] 🚨 No debug code or console.log statements left
-- [ ] 🔧 Commit messages follow conventional format
+- [ ]  Commit messages follow conventional format
 
 **By submitting this PR, I confirm that**:
 - [ ] My contribution is made under the project's MIT license

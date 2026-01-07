@@ -19,7 +19,7 @@ assignees: ''
 
 **Timeline**: When do you need this migration completed?
 
-## 🍳 Chef Environment
+## Chef Environment
 
 ### Current Chef Setup
 **Chef Version**: [e.g., 17.10.0]
@@ -57,7 +57,7 @@ Which Chef patterns does your infrastructure use? (check all that apply)
 - [ ] **InSpec** - compliance and testing
 - [ ] **Application Cookbooks** - deploy resources, git checkouts
 
-## 🎭 Target Ansible Environment
+## Target Ansible Environment
 
 ### Ansible Setup Goals
 **Ansible Version**: [target version, e.g., 2.15+]
@@ -86,7 +86,7 @@ Which Chef patterns does your infrastructure use? (check all that apply)
 - [ ] External variable sources
 - [ ] AWX/AAP credentials
 
-## 🔧 SousChef Usage
+## SousChef Usage
 
 ### What You've Tried
 - [ ] Used CLI to analyze cookbooks: `souschef-cli structure /path/to/cookbook`
@@ -137,7 +137,7 @@ What specific technical challenges do you face?
 - [ ] **Documentation** - updating operational procedures
 - [ ] **Tool Integration** - adapting existing toolchain
 
-## 📊 Sample Code/Configuration
+## Sample Code/Configuration
 
 ### Representative Chef Code
 Please provide a sample of your Chef code that represents the complexity:
@@ -176,7 +176,7 @@ If you have ideas about how this should look in Ansible:
 # ... additional tasks
 ```
 
-## 🎯 Success Criteria
+## Success Criteria
 
 What would make this migration successful for you?
 

@@ -7,17 +7,17 @@ assignees: ''
 
 ---
 
-## 🚀 Feature Description
+## Feature Description
 
 A clear and concise description of the feature you'd like to see added.
 
-## 🎯 Problem Statement
+## Problem Statement
 
 What problem does this feature solve? Is your feature request related to a problem?
 
 **Example**: "I'm always frustrated when trying to convert Chef [specific resource/pattern] because..."
 
-## 💡 Proposed Solution
+## Proposed Solution
 
 Describe the solution you'd like:
 
@@ -40,7 +40,7 @@ def new_tool_name(parameter: str) -> str:
 souschef-cli new-command input.rb --option value
 ```
 
-## 🔄 Use Cases
+## Use Cases
 
 Describe specific use cases where this feature would be helpful:
 
@@ -48,7 +48,7 @@ Describe specific use cases where this feature would be helpful:
 2. **Use Case 2**: Migrating from [specific Chef setup] to Ansible
 3. **Use Case 3**: Handling [specific migration scenario]
 
-## 🍳 Chef Context
+## Chef Context
 
 If this relates to Chef functionality:
 
@@ -65,7 +65,7 @@ custom_resource 'my_app' do
 end
 ```
 
-## 🎭 Ansible Context
+## Ansible Context
 
 If this relates to Ansible conversion:
 
@@ -82,7 +82,7 @@ If this relates to Ansible conversion:
     state: present
 ```
 
-## 📚 Alternative Solutions
+## Alternative Solutions
 
 Describe alternatives you've considered:
 
@@ -90,7 +90,7 @@ Describe alternatives you've considered:
 - Other tools or approaches
 - Manual conversion steps
 
-## 🏷️ Feature Category
+## Feature Category
 
 What type of feature is this? (check all that apply)
 
@@ -105,13 +105,13 @@ What type of feature is this? (check all that apply)
 - [ ] **Performance** - Speed or efficiency improvements
 - [ ] **Other** - Please specify
 
-## 📈 Priority/Impact
+## Priority/Impact
 
 - **Priority**: How important is this feature to you? (Low/Medium/High)
 - **Impact**: How many users would benefit from this? (Few/Some/Many)
 - **Complexity**: How complex do you think this would be to implement? (Simple/Medium/Complex)
 
-## 🔗 Related Issues/Discussions
+## Related Issues/Discussions
 
 Link any related issues or discussions:
 
@@ -119,7 +119,7 @@ Link any related issues or discussions:
 - Discussed in #XXX
 - Similar to #XXX
 
-## 📝 Additional Context
+## Additional Context
 
 Add any other context, screenshots, examples, or references:
 

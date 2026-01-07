@@ -1,0 +1,11 @@
+# TruffleHog Exclude Patterns (Regex)
+# This file contains regex patterns for false positives that TruffleHog should ignore
+
+# SonarCloud API URLs in badges and documentation (not secrets)
+sonarcloud\.io/api/project_badges
+sonarcloud\.io/summary/new_code
+
+# Project identifiers (not secrets)
+project=kpeacocke_souschef
+metric=(alert_status|security_rating|sqale_rating)
+

@@ -819,27 +819,29 @@ class TestPlaybookGenerationEdgeCases:
 
     def test_generate_playbook_with_parse_error(self, monkeypatch, tmp_path):
         """Test playbook generation when recipe parsing returns error."""
-        from souschef import server
+        from souschef.converters import playbook
 
         def mock_parse_recipe(*args):
             return "Error: Failed to parse recipe"
 
-        monkeypatch.setattr(server, "parse_recipe", mock_parse_recipe)
+        monkeypatch.setattr(playbook, "parse_recipe", mock_parse_recipe)
 
         temp_file = tmp_path / "test_recipe.rb"
         temp_file.write_text("package 'nginx'")
+
+        from souschef import server
 
         result = server.generate_playbook_from_recipe(str(temp_file))
         assert "Error:" in result
 
     def test_generate_playbook_with_exception(self, monkeypatch, tmp_path):
         """Test playbook generation with unexpected exception."""
-        from souschef import server
+        from souschef.converters import playbook
 
         def mock_parse_recipe(*args):
             raise RuntimeError("Unexpected error")
 
-        monkeypatch.setattr(server, "parse_recipe", mock_parse_recipe)
+        monkeypatch.setattr(playbook, "parse_recipe", mock_parse_recipe)
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
             f.write("package 'nginx'")
@@ -847,6 +849,8 @@ class TestPlaybookGenerationEdgeCases:
             temp_path = f.name
 
         try:
+            from souschef import server
+
             result = server.generate_playbook_from_recipe(temp_path)
             assert "Error generating playbook:" in result
         finally:
@@ -894,14 +898,14 @@ class TestAnalyzeSearchPatternsEdgeCases:
 
         from souschef.server import analyze_chef_search_patterns
 
-        with patch("souschef.server._normalize_path") as mock_path:
+        with patch("souschef.converters.playbook._normalize_path") as mock_path:
             mock_file = MagicMock()
             mock_file.is_file.return_value = True
             mock_file.is_dir.return_value = False
             mock_path.return_value = mock_file
 
             with patch(
-                "souschef.server._extract_search_patterns_from_file"
+                "souschef.converters.playbook._extract_search_patterns_from_file"
             ) as mock_extract:
                 mock_extract.side_effect = ValueError("Parse error")
 

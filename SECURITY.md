@@ -12,7 +12,7 @@ We currently support the following versions of SousChef with security updates:
 
 We take the security of SousChef seriously. If you discover a security vulnerability, please follow these steps:
 
-### 🔒 Private Disclosure
+### Private Disclosure
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
@@ -21,7 +21,7 @@ Instead, please report vulnerabilities privately using one of the following meth
 1. **GitHub Security Advisories** (preferred): Use the "Security" tab in the GitHub repository to privately report vulnerabilities
 2. **Email**: Send details to krpeacocke@gmail.com
 
-### 📋 What to Include
+### What to Include
 
 When reporting a vulnerability, please include:
 
@@ -31,14 +31,14 @@ When reporting a vulnerability, please include:
 - **Environment**: Python version, SousChef version, and operating system
 - **Proof of Concept**: If applicable, include a minimal proof of concept
 
-### ⏱️ Response Timeline
+### Response Timeline
 
 - **Initial Response**: We aim to acknowledge receipt within 48 hours
 - **Investigation**: We will investigate and provide an initial assessment within 7 days
 - **Resolution**: Critical vulnerabilities will be addressed within 30 days
 - **Disclosure**: We follow coordinated disclosure practices
 
-### 🏆 Recognition
+### Recognition
 
 Security researchers who responsibly disclose vulnerabilities may be:
 
@@ -101,4 +101,4 @@ For general security questions or concerns, please:
 2. Review this security policy
 3. Contact the maintainer at krpeacocke@gmail.com
 
-Thank you for helping keep SousChef secure! 🛡️
+Thank you for helping keep SousChef secure! 

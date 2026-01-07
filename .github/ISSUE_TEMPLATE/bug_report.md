@@ -11,7 +11,7 @@ assignees: ''
 
 A clear and concise description of what the bug is.
 
-## 🔄 Steps to Reproduce
+## Steps to Reproduce
 
 Steps to reproduce the behavior:
 
@@ -38,13 +38,13 @@ end
 - **Operating System**: [e.g., Ubuntu 22.04, macOS 13.0, Windows 11]
 - **Installation Method**: [e.g., poetry, pip, from source]
 
-## 📋 Output/Error Messages
+## Output/Error Messages
 
 ```
 Paste the complete error message or unexpected output here
 ```
 
-## 🤔 Expected Behavior
+## Expected Behavior
 
 A clear and concise description of what you expected to happen.
 

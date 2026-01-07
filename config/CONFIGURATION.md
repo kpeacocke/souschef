@@ -14,7 +14,7 @@ This directory contains example MCP server configurations for various MCP client
 - **`claude-desktop-dev.json`** - Claude Desktop with local Poetry development setup
 - **`vscode-copilot-dev.json`** - VS Code Copilot with local Poetry development setup
 
-## 🚀 Quick Setup
+## Quick Setup
 
 ### Claude Desktop
 
@@ -65,13 +65,13 @@ cp config/vscode-copilot-dev.json ~/.config/Code/User/globalStorage/github.copil
 code ~/.config/Code/User/globalStorage/github.copilot-chat/mcp.json
 ```
 
-## 🤖 Model Provider Support
+## Model Provider Support
 
 **SousChef is completely model-agnostic!** It works with any MCP-compatible client regardless of what AI model they use.
 
 ### Supported Configurations
 
-#### ✅ Red Hat AI / IBM Watsonx / Enterprise Models
+####  Red Hat AI / IBM Watsonx / Enterprise Models
 
 To use SousChef with Red Hat AI, Watsonx, or custom enterprise models, you need an MCP client that supports your model provider. Example configuration structure:
 
@@ -93,7 +93,7 @@ To use SousChef with Red Hat AI, Watsonx, or custom enterprise models, you need 
 
 **Note:** The `modelProvider` and `modelConfig` sections depend on your MCP client implementation. SousChef connects the same way regardless of the model.
 
-#### ✅ OpenAI (GPT-4, GPT-3.5)
+####  OpenAI (GPT-4, GPT-3.5)
 
 For OpenAI models, use an MCP client that supports OpenAI:
 
@@ -113,7 +113,7 @@ For OpenAI models, use an MCP client that supports OpenAI:
 }
 ```
 
-#### ✅ Local Models (Ollama, llama.cpp)
+####  Local Models (Ollama, llama.cpp)
 
 Run models locally with MCP clients that support local inference:
 
@@ -133,7 +133,7 @@ Run models locally with MCP clients that support local inference:
 }
 ```
 
-#### ✅ Claude (Anthropic)
+####  Claude (Anthropic)
 
 The provided example configs use Claude Desktop:
 
@@ -148,7 +148,7 @@ The provided example configs use Claude Desktop:
 }
 ```
 
-#### ✅ GitHub Copilot (VS Code)
+####  GitHub Copilot (VS Code)
 
 The provided VS Code configs work with Copilot:
 
@@ -163,13 +163,13 @@ The provided VS Code configs work with Copilot:
 
 ### Key Principle: Client vs Server
 
-**🎯 Important:** 
+** Important:** 
 - **MCP Server (SousChef)** = Provides the Chef/Ansible tools
 - **MCP Client** = Runs your chosen AI model
 - The client configuration determines which model you use
 - SousChef configuration is the same for all models
 
-## 🔧 Configuration Options
+## Configuration Options
 
 ### Using uvx (Recommended for Production)
 
@@ -211,7 +211,7 @@ The provided VS Code configs work with Copilot:
 - Testing changes before publishing
 - Contributing to the project
 
-## 🎯 Testing Your Configuration
+## Testing Your Configuration
 
 ### Claude Desktop
 
@@ -267,14 +267,14 @@ cd /path/to/souschef
 pwd  # Use this output in your config
 ```
 
-## 📚 Additional Resources
+## Additional Resources
 
 - [MCP Documentation](https://modelcontextprotocol.io/)
 - [Claude Desktop MCP Setup](https://docs.anthropic.com/claude/docs/model-context-protocol)
 - [SousChef Main README](../README.md)
 - [Contributing Guide](../CONTRIBUTING.md)
 
-## 💡 Tips
+## Tips
 
 1. **Use uvx for simplicity** - No need to manage virtual environments
 2. **Development setup** - Use Poetry configs when developing/testing
