@@ -141,7 +141,7 @@ In addition to the general guidelines above, the SousChef community values:
 - Help others learn infrastructure automation best practices
 - Contribute improvements that benefit the entire community
 
-### 🎯 Quality and Safety First
+### Quality and Safety First
 - Infrastructure automation affects production systems
 - Code changes should be thoroughly tested and reviewed
 - Documentation should be accurate and helpful
@@ -151,7 +151,7 @@ In addition to the general guidelines above, the SousChef community values:
 - Value different perspectives on automation and migration strategies
 - Support learning and professional development
 
-### 🔧 Practical Solutions
+### Practical Solutions
 - Focus on real-world migration scenarios and challenges
 - Prioritize features that solve actual infrastructure problems
 - Maintain balance between innovation and stability

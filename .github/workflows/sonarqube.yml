@@ -1,11 +1,10 @@
 name: SonarCloud Analysis
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches:
       - main
       - develop
@@ -25,14 +24,16 @@ jobs:
   sonarcloud:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Note: secrets check is done in steps; job-level if cannot use secrets context
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # Only run if CI workflow succeeded
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
 
     steps:
     - name: Check for SONAR_TOKEN secret
       id: check-token
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: |
-        if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+        if [ -z "$SONAR_TOKEN" ]; then
           echo "SONAR_TOKEN is not set. Skipping SonarCloud analysis."
           echo "has_token=false" >> $GITHUB_OUTPUT
         else
@@ -40,20 +41,20 @@ jobs:
         fi
 
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       if: steps.check-token.outputs.has_token == 'true'
       with:
         fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}
       if: steps.check-token.outputs.has_token == 'true'
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Install Poetry
       if: steps.check-token.outputs.has_token == 'true'
-      uses: snok/install-poetry@v1
+      uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a # v1
       with:
         version: latest
         virtualenvs-create: true
@@ -61,7 +62,7 @@ jobs:
 
     - name: Cache Poetry dependencies
       if: steps.check-token.outputs.has_token == 'true'
-      uses: actions/cache@v5
+      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5
       with:
         path: .venv
         key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
@@ -72,15 +73,24 @@ jobs:
       if: steps.check-token.outputs.has_token == 'true'
       run: poetry install --no-interaction
 
-    - name: Run tests with coverage for SonarCloud
-      if: steps.check-token.outputs.has_token == 'true'
+    - name: Download coverage from CI workflow
+      if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+      with:
+        name: coverage-report
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        run-id: ${{ github.event.workflow_run.id }}
+      continue-on-error: true
+
+    - name: Generate coverage if not downloaded
+      if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_dispatch'
       run: |
         poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
       continue-on-error: true
 
     - name: Run SonarCloud analysis
       if: steps.check-token.outputs.has_token == 'true'
-      uses: SonarSource/sonarqube-scan-action@v7
+      uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

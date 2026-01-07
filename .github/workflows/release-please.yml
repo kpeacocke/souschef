@@ -38,7 +38,7 @@ jobs:
         run: |
           PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
           echo "Enabling auto-merge for release PR #$PR_NUMBER..."
-          gh pr merge "$PR_NUMBER" --auto --squash --repo ${{ github.repository }}
+          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch --repo ${{ github.repository }}
 
       - name: Log release created
         if: ${{ steps.release.outputs.release_created }}

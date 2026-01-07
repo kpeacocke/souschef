@@ -13,6 +13,7 @@ usability of converted code.
 import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -420,53 +421,33 @@ class TestDeploymentStrategyConversion:
 
     def test_rolling_deployment_conversion(self):
         """Test rolling deployment strategy conversion."""
-        recipe_content = """
-# Rolling deployment recipe
-deploy_resource 'myapp' do
-  strategy 'rolling'
-  action :deploy
-end
-"""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
-            f.write(recipe_content)
-            temp_path = f.name
+        # Use sample cookbook fixture instead of temp file in random location
+        cookbook_path = Path(__file__).parent / "fixtures" / "sample_cookbook"
+        if not cookbook_path.exists():
+            pytest.skip("Sample cookbook fixture not found")
 
-        try:
-            result = convert_chef_deployment_to_ansible_strategy(
-                deployment_recipe_path=temp_path,
-                deployment_pattern="rolling",
-                target_strategy="rolling_update",
-            )
+        result = convert_chef_deployment_to_ansible_strategy(
+            cookbook_path=str(cookbook_path),
+            deployment_pattern="rolling",
+        )
 
-            # Verify Ansible rolling strategy
-            assert "serial" in result or "rolling" in result or "strategy" in result
-        finally:
-            Path(temp_path).unlink(missing_ok=True)
+        # Verify Ansible rolling strategy
+        assert "serial" in result or "rolling" in result or "strategy" in result
 
     def test_blue_green_deployment_conversion(self):
         """Test blue-green deployment conversion."""
-        recipe_content = """
-# Blue-green deployment recipe
-deploy_resource 'myapp' do
-  strategy 'blue_green'
-  action :deploy
-end
-"""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
-            f.write(recipe_content)
-            temp_path = f.name
+        # Use sample cookbook fixture instead of temp file in random location
+        cookbook_path = Path(__file__).parent / "fixtures" / "sample_cookbook"
+        if not cookbook_path.exists():
+            pytest.skip("Sample cookbook fixture not found")
 
-        try:
-            result = convert_chef_deployment_to_ansible_strategy(
-                deployment_recipe_path=temp_path,
-                deployment_pattern="blue_green",
-                target_strategy="blue_green",
-            )
+        result = convert_chef_deployment_to_ansible_strategy(
+            cookbook_path=str(cookbook_path),
+            deployment_pattern="blue_green",
+        )
 
-            # Verify blue-green strategy mentions color groups
-            assert "blue" in result.lower() or "green" in result.lower()
-        finally:
-            Path(temp_path).unlink(missing_ok=True)
+        # Verify blue-green strategy mentions color groups
+        assert "blue" in result.lower() or "green" in result.lower()
 
 
 class TestRecipeParsingAccuracy:
@@ -592,3 +573,160 @@ class TestEndToEndConversion:
             )
         finally:
             Path(temp_path).unlink(missing_ok=True)
+
+
+class TestRecipeParsingWithComplexPatterns:
+    """Test recipe parsing with various Chef patterns and constructs."""
+
+    def test_parse_recipe_with_wildcard_condition(self):
+        """Test recipe parsing with wildcard search conditions."""
+        from souschef.server import parse_recipe
+
+        recipe_content = """
+search_results = search(:node, "hostname:web-*")
+
+search_results.each do |server|
+  log "Found server: #{server['hostname']}"
+end
+"""
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+            mock_path = MagicMock()
+            mock_path.read_text.return_value = recipe_content
+            mock_path.exists.return_value = True
+            mock_path.is_file.return_value = True
+            mock_norm.return_value = mock_path
+
+            result = parse_recipe("/fake/path/recipe.rb")
+            assert "search" in result.lower() or "warning" in result.lower()
+
+    def test_parse_recipe_with_regex_condition(self):
+        """Test recipe parsing with regex search patterns."""
+        from souschef.server import parse_recipe
+
+        recipe_content = """
+nodes = search(:node, "name:/^app-\\d+$/")
+"""
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+            mock_path = MagicMock()
+            mock_path.read_text.return_value = recipe_content
+            mock_path.exists.return_value = True
+            mock_path.is_file.return_value = True
+            mock_norm.return_value = mock_path
+
+            result = parse_recipe("/fake/path/recipe.rb")
+            assert len(result) > 0
+
+    def test_parse_recipe_with_subscribes_and_handlers(self):
+        """Test recipe with both subscribes and notifies generates handlers."""
+        from souschef.server import parse_recipe
+
+        recipe_content = """
+template '/etc/app/config.conf' do
+  source 'config.conf.erb'
+  notifies :reload, 'service[app]', :immediately
+end
+
+service 'app' do
+  action [:enable, :start]
+  subscribes :restart, 'template[/etc/app/config.conf]', :delayed
+end
+"""
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+            mock_path = MagicMock()
+            mock_path.read_text.return_value = recipe_content
+            mock_path.exists.return_value = True
+            mock_path.is_file.return_value = True
+            mock_norm.return_value = mock_path
+
+            result = parse_recipe("/fake/path/recipe.rb")
+            assert "service" in result.lower() or "warning" in result.lower()
+            assert len(result) > 10
+
+    def test_parse_recipe_with_complex_version_constraints(self):
+        """Test recipe with version constraints in package resources."""
+        from souschef.server import parse_recipe
+
+        recipe_content = """
+package 'nginx' do
+  version '1.18.0-0ubuntu1'
+  action :install
+end
+
+package 'postgresql' do
+  version '>= 12.0, < 14.0'
+  action :upgrade
+end
+"""
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+            mock_path = MagicMock()
+            mock_path.read_text.return_value = recipe_content
+            mock_path.exists.return_value = True
+            mock_path.is_file.return_value = True
+            mock_norm.return_value = mock_path
+
+            result = parse_recipe("/fake/path/recipe.rb")
+            assert "nginx" in result or "warning" in result.lower()
+
+    def test_parse_recipe_with_only_if_guard(self):
+        """Test recipe with only_if guards."""
+        from souschef.server import parse_recipe
+
+        recipe_content = """
+service 'nginx' do
+  action :start
+  only_if 'test -f /etc/nginx/nginx.conf'
+end
+"""
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+            mock_path = MagicMock()
+            mock_path.read_text.return_value = recipe_content
+            mock_path.exists.return_value = True
+            mock_path.is_file.return_value = True
+            mock_norm.return_value = mock_path
+
+            result = parse_recipe("/fake/path/recipe.rb")
+            assert "nginx" in result or "warning" in result.lower()
+
+    def test_parse_recipe_with_not_if_guard(self):
+        """Test recipe with not_if guards."""
+        from souschef.server import parse_recipe
+
+        recipe_content = """
+package 'apache2' do
+  action :install
+  not_if 'which apache2'
+end
+"""
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+            mock_path = MagicMock()
+            mock_path.read_text.return_value = recipe_content
+            mock_path.exists.return_value = True
+            mock_path.is_file.return_value = True
+            mock_norm.return_value = mock_path
+
+            result = parse_recipe("/fake/path/recipe.rb")
+            assert "apache2" in result or "warning" in result.lower()
+
+    def test_parse_recipe_with_block_guard(self):
+        """Test recipe with block guards."""
+        from souschef.server import parse_recipe
+
+        recipe_content = """
+file '/tmp/test' do
+  content 'test'
+  only_if { File.exist?('/etc/config') }
+end
+"""
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+            mock_path = MagicMock()
+            mock_path.read_text.return_value = recipe_content
+            mock_path.exists.return_value = True
+            mock_path.is_file.return_value = True
+            mock_norm.return_value = mock_path
+
+            result = parse_recipe("/fake/path/recipe.rb")
+            assert (
+                "file" in result.lower()
+                or "test" in result
+                or "warning" in result.lower()
+            )

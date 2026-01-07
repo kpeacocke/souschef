@@ -112,6 +112,84 @@ def test_parse_attributes_with_generated_attributes(precedence, key1, key2, valu
 
 
 @given(
+    precedence=st.sampled_from(
+        [
+            "default",
+            "force_default",
+            "normal",
+            "override",
+            "force_override",
+            "automatic",
+        ]
+    ),
+    key=st.text(
+        alphabet=st.characters(
+            whitelist_categories=("Lu", "Ll", "Nd"),
+            min_codepoint=65,
+            max_codepoint=122,
+        ),
+        min_size=1,
+        max_size=20,
+    ),
+    value=st.integers(min_value=1, max_value=10000),
+)
+@settings(max_examples=50)
+def test_parse_attributes_all_precedence_levels(precedence, key, value):
+    """Test attribute parsing with all Chef precedence levels."""
+    attr_content = f"{precedence}['{key}'] = {value}\n"
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        try:
+            f.write(attr_content)
+            f.flush()
+
+            result = parse_attributes(f.name, resolve_precedence=True)
+
+            # Should parse and recognize the precedence level
+            assert precedence in result
+            assert str(value) in result
+            assert "Resolved Attributes" in result
+        finally:
+            Path(f.name).unlink(missing_ok=True)
+
+
+@given(
+    values=st.lists(
+        st.tuples(
+            st.sampled_from(["default", "normal", "override", "force_override"]),
+            st.integers(min_value=1, max_value=100),
+        ),
+        min_size=2,
+        max_size=5,
+    )
+)
+@settings(max_examples=50)
+def test_precedence_resolution_property(values):
+    """Property test: highest precedence always wins."""
+    from souschef.server import _get_precedence_level, _resolve_attribute_precedence
+
+    # Create attributes with same path but different precedences
+    attributes = [
+        {"precedence": prec, "path": "test.value", "value": str(val)}
+        for prec, val in values
+    ]
+
+    resolved = _resolve_attribute_precedence(attributes)
+
+    # Find the attribute with highest precedence in input
+    expected_winner = max(values, key=lambda x: _get_precedence_level(x[0]))
+
+    # Verify the winner was selected
+    assert resolved["test.value"]["precedence"] == expected_winner[0]
+    assert resolved["test.value"]["value"] == str(expected_winner[1])
+
+    # If multiple precedences, should have conflict
+    unique_precedences = len({prec for prec, _ in values})
+    if unique_precedences > 1:
+        assert resolved["test.value"]["has_conflict"] is True
+
+
+@given(
     resource_type=st.sampled_from(
         ["package", "service", "template", "file", "directory", "user", "group"]
     ),
@@ -657,3 +735,176 @@ end
     test = control["tests"][0]
     # Should capture all expectations
     assert len(test["expectations"]) == len(matchers)
+
+
+# Habitat Property-Based Tests
+
+
+@given(st.text())
+@settings(max_examples=50)
+def test_parse_habitat_plan_handles_any_content(content):
+    """Test that parse_habitat_plan doesn't crash on any file content."""
+    from souschef.server import parse_habitat_plan
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+        try:
+            f.write(content)
+            f.flush()
+
+            result = parse_habitat_plan(f.name)
+            # Should always return a string (JSON or error)
+            assert isinstance(result, str)
+        finally:
+            Path(f.name).unlink(missing_ok=True)
+
+
+@given(
+    pkg_name=st.text(
+        alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd")),
+        min_size=1,
+        max_size=20,
+    ),
+    pkg_version=st.text(
+        alphabet=st.characters(min_codepoint=ord("0"), max_codepoint=ord("9"))
+        | st.just("."),
+        min_size=1,
+        max_size=10,
+    ),
+)
+@settings(max_examples=50)
+def test_parse_habitat_plan_with_valid_metadata(pkg_name, pkg_version):
+    """Test parsing Habitat plans with randomly generated but valid metadata."""
+    content = f"""
+pkg_name={pkg_name}
+pkg_origin=test
+pkg_version="{pkg_version}"
+pkg_maintainer="Test User <test@example.com>"
+pkg_license=('Apache-2.0')
+pkg_description="Test package"
+"""
+
+    from souschef.server import parse_habitat_plan
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+        try:
+            f.write(content)
+            f.flush()
+
+            result = parse_habitat_plan(f.name)
+
+            # Should parse successfully
+            assert not result.startswith("Error")
+
+            import json
+
+            plan = json.loads(result)
+            assert plan["package"]["name"] == pkg_name
+            assert plan["package"]["version"] == pkg_version
+        finally:
+            Path(f.name).unlink(missing_ok=True)
+
+
+@given(
+    base_image=st.sampled_from(
+        ["ubuntu:22.04", "ubuntu:20.04", "debian:11", "alpine:3.17", "centos:7"]
+    ),
+)
+@settings(max_examples=30)
+def test_convert_habitat_to_dockerfile_with_different_bases(base_image):
+    """Test Dockerfile conversion with various base images."""
+    from souschef.server import convert_habitat_to_dockerfile
+
+    # Create minimal valid plan
+    content = """
+pkg_name=testapp
+pkg_version="1.0.0"
+pkg_svc_run="./start.sh"
+"""
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+        try:
+            f.write(content)
+            f.flush()
+
+            result = convert_habitat_to_dockerfile(f.name, base_image)
+
+            # Should generate Dockerfile with correct base image
+            assert isinstance(result, str)
+            if not result.startswith("Error"):
+                assert f"FROM {base_image}" in result
+        finally:
+            Path(f.name).unlink(missing_ok=True)
+
+
+@given(
+    dependencies=st.lists(
+        st.sampled_from(
+            [
+                "core/gcc",
+                "core/make",
+                "core/openssl",
+                "core/python",
+                "core/ruby",
+                "core/git",
+            ]
+        ),
+        min_size=1,
+        max_size=5,
+    ),
+)
+@settings(max_examples=30)
+def test_parse_habitat_dependencies(dependencies):
+    """Test parsing Habitat plans with various dependency combinations."""
+    from souschef.server import parse_habitat_plan
+
+    deps_string = "\n  ".join(dependencies)
+    content = f"""
+pkg_name=testapp
+pkg_version="1.0.0"
+pkg_build_deps=(
+  {deps_string}
+)
+"""
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+        try:
+            f.write(content)
+            f.flush()
+
+            result = parse_habitat_plan(f.name)
+
+            # Should parse successfully
+            assert not result.startswith("Error")
+
+            import json
+
+            plan = json.loads(result)
+            # Should have extracted all dependencies
+            for dep in dependencies:
+                assert dep in str(plan["dependencies"]["build"])
+        finally:
+            Path(f.name).unlink(missing_ok=True)
+
+
+@given(st.text(min_size=1, max_size=100))
+@settings(max_examples=50)
+def test_convert_habitat_to_dockerfile_handles_any_path(path_str):
+    """Test that Dockerfile conversion handles any path without crashing."""
+    from souschef.server import convert_habitat_to_dockerfile
+
+    result = convert_habitat_to_dockerfile(path_str)
+
+    # Should always return a string (Dockerfile or error)
+    assert isinstance(result, str)
+
+
+@given(st.text(min_size=1, max_size=200))
+@settings(max_examples=50)
+def test_generate_compose_handles_any_path(path_str):
+    """Test that compose generation handles any path without crashing."""
+    from souschef.server import generate_compose_from_habitat
+
+    result = generate_compose_from_habitat(path_str)
+
+    # Should always return a string (compose or error)
+    assert isinstance(result, str)

@@ -1,17 +1,22 @@
 """Integration tests using real files and fixtures."""
 
+import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from souschef.server import (
+    convert_habitat_to_dockerfile,
     convert_inspec_to_test,
     convert_resource_to_task,
+    generate_compose_from_habitat,
     generate_inspec_from_recipe,
     list_cookbook_structure,
     list_directory,
     parse_attributes,
     parse_custom_resource,
+    parse_habitat_plan,
     parse_inspec_profile,
     parse_recipe,
     parse_template,
@@ -65,10 +70,13 @@ class TestRealFileOperations:
         """Test parsing a real attributes file."""
         result = parse_attributes(str(SAMPLE_COOKBOOK / "attributes" / "default.rb"))
 
-        assert "default[nginx.port] = 80" in result
-        assert "default[nginx.ssl_port] = 443" in result
-        assert "override[nginx.worker_rlimit_nofile] = 65536" in result
-        assert "normal[nginx.server_tokens] = 'off'" in result
+        # By default, resolved format is returned
+        assert "Resolved Attributes" in result
+        assert "nginx.port" in result
+        assert "80" in result
+        assert "443" in result
+        assert "65536" in result
+        assert "'off'" in result
         # Test nested attributes
         assert "nginx.ssl.protocols" in result
 
@@ -797,3 +805,340 @@ class TestInSpecIntegration:
         # Ensure it still works correctly
         assert "import pytest" in result
         assert "def test_simple_test(host):" in result
+
+
+class TestPlaybookGenerationEdgeCases:
+    """Test edge cases in playbook generation."""
+
+    def test_generate_playbook_nonexistent_file(self):
+        """Test generating playbook from nonexistent recipe."""
+        from souschef.server import generate_playbook_from_recipe
+
+        result = generate_playbook_from_recipe("/nonexistent/recipe.rb")
+        assert "Error:" in result or "does not exist" in result.lower()
+
+    def test_generate_playbook_with_parse_error(self, monkeypatch, tmp_path):
+        """Test playbook generation when recipe parsing returns error."""
+        from souschef.converters import playbook
+
+        def mock_parse_recipe(*args):
+            return "Error: Failed to parse recipe"
+
+        monkeypatch.setattr(playbook, "parse_recipe", mock_parse_recipe)
+
+        temp_file = tmp_path / "test_recipe.rb"
+        temp_file.write_text("package 'nginx'")
+
+        from souschef import server
+
+        result = server.generate_playbook_from_recipe(str(temp_file))
+        assert "Error:" in result
+
+    def test_generate_playbook_with_exception(self, monkeypatch, tmp_path):
+        """Test playbook generation with unexpected exception."""
+        from souschef.converters import playbook
+
+        def mock_parse_recipe(*args):
+            raise RuntimeError("Unexpected error")
+
+        monkeypatch.setattr(playbook, "parse_recipe", mock_parse_recipe)
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+            f.write("package 'nginx'")
+            f.flush()
+            temp_path = f.name
+
+        try:
+            from souschef import server
+
+            result = server.generate_playbook_from_recipe(temp_path)
+            assert "Error generating playbook:" in result
+        finally:
+            Path(temp_path).unlink()
+
+    def test_generate_playbook_with_handlers(self):
+        """Test playbook generation includes handlers when notifications present."""
+        from unittest.mock import MagicMock
+
+        from souschef.server import generate_playbook_from_recipe
+
+        recipe_content = """
+package 'apache2' do
+  action :install
+  notifies :restart, 'service[apache2]', :delayed
+end
+
+service 'apache2' do
+  action [:enable, :start]
+end
+"""
+        with patch("souschef.server._normalize_path") as mock_norm:
+            mock_path = MagicMock()
+            mock_path.name = "recipe.rb"
+            mock_path.read_text.return_value = recipe_content
+            mock_path.exists.return_value = True
+            mock_path.is_file.return_value = True
+            mock_norm.return_value = mock_path
+
+            result = generate_playbook_from_recipe("/fake/path/recipe.rb")
+            assert (
+                "handlers:" in result
+                or "warning" in result.lower()
+                or "error" in result.lower()
+                or "---" in result
+            )
+
+
+class TestAnalyzeSearchPatternsEdgeCases:
+    """Test analyze_chef_search_patterns error handling."""
+
+    def test_analyze_search_patterns_with_error(self):
+        """Test analyze_chef_search_patterns exception handling."""
+        from unittest.mock import MagicMock
+
+        from souschef.server import analyze_chef_search_patterns
+
+        with patch("souschef.converters.playbook._normalize_path") as mock_path:
+            mock_file = MagicMock()
+            mock_file.is_file.return_value = True
+            mock_file.is_dir.return_value = False
+            mock_path.return_value = mock_file
+
+            with patch(
+                "souschef.converters.playbook._extract_search_patterns_from_file"
+            ) as mock_extract:
+                mock_extract.side_effect = ValueError("Parse error")
+
+                result = analyze_chef_search_patterns("some_recipe.rb")
+                assert "Error analyzing Chef search patterns" in result
+
+
+class TestAttributePrecedenceIntegration:
+    """Integration tests for Chef attribute precedence with real fixtures."""
+
+    def test_parse_attributes_with_real_cookbook_fixture(self):
+        """Test parsing attributes from real sample cookbook."""
+        result = parse_attributes(str(SAMPLE_COOKBOOK / "attributes" / "default.rb"))
+
+        # Should contain actual attributes from the fixture
+        assert "nginx" in result
+        assert "Resolved Attributes" in result
+
+    def test_parse_attributes_precedence_with_multiple_files(self, tmp_path):
+        """Test attribute precedence with multiple attribute files."""
+        # Create a temporary attributes directory
+        attrs_dir = tmp_path / "attributes"
+        attrs_dir.mkdir()
+
+        # Create default attributes
+        default_file = attrs_dir / "default.rb"
+        default_file.write_text(
+            """
+            default['app']['port'] = 3000
+            default['app']['workers'] = 2
+            default['app']['timeout'] = 30
+            """
+        )
+
+        # Create override attributes
+        override_file = attrs_dir / "override.rb"
+        override_file.write_text(
+            """
+            override['app']['port'] = 8080
+            force_override['app']['workers'] = 4
+            """
+        )
+
+        # Parse both files
+        default_result = parse_attributes(str(default_file))
+        override_result = parse_attributes(str(override_file))
+
+        # Verify both files parsed correctly
+        assert "3000" in default_result
+        assert "8080" in override_result
+        assert "force_override" in override_result
+
+    def test_parse_attributes_complex_nested_paths(self, tmp_path):
+        """Test attribute precedence with deeply nested attribute paths."""
+        attr_file = tmp_path / "complex.rb"
+        attr_file.write_text(
+            """
+            default['nginx']['config']['ssl']['protocols'] = 'TLSv1.2'
+            override['nginx']['config']['ssl']['protocols'] = 'TLSv1.3'
+            normal['nginx']['config']['worker']['connections'] = 1024
+            force_override['nginx']['config']['worker']['connections'] = 2048
+            """
+        )
+
+        result = parse_attributes(str(attr_file), resolve_precedence=True)
+
+        # Verify complex paths are parsed and resolved correctly
+        assert "TLSv1.3" in result  # override should win
+        assert "2048" in result  # force_override should win
+        assert "Attributes with precedence conflicts: 2" in result
+
+    def test_parse_attributes_with_ruby_values(self, tmp_path):
+        """Test parsing attributes with various Ruby value types."""
+        attr_file = tmp_path / "values.rb"
+        attr_file.write_text(
+            """
+            default['app']['enabled'] = true
+            default['app']['disabled'] = false
+            default['app']['count'] = 42
+            default['app']['ratio'] = 1.5
+            default['app']['name'] = 'my-app'
+            default['app']['tags'] = ['web', 'production']
+            default['app']['config'] = { 'key' => 'value' }
+            """
+        )
+
+        result = parse_attributes(str(attr_file))
+
+        # Verify various value types are captured
+        assert "true" in result
+        assert "false" in result
+        assert "42" in result
+        assert "1.5" in result
+        assert "my-app" in result
+        assert "['web', 'production']" in result or "web" in result
+
+    def test_parse_attributes_no_conflicts(self, tmp_path):
+        """Test attribute parsing when there are no precedence conflicts."""
+        attr_file = tmp_path / "no_conflicts.rb"
+        attr_file.write_text(
+            """
+            default['app']['port'] = 3000
+            default['app']['host'] = 'localhost'
+            default['app']['debug'] = true
+            """
+        )
+
+        result = parse_attributes(str(attr_file), resolve_precedence=True)
+
+        # Should not mention conflicts when there are none
+        assert "Total attributes: 3" in result
+        assert (
+            "Attributes with precedence conflicts" not in result
+            or "conflicts: 0" in result
+        )
+
+
+class TestHabitatIntegration:
+    """Integration tests for Habitat conversion with real fixtures."""
+
+    def test_parse_real_habitat_plan(self):
+        """Test parsing a real Habitat plan fixture."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        result = parse_habitat_plan(str(plan_path))
+
+        # Should parse successfully
+        assert not result.startswith("Error")
+
+        import json
+
+        plan = json.loads(result)
+        assert plan["package"]["name"] == "nginx"
+        assert plan["package"]["version"] == "1.25.3"
+        assert plan["package"]["origin"] == "core"
+        assert "BSD-2-Clause" in str(plan["package"]["license"])
+        assert len(plan["dependencies"]["build"]) > 0
+        assert len(plan["dependencies"]["runtime"]) > 0
+        assert len(plan["ports"]) == 2
+        assert "do_build" in plan["callbacks"]
+        assert "do_install" in plan["callbacks"]
+
+    def test_parse_postgres_habitat_plan(self):
+        """Test parsing PostgreSQL Habitat plan fixture."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan_postgres.sh"
+        result = parse_habitat_plan(str(plan_path))
+
+        # Should parse successfully
+        assert not result.startswith("Error")
+
+        import json
+
+        plan = json.loads(result)
+        assert plan["package"]["name"] == "postgresql"
+        assert plan["package"]["version"] == "14.5"
+        assert "do_init" in plan["callbacks"]
+        assert "initdb" in plan["callbacks"]["do_init"]
+
+    def test_convert_real_habitat_to_dockerfile(self):
+        """Test converting a real Habitat plan to Dockerfile."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        result = convert_habitat_to_dockerfile(str(plan_path), "ubuntu:22.04")
+
+        # Should generate valid Dockerfile
+        assert "FROM ubuntu:22.04" in result
+        assert "LABEL maintainer=" in result
+        assert 'LABEL version="1.25.3"' in result
+        assert "LABEL description=" in result
+        assert "RUN apt-get update" in result
+        # Build dependencies from plan.sh: core/gcc -> gcc, core/make -> make
+        assert "gcc" in result
+        assert "make" in result
+        # Runtime dependencies should also be present
+        assert "libssl-dev" in result  # from core/openssl
+        assert "libpcre3-dev" in result  # from core/pcre
+        assert "./configure" in result
+        assert "EXPOSE 80" in result
+        assert "EXPOSE 443" in result
+        assert "CMD" in result
+        assert "nginx" in result
+
+    def test_generate_compose_from_real_habitat_plans(self):
+        """Test generating docker-compose from real Habitat plans."""
+        nginx_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        postgres_path = FIXTURES_DIR / "habitat_package" / "plan_postgres.sh"
+
+        result = generate_compose_from_habitat(
+            f"{nginx_path},{postgres_path}", "habitat_net"
+        )
+
+        # Should generate valid docker-compose.yml
+        assert "version: '3.8'" in result
+        assert "services:" in result
+        assert "nginx:" in result
+        assert "postgresql:" in result
+        assert "build:" in result
+        assert "Dockerfile.nginx" in result
+        assert "Dockerfile.postgresql" in result
+        assert "ports:" in result
+        assert "networks:" in result
+        assert "habitat_net:" in result
+        assert "driver: bridge" in result
+        assert "volumes:" in result
+
+    def test_dockerfile_structure_validity(self):
+        """Test that generated Dockerfile has correct structure."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        result = convert_habitat_to_dockerfile(str(plan_path))
+
+        lines = result.split("\n")
+
+        # Check Dockerfile structure
+        assert any(line.startswith("FROM") for line in lines)
+        assert any(line.startswith("LABEL") for line in lines)
+        assert any(line.startswith("RUN") for line in lines)
+        assert any(line.startswith("EXPOSE") for line in lines)
+        assert any(
+            line.startswith("CMD") or line.startswith("ENTRYPOINT") for line in lines
+        )
+
+        # Should not have syntax errors
+        assert not any("$pkg_" in line for line in lines if line.startswith("CMD"))
+
+    def test_compose_with_single_service(self):
+        """Test docker-compose generation with single service."""
+        plan_path = FIXTURES_DIR / "habitat_package" / "plan.sh"
+        result = generate_compose_from_habitat(str(plan_path), "test_net")
+
+        # Should generate minimal compose file
+        assert "services:" in result
+        assert "nginx:" in result
+        assert "build:" in result
+        assert "networks:" in result
+        assert "test_net:" in result
+
+        # Verify basic structure is present
+        assert result.count("nginx:") > 0

@@ -74,12 +74,23 @@ jobs:
       run: poetry export -f requirements.txt --output requirements.txt --without-hashes
 
     - name: Run Snyk dependency vulnerability scan
-      uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
+      id: snyk-sca-scan
       continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        args: --severity-threshold=high --file=requirements.txt --sarif-file-output=snyk-sca.sarif
+      run: |
+        set +e
+        snyk test --severity-threshold=high --file=requirements.txt --sarif-file-output=snyk-sca.sarif 2>&1 | tee snyk-sca-output.log
+        EXIT_CODE=$?
+
+        # Check if rate limit was hit
+        if grep -qi "test limit\|rate limit\|monthly limit" snyk-sca-output.log; then
+          echo "⚠️ Snyk SCA test limit reached. Skipping scan for this run."
+          echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        exit $EXIT_CODE
 
     - name: Create empty SARIF if missing
       if: always()
@@ -87,6 +98,11 @@ jobs:
         if [ ! -f snyk-sca.sarif ] || [ ! -s snyk-sca.sarif ]; then
           echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"Snyk SCA","version":"1.0.0"}},"results":[]}]}' > snyk-sca.sarif
         fi
+
+    - name: Add rate limit notice
+      if: steps.snyk-sca-scan.outputs.rate_limit_hit == 'true'
+      run: |
+        echo "::notice::Snyk SCA test limit reached. Scan skipped for this run. The limit resets periodically."
 
     - name: Upload Snyk SCA results to GitHub Code Scanning
       uses: github/codeql-action/upload-sarif@v4
@@ -98,6 +114,8 @@ jobs:
   snyk-code:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Only run on main branch and scheduled runs to conserve test limits
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     # Note: SNYK_TOKEN check happens implicitly - job will skip if token is empty
     permissions:
       contents: read
@@ -112,17 +130,37 @@ jobs:
       uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
 
     - name: Run Snyk Code analysis (SAST)
+      id: snyk-code-scan
       continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      run: snyk code test --sarif-file-output=snyk-code.sarif
+      run: |
+        set +e
+        # Only scan source code, exclude tests and examples to conserve test limits
+        snyk code test souschef/ --sarif-file-output=snyk-code.sarif 2>&1 | tee snyk-code-output.log
+        EXIT_CODE=$?
 
-    - name: Create empty SARIF if missing
+        # Check if rate limit was hit - mark as skipped and exit successfully
+        if grep -qi "test limit\|rate limit\|monthly limit" snyk-code-output.log; then
+          echo "⚠️ Snyk Code test limit reached. Skipping scan for this run."
+          echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Exit with whatever code Snyk returned (vulnerabilities or other issues)
+        exit $EXIT_CODE
+
+    - name: Create empty SARIF if missing or rate limited
       if: always()
       run: |
         if [ ! -f snyk-code.sarif ] || [ ! -s snyk-code.sarif ]; then
           echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"Snyk Code","version":"1.0.0"}},"results":[]}]}' > snyk-code.sarif
         fi
+
+    - name: Add rate limit notice
+      if: steps.snyk-code-scan.outputs.rate_limit_hit == 'true'
+      run: |
+        echo "::notice::Snyk Code test limit reached. Scan skipped for this run. The limit resets periodically."
 
     - name: Upload Snyk Code results to GitHub Code Scanning
       uses: github/codeql-action/upload-sarif@v4
@@ -148,12 +186,24 @@ jobs:
       uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
 
     - name: Scan Infrastructure as Code files
+      id: snyk-iac-scan
       continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
+        set +e
         # Scan any Ansible playbooks in examples
-        snyk iac test examples/ --sarif-file-output=snyk-iac.sarif || true
+        snyk iac test examples/ --sarif-file-output=snyk-iac.sarif 2>&1 | tee snyk-iac-output.log
+        EXIT_CODE=$?
+
+        # Check if rate limit was hit
+        if grep -qi "test limit\|rate limit\|monthly limit" snyk-iac-output.log; then
+          echo "⚠️ Snyk IaC test limit reached. Skipping scan for this run."
+          echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        exit $EXIT_CODE
 
     - name: Create empty SARIF if missing
       if: always()
@@ -161,6 +211,11 @@ jobs:
         if [ ! -f snyk-iac.sarif ] || [ ! -s snyk-iac.sarif ]; then
           echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"Snyk IaC","version":"1.0.0"}},"results":[]}]}' > snyk-iac.sarif
         fi
+
+    - name: Add rate limit notice
+      if: steps.snyk-iac-scan.outputs.rate_limit_hit == 'true'
+      run: |
+        echo "::notice::Snyk IaC test limit reached. Scan skipped for this run. The limit resets periodically."
 
     - name: Upload Snyk IaC results to GitHub Code Scanning
       uses: github/codeql-action/upload-sarif@v4
@@ -211,9 +266,25 @@ jobs:
       run: poetry export -f requirements.txt --output requirements.txt --without-hashes
 
     - name: Register project with Snyk monitoring
-      uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
+      id: snyk-monitor
+      continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        command: monitor
-        args: --file=requirements.txt --project-name=souschef
+      run: |
+        set +e
+        snyk monitor --file=requirements.txt --project-name=souschef 2>&1 | tee snyk-monitor-output.log
+        EXIT_CODE=$?
+
+        # Check if rate limit was hit
+        if grep -q "test limit" snyk-monitor-output.log || grep -q "rate limit" snyk-monitor-output.log || grep -q "monthly limit" snyk-monitor-output.log; then
+          echo "⚠️ Snyk monitoring limit reached. Skipping for this run."
+          echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        exit $EXIT_CODE
+
+    - name: Add rate limit notice for monitoring
+      if: steps.snyk-monitor.outputs.rate_limit_hit == 'true'
+      run: |
+        echo "::notice::Snyk monitoring limit reached. Skipped for this run. The limit resets periodically."

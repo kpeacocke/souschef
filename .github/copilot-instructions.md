@@ -3,6 +3,64 @@
 ## Project Overview
 SousChef is an AI-powered MCP (Model Context Protocol) server that assists with converting Chef cookbooks to Ansible playbooks.
 
+## Project Architecture
+
+### Module Structure
+The project follows a modular architecture organized by functionality:
+
+```
+souschef/
+├── __init__.py          # Package initialization
+├── server.py            # MCP server entry point with tool registrations
+├── cli.py               # Command-line interface
+├── assessment.py        # Migration assessment and planning
+├── deployment.py        # AWX/Tower and deployment strategies
+├── core/                # Core utilities
+│   ├── constants.py     # Shared constants
+│   ├── path_utils.py    # Path normalization utilities
+│   ├── ruby_utils.py    # Ruby value normalization
+│   └── validation.py    # Validation engine
+├── parsers/             # Chef artifact parsers
+│   ├── attributes.py    # Attribute file parsing
+│   ├── habitat.py       # Habitat plan parsing
+│   ├── inspec.py        # InSpec profile parsing
+│   ├── metadata.rb      # Cookbook metadata parsing
+│   ├── recipe.py        # Recipe parsing
+│   ├── resource.py      # Custom resource parsing
+│   └── template.py      # ERB template parsing
+├── converters/          # Chef to Ansible converters
+│   ├── habitat.py       # Habitat to Docker conversion
+│   ├── playbook.py      # Recipe to playbook conversion
+│   └── resource.py      # Resource to task conversion
+└── filesystem/          # Filesystem operations
+    └── operations.py    # Directory/file operations
+```
+
+### Key Architecture Principles
+
+1. **server.py as Entry Point**: All MCP tools are registered in `server.py`. Internal functions are imported from specialized modules.
+
+2. **Backward Compatibility Exports**: Internal functions used by tests are re-exported from `server.py` with `# noqa: F401` comments to suppress unused import warnings.
+
+3. **Module Responsibilities**:
+   - `parsers/`: Parse Chef artifacts (read-only, extract structure)
+   - `converters/`: Transform Chef to Ansible (produce output)
+   - `core/`: Shared utilities (no business logic dependencies)
+   - `assessment.py`: High-level migration planning
+   - `deployment.py`: AWX integration and deployment strategies
+
+4. **When to Keep Functions Together vs. Modularize**:
+   - Keep tightly coupled MCP tools in `server.py` when they share significant context (e.g., databag/environment functions ~1,180 lines)
+   - Extract when reusable across multiple tools or testable in isolation
+   - Module size isn't the primary driver - cohesion and coupling are
+
+5. **Mock Patching Rule**: When testing, patch functions where they are **used** (imported), not where they are **defined**. Example:
+   ```python
+   # Function defined in souschef/parsers/recipe.py
+   # Used in souschef/converters/playbook.py
+   # Patch: "souschef.converters.playbook._normalize_path"
+   ```
+
 ## Development Standards
 
 ### Code Quality
@@ -12,6 +70,7 @@ SousChef is an AI-powered MCP (Model Context Protocol) server that assists with 
 - **Linting**: Code must pass `ruff check` with no violations
 - **Formatting**: Code must be formatted with `ruff format`
 - **Type checking**: Code must pass `mypy` type checking with no errors
+- **Import cleanup**: ALWAYS respect `# noqa: F401` markers - these indicate intentional re-exports for backward compatibility with tests. Never remove imports marked with `# noqa: F401` even if they appear unused in the file itself
 
 ### Development Tools
 SousChef uses a modern Python toolchain:
@@ -35,7 +94,8 @@ SousChef uses a modern Python toolchain:
   - Config: `[tool.pytest.ini_options]` in `pyproject.toml`
 
 ### Testing Requirements
-- **100% coverage goal**: Aim for as close to 100% test coverage as possible
+- **Current coverage**: 91% (913 tests passing across 13 test files)
+- **Coverage goal**: Maintain 90%+ for production readiness, aim for 95%+
 - **Test framework**: Use `pytest` for all tests
 - **Test structure**: Tests should be organized in `tests/` directory mirroring the source structure
 - **Test naming**: Test functions should clearly describe what they test (e.g., `test_list_directory_success`)
@@ -99,19 +159,19 @@ The project maintains three types of tests - ensure all are updated when adding 
 
 ## Code Review Checklist
 Before suggesting code, ensure:
-1. ✅ No linting errors (`ruff check`)
-2. ✅ Properly formatted (`ruff format`)
-3. ✅ No type errors (`mypy souschef`)
-4. ✅ All tests pass (`pytest`)
-5. ✅ Coverage maintained at 90%+ (`pytest --cov`)
-6. ✅ Unit tests added/updated in `test_server.py`
-7. ✅ Integration tests added/updated in `test_integration.py`
-8. ✅ Property-based tests added if applicable in `test_property_based.py`
-9. ✅ Test fixtures updated if new parsing features added
-10. ✅ Type hints are complete
-11. ✅ Docstrings are present and clear
-12. ✅ Error cases are handled
-13. ✅ Cross-platform compatible
+1.  No linting errors (`ruff check`)
+2.  Properly formatted (`ruff format`)
+3.  No type errors (`mypy souschef`)
+4.  All tests pass (`pytest`)
+5.  Coverage maintained at 90%+ (`pytest --cov`)
+6.  Unit tests added/updated in `test_server.py`
+7.  Integration tests added/updated in `test_integration.py`
+8.  Property-based tests added if applicable in `test_property_based.py`
+9.  Test fixtures updated if new parsing features added
+10.  Type hints are complete
+11.  Docstrings are present and clear
+12.  Error cases are handled
+13.  Cross-platform compatible
 
 ## Preferred Patterns
 
@@ -195,13 +255,13 @@ def test_handles_any_input(random_input):
 ```
 
 ## Anti-Patterns to Avoid
-- ❌ Disabling linting warnings without fixing the underlying issue
-- ❌ Missing type hints
-- ❌ Untested code paths
-- ❌ Platform-specific path handling
-- ❌ Bare `except:` clauses
-- ❌ Missing docstrings
-- ❌ Hardcoded file paths
+-  Disabling linting warnings without fixing the underlying issue
+-  Missing type hints
+-  Untested code paths
+-  Platform-specific path handling
+-  Bare `except:` clauses
+-  Missing docstrings
+-  Hardcoded file paths
 
 ## Documentation Maintenance
 - **README updates**: When adding new tools, features, or changing functionality, update README.md to reflect the changes

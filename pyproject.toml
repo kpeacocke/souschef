@@ -52,6 +52,8 @@ ignore = ["D100", "D104", "D105", "D107", "D203", "D212"]
 "__init__.py" = ["F401"]
 "tests/*" = ["S101", "E501"]  # Allow assert statements, long lines in test data
 "souschef/server.py" = ["T201", "E501"]  # Allow print in main entry, long lines in templates/reports
+"souschef/assessment.py" = ["E501"]  # Long lines in migration report templates
+"souschef/parsers/validation.py" = ["E501"]  # Long lines in validation messages
 
 [tool.pytest.ini_options]
 minversion = "6.0"
