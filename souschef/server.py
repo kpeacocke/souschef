@@ -22,38 +22,143 @@ from souschef.assessment import (
 from souschef.assessment import (
     generate_migration_report as _generate_migration_report,
 )
+from souschef.assessment import (
+    validate_conversion as _validate_conversion,
+)
 
 # Import extracted modules
 # Import private helper functions still used in server.py
-from souschef.converters.resource import (
-    _convert_chef_resource_to_ansible,
-    _format_ansible_task,
+from souschef.converters.habitat import (  # noqa: F401
+    _add_service_build,
+    _add_service_dependencies,
+    _add_service_environment,
+    _add_service_ports,
+    _add_service_volumes,
+    _build_compose_service,
+    _extract_default_port,
+    _map_habitat_deps_to_apt,
+    _needs_data_volume,
+    _validate_docker_image_name,
+    _validate_docker_network_name,
 )
-from souschef.deployment import (
-    analyze_chef_application_patterns,
-    convert_chef_deployment_to_ansible_strategy,
-    generate_awx_inventory_source_from_chef,
-    generate_awx_job_template_from_cookbook,
-    generate_awx_project_from_cookbooks,
-    generate_awx_workflow_from_chef_runlist,
-    generate_blue_green_deployment_playbook,
-    generate_canary_deployment_strategy,
+from souschef.converters.habitat import (
+    convert_habitat_to_dockerfile as _convert_habitat_to_dockerfile,
+)
+from souschef.converters.habitat import (
+    generate_compose_from_habitat as _generate_compose_from_habitat,
 )
 
-# Import parser functions
-from souschef.parsers.attributes import parse_attributes as _parse_attributes
-from souschef.parsers.habitat import parse_habitat_plan as _parse_habitat_plan
-from souschef.parsers.metadata import (
-    list_cookbook_structure as _list_cookbook_structure,
+# Import playbook converter functions
+from souschef.converters.playbook import (
+    analyze_chef_search_patterns as _analyze_chef_search_patterns,
 )
-from souschef.parsers.metadata import read_cookbook_metadata as _read_cookbook_metadata
-from souschef.parsers.recipe import parse_recipe as _parse_recipe
-from souschef.parsers.resource import parse_custom_resource as _parse_custom_resource
-from souschef.parsers.template import parse_template as _parse_template
+from souschef.converters.playbook import (
+    convert_chef_search_to_inventory as _convert_chef_search_to_inventory,
+)
+from souschef.converters.playbook import (
+    generate_dynamic_inventory_script as _generate_dynamic_inventory_script,
+)
+from souschef.converters.playbook import (
+    generate_playbook_from_recipe as _generate_playbook_from_recipe,
+)
+from souschef.converters.resource import (  # noqa: F401
+    _convert_chef_resource_to_ansible,
+    _format_ansible_task,
+    _get_file_params,
+    _get_service_params,
+)
+from souschef.converters.resource import (
+    convert_resource_to_task as _convert_resource_to_task,
+)
+
+# Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
+# These imports are intentionally exposed for external test access
+from souschef.core.ruby_utils import (  # noqa: F401
+    _normalize_ruby_value,
+)
+
+# Re-exports for backward compatibility (used by tests)
+# These are imported and re-exported intentionally
+from souschef.deployment import (
+    analyze_chef_application_patterns as _analyze_chef_application_patterns,
+)
+from souschef.deployment import (
+    convert_chef_deployment_to_ansible_strategy as _convert_chef_deployment_to_ansible_strategy,
+)
+from souschef.deployment import (
+    generate_awx_inventory_source_from_chef as _generate_awx_inventory_source_from_chef,
+)
+from souschef.deployment import (
+    generate_awx_job_template_from_cookbook as _generate_awx_job_template_from_cookbook,
+)
+from souschef.deployment import (
+    generate_awx_project_from_cookbooks as _generate_awx_project_from_cookbooks,
+)
+from souschef.deployment import (
+    generate_awx_workflow_from_chef_runlist as _generate_awx_workflow_from_chef_runlist,
+)
+from souschef.deployment import (
+    generate_blue_green_deployment_playbook as _generate_blue_green_deployment_playbook,
+)
+from souschef.deployment import (
+    generate_canary_deployment_strategy as _generate_canary_deployment_strategy,
+)
 
 # Import filesystem operations
 from souschef.filesystem import list_directory as _list_directory
 from souschef.filesystem import read_file as _read_file
+from souschef.parsers.attributes import (  # noqa: F401
+    _extract_attributes,
+    _format_attributes,
+    _format_resolved_attributes,
+    _get_precedence_level,
+    _resolve_attribute_precedence,
+)
+
+# Import parser functions
+from souschef.parsers.attributes import parse_attributes as _parse_attributes
+from souschef.parsers.habitat import (  # noqa: F401
+    _extract_plan_array,
+    _extract_plan_exports,
+    _extract_plan_function,
+    _extract_plan_var,
+    _update_quote_state,
+)
+
+# Import Habitat parser internal functions for backward compatibility
+from souschef.parsers.habitat import parse_habitat_plan as _parse_habitat_plan
+from souschef.parsers.metadata import (  # noqa: F401
+    _extract_metadata,
+    _format_cookbook_structure,
+    _format_metadata,
+)
+from souschef.parsers.metadata import (
+    list_cookbook_structure as _list_cookbook_structure,
+)
+from souschef.parsers.metadata import read_cookbook_metadata as _read_cookbook_metadata
+from souschef.parsers.recipe import (  # noqa: F401
+    _extract_conditionals,
+    _extract_resources,
+    _format_resources,
+)
+from souschef.parsers.recipe import parse_recipe as _parse_recipe
+from souschef.parsers.resource import (  # noqa: F401
+    _extract_resource_actions,
+    _extract_resource_properties,
+)
+from souschef.parsers.resource import parse_custom_resource as _parse_custom_resource
+from souschef.parsers.template import (  # noqa: F401
+    _convert_erb_to_jinja2,
+    _extract_code_block_variables,
+    _extract_heredoc_strings,
+    _extract_node_attribute_path,
+    _extract_output_variables,
+    _extract_template_variables,
+    _strip_ruby_comments,
+)
+
+# Import internal functions for backward compatibility (used by tests)
+from souschef.parsers.template import parse_template as _parse_template
 
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
@@ -725,27 +830,6 @@ ACTION_TO_STATE = {
     "reload": "reloaded",
 }
 
-# ERB to Jinja2 pattern mappings
-ERB_PATTERNS = {
-    # Variable output: <%= var %> -> {{ var }}
-    "output": (REGEX_ERB_OUTPUT, JINJA2_VAR_REPLACEMENT),
-    # Variable with node prefix: <%= node['attr'] %> -> {{ attr }}
-    "node_attr": (REGEX_ERB_NODE_ATTR, JINJA2_NODE_ATTR_REPLACEMENT),
-    # If statements: <% if condition %> -> {% if condition %}
-    "if_start": (REGEX_ERB_IF_START, JINJA2_IF_START),
-    # Unless (negated if): <% unless condition %> -> {% if not condition %}
-    "unless": (REGEX_ERB_UNLESS, JINJA2_IF_NOT),
-    # Else: <% else %> -> {% else %}
-    "else": (REGEX_ERB_ELSE, JINJA2_ELSE),
-    # Elsif: <% elsif condition %> -> {% elif condition %}
-    "elsif": (REGEX_ERB_ELSIF, JINJA2_ELIF),
-    # End: <% end %> -> {% endif %}
-    "end": (REGEX_ERB_END, JINJA2_ENDIF),
-    # Each loop: <% array.each do |item| %> -> {% for item in array %}
-    # Use [^%]{1,200} to prevent matching across %> boundaries and ReDoS
-    "each": (REGEX_ERB_EACH, JINJA2_FOR),
-}
-
 
 @mcp.tool()
 def parse_template(path: str) -> str:
@@ -789,7 +873,8 @@ def list_directory(path: str) -> list[str] | str:
         A list of filenames in the directory, or an error message.
 
     """
-    return _list_directory(path)
+    result: list[str] | str = _list_directory(path)
+    return result
 
 
 @mcp.tool()
@@ -804,7 +889,8 @@ def read_file(path: str) -> str:
         The contents of the file, or an error message.
 
     """
-    return _read_file(path)
+    result: str = _read_file(path)
+    return result
 
 
 @mcp.tool()
@@ -879,6 +965,26 @@ def list_cookbook_structure(path: str) -> str:
 
     """
     return _list_cookbook_structure(path)
+
+
+@mcp.tool()
+def convert_resource_to_task(
+    resource_type: str, resource_name: str, action: str = "create", properties: str = ""
+) -> str:
+    """
+    Convert a Chef resource to an Ansible task.
+
+    Args:
+        resource_type: The Chef resource type (e.g., 'package', 'service').
+        resource_name: The name of the resource.
+        action: The Chef action (e.g., 'install', 'start', 'create').
+        properties: Additional resource properties as a string representation.
+
+    Returns:
+        YAML representation of the equivalent Ansible task.
+
+    """
+    return _convert_resource_to_task(resource_type, resource_name, action, properties)
 
 
 @mcp.tool()
@@ -4998,14 +5104,14 @@ def _format_databag_structure(structure: dict) -> str:
 # - analyze_chef_application_patterns
 
 # Register imported deployment tools with MCP server
-mcp.tool()(generate_awx_job_template_from_cookbook)
-mcp.tool()(generate_awx_workflow_from_chef_runlist)
-mcp.tool()(generate_awx_project_from_cookbooks)
-mcp.tool()(generate_awx_inventory_source_from_chef)
-mcp.tool()(convert_chef_deployment_to_ansible_strategy)
-mcp.tool()(generate_blue_green_deployment_playbook)
-mcp.tool()(generate_canary_deployment_strategy)
-mcp.tool()(analyze_chef_application_patterns)
+mcp.tool()(_generate_awx_job_template_from_cookbook)
+mcp.tool()(_generate_awx_workflow_from_chef_runlist)
+mcp.tool()(_generate_awx_project_from_cookbooks)
+mcp.tool()(_generate_awx_inventory_source_from_chef)
+mcp.tool()(_convert_chef_deployment_to_ansible_strategy)
+mcp.tool()(_generate_blue_green_deployment_playbook)
+mcp.tool()(_generate_canary_deployment_strategy)
+mcp.tool()(_analyze_chef_application_patterns)
 
 
 # ============================================================================
@@ -6875,8 +6981,8 @@ def _generate_strategy_variables(strategy: str) -> dict:
 @mcp.tool()
 def assess_chef_migration_complexity(
     cookbook_paths: str,
-    target_environment: str = "standard",
-    include_recommendations: bool = True,
+    migration_scope: str = "full",
+    target_platform: str = "ansible_awx",
 ) -> str:
     """
     Assess the complexity of migrating Chef cookbooks to Ansible.
@@ -6886,21 +6992,23 @@ def assess_chef_migration_complexity(
 
     Args:
         cookbook_paths: Comma-separated list of paths to Chef cookbook directories.
-        target_environment: Target deployment environment (standard/cloud/hybrid).
-        include_recommendations: Whether to include migration recommendations.
+        migration_scope: Scope of migration (full/recipes_only/infrastructure_only).
+        target_platform: Target platform (ansible_awx/ansible_core/ansible_tower).
 
     Returns:
         Detailed assessment report in markdown format.
 
     """
     return _assess_chef_migration_complexity(
-        cookbook_paths, target_environment, include_recommendations
+        cookbook_paths, migration_scope, target_platform
     )
 
 
 @mcp.tool()
 def generate_migration_plan(
-    cookbook_paths: str, strategy: str = "phased", team_size: int = 3
+    cookbook_paths: str,
+    migration_strategy: str = "phased",
+    timeline_weeks: int = 12,
 ) -> str:
     """
     Generate a detailed migration plan for Chef to Ansible conversion.
@@ -6910,14 +7018,14 @@ def generate_migration_plan(
 
     Args:
         cookbook_paths: Comma-separated list of paths to Chef cookbook directories.
-        strategy: Migration strategy (phased/big_bang/parallel).
-        team_size: Size of the migration team.
+        migration_strategy: Migration approach (big_bang, phased, parallel).
+        timeline_weeks: Target timeline in weeks.
 
     Returns:
         Detailed migration plan in markdown format.
 
     """
-    return _generate_migration_plan(cookbook_paths, strategy, team_size)
+    return _generate_migration_plan(cookbook_paths, migration_strategy, timeline_weeks)
 
 
 @mcp.tool()
@@ -6940,7 +7048,9 @@ def analyze_cookbook_dependencies(cookbook_paths: str) -> str:
 
 @mcp.tool()
 def generate_migration_report(
-    cookbook_paths: str, include_executive_summary: bool = True
+    cookbook_paths: str,
+    report_format: str = "markdown",
+    include_technical_details: str = "yes",
 ) -> str:
     """
     Generate a comprehensive migration report.
@@ -6950,13 +7060,16 @@ def generate_migration_report(
 
     Args:
         cookbook_paths: Comma-separated list of paths to Chef cookbook directories.
-        include_executive_summary: Whether to include an executive summary.
+        report_format: Output format (markdown/html/json).
+        include_technical_details: Include technical details (yes/no).
 
     Returns:
         Comprehensive migration report in markdown format.
 
     """
-    return _generate_migration_report(cookbook_paths, include_executive_summary)
+    return _generate_migration_report(
+        cookbook_paths, report_format, include_technical_details
+    )
 
 
 @mcp.tool()
@@ -6980,6 +7093,7 @@ def validate_conversion(
         Validation report in the specified format.
 
     """
+    return _validate_conversion(conversion_type, result_content, output_format)
 
 
 # Habitat Parsing Tool
@@ -7003,10 +7117,121 @@ def parse_habitat_plan(plan_path: str) -> str:
     return _parse_habitat_plan(plan_path)
 
 
-# Habitat conversion tools (convert_habitat_to_dockerfile, generate_compose_from_habitat)
-# are now imported from souschef.converters.habitat module
+# Habitat conversion tools - re-export for backward compatibility
+def convert_habitat_to_dockerfile(
+    plan_path: str, base_image: str = "ubuntu:22.04"
+) -> str:
+    """
+    Convert a Habitat plan to Dockerfile.
 
-# are now imported from souschef.converters.habitat module
+    Args:
+        plan_path: Path to the Habitat plan.sh file.
+        base_image: Base Docker image to use.
+
+    Returns:
+        Generated Dockerfile content.
+
+    """
+    return _convert_habitat_to_dockerfile(plan_path, base_image)
+
+
+def generate_compose_from_habitat(
+    plan_paths: str, network_name: str = "habitat_net"
+) -> str:
+    """
+    Generate Docker Compose from Habitat plans.
+
+    Args:
+        plan_paths: Comma-separated paths to plan.sh files.
+        network_name: Docker network name.
+
+    Returns:
+        Generated Docker Compose YAML content.
+
+    """
+    return _generate_compose_from_habitat(plan_paths, network_name)
+
+
+# Playbook converter wrappers for backward compatibility
+def generate_playbook_from_recipe(recipe_path: str) -> str:
+    """
+    Generate Ansible playbook from Chef recipe.
+
+    Args:
+        recipe_path: Path to the Chef recipe file.
+
+    Returns:
+        Generated Ansible playbook content.
+
+    """
+    return _generate_playbook_from_recipe(recipe_path)
+
+
+def convert_chef_search_to_inventory(search_query: str) -> str:
+    """
+    Convert Chef search query to Ansible inventory.
+
+    Args:
+        search_query: Chef search query.
+
+    Returns:
+        Ansible inventory configuration.
+
+    """
+    return _convert_chef_search_to_inventory(search_query)
+
+
+def generate_dynamic_inventory_script(search_queries: str) -> str:
+    """
+    Generate dynamic inventory script from Chef search queries.
+
+    Args:
+        search_queries: Chef search queries (one per line).
+
+    Returns:
+        Python dynamic inventory script content.
+
+    """
+    return _generate_dynamic_inventory_script(search_queries)
+
+
+def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
+    """
+    Analyze Chef search patterns in recipe or cookbook.
+
+    Args:
+        recipe_or_cookbook_path: Path to recipe or cookbook.
+
+    Returns:
+        Analysis of search patterns found.
+
+    """
+    return _analyze_chef_search_patterns(recipe_or_cookbook_path)
+
+
+# AWX/AAP deployment wrappers for backward compatibility
+def generate_awx_job_template_from_cookbook(
+    cookbook_path: str,
+    cookbook_name: str,
+    target_environment: str = "production",
+    include_survey: bool = True,
+) -> str:
+    """
+    Generate AWX job template from cookbook.
+
+    Args:
+        cookbook_path: Path to the cookbook.
+        cookbook_name: Name of the cookbook for job template.
+        target_environment: Target environment for the job template.
+        include_survey: Whether to include survey spec for cookbook attributes.
+
+    Returns:
+        Generated AWX job template JSON.
+
+    """
+    return _generate_awx_job_template_from_cookbook(
+        cookbook_path, cookbook_name, target_environment, include_survey
+    )
 
 
 def main() -> None:

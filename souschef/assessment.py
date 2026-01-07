@@ -50,7 +50,7 @@ def assess_chef_migration_complexity(
 
         for cookbook_path in paths:
             if cookbook_path.exists():
-                # deepcode ignore PT: cookbook_path is already normalized via _normalize_path
+                # deepcode ignore PT: path normalized via _normalize_path
                 assessment = _assess_single_cookbook(cookbook_path)
                 cookbook_assessments.append(assessment)
 
@@ -133,7 +133,7 @@ def generate_migration_plan(
 
         for cookbook_path in paths:
             if cookbook_path.exists():
-                # deepcode ignore PT: cookbook_path is already normalized via _normalize_path
+                # deepcode ignore PT: path normalized via _normalize_path
                 assessment = _assess_single_cookbook(cookbook_path)
                 cookbook_assessments.append(assessment)
 

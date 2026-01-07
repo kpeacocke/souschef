@@ -72,7 +72,9 @@ def test_list_directory_success():
     mock_file2.name = "file2.txt"
     mock_path.iterdir.return_value = [mock_file1, mock_file2]
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory(".")
         assert result == ["file1.txt", "file2.txt"]
 
@@ -100,7 +102,7 @@ end
     mock_recipes_dir.glob.return_value = [mock_recipe_file]
     mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
 
-    with patch("souschef.server._normalize_path") as mock_path_class:
+    with patch("souschef.assessment._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = assess_chef_migration_complexity("/path/to/cookbook")
 
@@ -117,7 +119,7 @@ def test_assess_chef_migration_complexity_cookbook_not_found():
     mock_cookbook_path = MagicMock(spec=Path)
     mock_cookbook_path.exists.return_value = False
 
-    with patch("souschef.server._normalize_path") as mock_path_class:
+    with patch("souschef.assessment._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = assess_chef_migration_complexity("/nonexistent/path")
 
@@ -142,7 +144,7 @@ def test_generate_migration_plan_success():
     mock_recipes_dir.glob.return_value = [mock_recipe_file]
     mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
 
-    with patch("souschef.server._normalize_path") as mock_path_class:
+    with patch("souschef.assessment._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = generate_migration_plan("/path/to/cookbook", "phased", 12)
 
@@ -186,7 +188,7 @@ def test_analyze_cookbook_dependencies_not_found():
     mock_cookbook_path = MagicMock(spec=Path)
     mock_cookbook_path.exists.return_value = False
 
-    with patch("souschef.server._normalize_path") as mock_path_class:
+    with patch("souschef.assessment._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
         result = analyze_cookbook_dependencies("/nonexistent/path")
 
@@ -289,7 +291,9 @@ def test_list_directory_empty():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.return_value = []
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory("/empty")
         assert result == []
 
@@ -299,7 +303,9 @@ def test_list_directory_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = FileNotFoundError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory("non_existent_directory")
         assert "Error: Directory not found" in result
 
@@ -309,7 +315,9 @@ def test_list_directory_not_a_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = NotADirectoryError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory("file.txt")
         assert "Error:" in result
         assert "is not a directory" in result
@@ -320,7 +328,9 @@ def test_list_directory_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = PermissionError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory("/root")
         assert "Error: Permission denied" in result
 
@@ -330,7 +340,9 @@ def test_list_directory_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = Exception("A test exception")
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = list_directory(".")
         assert "An error occurred: A test exception" in result
 
@@ -340,7 +352,9 @@ def test_read_file_success():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.return_value = "file contents here"
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("test.txt")
         assert result == "file contents here"
         mock_path.read_text.assert_called_once_with(encoding="utf-8")
@@ -351,7 +365,9 @@ def test_read_file_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("missing.txt")
         assert "Error: File not found" in result
 
@@ -361,7 +377,9 @@ def test_read_file_is_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = IsADirectoryError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("somedir")
         assert "Error:" in result
         assert "is a directory" in result
@@ -372,7 +390,9 @@ def test_read_file_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("protected.txt")
         assert "Error: Permission denied" in result
 
@@ -382,7 +402,9 @@ def test_read_file_unicode_decode_error():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("binary.dat")
         assert "Error:" in result and "codec can't decode" in result
 
@@ -392,7 +414,9 @@ def test_read_file_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = Exception("Unexpected error")
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch(
+        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    ):
         result = read_file("test.txt")
         assert "An error occurred: Unexpected error" in result
 
@@ -410,7 +434,7 @@ depends 'iptables'
 supports 'ubuntu'
 supports 'debian'
     """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = metadata_content
@@ -429,7 +453,7 @@ supports 'debian'
 def test_read_cookbook_metadata_minimal():
     """Test read_cookbook_metadata with minimal metadata."""
     metadata_content = "name 'simple'"
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = metadata_content
@@ -442,7 +466,7 @@ def test_read_cookbook_metadata_minimal():
 
 def test_read_cookbook_metadata_empty():
     """Test read_cookbook_metadata with empty file."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = ""
@@ -454,7 +478,7 @@ def test_read_cookbook_metadata_empty():
 
 def test_read_cookbook_metadata_not_found():
     """Test read_cookbook_metadata with non-existent file."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = FileNotFoundError()
@@ -466,7 +490,7 @@ def test_read_cookbook_metadata_not_found():
 
 def test_read_cookbook_metadata_is_directory():
     """Test read_cookbook_metadata when path is a directory."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = IsADirectoryError()
@@ -479,7 +503,7 @@ def test_read_cookbook_metadata_is_directory():
 
 def test_read_cookbook_metadata_permission_denied():
     """Test read_cookbook_metadata with permission error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = PermissionError()
@@ -491,7 +515,7 @@ def test_read_cookbook_metadata_permission_denied():
 
 def test_read_cookbook_metadata_unicode_error():
     """Test read_cookbook_metadata with unicode decode error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = UnicodeDecodeError(
@@ -505,7 +529,7 @@ def test_read_cookbook_metadata_unicode_error():
 
 def test_read_cookbook_metadata_other_exception():
     """Test read_cookbook_metadata with unexpected exception."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = Exception("Unexpected")
@@ -532,7 +556,7 @@ template '/etc/nginx/nginx.conf' do
   action :create
 end
     """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = recipe_content
@@ -551,7 +575,7 @@ end
 
 def test_parse_recipe_empty():
     """Test parse_recipe with no resources."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = "# Just comments"
@@ -563,7 +587,7 @@ def test_parse_recipe_empty():
 
 def test_parse_recipe_not_found():
     """Test parse_recipe with non-existent file."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = FileNotFoundError()
@@ -575,7 +599,7 @@ def test_parse_recipe_not_found():
 
 def test_parse_recipe_is_directory():
     """Test parse_recipe when path is a directory."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = IsADirectoryError()
@@ -588,7 +612,7 @@ def test_parse_recipe_is_directory():
 
 def test_parse_recipe_permission_denied():
     """Test parse_recipe with permission error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = PermissionError()
@@ -600,7 +624,7 @@ def test_parse_recipe_permission_denied():
 
 def test_parse_recipe_unicode_error():
     """Test parse_recipe with unicode decode error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = UnicodeDecodeError(
@@ -614,7 +638,7 @@ def test_parse_recipe_unicode_error():
 
 def test_parse_recipe_other_exception():
     """Test parse_recipe with unexpected exception."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = Exception("Unexpected")
@@ -632,7 +656,7 @@ default['nginx']['ssl_port'] = 443
 override['nginx']['worker_processes'] = 4
 default['nginx']['user'] = 'www-data'
     """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = attributes_content
@@ -650,7 +674,7 @@ default['nginx']['user'] = 'www-data'
 
 def test_parse_attributes_empty():
     """Test parse_attributes with no attributes."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = "# Just comments"
@@ -662,7 +686,7 @@ def test_parse_attributes_empty():
 
 def test_parse_attributes_not_found():
     """Test parse_attributes with non-existent file."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = FileNotFoundError()
@@ -674,7 +698,7 @@ def test_parse_attributes_not_found():
 
 def test_parse_attributes_is_directory():
     """Test parse_attributes when path is a directory."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = IsADirectoryError()
@@ -687,7 +711,7 @@ def test_parse_attributes_is_directory():
 
 def test_parse_attributes_permission_denied():
     """Test parse_attributes with permission error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = PermissionError()
@@ -699,7 +723,7 @@ def test_parse_attributes_permission_denied():
 
 def test_parse_attributes_unicode_error():
     """Test parse_attributes with unicode decode error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = UnicodeDecodeError(
@@ -713,7 +737,7 @@ def test_parse_attributes_unicode_error():
 
 def test_parse_attributes_other_exception():
     """Test parse_attributes with unexpected exception."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.side_effect = Exception("Unexpected")
@@ -886,8 +910,8 @@ def test_format_resolved_attributes_empty():
 def test_list_cookbook_structure_success():
     """Test list_cookbook_structure with valid cookbook."""
     with (
-        patch("souschef.server._normalize_path") as mock_path,
-        patch("souschef.server._safe_join") as mock_safe_join,
+        patch("souschef.parsers.metadata._normalize_path") as mock_path,
+        patch("souschef.parsers.metadata._safe_join") as mock_safe_join,
     ):
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
@@ -943,8 +967,8 @@ def test_list_cookbook_structure_success():
 def test_list_cookbook_structure_empty():
     """Test list_cookbook_structure with empty directory."""
     with (
-        patch("souschef.server._normalize_path") as mock_path,
-        patch("souschef.server._safe_join") as mock_safe_join,
+        patch("souschef.parsers.metadata._normalize_path") as mock_path,
+        patch("souschef.parsers.metadata._safe_join") as mock_safe_join,
     ):
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
@@ -964,7 +988,7 @@ def test_list_cookbook_structure_empty():
 
 def test_list_cookbook_structure_not_directory():
     """Test list_cookbook_structure with non-directory path."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.return_value = False
@@ -977,7 +1001,7 @@ def test_list_cookbook_structure_not_directory():
 
 def test_list_cookbook_structure_permission_denied():
     """Test list_cookbook_structure with permission error."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.side_effect = PermissionError()
@@ -989,7 +1013,7 @@ def test_list_cookbook_structure_permission_denied():
 
 def test_list_cookbook_structure_other_exception():
     """Test list_cookbook_structure with unexpected exception."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
         mock_path.return_value = mock_cookbook
         mock_cookbook.is_dir.side_effect = Exception("Unexpected")
@@ -1140,7 +1164,9 @@ def test_convert_unknown_resource_type():
 def test_convert_with_exception():
     """Test that conversion handles exceptions gracefully."""
     # This should trigger an error by passing invalid data types
-    with patch("souschef.server._convert_chef_resource_to_ansible") as mock_convert:
+    with patch(
+        "souschef.converters.resource._convert_chef_resource_to_ansible"
+    ) as mock_convert:
         mock_convert.side_effect = Exception("Test exception")
 
         result = convert_resource_to_task("package", "nginx", "install")
@@ -1159,7 +1185,7 @@ def test_parse_template_success():
     erb_content = "Hello <%= @name %>!"
     mock_path.read_text.return_value = erb_content
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.template._normalize_path", return_value=mock_path):
         result = parse_template("/path/to/template.erb")
 
         assert "variables" in result
@@ -1172,7 +1198,7 @@ def test_parse_template_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.template._normalize_path", return_value=mock_path):
         result = parse_template("/nonexistent/template.erb")
 
         assert "Error: File not found" in result
@@ -1183,7 +1209,7 @@ def test_parse_template_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.template._normalize_path", return_value=mock_path):
         result = parse_template("/forbidden/template.erb")
 
         assert "Error: Permission denied" in result
@@ -1321,7 +1347,7 @@ end
 """
     mock_path.read_text.return_value = resource_content
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.resource._normalize_path", return_value=mock_path):
         result = parse_custom_resource("/path/to/resource.rb")
 
         assert "properties" in result
@@ -1334,7 +1360,7 @@ def test_parse_custom_resource_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.resource._normalize_path", return_value=mock_path):
         result = parse_custom_resource("/nonexistent/resource.rb")
 
         assert "Error: File not found" in result
@@ -1345,7 +1371,7 @@ def test_parse_custom_resource_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch("souschef.server._normalize_path", return_value=mock_path):
+    with patch("souschef.parsers.resource._normalize_path", return_value=mock_path):
         result = parse_custom_resource("/forbidden/resource.rb")
 
         assert "Error: Permission denied" in result
@@ -1586,7 +1612,7 @@ package 'nginx' do  # Using nginx
   action :install
 end
 """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = recipe_content
@@ -1607,7 +1633,7 @@ when 'centos'
   default['pkg']['name'] = 'httpd'
 end
 """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = attr_content
@@ -1642,7 +1668,7 @@ line3'
   action :create
 end
 """
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.read_text.return_value = recipe_content
@@ -12119,7 +12145,9 @@ class TestErrorHandlingPaths:
         from souschef.server import convert_chef_search_to_inventory
 
         # Trigger exception with invalid search query
-        with patch("souschef.server._parse_chef_search_query") as mock_parse:
+        with patch(
+            "souschef.converters.playbook._parse_chef_search_query"
+        ) as mock_parse:
             mock_parse.side_effect = Exception("Parse error")
             result = convert_chef_search_to_inventory(search_query="invalid::query")
             assert "error" in result.lower()
@@ -13113,7 +13141,7 @@ class TestHabitatConversion:
 
     def test_parse_habitat_plan_success(self):
         """Test parsing a valid Habitat plan file."""
-        with patch("souschef.server._normalize_path") as mock_normalize:
+        with patch("souschef.parsers.habitat._normalize_path") as mock_normalize:
             mock_file = MagicMock(spec=Path)
             mock_file.exists.return_value = True
             mock_file.is_dir.return_value = False
@@ -13169,7 +13197,7 @@ do_install() {
 
     def test_parse_habitat_plan_file_not_found(self):
         """Test parsing a non-existent Habitat plan."""
-        with patch("souschef.server._normalize_path") as mock_normalize:
+        with patch("souschef.parsers.habitat._normalize_path") as mock_normalize:
             mock_file = MagicMock(spec=Path)
             mock_file.exists.return_value = False
             mock_normalize.return_value = mock_file
@@ -13180,7 +13208,7 @@ do_install() {
 
     def test_parse_habitat_plan_is_directory(self):
         """Test parsing when path is a directory."""
-        with patch("souschef.server._normalize_path") as mock_normalize:
+        with patch("souschef.parsers.habitat._normalize_path") as mock_normalize:
             mock_file = MagicMock(spec=Path)
             mock_file.exists.return_value = True
             mock_file.is_dir.return_value = True
@@ -13415,7 +13443,7 @@ do_install() {
 
     def test_convert_habitat_to_dockerfile_success(self):
         """Test converting a Habitat plan to Dockerfile."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             mock_parse.return_value = json.dumps(
                 {
                     "package": {
@@ -13463,7 +13491,7 @@ do_install() {
 
     def test_convert_habitat_to_dockerfile_install_vars(self):
         """Test that do_install replaces Habitat variables."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             mock_parse.return_value = json.dumps(
                 {
                     "package": {
@@ -13493,7 +13521,7 @@ do_install() {
 
     def test_convert_habitat_to_dockerfile_apt_packages_escaped(self):
         """Test that apt package names are properly shell-escaped."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             # Mock plan with dependencies that will be mapped to apt packages
             mock_parse.return_value = json.dumps(
                 {
@@ -13526,7 +13554,7 @@ do_install() {
 
     def test_convert_habitat_to_dockerfile_dangerous_pattern_warning(self):
         """Test that dangerous command patterns trigger warnings in generated Dockerfile."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             # Mock plan with potentially dangerous commands
             mock_parse.return_value = json.dumps(
                 {
@@ -13555,7 +13583,7 @@ do_install() {
 
     def test_convert_habitat_to_dockerfile_label_escaping(self):
         """Test that LABEL values with quotes are properly escaped."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             # Mock plan with quotes in metadata fields
             mock_parse.return_value = json.dumps(
                 {
@@ -13587,7 +13615,7 @@ do_install() {
 
     def test_convert_habitat_to_dockerfile_parse_error(self):
         """Test Dockerfile conversion when plan parsing fails."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             mock_parse.return_value = "Error: File not found"
 
             result = convert_habitat_to_dockerfile("/nonexistent/plan.sh")
@@ -13596,7 +13624,7 @@ do_install() {
 
     def test_convert_habitat_to_dockerfile_with_quoted_cmd(self):
         """Test Dockerfile conversion with quoted arguments in run command."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             # Mock plan with command containing quoted strings
             mock_parse.return_value = json.dumps(
                 {
@@ -13724,7 +13752,7 @@ do_install() {
 
     def test_convert_habitat_to_dockerfile_invalid_base_image(self):
         """Test Dockerfile conversion rejects invalid base image names."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             mock_parse.return_value = json.dumps(
                 {
                     "package": {"name": "nginx", "origin": "core"},
@@ -13806,7 +13834,7 @@ do_install() {
 
     def test_generate_compose_from_habitat_invalid_network_name(self):
         """Test docker-compose generation rejects invalid network names."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             mock_parse.return_value = json.dumps(
                 {
                     "package": {"name": "nginx"},
@@ -13834,7 +13862,7 @@ do_install() {
 
     def test_generate_compose_from_habitat_single_service(self):
         """Test generating docker-compose.yml from a single Habitat plan."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             mock_parse.return_value = json.dumps(
                 {
                     "package": {"name": "nginx", "version": "1.25.3"},
@@ -13862,7 +13890,7 @@ do_install() {
 
     def test_generate_compose_from_habitat_multiple_services(self):
         """Test generating docker-compose.yml from multiple Habitat plans."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
 
             def mock_parse_side_effect(path):
                 if "nginx" in path:
@@ -13905,7 +13933,7 @@ do_install() {
 
     def test_generate_compose_from_habitat_parse_error(self):
         """Test docker-compose generation when plan parsing fails."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             mock_parse.return_value = "Error: File not found"
 
             result = generate_compose_from_habitat("/nonexistent/plan.sh")
@@ -13915,7 +13943,7 @@ do_install() {
 
     def test_habitat_plan_with_init_callback(self):
         """Test Dockerfile generation with init callback."""
-        with patch("souschef.server.parse_habitat_plan") as mock_parse:
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             mock_parse.return_value = json.dumps(
                 {
                     "package": {

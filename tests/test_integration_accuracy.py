@@ -609,7 +609,7 @@ search_results.each do |server|
   log "Found server: #{server['hostname']}"
 end
 """
-        with patch("souschef.server._normalize_path") as mock_norm:
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -626,7 +626,7 @@ end
         recipe_content = """
 nodes = search(:node, "name:/^app-\\d+$/")
 """
-        with patch("souschef.server._normalize_path") as mock_norm:
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -651,7 +651,7 @@ service 'app' do
   subscribes :restart, 'template[/etc/app/config.conf]', :delayed
 end
 """
-        with patch("souschef.server._normalize_path") as mock_norm:
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -677,7 +677,7 @@ package 'postgresql' do
   action :upgrade
 end
 """
-        with patch("souschef.server._normalize_path") as mock_norm:
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -697,7 +697,7 @@ service 'nginx' do
   only_if 'test -f /etc/nginx/nginx.conf'
 end
 """
-        with patch("souschef.server._normalize_path") as mock_norm:
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -717,7 +717,7 @@ package 'apache2' do
   not_if 'which apache2'
 end
 """
-        with patch("souschef.server._normalize_path") as mock_norm:
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -737,7 +737,7 @@ file '/tmp/test' do
   only_if { File.exist?('/etc/config') }
 end
 """
-        with patch("souschef.server._normalize_path") as mock_norm:
+        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True

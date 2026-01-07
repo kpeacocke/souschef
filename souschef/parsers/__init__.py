@@ -11,6 +11,12 @@ from souschef.parsers.metadata import list_cookbook_structure, read_cookbook_met
 from souschef.parsers.recipe import parse_recipe
 from souschef.parsers.resource import parse_custom_resource
 from souschef.parsers.template import parse_template
+from souschef.parsers.validation import (
+    ValidationCategory,
+    ValidationEngine,
+    ValidationLevel,
+    ValidationResult,
+)
 
 __all__ = [
     "parse_template",
@@ -23,4 +29,8 @@ __all__ = [
     "convert_inspec_to_test",
     "generate_inspec_from_chef",
     "parse_habitat_plan",
+    "ValidationCategory",
+    "ValidationEngine",
+    "ValidationLevel",
+    "ValidationResult",
 ]

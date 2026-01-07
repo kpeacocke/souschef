@@ -3,6 +3,59 @@
 ## Project Overview
 SousChef is an AI-powered MCP (Model Context Protocol) server that assists with converting Chef cookbooks to Ansible playbooks.
 
+## Project Architecture
+
+### Module Structure
+The project follows a modular architecture organized by functionality:
+
+```
+souschef/
+├── __init__.py          # Package initialization
+├── server.py            # MCP server entry point with tool registrations
+├── cli.py               # Command-line interface
+├── assessment.py        # Migration assessment and planning
+├── deployment.py        # AWX/Tower and deployment strategies
+├── core/                # Core utilities
+│   ├── constants.py     # Shared constants
+│   ├── path_utils.py    # Path normalization utilities
+│   ├── ruby_utils.py    # Ruby value normalization
+│   └── validation.py    # Validation engine
+├── parsers/             # Chef artifact parsers
+│   ├── attributes.py    # Attribute file parsing
+│   ├── habitat.py       # Habitat plan parsing
+│   ├── inspec.py        # InSpec profile parsing
+│   ├── metadata.py      # Cookbook metadata parsing
+│   ├── recipe.py        # Recipe parsing
+│   ├── resource.py      # Custom resource parsing
+│   └── template.py      # ERB template parsing
+├── converters/          # Chef to Ansible converters
+│   ├── habitat.py       # Habitat to Docker conversion
+│   ├── playbook.py      # Recipe to playbook conversion
+│   └── resource.py      # Resource to task conversion
+└── filesystem/          # Filesystem operations
+    └── operations.py    # Directory/file operations
+```
+
+### Key Architecture Principles
+
+1. **server.py as Entry Point**: All MCP tools are registered in `server.py`. Internal functions are imported from specialized modules.
+
+2. **Backward Compatibility Exports**: Internal functions used by tests are re-exported from `server.py` with `# noqa: F401` comments to suppress unused import warnings.
+
+3. **Module Responsibilities**:
+   - `parsers/`: Parse Chef artifacts (read-only, extract structure)
+   - `converters/`: Transform Chef to Ansible (produce output)
+   - `core/`: Shared utilities (no business logic dependencies)
+   - `assessment.py`: High-level migration planning
+   - `deployment.py`: AWX integration and deployment strategies
+
+4. **Mock Patching Rule**: When testing, patch functions where they are **used** (imported), not where they are **defined**. Example:
+   ```python
+   # Function defined in souschef/parsers/recipe.py
+   # Used in souschef/converters/playbook.py
+   # Patch: "souschef.converters.playbook._normalize_path"
+   ```
+
 ## Development Standards
 
 ### Code Quality

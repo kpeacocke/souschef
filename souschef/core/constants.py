@@ -38,6 +38,27 @@ JINJA2_ELIF = r"{% elif \1 %}"
 JINJA2_ENDIF = r"{% endif %}"
 JINJA2_FOR = r"{% for \2 in \1 %}"
 
+# ERB to Jinja2 pattern mappings
+ERB_PATTERNS = {
+    # Variable output: <%= var %> -> {{ var }}
+    "output": (REGEX_ERB_OUTPUT, JINJA2_VAR_REPLACEMENT),
+    # Variable with node prefix: <%= node['attr'] %> -> {{ attr }}
+    "node_attr": (REGEX_ERB_NODE_ATTR, JINJA2_NODE_ATTR_REPLACEMENT),
+    # If statements: <% if condition %> -> {% if condition %}
+    "if_start": (REGEX_ERB_IF_START, JINJA2_IF_START),
+    # Unless (negated if): <% unless condition %> -> {% if not condition %}
+    "unless": (REGEX_ERB_UNLESS, JINJA2_IF_NOT),
+    # Else: <% else %> -> {% else %}
+    "else": (REGEX_ERB_ELSE, JINJA2_ELSE),
+    # Elsif: <% elsif condition %> -> {% elif condition %}
+    "elsif": (REGEX_ERB_ELSIF, JINJA2_ELIF),
+    # End: <% end %> -> {% endif %}
+    "end": (REGEX_ERB_END, JINJA2_ENDIF),
+    # Each loop: <% array.each do |item| %> -> {% for item in array %}
+    # Use [^%]{1,200} to prevent matching across %> boundaries and ReDoS
+    "each": (REGEX_ERB_EACH, JINJA2_FOR),
+}
+
 # InSpec output formatting
 INSPEC_END_INDENT = "  end"
 INSPEC_SHOULD_EXIST = "    it { should exist }"
