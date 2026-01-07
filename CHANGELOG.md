@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2](https://github.com/kpeacocke/souschef/compare/v2.1.1...v2.1.2) (2026-01-05)
+
+
+### Bug Fixes
+
+* Develop ([#51](https://github.com/kpeacocke/souschef/issues/51)) ([bb1fcea](https://github.com/kpeacocke/souschef/commit/bb1fcea0e1586feda509577a574dd034e735cac9))
+
 ## [2.1.1](https://github.com/kpeacocke/souschef/compare/v2.1.0...v2.1.1) (2026-01-05)
 
 
