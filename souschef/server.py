@@ -3,6 +3,7 @@
 import ast
 import json
 import re
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -247,17 +248,32 @@ ERROR_FILE_NOT_FOUND = "Error: File not found at {path}"
 ERROR_IS_DIRECTORY = "Error: {path} is a directory, not a file"
 ERROR_PERMISSION_DENIED = "Error: Permission denied for {path}"
 
+    Attributes:
+        level: Severity level of the validation issue.
+        category: Category of the validation check.
+        message: Human-readable message describing the issue.
+        location: Optional location information (line number, resource name, etc.).
+        suggestion: Optional suggestion for fixing the issue.
 
-@mcp.tool()
-def parse_template(path: str) -> str:
     """
-    Parse a Chef ERB template file and convert to Jinja2.
 
-    Args:
-        path: Path to the ERB template file.
+    def __init__(
+        self,
+        level: ValidationLevel,
+        category: ValidationCategory,
+        message: str,
+        location: str | None = None,
+        suggestion: str | None = None,
+    ) -> None:
+        """
+        Initialize validation result.
 
-    Returns:
-        JSON string with extracted variables and Jinja2-converted template.
+        Args:
+            level: Severity level.
+            category: Validation category.
+            message: Issue description.
+            location: Optional location information.
+            suggestion: Optional fix suggestion.
 
     """
     return _parse_template(path)
@@ -305,10 +321,15 @@ def read_file(path: str) -> str:
     Returns:
         The contents of the file, or an error message.
 
+    Provides validation across syntax, semantics, best practices, security,
+    and performance categories.
     """
     result: str = _read_file(path)
     return result
 
+    def __init__(self) -> None:
+        """Initialize validation engine."""
+        self.results: list[ValidationResult] = []
 
 @mcp.tool()
 def read_cookbook_metadata(path: str) -> str:
@@ -324,6 +345,8 @@ def read_cookbook_metadata(path: str) -> str:
     """
     return _read_cookbook_metadata(path)
 
+        """
+        self.results = []
 
 @mcp.tool()
 def parse_recipe(path: str) -> str:
@@ -403,6 +426,13 @@ def convert_resource_to_task(
     """
     return _convert_resource_to_task(resource_type, resource_name, action, properties)
 
+        if notifies and "handlers:" not in content:
+            self._add_result(
+                ValidationLevel.WARNING,
+                ValidationCategory.SEMANTIC,
+                "Tasks reference handlers but no handlers section found",
+                suggestion="Add handlers section or remove notify directives",
+            )
 
 def _extract_resource_subscriptions(
     resource: dict[str, str], raw_content: str
@@ -449,6 +479,8 @@ def _extract_resource_subscriptions(
 
     return subscriptions
 
+        Args:
+            code: Python code to validate.
 
 @mcp.tool()
 def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
@@ -1190,6 +1222,8 @@ def _generate_inventory_group_from_environment(
 
     return yaml.dump(group_vars, default_flow_style=False, indent=2)
 
+        # Find data bag usage patterns
+        usage_patterns = _extract_databag_usage_from_cookbook(cookbook)
 
 def _generate_complete_inventory_from_environments(
     environments: dict, results: list, output_format: str
