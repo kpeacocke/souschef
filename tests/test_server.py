@@ -8382,13 +8382,13 @@ end""",
 end""",
                 "create",
             ),
-            # Mount resources - Test fixture uses fake credentials for Chef parsing
+            # Mount resources
             (
                 (
                     'mount "/mnt/shared" do\n'
                     '  device "//server/share"\n'
                     '  fstype "cifs"\n'
-                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'  # NOSONAR - test, not secret
+                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'
                     "  dump 0\n"
                     "  pass 0\n"
                     "  action [:mount, :enable]\n"

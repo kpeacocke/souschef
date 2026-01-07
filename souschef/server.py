@@ -95,6 +95,41 @@ from souschef.converters.resource import (  # noqa: F401
 from souschef.converters.resource import (
     convert_resource_to_task as _convert_resource_to_task,
 )
+from souschef.core.constants import (  # noqa: F401
+    ANSIBLE_SERVICE_MODULE,
+    CHEF_RECIPE_PREFIX,
+    CHEF_ROLE_PREFIX,
+    ERROR_PREFIX,
+    INSPEC_END_INDENT,
+    INSPEC_SHOULD_EXIST,
+    JINJA2_ELIF,
+    JINJA2_ELSE,
+    JINJA2_ENDIF,
+    JINJA2_FOR,
+    JINJA2_IF_NOT,
+    JINJA2_IF_START,
+    JINJA2_NODE_ATTR_REPLACEMENT,
+    JINJA2_VAR_REPLACEMENT,
+    METADATA_FILENAME,
+    NODE_PREFIX,
+    REGEX_ERB_CONDITION,
+    REGEX_ERB_EACH,
+    REGEX_ERB_ELSE,
+    REGEX_ERB_ELSIF,
+    REGEX_ERB_END,
+    REGEX_ERB_IF_START,
+    REGEX_ERB_NODE_ATTR,
+    REGEX_ERB_OUTPUT,
+    REGEX_ERB_UNLESS,
+    REGEX_QUOTE_DO_END,
+    REGEX_RESOURCE_BRACKET,
+    REGEX_RUBY_INTERPOLATION,
+    REGEX_WHITESPACE_QUOTE,
+    REGEX_WORD_SYMBOLS,
+)
+
+# Import core utilities
+from souschef.core.path_utils import _normalize_path, _safe_join  # noqa: F401
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
@@ -222,94 +257,6 @@ from souschef.parsers.template import parse_template as _parse_template
 
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
-
-
-def _normalize_path(path_str: str) -> Path:
-    """
-    Normalize a file path for safe filesystem operations.
-
-    This function resolves relative paths and symlinks to absolute paths,
-    preventing path traversal attacks (CWE-23). Note: This MCP server
-    intentionally allows full filesystem access as it runs in the user's
-    local environment with their permissions.
-
-    Args:
-        path_str: Path string to normalize.
-
-    Returns:
-        Resolved absolute Path object.
-
-    Raises:
-        ValueError: If the path contains null bytes or is invalid.
-
-    """
-    if "\x00" in path_str:
-        raise ValueError(f"Path contains null bytes: {path_str!r}")
-
-    try:
-        # Resolve to absolute path, removing .., ., and resolving symlinks
-        # This is the path normalization function itself that validates input
-        # lgtm[py/path-injection]
-        # codeql[py/path-injection]
-        return Path(path_str).resolve()
-    except (OSError, RuntimeError) as e:
-        raise ValueError(f"Invalid path {path_str}: {e}") from e
-
-
-def _safe_join(base_path: Path, *parts: str) -> Path:
-    """
-    Safely join path components ensuring result stays within base directory.
-
-    Args:
-        base_path: Normalized base path.
-        *parts: Path components to join.
-
-    Returns:
-        Joined path within base_path.
-
-    Raises:
-        ValueError: If result would escape base_path.
-
-    """
-    result = base_path.joinpath(*parts).resolve()
-    try:
-        result.relative_to(base_path)
-        return result
-    except ValueError as e:
-        raise ValueError(f"Path traversal attempt: {parts} escapes {base_path}") from e
-
-
-# Constants for commonly used strings
-ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"
-METADATA_FILENAME = "metadata.rb"
-ERROR_PREFIX = "Error:"
-REGEX_WHITESPACE_QUOTE = r"\s+['\"]?"
-REGEX_QUOTE_DO_END = r"['\"]?\s+do\s*([^\n]{0,15000})\nend"
-REGEX_RESOURCE_BRACKET = r"(\w+)\[([^\]]+)\]"
-REGEX_ERB_OUTPUT = r"<%=\s*([^%]{1,200}?)\s*%>"
-REGEX_ERB_CONDITION = r"[^%]{1,200}?"
-REGEX_ERB_NODE_ATTR = rf"<%=\s*node\[(['\"])({REGEX_ERB_CONDITION})\1\]\s*%>"
-REGEX_ERB_IF_START = rf"<%\s*if\s+({REGEX_ERB_CONDITION})\s*%>"
-REGEX_ERB_UNLESS = rf"<%\s*unless\s+({REGEX_ERB_CONDITION})\s*%>"
-REGEX_ERB_ELSE = r"<%\s*else\s*%>"
-REGEX_ERB_ELSIF = rf"<%\s*elsif\s+({REGEX_ERB_CONDITION})\s*%>"
-REGEX_ERB_END = r"<%\s*end\s*%>"
-REGEX_ERB_EACH = rf"<%\s*({REGEX_ERB_CONDITION})\.each\s+do\s+\|(\w+)\|\s*%>"
-REGEX_WORD_SYMBOLS = r"[\w.\[\]'\"]+"
-REGEX_RUBY_INTERPOLATION = r"#\{([^}]+)\}"
-NODE_PREFIX = "node["
-JINJA2_VAR_REPLACEMENT = r"{{ \1 }}"
-JINJA2_NODE_ATTR_REPLACEMENT = r"{{ \2 }}"
-JINJA2_IF_START = r"{% if \1 %}"
-JINJA2_IF_NOT = r"{% if not \1 %}"
-JINJA2_ELSE = r"{% else %}"
-JINJA2_ELIF = r"{% elif \1 %}"
-JINJA2_ENDIF = r"{% endif %}"
-JINJA2_FOR = r"{% for \2 in \1 %}"
-INSPEC_END_INDENT = "  end"
-INSPEC_SHOULD_EXIST = "    it { should exist }"
-CHEF_RECIPE_PREFIX = "recipe["
-CHEF_ROLE_PREFIX = "role["
 
 # Error message templates
 ERROR_FILE_NOT_FOUND = "Error: File not found at {path}"

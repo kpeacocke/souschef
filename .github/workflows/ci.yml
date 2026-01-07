@@ -84,6 +84,14 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
 
+    - name: Upload coverage for SonarCloud
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      if: matrix.python-version == '3.14'
+      with:
+        name: coverage-report
+        path: coverage.xml
+        retention-days: 1
+
   test-cli:
     runs-on: ubuntu-latest
     timeout-minutes: 10
