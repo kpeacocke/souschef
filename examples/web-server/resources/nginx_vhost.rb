@@ -2,6 +2,10 @@
 # Custom resource for managing nginx virtual hosts
 #
 
+# Constants
+WEB_USER = 'www-data'
+NGINX_SERVICE = 'service[nginx]'
+
 property :site_name, String, name_property: true
 property :server_name, String, required: true
 property :port, Integer, default: 80
@@ -18,8 +22,8 @@ default_action :create
 action :create do
   # Create document root
   directory new_resource.root_dir do
-    owner 'www-data'
-    group 'www-data'
+    owner WEB_USER
+    group WEB_USER
     mode '0755'
     recursive true
     action :create
@@ -41,21 +45,21 @@ action :create do
       custom_config: new_resource.custom_config
     )
     action :create
-    notifies :reload, 'service[nginx]', :delayed
+    notifies :reload, NGINX_SERVICE, :delayed
   end
 
   # Enable site
   link "/etc/nginx/sites-enabled/#{new_resource.site_name}" do
     to "/etc/nginx/sites-available/#{new_resource.site_name}"
     action :create
-    notifies :reload, 'service[nginx]', :delayed
+    notifies :reload, NGINX_SERVICE, :delayed
   end
 
   # Create default index if it doesn't exist
   file "#{new_resource.root_dir}/index.html" do
     content "<h1>#{new_resource.server_name}</h1>"
-    owner 'www-data'
-    group 'www-data'
+    owner WEB_USER
+    group WEB_USER
     mode '0644'
     action :create_if_missing
   end
@@ -65,20 +69,20 @@ action :delete do
   # Disable site
   link "/etc/nginx/sites-enabled/#{new_resource.site_name}" do
     action :delete
-    notifies :reload, 'service[nginx]', :delayed
+    notifies :reload, NGINX_SERVICE, :delayed
   end
 
   # Remove configuration
   file "/etc/nginx/sites-available/#{new_resource.site_name}" do
     action :delete
-    notifies :reload, 'service[nginx]', :delayed
+    notifies :reload, NGINX_SERVICE, :delayed
   end
 end
 
 action :disable do
   link "/etc/nginx/sites-enabled/#{new_resource.site_name}" do
     action :delete
-    notifies :reload, 'service[nginx]', :delayed
+    notifies :reload, NGINX_SERVICE, :delayed
   end
 end
 
@@ -86,6 +90,6 @@ action :enable do
   link "/etc/nginx/sites-enabled/#{new_resource.site_name}" do
     to "/etc/nginx/sites-available/#{new_resource.site_name}"
     action :create
-    notifies :reload, 'service[nginx]', :delayed
+    notifies :reload, NGINX_SERVICE, :delayed
   end
 end
