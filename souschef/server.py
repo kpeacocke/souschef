@@ -10,6 +10,23 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+# Import extracted modules
+# Import private helper functions still used in server.py
+from souschef.converters.resource import (
+    _convert_chef_resource_to_ansible,
+    _format_ansible_task,
+)
+from souschef.deployment import (
+    analyze_chef_application_patterns,
+    convert_chef_deployment_to_ansible_strategy,
+    generate_awx_inventory_source_from_chef,
+    generate_awx_job_template_from_cookbook,
+    generate_awx_project_from_cookbooks,
+    generate_awx_workflow_from_chef_runlist,
+    generate_blue_green_deployment_playbook,
+    generate_canary_deployment_strategy,
+)
+
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
 
@@ -1828,310 +1845,15 @@ def _format_cookbook_structure(structure: dict[str, list[str]]) -> str:
     return "\n".join(result).rstrip()
 
 
-@mcp.tool()
-def convert_resource_to_task(
-    resource_type: str, resource_name: str, action: str = "create", properties: str = ""
-) -> str:
-    """
-    Convert a Chef resource to an Ansible task.
-
-    Args:
-        resource_type: The Chef resource type (e.g., 'package', 'service').
-        resource_name: The name of the resource.
-        action: The Chef action (e.g., 'install', 'start', 'create').
-            Defaults to 'create'.
-        properties: Additional resource properties as a string representation.
-
-    Returns:
-        YAML representation of the equivalent Ansible task.
-
-    """
-    try:
-        task = _convert_chef_resource_to_ansible(
-            resource_type, resource_name, action, properties
-        )
-        return _format_ansible_task(task)
-    except Exception as e:
-        return f"An error occurred during conversion: {e}"
-
-
-def _get_service_params(resource_name: str, action: str) -> dict[str, Any]:
-    """
-    Get Ansible service module parameters.
-
-    Args:
-        resource_name: Service name.
-        action: Chef action.
-
-    Returns:
-        Dictionary of Ansible service parameters.
-
-    """
-    params: dict[str, Any] = {"name": resource_name}
-    if action in ["enable", "start"]:
-        params["enabled"] = True
-        params["state"] = "started"
-    elif action in ["disable", "stop"]:
-        params["enabled"] = False
-        params["state"] = "stopped"
-    else:
-        params["state"] = ACTION_TO_STATE.get(action, action)
-    return params
-
-
-def _get_file_params(
-    resource_name: str, action: str, resource_type: str
-) -> dict[str, Any]:
-    """
-    Get Ansible file module parameters.
-
-    Args:
-        resource_name: File/directory path.
-        action: Chef action.
-        resource_type: Type of file resource (file/directory/template).
-
-    Returns:
-        Dictionary of Ansible file parameters.
-
-    """
-    params: dict[str, Any] = {}
-
-    if resource_type == "template":
-        params["src"] = resource_name
-        params["dest"] = resource_name.replace(".erb", "")
-        if action == "create":
-            params["mode"] = "0644"
-    elif resource_type == "file":
-        params["path"] = resource_name
-        if action == "create":
-            params["state"] = "file"
-            params["mode"] = "0644"
-        else:
-            params["state"] = ACTION_TO_STATE.get(action, action)
-    elif resource_type == "directory":
-        params["path"] = resource_name
-        params["state"] = "directory"
-        if action == "create":
-            params["mode"] = "0755"
-
-    return params
-
-
-def _convert_chef_resource_to_ansible(
-    resource_type: str, resource_name: str, action: str, properties: str
-) -> dict[str, Any]:
-    """
-    Convert Chef resource to Ansible task dictionary.
-
-    Args:
-        resource_type: The Chef resource type.
-        resource_name: The name of the resource.
-        action: The Chef action.
-        properties: Additional properties string.
-
-    Returns:
-        Dictionary representing an Ansible task.
-
-    """
-    # Get Ansible module name
-    ansible_module = RESOURCE_MAPPINGS.get(resource_type, f"# Unknown: {resource_type}")
-
-    # Start building the task
-    task: dict[str, Any] = {
-        "name": f"{action.capitalize()} {resource_type} {resource_name}",
-    }
-
-    # Build module parameters based on resource type
-    module_params: dict[str, Any] = {}
-
-    if resource_type == "package":
-        module_params["name"] = resource_name
-        module_params["state"] = ACTION_TO_STATE.get(action, action)
-    elif resource_type in ["service", "systemd_unit"]:
-        module_params = _get_service_params(resource_name, action)
-    elif resource_type in ["template", "file", "directory"]:
-        module_params = _get_file_params(resource_name, action, resource_type)
-    elif resource_type in ["execute", "bash"]:
-        module_params["cmd"] = resource_name
-        task["changed_when"] = "false"
-    elif resource_type in ["user", "group"]:
-        module_params["name"] = resource_name
-        module_params["state"] = ACTION_TO_STATE.get(action, "present")
-    else:
-        module_params["name"] = resource_name
-        if action in ACTION_TO_STATE:
-            module_params["state"] = ACTION_TO_STATE[action]
-
-    task[ansible_module] = module_params
-    return task
-
-
-def _format_yaml_value(value: Any) -> str:
-    """Format a value for YAML output."""
-    if isinstance(value, str):
-        return f'"{value}"'
-    return json.dumps(value)
-
-
-def _format_dict_value(key: str, value: dict[str, Any]) -> list[str]:
-    """Format a dictionary value for YAML output."""
-    lines = [f"  {key}:"]
-    for param_key, param_value in value.items():
-        lines.append(f"    {param_key}: {_format_yaml_value(param_value)}")
-    return lines
-
-
-def _format_ansible_task(task: dict[str, Any]) -> str:
-    """
-    Format an Ansible task dictionary as YAML.
-
-    Args:
-        task: Dictionary representing an Ansible task.
-
-    Returns:
-        YAML-formatted string.
-
-    """
-    result = ["- name: " + task["name"]]
-
-    for key, value in task.items():
-        if key == "name":
-            continue
-        if isinstance(value, dict):
-            result.extend(_format_dict_value(key, value))
-        else:
-            result.append(f"  {key}: {_format_yaml_value(value)}")
-
-    return "\n".join(result)
+# Converter tools imported from souschef.converters module:
+# - convert_resource_to_task
+# - generate_playbook_from_recipe
+# - convert_chef_search_to_inventory
+# - generate_dynamic_inventory_script
+# - analyze_chef_search_patterns
 
 
 @mcp.tool()
-def generate_playbook_from_recipe(recipe_path: str) -> str:
-    """
-    Generate a complete Ansible playbook from a Chef recipe.
-
-    Args:
-        recipe_path: Path to the Chef recipe (.rb) file.
-
-    Returns:
-        Complete Ansible playbook in YAML format with tasks, handlers, and variables.
-
-    """
-    try:
-        # First, parse the recipe to extract resources
-        recipe_content: str = parse_recipe(recipe_path)
-
-        if recipe_content.startswith(ERROR_PREFIX):
-            return recipe_content
-
-        # Parse the raw recipe file to extract notifications and other advanced features
-        recipe_file = _normalize_path(recipe_path)
-        if not recipe_file.exists():
-            return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
-
-        raw_content = recipe_file.read_text()
-
-        # Generate playbook structure
-        playbook: str = _generate_playbook_structure(
-            recipe_content, raw_content, recipe_file.name
-        )
-
-        return playbook
-
-    except Exception as e:
-        return f"Error generating playbook: {e}"
-
-
-@mcp.tool()
-def convert_chef_search_to_inventory(search_query: str) -> str:
-    """
-    Convert a Chef search query to Ansible inventory patterns and groups.
-
-    Args:
-        search_query: Chef search query (e.g., "role:web AND environment:production").
-
-    Returns:
-        JSON string with Ansible inventory patterns and group definitions.
-
-    """
-    try:
-        # Parse the Chef search query
-        search_info = _parse_chef_search_query(search_query)
-
-        # Convert to Ansible inventory patterns
-        inventory_config = _generate_ansible_inventory_from_search(search_info)
-
-        return json.dumps(inventory_config, indent=2)
-
-    except Exception as e:
-        return f"Error converting Chef search: {e}"
-
-
-@mcp.tool()
-def generate_dynamic_inventory_script(search_queries: str) -> str:
-    """
-    Generate a Python dynamic inventory script from Chef search queries.
-
-    Args:
-        search_queries: JSON string containing Chef search queries and group names.
-
-    Returns:
-        Complete Python script for Ansible dynamic inventory.
-
-    """
-    try:
-        queries_data = json.loads(search_queries)
-
-        # Generate dynamic inventory script
-        script_content = _generate_inventory_script_content(queries_data)
-
-        return script_content
-
-    except json.JSONDecodeError:
-        return "Error: Invalid JSON format for search queries"
-    except Exception as e:
-        return f"Error generating dynamic inventory script: {e}"
-
-
-@mcp.tool()
-def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
-    """
-    Analyze Chef recipes/cookbooks to extract search patterns for inventory planning.
-
-    Args:
-        recipe_or_cookbook_path: Path to Chef recipe file or cookbook directory.
-
-    Returns:
-        JSON string with discovered search patterns and recommended inventory structure.
-
-    """
-    try:
-        path_obj = _normalize_path(recipe_or_cookbook_path)
-
-        if path_obj.is_file():
-            # Single recipe file
-            search_patterns = _extract_search_patterns_from_file(path_obj)
-        elif path_obj.is_dir():
-            # Cookbook directory
-            search_patterns = _extract_search_patterns_from_cookbook(path_obj)
-        else:
-            return f"Error: Path {recipe_or_cookbook_path} does not exist"
-
-        # Generate inventory recommendations
-        recommendations = _generate_inventory_recommendations(search_patterns)
-
-        return json.dumps(
-            {
-                "discovered_searches": search_patterns,
-                "inventory_recommendations": recommendations,
-            },
-            indent=2,
-        )
-
-    except Exception as e:
-        return f"Error analyzing Chef search patterns: {e}"
-
-
 def _determine_search_index(normalized_query: str) -> str:
     """
     Determine the search index from the query.
@@ -6234,65 +5956,34 @@ def _format_databag_structure(structure: dict) -> str:
     return "\n".join(formatted)
 
 
-@mcp.tool()
-def generate_awx_job_template_from_cookbook(
-    cookbook_path: str,
-    cookbook_name: str,
-    target_environment: str = "production",
-    include_survey: bool = True,
-) -> str:
-    """
-    Generate AWX/AAP job template configuration from Chef cookbook.
+# ============================================================================
+# Deployment and AWX/AAP Integration Tools
+# ============================================================================
+# The following tools are imported from souschef.deployment module
+# - generate_awx_job_template_from_cookbook
+# - generate_awx_workflow_from_chef_runlist
+# - generate_awx_project_from_cookbooks
+# - generate_awx_inventory_source_from_chef
+# - convert_chef_deployment_to_ansible_strategy
+# - generate_blue_green_deployment_playbook
+# - generate_canary_deployment_strategy
+# - analyze_chef_application_patterns
 
-    Args:
-        cookbook_path: Path to Chef cookbook directory
-        cookbook_name: Name of the cookbook for job template
-        target_environment: Target environment for the job template
-        include_survey: Whether to include survey spec for cookbook attributes
+# Register imported deployment tools with MCP server
+mcp.tool()(generate_awx_job_template_from_cookbook)
+mcp.tool()(generate_awx_workflow_from_chef_runlist)
+mcp.tool()(generate_awx_project_from_cookbooks)
+mcp.tool()(generate_awx_inventory_source_from_chef)
+mcp.tool()(convert_chef_deployment_to_ansible_strategy)
+mcp.tool()(generate_blue_green_deployment_playbook)
+mcp.tool()(generate_canary_deployment_strategy)
+mcp.tool()(analyze_chef_application_patterns)
 
-    Returns:
-        AWX/AAP job template JSON configuration
 
-    """
-    try:
-        cookbook = _normalize_path(cookbook_path)
-        if not cookbook.exists():
-            return f"Error: Cookbook path not found: {cookbook_path}"
-
-        # Analyze cookbook structure
-        cookbook_analysis = _analyze_cookbook_for_awx(cookbook, cookbook_name)
-
-        # Generate job template
-        job_template = _generate_awx_job_template(
-            cookbook_analysis, cookbook_name, target_environment, include_survey
-        )
-
-        return f"""# AWX/AAP Job Template Configuration
-# Generated from Chef cookbook: {cookbook_name}
-
-## Job Template JSON:
-```json
-{json.dumps(job_template, indent=2)}
-```
-
-## CLI Import Command:
-```bash
-awx-cli job_templates create \\
-    --name "{job_template["name"]}" \\
-    --project "{job_template["project"]}" \\
-    --playbook "{job_template["playbook"]}" \\
-    --inventory "{job_template["inventory"]}" \\
-    --credential "{job_template["credential"]}" \\
-    --job_type run \\
-    --verbosity 1
-```
-
-## Cookbook Analysis Summary:
-{_format_cookbook_analysis(cookbook_analysis)}
-"""
-
-    except Exception as e:
-        return f"Error generating AWX job template from cookbook: {e}"
+# ============================================================================
+# Assessment and Migration Planning Tools
+# ============================================================================
+# Note: assess_chef_migration_complexity is defined later in this file
 
 
 @mcp.tool()
@@ -9994,47 +9685,10 @@ def _add_dockerfile_runtime(lines: list[str], plan: dict[str, Any]) -> None:
             lines.append(f"CMD {json.dumps(cmd_parts)}")
 
 
-@mcp.tool()
-def convert_habitat_to_dockerfile(
-    plan_path: str, base_image: str = "ubuntu:22.04"
-) -> str:
-    """
-    Convert a Chef Habitat plan to a Dockerfile.
-
-    Creates a Dockerfile that replicates Habitat plan configuration.
-
-    Security Warning: This tool processes shell commands from Habitat plans
-    and includes them in the generated Dockerfile. Only use with trusted
-    Habitat plans from known sources. Review generated Dockerfiles before
-    building images, especially if the plan source is untrusted.
-
-    Args:
-        plan_path: Path to the plan.sh file
-        base_image: Base Docker image (default: ubuntu:22.04)
-
-    Returns:
-        Dockerfile content as a string
-
-    """
-    try:
-        # Validate and normalize path to prevent path traversal
-        try:
-            normalized_path = _normalize_path(plan_path)
-            validated_path = str(normalized_path)
-        except ValueError as e:
-            return f"Invalid path {plan_path}: {e}"
-
-        plan_json: str = parse_habitat_plan(validated_path)
-        if plan_json.startswith(ERROR_PREFIX):
-            return plan_json
-        plan: dict[str, Any] = json.loads(plan_json)
-        lines = _build_dockerfile_header(plan, validated_path, base_image)
-        _add_dockerfile_deps(lines, plan)
-        _add_dockerfile_build(lines, plan)
-        _add_dockerfile_runtime(lines, plan)
-        return "\n".join(lines)
-    except Exception as e:
-        return f"Error converting Habitat plan to Dockerfile: {e}"
+# Habitat Conversion Tools
+# ============================================================================
+# convert_habitat_to_dockerfile and generate_compose_from_habitat are imported
+# from souschef.converters.habitat module
 
 
 def _needs_data_volume(plan: dict[str, Any]) -> bool:
@@ -10214,54 +9868,8 @@ def _format_compose_yaml(services: dict[str, Any], network_name: str) -> str:
     return "\n".join(lines)
 
 
-@mcp.tool()
-def generate_compose_from_habitat(
-    plan_paths: str, network_name: str = "habitat_net"
-) -> str:
-    """
-    Generate docker-compose.yml from Habitat plans.
-
-    Creates Docker Compose configuration for multiple services.
-
-    Args:
-        plan_paths: Comma-separated paths to plan.sh files
-        network_name: Docker network name
-
-    Returns:
-        docker-compose.yml content
-
-    """
-    try:
-        # Validate network_name to prevent YAML injection
-        if not _validate_docker_network_name(network_name):
-            return (
-                f"Invalid Docker network name: {network_name}. "
-                "Expected format: alphanumeric with hyphens, underscores, or dots"
-            )
-
-        paths = [p.strip() for p in plan_paths.split(",")]
-        # Validate and normalize all paths to prevent path traversal
-        validated_paths = []
-        for path_str in paths:
-            try:
-                normalized = _normalize_path(path_str)
-                validated_paths.append(str(normalized))
-            except ValueError as e:
-                return f"Invalid path {path_str}: {e}"
-
-        services: dict[str, Any] = {}
-        for plan_path in validated_paths:
-            plan_json = parse_habitat_plan(plan_path)
-            if plan_json.startswith(ERROR_PREFIX):
-                return f"Error parsing {plan_path}: {plan_json}"
-            plan: dict[str, Any] = json.loads(plan_json)
-            pkg_name = plan["package"].get("name", "unknown")
-            service = _build_compose_service(plan, pkg_name)
-            service["networks"] = [network_name]
-            services[pkg_name] = service
-        return _format_compose_yaml(services, network_name)
-    except Exception as e:
-        return f"Error generating docker-compose.yml: {e}"
+# Habitat conversion tools (convert_habitat_to_dockerfile, generate_compose_from_habitat)
+# are now imported from souschef.converters.habitat module
 
 
 def main() -> None:
