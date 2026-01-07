@@ -129,21 +129,22 @@ jobs:
 
     - name: Run Snyk Code analysis (SAST)
       id: snyk-code-scan
-      continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
         set +e
-        snyk code test --sarif-file-output=snyk-code.sarif 2>&1 | tee snyk-code-output.log
+        # Only scan source code, exclude tests and examples to conserve test limits
+        snyk code test souschef/ --sarif-file-output=snyk-code.sarif 2>&1 | tee snyk-code-output.log
         EXIT_CODE=$?
 
-        # Check if rate limit was hit
-        if grep -q "test limit" snyk-code-output.log || grep -q "rate limit" snyk-code-output.log; then
+        # Check if rate limit was hit - exit 0 to skip, not fail
+        if grep -q "test limit" snyk-code-output.log || grep -q "rate limit" snyk-code-output.log || grep -q "monthly limit" snyk-code-output.log; then
           echo "⚠️ Snyk Code test limit reached. Skipping scan for this run."
           echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
           exit 0
         fi
 
+        # For vulnerabilities found or other errors, fail the workflow
         exit $EXIT_CODE
 
     - name: Create empty SARIF if missing or rate limited
