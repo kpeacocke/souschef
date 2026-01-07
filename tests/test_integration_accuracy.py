@@ -421,53 +421,33 @@ class TestDeploymentStrategyConversion:
 
     def test_rolling_deployment_conversion(self):
         """Test rolling deployment strategy conversion."""
-        recipe_content = """
-# Rolling deployment recipe
-deploy_resource 'myapp' do
-  strategy 'rolling'
-  action :deploy
-end
-"""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
-            f.write(recipe_content)
-            temp_path = f.name
+        # Use sample cookbook fixture instead of temp file in random location
+        cookbook_path = Path(__file__).parent / "fixtures" / "sample_cookbook"
+        if not cookbook_path.exists():
+            pytest.skip("Sample cookbook fixture not found")
 
-        try:
-            # Function expects cookbook path, using parent directory
-            result = convert_chef_deployment_to_ansible_strategy(
-                cookbook_path=str(Path(temp_path).parent),
-                deployment_pattern="rolling",
-            )
+        result = convert_chef_deployment_to_ansible_strategy(
+            cookbook_path=str(cookbook_path),
+            deployment_pattern="rolling",
+        )
 
-            # Verify Ansible rolling strategy
-            assert "serial" in result or "rolling" in result or "strategy" in result
-        finally:
-            Path(temp_path).unlink(missing_ok=True)
+        # Verify Ansible rolling strategy
+        assert "serial" in result or "rolling" in result or "strategy" in result
 
     def test_blue_green_deployment_conversion(self):
         """Test blue-green deployment conversion."""
-        recipe_content = """
-# Blue-green deployment recipe
-deploy_resource 'myapp' do
-  strategy 'blue_green'
-  action :deploy
-end
-"""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
-            f.write(recipe_content)
-            temp_path = f.name
+        # Use sample cookbook fixture instead of temp file in random location
+        cookbook_path = Path(__file__).parent / "fixtures" / "sample_cookbook"
+        if not cookbook_path.exists():
+            pytest.skip("Sample cookbook fixture not found")
 
-        try:
-            # Function expects cookbook path, using parent directory
-            result = convert_chef_deployment_to_ansible_strategy(
-                cookbook_path=str(Path(temp_path).parent),
-                deployment_pattern="blue_green",
-            )
+        result = convert_chef_deployment_to_ansible_strategy(
+            cookbook_path=str(cookbook_path),
+            deployment_pattern="blue_green",
+        )
 
-            # Verify blue-green strategy mentions color groups
-            assert "blue" in result.lower() or "green" in result.lower()
-        finally:
-            Path(temp_path).unlink(missing_ok=True)
+        # Verify blue-green strategy mentions color groups
+        assert "blue" in result.lower() or "green" in result.lower()
 
 
 class TestRecipeParsingAccuracy:

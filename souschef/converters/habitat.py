@@ -309,6 +309,32 @@ def _validate_docker_image_name(base_image: str) -> bool:
 # Dockerfile generation
 
 
+def _add_dockerfile_label(
+    lines: list[str], label_name: str, label_value: str | None
+) -> None:
+    """
+    Add a LABEL to Dockerfile lines with validation.
+
+    Args:
+        lines: List of Dockerfile lines to append to.
+        label_name: Name of the label (e.g., 'maintainer', 'version').
+        label_value: Value for the label, or None if not present.
+
+    """
+    if not label_value:
+        return
+
+    # Validate no newlines that would break Dockerfile syntax
+    if "\n" in label_value or "\r" in label_value:
+        lines.append(
+            f"# WARNING: {label_name.title()} field contains newlines, omitting LABEL"
+        )
+    else:
+        # Use json.dumps to properly escape quotes and special characters
+        escaped_value = json.dumps(label_value)
+        lines.append(f"LABEL {label_name}={escaped_value}")
+
+
 def _build_dockerfile_header(
     plan: dict[str, Any], plan_path: str, base_image: str
 ) -> list[str]:
@@ -346,16 +372,9 @@ def _build_dockerfile_header(
         f"FROM {base_image}",
         "",
     ]
-    if plan["package"].get("maintainer"):
-        # Use json.dumps to properly escape quotes and special characters
-        escaped_maintainer = json.dumps(plan["package"]["maintainer"])
-        lines.append(f"LABEL maintainer={escaped_maintainer}")
-    if plan["package"].get("version"):
-        escaped_version = json.dumps(plan["package"]["version"])
-        lines.append(f"LABEL version={escaped_version}")
-    if plan["package"].get("description"):
-        escaped_description = json.dumps(plan["package"]["description"])
-        lines.append(f"LABEL description={escaped_description}")
+    _add_dockerfile_label(lines, "maintainer", plan["package"].get("maintainer"))
+    _add_dockerfile_label(lines, "version", plan["package"].get("version"))
+    _add_dockerfile_label(lines, "description", plan["package"].get("description"))
     if lines[-1].startswith("LABEL"):
         lines.append("")
     return lines
@@ -407,7 +426,16 @@ def _process_callback_lines(
     for line in callback_content.split("\n"):
         line = line.strip()
         if line and not line.startswith("#"):
-            # Check for potentially dangerous patterns
+            # Perform variable replacement BEFORE validation
+            if replace_vars:
+                line = (
+                    line.replace("$pkg_prefix", "/usr/local")
+                    .replace("$pkg_svc_config_path", "/etc/app")
+                    .replace("$pkg_svc_data_path", "/var/lib/app")
+                    .replace("$pkg_svc_var_path", "/var/run/app")
+                )
+
+            # Check for potentially dangerous patterns AFTER replacement
             for pattern in dangerous_patterns:
                 if re.search(pattern, line, re.IGNORECASE):
                     # Add a warning comment but still include the command
@@ -417,13 +445,6 @@ def _process_callback_lines(
                     )
                     break
 
-            if replace_vars:
-                line = (
-                    line.replace("$pkg_prefix", "/usr/local")
-                    .replace("$pkg_svc_config_path", "/etc/app")
-                    .replace("$pkg_svc_data_path", "/var/lib/app")
-                    .replace("$pkg_svc_var_path", "/var/run/app")
-                )
             processed.append(f"RUN {line}")
     return processed
 

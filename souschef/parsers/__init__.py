@@ -1,5 +1,11 @@
 """Chef cookbook parsers."""
 
+from souschef.core.validation import (
+    ValidationCategory,
+    ValidationEngine,
+    ValidationLevel,
+    ValidationResult,
+)
 from souschef.parsers.attributes import parse_attributes
 from souschef.parsers.habitat import parse_habitat_plan
 from souschef.parsers.inspec import (
@@ -11,12 +17,6 @@ from souschef.parsers.metadata import list_cookbook_structure, read_cookbook_met
 from souschef.parsers.recipe import parse_recipe
 from souschef.parsers.resource import parse_custom_resource
 from souschef.parsers.template import parse_template
-from souschef.parsers.validation import (
-    ValidationCategory,
-    ValidationEngine,
-    ValidationLevel,
-    ValidationResult,
-)
 
 __all__ = [
     "parse_template",

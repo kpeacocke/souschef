@@ -307,6 +307,80 @@ def test_nginx_installed(host):
         infos = [r for r in engine.results if r.level == ValidationLevel.INFO]
         assert any("very short" in i.message for i in infos)
 
+    def test_validate_task_naming_valid_descriptive(self):
+        """Test validation passes with descriptive task names."""
+        engine = ValidationEngine()
+        task = "name: Install and configure nginx web server"
+
+        engine._validate_task_naming(task)
+
+        warnings = [r for r in engine.results if r.level == ValidationLevel.WARNING]
+        infos = [r for r in engine.results if r.level == ValidationLevel.INFO]
+        # Should not flag descriptive names (>= 10 chars)
+        assert len(warnings) == 0
+        assert len(infos) == 0
+
+    def test_validate_task_naming_exactly_ten_characters(self):
+        """Test validation boundary at 10 characters."""
+        engine = ValidationEngine()
+        # Exactly 10 characters - should not trigger short name warning
+        task = "name: Ten chars!"
+
+        engine._validate_task_naming(task)
+
+        infos = [r for r in engine.results if r.level == ValidationLevel.INFO]
+        short_name_infos = [i for i in infos if "very short" in i.message]
+        # 10 chars should NOT be flagged as short
+        assert len(short_name_infos) == 0
+
+    def test_validate_task_naming_nine_characters(self):
+        """Test validation flags names with 9 characters."""
+        engine = ValidationEngine()
+        # 9 characters - should trigger short name info
+        task = "name: Nine char"
+
+        engine._validate_task_naming(task)
+
+        infos = [r for r in engine.results if r.level == ValidationLevel.INFO]
+        assert any("very short" in i.message for i in infos)
+
+    def test_validate_task_naming_whitespace_only(self):
+        """Test validation flags names with only whitespace as short."""
+        engine = ValidationEngine()
+        task = "name: '   '"
+
+        engine._validate_task_naming(task)
+
+        infos = [r for r in engine.results if r.level == ValidationLevel.INFO]
+        # 3 spaces gets stripped to empty quotes but still counts as 3 chars
+        # after strip("\"'"), so it's flagged as short, not empty
+        assert any("very short" in i.message for i in infos)
+
+    def test_validate_task_naming_no_name_field(self):
+        """Test validation handles tasks without name field."""
+        engine = ValidationEngine()
+        task = "ansible.builtin.debug: msg=test"
+
+        engine._validate_task_naming(task)
+
+        # No name field means no results - validation is for naming when present
+        # Just verify it doesn't crash
+        assert isinstance(engine.results, list)
+
+    def test_validate_task_naming_special_characters_long_enough(self):
+        """Test validation passes special characters if long enough."""
+        engine = ValidationEngine()
+        # 15 characters of special chars - unusual but meets length requirement
+        task = "name: '!!!!!!!!!!!!!!!'"
+
+        engine._validate_task_naming(task)
+
+        warnings = [r for r in engine.results if r.level == ValidationLevel.WARNING]
+        infos = [r for r in engine.results if r.level == ValidationLevel.INFO]
+        # Current validation only checks length, not content quality
+        assert len(warnings) == 0
+        assert len(infos) == 0
+
     def test_validate_variable_usage_ansible_prefix(self):
         """Test validation flags variables with ansible_ prefix."""
         engine = ValidationEngine()

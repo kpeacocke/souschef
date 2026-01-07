@@ -16,6 +16,12 @@ from souschef.core.constants import (
 )
 from souschef.core.path_utils import _normalize_path
 
+# Maximum length for variable names in ERB template parsing
+MAX_VARIABLE_NAME_LENGTH = 100
+
+# Maximum length for code block content in regex matching
+MAX_CODE_BLOCK_LENGTH = 500
+
 
 def parse_template(path: str) -> str:
     """
@@ -198,7 +204,11 @@ def _extract_iterator_variables(code: str, variables: set[str]) -> None:
 
     """
     if ".each" in code:
-        match = re.search(r"(\w{1,100})\.each\s+do\s+\|(\w{1,100})\|", code)
+        match = re.search(
+            rf"(\w{{1,{MAX_VARIABLE_NAME_LENGTH}}})\.each\s+do\s+\|"
+            rf"(\w{{1,{MAX_VARIABLE_NAME_LENGTH}}})\|",
+            code,
+        )
         if match:
             variables.add(match.group(1))  # Array variable
             variables.add(match.group(2))  # Iterator variable
@@ -213,7 +223,9 @@ def _extract_code_block_variables(content: str, variables: set[str]) -> None:
         variables: Set to add found variables to (modified in place).
 
     """
-    code_blocks = re.findall(r"<%\s+([^%]{1,500}?)\s+%>", content, re.DOTALL)
+    code_blocks = re.findall(
+        rf"<%\s+([^%]{{1,{MAX_CODE_BLOCK_LENGTH}}}?)\s+%>", content, re.DOTALL
+    )
     for code in code_blocks:
         _extract_interpolated_variables(code, variables)
         _extract_node_attributes(code, variables)

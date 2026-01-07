@@ -29,6 +29,9 @@ from souschef.core.constants import (
 from souschef.core.path_utils import _normalize_path, _safe_join
 from souschef.parsers.recipe import parse_recipe
 
+# Maximum length for guard condition patterns in regex matching
+MAX_GUARD_LENGTH = 500
+
 
 def generate_playbook_from_recipe(recipe_path: str) -> str:
     """
@@ -1263,11 +1266,15 @@ def _extract_guard_patterns(
 ) -> tuple[list[str], list[str], list[str], list[str], list[str], list[str]]:
     """Extract all guard patterns from resource block including enhanced support."""
     # Extract only_if conditions
-    only_if_pattern = re.compile(r'only_if\s+[\'"]([^\'"]{1,500})[\'"]')
+    only_if_pattern = re.compile(
+        rf'only_if\s+[\'"]([^\'"]{{{1},{MAX_GUARD_LENGTH}}})[\'"]'
+    )
     only_if_matches = only_if_pattern.findall(resource_block)
 
     # Extract not_if conditions
-    not_if_pattern = re.compile(r'not_if\s+[\'"]([^\'"]{1,500})[\'"]')
+    not_if_pattern = re.compile(
+        rf'not_if\s+[\'"]([^\'"]{{{1},{MAX_GUARD_LENGTH}}})[\'"]'
+    )
     not_if_matches = not_if_pattern.findall(resource_block)
 
     # Extract only_if blocks (Ruby code blocks)
@@ -1279,21 +1286,29 @@ def _extract_guard_patterns(
     not_if_block_matches = not_if_block_pattern.findall(resource_block)
 
     # Extract only_if with curly brace blocks (lambda/proc syntax)
-    only_if_lambda_pattern = re.compile(r"only_if\s+\{([^}]{1,500})\}", re.DOTALL)
+    only_if_lambda_pattern = re.compile(
+        rf"only_if\s+\{{([^}}]{{{1},{MAX_GUARD_LENGTH}}})\}}", re.DOTALL
+    )
     only_if_lambda_matches = only_if_lambda_pattern.findall(resource_block)
     only_if_block_matches.extend(only_if_lambda_matches)
 
     # Extract not_if with curly brace blocks (lambda/proc syntax)
-    not_if_lambda_pattern = re.compile(r"not_if\s+\{([^}]{1,500})\}", re.DOTALL)
+    not_if_lambda_pattern = re.compile(
+        rf"not_if\s+\{{([^}}]{{{1},{MAX_GUARD_LENGTH}}})\}}", re.DOTALL
+    )
     not_if_lambda_matches = not_if_lambda_pattern.findall(resource_block)
     not_if_block_matches.extend(not_if_lambda_matches)
 
     # Extract only_if arrays [condition1, condition2]
-    only_if_array_pattern = re.compile(r"only_if\s+\[([^\]]{1,500})\]", re.DOTALL)
+    only_if_array_pattern = re.compile(
+        rf"only_if\s+\[([^\]]{{{1},{MAX_GUARD_LENGTH}}})\]", re.DOTALL
+    )
     only_if_array_matches = only_if_array_pattern.findall(resource_block)
 
     # Extract not_if arrays [condition1, condition2]
-    not_if_array_pattern = re.compile(r"not_if\s+\[([^\]]{1,500})\]", re.DOTALL)
+    not_if_array_pattern = re.compile(
+        rf"not_if\s+\[([^\]]{{{1},{MAX_GUARD_LENGTH}}})\]", re.DOTALL
+    )
     not_if_array_matches = not_if_array_pattern.findall(resource_block)
 
     return (

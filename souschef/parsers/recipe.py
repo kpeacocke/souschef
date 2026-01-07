@@ -11,6 +11,16 @@ from souschef.core.constants import (
 from souschef.core.path_utils import _normalize_path
 from souschef.parsers.template import _strip_ruby_comments
 
+# Maximum length for resource body content in regex matching
+# Prevents ReDoS attacks from extremely large resource blocks
+MAX_RESOURCE_BODY_LENGTH = 15000
+
+# Maximum length for conditional expressions and branches
+MAX_CONDITION_LENGTH = 200
+
+# Maximum length for case statement body content
+MAX_CASE_BODY_LENGTH = 2000
+
 
 def parse_recipe(path: str) -> str:
     """
@@ -65,8 +75,14 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
     # 1. Standard: package 'nginx' do ... end
     # 2. With parentheses: package('nginx') do ... end
     # 3. Multi-line strings: package 'nginx' do\n  content <<-EOH\n  ...\n  EOH\nend
-    # Use a more robust pattern that handles nested blocks
-    pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do(.{0,15000}?)^end"
+    # Use a more robust pattern that avoids matching 'end' keywords within the body
+    # Pattern breakdown: match any char that doesn't start spelling 'end' at line start
+    # This prevents catastrophic backtracking on large files
+    pattern = (
+        r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do"
+        rf"((?:[^e]|e(?:[^n]|n(?:[^d]|\d))|(?!^)e(?:n(?:d))){{0,{MAX_RESOURCE_BODY_LENGTH}}}?)"
+        r"^end"
+    )
 
     for match in re.finditer(pattern, clean_content, re.DOTALL | re.MULTILINE):
         resource_type = match.group(1)
@@ -113,12 +129,16 @@ def _extract_conditionals(content: str) -> list[dict[str, Any]]:
 
     # Match case/when statements
     # Use explicit non-'end' matching to avoid ReDoS
-    case_pattern = r"case\s+([^\n]{1,200})\n([^e]|e[^n]|en[^d]){0,2000}^end"
+    case_pattern = (
+        rf"case\s+([^\n]{{1,{MAX_CONDITION_LENGTH}}})\n"
+        rf"([^e]|e[^n]|en[^d]){{0,{MAX_CASE_BODY_LENGTH}}}^end"
+    )
     for match in re.finditer(case_pattern, content, re.DOTALL | re.MULTILINE):
         case_expr = match.group(1).strip()
         case_body = match.group(2)
         when_clauses = re.findall(
-            r"when\s+['\"]?([^'\"\n]{1,200})['\"]?\s*\n", case_body
+            rf"when\s+['\"]?([^'\"\n]{{1,{MAX_CONDITION_LENGTH}}})['\"]?\s*\n",
+            case_body,
         )
         conditionals.append(
             {

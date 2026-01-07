@@ -18,6 +18,10 @@ from souschef.core.constants import (
 )
 from souschef.core.path_utils import _normalize_path, _safe_join
 
+# Maximum length for attribute values in Chef attribute parsing
+# Prevents ReDoS attacks from extremely long attribute declarations
+MAX_ATTRIBUTE_VALUE_LENGTH = 5000
+
 # AWX/AAP Integration Functions
 
 
@@ -289,14 +293,13 @@ def convert_chef_deployment_to_ansible_strategy(
 
 
 def generate_blue_green_deployment_playbook(
-    app_name: str, service_config: str = "", health_check_url: str = "/health"
+    app_name: str, health_check_url: str = "/health"
 ) -> str:
     """
     Generate blue/green deployment playbook for zero-downtime deployments.
 
     Args:
         app_name: Application name for deployment.
-        service_config: Service configuration details (JSON or YAML).
         health_check_url: Health check endpoint URL.
 
     Returns:
@@ -639,7 +642,7 @@ def _generate_chef_inventory_source(chef_server_url: str, sync_schedule: str) ->
         "source": "scm",
         "source_project": "chef-inventory-scripts",
         "source_path": "chef_inventory.py",
-        "credential": "chef-server-credential",
+        "credential": "chef-server-credential",  # NOSONAR - credential name, not secret
         "overwrite": True,
         "overwrite_vars": True,
         "timeout": 300,
@@ -801,13 +804,23 @@ def _extract_cookbook_attributes(content: str) -> dict:
     attributes = {}
 
     # Find default attribute declarations
-    attr_pattern = r"default\[['\"]([^'\"]+)['\"]\]\s*=\s*([^#\n]+)"
-    for match in re.finditer(attr_pattern, content):
+    # Pattern handles multiline values with line continuations, hashes, and arrays
+    # Uses bounded quantifier to prevent ReDoS on malformed input
+    attr_pattern = (
+        r"default\[['\"]([^'\"]+)['\"]\]\s*=\s*"
+        rf"(.{{0,{MAX_ATTRIBUTE_VALUE_LENGTH}}}?)"
+        r"(?=\n(?!.*\\$)|$|#)"
+    )
+    for match in re.finditer(attr_pattern, content, re.MULTILINE | re.DOTALL):
         attr_name = match.group(1)
         attr_value = match.group(2).strip()
 
-        # Clean up value
-        if attr_value.startswith(("'", '"')):
+        # Clean up value - remove trailing backslashes and extra whitespace
+        attr_value = re.sub(r"\\\s*\n\s*", " ", attr_value)
+        attr_value = attr_value.strip()
+
+        # Clean up quotes
+        if attr_value.startswith(("'", '"')) and attr_value.endswith(("'", '"')):
             attr_value = attr_value[1:-1]
 
         attributes[attr_name] = attr_value

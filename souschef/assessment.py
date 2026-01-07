@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 from souschef.core import ERROR_PREFIX, METADATA_FILENAME, _normalize_path, _safe_join
-from souschef.parsers.validation import (
+from souschef.core.validation import (
     ValidationEngine,
     ValidationLevel,
     ValidationResult,

@@ -11,6 +11,10 @@ from souschef.core.constants import (
 )
 from souschef.core.path_utils import _normalize_path
 
+# Maximum length for variable values in Habitat plan parsing
+# Prevents ReDoS attacks from extremely long variable assignments
+MAX_PLAN_VALUE_LENGTH = 10000
+
 
 def parse_habitat_plan(plan_path: str) -> str:
     """
@@ -104,7 +108,11 @@ def _extract_plan_var(content: str, var_name: str) -> str:
     # First, try to match a quoted value (single or double quotes), allowing
     # escaped characters (e.g. \" or \') inside the value. We anchor at the
     # start of the line to avoid partial matches elsewhere.
-    quoted_pattern = rf'^{re.escape(var_name)}=(["\'])(?P<value>(?:\\.|(?!\1).)*)\1'
+    # Use a bounded, non-greedy quantifier to prevent ReDoS on malformed input.
+    quoted_pattern = (
+        rf'^{re.escape(var_name)}=(["\'])'
+        rf"(?P<value>(?:\\.|(?!\1).){{0,{MAX_PLAN_VALUE_LENGTH}}}?)\1"
+    )
     match = re.search(quoted_pattern, content, re.MULTILINE | re.DOTALL)
     if match:
         return match.group("value").strip()

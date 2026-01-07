@@ -212,9 +212,10 @@ def _parse_inspec_control(content: str) -> list[dict[str, Any]]:
     """
     controls = []
     lines = content.split("\n")
+    lines_len = len(lines)
 
     i = 0
-    while i < len(lines):
+    while i < lines_len:
         line = lines[i].strip()
 
         # Look for control start
@@ -256,9 +257,10 @@ def _find_nested_block_end(lines: list[str], start_index: int) -> tuple[list[str
     """
     nesting_level = 0
     body_lines = []
+    lines_len = len(lines)
     i = start_index
 
-    while i < len(lines):
+    while i < lines_len:
         current_line = lines[i]
         stripped = current_line.strip()
 
@@ -330,9 +332,10 @@ def _extract_inspec_describe_blocks(content: str) -> list[dict[str, Any]]:
     """
     tests = []
     lines = content.split("\n")
+    lines_len = len(lines)
 
     i = 0
-    while i < len(lines):
+    while i < lines_len:
         line = lines[i].strip()
 
         # Look for describe start

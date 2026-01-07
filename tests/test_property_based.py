@@ -3,7 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -566,7 +565,7 @@ end
     assert control["id"] == control_id
     assert control["title"] == "Test control"
     assert control["desc"] == "Test description"
-    assert control["impact"] == pytest.approx(1.0)
+    assert control["impact"] == 1.0
     assert len(control["tests"]) == 1
 
     test = control["tests"][0]
