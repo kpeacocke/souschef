@@ -95,37 +95,10 @@ from souschef.converters.resource import (  # noqa: F401
 from souschef.converters.resource import (
     convert_resource_to_task as _convert_resource_to_task,
 )
-from souschef.core.constants import (  # noqa: F401
+from souschef.core.constants import (
     ANSIBLE_SERVICE_MODULE,
-    CHEF_RECIPE_PREFIX,
-    CHEF_ROLE_PREFIX,
     ERROR_PREFIX,
-    INSPEC_END_INDENT,
-    INSPEC_SHOULD_EXIST,
-    JINJA2_ELIF,
-    JINJA2_ELSE,
-    JINJA2_ENDIF,
-    JINJA2_FOR,
-    JINJA2_IF_NOT,
-    JINJA2_IF_START,
-    JINJA2_NODE_ATTR_REPLACEMENT,
-    JINJA2_VAR_REPLACEMENT,
-    METADATA_FILENAME,
-    NODE_PREFIX,
-    REGEX_ERB_CONDITION,
-    REGEX_ERB_EACH,
-    REGEX_ERB_ELSE,
-    REGEX_ERB_ELSIF,
-    REGEX_ERB_END,
-    REGEX_ERB_IF_START,
-    REGEX_ERB_NODE_ATTR,
-    REGEX_ERB_OUTPUT,
-    REGEX_ERB_UNLESS,
-    REGEX_QUOTE_DO_END,
     REGEX_RESOURCE_BRACKET,
-    REGEX_RUBY_INTERPOLATION,
-    REGEX_WHITESPACE_QUOTE,
-    REGEX_WORD_SYMBOLS,
 )
 
 # Import core utilities
