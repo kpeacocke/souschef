@@ -389,6 +389,20 @@ class ValidationEngine:
                 suggestion="Consider using appropriate state parameter",
             )
 
+    def _extract_jinja2_variables(self, content: str) -> set[str]:
+        """
+        Extract Jinja2 variable references from content.
+
+        Args:
+            content: Content containing Jinja2 variables.
+
+        Returns:
+            Set of variable names found.
+
+        """
+        var_pattern = r"\{\{\s*([\w.]+)\s*\}\}"
+        return set(re.findall(var_pattern, content))
+
     def _validate_variable_usage(self, content: str) -> None:
         """
         Validate variable usage in playbook.
@@ -398,8 +412,7 @@ class ValidationEngine:
 
         """
         # Check for undefined variables (basic check)
-        var_pattern = r"\{\{\s*([\w.]+)\s*\}\}"
-        variables = set(re.findall(var_pattern, content))
+        variables = self._extract_jinja2_variables(content)
 
         # Check for common issues
         for var in variables:
@@ -491,8 +504,7 @@ class ValidationEngine:
 
         """
         # Check for undefined variable patterns
-        var_pattern = r"\{\{\s*([\w.]+)\s*\}\}"
-        variables = set(re.findall(var_pattern, template))
+        variables = self._extract_jinja2_variables(template)
 
         # Check for potential issues
         for var in variables:
