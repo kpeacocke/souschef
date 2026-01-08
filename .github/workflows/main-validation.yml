@@ -1,20 +1,12 @@
-name: CI
+name: Main Branch Validation
 
-# This workflow runs on every push and PR to protected branches and gitflow branches.
-# It coordinates with parallel security workflows:
-# - snyk.yml: Vulnerability scanning (runs independently)
-# - sonarqube.yml: Code quality analysis (runs independently)
-# - gitflow.yml: Branch naming and PR target validation
-# All workflows must pass for merge protection (configure in branch settings)
+# Runs comprehensive validation on main branch after merges
+# Triggers release workflows when all checks pass
 
 on:
   push:
     branches:
-      - develop
-  pull_request:
-    branches:
       - main
-      - develop
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
