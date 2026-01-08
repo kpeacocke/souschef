@@ -2,7 +2,7 @@ name: SonarCloud Analysis
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["Main Branch Validation"]
     types:
       - completed
     branches:
@@ -72,7 +72,7 @@ jobs:
       if: steps.check-token.outputs.has_token == 'true'
       run: poetry install --no-interaction
 
-    - name: Download coverage from CI workflow
+    - name: Download coverage from Main Branch Validation workflow
       if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
       uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
       with:
