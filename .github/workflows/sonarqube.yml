@@ -5,9 +5,6 @@ on:
     workflows: ["CI", "Main Branch Validation"]
     types:
       - completed
-    branches:
-      - main
-      - develop
   workflow_dispatch:
 
 concurrency:
