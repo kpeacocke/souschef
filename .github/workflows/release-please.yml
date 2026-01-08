@@ -1,12 +1,10 @@
 name: Release Please
 
-# Run manually or after quality checks pass
+# Run after pushes to main (after quality checks have passed)
 on:
-  workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - '.release-please-manifest.json'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,12 +26,12 @@ jobs:
         with:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Auto-merge release PR
         if: ${{ steps.release.outputs.prs_created == 'true' }}
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
