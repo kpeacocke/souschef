@@ -1,9 +1,9 @@
 name: Release Please
 
-# Run after Main Branch Validation and SonarQube complete on main
+# Run after SonarCloud Analysis completes on main (which runs after Main Branch Validation)
 on:
   workflow_run:
-    workflows: ["Main Branch Validation", "SonarQube Analysis"]
+    workflows: ["SonarCloud Analysis"]
     types: [completed]
     branches: [main]
 
@@ -20,7 +20,7 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only run if both Main Branch Validation and SonarQube passed
+    # Only run if SonarCloud Analysis passed (which implies Main Branch Validation also passed)
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
