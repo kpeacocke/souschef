@@ -260,6 +260,7 @@ class TestChefToAnsibleConversion:
             ("execute", "systemctl daemon-reload", "run", "ansible.builtin.command"),
             ("user", "appuser", "create", "ansible.builtin.user"),
             ("group", "appgroup", "create", "ansible.builtin.group"),
+            ("remote_file", "/tmp/file.tar.gz", "create", "ansible.builtin.get_url"),
         ],
     )
     def test_convert_various_resources(
@@ -355,6 +356,22 @@ class TestChefToAnsibleConversion:
 
         # Should have indented parameters
         assert '    name: "nginx"' in result or "    name:" in result
+
+    def test_convert_remote_file_with_properties(self):
+        """Test conversion of remote_file resource with properties."""
+        properties = "{'source': 'http://example.com/file.tar.gz', 'mode': '0644', 'owner': 'root'}"
+        result = convert_resource_to_task(
+            resource_type="remote_file",
+            resource_name="/tmp/file.tar.gz",
+            action="create",
+            properties=properties,
+        )
+
+        assert "ansible.builtin.get_url:" in result
+        assert 'dest: "/tmp/file.tar.gz"' in result
+        assert 'url: "http://example.com/file.tar.gz"' in result
+        assert 'mode: "0644"' in result
+        assert 'owner: "root"' in result
 
 
 def test_benchmark_conversion(benchmark):

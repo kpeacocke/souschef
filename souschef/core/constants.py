@@ -125,6 +125,7 @@ RESOURCE_MAPPINGS = {
     "cron": "ansible.builtin.cron",
     "mount": "ansible.builtin.mount",
     "git": "ansible.builtin.git",
+    "remote_file": "ansible.builtin.get_url",
 }
 
 # Chef action to Ansible state mappings

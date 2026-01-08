@@ -1,9 +1,40 @@
 """Chef resource to Ansible task converter."""
 
+import ast
 import json
 from typing import Any
 
 from souschef.core.constants import ACTION_TO_STATE, RESOURCE_MAPPINGS
+
+
+def _parse_properties(properties_str: str) -> dict[str, Any]:
+    """
+    Parse properties string into a dictionary.
+
+    Args:
+        properties_str: String representation of properties dict.
+
+    Returns:
+        Dictionary of properties.
+
+    """
+    if not properties_str:
+        return {}
+    try:
+        # Try ast.literal_eval first for safety
+        result = ast.literal_eval(properties_str)
+        if isinstance(result, dict):
+            return result
+        return {}
+    except (ValueError, SyntaxError):
+        # Fallback to eval if needed, but this is less safe
+        try:
+            result = eval(properties_str)  # noqa: S307
+            if isinstance(result, dict):
+                return result
+            return {}
+        except Exception:
+            return {}
 
 
 def convert_resource_to_task(
@@ -121,6 +152,9 @@ def _convert_chef_resource_to_ansible(
     # Build module parameters based on resource type
     module_params: dict[str, Any] = {}
 
+    # Parse properties if provided
+    props = _parse_properties(properties)
+
     if resource_type == "package":
         module_params["name"] = resource_name
         module_params["state"] = ACTION_TO_STATE.get(action, action)
@@ -134,6 +168,18 @@ def _convert_chef_resource_to_ansible(
     elif resource_type in ["user", "group"]:
         module_params["name"] = resource_name
         module_params["state"] = ACTION_TO_STATE.get(action, "present")
+    elif resource_type == "remote_file":
+        module_params["dest"] = resource_name
+        if "source" in props:
+            module_params["url"] = props["source"]
+        if "mode" in props:
+            module_params["mode"] = props["mode"]
+        if "owner" in props:
+            module_params["owner"] = props["owner"]
+        if "group" in props:
+            module_params["group"] = props["group"]
+        if "checksum" in props:
+            module_params["checksum"] = props["checksum"]
     else:
         module_params["name"] = resource_name
         if action in ACTION_TO_STATE:
