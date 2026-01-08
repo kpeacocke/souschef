@@ -1,20 +1,16 @@
 name: Release Please
 
-# Run after SonarCloud Analysis completes on main (which runs after Main Branch Validation)
+# Run manually or after quality checks pass
 on:
-  workflow_run:
-    workflows: ["SonarCloud Analysis"]
-    types: [completed]
+  workflow_dispatch:
+  push:
     branches: [main]
+    paths:
+      - '.release-please-manifest.json'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
-
-permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
 
 jobs:
   release-please:
@@ -24,8 +20,6 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    # Only run if SonarCloud Analysis passed (which implies Main Branch Validation also passed)
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Create or update release PR / Create release
