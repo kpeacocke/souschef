@@ -22,11 +22,17 @@ def _parse_properties(properties_str: str) -> dict[str, Any]:
         return {}
     try:
         # Try ast.literal_eval first for safety
-        return ast.literal_eval(properties_str)
+        result = ast.literal_eval(properties_str)
+        if isinstance(result, dict):
+            return result
+        return {}
     except (ValueError, SyntaxError):
         # Fallback to eval if needed, but this is less safe
         try:
-            return eval(properties_str)  # noqa: S307
+            result = eval(properties_str)  # noqa: S307
+            if isinstance(result, dict):
+                return result
+            return {}
         except Exception:
             return {}
 
