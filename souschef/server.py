@@ -106,6 +106,7 @@ from souschef.core.constants import (  # noqa: F401
 )
 
 # Import core utilities
+from souschef.core.errors import format_error_with_context
 from souschef.core.path_utils import _normalize_path, _safe_join  # noqa: F401
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
@@ -525,17 +526,30 @@ def parse_inspec_profile(path: str) -> str:
 
     """
     try:
+        # Validate input
+        if not path or not path.strip():
+            return (
+                "Error: Path cannot be empty\n\n"
+                "Suggestion: Provide a path to an InSpec profile directory or control file"
+            )
+
         profile_path = _normalize_path(path)
 
         if not profile_path.exists():
-            return f"Error: Path does not exist: {path}"
+            return (
+                f"Error: Path does not exist: {path}\n\n"
+                "Suggestion: Check that the path is correct and the InSpec profile exists"
+            )
 
         if profile_path.is_dir():
             controls = _parse_controls_from_directory(profile_path)
         elif profile_path.is_file():
             controls = _parse_controls_from_file(profile_path)
         else:
-            return f"Error: Invalid path type: {path}"
+            return (
+                f"Error: Invalid path type: {path}\n\n"
+                "Suggestion: Provide a directory or file path, not a special file type"
+            )
 
         return json.dumps(
             {
@@ -547,9 +561,9 @@ def parse_inspec_profile(path: str) -> str:
         )
 
     except (FileNotFoundError, RuntimeError) as e:
-        return f"Error: {e}"
+        return format_error_with_context(e, "parsing InSpec profile", path)
     except Exception as e:
-        return f"An error occurred while parsing InSpec profile: {e}"
+        return format_error_with_context(e, "parsing InSpec profile", path)
 
 
 @mcp.tool()
@@ -610,7 +624,9 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         return "\n".join(converted_tests)
 
     except Exception as e:
-        return f"An error occurred while converting InSpec: {e}"
+        return format_error_with_context(
+            e, f"converting InSpec to {output_format}", inspec_path
+        )
 
 
 def _extract_resources_from_parse_result(parse_result: str) -> list[dict[str, Any]]:
@@ -696,7 +712,9 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:
         return "\n".join(controls)
 
     except Exception as e:
-        return f"An error occurred while generating InSpec controls: {e}"
+        return format_error_with_context(
+            e, "generating InSpec controls from recipe", recipe_path
+        )
 
 
 @mcp.tool()
@@ -724,11 +742,34 @@ def convert_chef_databag_to_vars(
     try:
         import yaml
 
+        # Validate inputs
+        if not databag_content or not databag_content.strip():
+            return (
+                "Error: Databag content cannot be empty\n\n"
+                "Suggestion: Provide valid JSON content from a Chef data bag"
+            )
+
+        if not databag_name or not databag_name.strip():
+            return (
+                "Error: Databag name cannot be empty\n\n"
+                "Suggestion: Provide a valid data bag name"
+            )
+
+        valid_scopes = ["group_vars", "host_vars", "playbook"]
+        if target_scope not in valid_scopes:
+            return (
+                f"Error: Invalid target scope '{target_scope}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_scopes)}"
+            )
+
         # Parse the data bag content
         try:
             parsed_databag = json.loads(databag_content)
         except json.JSONDecodeError as e:
-            return f"Error: Invalid JSON format in data bag: {e}"
+            return (
+                f"Error: Invalid JSON format in data bag: {e}\n\n"
+                "Suggestion: Ensure the databag content is valid JSON"
+            )
 
         # Convert to Ansible variables format
         ansible_vars = _convert_databag_to_ansible_vars(
@@ -763,7 +804,9 @@ def convert_chef_databag_to_vars(
 {yaml_content.rstrip()}
 """
     except Exception as e:
-        return f"Error converting data bag to Ansible variables: {e}"
+        return format_error_with_context(
+            e, f"converting data bag '{databag_name}' to Ansible variables"
+        )
 
 
 @mcp.tool()
@@ -785,9 +828,25 @@ def generate_ansible_vault_from_databags(
 
     """
     try:
+        # Validate inputs
+        if not databags_directory or not databags_directory.strip():
+            return (
+                "Error: Databags directory path cannot be empty\n\n"
+                "Suggestion: Provide the path to your Chef data_bags directory"
+            )
+
         databags_path = _normalize_path(databags_directory)
         if not databags_path.exists():
-            return f"Error: Data bags directory not found: {databags_directory}"
+            return (
+                f"Error: Data bags directory not found: {databags_directory}\n\n"
+                "Suggestion: Check that the path is correct and the directory exists"
+            )
+
+        if not databags_path.is_dir():
+            return (
+                f"Error: Path is not a directory: {databags_directory}\n\n"
+                "Suggestion: Provide a path to the data_bags directory"
+            )
 
         conversion_results = []
 
@@ -837,7 +896,9 @@ def generate_ansible_vault_from_databags(
         )
 
     except Exception as e:
-        return f"Error processing data bags directory: {e}"
+        return format_error_with_context(
+            e, "processing data bags directory", databags_directory
+        )
 
 
 @mcp.tool()
@@ -891,7 +952,7 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
 4. Encrypt sensitive data with ansible-vault
 """
     except Exception as e:
-        return f"Data bag parsing failed: {e}"
+        return format_error_with_context(e, "analyzing data bag usage", cookbook_path)
 
 
 @mcp.tool()
@@ -936,7 +997,9 @@ def convert_chef_environment_to_inventory_group(
 # {environment_name}
 """
     except Exception as e:
-        return f"Environment conversion failed: {e}"
+        return format_error_with_context(
+            e, "converting Chef environment to inventory group", environment_name
+        )
 
 
 @mcp.tool()
@@ -994,7 +1057,9 @@ def generate_inventory_from_chef_environments(
         )
 
     except Exception as e:
-        return f"Error generating inventory from Chef environments: {e}"
+        return format_error_with_context(
+            e, "generating inventory from Chef environments", environments_directory
+        )
 
 
 @mcp.tool()
@@ -1053,7 +1118,9 @@ def analyze_chef_environment_usage(
 5. Test environment-specific deployments with new inventory structure
 """
     except Exception as e:
-        return f"Error analyzing Chef environment usage: {e}"
+        return format_error_with_context(
+            e, "analyzing Chef environment usage", cookbook_path
+        )
 
 
 def _parse_chef_environment_content(content: str) -> dict:
