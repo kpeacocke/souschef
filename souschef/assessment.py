@@ -9,7 +9,8 @@ import json
 import re
 from typing import Any
 
-from souschef.core import ERROR_PREFIX, METADATA_FILENAME, _normalize_path, _safe_join
+from souschef.core import METADATA_FILENAME, _normalize_path, _safe_join
+from souschef.core.errors import format_error_with_context
 from souschef.core.validation import (
     ValidationEngine,
     ValidationLevel,
@@ -35,8 +36,39 @@ def assess_chef_migration_complexity(
 
     """
     try:
+        # Validate inputs
+        if not cookbook_paths or not cookbook_paths.strip():
+            return (
+                "Error: Cookbook paths cannot be empty\n\n"
+                "Suggestion: Provide comma-separated paths to Chef cookbooks"
+            )
+
+        valid_scopes = ["full", "recipes_only", "infrastructure_only"]
+        if migration_scope not in valid_scopes:
+            return (
+                f"Error: Invalid migration scope '{migration_scope}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_scopes)}"
+            )
+
+        valid_platforms = ["ansible_awx", "ansible_core", "ansible_tower"]
+        if target_platform not in valid_platforms:
+            return (
+                f"Error: Invalid target platform '{target_platform}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_platforms)}"
+            )
+
         # Parse cookbook paths
         paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
+
+        # Validate at least one valid path
+        valid_paths = [p for p in paths if p.exists()]
+        if not valid_paths:
+            invalid_paths = ", ".join(str(p) for p in paths)
+            return (
+                f"Error: No valid cookbook paths found\n\n"
+                f"Checked: {invalid_paths}\n\n"
+                "Suggestion: Ensure paths exist and point to Chef cookbook directories"
+            )
 
         # Assess each cookbook
         cookbook_assessments = []
@@ -48,24 +80,21 @@ def assess_chef_migration_complexity(
             "estimated_effort_days": 0,
         }
 
-        for cookbook_path in paths:
-            if cookbook_path.exists():
-                # deepcode ignore PT: path normalized via _normalize_path
-                assessment = _assess_single_cookbook(cookbook_path)
-                cookbook_assessments.append(assessment)
+        for cookbook_path in valid_paths:
+            # deepcode ignore PT: path normalized via _normalize_path
+            assessment = _assess_single_cookbook(cookbook_path)
+            cookbook_assessments.append(assessment)
 
-                # Aggregate metrics
-                overall_metrics["total_cookbooks"] += 1
-                overall_metrics["total_recipes"] += assessment["metrics"][
-                    "recipe_count"
-                ]
-                overall_metrics["total_resources"] += assessment["metrics"][
-                    "resource_count"
-                ]
-                overall_metrics["complexity_score"] += assessment["complexity_score"]
-                overall_metrics["estimated_effort_days"] += assessment[
-                    "estimated_effort_days"
-                ]
+            # Aggregate metrics
+            overall_metrics["total_cookbooks"] += 1
+            overall_metrics["total_recipes"] += assessment["metrics"]["recipe_count"]
+            overall_metrics["total_resources"] += assessment["metrics"][
+                "resource_count"
+            ]
+            overall_metrics["complexity_score"] += assessment["complexity_score"]
+            overall_metrics["estimated_effort_days"] += assessment[
+                "estimated_effort_days"
+            ]
 
         # Calculate averages
         if cookbook_assessments:
@@ -107,7 +136,9 @@ def assess_chef_migration_complexity(
 {_estimate_resource_requirements(overall_metrics, target_platform)}
 """
     except Exception as e:
-        return f"Error assessing migration complexity: {e}"
+        return format_error_with_context(
+            e, "assessing Chef migration complexity", cookbook_paths
+        )
 
 
 def generate_migration_plan(
@@ -126,15 +157,41 @@ def generate_migration_plan(
 
     """
     try:
+        # Validate inputs
+        if not cookbook_paths or not cookbook_paths.strip():
+            return (
+                "Error: Cookbook paths cannot be empty\n\n"
+                "Suggestion: Provide comma-separated paths to Chef cookbooks"
+            )
+
+        valid_strategies = ["big_bang", "phased", "parallel"]
+        if migration_strategy not in valid_strategies:
+            return (
+                f"Error: Invalid migration strategy '{migration_strategy}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_strategies)}"
+            )
+
+        if not (1 <= timeline_weeks <= 104):  # 1 week to 2 years
+            return (
+                f"Error: Timeline must be between 1 and 104 weeks, got {timeline_weeks}\n\n"
+                "Suggestion: Provide a realistic timeline (4-12 weeks typical)"
+            )
+
         # Parse and assess cookbooks
         paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
-        cookbook_assessments = []
+        valid_paths = [p for p in paths if p.exists()]
 
-        for cookbook_path in paths:
-            if cookbook_path.exists():
-                # deepcode ignore PT: path normalized via _normalize_path
-                assessment = _assess_single_cookbook(cookbook_path)
-                cookbook_assessments.append(assessment)
+        if not valid_paths:
+            return (
+                "Error: No valid cookbook paths found\n\n"
+                "Suggestion: Ensure paths exist and point to cookbook directories"
+            )
+
+        cookbook_assessments = []
+        for cookbook_path in valid_paths:
+            # deepcode ignore PT: path normalized via _normalize_path
+            assessment = _assess_single_cookbook(cookbook_path)
+            cookbook_assessments.append(assessment)
 
         # Generate migration plan based on strategy
         migration_plan = _generate_detailed_migration_plan(
@@ -174,7 +231,7 @@ def generate_migration_plan(
 {migration_plan["post_migration"]}
 """
     except Exception as e:
-        return f"Error generating migration plan: {e}"
+        return format_error_with_context(e, "generating migration plan", cookbook_paths)
 
 
 def analyze_cookbook_dependencies(
@@ -192,9 +249,20 @@ def analyze_cookbook_dependencies(
 
     """
     try:
+        # Validate inputs
+        valid_depths = ["direct", "transitive", "full"]
+        if dependency_depth not in valid_depths:
+            return (
+                f"Error: Invalid dependency depth '{dependency_depth}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_depths)}"
+            )
+
         cookbook_path_obj = _normalize_path(cookbook_path)
         if not cookbook_path_obj.exists():
-            return f"{ERROR_PREFIX} Cookbook path not found: {cookbook_path}"
+            return (
+                f"Error: Cookbook path not found: {cookbook_path}\n\n"
+                "Suggestion: Check that the path exists and points to a cookbook directory"
+            )
 
         # Analyze dependencies
         dependency_analysis = _analyze_cookbook_dependencies_detailed(cookbook_path_obj)
@@ -231,7 +299,9 @@ def analyze_cookbook_dependencies(
 {_analyze_dependency_migration_impact(dependency_analysis)}
 """
     except Exception as e:
-        return f"Error analyzing cookbook dependencies: {e}"
+        return format_error_with_context(
+            e, "analyzing cookbook dependencies", cookbook_path
+        )
 
 
 def generate_migration_report(
@@ -300,7 +370,7 @@ def generate_migration_report(
 {report["appendices"]}
 """
     except Exception as e:
-        return f"Error generating migration report: {e}"
+        return format_error_with_context(e, "generating migration report")
 
 
 def validate_conversion(
@@ -347,7 +417,9 @@ def validate_conversion(
             return _format_validation_results_text(conversion_type, results, summary)
 
     except Exception as e:
-        return f"Error during validation: {e}"
+        return format_error_with_context(
+            e, f"validating Ansible {conversion_type} conversion"
+        )
 
 
 # Private helper functions for assessment
