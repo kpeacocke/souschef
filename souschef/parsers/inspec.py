@@ -616,6 +616,50 @@ def _generate_inspec_package_checks(
     return lines
 
 
+def _generate_inspec_resource_checks(
+    resource_type: str,
+    resource_name: str,
+    properties: dict[str, Any] | None = None,
+    custom_checks: list[str] | None = None,
+) -> list[str]:
+    """
+    Generate InSpec checks for a resource using a generic pattern.
+
+    Args:
+        resource_type: InSpec resource type (e.g., 'file', 'user', 'service').
+        resource_name: Name/path of the resource.
+        properties: Optional resource properties to check.
+        custom_checks: Optional list of custom check lines.
+
+    Returns:
+        List of InSpec check lines.
+
+    """
+    lines = [f"  describe {resource_type}('{resource_name}') do"]
+
+    # Add custom checks if provided
+    if custom_checks:
+        lines.extend(custom_checks)
+    else:
+        # Default: should exist
+        lines.append(INSPEC_SHOULD_EXIST)
+
+    # Add property checks
+    if properties:
+        property_map = {
+            "mode": lambda v: f"    its('mode') {{ should cmp '{v}' }}",
+            "owner": lambda v: f"    its('owner') {{ should eq '{v}' }}",
+            "group": lambda v: f"    its('group') {{ should eq '{v}' }}",
+            "shell": lambda v: f"    its('shell') {{ should eq '{v}' }}",
+        }
+        for prop, value in properties.items():
+            if prop in property_map:
+                lines.append(property_map[prop](value))
+
+    lines.append(INSPEC_END_INDENT)
+    return lines
+
+
 def _generate_inspec_service_checks(resource_name: str) -> list[str]:
     """
     Generate InSpec checks for service resource.
@@ -627,12 +671,14 @@ def _generate_inspec_service_checks(resource_name: str) -> list[str]:
         List of InSpec check lines.
 
     """
-    return [
-        f"  describe service('{resource_name}') do",
-        "    it { should be_running }",
-        "    it { should be_enabled }",
-        INSPEC_END_INDENT,
-    ]
+    return _generate_inspec_resource_checks(
+        "service",
+        resource_name,
+        custom_checks=[
+            "    it { should be_running }",
+            "    it { should be_enabled }",
+        ],
+    )
 
 
 def _generate_inspec_file_checks(
@@ -649,15 +695,11 @@ def _generate_inspec_file_checks(
         List of InSpec check lines.
 
     """
-    lines = [f"  describe file('{resource_name}') do", INSPEC_SHOULD_EXIST]
-    if "mode" in properties:
-        lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
-    if "owner" in properties:
-        lines.append(f"    its('owner') {{ should eq '{properties['owner']}' }}")
-    if "group" in properties:
-        lines.append(f"    its('group') {{ should eq '{properties['group']}' }}")
-    lines.append(INSPEC_END_INDENT)
-    return lines
+    return _generate_inspec_resource_checks(
+        "file",
+        resource_name,
+        properties=properties,
+    )
 
 
 def _generate_inspec_directory_checks(
@@ -674,15 +716,15 @@ def _generate_inspec_directory_checks(
         List of InSpec check lines.
 
     """
-    lines = [
-        f"  describe file('{resource_name}') do",
-        INSPEC_SHOULD_EXIST,
-        "    it { should be_directory }",
-    ]
-    if "mode" in properties:
-        lines.append(f"    its('mode') {{ should cmp '{properties['mode']}' }}")
-    lines.append(INSPEC_END_INDENT)
-    return lines
+    return _generate_inspec_resource_checks(
+        "file",
+        resource_name,
+        properties=properties,
+        custom_checks=[
+            INSPEC_SHOULD_EXIST,
+            "    it { should be_directory }",
+        ],
+    )
 
 
 def _generate_inspec_user_checks(
@@ -699,11 +741,11 @@ def _generate_inspec_user_checks(
         List of InSpec check lines.
 
     """
-    lines = [f"  describe user('{resource_name}') do", INSPEC_SHOULD_EXIST]
-    if "shell" in properties:
-        lines.append(f"    its('shell') {{ should eq '{properties['shell']}' }}")
-    lines.append(INSPEC_END_INDENT)
-    return lines
+    return _generate_inspec_resource_checks(
+        "user",
+        resource_name,
+        properties=properties,
+    )
 
 
 def _generate_inspec_group_checks(resource_name: str) -> list[str]:
@@ -717,11 +759,7 @@ def _generate_inspec_group_checks(resource_name: str) -> list[str]:
         List of InSpec check lines.
 
     """
-    return [
-        f"  describe group('{resource_name}') do",
-        INSPEC_SHOULD_EXIST,
-        INSPEC_END_INDENT,
-    ]
+    return _generate_inspec_resource_checks("group", resource_name)
 
 
 def _generate_inspec_from_resource(
