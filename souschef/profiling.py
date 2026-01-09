@@ -345,9 +345,11 @@ def generate_cookbook_performance_report(
         >>> print(report)
 
     """
-    from souschef.filesystem.operations import list_cookbook_structure
     from souschef.parsers.attributes import parse_attributes
-    from souschef.parsers.metadata import read_cookbook_metadata
+    from souschef.parsers.metadata import (
+        list_cookbook_structure,
+        read_cookbook_metadata,
+    )
     from souschef.parsers.recipe import parse_recipe
     from souschef.parsers.resource import parse_custom_resource
     from souschef.parsers.template import parse_template
