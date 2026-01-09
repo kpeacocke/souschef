@@ -773,17 +773,20 @@ def _create_migration_roadmap(assessments: list) -> str:
     return "\n".join(roadmap_formatted)
 
 
-def _assess_migration_risks(assessments: list, target_platform: str) -> str:
-    """Assess migration risks."""
+def _assess_technical_complexity_risks(assessments: list) -> list[str]:
+    """Assess risks related to technical complexity."""
     risks = []
-
-    # Technical risks
     high_complexity_count = len([a for a in assessments if a["complexity_score"] > 70])
     if high_complexity_count > 0:
         risks.append(
             f"🔴 HIGH: {high_complexity_count} high-complexity cookbooks may cause delays"
         )
+    return risks
 
+
+def _assess_custom_resource_risks(assessments: list) -> list[str]:
+    """Assess risks related to custom resources and Ruby blocks."""
+    risks = []
     custom_resource_count = sum(a["metrics"]["custom_resources"] for a in assessments)
     if custom_resource_count > 0:
         risks.append(
@@ -796,14 +799,33 @@ def _assess_migration_risks(assessments: list, target_platform: str) -> str:
             f"🟡 MEDIUM: {ruby_block_count} Ruby blocks require shell script conversion"
         )
 
-    # Timeline risks
+    return risks
+
+
+def _assess_timeline_risks(assessments: list) -> list[str]:
+    """Assess risks related to migration timeline and scope."""
+    risks = []
     total_effort = sum(a["estimated_effort_days"] for a in assessments)
     if total_effort > 50:
         risks.append("🟡 MEDIUM: Large migration scope may impact timeline")
+    return risks
 
-    # Platform risks
+
+def _assess_platform_risks(target_platform: str) -> list[str]:
+    """Assess risks related to target platform."""
     if target_platform == "ansible_awx":
-        risks.append("🟢 LOW: AWX integration well-supported with existing tools")
+        return ["🟢 LOW: AWX integration well-supported with existing tools"]
+    return []
+
+
+def _assess_migration_risks(assessments: list, target_platform: str) -> str:
+    """Assess migration risks."""
+    risks = []
+
+    risks.extend(_assess_technical_complexity_risks(assessments))
+    risks.extend(_assess_custom_resource_risks(assessments))
+    risks.extend(_assess_timeline_risks(assessments))
+    risks.extend(_assess_platform_risks(target_platform))
 
     if not risks:
         risks.append("🟢 LOW: No significant migration risks identified")
