@@ -253,10 +253,11 @@ def generate_awx_inventory_source_from_chef(
                 "(e.g., https://chef.example.com)"
             )
 
-        if not chef_server_url.startswith(("http://", "https://")):
+        if not chef_server_url.startswith("https://"):
             return (
                 f"Error: Invalid Chef server URL: {chef_server_url}\n\n"
-                "Suggestion: URL must start with http:// or https://"
+                "Suggestion: URL must use HTTPS protocol for security "
+                "(e.g., https://chef.example.com)"
             )
 
         # Generate inventory source configuration
