@@ -2459,6 +2459,84 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
     return _analyze_chef_search_patterns(recipe_or_cookbook_path)
 
 
+@mcp.tool()
+def profile_cookbook_performance(cookbook_path: str) -> str:
+    """
+    Profile cookbook parsing performance and generate optimization report.
+
+    Analyzes the performance of parsing all cookbook components (recipes,
+    attributes, resources, templates) and provides recommendations for
+    optimization. Useful for large cookbooks or batch processing operations.
+
+    Args:
+        cookbook_path: Path to the Chef cookbook to profile.
+
+    Returns:
+        Formatted performance report with timing, memory usage, and recommendations.
+
+    """
+    from souschef.profiling import generate_cookbook_performance_report
+
+    try:
+        report = generate_cookbook_performance_report(cookbook_path)
+        return str(report)
+    except Exception as e:
+        return format_error_with_context(
+            e, "profiling cookbook performance", cookbook_path
+        )
+
+
+@mcp.tool()
+def profile_parsing_operation(
+    operation: str, file_path: str, detailed: bool = False
+) -> str:
+    """
+    Profile a single parsing operation with detailed performance metrics.
+
+    Measures execution time, memory usage, and optionally provides detailed
+    function call statistics for a specific parsing operation.
+
+    Args:
+        operation: Type of operation to profile ('recipe', 'attributes', 'resource', 'template').
+        file_path: Path to the file to parse.
+        detailed: If True, include detailed function call statistics.
+
+    Returns:
+        Performance metrics for the operation.
+
+    """
+    from souschef.profiling import detailed_profile_function, profile_function
+
+    operation_map = {
+        "recipe": parse_recipe,
+        "attributes": parse_attributes,
+        "resource": parse_custom_resource,
+        "template": parse_template,
+    }
+
+    if operation not in operation_map:
+        return (
+            f"Error: Invalid operation '{operation}'\n\n"
+            f"Supported operations: {', '.join(operation_map.keys())}"
+        )
+
+    func = operation_map[operation]
+
+    try:
+        if detailed:
+            _, profile_result = detailed_profile_function(func, file_path)
+            result = str(profile_result)
+            if profile_result.function_stats.get("top_functions"):
+                result += "\n\nDetailed Function Statistics:\n"
+                result += profile_result.function_stats["top_functions"]
+            return result
+        else:
+            _, profile_result = profile_function(func, file_path)
+            return str(profile_result)
+    except Exception as e:
+        return format_error_with_context(e, f"profiling {operation} parsing", file_path)
+
+
 # AWX/AAP deployment wrappers for backward compatibility
 def main() -> None:
     """
