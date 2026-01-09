@@ -1775,43 +1775,118 @@ def _detect_encrypted_databag(content: str) -> bool:
         return False
 
 
-def _generate_databag_conversion_summary(results: list, output_dir: str) -> str:
-    """Generate summary of data bag conversion results."""
-    total_bags = len(results)
-    successful = len([r for r in results if "error" not in r])
-    encrypted = len([r for r in results if r.get("encrypted", False)])
+def _calculate_conversion_statistics(results: list) -> dict[str, int]:
+    """
+    Calculate statistics from conversion results.
 
-    summary = f"""# Data Bag Conversion Summary
+    Args:
+        results: List of conversion result dictionaries.
+
+    Returns:
+        Dictionary with 'total', 'successful', and 'encrypted' counts.
+
+    """
+    return {
+        "total": len(results),
+        "successful": len([r for r in results if "error" not in r]),
+        "encrypted": len([r for r in results if r.get("encrypted", False)]),
+    }
+
+
+def _build_statistics_section(stats: dict[str, int]) -> str:
+    """
+    Build the statistics section of the summary.
+
+    Args:
+        stats: Dictionary with conversion statistics.
+
+    Returns:
+        Formatted statistics section as markdown.
+
+    """
+    return f"""# Data Bag Conversion Summary
 
 ## Statistics:
-- Total data bags processed: {total_bags}
-- Successfully converted: {successful}
-- Failed conversions: {total_bags - successful}
-- Encrypted data bags: {encrypted}
-
-## Generated Files:
+- Total data bags processed: {stats["total"]}
+- Successfully converted: {stats["successful"]}
+- Failed conversions: {stats["total"] - stats["successful"]}
+- Encrypted data bags: {stats["encrypted"]}
 """
+
+
+def _extract_generated_files(results: list) -> list[str]:
+    """
+    Extract unique generated file paths from results.
+
+    Args:
+        results: List of conversion result dictionaries.
+
+    Returns:
+        Sorted list of unique file paths.
+
+    """
     files_created = set()
     for result in results:
         if "error" not in result:
             target_file = result["target_file"]
             files_created.add(target_file)
+    return sorted(files_created)
 
-    for file in sorted(files_created):
-        summary += f"- {file}\n"
 
-    summary += "\n## Conversion Details:\n"
+def _build_files_section(files: list[str]) -> str:
+    """
+    Build the generated files section.
+
+    Args:
+        files: List of generated file paths.
+
+    Returns:
+        Formatted files section as markdown.
+
+    """
+    section = "\n## Generated Files:\n"
+    for file in files:
+        section += f"- {file}\n"
+    return section
+
+
+def _build_conversion_details_section(results: list) -> str:
+    """
+    Build the conversion details section.
+
+    Args:
+        results: List of conversion result dictionaries.
+
+    Returns:
+        Formatted conversion details section as markdown.
+
+    """
+    section = "\n## Conversion Details:\n"
 
     for result in results:
         if "error" in result:
-            summary += f"❌ {result['databag']}/{result['item']}: {result['error']}\n"
+            section += f"❌ {result['databag']}/{result['item']}: {result['error']}\n"
         else:
             status = "🔒 Encrypted" if result["encrypted"] else "📄 Plain"
             databag_item = f"{result['databag']}/{result['item']}"
             target = result["target_file"]
-            summary += f"✅ {databag_item} → {target} ({status})\n"
+            section += f"✅ {databag_item} → {target} ({status})\n"
 
-    summary += f"""
+    return section
+
+
+def _build_next_steps_section(output_dir: str) -> str:
+    """
+    Build the next steps section.
+
+    Args:
+        output_dir: Output directory path.
+
+    Returns:
+        Formatted next steps section as markdown.
+
+    """
+    return f"""
 ## Next Steps:
 1. Review generated variable files in {output_dir}/
 2. Encrypt vault files: `ansible-vault encrypt {output_dir}/*_vault.yml`
@@ -1819,7 +1894,29 @@ def _generate_databag_conversion_summary(results: list, output_dir: str) -> str:
 4. Test variable access in playbooks
 5. Remove original Chef data bags after validation
 """
-    return summary
+
+
+def _generate_databag_conversion_summary(results: list, output_dir: str) -> str:
+    """
+    Generate summary of data bag conversion results.
+
+    Args:
+        results: List of conversion result dictionaries.
+        output_dir: Output directory path.
+
+    Returns:
+        Complete formatted summary as markdown.
+
+    """
+    stats = _calculate_conversion_statistics(results)
+    files = _extract_generated_files(results)
+
+    return (
+        _build_statistics_section(stats)
+        + _build_files_section(files)
+        + _build_conversion_details_section(results)
+        + _build_next_steps_section(output_dir)
+    )
 
 
 def _extract_databag_usage_from_cookbook(cookbook_path) -> list:
