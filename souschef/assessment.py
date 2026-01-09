@@ -1294,6 +1294,46 @@ def _generate_migration_timeline(strategy: str, timeline_weeks: int) -> str:
     return "\n".join([f"• {milestone}" for milestone in milestones])
 
 
+def _build_validation_header(
+    conversion_type: str, summary: dict[str, int]
+) -> list[str]:
+    """Build the header section of validation results."""
+    return [
+        f"# Validation Results for {conversion_type} Conversion",
+        "",
+        "## Summary",
+        f"• Errors: {summary['errors']}",
+        f"• Warnings: {summary['warnings']}",
+        f"• Info: {summary['info']}",
+        "",
+    ]
+
+
+def _group_results_by_level(
+    results: list[ValidationResult],
+) -> tuple[list[ValidationResult], list[ValidationResult], list[ValidationResult]]:
+    """Group validation results by severity level."""
+    errors = [r for r in results if r.level == ValidationLevel.ERROR]
+    warnings = [r for r in results if r.level == ValidationLevel.WARNING]
+    infos = [r for r in results if r.level == ValidationLevel.INFO]
+    return errors, warnings, infos
+
+
+def _format_result_section(
+    title: str, icon: str, results: list[ValidationResult]
+) -> list[str]:
+    """Format a single validation results section."""
+    if not results:
+        return []
+
+    lines = [f"## {icon} {title}", ""]
+    for result in results:
+        lines.append(str(result))
+        lines.append("")
+
+    return lines
+
+
 def _format_validation_results_text(
     conversion_type: str, results: list[ValidationResult], summary: dict[str, int]
 ) -> str:
@@ -1314,41 +1354,13 @@ def _format_validation_results_text(
 
 ✅ All validation checks passed! No issues found.
 """
-    output_lines = [
-        f"# Validation Results for {conversion_type} Conversion",
-        "",
-        "## Summary",
-        f"• Errors: {summary['errors']}",
-        f"• Warnings: {summary['warnings']}",
-        f"• Info: {summary['info']}",
-        "",
-    ]
 
-    # Group results by level
-    errors = [r for r in results if r.level == ValidationLevel.ERROR]
-    warnings = [r for r in results if r.level == ValidationLevel.WARNING]
-    infos = [r for r in results if r.level == ValidationLevel.INFO]
+    output_lines = _build_validation_header(conversion_type, summary)
+    errors, warnings, infos = _group_results_by_level(results)
 
-    if errors:
-        output_lines.append("## ❌ Errors")
-        output_lines.append("")
-        for result in errors:
-            output_lines.append(str(result))
-            output_lines.append("")
-
-    if warnings:
-        output_lines.append("## ⚠️  Warnings")
-        output_lines.append("")
-        for result in warnings:
-            output_lines.append(str(result))
-            output_lines.append("")
-
-    if infos:
-        output_lines.append("## ℹ️  Information")
-        output_lines.append("")
-        for result in infos:
-            output_lines.append(str(result))
-            output_lines.append("")
+    output_lines.extend(_format_result_section("❌ Errors", "", errors))
+    output_lines.extend(_format_result_section("⚠️  Warnings", "", warnings))
+    output_lines.extend(_format_result_section("ℹ️  Information", "", infos))
 
     return "\n".join(output_lines)
 
