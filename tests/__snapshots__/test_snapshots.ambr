@@ -19,7 +19,7 @@
 # ---
 # name: test_convert_chef_deployment_strategy_snapshot
   '''
-  Error: Cookbook path not found: 
+  Could not find cookbook: 
   {
     "strategy": "rolling",
     "batch_size": 5,
@@ -31,6 +31,8 @@
     }
   }
   
+  
+  Suggestion: Check that the path exists and you have read permissions. For cookbooks, ensure you're pointing to the cookbook root directory containing metadata.rb.
   '''
 # ---
 # name: test_convert_chef_environment_to_inventory_snapshot

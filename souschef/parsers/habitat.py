@@ -205,6 +205,32 @@ def _extract_plan_exports(content: str, var_name: str) -> list[dict[str, str]]:
     return exports
 
 
+def _is_quote_blocked(
+    ch: str, in_single_quote: bool, in_double_quote: bool, in_backtick: bool
+) -> bool:
+    """Check if a quote character is blocked by other active quotes."""
+    if ch == "'":
+        return in_double_quote or in_backtick
+    if ch == '"':
+        return in_single_quote or in_backtick
+    if ch == "`":
+        return in_single_quote or in_double_quote
+    return False
+
+
+def _toggle_quote(
+    ch: str, in_single_quote: bool, in_double_quote: bool, in_backtick: bool
+) -> tuple[bool, bool, bool]:
+    """Toggle the appropriate quote state based on character."""
+    if ch == "'":
+        return not in_single_quote, in_double_quote, in_backtick
+    if ch == '"':
+        return in_single_quote, not in_double_quote, in_backtick
+    if ch == "`":
+        return in_single_quote, in_double_quote, not in_backtick
+    return in_single_quote, in_double_quote, in_backtick
+
+
 def _update_quote_state(
     ch: str,
     in_single_quote: bool,
@@ -213,18 +239,21 @@ def _update_quote_state(
     escape_next: bool,
 ) -> tuple[bool, bool, bool, bool]:
     """Update quote tracking state for shell script parsing."""
+    # Handle escape sequences
     if escape_next:
         return in_single_quote, in_double_quote, in_backtick, False
 
     if ch == "\\":
         return in_single_quote, in_double_quote, in_backtick, True
 
-    if ch == "'" and not in_double_quote and not in_backtick:
-        return not in_single_quote, in_double_quote, in_backtick, False
-    if ch == '"' and not in_single_quote and not in_backtick:
-        return in_single_quote, not in_double_quote, in_backtick, False
-    if ch == "`" and not in_single_quote and not in_double_quote:
-        return in_single_quote, in_double_quote, not in_backtick, False
+    # Handle quote characters
+    if ch in ("'", '"', "`") and not _is_quote_blocked(
+        ch, in_single_quote, in_double_quote, in_backtick
+    ):
+        single, double, backtick = _toggle_quote(
+            ch, in_single_quote, in_double_quote, in_backtick
+        )
+        return single, double, backtick, False
 
     return in_single_quote, in_double_quote, in_backtick, False
 

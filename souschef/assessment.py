@@ -9,7 +9,8 @@ import json
 import re
 from typing import Any
 
-from souschef.core import ERROR_PREFIX, METADATA_FILENAME, _normalize_path, _safe_join
+from souschef.core import METADATA_FILENAME, _normalize_path, _safe_join
+from souschef.core.errors import format_error_with_context
 from souschef.core.validation import (
     ValidationEngine,
     ValidationLevel,
@@ -35,116 +36,110 @@ def assess_chef_migration_complexity(
 
     """
     try:
-        # Parse cookbook paths
-        paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
+        # Validate inputs
+        error_msg = _validate_assessment_inputs(
+            cookbook_paths, migration_scope, target_platform
+        )
+        if error_msg:
+            return error_msg
 
-        # Assess each cookbook
-        cookbook_assessments = []
-        overall_metrics = {
-            "total_cookbooks": 0,
-            "total_recipes": 0,
-            "total_resources": 0,
-            "complexity_score": 0,
-            "estimated_effort_days": 0,
-        }
+        # Parse cookbook paths (may be empty if none exist)
+        valid_paths = _parse_cookbook_paths(cookbook_paths)
 
-        for cookbook_path in paths:
-            if cookbook_path.exists():
-                # deepcode ignore PT: path normalized via _normalize_path
-                assessment = _assess_single_cookbook(cookbook_path)
-                cookbook_assessments.append(assessment)
+        # Analyze all cookbooks (handles empty list gracefully)
+        cookbook_assessments, overall_metrics = _analyze_cookbook_metrics(valid_paths)
 
-                # Aggregate metrics
-                overall_metrics["total_cookbooks"] += 1
-                overall_metrics["total_recipes"] += assessment["metrics"][
-                    "recipe_count"
-                ]
-                overall_metrics["total_resources"] += assessment["metrics"][
-                    "resource_count"
-                ]
-                overall_metrics["complexity_score"] += assessment["complexity_score"]
-                overall_metrics["estimated_effort_days"] += assessment[
-                    "estimated_effort_days"
-                ]
-
-        # Calculate averages
-        if cookbook_assessments:
-            overall_metrics["avg_complexity"] = int(
-                overall_metrics["complexity_score"] / len(cookbook_assessments)
-            )
-
-        # Generate migration recommendations
+        # Generate recommendations and reports
         recommendations = _generate_migration_recommendations_from_assessment(
             cookbook_assessments, overall_metrics, target_platform
         )
-
-        # Create migration roadmap
         roadmap = _create_migration_roadmap(cookbook_assessments)
 
-        return f"""# Chef to Ansible Migration Assessment
-# Scope: {migration_scope}
-# Target Platform: {target_platform}
-
-## Overall Migration Metrics:
-{_format_overall_metrics(overall_metrics)}
-
-## Cookbook Assessments:
-{_format_cookbook_assessments(cookbook_assessments)}
-
-## Migration Complexity Analysis:
-{_format_complexity_analysis(cookbook_assessments)}
-
-## Migration Recommendations:
-{recommendations}
-
-## Migration Roadmap:
-{roadmap}
-
-## Risk Assessment:
-{_assess_migration_risks(cookbook_assessments, target_platform)}
-
-## Resource Requirements:
-{_estimate_resource_requirements(overall_metrics, target_platform)}
-"""
+        # Format final assessment report
+        return _format_assessment_report(
+            migration_scope,
+            target_platform,
+            overall_metrics,
+            cookbook_assessments,
+            recommendations,
+            roadmap,
+        )
     except Exception as e:
-        return f"Error assessing migration complexity: {e}"
-
-
-def generate_migration_plan(
-    cookbook_paths: str, migration_strategy: str = "phased", timeline_weeks: int = 12
-) -> str:
-    """
-    Generate a detailed migration plan from Chef to Ansible with timeline and milestones.
-
-    Args:
-        cookbook_paths: Comma-separated paths to Chef cookbooks
-        migration_strategy: Migration approach (big_bang, phased, parallel)
-        timeline_weeks: Target timeline in weeks
-
-    Returns:
-        Detailed migration plan with phases, milestones, and deliverables
-
-    """
-    try:
-        # Parse and assess cookbooks
-        paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
-        cookbook_assessments = []
-
-        for cookbook_path in paths:
-            if cookbook_path.exists():
-                # deepcode ignore PT: path normalized via _normalize_path
-                assessment = _assess_single_cookbook(cookbook_path)
-                cookbook_assessments.append(assessment)
-
-        # Generate migration plan based on strategy
-        migration_plan = _generate_detailed_migration_plan(
-            cookbook_assessments, migration_strategy, timeline_weeks
+        return format_error_with_context(
+            e, "assessing Chef migration complexity", cookbook_paths
         )
 
-        return f"""# Chef to Ansible Migration Plan
+
+def _validate_migration_plan_inputs(
+    cookbook_paths: str, migration_strategy: str, timeline_weeks: int
+) -> str | None:
+    """
+    Validate migration plan inputs.
+
+    Returns:
+        Error message if validation fails, None if valid.
+
+    """
+    if not cookbook_paths or not cookbook_paths.strip():
+        return (
+            "Error: Cookbook paths cannot be empty\n\n"
+            "Suggestion: Provide comma-separated paths to Chef cookbooks"
+        )
+
+    valid_strategies = ["big_bang", "phased", "parallel"]
+    if migration_strategy not in valid_strategies:
+        return (
+            f"Error: Invalid migration strategy '{migration_strategy}'\n\n"
+            f"Suggestion: Use one of {', '.join(valid_strategies)}"
+        )
+
+    if not (1 <= timeline_weeks <= 104):  # 1 week to 2 years
+        return (
+            f"Error: Timeline must be between 1 and 104 weeks, got {timeline_weeks}\n\n"
+            "Suggestion: Provide a realistic timeline (4-12 weeks typical)"
+        )
+
+    return None
+
+
+def _parse_and_assess_cookbooks(cookbook_paths: str) -> tuple[list, str | None]:
+    """
+    Parse cookbook paths and assess each cookbook.
+
+    Returns:
+        Tuple of (cookbook_assessments, error_message).
+
+    """
+    paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
+    valid_paths = [p for p in paths if p.exists()]
+
+    if not valid_paths:
+        return (
+            [],
+            "Error: No valid cookbook paths found\n\n"
+            "Suggestion: Ensure paths exist and point to cookbook directories",
+        )
+
+    cookbook_assessments = []
+    for cookbook_path in valid_paths:
+        # deepcode ignore PT: path normalized via _normalize_path
+        assessment = _assess_single_cookbook(cookbook_path)
+        cookbook_assessments.append(assessment)
+
+    return cookbook_assessments, None
+
+
+def _format_migration_plan_output(
+    migration_plan: dict,
+    migration_strategy: str,
+    timeline_weeks: int,
+    num_cookbooks: int,
+) -> str:
+    """Format migration plan as markdown output."""
+    return f"""# Chef to Ansible Migration Plan
 # Strategy: {migration_strategy}
 # Timeline: {timeline_weeks} weeks
-# Cookbooks: {len(cookbook_assessments)}
+# Cookbooks: {num_cookbooks}
 
 ## Executive Summary:
 {migration_plan["executive_summary"]}
@@ -173,8 +168,50 @@ def generate_migration_plan(
 ## Post-Migration Tasks:
 {migration_plan["post_migration"]}
 """
+
+
+def generate_migration_plan(
+    cookbook_paths: str, migration_strategy: str = "phased", timeline_weeks: int = 12
+) -> str:
+    """
+    Generate a detailed migration plan from Chef to Ansible with timeline and milestones.
+
+    Args:
+        cookbook_paths: Comma-separated paths to Chef cookbooks
+        migration_strategy: Migration approach (big_bang, phased, parallel)
+        timeline_weeks: Target timeline in weeks
+
+    Returns:
+        Detailed migration plan with phases, milestones, and deliverables
+
+    """
+    try:
+        # Validate inputs
+        error = _validate_migration_plan_inputs(
+            cookbook_paths, migration_strategy, timeline_weeks
+        )
+        if error:
+            return error
+
+        # Parse and assess cookbooks
+        cookbook_assessments, error = _parse_and_assess_cookbooks(cookbook_paths)
+        if error:
+            return error
+
+        # Generate migration plan based on strategy
+        migration_plan = _generate_detailed_migration_plan(
+            cookbook_assessments, migration_strategy, timeline_weeks
+        )
+
+        return _format_migration_plan_output(
+            migration_plan,
+            migration_strategy,
+            timeline_weeks,
+            len(cookbook_assessments),
+        )
+
     except Exception as e:
-        return f"Error generating migration plan: {e}"
+        return format_error_with_context(e, "generating migration plan", cookbook_paths)
 
 
 def analyze_cookbook_dependencies(
@@ -192,9 +229,20 @@ def analyze_cookbook_dependencies(
 
     """
     try:
+        # Validate inputs
+        valid_depths = ["direct", "transitive", "full"]
+        if dependency_depth not in valid_depths:
+            return (
+                f"Error: Invalid dependency depth '{dependency_depth}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_depths)}"
+            )
+
         cookbook_path_obj = _normalize_path(cookbook_path)
         if not cookbook_path_obj.exists():
-            return f"{ERROR_PREFIX} Cookbook path not found: {cookbook_path}"
+            return (
+                f"Error: Cookbook path not found: {cookbook_path}\n\n"
+                "Suggestion: Check that the path exists and points to a cookbook directory"
+            )
 
         # Analyze dependencies
         dependency_analysis = _analyze_cookbook_dependencies_detailed(cookbook_path_obj)
@@ -231,7 +279,9 @@ def analyze_cookbook_dependencies(
 {_analyze_dependency_migration_impact(dependency_analysis)}
 """
     except Exception as e:
-        return f"Error analyzing cookbook dependencies: {e}"
+        return format_error_with_context(
+            e, "analyzing cookbook dependencies", cookbook_path
+        )
 
 
 def generate_migration_report(
@@ -300,7 +350,7 @@ def generate_migration_report(
 {report["appendices"]}
 """
     except Exception as e:
-        return f"Error generating migration report: {e}"
+        return format_error_with_context(e, "generating migration report")
 
 
 def validate_conversion(
@@ -347,31 +397,188 @@ def validate_conversion(
             return _format_validation_results_text(conversion_type, results, summary)
 
     except Exception as e:
-        return f"Error during validation: {e}"
+        return format_error_with_context(
+            e, f"validating Ansible {conversion_type} conversion"
+        )
 
 
 # Private helper functions for assessment
 
 
-def _assess_single_cookbook(cookbook_path) -> dict:
-    """Assess complexity of a single cookbook."""
-    cookbook = _normalize_path(cookbook_path)
-    assessment: dict[str, Any] = {
-        "cookbook_name": cookbook.name,
-        "cookbook_path": str(cookbook),
-        "metrics": {},
+def _validate_assessment_inputs(
+    cookbook_paths: str, migration_scope: str, target_platform: str
+) -> str | None:
+    """
+    Validate inputs for migration assessment.
+
+    Args:
+        cookbook_paths: Paths to cookbooks
+        migration_scope: Scope of migration
+        target_platform: Target platform
+
+    Returns:
+        Error message if validation fails, None otherwise
+
+    """
+    if not cookbook_paths or not cookbook_paths.strip():
+        return (
+            "Error: Cookbook paths cannot be empty\n\n"
+            "Suggestion: Provide comma-separated paths to Chef cookbooks"
+        )
+
+    valid_scopes = ["full", "recipes_only", "infrastructure_only"]
+    if migration_scope not in valid_scopes:
+        return (
+            f"Error: Invalid migration scope '{migration_scope}'\n\n"
+            f"Suggestion: Use one of {', '.join(valid_scopes)}"
+        )
+
+    valid_platforms = ["ansible_awx", "ansible_core", "ansible_tower"]
+    if target_platform not in valid_platforms:
+        return (
+            f"Error: Invalid target platform '{target_platform}'\n\n"
+            f"Suggestion: Use one of {', '.join(valid_platforms)}"
+        )
+
+    return None
+
+
+def _parse_cookbook_paths(cookbook_paths: str) -> list[Any]:
+    """
+    Parse and validate cookbook paths.
+
+    Args:
+        cookbook_paths: Comma-separated paths to cookbooks
+
+    Returns:
+        List of valid Path objects (may be empty)
+
+    """
+    paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
+    valid_paths = [p for p in paths if p.exists()]
+    return valid_paths
+
+
+def _analyze_cookbook_metrics(
+    valid_paths: list[Any],
+) -> tuple[list[Any], dict[str, int]]:
+    """
+    Analyze metrics for all cookbooks.
+
+    Args:
+        valid_paths: List of valid cookbook paths
+
+    Returns:
+        Tuple of (cookbook_assessments, overall_metrics)
+
+    """
+    cookbook_assessments = []
+    overall_metrics = {
+        "total_cookbooks": 0,
+        "total_recipes": 0,
+        "total_resources": 0,
         "complexity_score": 0,
         "estimated_effort_days": 0,
-        "challenges": [],
-        "migration_priority": "medium",
-        "dependencies": [],
     }
 
-    # Count recipes and resources
-    recipes_dir = _safe_join(cookbook, "recipes")
+    for cookbook_path in valid_paths:
+        # deepcode ignore PT: path normalized via _normalize_path
+        assessment = _assess_single_cookbook(cookbook_path)
+        cookbook_assessments.append(assessment)
+
+        # Aggregate metrics
+        overall_metrics["total_cookbooks"] += 1
+        overall_metrics["total_recipes"] += assessment["metrics"]["recipe_count"]
+        overall_metrics["total_resources"] += assessment["metrics"]["resource_count"]
+        overall_metrics["complexity_score"] += assessment["complexity_score"]
+        overall_metrics["estimated_effort_days"] += assessment["estimated_effort_days"]
+
+    # Calculate averages
+    if cookbook_assessments:
+        overall_metrics["avg_complexity"] = int(
+            overall_metrics["complexity_score"] / len(cookbook_assessments)
+        )
+
+    return cookbook_assessments, overall_metrics
+
+
+def _format_assessment_report(
+    migration_scope: str,
+    target_platform: str,
+    overall_metrics: dict[str, int],
+    cookbook_assessments: list[Any],
+    recommendations: str,
+    roadmap: str,
+) -> str:
+    """
+    Format the final assessment report.
+
+    Args:
+        migration_scope: Scope of migration
+        target_platform: Target platform
+        overall_metrics: Overall metrics dictionary
+        cookbook_assessments: List of cookbook assessments
+        recommendations: Migration recommendations
+        roadmap: Migration roadmap
+
+    Returns:
+        Formatted report string
+
+    """
+    return f"""# Chef to Ansible Migration Assessment
+# Scope: {migration_scope}
+# Target Platform: {target_platform}
+
+## Overall Migration Metrics:
+{_format_overall_metrics(overall_metrics)}
+
+## Cookbook Assessments:
+{_format_cookbook_assessments(cookbook_assessments)}
+
+## Migration Complexity Analysis:
+{_format_complexity_analysis(cookbook_assessments)}
+
+## Migration Recommendations:
+{recommendations}
+
+## Migration Roadmap:
+{roadmap}
+
+## Risk Assessment:
+{_assess_migration_risks(cookbook_assessments, target_platform)}
+
+## Resource Requirements:
+{_estimate_resource_requirements(overall_metrics, target_platform)}
+"""
+
+
+def _count_cookbook_artifacts(cookbook_path) -> dict[str, int]:
+    """Count basic cookbook artifacts (recipes, templates, files)."""
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    # Analyze recipe complexity
+    templates_count = (
+        len(list(_safe_join(cookbook_path, "templates").glob("*")))
+        if _safe_join(cookbook_path, "templates").exists()
+        else 0
+    )
+
+    files_count = (
+        len(list(_safe_join(cookbook_path, "files").glob("*")))
+        if _safe_join(cookbook_path, "files").exists()
+        else 0
+    )
+
+    return {
+        "recipe_count": recipe_count,
+        "templates": templates_count,
+        "files": files_count,
+    }
+
+
+def _analyze_recipe_complexity(cookbook_path) -> dict[str, int]:
+    """Analyze recipe files for resource counts, Ruby blocks, and custom resources."""
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     resource_count = 0
     custom_resources = 0
     ruby_blocks = 0
@@ -381,7 +588,6 @@ def _assess_single_cookbook(cookbook_path) -> dict:
             with recipe_file.open("r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
                 # Count Chef resources
-
                 resources = len(
                     re.findall(r'\w{1,100}\s+[\'"]([^\'"]{0,200})[\'"]\s+do', content)
                 )
@@ -395,57 +601,85 @@ def _assess_single_cookbook(cookbook_path) -> dict:
                 )
                 resource_count += resources
 
-    assessment["metrics"] = {
-        "recipe_count": recipe_count,
+    return {
         "resource_count": resource_count,
         "custom_resources": custom_resources,
         "ruby_blocks": ruby_blocks,
-        "templates": len(list(_safe_join(cookbook, "templates").glob("*")))
-        if _safe_join(cookbook, "templates").exists()
-        else 0,
-        "files": len(list(_safe_join(cookbook, "files").glob("*")))
-        if _safe_join(cookbook, "files").exists()
-        else 0,
     }
 
-    # Calculate complexity score (0-100)
+
+def _calculate_complexity_score(metrics: dict[str, int]) -> int:
+    """Calculate complexity score (0-100) based on metrics."""
+    recipe_count = metrics["recipe_count"]
+    resource_count = metrics["resource_count"]
+
     complexity_factors = {
         "recipe_count": min(recipe_count * 2, 20),
         "resource_density": min(resource_count / max(recipe_count, 1) * 5, 25),
-        "custom_resources": custom_resources * 10,
-        "ruby_blocks": ruby_blocks * 5,
-        "templates": min(assessment["metrics"]["templates"] * 2, 15),
-        "files": min(assessment["metrics"]["files"] * 1, 10),
+        "custom_resources": metrics["custom_resources"] * 10,
+        "ruby_blocks": metrics["ruby_blocks"] * 5,
+        "templates": min(metrics["templates"] * 2, 15),
+        "files": min(metrics["files"] * 1, 10),
     }
 
-    assessment["complexity_score"] = sum(complexity_factors.values())
+    return int(sum(complexity_factors.values()))
 
-    # Estimate effort (person-days)
-    base_effort = recipe_count * 0.5  # 0.5 days per recipe
-    complexity_multiplier = 1 + (assessment["complexity_score"] / 100)
-    assessment["estimated_effort_days"] = round(base_effort * complexity_multiplier, 1)
 
-    # Identify challenges
-    if custom_resources > 0:
-        assessment["challenges"].append(
-            f"{custom_resources} custom resources requiring manual conversion"
+def _identify_migration_challenges(
+    metrics: dict[str, int], complexity_score: int
+) -> list[str]:
+    """Identify migration challenges based on metrics."""
+    challenges = []
+
+    if metrics["custom_resources"] > 0:
+        challenges.append(
+            f"{metrics['custom_resources']} custom resources requiring manual conversion"
         )
-    if ruby_blocks > 5:
-        assessment["challenges"].append(
-            f"{ruby_blocks} Ruby blocks needing shell script conversion"
+    if metrics["ruby_blocks"] > 5:
+        challenges.append(
+            f"{metrics['ruby_blocks']} Ruby blocks needing shell script conversion"
         )
-    if assessment["complexity_score"] > 70:
-        assessment["challenges"].append(
-            "High complexity cookbook requiring expert review"
-        )
+    if complexity_score > 70:
+        challenges.append("High complexity cookbook requiring expert review")
 
-    # Set migration priority
-    if assessment["complexity_score"] < 30:
-        assessment["migration_priority"] = "low"
-    elif assessment["complexity_score"] > 70:
-        assessment["migration_priority"] = "high"
+    return challenges
 
-    return assessment
+
+def _determine_migration_priority(complexity_score: int) -> str:
+    """Determine migration priority based on complexity score."""
+    if complexity_score < 30:
+        return "low"
+    elif complexity_score > 70:
+        return "high"
+    return "medium"
+
+
+def _assess_single_cookbook(cookbook_path) -> dict:
+    """Assess complexity of a single cookbook."""
+    cookbook = _normalize_path(cookbook_path)
+
+    # Collect metrics
+    artifact_counts = _count_cookbook_artifacts(cookbook)
+    recipe_complexity = _analyze_recipe_complexity(cookbook)
+    metrics = {**artifact_counts, **recipe_complexity}
+
+    # Calculate complexity and effort
+    complexity_score = _calculate_complexity_score(metrics)
+    base_effort = metrics["recipe_count"] * 0.5  # 0.5 days per recipe
+    complexity_multiplier = 1 + (complexity_score / 100)
+    estimated_effort = round(base_effort * complexity_multiplier, 1)
+
+    # Build assessment
+    return {
+        "cookbook_name": cookbook.name,
+        "cookbook_path": str(cookbook),
+        "metrics": metrics,
+        "complexity_score": complexity_score,
+        "estimated_effort_days": estimated_effort,
+        "challenges": _identify_migration_challenges(metrics, complexity_score),
+        "migration_priority": _determine_migration_priority(complexity_score),
+        "dependencies": [],
+    }
 
 
 def _format_overall_metrics(metrics: dict) -> str:
@@ -625,17 +859,20 @@ def _create_migration_roadmap(assessments: list) -> str:
     return "\n".join(roadmap_formatted)
 
 
-def _assess_migration_risks(assessments: list, target_platform: str) -> str:
-    """Assess migration risks."""
+def _assess_technical_complexity_risks(assessments: list) -> list[str]:
+    """Assess risks related to technical complexity."""
     risks = []
-
-    # Technical risks
     high_complexity_count = len([a for a in assessments if a["complexity_score"] > 70])
     if high_complexity_count > 0:
         risks.append(
             f"🔴 HIGH: {high_complexity_count} high-complexity cookbooks may cause delays"
         )
+    return risks
 
+
+def _assess_custom_resource_risks(assessments: list) -> list[str]:
+    """Assess risks related to custom resources and Ruby blocks."""
+    risks = []
     custom_resource_count = sum(a["metrics"]["custom_resources"] for a in assessments)
     if custom_resource_count > 0:
         risks.append(
@@ -648,14 +885,33 @@ def _assess_migration_risks(assessments: list, target_platform: str) -> str:
             f"🟡 MEDIUM: {ruby_block_count} Ruby blocks require shell script conversion"
         )
 
-    # Timeline risks
+    return risks
+
+
+def _assess_timeline_risks(assessments: list) -> list[str]:
+    """Assess risks related to migration timeline and scope."""
+    risks = []
     total_effort = sum(a["estimated_effort_days"] for a in assessments)
     if total_effort > 50:
         risks.append("🟡 MEDIUM: Large migration scope may impact timeline")
+    return risks
 
-    # Platform risks
+
+def _assess_platform_risks(target_platform: str) -> list[str]:
+    """Assess risks related to target platform."""
     if target_platform == "ansible_awx":
-        risks.append("🟢 LOW: AWX integration well-supported with existing tools")
+        return ["🟢 LOW: AWX integration well-supported with existing tools"]
+    return []
+
+
+def _assess_migration_risks(assessments: list, target_platform: str) -> str:
+    """Assess migration risks."""
+    risks = []
+
+    risks.extend(_assess_technical_complexity_risks(assessments))
+    risks.extend(_assess_custom_resource_risks(assessments))
+    risks.extend(_assess_timeline_risks(assessments))
+    risks.extend(_assess_platform_risks(target_platform))
 
     if not risks:
         risks.append("🟢 LOW: No significant migration risks identified")
@@ -1146,6 +1402,46 @@ def _generate_migration_timeline(strategy: str, timeline_weeks: int) -> str:
     return "\n".join([f"• {milestone}" for milestone in milestones])
 
 
+def _build_validation_header(
+    conversion_type: str, summary: dict[str, int]
+) -> list[str]:
+    """Build the header section of validation results."""
+    return [
+        f"# Validation Results for {conversion_type} Conversion",
+        "",
+        "## Summary",
+        f"• Errors: {summary['errors']}",
+        f"• Warnings: {summary['warnings']}",
+        f"• Info: {summary['info']}",
+        "",
+    ]
+
+
+def _group_results_by_level(
+    results: list[ValidationResult],
+) -> tuple[list[ValidationResult], list[ValidationResult], list[ValidationResult]]:
+    """Group validation results by severity level."""
+    errors = [r for r in results if r.level == ValidationLevel.ERROR]
+    warnings = [r for r in results if r.level == ValidationLevel.WARNING]
+    infos = [r for r in results if r.level == ValidationLevel.INFO]
+    return errors, warnings, infos
+
+
+def _format_result_section(
+    title: str, icon: str, results: list[ValidationResult]
+) -> list[str]:
+    """Format a single validation results section."""
+    if not results:
+        return []
+
+    lines = [f"## {icon} {title}", ""]
+    for result in results:
+        lines.append(str(result))
+        lines.append("")
+
+    return lines
+
+
 def _format_validation_results_text(
     conversion_type: str, results: list[ValidationResult], summary: dict[str, int]
 ) -> str:
@@ -1166,41 +1462,13 @@ def _format_validation_results_text(
 
 ✅ All validation checks passed! No issues found.
 """
-    output_lines = [
-        f"# Validation Results for {conversion_type} Conversion",
-        "",
-        "## Summary",
-        f"• Errors: {summary['errors']}",
-        f"• Warnings: {summary['warnings']}",
-        f"• Info: {summary['info']}",
-        "",
-    ]
 
-    # Group results by level
-    errors = [r for r in results if r.level == ValidationLevel.ERROR]
-    warnings = [r for r in results if r.level == ValidationLevel.WARNING]
-    infos = [r for r in results if r.level == ValidationLevel.INFO]
+    output_lines = _build_validation_header(conversion_type, summary)
+    errors, warnings, infos = _group_results_by_level(results)
 
-    if errors:
-        output_lines.append("## ❌ Errors")
-        output_lines.append("")
-        for result in errors:
-            output_lines.append(str(result))
-            output_lines.append("")
-
-    if warnings:
-        output_lines.append("## ⚠️  Warnings")
-        output_lines.append("")
-        for result in warnings:
-            output_lines.append(str(result))
-            output_lines.append("")
-
-    if infos:
-        output_lines.append("## ℹ️  Information")
-        output_lines.append("")
-        for result in infos:
-            output_lines.append(str(result))
-            output_lines.append("")
+    output_lines.extend(_format_result_section("❌ Errors", "", errors))
+    output_lines.extend(_format_result_section("⚠️  Warnings", "", warnings))
+    output_lines.extend(_format_result_section("ℹ️  Information", "", infos))
 
     return "\n".join(output_lines)
 

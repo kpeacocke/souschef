@@ -11,6 +11,10 @@ from typing import NoReturn
 
 import click
 
+from souschef.profiling import (
+    generate_cookbook_performance_report,
+    profile_function,
+)
 from souschef.server import (
     convert_inspec_to_test,
     convert_resource_to_task,
@@ -423,6 +427,92 @@ def _output_result(result: str, output_format: str) -> None:
         _output_json_format(result)
     else:
         _output_text_format(result)
+
+
+@cli.command()
+@click.argument("cookbook_path", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Save report to file instead of printing to stdout",
+)
+def profile(cookbook_path: str, output: str | None) -> None:
+    """
+    Profile cookbook parsing performance and generate optimization report.
+
+    COOKBOOK_PATH: Path to the Chef cookbook to profile
+
+    This command analyzes the performance of parsing all cookbook components
+    (recipes, attributes, resources, templates) and provides recommendations
+    for optimization.
+    """
+    try:
+        click.echo(f"Profiling cookbook: {cookbook_path}")
+        click.echo("This may take a moment for large cookbooks...")
+
+        report = generate_cookbook_performance_report(cookbook_path)
+        report_text = str(report)
+
+        if output:
+            Path(output).write_text(report_text)
+            click.echo(f"✓ Performance report saved to: {output}")
+        else:
+            click.echo(report_text)
+
+    except Exception as e:
+        click.echo(f"Error profiling cookbook: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument(
+    "operation",
+    type=click.Choice(["recipe", "attributes", "resource", "template"]),
+)
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--detailed",
+    is_flag=True,
+    help="Show detailed function call statistics",
+)
+def profile_operation(operation: str, path: str, detailed: bool) -> None:
+    """
+    Profile a single parsing operation in detail.
+
+    OPERATION: Type of operation to profile
+    PATH: Path to the file to parse
+
+    This command profiles a single parsing operation and shows
+    execution time, memory usage, and optionally detailed function statistics.
+    """
+    operation_map = {
+        "recipe": parse_recipe,
+        "attributes": parse_attributes,
+        "resource": parse_custom_resource,
+        "template": parse_template,
+    }
+
+    func = operation_map[operation]
+
+    try:
+        click.echo(f"Profiling {operation} parsing: {path}")
+
+        if detailed:
+            from souschef.profiling import detailed_profile_function
+
+            _, profile_result = detailed_profile_function(func, path)
+            click.echo(str(profile_result))
+            if profile_result.function_stats.get("top_functions"):
+                click.echo("\nDetailed Function Statistics:")
+                click.echo(profile_result.function_stats["top_functions"])
+        else:
+            _, profile_result = profile_function(func, path)
+            click.echo(str(profile_result))
+
+    except Exception as e:
+        click.echo(f"Error profiling operation: {e}", err=True)
+        sys.exit(1)
 
 
 def main() -> NoReturn:
