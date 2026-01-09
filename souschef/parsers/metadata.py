@@ -45,6 +45,64 @@ def read_cookbook_metadata(path: str) -> str:
         return f"An error occurred: {e}"
 
 
+def _scan_cookbook_directory(
+    cookbook_path, dir_name: str
+) -> tuple[str, list[str]] | None:
+    """
+    Scan a single cookbook directory for files.
+
+    Args:
+        cookbook_path: Path to the cookbook root.
+        dir_name: Name of the subdirectory to scan.
+
+    Returns:
+        Tuple of (dir_name, files) if directory exists and has files, None otherwise.
+
+    """
+    dir_path = _safe_join(cookbook_path, dir_name)
+    if not dir_path.exists() or not dir_path.is_dir():
+        return None
+
+    files = [f.name for f in dir_path.iterdir() if f.is_file()]
+    return (dir_name, files) if files else None
+
+
+def _collect_cookbook_structure(cookbook_path) -> dict[str, list[str]]:
+    """
+    Collect all standard cookbook directories and their files.
+
+    Args:
+        cookbook_path: Path to the cookbook root.
+
+    Returns:
+        Dictionary mapping directory names to file lists.
+
+    """
+    structure = {}
+    common_dirs = [
+        "recipes",
+        "attributes",
+        "templates",
+        "files",
+        "resources",
+        "providers",
+        "libraries",
+        "definitions",
+    ]
+
+    for dir_name in common_dirs:
+        result = _scan_cookbook_directory(cookbook_path, dir_name)
+        if result:
+            structure[result[0]] = result[1]
+
+    # Check for metadata.rb
+    metadata_path = _safe_join(cookbook_path, METADATA_FILENAME)
+    if metadata_path.exists():
+        structure["metadata"] = [METADATA_FILENAME]
+
+    return structure
+
+
 def list_cookbook_structure(path: str) -> str:
     """
     List the structure of a Chef cookbook directory.
@@ -62,29 +120,7 @@ def list_cookbook_structure(path: str) -> str:
         if not cookbook_path.is_dir():
             return f"Error: {path} is not a directory"
 
-        structure = {}
-        common_dirs = [
-            "recipes",
-            "attributes",
-            "templates",
-            "files",
-            "resources",
-            "providers",
-            "libraries",
-            "definitions",
-        ]
-
-        for dir_name in common_dirs:
-            dir_path = _safe_join(cookbook_path, dir_name)
-            if dir_path.exists() and dir_path.is_dir():
-                files = [f.name for f in dir_path.iterdir() if f.is_file()]
-                if files:
-                    structure[dir_name] = files
-
-        # Check for metadata.rb
-        metadata_path = _safe_join(cookbook_path, METADATA_FILENAME)
-        if metadata_path.exists():
-            structure["metadata"] = [METADATA_FILENAME]
+        structure = _collect_cookbook_structure(cookbook_path)
 
         if not structure:
             return f"Warning: No standard cookbook structure found in {path}"
