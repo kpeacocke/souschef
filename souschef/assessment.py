@@ -70,67 +70,76 @@ def assess_chef_migration_complexity(
         )
 
 
-def generate_migration_plan(
-    cookbook_paths: str, migration_strategy: str = "phased", timeline_weeks: int = 12
-) -> str:
+def _validate_migration_plan_inputs(
+    cookbook_paths: str, migration_strategy: str, timeline_weeks: int
+) -> str | None:
     """
-    Generate a detailed migration plan from Chef to Ansible with timeline and milestones.
-
-    Args:
-        cookbook_paths: Comma-separated paths to Chef cookbooks
-        migration_strategy: Migration approach (big_bang, phased, parallel)
-        timeline_weeks: Target timeline in weeks
+    Validate migration plan inputs.
 
     Returns:
-        Detailed migration plan with phases, milestones, and deliverables
+        Error message if validation fails, None if valid.
 
     """
-    try:
-        # Validate inputs
-        if not cookbook_paths or not cookbook_paths.strip():
-            return (
-                "Error: Cookbook paths cannot be empty\n\n"
-                "Suggestion: Provide comma-separated paths to Chef cookbooks"
-            )
-
-        valid_strategies = ["big_bang", "phased", "parallel"]
-        if migration_strategy not in valid_strategies:
-            return (
-                f"Error: Invalid migration strategy '{migration_strategy}'\n\n"
-                f"Suggestion: Use one of {', '.join(valid_strategies)}"
-            )
-
-        if not (1 <= timeline_weeks <= 104):  # 1 week to 2 years
-            return (
-                f"Error: Timeline must be between 1 and 104 weeks, got {timeline_weeks}\n\n"
-                "Suggestion: Provide a realistic timeline (4-12 weeks typical)"
-            )
-
-        # Parse and assess cookbooks
-        paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
-        valid_paths = [p for p in paths if p.exists()]
-
-        if not valid_paths:
-            return (
-                "Error: No valid cookbook paths found\n\n"
-                "Suggestion: Ensure paths exist and point to cookbook directories"
-            )
-
-        cookbook_assessments = []
-        for cookbook_path in valid_paths:
-            # deepcode ignore PT: path normalized via _normalize_path
-            assessment = _assess_single_cookbook(cookbook_path)
-            cookbook_assessments.append(assessment)
-
-        # Generate migration plan based on strategy
-        migration_plan = _generate_detailed_migration_plan(
-            cookbook_assessments, migration_strategy, timeline_weeks
+    if not cookbook_paths or not cookbook_paths.strip():
+        return (
+            "Error: Cookbook paths cannot be empty\n\n"
+            "Suggestion: Provide comma-separated paths to Chef cookbooks"
         )
 
-        return f"""# Chef to Ansible Migration Plan
+    valid_strategies = ["big_bang", "phased", "parallel"]
+    if migration_strategy not in valid_strategies:
+        return (
+            f"Error: Invalid migration strategy '{migration_strategy}'\n\n"
+            f"Suggestion: Use one of {', '.join(valid_strategies)}"
+        )
+
+    if not (1 <= timeline_weeks <= 104):  # 1 week to 2 years
+        return (
+            f"Error: Timeline must be between 1 and 104 weeks, got {timeline_weeks}\n\n"
+            "Suggestion: Provide a realistic timeline (4-12 weeks typical)"
+        )
+
+    return None
+
+
+def _parse_and_assess_cookbooks(cookbook_paths: str) -> tuple[list, str | None]:
+    """
+    Parse cookbook paths and assess each cookbook.
+
+    Returns:
+        Tuple of (cookbook_assessments, error_message).
+
+    """
+    paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
+    valid_paths = [p for p in paths if p.exists()]
+
+    if not valid_paths:
+        return (
+            [],
+            "Error: No valid cookbook paths found\n\n"
+            "Suggestion: Ensure paths exist and point to cookbook directories",
+        )
+
+    cookbook_assessments = []
+    for cookbook_path in valid_paths:
+        # deepcode ignore PT: path normalized via _normalize_path
+        assessment = _assess_single_cookbook(cookbook_path)
+        cookbook_assessments.append(assessment)
+
+    return cookbook_assessments, None
+
+
+def _format_migration_plan_output(
+    migration_plan: dict,
+    migration_strategy: str,
+    timeline_weeks: int,
+    num_cookbooks: int,
+) -> str:
+    """Format migration plan as markdown output."""
+    return f"""# Chef to Ansible Migration Plan
 # Strategy: {migration_strategy}
 # Timeline: {timeline_weeks} weeks
-# Cookbooks: {len(cookbook_assessments)}
+# Cookbooks: {num_cookbooks}
 
 ## Executive Summary:
 {migration_plan["executive_summary"]}
@@ -159,6 +168,48 @@ def generate_migration_plan(
 ## Post-Migration Tasks:
 {migration_plan["post_migration"]}
 """
+
+
+def generate_migration_plan(
+    cookbook_paths: str, migration_strategy: str = "phased", timeline_weeks: int = 12
+) -> str:
+    """
+    Generate a detailed migration plan from Chef to Ansible with timeline and milestones.
+
+    Args:
+        cookbook_paths: Comma-separated paths to Chef cookbooks
+        migration_strategy: Migration approach (big_bang, phased, parallel)
+        timeline_weeks: Target timeline in weeks
+
+    Returns:
+        Detailed migration plan with phases, milestones, and deliverables
+
+    """
+    try:
+        # Validate inputs
+        error = _validate_migration_plan_inputs(
+            cookbook_paths, migration_strategy, timeline_weeks
+        )
+        if error:
+            return error
+
+        # Parse and assess cookbooks
+        cookbook_assessments, error = _parse_and_assess_cookbooks(cookbook_paths)
+        if error:
+            return error
+
+        # Generate migration plan based on strategy
+        migration_plan = _generate_detailed_migration_plan(
+            cookbook_assessments, migration_strategy, timeline_weeks
+        )
+
+        return _format_migration_plan_output(
+            migration_plan,
+            migration_strategy,
+            timeline_weeks,
+            len(cookbook_assessments),
+        )
+
     except Exception as e:
         return format_error_with_context(e, "generating migration plan", cookbook_paths)
 
