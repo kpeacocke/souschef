@@ -606,6 +606,8 @@ def generate_canary_deployment_strategy(
         if error:
             return error
 
+        assert steps is not None, "steps must be non-None after successful validation"
+
         # Generate canary strategy
         strategy = _generate_canary_strategy(app_name, canary_percentage, steps)
 

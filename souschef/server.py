@@ -810,6 +810,86 @@ def convert_chef_databag_to_vars(
 
 
 @mcp.tool()
+def _validate_databags_directory(
+    databags_directory: str,
+) -> tuple[Path | None, str | None]:
+    """
+    Validate databags directory input.
+
+    Args:
+        databags_directory: Path to the data bags directory.
+
+    Returns:
+        Tuple of (normalized_path, error_message).
+        If validation succeeds: (Path, None)
+        If validation fails: (None, error_message)
+
+    """
+    if not databags_directory or not databags_directory.strip():
+        return None, (
+            "Error: Databags directory path cannot be empty\n\n"
+            "Suggestion: Provide the path to your Chef data_bags directory"
+        )
+
+    databags_path = _normalize_path(databags_directory)
+    if not databags_path.exists():
+        return None, (
+            f"Error: Data bags directory not found: {databags_directory}\n\n"
+            "Suggestion: Check that the path is correct and the directory exists"
+        )
+
+    if not databags_path.is_dir():
+        return None, (
+            f"Error: Path is not a directory: {databags_directory}\n\n"
+            "Suggestion: Provide a path to the data_bags directory"
+        )
+
+    return databags_path, None
+
+
+def _convert_databag_item(item_file, databag_name: str, output_directory: str) -> dict:
+    """Convert a single databag item file to Ansible format."""
+    item_name = item_file.stem
+
+    try:
+        with item_file.open() as f:
+            content = f.read()
+
+        # Detect if encrypted
+        is_encrypted = _detect_encrypted_databag(content)
+
+        # Convert to Ansible format
+        result = convert_chef_databag_to_vars(
+            content, databag_name, item_name, is_encrypted, output_directory
+        )
+
+        vault_suffix = "_vault" if is_encrypted else ""
+        target_file = f"{output_directory}/{databag_name}{vault_suffix}.yml"
+
+        return {
+            "databag": databag_name,
+            "item": item_name,
+            "encrypted": is_encrypted,
+            "target_file": target_file,
+            "content": result,
+        }
+
+    except Exception as e:
+        return {"databag": databag_name, "item": item_name, "error": str(e)}
+
+
+def _process_databag_directory(databag_dir, output_directory: str) -> list[dict]:
+    """Process all items in a single databag directory."""
+    results = []
+    databag_name = databag_dir.name
+
+    for item_file in databag_dir.glob("*.json"):
+        result = _convert_databag_item(item_file, databag_name, output_directory)
+        results.append(result)
+
+    return results
+
+
 def generate_ansible_vault_from_databags(
     databags_directory: str,
     output_directory: str = "group_vars",
@@ -829,24 +909,14 @@ def generate_ansible_vault_from_databags(
     """
     try:
         # Validate inputs
-        if not databags_directory or not databags_directory.strip():
-            return (
-                "Error: Databags directory path cannot be empty\n\n"
-                "Suggestion: Provide the path to your Chef data_bags directory"
-            )
+        databags_path, error = _validate_databags_directory(databags_directory)
+        if error:
+            assert isinstance(error, str), "error must be string when present"
+            return error
 
-        databags_path = _normalize_path(databags_directory)
-        if not databags_path.exists():
-            return (
-                f"Error: Data bags directory not found: {databags_directory}\n\n"
-                "Suggestion: Check that the path is correct and the directory exists"
-            )
-
-        if not databags_path.is_dir():
-            return (
-                f"Error: Path is not a directory: {databags_directory}\n\n"
-                "Suggestion: Provide a path to the data_bags directory"
-            )
+        assert databags_path is not None, (
+            "databags_path must be non-None after successful validation"
+        )
 
         conversion_results = []
 
@@ -855,40 +925,8 @@ def generate_ansible_vault_from_databags(
             if not databag_dir.is_dir():
                 continue
 
-            databag_name = databag_dir.name
-
-            # Process each item in the data bag
-            for item_file in databag_dir.glob("*.json"):
-                item_name = item_file.stem
-
-                try:
-                    with item_file.open() as f:
-                        content = f.read()
-
-                    # Detect if encrypted (Chef encrypted data bags have specific structure)
-                    is_encrypted = _detect_encrypted_databag(content)
-
-                    # Convert to Ansible format
-                    result = convert_chef_databag_to_vars(
-                        content, databag_name, item_name, is_encrypted, output_directory
-                    )
-
-                    vault_suffix = "_vault" if is_encrypted else ""
-                    target_file = f"{output_directory}/{databag_name}{vault_suffix}.yml"
-                    conversion_results.append(
-                        {
-                            "databag": databag_name,
-                            "item": item_name,
-                            "encrypted": is_encrypted,
-                            "target_file": target_file,
-                            "content": result,
-                        }
-                    )
-
-                except Exception as e:
-                    conversion_results.append(
-                        {"databag": databag_name, "item": item_name, "error": str(e)}
-                    )
+            results = _process_databag_directory(databag_dir, output_directory)
+            conversion_results.extend(results)
 
         # Generate summary and file structure
         return _generate_databag_conversion_summary(
