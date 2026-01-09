@@ -607,7 +607,7 @@ def generate_canary_deployment_strategy(
             return error
 
         # Generate canary strategy
-        strategy = _generate_canary_strategy(app_name, canary_percentage, steps)  # type: ignore
+        strategy = _generate_canary_strategy(app_name, canary_percentage, steps)
 
         # Format output
         return _format_canary_output(
@@ -615,7 +615,7 @@ def generate_canary_deployment_strategy(
             canary_percentage,
             rollout_steps,
             steps,
-            strategy,  # type: ignore
+            strategy,
         )
 
     except Exception as e:
@@ -1840,10 +1840,10 @@ def _generate_deployment_migration_recommendations(
 
 def _extract_detected_patterns(patterns: dict) -> list[str]:
     """Extract detected patterns from patterns dictionary."""
-    pattern_list = patterns.get("deployment_patterns", [])
+    pattern_list: list = patterns.get("deployment_patterns", [])
     if pattern_list and isinstance(pattern_list[0], dict):
         return [p["type"] for p in pattern_list]
-    return pattern_list
+    return list(pattern_list)
 
 
 def _build_deployment_strategy_recommendations(
