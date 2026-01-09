@@ -509,6 +509,36 @@ def test_generate_canary_deployment_strategy_success():
     assert "Monitoring" in result  # Updated to match new output
 
 
+def test_generate_canary_deployment_strategy_invalid_app_name():
+    """Test canary deployment with empty app name."""
+    from souschef.server import generate_canary_deployment_strategy
+
+    result = generate_canary_deployment_strategy("", 10, "10,25,50,100")
+
+    assert "Error: Application name cannot be empty" in result
+    assert "Suggestion: Provide a descriptive name" in result
+
+
+def test_generate_canary_deployment_strategy_invalid_percentage():
+    """Test canary deployment with invalid percentage."""
+    from souschef.server import generate_canary_deployment_strategy
+
+    result = generate_canary_deployment_strategy("webapp", 150, "10,25,50,100")
+
+    assert "Error: Canary percentage must be between 1 and 100" in result
+    assert "Suggestion: Start with 10% for safety" in result
+
+
+def test_generate_canary_deployment_strategy_invalid_steps():
+    """Test canary deployment with invalid rollout steps."""
+    from souschef.server import generate_canary_deployment_strategy
+
+    result = generate_canary_deployment_strategy("webapp", 10, "abc,def")
+
+    assert "Error: Invalid rollout step" in result
+    assert "Suggestion: Use comma-separated percentages" in result
+
+
 def test_analyze_chef_application_patterns_success():
     """Test analyze_chef_application_patterns with valid cookbook."""
     from souschef.server import analyze_chef_application_patterns
@@ -13172,8 +13202,6 @@ def test_nginx(host):
         )
 
         # Should be valid JSON
-        import json
-
         data = json.loads(result)
         assert "summary" in data
         assert "results" in data

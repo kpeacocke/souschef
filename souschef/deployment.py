@@ -16,7 +16,12 @@ from souschef.core.constants import (
     CHEF_ROLE_PREFIX,
     METADATA_FILENAME,
 )
-from souschef.core.path_utils import _normalize_path, _safe_join
+from souschef.core.errors import (
+    format_error_with_context,
+    validate_cookbook_structure,
+    validate_directory_exists,
+)
+from souschef.core.path_utils import _safe_join
 
 # Maximum length for attribute values in Chef attribute parsing
 # Prevents ReDoS attacks from extremely long attribute declarations
@@ -38,10 +43,14 @@ def generate_awx_job_template_from_cookbook(
     Survey specs auto-generated from cookbook attributes when include_survey=True.
     """
     try:
-        cookbook = _normalize_path(cookbook_path)
-        if not cookbook.exists():
-            return f"Cookbook not found at {cookbook_path}"
+        # Validate inputs
+        if not cookbook_name or not cookbook_name.strip():
+            return (
+                "Error: Cookbook name cannot be empty\n\n"
+                "Suggestion: Provide a valid cookbook name"
+            )
 
+        cookbook = validate_cookbook_structure(cookbook_path)
         cookbook_analysis = _analyze_cookbook_for_awx(cookbook, cookbook_name)
         job_template = _generate_awx_job_template(
             cookbook_analysis, cookbook_name, target_environment, include_survey
@@ -71,7 +80,9 @@ awx-cli job_templates create \\
 {_format_cookbook_analysis(cookbook_analysis)}
 """
     except Exception as e:
-        return f"AWX template generation failed for {cookbook_name}: {e}"
+        return format_error_with_context(
+            e, f"generating AWX job template for {cookbook_name}", cookbook_path
+        )
 
 
 def generate_awx_workflow_from_chef_runlist(
@@ -84,8 +95,29 @@ def generate_awx_workflow_from_chef_runlist(
     Workflows preserve runlist execution order with success/failure paths.
     """
     try:
+        # Validate inputs
+        if not runlist_content or not runlist_content.strip():
+            return (
+                "Error: Runlist content cannot be empty\n\n"
+                "Suggestion: Provide a valid Chef runlist "
+                "(e.g., 'recipe[cookbook::recipe]' or JSON array)"
+            )
+
+        if not workflow_name or not workflow_name.strip():
+            return (
+                "Error: Workflow name cannot be empty\n\n"
+                "Suggestion: Provide a descriptive name for the AWX workflow"
+            )
+
         # Parse runlist
         runlist = _parse_chef_runlist(runlist_content)
+
+        if not runlist:
+            return (
+                "Error: Runlist parsing resulted in no items\n\n"
+                "Suggestion: Check runlist format. Expected 'recipe[name]' "
+                "or 'role[name]' entries"
+            )
 
         # Generate workflow template
         workflow_template = _generate_awx_workflow_template(
@@ -115,7 +147,9 @@ def generate_awx_workflow_from_chef_runlist(
 4. Test execution with survey parameters
 """
     except Exception as e:
-        return f"Workflow generation failed: {e}"
+        return format_error_with_context(
+            e, f"generating AWX workflow from runlist for {workflow_name}"
+        )
 
 
 def generate_awx_project_from_cookbooks(
@@ -138,9 +172,16 @@ def generate_awx_project_from_cookbooks(
 
     """
     try:
-        cookbooks_path = _normalize_path(cookbooks_directory)
-        if not cookbooks_path.exists():
-            return f"Error: Cookbooks directory not found: {cookbooks_directory}"
+        # Validate inputs
+        if not project_name or not project_name.strip():
+            return (
+                "Error: Project name cannot be empty\n\n"
+                "Suggestion: Provide a descriptive name for the AWX project"
+            )
+
+        cookbooks_path = validate_directory_exists(
+            cookbooks_directory, "cookbooks directory"
+        )
 
         # Analyze all cookbooks
         cookbooks_analysis = _analyze_cookbooks_directory(cookbooks_path)
@@ -181,7 +222,11 @@ def generate_awx_project_from_cookbooks(
 5. Set up inventories and credentials
 """
     except Exception as e:
-        return f"Project configuration failed: {e}"
+        return format_error_with_context(
+            e,
+            f"generating AWX project configuration for {project_name}",
+            cookbooks_directory,
+        )
 
 
 def generate_awx_inventory_source_from_chef(
@@ -200,6 +245,21 @@ def generate_awx_inventory_source_from_chef(
 
     """
     try:
+        # Validate inputs
+        if not chef_server_url or not chef_server_url.strip():
+            return (
+                "Error: Chef server URL cannot be empty\n\n"
+                "Suggestion: Provide a valid Chef server URL "
+                "(e.g., https://chef.example.com)"
+            )
+
+        if not chef_server_url.startswith("https://"):
+            return (
+                f"Error: Invalid Chef server URL: {chef_server_url}\n\n"
+                "Suggestion: URL must use HTTPS protocol for security "
+                "(e.g., https://chef.example.com)"
+            )
+
         # Generate inventory source configuration
         inventory_source = _generate_chef_inventory_source(
             chef_server_url, sync_schedule
@@ -240,7 +300,9 @@ def generate_awx_inventory_source_from_chef(
 - CHEF_CLIENT_KEY: ${{{{chef_client_key}}}}
 """
     except Exception as e:
-        return f"Inventory source generation failed: {e}"
+        return format_error_with_context(
+            e, "generating AWX inventory source from Chef server", chef_server_url
+        )
 
 
 # Deployment Strategy Functions
@@ -256,9 +318,15 @@ def convert_chef_deployment_to_ansible_strategy(
     Override auto-detection by specifying explicit pattern.
     """
     try:
-        cookbook = _normalize_path(cookbook_path)
-        if not cookbook.exists():
-            return f"Error: Cookbook path not found: {cookbook_path}"
+        cookbook = validate_cookbook_structure(cookbook_path)
+
+        # Validate deployment pattern
+        valid_patterns = ["auto", "blue_green", "canary", "rolling_update"]
+        if deployment_pattern not in valid_patterns:
+            return (
+                f"Error: Invalid deployment pattern '{deployment_pattern}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_patterns)}"
+            )
 
         # Analyze Chef deployment pattern
         pattern_analysis = _analyze_chef_deployment_pattern(cookbook)
@@ -289,7 +357,9 @@ def convert_chef_deployment_to_ansible_strategy(
 {_generate_deployment_migration_recommendations(pattern_analysis)}
 """
     except Exception as e:
-        return f"Deployment pattern conversion failed: {e}"
+        return format_error_with_context(
+            e, "converting Chef deployment pattern to Ansible strategy", cookbook_path
+        )
 
 
 def generate_blue_green_deployment_playbook(
@@ -307,6 +377,21 @@ def generate_blue_green_deployment_playbook(
 
     """
     try:
+        # Validate inputs
+        if not app_name or not app_name.strip():
+            return (
+                "Error: Application name cannot be empty\n\n"
+                "Suggestion: Provide a descriptive name for the application "
+                "being deployed"
+            )
+
+        if not health_check_url.startswith("/"):
+            return (
+                f"Error: Health check URL must be a path starting with '/': "
+                f"{health_check_url}\n\n"
+                "Suggestion: Use a relative path like '/health' or '/api/health'"
+            )
+
         # Generate main deployment playbook
         playbook = _generate_blue_green_playbook(app_name, health_check_url)
 
@@ -347,26 +432,125 @@ def generate_blue_green_deployment_playbook(
 - Blue and green environments provisioned
 """
     except Exception as e:
-        return f"Failed to generate blue/green playbook: {e}"
+        return format_error_with_context(
+            e, f"generating blue/green deployment playbook for {app_name}"
+        )
 
 
-def generate_canary_deployment_strategy(
-    app_name: str, canary_percentage: int = 10, rollout_steps: str = "10,25,50,100"
+def _validate_canary_inputs(
+    app_name: str, canary_percentage: int, rollout_steps: str
+) -> tuple[list[int] | None, str | None]:
+    """
+    Validate canary deployment inputs.
+
+    Args:
+        app_name: Application name
+        canary_percentage: Initial canary percentage
+        rollout_steps: Comma-separated rollout steps
+
+    Returns:
+        Tuple of (parsed steps list, error message). If error, steps is None.
+
+    """
+    # Validate app name
+    if not app_name or not app_name.strip():
+        return None, (
+            "Error: Application name cannot be empty\n\n"
+            "Suggestion: Provide a descriptive name for the application"
+        )
+
+    # Validate canary percentage
+    if not (1 <= canary_percentage <= 100):
+        return None, (
+            f"Error: Canary percentage must be between 1 and 100, "
+            f"got {canary_percentage}\n\n"
+            "Suggestion: Start with 10% for safety"
+        )
+
+    # Parse and validate rollout steps
+    try:
+        steps = [int(s.strip()) for s in rollout_steps.split(",")]
+        if not all(1 <= s <= 100 for s in steps):
+            raise ValueError("Steps must be between 1 and 100")
+        if steps != sorted(steps):
+            return None, (
+                f"Error: Rollout steps must be in ascending order: {rollout_steps}\n\n"
+                "Suggestion: Use format like '10,25,50,100'"
+            )
+        return steps, None
+    except ValueError as e:
+        return None, (
+            f"Error: Invalid rollout steps '{rollout_steps}': {e}\n\n"
+            "Suggestion: Use comma-separated percentages like '10,25,50,100'"
+        )
+
+
+def _build_canary_workflow_guide(canary_percentage: int, steps: list[int]) -> str:
+    """
+    Build deployment workflow guide.
+
+    Args:
+        canary_percentage: Initial canary percentage
+        steps: List of rollout step percentages
+
+    Returns:
+        Formatted workflow guide
+
+    """
+    workflow = f"""## Deployment Workflow:
+1. Deploy canary at {canary_percentage}%: `ansible-playbook deploy_canary.yml`
+2. Monitor metrics: `ansible-playbook monitor_canary.yml`
+3. Progressive rollout: `ansible-playbook progressive_rollout.yml`
+"""
+
+    # Add step details
+    for i, step_pct in enumerate(steps, 1):
+        workflow += f"   - Step {i}: {step_pct}% traffic"
+        if i == len(steps):
+            workflow += " (full rollout)"
+        workflow += "\n"
+
+    workflow += """4. Rollback if issues: `ansible-playbook rollback_canary.yml`
+
+## Monitoring Points:
+- Error rate comparison (canary vs stable)
+- Response time percentiles (p50, p95, p99)
+- Resource utilization (CPU, memory)
+- Custom business metrics
+
+## Rollback Triggers:
+- Error rate increase > 5%
+- Response time degradation > 20%
+- Failed health checks
+- Manual trigger
+"""
+    return workflow
+
+
+def _format_canary_output(
+    app_name: str,
+    canary_percentage: int,
+    rollout_steps: str,
+    steps: list[int],
+    strategy: dict,
 ) -> str:
     """
-    Generate canary deployment with progressive rollout.
+    Format complete canary deployment output.
 
-    Starts at canary_percentage, progresses through rollout_steps.
-    Includes monitoring checks and automatic rollback on failure.
+    Args:
+        app_name: Application name
+        canary_percentage: Initial canary percentage
+        rollout_steps: Original rollout steps string
+        steps: Parsed rollout steps
+        strategy: Generated strategy dict
+
+    Returns:
+        Formatted output string
+
     """
-    try:
-        # Parse rollout steps
-        steps = [int(s.strip()) for s in rollout_steps.split(",")]
+    workflow = _build_canary_workflow_guide(canary_percentage, steps)
 
-        # Generate canary strategy
-        strategy = _generate_canary_strategy(app_name, canary_percentage, steps)
-
-        return f"""# Canary Deployment Strategy
+    return f"""# Canary Deployment Strategy
 # Application: {app_name}
 # Initial Canary: {canary_percentage}%
 # Rollout Steps: {rollout_steps}
@@ -391,30 +575,53 @@ def generate_canary_deployment_strategy(
 {strategy["rollback"]}
 ```
 
-## Deployment Workflow:
-1. Deploy canary at {canary_percentage}%: `ansible-playbook deploy_canary.yml`
-2. Monitor metrics: `ansible-playbook monitor_canary.yml`
-3. Progressive rollout: `ansible-playbook progressive_rollout.yml`
-   - Step 1: {steps[0]}% traffic
-   - Step 2: {steps[1]}% traffic
-   - Step 3: {steps[2]}% traffic
-   - Step 4: {steps[3]}% traffic (full rollout)
-4. Rollback if issues: `ansible-playbook rollback_canary.yml`
+{workflow}"""
 
-## Monitoring Points:
-- Error rate comparison (canary vs stable)
-- Response time percentiles (p50, p95, p99)
-- Resource utilization (CPU, memory)
-- Custom business metrics
 
-## Rollback Triggers:
-- Error rate increase > 5%
-- Response time degradation > 20%
-- Failed health checks
-- Manual trigger
-"""
+def generate_canary_deployment_strategy(
+    app_name: str, canary_percentage: int = 10, rollout_steps: str = "10,25,50,100"
+) -> str:
+    """
+    Generate canary deployment with progressive rollout.
+
+    Starts at canary_percentage, progresses through rollout_steps.
+    Includes monitoring checks and automatic rollback on failure.
+
+    Args:
+        app_name: Name of the application
+        canary_percentage: Initial canary traffic percentage (1-100)
+        rollout_steps: Comma-separated progressive rollout steps
+
+    Returns:
+        Formatted canary deployment strategy with playbooks
+
+    """
+    try:
+        # Validate inputs
+        steps, error = _validate_canary_inputs(
+            app_name, canary_percentage, rollout_steps
+        )
+        if error:
+            return error
+
+        assert steps is not None, "steps must be non-None after successful validation"
+
+        # Generate canary strategy
+        strategy = _generate_canary_strategy(app_name, canary_percentage, steps)
+
+        # Format output
+        return _format_canary_output(
+            app_name,
+            canary_percentage,
+            rollout_steps,
+            steps,
+            strategy,
+        )
+
     except Exception as e:
-        return f"Canary deployment generation failed: {e}"
+        return format_error_with_context(
+            e, f"generating canary deployment strategy for {app_name}"
+        )
 
 
 def analyze_chef_application_patterns(
@@ -427,9 +634,15 @@ def analyze_chef_application_patterns(
     Application type helps tune recommendations for web/database/service workloads.
     """
     try:
-        cookbook = _normalize_path(cookbook_path)
-        if not cookbook.exists():
-            return f"Error: Cookbook path not found: {cookbook_path}"
+        cookbook = validate_cookbook_structure(cookbook_path)
+
+        # Validate application type
+        valid_app_types = ["web_application", "database", "service", "batch", "api"]
+        if application_type not in valid_app_types:
+            return (
+                f"Error: Invalid application type '{application_type}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_app_types)}"
+            )
 
         # Analyze cookbook for application patterns
         analysis = _analyze_application_cookbook(cookbook, application_type)
@@ -460,83 +673,156 @@ def analyze_chef_application_patterns(
 5. Document lessons learned and iterate
 """
     except Exception as e:
-        return f"Couldn't analyze cookbook patterns: {e}"
+        return format_error_with_context(
+            e,
+            f"analyzing Chef application patterns for {application_type}",
+            cookbook_path,
+        )
 
 
 # AWX Helper Functions
 
 
-def _analyze_cookbook_for_awx(cookbook_path: Path, cookbook_name: str) -> dict:
-    """Analyze Chef cookbook structure for AWX job template generation."""
-    analysis: dict[str, Any] = {
-        "name": cookbook_name,
-        "recipes": [],
-        "attributes": {},
-        "dependencies": [],
-        "templates": [],
-        "files": [],
-        "survey_fields": [],
-    }
+def _analyze_recipes(cookbook_path: Path) -> list[dict[str, Any]]:
+    """
+    Analyze recipes directory for AWX job steps.
 
-    # Check for recipes to convert into AWX job steps
+    Args:
+        cookbook_path: Path to cookbook root
+
+    Returns:
+        List of recipe metadata dicts
+
+    """
+    recipes = []
     recipes_dir = _safe_join(cookbook_path, "recipes")
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
-            recipe_name = recipe_file.stem
-            analysis["recipes"].append(
+            recipes.append(
                 {
-                    "name": recipe_name,
+                    "name": recipe_file.stem,
                     "file": str(recipe_file),
                     "size": recipe_file.stat().st_size,
                 }
             )
+    return recipes
 
-    # Analyze attributes for survey generation
+
+def _analyze_attributes_for_survey(
+    cookbook_path: Path,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """
+    Analyze attributes directory for survey field generation.
+
+    Args:
+        cookbook_path: Path to cookbook root
+
+    Returns:
+        Tuple of (attributes dict, survey fields list)
+
+    """
+    attributes = {}
+    survey_fields = []
     attributes_dir = _safe_join(cookbook_path, "attributes")
+
     if attributes_dir.exists():
         for attr_file in attributes_dir.glob("*.rb"):
             try:
                 with attr_file.open("r") as f:
                     content = f.read()
 
-                # Extract attribute declarations for survey
-                attributes = _extract_cookbook_attributes(content)
-                analysis["attributes"].update(attributes)
+                # Extract attribute declarations
+                attrs = _extract_cookbook_attributes(content)
+                attributes.update(attrs)
 
-                # Generate survey fields from attributes
-                survey_fields = _generate_survey_fields_from_attributes(attributes)
-                analysis["survey_fields"].extend(survey_fields)
+                # Generate survey fields
+                fields = _generate_survey_fields_from_attributes(attrs)
+                survey_fields.extend(fields)
 
             except Exception:
                 # Silently skip malformed attribute files
                 pass
 
-    # Analyze dependencies
+    return attributes, survey_fields
+
+
+def _analyze_metadata_dependencies(cookbook_path: Path) -> list[str]:
+    """
+    Extract cookbook dependencies from metadata.
+
+    Args:
+        cookbook_path: Path to cookbook root
+
+    Returns:
+        List of dependency names
+
+    """
     metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
     if metadata_file.exists():
         try:
             with metadata_file.open("r") as f:
                 content = f.read()
-
-            dependencies = _extract_cookbook_dependencies(content)
-            analysis["dependencies"] = dependencies
-
+            return _extract_cookbook_dependencies(content)
         except Exception:
-            # Silently skip malformed metadata
             pass
+    return []
 
-    # Count templates and files
+
+def _collect_static_files(cookbook_path: Path) -> tuple[list[str], list[str]]:
+    """
+    Collect templates and static files from cookbook.
+
+    Args:
+        cookbook_path: Path to cookbook root
+
+    Returns:
+        Tuple of (template names list, file names list)
+
+    """
+    templates = []
+    files = []
+
     templates_dir = _safe_join(cookbook_path, "templates")
     if templates_dir.exists():
-        analysis["templates"] = [
-            f.name for f in templates_dir.rglob("*") if f.is_file()
-        ]
+        templates = [f.name for f in templates_dir.rglob("*") if f.is_file()]
 
     files_dir = _safe_join(cookbook_path, "files")
     if files_dir.exists():
-        analysis["files"] = [f.name for f in files_dir.rglob("*") if f.is_file()]
+        files = [f.name for f in files_dir.rglob("*") if f.is_file()]
 
-    return analysis
+    return templates, files
+
+
+def _analyze_cookbook_for_awx(cookbook_path: Path, cookbook_name: str) -> dict:
+    """
+    Analyze Chef cookbook structure for AWX job template generation.
+
+    Orchestrates multiple analysis helpers to build comprehensive cookbook metadata.
+
+    Args:
+        cookbook_path: Path to cookbook root
+        cookbook_name: Name of the cookbook
+
+    Returns:
+        Analysis dict with recipes, attributes, dependencies, templates, files, surveys
+
+    """
+    # Analyze each dimension independently
+    recipes = _analyze_recipes(cookbook_path)
+    attributes, survey_fields = _analyze_attributes_for_survey(cookbook_path)
+    dependencies = _analyze_metadata_dependencies(cookbook_path)
+    templates, files = _collect_static_files(cookbook_path)
+
+    # Assemble complete analysis
+    return {
+        "name": cookbook_name,
+        "recipes": recipes,
+        "attributes": attributes,
+        "dependencies": dependencies,
+        "templates": templates,
+        "files": files,
+        "survey_fields": survey_fields,
+    }
 
 
 def _generate_awx_job_template(
@@ -1552,16 +1838,19 @@ def _generate_deployment_migration_recommendations(
     return "\n".join(recommendations)
 
 
-def _recommend_ansible_strategies(patterns: dict) -> str:
-    """Recommend appropriate Ansible strategies."""
-    strategies: list[str] = []
-
-    # Handle both formats: list of dicts with 'type' key or list of strings
-    pattern_list = patterns.get("deployment_patterns", [])
+def _extract_detected_patterns(patterns: dict) -> list[str]:
+    """Extract detected patterns from patterns dictionary."""
+    pattern_list: list = patterns.get("deployment_patterns", [])
     if pattern_list and isinstance(pattern_list[0], dict):
-        detected_patterns = [p["type"] for p in pattern_list]
-    else:
-        detected_patterns = pattern_list
+        return [p["type"] for p in pattern_list]
+    return list(pattern_list)
+
+
+def _build_deployment_strategy_recommendations(
+    detected_patterns: list[str],
+) -> list[str]:
+    """Build deployment strategy recommendations based on detected patterns."""
+    strategies: list[str] = []
 
     if "blue_green" in detected_patterns:
         strategies.append(
@@ -1574,7 +1863,15 @@ def _recommend_ansible_strategies(patterns: dict) -> str:
             "• Rolling Update: Balanced approach with configurable parallelism"
         )
 
-    # Application-pattern specific strategies
+    return strategies
+
+
+def _build_application_strategy_recommendations(
+    detected_patterns: list[str],
+) -> list[str]:
+    """Build application-pattern specific strategy recommendations."""
+    strategies: list[str] = []
+
     if "package_management" in detected_patterns:
         strategies.append("• Package: Use `package` module for package installation")
     if "configuration_management" in detected_patterns:
@@ -1584,11 +1881,26 @@ def _recommend_ansible_strategies(patterns: dict) -> str:
     if "source_deployment" in detected_patterns:
         strategies.append("• Source: Use `git` module for source code deployment")
 
+    return strategies
+
+
+def _get_default_strategy_recommendations() -> list[str]:
+    """Get default strategy recommendations when no patterns detected."""
+    return [
+        "• Rolling Update: Recommended starting strategy",
+        "• Blue/Green: For critical applications requiring zero downtime",
+        "• Canary: For high-risk deployments requiring validation",
+    ]
+
+
+def _recommend_ansible_strategies(patterns: dict) -> str:
+    """Recommend appropriate Ansible strategies."""
+    detected_patterns = _extract_detected_patterns(patterns)
+
+    strategies = _build_deployment_strategy_recommendations(detected_patterns)
+    strategies.extend(_build_application_strategy_recommendations(detected_patterns))
+
     if not strategies:
-        strategies = [
-            "• Rolling Update: Recommended starting strategy",
-            "• Blue/Green: For critical applications requiring zero downtime",
-            "• Canary: For high-risk deployments requiring validation",
-        ]
+        strategies = _get_default_strategy_recommendations()
 
     return "\n".join(strategies)

@@ -1441,8 +1441,40 @@ def _extract_chef_guards(resource: dict[str, str], raw_content: str) -> dict[str
     return guards
 
 
+def _is_opening_delimiter(char: str, in_quotes: bool) -> bool:
+    """Check if character is an opening delimiter."""
+    return char == "{" and not in_quotes
+
+
+def _is_closing_delimiter(char: str, in_quotes: bool) -> bool:
+    """Check if character is a closing delimiter."""
+    return char == "}" and not in_quotes
+
+
+def _is_quote_character(char: str) -> bool:
+    """Check if character is a quote."""
+    return char in ['"', "'"]
+
+
+def _should_split_here(char: str, in_quotes: bool, in_block: int) -> bool:
+    """Determine if we should split at this comma."""
+    return char == "," and not in_quotes and in_block == 0
+
+
 def _split_guard_array_parts(array_content: str) -> list[str]:
-    """Split array content by commas, respecting quotes and blocks."""
+    """
+    Split array content by commas, respecting quotes and blocks.
+
+    Handles Chef guard arrays like: ['test -f /file', { block }, "string"]
+    Tracks quote state and brace nesting to avoid splitting inside strings or blocks.
+
+    Args:
+        array_content: Raw array content string
+
+    Returns:
+        List of array parts split by commas
+
+    """
     parts = []
     current_part = ""
     in_quotes = False
@@ -1450,24 +1482,30 @@ def _split_guard_array_parts(array_content: str) -> list[str]:
     quote_char = None
 
     for char in array_content:
-        if char in ['"', "'"] and not in_block:
+        # Handle quote transitions
+        if _is_quote_character(char) and not in_block:
             if not in_quotes:
                 in_quotes = True
                 quote_char = char
             elif char == quote_char:
                 in_quotes = False
                 quote_char = None
-        elif char == "{" and not in_quotes:
+
+        # Handle block nesting
+        elif _is_opening_delimiter(char, in_quotes):
             in_block += 1
-        elif char == "}" and not in_quotes:
+        elif _is_closing_delimiter(char, in_quotes):
             in_block -= 1
-        elif char == "," and not in_quotes and in_block == 0:
+
+        # Handle splits at commas
+        elif _should_split_here(char, in_quotes, in_block):
             parts.append(current_part.strip())
             current_part = ""
             continue
 
         current_part += char
 
+    # Add final part if not empty
     if current_part.strip():
         parts.append(current_part.strip())
 

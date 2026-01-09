@@ -1,4 +1,4 @@
-# Chef to Ansible migration - SousChef MCP 
+# Chef to Ansible migration - SousChef MCP
 
 An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 
@@ -228,6 +228,33 @@ generate_inspec_from_recipe /path/to/recipe.rb
 convert_inspec_to_test /path/to/inspec_profile testinfra
 ```
 
+### Performance Profiling & Optimization
+Profile cookbook parsing performance to identify bottlenecks and optimize large-scale migrations:
+
+```bash
+# Profile entire cookbook (all parsing operations)
+souschef-cli profile /path/to/cookbook
+
+# Save profiling report to file
+souschef-cli profile /path/to/cookbook --output profile_report.txt
+
+# Profile specific operations with detailed statistics
+souschef-cli profile-operation recipe /path/to/recipe.rb --detailed
+souschef-cli profile-operation attributes /path/to/attributes/default.rb
+souschef-cli profile-operation template /path/to/template.erb
+
+# MCP Tool Usage (from AI assistants)
+profile_cookbook_performance /path/to/large_cookbook
+profile_parsing_operation recipe /path/to/recipe.rb --detailed
+```
+
+**Features:**
+-  Execution time and peak memory tracking for all parsing operations
+-  Detailed cProfile statistics with top function calls
+-  Automatic performance recommendations based on thresholds
+-  Before/after comparison for optimization validation
+-  Integration with CLI and MCP for AI-assisted profiling
+
 ## Enterprise Features
 
 ### Migration Assessment & Reporting
@@ -419,7 +446,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Roadmap
 
-### Completed 
+### Completed ✅
 -  Complete Chef cookbook parsing (recipes, attributes, metadata, templates)
 -  InSpec profile parsing and conversion to Testinfra/Ansible tests
 -  Chef resource to Ansible task conversion with module mapping
@@ -437,12 +464,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -  Automated branch cleanup for release PRs
 -  Automated conversion validation and testing framework
 -  Chef Habitat to containerized deployment conversion (parse_habitat_plan, convert_habitat_to_dockerfile, generate_compose_from_habitat)
+-  Enhanced error handling with custom exceptions and actionable recovery suggestions
+-  Technical debt reduction - ALL PHASES COMPLETE: 16 functions refactored (15 C-grade eliminated, 70+ helpers extracted, average 77% complexity reduction, zero C-grade functions remaining)
+-  Performance profiling and optimization for large cookbooks (profiling module, CLI commands, MCP tools)
 
-### In Progress 
--  Enhanced error handling and user experience improvements
--  Documentation website and interactive examples
--  Performance optimizations for large-scale enterprise migrations
--  Technical debt reduction (15 functions tracked in [GitHub Issues](https://github.com/kpeacocke/souschef/issues?q=is%3Aissue+is%3Aopen+label%3Atechnical-debt))
+### In Progress 🚧
+-  Documentation website with MkDocs + Material theme
+-  Documentation content (Getting Started, Tool Reference, Migration Guide)
 
 ### Planned 📅
 - 📅 Integration with additional test frameworks (ServerSpec, Goss)

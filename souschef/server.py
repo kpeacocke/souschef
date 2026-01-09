@@ -27,6 +27,7 @@ from souschef.assessment import (
 
 # Import extracted modules
 # Import private helper functions still used in server.py
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.habitat import (  # noqa: F401
     _add_service_build,
     _add_service_dependencies,
@@ -48,6 +49,7 @@ from souschef.converters.habitat import (
 )
 
 # Re-exports of playbook internal functions for backward compatibility (tests)
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.playbook import (  # noqa: F401
     _add_general_recommendations,
     _convert_chef_block_to_ansible,
@@ -85,6 +87,8 @@ from souschef.converters.playbook import (
 from souschef.converters.playbook import (
     generate_playbook_from_recipe as _generate_playbook_from_recipe,
 )
+
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.resource import (  # noqa: F401
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
@@ -97,6 +101,7 @@ from souschef.converters.resource import (
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.constants import (  # noqa: F401
     ACTION_TO_STATE,
     ANSIBLE_SERVICE_MODULE,
@@ -106,16 +111,21 @@ from souschef.core.constants import (  # noqa: F401
 )
 
 # Import core utilities
+from souschef.core.errors import format_error_with_context
+
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.path_utils import _normalize_path, _safe_join  # noqa: F401
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.ruby_utils import (  # noqa: F401
     _normalize_ruby_value,
 )
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.validation import (  # noqa: F401
     ValidationCategory,
     ValidationEngine,
@@ -127,6 +137,7 @@ from souschef.core.validation import (  # noqa: F401
 # Re-exports of deployment internal functions for backward compatibility (tests)
 # Public re-exports of deployment functions for test backward compatibility
 # Note: MCP tool wrappers exist for some of these, but tests import directly
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.deployment import (  # noqa: F401
     _analyze_cookbook_for_awx,
     _analyze_cookbooks_directory,
@@ -180,6 +191,8 @@ from souschef.deployment import (
 # Import filesystem operations
 from souschef.filesystem import list_directory as _list_directory
 from souschef.filesystem import read_file as _read_file
+
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.attributes import (  # noqa: F401
     _extract_attributes,
     _format_attributes,
@@ -190,6 +203,8 @@ from souschef.parsers.attributes import (  # noqa: F401
 
 # Import parser functions
 from souschef.parsers.attributes import parse_attributes as _parse_attributes
+
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.habitat import (  # noqa: F401
     _extract_plan_array,
     _extract_plan_exports,
@@ -202,6 +217,7 @@ from souschef.parsers.habitat import (  # noqa: F401
 from souschef.parsers.habitat import parse_habitat_plan as _parse_habitat_plan
 
 # Re-export InSpec internal functions for backward compatibility (tests)
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.inspec import (  # noqa: F401
     _convert_inspec_to_ansible_assert,
     _convert_inspec_to_testinfra,
@@ -209,6 +225,8 @@ from souschef.parsers.inspec import (  # noqa: F401
     _generate_inspec_from_resource,
     _parse_inspec_control,
 )
+
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.metadata import (  # noqa: F401
     _extract_metadata,
     _format_cookbook_structure,
@@ -218,17 +236,23 @@ from souschef.parsers.metadata import (
     list_cookbook_structure as _list_cookbook_structure,
 )
 from souschef.parsers.metadata import read_cookbook_metadata as _read_cookbook_metadata
+
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.recipe import (  # noqa: F401
     _extract_conditionals,
     _extract_resources,
     _format_resources,
 )
 from souschef.parsers.recipe import parse_recipe as _parse_recipe
+
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.resource import (  # noqa: F401
     _extract_resource_actions,
     _extract_resource_properties,
 )
 from souschef.parsers.resource import parse_custom_resource as _parse_custom_resource
+
+# lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.template import (  # noqa: F401
     _convert_erb_to_jinja2,
     _extract_code_block_variables,
@@ -525,17 +549,30 @@ def parse_inspec_profile(path: str) -> str:
 
     """
     try:
+        # Validate input
+        if not path or not path.strip():
+            return (
+                "Error: Path cannot be empty\n\n"
+                "Suggestion: Provide a path to an InSpec profile directory or control file"
+            )
+
         profile_path = _normalize_path(path)
 
         if not profile_path.exists():
-            return f"Error: Path does not exist: {path}"
+            return (
+                f"Error: Path does not exist: {path}\n\n"
+                "Suggestion: Check that the path is correct and the InSpec profile exists"
+            )
 
         if profile_path.is_dir():
             controls = _parse_controls_from_directory(profile_path)
         elif profile_path.is_file():
             controls = _parse_controls_from_file(profile_path)
         else:
-            return f"Error: Invalid path type: {path}"
+            return (
+                f"Error: Invalid path type: {path}\n\n"
+                "Suggestion: Provide a directory or file path, not a special file type"
+            )
 
         return json.dumps(
             {
@@ -547,9 +584,9 @@ def parse_inspec_profile(path: str) -> str:
         )
 
     except (FileNotFoundError, RuntimeError) as e:
-        return f"Error: {e}"
+        return format_error_with_context(e, "parsing InSpec profile", path)
     except Exception as e:
-        return f"An error occurred while parsing InSpec profile: {e}"
+        return format_error_with_context(e, "parsing InSpec profile", path)
 
 
 @mcp.tool()
@@ -610,7 +647,9 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         return "\n".join(converted_tests)
 
     except Exception as e:
-        return f"An error occurred while converting InSpec: {e}"
+        return format_error_with_context(
+            e, f"converting InSpec to {output_format}", inspec_path
+        )
 
 
 def _extract_resources_from_parse_result(parse_result: str) -> list[dict[str, Any]]:
@@ -696,7 +735,9 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:
         return "\n".join(controls)
 
     except Exception as e:
-        return f"An error occurred while generating InSpec controls: {e}"
+        return format_error_with_context(
+            e, "generating InSpec controls from recipe", recipe_path
+        )
 
 
 @mcp.tool()
@@ -724,11 +765,34 @@ def convert_chef_databag_to_vars(
     try:
         import yaml
 
+        # Validate inputs
+        if not databag_content or not databag_content.strip():
+            return (
+                "Error: Databag content cannot be empty\n\n"
+                "Suggestion: Provide valid JSON content from a Chef data bag"
+            )
+
+        if not databag_name or not databag_name.strip():
+            return (
+                "Error: Databag name cannot be empty\n\n"
+                "Suggestion: Provide a valid data bag name"
+            )
+
+        valid_scopes = ["group_vars", "host_vars", "playbook"]
+        if target_scope not in valid_scopes:
+            return (
+                f"Error: Invalid target scope '{target_scope}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_scopes)}"
+            )
+
         # Parse the data bag content
         try:
             parsed_databag = json.loads(databag_content)
         except json.JSONDecodeError as e:
-            return f"Error: Invalid JSON format in data bag: {e}"
+            return (
+                f"Error: Invalid JSON format in data bag: {e}\n\n"
+                "Suggestion: Ensure the databag content is valid JSON"
+            )
 
         # Convert to Ansible variables format
         ansible_vars = _convert_databag_to_ansible_vars(
@@ -763,14 +827,95 @@ def convert_chef_databag_to_vars(
 {yaml_content.rstrip()}
 """
     except Exception as e:
-        return f"Error converting data bag to Ansible variables: {e}"
+        return format_error_with_context(
+            e, f"converting data bag '{databag_name}' to Ansible variables"
+        )
 
 
 @mcp.tool()
+def _validate_databags_directory(
+    databags_directory: str,
+) -> tuple[Path | None, str | None]:
+    """
+    Validate databags directory input.
+
+    Args:
+        databags_directory: Path to the data bags directory.
+
+    Returns:
+        Tuple of (normalized_path, error_message).
+        If validation succeeds: (Path, None)
+        If validation fails: (None, error_message)
+
+    """
+    if not databags_directory or not databags_directory.strip():
+        return None, (
+            "Error: Databags directory path cannot be empty\n\n"
+            "Suggestion: Provide the path to your Chef data_bags directory"
+        )
+
+    databags_path = _normalize_path(databags_directory)
+    if not databags_path.exists():
+        return None, (
+            f"Error: Data bags directory not found: {databags_directory}\n\n"
+            "Suggestion: Check that the path is correct and the directory exists"
+        )
+
+    if not databags_path.is_dir():
+        return None, (
+            f"Error: Path is not a directory: {databags_directory}\n\n"
+            "Suggestion: Provide a path to the data_bags directory"
+        )
+
+    return databags_path, None
+
+
+def _convert_databag_item(item_file, databag_name: str, output_directory: str) -> dict:
+    """Convert a single databag item file to Ansible format."""
+    item_name = item_file.stem
+
+    try:
+        with item_file.open() as f:
+            content = f.read()
+
+        # Detect if encrypted
+        is_encrypted = _detect_encrypted_databag(content)
+
+        # Convert to Ansible format
+        result = convert_chef_databag_to_vars(
+            content, databag_name, item_name, is_encrypted, output_directory
+        )
+
+        vault_suffix = "_vault" if is_encrypted else ""
+        target_file = f"{output_directory}/{databag_name}{vault_suffix}.yml"
+
+        return {
+            "databag": databag_name,
+            "item": item_name,
+            "encrypted": is_encrypted,
+            "target_file": target_file,
+            "content": result,
+        }
+
+    except Exception as e:
+        return {"databag": databag_name, "item": item_name, "error": str(e)}
+
+
+def _process_databag_directory(databag_dir, output_directory: str) -> list[dict]:
+    """Process all items in a single databag directory."""
+    results = []
+    databag_name = databag_dir.name
+
+    for item_file in databag_dir.glob("*.json"):
+        result = _convert_databag_item(item_file, databag_name, output_directory)
+        results.append(result)
+
+    return results
+
+
 def generate_ansible_vault_from_databags(
     databags_directory: str,
     output_directory: str = "group_vars",
-    encryption_key_hint: str = "",
 ) -> str:
     """
     Generate Ansible Vault files from Chef data bags directory.
@@ -778,16 +923,21 @@ def generate_ansible_vault_from_databags(
     Args:
         databags_directory: Path to Chef data_bags directory
         output_directory: Target directory for Ansible variables (group_vars/host_vars)
-        encryption_key_hint: Hint for identifying encrypted data bags
 
     Returns:
         Summary of converted data bags and instructions
 
     """
     try:
-        databags_path = _normalize_path(databags_directory)
-        if not databags_path.exists():
-            return f"Error: Data bags directory not found: {databags_directory}"
+        # Validate inputs
+        databags_path, error = _validate_databags_directory(databags_directory)
+        if error:
+            assert isinstance(error, str), "error must be string when present"
+            return error
+
+        assert databags_path is not None, (
+            "databags_path must be non-None after successful validation"
+        )
 
         conversion_results = []
 
@@ -796,40 +946,8 @@ def generate_ansible_vault_from_databags(
             if not databag_dir.is_dir():
                 continue
 
-            databag_name = databag_dir.name
-
-            # Process each item in the data bag
-            for item_file in databag_dir.glob("*.json"):
-                item_name = item_file.stem
-
-                try:
-                    with item_file.open() as f:
-                        content = f.read()
-
-                    # Detect if encrypted (Chef encrypted data bags have specific structure)
-                    is_encrypted = _detect_encrypted_databag(content)
-
-                    # Convert to Ansible format
-                    result = convert_chef_databag_to_vars(
-                        content, databag_name, item_name, is_encrypted, output_directory
-                    )
-
-                    vault_suffix = "_vault" if is_encrypted else ""
-                    target_file = f"{output_directory}/{databag_name}{vault_suffix}.yml"
-                    conversion_results.append(
-                        {
-                            "databag": databag_name,
-                            "item": item_name,
-                            "encrypted": is_encrypted,
-                            "target_file": target_file,
-                            "content": result,
-                        }
-                    )
-
-                except Exception as e:
-                    conversion_results.append(
-                        {"databag": databag_name, "item": item_name, "error": str(e)}
-                    )
+            results = _process_databag_directory(databag_dir, output_directory)
+            conversion_results.extend(results)
 
         # Generate summary and file structure
         return _generate_databag_conversion_summary(
@@ -837,7 +955,9 @@ def generate_ansible_vault_from_databags(
         )
 
     except Exception as e:
-        return f"Error processing data bags directory: {e}"
+        return format_error_with_context(
+            e, "processing data bags directory", databags_directory
+        )
 
 
 @mcp.tool()
@@ -891,7 +1011,7 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
 4. Encrypt sensitive data with ansible-vault
 """
     except Exception as e:
-        return f"Data bag parsing failed: {e}"
+        return format_error_with_context(e, "analyzing data bag usage", cookbook_path)
 
 
 @mcp.tool()
@@ -936,7 +1056,9 @@ def convert_chef_environment_to_inventory_group(
 # {environment_name}
 """
     except Exception as e:
-        return f"Environment conversion failed: {e}"
+        return format_error_with_context(
+            e, "converting Chef environment to inventory group", environment_name
+        )
 
 
 @mcp.tool()
@@ -994,7 +1116,9 @@ def generate_inventory_from_chef_environments(
         )
 
     except Exception as e:
-        return f"Error generating inventory from Chef environments: {e}"
+        return format_error_with_context(
+            e, "generating inventory from Chef environments", environments_directory
+        )
 
 
 @mcp.tool()
@@ -1053,7 +1177,9 @@ def analyze_chef_environment_usage(
 5. Test environment-specific deployments with new inventory structure
 """
     except Exception as e:
-        return f"Error analyzing Chef environment usage: {e}"
+        return format_error_with_context(
+            e, "analyzing Chef environment usage", cookbook_path
+        )
 
 
 def _parse_chef_environment_content(content: str) -> dict:
@@ -1196,18 +1322,27 @@ def _generate_inventory_group_from_environment(
     return yaml.dump(group_vars, default_flow_style=False, indent=2)
 
 
-def _generate_complete_inventory_from_environments(
-    environments: dict, results: list, output_format: str
-) -> str:
-    """Generate complete Ansible inventory from multiple Chef environments."""
-    import yaml
+def _build_conversion_summary(results: list) -> str:
+    """
+    Build summary of environment conversion results.
+
+    Args:
+        results: List of conversion result dicts
+
+    Returns:
+        Formatted summary string
+
+    """
+    total = len(results)
+    successful = len([r for r in results if r["status"] == "success"])
+    failed = len([r for r in results if r["status"] == "error"])
 
     summary = f"""# Chef Environments to Ansible Inventory Conversion
 
 ## Processing Summary:
-- Total environments processed: {len(results)}
-- Successfully converted: {len([r for r in results if r["status"] == "success"])}
-- Failed conversions: {len([r for r in results if r["status"] == "error"])}
+- Total environments processed: {total}
+- Successfully converted: {successful}
+- Failed conversions: {failed}
 
 ## Environment Details:
 """
@@ -1223,35 +1358,71 @@ def _generate_complete_inventory_from_environments(
         else:
             summary += f"❌ {result['environment']}: {result['error']}\n"
 
-    if output_format in ["yaml", "both"]:
-        summary += "\n## YAML Inventory Structure:\n\n```yaml\n"
+    return summary
 
-        # Generate YAML inventory
-        inventory: dict[str, Any] = {"all": {"children": {}}}
 
-        for env_name, env_data in environments.items():
-            inventory["all"]["children"][env_name] = {
-                "hosts": {},  # Hosts to be added manually
-                "vars": _flatten_environment_vars(env_data),
-            }
+def _generate_yaml_inventory(environments: dict) -> str:
+    """
+    Generate YAML format inventory from environments.
 
-        summary += yaml.dump(inventory, default_flow_style=False, indent=2)
-        summary += "```\n"
+    Args:
+        environments: Dict of environment name to data
 
-    if output_format in ["ini", "both"]:
-        summary += "\n## INI Inventory Structure:\n\n```ini\n"
-        summary += "[all:children]\n"
-        for env_name in environments:
-            summary += f"{env_name}\n"
+    Returns:
+        YAML inventory string
 
-        summary += "\n"
-        for env_name in environments:
-            summary += f"[{env_name}]\n"
-            summary += "# Add your hosts here\n\n"
+    """
+    import yaml
 
-        summary += "```\n"
+    inventory: dict[str, Any] = {"all": {"children": {}}}
 
-    summary += """
+    for env_name, env_data in environments.items():
+        inventory["all"]["children"][env_name] = {
+            "hosts": {},  # Hosts to be added manually
+            "vars": _flatten_environment_vars(env_data),
+        }
+
+    yaml_output = yaml.dump(inventory, default_flow_style=False, indent=2)
+    return f"\n## YAML Inventory Structure:\n\n```yaml\n{yaml_output}```\n"
+
+
+def _generate_ini_inventory(environments: dict) -> str:
+    """
+    Generate INI format inventory from environments.
+
+    Args:
+        environments: Dict of environment name to data
+
+    Returns:
+        INI inventory string
+
+    """
+    output = "\n## INI Inventory Structure:\n\n```ini\n"
+    output += "[all:children]\n"
+    for env_name in environments:
+        output += f"{env_name}\n"
+
+    output += "\n"
+    for env_name in environments:
+        output += f"[{env_name}]\n"
+        output += "# Add your hosts here\n\n"
+
+    output += "```\n"
+    return output
+
+
+def _generate_next_steps_guide(environments: dict) -> str:
+    """
+    Generate next steps and file structure guide.
+
+    Args:
+        environments: Dict of environment name to data
+
+    Returns:
+        Guide string
+
+    """
+    guide = """
 ## Next Steps:
 1. Create group_vars directory structure
 2. Add environment-specific variable files
@@ -1262,7 +1433,40 @@ def _generate_complete_inventory_from_environments(
 ## File Structure to Create:
 """
     for env_name in environments:
-        summary += f"- inventory/group_vars/{env_name}.yml\n"
+        guide += f"- inventory/group_vars/{env_name}.yml\n"
+
+    return guide
+
+
+def _generate_complete_inventory_from_environments(
+    environments: dict, results: list, output_format: str
+) -> str:
+    """
+    Generate complete Ansible inventory from multiple Chef environments.
+
+    Orchestrates summary, YAML/INI generation, and guidance.
+
+    Args:
+        environments: Dict of environment name to data
+        results: List of conversion results
+        output_format: Output format ("yaml", "ini", or "both")
+
+    Returns:
+        Complete formatted inventory with summary and guidance
+
+    """
+    # Build conversion summary
+    summary = _build_conversion_summary(results)
+
+    # Generate requested inventory formats
+    if output_format in ["yaml", "both"]:
+        summary += _generate_yaml_inventory(environments)
+
+    if output_format in ["ini", "both"]:
+        summary += _generate_ini_inventory(environments)
+
+    # Add next steps guide
+    summary += _generate_next_steps_guide(environments)
 
     return summary
 
@@ -1592,43 +1796,118 @@ def _detect_encrypted_databag(content: str) -> bool:
         return False
 
 
-def _generate_databag_conversion_summary(results: list, output_dir: str) -> str:
-    """Generate summary of data bag conversion results."""
-    total_bags = len(results)
-    successful = len([r for r in results if "error" not in r])
-    encrypted = len([r for r in results if r.get("encrypted", False)])
+def _calculate_conversion_statistics(results: list) -> dict[str, int]:
+    """
+    Calculate statistics from conversion results.
 
-    summary = f"""# Data Bag Conversion Summary
+    Args:
+        results: List of conversion result dictionaries.
+
+    Returns:
+        Dictionary with 'total', 'successful', and 'encrypted' counts.
+
+    """
+    return {
+        "total": len(results),
+        "successful": len([r for r in results if "error" not in r]),
+        "encrypted": len([r for r in results if r.get("encrypted", False)]),
+    }
+
+
+def _build_statistics_section(stats: dict[str, int]) -> str:
+    """
+    Build the statistics section of the summary.
+
+    Args:
+        stats: Dictionary with conversion statistics.
+
+    Returns:
+        Formatted statistics section as markdown.
+
+    """
+    return f"""# Data Bag Conversion Summary
 
 ## Statistics:
-- Total data bags processed: {total_bags}
-- Successfully converted: {successful}
-- Failed conversions: {total_bags - successful}
-- Encrypted data bags: {encrypted}
-
-## Generated Files:
+- Total data bags processed: {stats["total"]}
+- Successfully converted: {stats["successful"]}
+- Failed conversions: {stats["total"] - stats["successful"]}
+- Encrypted data bags: {stats["encrypted"]}
 """
+
+
+def _extract_generated_files(results: list) -> list[str]:
+    """
+    Extract unique generated file paths from results.
+
+    Args:
+        results: List of conversion result dictionaries.
+
+    Returns:
+        Sorted list of unique file paths.
+
+    """
     files_created = set()
     for result in results:
         if "error" not in result:
             target_file = result["target_file"]
             files_created.add(target_file)
+    return sorted(files_created)
 
-    for file in sorted(files_created):
-        summary += f"- {file}\n"
 
-    summary += "\n## Conversion Details:\n"
+def _build_files_section(files: list[str]) -> str:
+    """
+    Build the generated files section.
+
+    Args:
+        files: List of generated file paths.
+
+    Returns:
+        Formatted files section as markdown.
+
+    """
+    section = "\n## Generated Files:\n"
+    for file in files:
+        section += f"- {file}\n"
+    return section
+
+
+def _build_conversion_details_section(results: list) -> str:
+    """
+    Build the conversion details section.
+
+    Args:
+        results: List of conversion result dictionaries.
+
+    Returns:
+        Formatted conversion details section as markdown.
+
+    """
+    section = "\n## Conversion Details:\n"
 
     for result in results:
         if "error" in result:
-            summary += f"❌ {result['databag']}/{result['item']}: {result['error']}\n"
+            section += f"❌ {result['databag']}/{result['item']}: {result['error']}\n"
         else:
             status = "🔒 Encrypted" if result["encrypted"] else "📄 Plain"
             databag_item = f"{result['databag']}/{result['item']}"
             target = result["target_file"]
-            summary += f"✅ {databag_item} → {target} ({status})\n"
+            section += f"✅ {databag_item} → {target} ({status})\n"
 
-    summary += f"""
+    return section
+
+
+def _build_next_steps_section(output_dir: str) -> str:
+    """
+    Build the next steps section.
+
+    Args:
+        output_dir: Output directory path.
+
+    Returns:
+        Formatted next steps section as markdown.
+
+    """
+    return f"""
 ## Next Steps:
 1. Review generated variable files in {output_dir}/
 2. Encrypt vault files: `ansible-vault encrypt {output_dir}/*_vault.yml`
@@ -1636,7 +1915,29 @@ def _generate_databag_conversion_summary(results: list, output_dir: str) -> str:
 4. Test variable access in playbooks
 5. Remove original Chef data bags after validation
 """
-    return summary
+
+
+def _generate_databag_conversion_summary(results: list, output_dir: str) -> str:
+    """
+    Generate summary of data bag conversion results.
+
+    Args:
+        results: List of conversion result dictionaries.
+        output_dir: Output directory path.
+
+    Returns:
+        Complete formatted summary as markdown.
+
+    """
+    stats = _calculate_conversion_statistics(results)
+    files = _extract_generated_files(results)
+
+    return (
+        _build_statistics_section(stats)
+        + _build_files_section(files)
+        + _build_conversion_details_section(results)
+        + _build_next_steps_section(output_dir)
+    )
 
 
 def _extract_databag_usage_from_cookbook(cookbook_path) -> list:
@@ -1745,64 +2046,125 @@ def _analyze_databag_structure(databags_path) -> dict:
     return structure
 
 
+def _analyze_usage_patterns(usage_patterns: list) -> list[str]:
+    """
+    Analyze databag usage patterns and generate recommendations.
+
+    Args:
+        usage_patterns: List of usage pattern dicts
+
+    Returns:
+        List of recommendation strings
+
+    """
+    recommendations: list[str] = []
+
+    if not usage_patterns:
+        return recommendations
+
+    unique_databags = {
+        p.get("databag_name") for p in usage_patterns if p.get("databag_name")
+    }
+    recommendations.append(
+        f"• Found {len(usage_patterns)} data bag references "
+        f"across {len(unique_databags)} different data bags"
+    )
+
+    # Check for encrypted usage
+    encrypted_usage = [p for p in usage_patterns if "encrypted" in p.get("type", "")]
+    if encrypted_usage:
+        recommendations.append(
+            f"• {len(encrypted_usage)} encrypted data bag references "
+            f"- convert to Ansible Vault"
+        )
+
+    # Check for complex patterns
+    search_patterns = [p for p in usage_patterns if "search" in p.get("type", "")]
+    if search_patterns:
+        recommendations.append(
+            f"• {len(search_patterns)} search patterns involving data bags "
+            f"- may need inventory integration"
+        )
+
+    return recommendations
+
+
+def _analyze_databag_structure_recommendations(databag_structure: dict) -> list[str]:
+    """
+    Analyze databag structure and generate recommendations.
+
+    Args:
+        databag_structure: Dict with structure analysis
+
+    Returns:
+        List of recommendation strings
+
+    """
+    recommendations: list[str] = []
+
+    if not databag_structure:
+        return recommendations
+
+    total_bags = databag_structure.get("total_databags", 0)
+    encrypted_items = databag_structure.get("encrypted_items", 0)
+
+    if total_bags > 0:
+        recommendations.append(
+            f"• Convert {total_bags} data bags to group_vars/host_vars structure"
+        )
+
+    if encrypted_items > 0:
+        recommendations.append(
+            f"• {encrypted_items} encrypted items need Ansible Vault conversion"
+        )
+
+    return recommendations
+
+
+def _get_variable_scope_recommendations() -> list[str]:
+    """
+    Get standard variable scope recommendations.
+
+    Returns:
+        List of recommendation strings
+
+    """
+    return [
+        "• Use group_vars/ for environment-specific data (production, staging)",
+        "• Use host_vars/ for node-specific configurations",
+        "• Consider splitting large data bags into logical variable files",
+        "• Implement variable precedence hierarchy matching Chef environments",
+    ]
+
+
 def _generate_databag_migration_recommendations(
     usage_patterns: list, databag_structure: dict
 ) -> str:
-    """Generate migration recommendations based on usage analysis."""
+    """
+    Generate migration recommendations based on usage analysis.
+
+    Combines usage pattern analysis, structure analysis, and best practices.
+
+    Args:
+        usage_patterns: List of databag usage patterns
+        databag_structure: Dict with databag structure info
+
+    Returns:
+        Formatted recommendations string
+
+    """
     recommendations = []
 
     # Analyze usage patterns
-    if usage_patterns:
-        unique_databags = {
-            p.get("databag_name") for p in usage_patterns if p.get("databag_name")
-        }
-        recommendations.append(
-            f"• Found {len(usage_patterns)} data bag references "
-            f"across {len(unique_databags)} different data bags"
-        )
-
-        # Check for encrypted usage
-        encrypted_usage = [
-            p for p in usage_patterns if "encrypted" in p.get("type", "")
-        ]
-        if encrypted_usage:
-            recommendations.append(
-                f"• {len(encrypted_usage)} encrypted data bag references "
-                f"- convert to Ansible Vault"
-            )
-
-        # Check for complex patterns
-        search_patterns = [p for p in usage_patterns if "search" in p.get("type", "")]
-        if search_patterns:
-            recommendations.append(
-                f"• {len(search_patterns)} search patterns involving data bags "
-                f"- may need inventory integration"
-            )
+    recommendations.extend(_analyze_usage_patterns(usage_patterns))
 
     # Analyze structure
-    if databag_structure:
-        total_bags = databag_structure.get("total_databags", 0)
-        encrypted_items = databag_structure.get("encrypted_items", 0)
-
-        if total_bags > 0:
-            recommendations.append(
-                f"• Convert {total_bags} data bags to group_vars/host_vars structure"
-            )
-
-        if encrypted_items > 0:
-            recommendations.append(
-                f"• {encrypted_items} encrypted items need Ansible Vault conversion"
-            )
-
-    # Variable scope recommendations
     recommendations.extend(
-        [
-            "• Use group_vars/ for environment-specific data (production, staging)",
-            "• Use host_vars/ for node-specific configurations",
-            "• Consider splitting large data bags into logical variable files",
-            "• Implement variable precedence hierarchy matching Chef environments",
-        ]
+        _analyze_databag_structure_recommendations(databag_structure)
     )
+
+    # Add variable scope best practices
+    recommendations.extend(_get_variable_scope_recommendations())
 
     return "\n".join(recommendations)
 
@@ -2116,6 +2478,84 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
 
     """
     return _analyze_chef_search_patterns(recipe_or_cookbook_path)
+
+
+@mcp.tool()
+def profile_cookbook_performance(cookbook_path: str) -> str:
+    """
+    Profile cookbook parsing performance and generate optimization report.
+
+    Analyzes the performance of parsing all cookbook components (recipes,
+    attributes, resources, templates) and provides recommendations for
+    optimization. Useful for large cookbooks or batch processing operations.
+
+    Args:
+        cookbook_path: Path to the Chef cookbook to profile.
+
+    Returns:
+        Formatted performance report with timing, memory usage, and recommendations.
+
+    """
+    from souschef.profiling import generate_cookbook_performance_report
+
+    try:
+        report = generate_cookbook_performance_report(cookbook_path)
+        return str(report)
+    except Exception as e:
+        return format_error_with_context(
+            e, "profiling cookbook performance", cookbook_path
+        )
+
+
+@mcp.tool()
+def profile_parsing_operation(
+    operation: str, file_path: str, detailed: bool = False
+) -> str:
+    """
+    Profile a single parsing operation with detailed performance metrics.
+
+    Measures execution time, memory usage, and optionally provides detailed
+    function call statistics for a specific parsing operation.
+
+    Args:
+        operation: Type of operation to profile ('recipe', 'attributes', 'resource', 'template').
+        file_path: Path to the file to parse.
+        detailed: If True, include detailed function call statistics.
+
+    Returns:
+        Performance metrics for the operation.
+
+    """
+    from souschef.profiling import detailed_profile_function, profile_function
+
+    operation_map = {
+        "recipe": parse_recipe,
+        "attributes": parse_attributes,
+        "resource": parse_custom_resource,
+        "template": parse_template,
+    }
+
+    if operation not in operation_map:
+        return (
+            f"Error: Invalid operation '{operation}'\n\n"
+            f"Supported operations: {', '.join(operation_map.keys())}"
+        )
+
+    func = operation_map[operation]
+
+    try:
+        if detailed:
+            _, profile_result = detailed_profile_function(func, file_path)
+            result = str(profile_result)
+            if profile_result.function_stats.get("top_functions"):
+                result += "\n\nDetailed Function Statistics:\n"
+                result += profile_result.function_stats["top_functions"]
+            return result
+        else:
+            _, profile_result = profile_function(func, file_path)
+            return str(profile_result)
+    except Exception as e:
+        return format_error_with_context(e, f"profiling {operation} parsing", file_path)
 
 
 # AWX/AAP deployment wrappers for backward compatibility

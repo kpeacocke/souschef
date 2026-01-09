@@ -41,6 +41,7 @@ jobs:
       uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       if: steps.check-token.outputs.has_token == 'true'
       with:
+        ref: ${{ github.event.workflow_run.head_sha }}
         fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}
