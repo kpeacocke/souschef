@@ -9,15 +9,16 @@ on:
       - 'docs/**'
       - 'examples/**'
       - 'LICENSE'
-  pull_request:
-    branches:
-      - main
-      - develop
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'examples/**'
-      - 'LICENSE'
+  # Disabled: Snyk test limit reached, only run on main branch pushes
+  # pull_request:
+  #   branches:
+  #     - main
+  #     - develop
+  #   paths-ignore:
+  #     - '**.md'
+  #     - 'docs/**'
+  #     - 'examples/**'
+  #     - 'LICENSE'
   schedule:
     # Run weekly on Monday at 2 AM UTC
     - cron: '0 2 * * 1'
