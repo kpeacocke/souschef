@@ -13172,8 +13172,6 @@ def test_nginx(host):
         )
 
         # Should be valid JSON
-        import json
-
         data = json.loads(result)
         assert "summary" in data
         assert "results" in data
