@@ -91,6 +91,39 @@ def _get_service_params(resource_name: str, action: str) -> dict[str, Any]:
     return params
 
 
+def _get_template_file_params(resource_name: str, action: str) -> dict[str, Any]:
+    """Get parameters for template resources."""
+    params = {
+        "src": resource_name,
+        "dest": resource_name.replace(".erb", ""),
+    }
+    if action == "create":
+        params["mode"] = "0644"
+    return params
+
+
+def _get_regular_file_params(resource_name: str, action: str) -> dict[str, Any]:
+    """Get parameters for regular file resources."""
+    params: dict[str, Any] = {"path": resource_name}
+    if action == "create":
+        params["state"] = "file"
+        params["mode"] = "0644"
+    else:
+        params["state"] = ACTION_TO_STATE.get(action, action)
+    return params
+
+
+def _get_directory_params(resource_name: str, action: str) -> dict[str, Any]:
+    """Get parameters for directory resources."""
+    params: dict[str, Any] = {
+        "path": resource_name,
+        "state": "directory",
+    }
+    if action == "create":
+        params["mode"] = "0755"
+    return params
+
+
 def _get_file_params(
     resource_name: str, action: str, resource_type: str
 ) -> dict[str, Any]:
@@ -106,27 +139,13 @@ def _get_file_params(
         Dictionary of Ansible file parameters.
 
     """
-    params: dict[str, Any] = {}
-
     if resource_type == "template":
-        params["src"] = resource_name
-        params["dest"] = resource_name.replace(".erb", "")
-        if action == "create":
-            params["mode"] = "0644"
+        return _get_template_file_params(resource_name, action)
     elif resource_type == "file":
-        params["path"] = resource_name
-        if action == "create":
-            params["state"] = "file"
-            params["mode"] = "0644"
-        else:
-            params["state"] = ACTION_TO_STATE.get(action, action)
+        return _get_regular_file_params(resource_name, action)
     elif resource_type == "directory":
-        params["path"] = resource_name
-        params["state"] = "directory"
-        if action == "create":
-            params["mode"] = "0755"
-
-    return params
+        return _get_directory_params(resource_name, action)
+    return {}
 
 
 def _get_package_params(
