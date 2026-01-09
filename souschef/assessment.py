@@ -37,104 +37,33 @@ def assess_chef_migration_complexity(
     """
     try:
         # Validate inputs
-        if not cookbook_paths or not cookbook_paths.strip():
-            return (
-                "Error: Cookbook paths cannot be empty\n\n"
-                "Suggestion: Provide comma-separated paths to Chef cookbooks"
-            )
+        error_msg = _validate_assessment_inputs(
+            cookbook_paths, migration_scope, target_platform
+        )
+        if error_msg:
+            return error_msg
 
-        valid_scopes = ["full", "recipes_only", "infrastructure_only"]
-        if migration_scope not in valid_scopes:
-            return (
-                f"Error: Invalid migration scope '{migration_scope}'\n\n"
-                f"Suggestion: Use one of {', '.join(valid_scopes)}"
-            )
+        # Parse cookbook paths (may be empty if none exist)
+        valid_paths = _parse_cookbook_paths(cookbook_paths)
 
-        valid_platforms = ["ansible_awx", "ansible_core", "ansible_tower"]
-        if target_platform not in valid_platforms:
-            return (
-                f"Error: Invalid target platform '{target_platform}'\n\n"
-                f"Suggestion: Use one of {', '.join(valid_platforms)}"
-            )
+        # Analyze all cookbooks (handles empty list gracefully)
+        cookbook_assessments, overall_metrics = _analyze_cookbook_metrics(valid_paths)
 
-        # Parse cookbook paths
-        paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
-
-        # Validate at least one valid path
-        valid_paths = [p for p in paths if p.exists()]
-        if not valid_paths:
-            invalid_paths = ", ".join(str(p) for p in paths)
-            return (
-                f"Error: No valid cookbook paths found\n\n"
-                f"Checked: {invalid_paths}\n\n"
-                "Suggestion: Ensure paths exist and point to Chef cookbook directories"
-            )
-
-        # Assess each cookbook
-        cookbook_assessments = []
-        overall_metrics = {
-            "total_cookbooks": 0,
-            "total_recipes": 0,
-            "total_resources": 0,
-            "complexity_score": 0,
-            "estimated_effort_days": 0,
-        }
-
-        for cookbook_path in valid_paths:
-            # deepcode ignore PT: path normalized via _normalize_path
-            assessment = _assess_single_cookbook(cookbook_path)
-            cookbook_assessments.append(assessment)
-
-            # Aggregate metrics
-            overall_metrics["total_cookbooks"] += 1
-            overall_metrics["total_recipes"] += assessment["metrics"]["recipe_count"]
-            overall_metrics["total_resources"] += assessment["metrics"][
-                "resource_count"
-            ]
-            overall_metrics["complexity_score"] += assessment["complexity_score"]
-            overall_metrics["estimated_effort_days"] += assessment[
-                "estimated_effort_days"
-            ]
-
-        # Calculate averages
-        if cookbook_assessments:
-            overall_metrics["avg_complexity"] = int(
-                overall_metrics["complexity_score"] / len(cookbook_assessments)
-            )
-
-        # Generate migration recommendations
+        # Generate recommendations and reports
         recommendations = _generate_migration_recommendations_from_assessment(
             cookbook_assessments, overall_metrics, target_platform
         )
-
-        # Create migration roadmap
         roadmap = _create_migration_roadmap(cookbook_assessments)
 
-        return f"""# Chef to Ansible Migration Assessment
-# Scope: {migration_scope}
-# Target Platform: {target_platform}
-
-## Overall Migration Metrics:
-{_format_overall_metrics(overall_metrics)}
-
-## Cookbook Assessments:
-{_format_cookbook_assessments(cookbook_assessments)}
-
-## Migration Complexity Analysis:
-{_format_complexity_analysis(cookbook_assessments)}
-
-## Migration Recommendations:
-{recommendations}
-
-## Migration Roadmap:
-{roadmap}
-
-## Risk Assessment:
-{_assess_migration_risks(cookbook_assessments, target_platform)}
-
-## Resource Requirements:
-{_estimate_resource_requirements(overall_metrics, target_platform)}
-"""
+        # Format final assessment report
+        return _format_assessment_report(
+            migration_scope,
+            target_platform,
+            overall_metrics,
+            cookbook_assessments,
+            recommendations,
+            roadmap,
+        )
     except Exception as e:
         return format_error_with_context(
             e, "assessing Chef migration complexity", cookbook_paths
@@ -423,6 +352,153 @@ def validate_conversion(
 
 
 # Private helper functions for assessment
+
+
+def _validate_assessment_inputs(
+    cookbook_paths: str, migration_scope: str, target_platform: str
+) -> str | None:
+    """
+    Validate inputs for migration assessment.
+
+    Args:
+        cookbook_paths: Paths to cookbooks
+        migration_scope: Scope of migration
+        target_platform: Target platform
+
+    Returns:
+        Error message if validation fails, None otherwise
+
+    """
+    if not cookbook_paths or not cookbook_paths.strip():
+        return (
+            "Error: Cookbook paths cannot be empty\n\n"
+            "Suggestion: Provide comma-separated paths to Chef cookbooks"
+        )
+
+    valid_scopes = ["full", "recipes_only", "infrastructure_only"]
+    if migration_scope not in valid_scopes:
+        return (
+            f"Error: Invalid migration scope '{migration_scope}'\n\n"
+            f"Suggestion: Use one of {', '.join(valid_scopes)}"
+        )
+
+    valid_platforms = ["ansible_awx", "ansible_core", "ansible_tower"]
+    if target_platform not in valid_platforms:
+        return (
+            f"Error: Invalid target platform '{target_platform}'\n\n"
+            f"Suggestion: Use one of {', '.join(valid_platforms)}"
+        )
+
+    return None
+
+
+def _parse_cookbook_paths(cookbook_paths: str) -> list[Any]:
+    """
+    Parse and validate cookbook paths.
+
+    Args:
+        cookbook_paths: Comma-separated paths to cookbooks
+
+    Returns:
+        List of valid Path objects (may be empty)
+
+    """
+    paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
+    valid_paths = [p for p in paths if p.exists()]
+    return valid_paths
+
+
+def _analyze_cookbook_metrics(
+    valid_paths: list[Any],
+) -> tuple[list[Any], dict[str, int]]:
+    """
+    Analyze metrics for all cookbooks.
+
+    Args:
+        valid_paths: List of valid cookbook paths
+
+    Returns:
+        Tuple of (cookbook_assessments, overall_metrics)
+
+    """
+    cookbook_assessments = []
+    overall_metrics = {
+        "total_cookbooks": 0,
+        "total_recipes": 0,
+        "total_resources": 0,
+        "complexity_score": 0,
+        "estimated_effort_days": 0,
+    }
+
+    for cookbook_path in valid_paths:
+        # deepcode ignore PT: path normalized via _normalize_path
+        assessment = _assess_single_cookbook(cookbook_path)
+        cookbook_assessments.append(assessment)
+
+        # Aggregate metrics
+        overall_metrics["total_cookbooks"] += 1
+        overall_metrics["total_recipes"] += assessment["metrics"]["recipe_count"]
+        overall_metrics["total_resources"] += assessment["metrics"]["resource_count"]
+        overall_metrics["complexity_score"] += assessment["complexity_score"]
+        overall_metrics["estimated_effort_days"] += assessment["estimated_effort_days"]
+
+    # Calculate averages
+    if cookbook_assessments:
+        overall_metrics["avg_complexity"] = int(
+            overall_metrics["complexity_score"] / len(cookbook_assessments)
+        )
+
+    return cookbook_assessments, overall_metrics
+
+
+def _format_assessment_report(
+    migration_scope: str,
+    target_platform: str,
+    overall_metrics: dict[str, int],
+    cookbook_assessments: list[Any],
+    recommendations: str,
+    roadmap: str,
+) -> str:
+    """
+    Format the final assessment report.
+
+    Args:
+        migration_scope: Scope of migration
+        target_platform: Target platform
+        overall_metrics: Overall metrics dictionary
+        cookbook_assessments: List of cookbook assessments
+        recommendations: Migration recommendations
+        roadmap: Migration roadmap
+
+    Returns:
+        Formatted report string
+
+    """
+    return f"""# Chef to Ansible Migration Assessment
+# Scope: {migration_scope}
+# Target Platform: {target_platform}
+
+## Overall Migration Metrics:
+{_format_overall_metrics(overall_metrics)}
+
+## Cookbook Assessments:
+{_format_cookbook_assessments(cookbook_assessments)}
+
+## Migration Complexity Analysis:
+{_format_complexity_analysis(cookbook_assessments)}
+
+## Migration Recommendations:
+{recommendations}
+
+## Migration Roadmap:
+{roadmap}
+
+## Risk Assessment:
+{_assess_migration_risks(cookbook_assessments, target_platform)}
+
+## Resource Requirements:
+{_estimate_resource_requirements(overall_metrics, target_platform)}
+"""
 
 
 def _assess_single_cookbook(cookbook_path) -> dict:
