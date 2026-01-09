@@ -63,6 +63,24 @@ testpaths = [
     "tests",
 ]
 
+[tool.coverage.run]
+source = ["souschef"]
+relative_files = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+]
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
 [tool.mutmut]
 backup = false
 
