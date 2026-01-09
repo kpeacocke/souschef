@@ -1890,64 +1890,125 @@ def _analyze_databag_structure(databags_path) -> dict:
     return structure
 
 
+def _analyze_usage_patterns(usage_patterns: list) -> list[str]:
+    """
+    Analyze databag usage patterns and generate recommendations.
+
+    Args:
+        usage_patterns: List of usage pattern dicts
+
+    Returns:
+        List of recommendation strings
+
+    """
+    recommendations: list[str] = []
+
+    if not usage_patterns:
+        return recommendations
+
+    unique_databags = {
+        p.get("databag_name") for p in usage_patterns if p.get("databag_name")
+    }
+    recommendations.append(
+        f"• Found {len(usage_patterns)} data bag references "
+        f"across {len(unique_databags)} different data bags"
+    )
+
+    # Check for encrypted usage
+    encrypted_usage = [p for p in usage_patterns if "encrypted" in p.get("type", "")]
+    if encrypted_usage:
+        recommendations.append(
+            f"• {len(encrypted_usage)} encrypted data bag references "
+            f"- convert to Ansible Vault"
+        )
+
+    # Check for complex patterns
+    search_patterns = [p for p in usage_patterns if "search" in p.get("type", "")]
+    if search_patterns:
+        recommendations.append(
+            f"• {len(search_patterns)} search patterns involving data bags "
+            f"- may need inventory integration"
+        )
+
+    return recommendations
+
+
+def _analyze_databag_structure_recommendations(databag_structure: dict) -> list[str]:
+    """
+    Analyze databag structure and generate recommendations.
+
+    Args:
+        databag_structure: Dict with structure analysis
+
+    Returns:
+        List of recommendation strings
+
+    """
+    recommendations: list[str] = []
+
+    if not databag_structure:
+        return recommendations
+
+    total_bags = databag_structure.get("total_databags", 0)
+    encrypted_items = databag_structure.get("encrypted_items", 0)
+
+    if total_bags > 0:
+        recommendations.append(
+            f"• Convert {total_bags} data bags to group_vars/host_vars structure"
+        )
+
+    if encrypted_items > 0:
+        recommendations.append(
+            f"• {encrypted_items} encrypted items need Ansible Vault conversion"
+        )
+
+    return recommendations
+
+
+def _get_variable_scope_recommendations() -> list[str]:
+    """
+    Get standard variable scope recommendations.
+
+    Returns:
+        List of recommendation strings
+
+    """
+    return [
+        "• Use group_vars/ for environment-specific data (production, staging)",
+        "• Use host_vars/ for node-specific configurations",
+        "• Consider splitting large data bags into logical variable files",
+        "• Implement variable precedence hierarchy matching Chef environments",
+    ]
+
+
 def _generate_databag_migration_recommendations(
     usage_patterns: list, databag_structure: dict
 ) -> str:
-    """Generate migration recommendations based on usage analysis."""
+    """
+    Generate migration recommendations based on usage analysis.
+
+    Combines usage pattern analysis, structure analysis, and best practices.
+
+    Args:
+        usage_patterns: List of databag usage patterns
+        databag_structure: Dict with databag structure info
+
+    Returns:
+        Formatted recommendations string
+
+    """
     recommendations = []
 
     # Analyze usage patterns
-    if usage_patterns:
-        unique_databags = {
-            p.get("databag_name") for p in usage_patterns if p.get("databag_name")
-        }
-        recommendations.append(
-            f"• Found {len(usage_patterns)} data bag references "
-            f"across {len(unique_databags)} different data bags"
-        )
-
-        # Check for encrypted usage
-        encrypted_usage = [
-            p for p in usage_patterns if "encrypted" in p.get("type", "")
-        ]
-        if encrypted_usage:
-            recommendations.append(
-                f"• {len(encrypted_usage)} encrypted data bag references "
-                f"- convert to Ansible Vault"
-            )
-
-        # Check for complex patterns
-        search_patterns = [p for p in usage_patterns if "search" in p.get("type", "")]
-        if search_patterns:
-            recommendations.append(
-                f"• {len(search_patterns)} search patterns involving data bags "
-                f"- may need inventory integration"
-            )
+    recommendations.extend(_analyze_usage_patterns(usage_patterns))
 
     # Analyze structure
-    if databag_structure:
-        total_bags = databag_structure.get("total_databags", 0)
-        encrypted_items = databag_structure.get("encrypted_items", 0)
-
-        if total_bags > 0:
-            recommendations.append(
-                f"• Convert {total_bags} data bags to group_vars/host_vars structure"
-            )
-
-        if encrypted_items > 0:
-            recommendations.append(
-                f"• {encrypted_items} encrypted items need Ansible Vault conversion"
-            )
-
-    # Variable scope recommendations
     recommendations.extend(
-        [
-            "• Use group_vars/ for environment-specific data (production, staging)",
-            "• Use host_vars/ for node-specific configurations",
-            "• Consider splitting large data bags into logical variable files",
-            "• Implement variable precedence hierarchy matching Chef environments",
-        ]
+        _analyze_databag_structure_recommendations(databag_structure)
     )
+
+    # Add variable scope best practices
+    recommendations.extend(_get_variable_scope_recommendations())
 
     return "\n".join(recommendations)
 
