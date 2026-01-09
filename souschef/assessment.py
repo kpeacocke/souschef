@@ -552,25 +552,33 @@ def _format_assessment_report(
 """
 
 
-def _assess_single_cookbook(cookbook_path) -> dict:
-    """Assess complexity of a single cookbook."""
-    cookbook = _normalize_path(cookbook_path)
-    assessment: dict[str, Any] = {
-        "cookbook_name": cookbook.name,
-        "cookbook_path": str(cookbook),
-        "metrics": {},
-        "complexity_score": 0,
-        "estimated_effort_days": 0,
-        "challenges": [],
-        "migration_priority": "medium",
-        "dependencies": [],
-    }
-
-    # Count recipes and resources
-    recipes_dir = _safe_join(cookbook, "recipes")
+def _count_cookbook_artifacts(cookbook_path) -> dict[str, int]:
+    """Count basic cookbook artifacts (recipes, templates, files)."""
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    # Analyze recipe complexity
+    templates_count = (
+        len(list(_safe_join(cookbook_path, "templates").glob("*")))
+        if _safe_join(cookbook_path, "templates").exists()
+        else 0
+    )
+
+    files_count = (
+        len(list(_safe_join(cookbook_path, "files").glob("*")))
+        if _safe_join(cookbook_path, "files").exists()
+        else 0
+    )
+
+    return {
+        "recipe_count": recipe_count,
+        "templates": templates_count,
+        "files": files_count,
+    }
+
+
+def _analyze_recipe_complexity(cookbook_path) -> dict[str, int]:
+    """Analyze recipe files for resource counts, Ruby blocks, and custom resources."""
+    recipes_dir = _safe_join(cookbook_path, "recipes")
     resource_count = 0
     custom_resources = 0
     ruby_blocks = 0
@@ -580,7 +588,6 @@ def _assess_single_cookbook(cookbook_path) -> dict:
             with recipe_file.open("r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
                 # Count Chef resources
-
                 resources = len(
                     re.findall(r'\w{1,100}\s+[\'"]([^\'"]{0,200})[\'"]\s+do', content)
                 )
@@ -594,57 +601,85 @@ def _assess_single_cookbook(cookbook_path) -> dict:
                 )
                 resource_count += resources
 
-    assessment["metrics"] = {
-        "recipe_count": recipe_count,
+    return {
         "resource_count": resource_count,
         "custom_resources": custom_resources,
         "ruby_blocks": ruby_blocks,
-        "templates": len(list(_safe_join(cookbook, "templates").glob("*")))
-        if _safe_join(cookbook, "templates").exists()
-        else 0,
-        "files": len(list(_safe_join(cookbook, "files").glob("*")))
-        if _safe_join(cookbook, "files").exists()
-        else 0,
     }
 
-    # Calculate complexity score (0-100)
+
+def _calculate_complexity_score(metrics: dict[str, int]) -> int:
+    """Calculate complexity score (0-100) based on metrics."""
+    recipe_count = metrics["recipe_count"]
+    resource_count = metrics["resource_count"]
+
     complexity_factors = {
         "recipe_count": min(recipe_count * 2, 20),
         "resource_density": min(resource_count / max(recipe_count, 1) * 5, 25),
-        "custom_resources": custom_resources * 10,
-        "ruby_blocks": ruby_blocks * 5,
-        "templates": min(assessment["metrics"]["templates"] * 2, 15),
-        "files": min(assessment["metrics"]["files"] * 1, 10),
+        "custom_resources": metrics["custom_resources"] * 10,
+        "ruby_blocks": metrics["ruby_blocks"] * 5,
+        "templates": min(metrics["templates"] * 2, 15),
+        "files": min(metrics["files"] * 1, 10),
     }
 
-    assessment["complexity_score"] = sum(complexity_factors.values())
+    return int(sum(complexity_factors.values()))
 
-    # Estimate effort (person-days)
-    base_effort = recipe_count * 0.5  # 0.5 days per recipe
-    complexity_multiplier = 1 + (assessment["complexity_score"] / 100)
-    assessment["estimated_effort_days"] = round(base_effort * complexity_multiplier, 1)
 
-    # Identify challenges
-    if custom_resources > 0:
-        assessment["challenges"].append(
-            f"{custom_resources} custom resources requiring manual conversion"
+def _identify_migration_challenges(
+    metrics: dict[str, int], complexity_score: int
+) -> list[str]:
+    """Identify migration challenges based on metrics."""
+    challenges = []
+
+    if metrics["custom_resources"] > 0:
+        challenges.append(
+            f"{metrics['custom_resources']} custom resources requiring manual conversion"
         )
-    if ruby_blocks > 5:
-        assessment["challenges"].append(
-            f"{ruby_blocks} Ruby blocks needing shell script conversion"
+    if metrics["ruby_blocks"] > 5:
+        challenges.append(
+            f"{metrics['ruby_blocks']} Ruby blocks needing shell script conversion"
         )
-    if assessment["complexity_score"] > 70:
-        assessment["challenges"].append(
-            "High complexity cookbook requiring expert review"
-        )
+    if complexity_score > 70:
+        challenges.append("High complexity cookbook requiring expert review")
 
-    # Set migration priority
-    if assessment["complexity_score"] < 30:
-        assessment["migration_priority"] = "low"
-    elif assessment["complexity_score"] > 70:
-        assessment["migration_priority"] = "high"
+    return challenges
 
-    return assessment
+
+def _determine_migration_priority(complexity_score: int) -> str:
+    """Determine migration priority based on complexity score."""
+    if complexity_score < 30:
+        return "low"
+    elif complexity_score > 70:
+        return "high"
+    return "medium"
+
+
+def _assess_single_cookbook(cookbook_path) -> dict:
+    """Assess complexity of a single cookbook."""
+    cookbook = _normalize_path(cookbook_path)
+
+    # Collect metrics
+    artifact_counts = _count_cookbook_artifacts(cookbook)
+    recipe_complexity = _analyze_recipe_complexity(cookbook)
+    metrics = {**artifact_counts, **recipe_complexity}
+
+    # Calculate complexity and effort
+    complexity_score = _calculate_complexity_score(metrics)
+    base_effort = metrics["recipe_count"] * 0.5  # 0.5 days per recipe
+    complexity_multiplier = 1 + (complexity_score / 100)
+    estimated_effort = round(base_effort * complexity_multiplier, 1)
+
+    # Build assessment
+    return {
+        "cookbook_name": cookbook.name,
+        "cookbook_path": str(cookbook),
+        "metrics": metrics,
+        "complexity_score": complexity_score,
+        "estimated_effort_days": estimated_effort,
+        "challenges": _identify_migration_challenges(metrics, complexity_score),
+        "migration_priority": _determine_migration_priority(complexity_score),
+        "dependencies": [],
+    }
 
 
 def _format_overall_metrics(metrics: dict) -> str:
