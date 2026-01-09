@@ -38,6 +38,18 @@ from souschef.core.constants import (
     REGEX_WORD_SYMBOLS,
     RESOURCE_MAPPINGS,
 )
+from souschef.core.errors import (
+    ChefFileNotFoundError,
+    ConversionError,
+    InvalidCookbookError,
+    ParseError,
+    SousChefError,
+    ValidationError,
+    format_error_with_context,
+    validate_cookbook_structure,
+    validate_directory_exists,
+    validate_file_exists,
+)
 from souschef.core.path_utils import _normalize_path, _safe_join
 from souschef.core.ruby_utils import _normalize_ruby_value
 from souschef.core.validation import (
@@ -55,4 +67,14 @@ __all__ = [
     "ValidationEngine",
     "ValidationLevel",
     "ValidationResult",
+    "SousChefError",
+    "ChefFileNotFoundError",
+    "InvalidCookbookError",
+    "ParseError",
+    "ConversionError",
+    "ValidationError",
+    "validate_file_exists",
+    "validate_directory_exists",
+    "validate_cookbook_structure",
+    "format_error_with_context",
 ]

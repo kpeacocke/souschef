@@ -16,7 +16,12 @@ from souschef.core.constants import (
     CHEF_ROLE_PREFIX,
     METADATA_FILENAME,
 )
-from souschef.core.path_utils import _normalize_path, _safe_join
+from souschef.core.errors import (
+    format_error_with_context,
+    validate_cookbook_structure,
+    validate_directory_exists,
+)
+from souschef.core.path_utils import _safe_join
 
 # Maximum length for attribute values in Chef attribute parsing
 # Prevents ReDoS attacks from extremely long attribute declarations
@@ -38,10 +43,14 @@ def generate_awx_job_template_from_cookbook(
     Survey specs auto-generated from cookbook attributes when include_survey=True.
     """
     try:
-        cookbook = _normalize_path(cookbook_path)
-        if not cookbook.exists():
-            return f"Cookbook not found at {cookbook_path}"
+        # Validate inputs
+        if not cookbook_name or not cookbook_name.strip():
+            return (
+                "Error: Cookbook name cannot be empty\n\n"
+                "Suggestion: Provide a valid cookbook name"
+            )
 
+        cookbook = validate_cookbook_structure(cookbook_path)
         cookbook_analysis = _analyze_cookbook_for_awx(cookbook, cookbook_name)
         job_template = _generate_awx_job_template(
             cookbook_analysis, cookbook_name, target_environment, include_survey
@@ -71,7 +80,9 @@ awx-cli job_templates create \\
 {_format_cookbook_analysis(cookbook_analysis)}
 """
     except Exception as e:
-        return f"AWX template generation failed for {cookbook_name}: {e}"
+        return format_error_with_context(
+            e, f"generating AWX job template for {cookbook_name}", cookbook_path
+        )
 
 
 def generate_awx_workflow_from_chef_runlist(
@@ -84,8 +95,29 @@ def generate_awx_workflow_from_chef_runlist(
     Workflows preserve runlist execution order with success/failure paths.
     """
     try:
+        # Validate inputs
+        if not runlist_content or not runlist_content.strip():
+            return (
+                "Error: Runlist content cannot be empty\n\n"
+                "Suggestion: Provide a valid Chef runlist "
+                "(e.g., 'recipe[cookbook::recipe]' or JSON array)"
+            )
+
+        if not workflow_name or not workflow_name.strip():
+            return (
+                "Error: Workflow name cannot be empty\n\n"
+                "Suggestion: Provide a descriptive name for the AWX workflow"
+            )
+
         # Parse runlist
         runlist = _parse_chef_runlist(runlist_content)
+
+        if not runlist:
+            return (
+                "Error: Runlist parsing resulted in no items\n\n"
+                "Suggestion: Check runlist format. Expected 'recipe[name]' "
+                "or 'role[name]' entries"
+            )
 
         # Generate workflow template
         workflow_template = _generate_awx_workflow_template(
@@ -115,7 +147,9 @@ def generate_awx_workflow_from_chef_runlist(
 4. Test execution with survey parameters
 """
     except Exception as e:
-        return f"Workflow generation failed: {e}"
+        return format_error_with_context(
+            e, f"generating AWX workflow from runlist for {workflow_name}"
+        )
 
 
 def generate_awx_project_from_cookbooks(
@@ -138,9 +172,16 @@ def generate_awx_project_from_cookbooks(
 
     """
     try:
-        cookbooks_path = _normalize_path(cookbooks_directory)
-        if not cookbooks_path.exists():
-            return f"Error: Cookbooks directory not found: {cookbooks_directory}"
+        # Validate inputs
+        if not project_name or not project_name.strip():
+            return (
+                "Error: Project name cannot be empty\n\n"
+                "Suggestion: Provide a descriptive name for the AWX project"
+            )
+
+        cookbooks_path = validate_directory_exists(
+            cookbooks_directory, "cookbooks directory"
+        )
 
         # Analyze all cookbooks
         cookbooks_analysis = _analyze_cookbooks_directory(cookbooks_path)
@@ -181,7 +222,11 @@ def generate_awx_project_from_cookbooks(
 5. Set up inventories and credentials
 """
     except Exception as e:
-        return f"Project configuration failed: {e}"
+        return format_error_with_context(
+            e,
+            f"generating AWX project configuration for {project_name}",
+            cookbooks_directory,
+        )
 
 
 def generate_awx_inventory_source_from_chef(
@@ -200,6 +245,20 @@ def generate_awx_inventory_source_from_chef(
 
     """
     try:
+        # Validate inputs
+        if not chef_server_url or not chef_server_url.strip():
+            return (
+                "Error: Chef server URL cannot be empty\n\n"
+                "Suggestion: Provide a valid Chef server URL "
+                "(e.g., https://chef.example.com)"
+            )
+
+        if not chef_server_url.startswith(("http://", "https://")):
+            return (
+                f"Error: Invalid Chef server URL: {chef_server_url}\n\n"
+                "Suggestion: URL must start with http:// or https://"
+            )
+
         # Generate inventory source configuration
         inventory_source = _generate_chef_inventory_source(
             chef_server_url, sync_schedule
@@ -240,7 +299,9 @@ def generate_awx_inventory_source_from_chef(
 - CHEF_CLIENT_KEY: ${{{{chef_client_key}}}}
 """
     except Exception as e:
-        return f"Inventory source generation failed: {e}"
+        return format_error_with_context(
+            e, "generating AWX inventory source from Chef server", chef_server_url
+        )
 
 
 # Deployment Strategy Functions
@@ -256,9 +317,15 @@ def convert_chef_deployment_to_ansible_strategy(
     Override auto-detection by specifying explicit pattern.
     """
     try:
-        cookbook = _normalize_path(cookbook_path)
-        if not cookbook.exists():
-            return f"Error: Cookbook path not found: {cookbook_path}"
+        cookbook = validate_cookbook_structure(cookbook_path)
+
+        # Validate deployment pattern
+        valid_patterns = ["auto", "blue_green", "canary", "rolling_update"]
+        if deployment_pattern not in valid_patterns:
+            return (
+                f"Error: Invalid deployment pattern '{deployment_pattern}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_patterns)}"
+            )
 
         # Analyze Chef deployment pattern
         pattern_analysis = _analyze_chef_deployment_pattern(cookbook)
@@ -289,7 +356,9 @@ def convert_chef_deployment_to_ansible_strategy(
 {_generate_deployment_migration_recommendations(pattern_analysis)}
 """
     except Exception as e:
-        return f"Deployment pattern conversion failed: {e}"
+        return format_error_with_context(
+            e, "converting Chef deployment pattern to Ansible strategy", cookbook_path
+        )
 
 
 def generate_blue_green_deployment_playbook(
@@ -307,6 +376,21 @@ def generate_blue_green_deployment_playbook(
 
     """
     try:
+        # Validate inputs
+        if not app_name or not app_name.strip():
+            return (
+                "Error: Application name cannot be empty\n\n"
+                "Suggestion: Provide a descriptive name for the application "
+                "being deployed"
+            )
+
+        if not health_check_url.startswith("/"):
+            return (
+                f"Error: Health check URL must be a path starting with '/': "
+                f"{health_check_url}\n\n"
+                "Suggestion: Use a relative path like '/health' or '/api/health'"
+            )
+
         # Generate main deployment playbook
         playbook = _generate_blue_green_playbook(app_name, health_check_url)
 
@@ -347,7 +431,9 @@ def generate_blue_green_deployment_playbook(
 - Blue and green environments provisioned
 """
     except Exception as e:
-        return f"Failed to generate blue/green playbook: {e}"
+        return format_error_with_context(
+            e, f"generating blue/green deployment playbook for {app_name}"
+        )
 
 
 def generate_canary_deployment_strategy(
@@ -360,8 +446,36 @@ def generate_canary_deployment_strategy(
     Includes monitoring checks and automatic rollback on failure.
     """
     try:
+        # Validate inputs
+        if not app_name or not app_name.strip():
+            return (
+                "Error: Application name cannot be empty\n\n"
+                "Suggestion: Provide a descriptive name for the application"
+            )
+
+        if not (1 <= canary_percentage <= 100):
+            return (
+                f"Error: Canary percentage must be between 1 and 100, "
+                f"got {canary_percentage}\n\n"
+                "Suggestion: Start with 10% for safety"
+            )
+
         # Parse rollout steps
-        steps = [int(s.strip()) for s in rollout_steps.split(",")]
+        try:
+            steps = [int(s.strip()) for s in rollout_steps.split(",")]
+            if not all(1 <= s <= 100 for s in steps):
+                raise ValueError("Steps must be between 1 and 100")
+            if steps != sorted(steps):
+                return (
+                    f"Error: Rollout steps must be in ascending order: "
+                    f"{rollout_steps}\n\n"
+                    "Suggestion: Use format like '10,25,50,100'"
+                )
+        except ValueError as e:
+            return (
+                f"Error: Invalid rollout steps '{rollout_steps}': {e}\n\n"
+                "Suggestion: Use comma-separated percentages like '10,25,50,100'"
+            )
 
         # Generate canary strategy
         strategy = _generate_canary_strategy(app_name, canary_percentage, steps)
@@ -414,7 +528,9 @@ def generate_canary_deployment_strategy(
 - Manual trigger
 """
     except Exception as e:
-        return f"Canary deployment generation failed: {e}"
+        return format_error_with_context(
+            e, f"generating canary deployment strategy for {app_name}"
+        )
 
 
 def analyze_chef_application_patterns(
@@ -427,9 +543,15 @@ def analyze_chef_application_patterns(
     Application type helps tune recommendations for web/database/service workloads.
     """
     try:
-        cookbook = _normalize_path(cookbook_path)
-        if not cookbook.exists():
-            return f"Error: Cookbook path not found: {cookbook_path}"
+        cookbook = validate_cookbook_structure(cookbook_path)
+
+        # Validate application type
+        valid_app_types = ["web_application", "database", "service", "batch", "api"]
+        if application_type not in valid_app_types:
+            return (
+                f"Error: Invalid application type '{application_type}'\n\n"
+                f"Suggestion: Use one of {', '.join(valid_app_types)}"
+            )
 
         # Analyze cookbook for application patterns
         analysis = _analyze_application_cookbook(cookbook, application_type)
@@ -460,7 +582,11 @@ def analyze_chef_application_patterns(
 5. Document lessons learned and iterate
 """
     except Exception as e:
-        return f"Couldn't analyze cookbook patterns: {e}"
+        return format_error_with_context(
+            e,
+            f"analyzing Chef application patterns for {application_type}",
+            cookbook_path,
+        )
 
 
 # AWX Helper Functions
