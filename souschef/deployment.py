@@ -1838,16 +1838,19 @@ def _generate_deployment_migration_recommendations(
     return "\n".join(recommendations)
 
 
-def _recommend_ansible_strategies(patterns: dict) -> str:
-    """Recommend appropriate Ansible strategies."""
-    strategies: list[str] = []
-
-    # Handle both formats: list of dicts with 'type' key or list of strings
+def _extract_detected_patterns(patterns: dict) -> list[str]:
+    """Extract detected patterns from patterns dictionary."""
     pattern_list = patterns.get("deployment_patterns", [])
     if pattern_list and isinstance(pattern_list[0], dict):
-        detected_patterns = [p["type"] for p in pattern_list]
-    else:
-        detected_patterns = pattern_list
+        return [p["type"] for p in pattern_list]
+    return pattern_list
+
+
+def _build_deployment_strategy_recommendations(
+    detected_patterns: list[str],
+) -> list[str]:
+    """Build deployment strategy recommendations based on detected patterns."""
+    strategies: list[str] = []
 
     if "blue_green" in detected_patterns:
         strategies.append(
@@ -1860,7 +1863,15 @@ def _recommend_ansible_strategies(patterns: dict) -> str:
             "• Rolling Update: Balanced approach with configurable parallelism"
         )
 
-    # Application-pattern specific strategies
+    return strategies
+
+
+def _build_application_strategy_recommendations(
+    detected_patterns: list[str],
+) -> list[str]:
+    """Build application-pattern specific strategy recommendations."""
+    strategies: list[str] = []
+
     if "package_management" in detected_patterns:
         strategies.append("• Package: Use `package` module for package installation")
     if "configuration_management" in detected_patterns:
@@ -1870,11 +1881,26 @@ def _recommend_ansible_strategies(patterns: dict) -> str:
     if "source_deployment" in detected_patterns:
         strategies.append("• Source: Use `git` module for source code deployment")
 
+    return strategies
+
+
+def _get_default_strategy_recommendations() -> list[str]:
+    """Get default strategy recommendations when no patterns detected."""
+    return [
+        "• Rolling Update: Recommended starting strategy",
+        "• Blue/Green: For critical applications requiring zero downtime",
+        "• Canary: For high-risk deployments requiring validation",
+    ]
+
+
+def _recommend_ansible_strategies(patterns: dict) -> str:
+    """Recommend appropriate Ansible strategies."""
+    detected_patterns = _extract_detected_patterns(patterns)
+
+    strategies = _build_deployment_strategy_recommendations(detected_patterns)
+    strategies.extend(_build_application_strategy_recommendations(detected_patterns))
+
     if not strategies:
-        strategies = [
-            "• Rolling Update: Recommended starting strategy",
-            "• Blue/Green: For critical applications requiring zero downtime",
-            "• Canary: For high-risk deployments requiring validation",
-        ]
+        strategies = _get_default_strategy_recommendations()
 
     return "\n".join(strategies)
