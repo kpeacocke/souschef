@@ -592,77 +592,146 @@ def analyze_chef_application_patterns(
 # AWX Helper Functions
 
 
-def _analyze_cookbook_for_awx(cookbook_path: Path, cookbook_name: str) -> dict:
-    """Analyze Chef cookbook structure for AWX job template generation."""
-    analysis: dict[str, Any] = {
-        "name": cookbook_name,
-        "recipes": [],
-        "attributes": {},
-        "dependencies": [],
-        "templates": [],
-        "files": [],
-        "survey_fields": [],
-    }
+def _analyze_recipes(cookbook_path: Path) -> list[dict[str, Any]]:
+    """
+    Analyze recipes directory for AWX job steps.
 
-    # Check for recipes to convert into AWX job steps
+    Args:
+        cookbook_path: Path to cookbook root
+
+    Returns:
+        List of recipe metadata dicts
+
+    """
+    recipes = []
     recipes_dir = _safe_join(cookbook_path, "recipes")
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
-            recipe_name = recipe_file.stem
-            analysis["recipes"].append(
+            recipes.append(
                 {
-                    "name": recipe_name,
+                    "name": recipe_file.stem,
                     "file": str(recipe_file),
                     "size": recipe_file.stat().st_size,
                 }
             )
+    return recipes
 
-    # Analyze attributes for survey generation
+
+def _analyze_attributes_for_survey(
+    cookbook_path: Path,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """
+    Analyze attributes directory for survey field generation.
+
+    Args:
+        cookbook_path: Path to cookbook root
+
+    Returns:
+        Tuple of (attributes dict, survey fields list)
+
+    """
+    attributes = {}
+    survey_fields = []
     attributes_dir = _safe_join(cookbook_path, "attributes")
+
     if attributes_dir.exists():
         for attr_file in attributes_dir.glob("*.rb"):
             try:
                 with attr_file.open("r") as f:
                     content = f.read()
 
-                # Extract attribute declarations for survey
-                attributes = _extract_cookbook_attributes(content)
-                analysis["attributes"].update(attributes)
+                # Extract attribute declarations
+                attrs = _extract_cookbook_attributes(content)
+                attributes.update(attrs)
 
-                # Generate survey fields from attributes
-                survey_fields = _generate_survey_fields_from_attributes(attributes)
-                analysis["survey_fields"].extend(survey_fields)
+                # Generate survey fields
+                fields = _generate_survey_fields_from_attributes(attrs)
+                survey_fields.extend(fields)
 
             except Exception:
                 # Silently skip malformed attribute files
                 pass
 
-    # Analyze dependencies
+    return attributes, survey_fields
+
+
+def _analyze_metadata_dependencies(cookbook_path: Path) -> list[str]:
+    """
+    Extract cookbook dependencies from metadata.
+
+    Args:
+        cookbook_path: Path to cookbook root
+
+    Returns:
+        List of dependency names
+
+    """
     metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
     if metadata_file.exists():
         try:
             with metadata_file.open("r") as f:
                 content = f.read()
-
-            dependencies = _extract_cookbook_dependencies(content)
-            analysis["dependencies"] = dependencies
-
+            return _extract_cookbook_dependencies(content)
         except Exception:
-            # Silently skip malformed metadata
             pass
+    return []
 
-    # Count templates and files
+
+def _collect_static_files(cookbook_path: Path) -> tuple[list[str], list[str]]:
+    """
+    Collect templates and static files from cookbook.
+
+    Args:
+        cookbook_path: Path to cookbook root
+
+    Returns:
+        Tuple of (template names list, file names list)
+
+    """
+    templates = []
+    files = []
+
     templates_dir = _safe_join(cookbook_path, "templates")
     if templates_dir.exists():
-        analysis["templates"] = [
-            f.name for f in templates_dir.rglob("*") if f.is_file()
-        ]
+        templates = [f.name for f in templates_dir.rglob("*") if f.is_file()]
 
     files_dir = _safe_join(cookbook_path, "files")
     if files_dir.exists():
-        analysis["files"] = [f.name for f in files_dir.rglob("*") if f.is_file()]
+        files = [f.name for f in files_dir.rglob("*") if f.is_file()]
 
-    return analysis
+    return templates, files
+
+
+def _analyze_cookbook_for_awx(cookbook_path: Path, cookbook_name: str) -> dict:
+    """
+    Analyze Chef cookbook structure for AWX job template generation.
+
+    Orchestrates multiple analysis helpers to build comprehensive cookbook metadata.
+
+    Args:
+        cookbook_path: Path to cookbook root
+        cookbook_name: Name of the cookbook
+
+    Returns:
+        Analysis dict with recipes, attributes, dependencies, templates, files, surveys
+
+    """
+    # Analyze each dimension independently
+    recipes = _analyze_recipes(cookbook_path)
+    attributes, survey_fields = _analyze_attributes_for_survey(cookbook_path)
+    dependencies = _analyze_metadata_dependencies(cookbook_path)
+    templates, files = _collect_static_files(cookbook_path)
+
+    # Assemble complete analysis
+    return {
+        "name": cookbook_name,
+        "recipes": recipes,
+        "attributes": attributes,
+        "dependencies": dependencies,
+        "templates": templates,
+        "files": files,
+        "survey_fields": survey_fields,
+    }
 
 
 def _generate_awx_job_template(
