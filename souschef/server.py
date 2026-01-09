@@ -1263,18 +1263,27 @@ def _generate_inventory_group_from_environment(
     return yaml.dump(group_vars, default_flow_style=False, indent=2)
 
 
-def _generate_complete_inventory_from_environments(
-    environments: dict, results: list, output_format: str
-) -> str:
-    """Generate complete Ansible inventory from multiple Chef environments."""
-    import yaml
+def _build_conversion_summary(results: list) -> str:
+    """
+    Build summary of environment conversion results.
+
+    Args:
+        results: List of conversion result dicts
+
+    Returns:
+        Formatted summary string
+
+    """
+    total = len(results)
+    successful = len([r for r in results if r["status"] == "success"])
+    failed = len([r for r in results if r["status"] == "error"])
 
     summary = f"""# Chef Environments to Ansible Inventory Conversion
 
 ## Processing Summary:
-- Total environments processed: {len(results)}
-- Successfully converted: {len([r for r in results if r["status"] == "success"])}
-- Failed conversions: {len([r for r in results if r["status"] == "error"])}
+- Total environments processed: {total}
+- Successfully converted: {successful}
+- Failed conversions: {failed}
 
 ## Environment Details:
 """
@@ -1290,35 +1299,71 @@ def _generate_complete_inventory_from_environments(
         else:
             summary += f"❌ {result['environment']}: {result['error']}\n"
 
-    if output_format in ["yaml", "both"]:
-        summary += "\n## YAML Inventory Structure:\n\n```yaml\n"
+    return summary
 
-        # Generate YAML inventory
-        inventory: dict[str, Any] = {"all": {"children": {}}}
 
-        for env_name, env_data in environments.items():
-            inventory["all"]["children"][env_name] = {
-                "hosts": {},  # Hosts to be added manually
-                "vars": _flatten_environment_vars(env_data),
-            }
+def _generate_yaml_inventory(environments: dict) -> str:
+    """
+    Generate YAML format inventory from environments.
 
-        summary += yaml.dump(inventory, default_flow_style=False, indent=2)
-        summary += "```\n"
+    Args:
+        environments: Dict of environment name to data
 
-    if output_format in ["ini", "both"]:
-        summary += "\n## INI Inventory Structure:\n\n```ini\n"
-        summary += "[all:children]\n"
-        for env_name in environments:
-            summary += f"{env_name}\n"
+    Returns:
+        YAML inventory string
 
-        summary += "\n"
-        for env_name in environments:
-            summary += f"[{env_name}]\n"
-            summary += "# Add your hosts here\n\n"
+    """
+    import yaml
 
-        summary += "```\n"
+    inventory: dict[str, Any] = {"all": {"children": {}}}
 
-    summary += """
+    for env_name, env_data in environments.items():
+        inventory["all"]["children"][env_name] = {
+            "hosts": {},  # Hosts to be added manually
+            "vars": _flatten_environment_vars(env_data),
+        }
+
+    yaml_output = yaml.dump(inventory, default_flow_style=False, indent=2)
+    return f"\n## YAML Inventory Structure:\n\n```yaml\n{yaml_output}```\n"
+
+
+def _generate_ini_inventory(environments: dict) -> str:
+    """
+    Generate INI format inventory from environments.
+
+    Args:
+        environments: Dict of environment name to data
+
+    Returns:
+        INI inventory string
+
+    """
+    output = "\n## INI Inventory Structure:\n\n```ini\n"
+    output += "[all:children]\n"
+    for env_name in environments:
+        output += f"{env_name}\n"
+
+    output += "\n"
+    for env_name in environments:
+        output += f"[{env_name}]\n"
+        output += "# Add your hosts here\n\n"
+
+    output += "```\n"
+    return output
+
+
+def _generate_next_steps_guide(environments: dict) -> str:
+    """
+    Generate next steps and file structure guide.
+
+    Args:
+        environments: Dict of environment name to data
+
+    Returns:
+        Guide string
+
+    """
+    guide = """
 ## Next Steps:
 1. Create group_vars directory structure
 2. Add environment-specific variable files
@@ -1329,7 +1374,40 @@ def _generate_complete_inventory_from_environments(
 ## File Structure to Create:
 """
     for env_name in environments:
-        summary += f"- inventory/group_vars/{env_name}.yml\n"
+        guide += f"- inventory/group_vars/{env_name}.yml\n"
+
+    return guide
+
+
+def _generate_complete_inventory_from_environments(
+    environments: dict, results: list, output_format: str
+) -> str:
+    """
+    Generate complete Ansible inventory from multiple Chef environments.
+
+    Orchestrates summary, YAML/INI generation, and guidance.
+
+    Args:
+        environments: Dict of environment name to data
+        results: List of conversion results
+        output_format: Output format ("yaml", "ini", or "both")
+
+    Returns:
+        Complete formatted inventory with summary and guidance
+
+    """
+    # Build conversion summary
+    summary = _build_conversion_summary(results)
+
+    # Generate requested inventory formats
+    if output_format in ["yaml", "both"]:
+        summary += _generate_yaml_inventory(environments)
+
+    if output_format in ["ini", "both"]:
+        summary += _generate_ini_inventory(environments)
+
+    # Add next steps guide
+    summary += _generate_next_steps_guide(environments)
 
     return summary
 
