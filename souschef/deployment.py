@@ -436,51 +436,123 @@ def generate_blue_green_deployment_playbook(
         )
 
 
-def generate_canary_deployment_strategy(
-    app_name: str, canary_percentage: int = 10, rollout_steps: str = "10,25,50,100"
+def _validate_canary_inputs(
+    app_name: str, canary_percentage: int, rollout_steps: str
+) -> tuple[list[int] | None, str | None]:
+    """
+    Validate canary deployment inputs.
+
+    Args:
+        app_name: Application name
+        canary_percentage: Initial canary percentage
+        rollout_steps: Comma-separated rollout steps
+
+    Returns:
+        Tuple of (parsed steps list, error message). If error, steps is None.
+
+    """
+    # Validate app name
+    if not app_name or not app_name.strip():
+        return None, (
+            "Error: Application name cannot be empty\n\n"
+            "Suggestion: Provide a descriptive name for the application"
+        )
+
+    # Validate canary percentage
+    if not (1 <= canary_percentage <= 100):
+        return None, (
+            f"Error: Canary percentage must be between 1 and 100, "
+            f"got {canary_percentage}\n\n"
+            "Suggestion: Start with 10% for safety"
+        )
+
+    # Parse and validate rollout steps
+    try:
+        steps = [int(s.strip()) for s in rollout_steps.split(",")]
+        if not all(1 <= s <= 100 for s in steps):
+            raise ValueError("Steps must be between 1 and 100")
+        if steps != sorted(steps):
+            return None, (
+                f"Error: Rollout steps must be in ascending order: {rollout_steps}\n\n"
+                "Suggestion: Use format like '10,25,50,100'"
+            )
+        return steps, None
+    except ValueError as e:
+        return None, (
+            f"Error: Invalid rollout steps '{rollout_steps}': {e}\n\n"
+            "Suggestion: Use comma-separated percentages like '10,25,50,100'"
+        )
+
+
+def _build_canary_workflow_guide(
+    app_name: str, canary_percentage: int, steps: list[int]
 ) -> str:
     """
-    Generate canary deployment with progressive rollout.
+    Build deployment workflow guide.
 
-    Starts at canary_percentage, progresses through rollout_steps.
-    Includes monitoring checks and automatic rollback on failure.
+    Args:
+        app_name: Application name
+        canary_percentage: Initial canary percentage
+        steps: List of rollout step percentages
+
+    Returns:
+        Formatted workflow guide
+
     """
-    try:
-        # Validate inputs
-        if not app_name or not app_name.strip():
-            return (
-                "Error: Application name cannot be empty\n\n"
-                "Suggestion: Provide a descriptive name for the application"
-            )
+    workflow = f"""## Deployment Workflow:
+1. Deploy canary at {canary_percentage}%: `ansible-playbook deploy_canary.yml`
+2. Monitor metrics: `ansible-playbook monitor_canary.yml`
+3. Progressive rollout: `ansible-playbook progressive_rollout.yml`
+"""
 
-        if not (1 <= canary_percentage <= 100):
-            return (
-                f"Error: Canary percentage must be between 1 and 100, "
-                f"got {canary_percentage}\n\n"
-                "Suggestion: Start with 10% for safety"
-            )
+    # Add step details
+    for i, step_pct in enumerate(steps, 1):
+        workflow += f"   - Step {i}: {step_pct}% traffic"
+        if i == len(steps):
+            workflow += " (full rollout)"
+        workflow += "\n"
 
-        # Parse rollout steps
-        try:
-            steps = [int(s.strip()) for s in rollout_steps.split(",")]
-            if not all(1 <= s <= 100 for s in steps):
-                raise ValueError("Steps must be between 1 and 100")
-            if steps != sorted(steps):
-                return (
-                    f"Error: Rollout steps must be in ascending order: "
-                    f"{rollout_steps}\n\n"
-                    "Suggestion: Use format like '10,25,50,100'"
-                )
-        except ValueError as e:
-            return (
-                f"Error: Invalid rollout steps '{rollout_steps}': {e}\n\n"
-                "Suggestion: Use comma-separated percentages like '10,25,50,100'"
-            )
+    workflow += """4. Rollback if issues: `ansible-playbook rollback_canary.yml`
 
-        # Generate canary strategy
-        strategy = _generate_canary_strategy(app_name, canary_percentage, steps)
+## Monitoring Points:
+- Error rate comparison (canary vs stable)
+- Response time percentiles (p50, p95, p99)
+- Resource utilization (CPU, memory)
+- Custom business metrics
 
-        return f"""# Canary Deployment Strategy
+## Rollback Triggers:
+- Error rate increase > 5%
+- Response time degradation > 20%
+- Failed health checks
+- Manual trigger
+"""
+    return workflow
+
+
+def _format_canary_output(
+    app_name: str,
+    canary_percentage: int,
+    rollout_steps: str,
+    steps: list[int],
+    strategy: dict,
+) -> str:
+    """
+    Format complete canary deployment output.
+
+    Args:
+        app_name: Application name
+        canary_percentage: Initial canary percentage
+        rollout_steps: Original rollout steps string
+        steps: Parsed rollout steps
+        strategy: Generated strategy dict
+
+    Returns:
+        Formatted output string
+
+    """
+    workflow = _build_canary_workflow_guide(app_name, canary_percentage, steps)
+
+    return f"""# Canary Deployment Strategy
 # Application: {app_name}
 # Initial Canary: {canary_percentage}%
 # Rollout Steps: {rollout_steps}
@@ -505,28 +577,47 @@ def generate_canary_deployment_strategy(
 {strategy["rollback"]}
 ```
 
-## Deployment Workflow:
-1. Deploy canary at {canary_percentage}%: `ansible-playbook deploy_canary.yml`
-2. Monitor metrics: `ansible-playbook monitor_canary.yml`
-3. Progressive rollout: `ansible-playbook progressive_rollout.yml`
-   - Step 1: {steps[0]}% traffic
-   - Step 2: {steps[1]}% traffic
-   - Step 3: {steps[2]}% traffic
-   - Step 4: {steps[3]}% traffic (full rollout)
-4. Rollback if issues: `ansible-playbook rollback_canary.yml`
+{workflow}"""
 
-## Monitoring Points:
-- Error rate comparison (canary vs stable)
-- Response time percentiles (p50, p95, p99)
-- Resource utilization (CPU, memory)
-- Custom business metrics
 
-## Rollback Triggers:
-- Error rate increase > 5%
-- Response time degradation > 20%
-- Failed health checks
-- Manual trigger
-"""
+def generate_canary_deployment_strategy(
+    app_name: str, canary_percentage: int = 10, rollout_steps: str = "10,25,50,100"
+) -> str:
+    """
+    Generate canary deployment with progressive rollout.
+
+    Starts at canary_percentage, progresses through rollout_steps.
+    Includes monitoring checks and automatic rollback on failure.
+
+    Args:
+        app_name: Name of the application
+        canary_percentage: Initial canary traffic percentage (1-100)
+        rollout_steps: Comma-separated progressive rollout steps
+
+    Returns:
+        Formatted canary deployment strategy with playbooks
+
+    """
+    try:
+        # Validate inputs
+        steps, error = _validate_canary_inputs(
+            app_name, canary_percentage, rollout_steps
+        )
+        if error:
+            return error
+
+        # Generate canary strategy
+        strategy = _generate_canary_strategy(app_name, canary_percentage, steps)  # type: ignore
+
+        # Format output
+        return _format_canary_output(
+            app_name,
+            canary_percentage,
+            rollout_steps,
+            steps,
+            strategy,  # type: ignore
+        )
+
     except Exception as e:
         return format_error_with_context(
             e, f"generating canary deployment strategy for {app_name}"
