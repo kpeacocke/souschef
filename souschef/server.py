@@ -893,7 +893,6 @@ def _process_databag_directory(databag_dir, output_directory: str) -> list[dict]
 def generate_ansible_vault_from_databags(
     databags_directory: str,
     output_directory: str = "group_vars",
-    encryption_key_hint: str = "",
 ) -> str:
     """
     Generate Ansible Vault files from Chef data bags directory.
@@ -901,7 +900,6 @@ def generate_ansible_vault_from_databags(
     Args:
         databags_directory: Path to Chef data_bags directory
         output_directory: Target directory for Ansible variables (group_vars/host_vars)
-        encryption_key_hint: Hint for identifying encrypted data bags
 
     Returns:
         Summary of converted data bags and instructions

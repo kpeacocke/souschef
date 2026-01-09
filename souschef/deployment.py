@@ -484,14 +484,11 @@ def _validate_canary_inputs(
         )
 
 
-def _build_canary_workflow_guide(
-    app_name: str, canary_percentage: int, steps: list[int]
-) -> str:
+def _build_canary_workflow_guide(canary_percentage: int, steps: list[int]) -> str:
     """
     Build deployment workflow guide.
 
     Args:
-        app_name: Application name
         canary_percentage: Initial canary percentage
         steps: List of rollout step percentages
 
@@ -550,7 +547,7 @@ def _format_canary_output(
         Formatted output string
 
     """
-    workflow = _build_canary_workflow_guide(app_name, canary_percentage, steps)
+    workflow = _build_canary_workflow_guide(canary_percentage, steps)
 
     return f"""# Canary Deployment Strategy
 # Application: {app_name}

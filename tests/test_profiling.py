@@ -60,7 +60,7 @@ class TestProfileFunction:
         """Test profiling with custom operation name."""
         recipe_path = FIXTURES_DIR / "sample_cookbook" / "recipes" / "default.rb"
 
-        result, profile = profile_function(
+        _, profile = profile_function(
             parse_recipe, str(recipe_path), operation_name="custom_parse"
         )
 
@@ -87,9 +87,7 @@ class TestDetailedProfileFunction:
         """Test detailed profiling with custom top_n parameter."""
         recipe_path = FIXTURES_DIR / "sample_cookbook" / "recipes" / "default.rb"
 
-        result, profile = detailed_profile_function(
-            parse_recipe, str(recipe_path), top_n=10
-        )
+        _, profile = detailed_profile_function(parse_recipe, str(recipe_path), top_n=10)
 
         assert profile.function_stats["top_functions"]
 
@@ -126,7 +124,7 @@ class TestPerformanceReport:
         )
 
         assert report.cookbook_name == "test_cookbook"
-        assert report.total_time == 5.0
+        assert abs(report.total_time - 5.0) < 0.001
         assert len(report.operation_results) == 0
         assert len(report.recommendations) == 0
 

@@ -1,4 +1,4 @@
-# Chef to Ansible migration - SousChef MCP 
+# Chef to Ansible migration - SousChef MCP
 
 An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 

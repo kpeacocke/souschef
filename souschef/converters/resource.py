@@ -169,9 +169,7 @@ def _get_remote_file_params(
     return params
 
 
-def _get_default_params(
-    resource_name: str, action: str, props: dict[str, Any]
-) -> dict[str, Any]:
+def _get_default_params(resource_name: str, action: str) -> dict[str, Any]:
     """Build default parameters for unknown resource types."""
     params = {"name": resource_name}
     if action in ACTION_TO_STATE:
@@ -254,7 +252,7 @@ def _build_module_params(
 
     if builder is None:
         # Unknown resource type - use default builder
-        return _get_default_params(resource_name, action, props)
+        return _get_default_params(resource_name, action)
 
     if isinstance(builder, str):
         # Special handler reference (service/file)
@@ -263,7 +261,7 @@ def _build_module_params(
         elif builder == "file":
             return _get_file_params(resource_name, action, resource_type)
         # This shouldn't happen, but handle gracefully
-        return _get_default_params(resource_name, action, props)
+        return _get_default_params(resource_name, action)
 
     # Call the parameter builder function
     return builder(resource_name, action, props)
