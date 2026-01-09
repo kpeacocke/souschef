@@ -345,14 +345,12 @@ def generate_cookbook_performance_report(
         >>> print(report)
 
     """
-    from souschef.server import (
-        list_cookbook_structure,
-        parse_attributes,
-        parse_custom_resource,
-        parse_recipe,
-        parse_template,
-        read_cookbook_metadata,
-    )
+    from souschef.filesystem.operations import list_cookbook_structure
+    from souschef.parsers.attributes import parse_attributes
+    from souschef.parsers.metadata import read_cookbook_metadata
+    from souschef.parsers.recipe import parse_recipe
+    from souschef.parsers.resource import parse_custom_resource
+    from souschef.parsers.template import parse_template
 
     path = Path(cookbook_path)
     if not path.exists():
