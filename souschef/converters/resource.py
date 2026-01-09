@@ -2,9 +2,13 @@
 
 import ast
 import json
+from collections.abc import Callable
 from typing import Any
 
 from souschef.core.constants import ACTION_TO_STATE, RESOURCE_MAPPINGS
+
+# Type alias for parameter builder functions
+ParamBuilder = Callable[[str, str, dict[str, Any]], dict[str, Any]]
 
 
 def _parse_properties(properties_str: str) -> dict[str, Any]:
@@ -125,11 +129,77 @@ def _get_file_params(
     return params
 
 
+def _get_package_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build parameters for package resources."""
+    return {"name": resource_name, "state": ACTION_TO_STATE.get(action, action)}
+
+
+def _get_execute_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build parameters for execute/bash resources."""
+    return {"cmd": resource_name}
+
+
+def _get_user_group_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build parameters for user/group resources."""
+    return {"name": resource_name, "state": ACTION_TO_STATE.get(action, "present")}
+
+
+def _get_remote_file_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build parameters for remote_file resources."""
+    params = {"dest": resource_name}
+    # Map Chef properties to Ansible parameters
+    prop_mappings = {
+        "source": "url",
+        "mode": "mode",
+        "owner": "owner",
+        "group": "group",
+        "checksum": "checksum",
+    }
+    for chef_prop, ansible_param in prop_mappings.items():
+        if chef_prop in props:
+            params[ansible_param] = props[chef_prop]
+    return params
+
+
+def _get_default_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build default parameters for unknown resource types."""
+    params = {"name": resource_name}
+    if action in ACTION_TO_STATE:
+        params["state"] = ACTION_TO_STATE[action]
+    return params
+
+
+# Resource type to parameter builder mappings
+RESOURCE_PARAM_BUILDERS: dict[str, ParamBuilder | str] = {
+    "package": _get_package_params,
+    "service": "service",  # Uses _get_service_params
+    "systemd_unit": "service",
+    "template": "file",  # Uses _get_file_params
+    "file": "file",
+    "directory": "file",
+    "execute": _get_execute_params,
+    "bash": _get_execute_params,
+    "user": _get_user_group_params,
+    "group": _get_user_group_params,
+    "remote_file": _get_remote_file_params,
+}
+
+
 def _convert_chef_resource_to_ansible(
     resource_type: str, resource_name: str, action: str, properties: str
 ) -> dict[str, Any]:
     """
-    Convert Chef resource to Ansible task dictionary.
+    Convert Chef resource to Ansible task dictionary using data-driven approach.
 
     Args:
         resource_type: The Chef resource type.
@@ -149,44 +219,54 @@ def _convert_chef_resource_to_ansible(
         "name": f"{action.capitalize()} {resource_type} {resource_name}",
     }
 
-    # Build module parameters based on resource type
-    module_params: dict[str, Any] = {}
-
-    # Parse properties if provided
+    # Parse properties
     props = _parse_properties(properties)
 
-    if resource_type == "package":
-        module_params["name"] = resource_name
-        module_params["state"] = ACTION_TO_STATE.get(action, action)
-    elif resource_type in ["service", "systemd_unit"]:
-        module_params = _get_service_params(resource_name, action)
-    elif resource_type in ["template", "file", "directory"]:
-        module_params = _get_file_params(resource_name, action, resource_type)
-    elif resource_type in ["execute", "bash"]:
-        module_params["cmd"] = resource_name
+    # Build module parameters using appropriate builder
+    module_params = _build_module_params(resource_type, resource_name, action, props)
+
+    # Add special task-level flags for execute/bash resources
+    if resource_type in ["execute", "bash"]:
         task["changed_when"] = "false"
-    elif resource_type in ["user", "group"]:
-        module_params["name"] = resource_name
-        module_params["state"] = ACTION_TO_STATE.get(action, "present")
-    elif resource_type == "remote_file":
-        module_params["dest"] = resource_name
-        if "source" in props:
-            module_params["url"] = props["source"]
-        if "mode" in props:
-            module_params["mode"] = props["mode"]
-        if "owner" in props:
-            module_params["owner"] = props["owner"]
-        if "group" in props:
-            module_params["group"] = props["group"]
-        if "checksum" in props:
-            module_params["checksum"] = props["checksum"]
-    else:
-        module_params["name"] = resource_name
-        if action in ACTION_TO_STATE:
-            module_params["state"] = ACTION_TO_STATE[action]
 
     task[ansible_module] = module_params
     return task
+
+
+def _build_module_params(
+    resource_type: str, resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Build Ansible module parameters based on resource type.
+
+    Args:
+        resource_type: The Chef resource type.
+        resource_name: The resource name.
+        action: The Chef action.
+        props: Parsed properties dictionary.
+
+    Returns:
+        Dictionary of Ansible module parameters.
+
+    """
+    # Look up the parameter builder for this resource type
+    builder = RESOURCE_PARAM_BUILDERS.get(resource_type)
+
+    if builder is None:
+        # Unknown resource type - use default builder
+        return _get_default_params(resource_name, action, props)
+
+    if isinstance(builder, str):
+        # Special handler reference (service/file)
+        if builder == "service":
+            return _get_service_params(resource_name, action)
+        elif builder == "file":
+            return _get_file_params(resource_name, action, resource_type)
+        # This shouldn't happen, but handle gracefully
+        return _get_default_params(resource_name, action, props)
+
+    # Call the parameter builder function
+    return builder(resource_name, action, props)
 
 
 def _format_yaml_value(value: Any) -> str:
