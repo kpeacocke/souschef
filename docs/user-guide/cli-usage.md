@@ -354,7 +354,7 @@ souschef-cli convert RESOURCE_TYPE RESOURCE_NAME [OPTIONS]
     ```bash
     souschef-cli convert package nginx --action install
     ```
-    
+
     Output:
     ```yaml
     - name: Install nginx
@@ -367,7 +367,7 @@ souschef-cli convert RESOURCE_TYPE RESOURCE_NAME [OPTIONS]
     ```bash
     souschef-cli convert service nginx --action 'enable,start'
     ```
-    
+
     Output:
     ```yaml
     - name: Enable and start nginx
@@ -383,7 +383,7 @@ souschef-cli convert RESOURCE_TYPE RESOURCE_NAME [OPTIONS]
       --action create \
       --properties '{"source": "nginx.conf.erb", "owner": "root", "mode": "0644"}'
     ```
-    
+
     Output:
     ```yaml
     - name: Create /etc/nginx/nginx.conf
@@ -547,13 +547,13 @@ souschef-cli inspec-convert PATH [--format FORMAT]
     ```bash
     souschef-cli inspec-convert tests/inspec/nginx-profile --format testinfra
     ```
-    
+
     Output:
     ```python
     def test_nginx_installed(host):
         nginx = host.package("nginx")
         assert nginx.is_installed
-        
+
     def test_nginx_running(host):
         nginx = host.service("nginx")
         assert nginx.is_running
@@ -564,7 +564,7 @@ souschef-cli inspec-convert PATH [--format FORMAT]
     ```bash
     souschef-cli inspec-convert tests/inspec/nginx-profile --format ansible_assert
     ```
-    
+
     Output:
     ```yaml
     - name: Verify nginx installation
@@ -572,7 +572,7 @@ souschef-cli inspec-convert PATH [--format FORMAT]
         that:
           - "'nginx' in ansible_facts.packages"
         fail_msg: "nginx package is not installed"
-    
+
     - name: Verify nginx service
       assert:
         that:
@@ -608,7 +608,7 @@ control 'package-nginx' do
   impact 1.0
   title 'Verify nginx package installation'
   desc 'Generated from recipe: default.rb'
-  
+
   describe package('nginx') do
     it { should be_installed }
   end
@@ -618,7 +618,7 @@ control 'service-nginx' do
   impact 1.0
   title 'Verify nginx service state'
   desc 'Generated from recipe: default.rb'
-  
+
   describe service('nginx') do
     it { should be_enabled }
     it { should be_running }
@@ -705,15 +705,15 @@ souschef-cli profile-operation OPERATION PATH [OPTIONS]
     ```bash
     souschef-cli profile-operation recipe recipes/default.rb
     ```
-    
+
     Output:
     ```
     Operation: recipe
     File: recipes/default.rb
-    
+
     Execution Time: 89.4ms
     Peak Memory: 12.3 MB
-    
+
     Status: ✓ Performance is good
     ```
 
@@ -721,15 +721,15 @@ souschef-cli profile-operation OPERATION PATH [OPTIONS]
     ```bash
     souschef-cli profile-operation recipe recipes/default.rb --detailed
     ```
-    
+
     Output:
     ```
     Operation: recipe
     File: recipes/default.rb
-    
+
     Execution Time: 89.4ms
     Peak Memory: 12.3 MB
-    
+
     Top Functions by Time:
     ──────────────────────────────────────────────
     45.2ms  parse_resource_block
@@ -737,13 +737,13 @@ souschef-cli profile-operation OPERATION PATH [OPTIONS]
     8.7ms   resolve_guards
     6.3ms   parse_ruby_ast
     ...
-    
+
     Function Call Statistics:
     ──────────────────────────────────────────────
     parse_resource_block:     15 calls
     extract_properties:       45 calls
     resolve_guards:          12 calls
-    
+
     Status: ✓ Performance is good
     ```
 

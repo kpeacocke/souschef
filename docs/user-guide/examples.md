@@ -364,7 +364,7 @@ end
         dest: /etc/haproxy/haproxy.cfg
         mode: '0644'
       notify: Reload haproxy
-  
+
   handlers:
     - name: Reload haproxy
       ansible.builtin.service:
@@ -532,23 +532,23 @@ control 'nginx-01' do
   impact 1.0
   title 'Verify nginx installation'
   desc 'Ensure nginx is installed and configured correctly'
-  
+
   describe package('nginx') do
     it { should be_installed }
   end
-  
+
   describe service('nginx') do
     it { should be_enabled }
     it { should be_running }
   end
-  
+
   describe file('/etc/nginx/nginx.conf') do
     it { should exist }
     it { should be_file }
     its('owner') { should eq 'root' }
     its('mode') { should cmp '0644' }
   end
-  
+
   describe port(80) do
     it { should be_listening }
   end
@@ -577,29 +577,29 @@ end
   tasks:
     - name: Check nginx package
       ansible.builtin.package_facts:
-      
+
     - name: Assert nginx is installed
       ansible.builtin.assert:
         that:
           - "'nginx' in ansible_facts.packages"
         fail_msg: "nginx package is not installed"
         success_msg: "nginx package is installed"
-    
+
     - name: Get nginx service status
       ansible.builtin.service_facts:
-      
+
     - name: Assert nginx service is enabled and running
       ansible.builtin.assert:
         that:
           - ansible_facts.services['nginx.service'].state == 'running'
           - ansible_facts.services['nginx.service'].status == 'enabled'
         fail_msg: "nginx service is not running or enabled"
-    
+
     - name: Check nginx config file
       ansible.builtin.stat:
         path: /etc/nginx/nginx.conf
       register: nginx_conf
-    
+
     - name: Assert nginx config exists with correct permissions
       ansible.builtin.assert:
         that:
@@ -608,7 +608,7 @@ end
           - nginx_conf.stat.pw_name == 'root'
           - nginx_conf.stat.mode == '0644'
         fail_msg: "nginx.conf not found or has incorrect permissions"
-    
+
     - name: Check nginx is listening on port 80
       ansible.builtin.wait_for:
         port: 80

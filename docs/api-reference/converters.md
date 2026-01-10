@@ -8,36 +8,15 @@ The `souschef.converters` package transforms parsed Chef artifacts into Ansible 
 
 ---
 
-## Playbook Converter
+## Converter Modules
 
-::: souschef.converters.playbook
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
+The following converters are available:
 
----
+- **Playbook Converter** (`souschef.converters.playbook`) - Convert recipes to playbooks
+- **Resource Converter** (`souschef.converters.resource`) - Convert Chef resources to Ansible tasks
+- **Habitat Converter** (`souschef.converters.habitat`) - Convert Habitat plans to Docker
 
-## Resource Converter
-
-::: souschef.converters.resource
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
-
----
-
-## Habitat Converter
-
-::: souschef.converters.habitat
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
+For detailed conversion patterns and examples, see the [Conversion Guide](../migration-guide/conversion.md).
 
 ---
 
@@ -48,10 +27,10 @@ The `souschef.converters` package transforms parsed Chef artifacts into Ansible 
 ```python
 def convert_resource_to_task(resource: dict) -> dict:
     """Convert Chef resource to Ansible task.
-    
+
     Args:
         resource: Parsed Chef resource
-        
+
     Returns:
         Ansible task dictionary
     """
@@ -62,11 +41,11 @@ def convert_resource_to_task(resource: dict) -> dict:
             'state': 'present' if resource['action'] == 'install' else 'absent'
         }
     }
-    
+
     # Add guards as when conditions
     if resource.get('guards'):
         task['when'] = convert_guards(resource['guards'])
-    
+
     return task
 ```
 
@@ -75,28 +54,28 @@ def convert_resource_to_task(resource: dict) -> dict:
 ```python
 def convert_erb_to_jinja2(erb_content: str) -> str:
     """Convert ERB template to Jinja2.
-    
+
     Args:
         erb_content: ERB template content
-        
+
     Returns:
         Jinja2 template content
     """
     # Variable interpolation: <%= @var %> → {{ var }}
     jinja2 = erb_content
     jinja2 = re.sub(r'<%=\s*@(\w+)\s*%>', r'{{ \1 }}', jinja2)
-    
+
     # Conditionals: <% if @var %> → {% if var %}
     jinja2 = re.sub(r'<%\s*if\s+@(\w+)\s*%>', r'{% if \1 %}', jinja2)
     jinja2 = re.sub(r'<%\s*end\s*%>', r'{% endif %}', jinja2)
-    
+
     # Loops: <% @items.each do |item| %> → {% for item in items %}
     jinja2 = re.sub(
         r'<%\s*@(\w+)\.each\s+do\s+\|(\w+)\|\s*%>',
         r'{% for \2 in \1 %}',
         jinja2
     )
-    
+
     return jinja2
 ```
 
@@ -105,21 +84,21 @@ def convert_erb_to_jinja2(erb_content: str) -> str:
 ```python
 def convert_guards(guards: list) -> str:
     """Convert Chef guards to Ansible when clause.
-    
+
     Args:
         guards: List of Chef guard conditions
-        
+
     Returns:
         Ansible when condition
     """
     conditions = []
-    
+
     for guard in guards:
         if guard['type'] == 'only_if':
             conditions.append(convert_condition(guard['condition']))
         elif guard['type'] == 'not_if':
             conditions.append(f"not ({convert_condition(guard['condition'])})")
-    
+
     return ' and '.join(conditions)
 
 def convert_condition(condition: str) -> str:
@@ -128,11 +107,11 @@ def convert_condition(condition: str) -> str:
     if 'File.exist?' in condition:
         path = re.search(r"File\.exist\?\(['\"](.*?)['\"]\)", condition).group(1)
         return f"stat_{path.replace('/', '_')}.stat.exists"
-    
+
     # Command success: system('command') → command_result.rc == 0
     if 'system(' in condition:
         return "command_result.rc == 0"
-    
+
     return condition
 ```
 
@@ -220,18 +199,18 @@ For complex conversions requiring multiple tasks:
 def convert_complex_resource(resource: dict) -> list[dict]:
     """Convert complex resource to multiple tasks."""
     tasks = []
-    
+
     # Pre-conditions
     if resource.get('guards'):
         tasks.extend(convert_guard_checks(resource['guards']))
-    
+
     # Main action
     tasks.append(convert_main_action(resource))
-    
+
     # Notifications
     if resource.get('notifies'):
         tasks.extend(convert_notifications(resource['notifies']))
-    
+
     return tasks
 ```
 
@@ -264,11 +243,11 @@ def validate_conversion_logic(chef_resource: dict, ansible_task: dict) -> bool:
         assert ansible_task['package']['state'] == 'present'
     elif chef_resource['action'] == 'remove':
         assert ansible_task['package']['state'] == 'absent'
-    
+
     # Check guards converted to when clauses
     if chef_resource.get('guards'):
         assert 'when' in ansible_task
-    
+
     return True
 ```
 

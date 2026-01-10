@@ -25,7 +25,7 @@ graph TD
     H -->|Yes| I[Commit & Next]
     H -->|No| J[Fix Issues]
     J --> G
-    
+
     style A fill:#e3f2fd
     style C fill:#fff3e0
     style G fill:#e8f5e9
@@ -79,19 +79,19 @@ end
 - name: Configure web server
   hosts: webservers
   become: true
-  
+
   tasks:
     - name: Install nginx
       ansible.builtin.package:
         name: nginx
         state: present
-    
+
     - name: Enable and start nginx
       ansible.builtin.service:
         name: nginx
         enabled: true
         state: started
-    
+
     - name: Deploy nginx configuration
       ansible.builtin.template:
         src: nginx.conf.j2
@@ -100,7 +100,7 @@ end
         group: root
         mode: '0644'
       notify: Reload nginx
-  
+
   handlers:
     - name: Reload nginx
       ansible.builtin.service:
@@ -224,7 +224,7 @@ http {
     gzip on;
     gzip_types text/plain text/css application/json;
     <% end %>
-    
+
     <% @servers.each do |server| %>
     upstream <%= server['name'] %> {
         <% server['backends'].each do |backend| %>
@@ -263,7 +263,7 @@ http {
     gzip on;
     gzip_types text/plain text/css application/json;
     {% endif %}
-    
+
     {% for server in nginx_servers %}
     upstream {{ server.name }} {
         {% for backend in server.backends %}
@@ -556,10 +556,10 @@ from ansible.module_utils.basic import AnsibleModule
 def deploy_app(module, app_name, version, config):
     """Deploy application with complex logic."""
     changed = False
-    
+
     # Complex deployment logic here
     # ...
-    
+
     return changed, "Deployment successful"
 
 def main():
@@ -568,18 +568,18 @@ def main():
             app_name=dict(type='str', required=True),
             version=dict(type='str', required=True),
             config=dict(type='dict', required=True),
-            state=dict(type='str', default='present', 
+            state=dict(type='str', default='present',
                       choices=['present', 'absent'])
         )
     )
-    
+
     changed, message = deploy_app(
         module,
         module.params['app_name'],
         module.params['version'],
         module.params['config']
     )
-    
+
     module.exit_json(changed=changed, msg=message)
 
 if __name__ == '__main__':
@@ -698,7 +698,7 @@ knife data bag show secrets database --secret-file ~/.chef/encrypted_data_bag_se
     vault_db_password: "{{ lookup('file', 'database_secrets.json') | from_json | json_query('password') }}"
     vault_db_host: "{{ lookup('file', 'database_secrets.json') | from_json | json_query('host') }}"
     EOF
-    
+
     # Encrypt with Ansible Vault
     ansible-vault encrypt group_vars/all/vault.yml
     ```
@@ -875,8 +875,8 @@ Overall: PASSED with warnings
 # Break into separate fact-gathering and conditional tasks
 - name: Gather deployment facts
   ansible.builtin.set_fact:
-    can_deploy: "{{ (app_archive.stat.exists and 
-                     not deploy_marker.stat.exists and 
+    can_deploy: "{{ (app_archive.stat.exists and
+                     not deploy_marker.stat.exists and
                      not maintenance_mode) | bool }}"
 
 - name: Deploy if conditions met

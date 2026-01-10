@@ -27,7 +27,7 @@ graph LR
     B --> C[3. Conversion]
     C --> D[4. Validation]
     D --> E[5. Deployment]
-    
+
     style A fill:#e3f2fd
     style B fill:#fff3e0
     style C fill:#f3e5f5
@@ -204,19 +204,19 @@ graph LR
 
 === "Blue/Green"
     **Best for**: Full environment swaps, quick rollback capability
-    
+
     ```yaml
     # Blue environment (current)
     - hosts: blue_servers
       tasks:
         - name: Deploy current version
-    
+
     # Green environment (new)
     - hosts: green_servers
       tasks:
         - name: Deploy new version
         - name: Run validation
-    
+
     # Switch traffic
     - hosts: load_balancers
       tasks:
@@ -225,18 +225,18 @@ graph LR
 
 === "Canary"
     **Best for**: Gradual rollout with monitoring
-    
+
     ```yaml
     # Stage 1: 10% traffic
     - hosts: canary_10pct
       tasks:
         - name: Deploy to 10% of fleet
         - name: Monitor metrics
-    
+
     # Stage 2: 50% traffic
     - hosts: canary_50pct
       when: canary_10pct_success
-    
+
     # Stage 3: 100% traffic
     - hosts: all_servers
       when: canary_50pct_success
@@ -244,7 +244,7 @@ graph LR
 
 === "Parallel Run"
     **Best for**: Risk mitigation, comparison testing
-    
+
     ```yaml
     # Run Chef (readonly/reporting mode)
     - hosts: all
@@ -252,7 +252,7 @@ graph LR
         - name: Execute Chef in why-run mode
           command: chef-client --why-run
           register: chef_result
-    
+
     # Run Ansible
     - hosts: all
       tasks:
@@ -260,7 +260,7 @@ graph LR
           include_role:
             name: migrated_cookbook
           register: ansible_result
-    
+
     # Compare results
     - hosts: localhost
       tasks:
@@ -465,14 +465,14 @@ Track these metrics to measure migration success:
 
 **Problem**: Chef guards with Ruby blocks don't convert cleanly
 
-**Solution**: 
+**Solution**:
 - Use SousChef's enhanced guard handling
 - For complex guards, convert to Ansible facts and conditions
 - Example:
   ```ruby
   # Chef
   only_if { ::File.exist?('/path') && node['attr'] == 'value' }
-  
+
   # Ansible
   when:
     - path_check.stat.exists

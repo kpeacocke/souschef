@@ -56,7 +56,7 @@ SousChef provides pre-configured setup files for common MCP clients in the `conf
     ```bash
     # Copy the configuration file
     cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
-    
+
     # Restart Claude Desktop
     ```
 
@@ -65,7 +65,7 @@ SousChef provides pre-configured setup files for common MCP clients in the `conf
     ```bash
     # Copy the configuration file
     cp config/claude-desktop.json ~/.config/Claude/claude_desktop_config.json
-    
+
     # Restart Claude Desktop
     ```
 
@@ -74,7 +74,7 @@ SousChef provides pre-configured setup files for common MCP clients in the `conf
     ```powershell
     # Copy the configuration file
     copy config\claude-desktop.json %APPDATA%\Claude\claude_desktop_config.json
-    
+
     # Restart Claude Desktop
     ```
 

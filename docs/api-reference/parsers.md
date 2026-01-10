@@ -8,80 +8,19 @@ The `souschef.parsers` package contains specialized parsers for different Chef a
 
 ---
 
-## Recipe Parser
+## Parser Modules
 
-::: souschef.parsers.recipe
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
+The following parsers are available:
 
----
+- **Recipe Parser** (`souschef.parsers.recipe`) - Parse Chef recipes
+- **Template Parser** (`souschef.parsers.template`) - Extract ERB template variables
+- **Resource Parser** (`souschef.parsers.resource`) - Parse custom resources
+- **Attributes Parser** (`souschef.parsers.attributes`) - Parse attribute files
+- **Metadata Parser** (`souschef.parsers.metadata`) - Parse cookbook metadata
+- **InSpec Parser** (`souschef.parsers.inspec`) - Parse InSpec profiles
+- **Habitat Parser** (`souschef.parsers.habitat`) - Parse Habitat plans
 
-## Template Parser
-
-::: souschef.parsers.template
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
-
----
-
-## Resource Parser
-
-::: souschef.parsers.resource
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
-
----
-
-## Attributes Parser
-
-::: souschef.parsers.attributes
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
-
----
-
-## Metadata Parser
-
-::: souschef.parsers.metadata
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
-
----
-
-## InSpec Parser
-
-::: souschef.parsers.inspec
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
-
----
-
-## Habitat Parser
-
-::: souschef.parsers.habitat
-    options:
-      show_root_heading: true
-      show_source: false
-      members: true
-      heading_level: 3
+For usage examples and patterns, see the [Examples Guide](../user-guide/examples.md).
 
 ---
 
@@ -97,12 +36,12 @@ from pathlib import Path
 
 class RecipeParser:
     """Parse Chef recipes."""
-    
+
     RESOURCE_PATTERN = re.compile(
         r'^\s*(\w+)\s+([\'\"]([^'\"]+)[\'\"]|[\w-]+)\s+do',
         re.MULTILINE
     )
-    
+
     def parse(self, content: str) -> dict:
         """Extract resources from recipe."""
         resources = []
@@ -195,10 +134,10 @@ from pathlib import Path
 def parse_cookbook_parallel(cookbook_path: str) -> dict:
     """Parse all recipes in parallel."""
     recipes = list(Path(cookbook_path).glob('recipes/*.rb'))
-    
+
     with ProcessPoolExecutor() as executor:
         results = executor.map(parse_recipe_file, recipes)
-    
+
     return {'recipes': list(results)}
 ```
 

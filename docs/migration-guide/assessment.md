@@ -21,7 +21,7 @@ graph TD
     D --> E[Identify Risks]
     E --> F[Generate Plan]
     F --> G[Review & Approve]
-    
+
     style A fill:#e3f2fd
     style C fill:#fff3e0
     style D fill:#f3e5f5
@@ -90,7 +90,7 @@ Use SousChef to analyze each cookbook's structure:
 === "CLI"
     ```bash
     souschef-cli structure /path/to/cookbook
-    
+
     # Or for all cookbooks
     for cookbook in cookbooks/*; do
       echo "=== $(basename $cookbook) ==="
@@ -164,7 +164,7 @@ SousChef's complexity assessment tool analyzes multiple dimensions:
     ```bash
     # Single cookbook
     souschef-cli assess /path/to/cookbook --include-dependencies
-    
+
     # All cookbooks
     souschef-cli assess /path/to/cookbooks --recursive --output assessment_report.json
     ```
@@ -179,7 +179,7 @@ SousChef's complexity assessment tool analyzes multiple dimensions:
   "complexity_level": "Medium",
   "estimated_effort_hours": 40,
   "risk_level": "Medium",
-  
+
   "metrics": {
     "recipes": {
       "count": 4,
@@ -217,7 +217,7 @@ SousChef's complexity assessment tool analyzes multiple dimensions:
       "complexity": "None"
     }
   },
-  
+
   "risk_factors": [
     {
       "type": "dependency_chain",
@@ -232,7 +232,7 @@ SousChef's complexity assessment tool analyzes multiple dimensions:
       "mitigation": "Convert to Ansible roles with similar interface"
     }
   ],
-  
+
   "recommendations": [
     "Start with install.rb (simplest recipe, 3 resources)",
     "Migrate custom resources to roles early in process",
@@ -291,7 +291,7 @@ graph TD
     A --> D[yum]
     B --> E[build-essential]
     C --> F[compat_resource]
-    
+
     style A fill:#ffeb3b
     style B fill:#4caf50
     style C fill:#4caf50
@@ -385,7 +385,7 @@ risk_score = (
     - /path/to/cookbook1
     - /path/to/cookbook2
     - /path/to/cookbook3
-    
+
     Include timeline and resource allocation
     ```
 

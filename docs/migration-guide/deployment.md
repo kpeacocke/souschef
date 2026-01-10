@@ -19,7 +19,7 @@ graph LR
     B --> C[Level 3:<br/>CI/CD]
     C --> D[Level 4:<br/>Self-Service]
     D --> E[Level 5:<br/>GitOps]
-    
+
     style A fill:#ffebee
     style B fill:#fff3e0
     style C fill:#e3f2fd
@@ -53,7 +53,7 @@ graph TD
     F --> B
     E --> G[Green becomes Production]
     G --> H[Blue becomes Standby]
-    
+
     style A fill:#2196f3,color:#fff
     style E fill:#4caf50,color:#fff
     style G fill:#4caf50,color:#fff
@@ -70,7 +70,7 @@ graph TD
   vars:
     current_env: blue
     target_env: green
-    
+
   tasks:
     - name: Deploy to green environment
       ansible.builtin.include_role:
@@ -78,7 +78,7 @@ graph TD
       vars:
         environment: "{{ target_env }}"
         ansible_limit: "{{ target_env }}_servers"
-    
+
     - name: Run smoke tests on green
       ansible.builtin.uri:
         url: "https://{{ target_env }}.example.com/health"
@@ -86,20 +86,20 @@ graph TD
       register: health_check
       retries: 5
       delay: 10
-    
+
     - name: Switch load balancer to green
       community.general.haproxy:
         backend: app_backend
         host: "{{ target_env }}_servers"
         state: enabled
       when: health_check.status == 200
-    
+
     - name: Disable blue environment
       community.general.haproxy:
         backend: app_backend
         host: "{{ current_env }}_servers"
         state: disabled
-    
+
     - name: Update environment marker
       ansible.builtin.set_fact:
         cacheable: true
@@ -127,7 +127,7 @@ graph LR
     D -->|Good| E[Deploy to<br/>100%]
     B -->|Issues| F[Rollback]
     D -->|Issues| F
-    
+
     style A fill:#fff3e0
     style C fill:#e3f2fd
     style E fill:#4caf50,color:#fff
@@ -142,18 +142,18 @@ graph LR
   hosts: app_servers
   serial: "{{ rollout_percentage | default('10%') }}"
   max_fail_percentage: 5
-  
+
   tasks:
     - name: Deploy new version
       ansible.builtin.include_role:
         name: application
       vars:
         app_version: "{{ new_version }}"
-    
+
     - name: Wait for service to stabilize
       ansible.builtin.pause:
         seconds: 30
-    
+
     - name: Check service health
       ansible.builtin.uri:
         url: "http://localhost:8080/health"
@@ -161,13 +161,13 @@ graph LR
       register: health
       retries: 3
       delay: 5
-    
+
     - name: Monitor error rates
       ansible.builtin.command:
         cmd: curl -s http://localhost:9090/metrics | grep error_rate
       register: metrics
       failed_when: "'error_rate > 0.05' in metrics.stdout"
-    
+
     - name: Pause for monitoring
       ansible.builtin.pause:
         prompt: "Review metrics before continuing (Enter to proceed)"
@@ -210,7 +210,7 @@ ansible-playbook deploy.yml -e "rollout_percentage=100%" -e "new_version=2.0.0"
 - name: Rolling Deployment
   hosts: app_servers
   serial: 2  # Update 2 servers at a time
-  
+
   pre_tasks:
     - name: Remove server from load balancer
       community.general.haproxy:
@@ -218,28 +218,28 @@ ansible-playbook deploy.yml -e "rollout_percentage=100%" -e "new_version=2.0.0"
         host: "{{ inventory_hostname }}"
         state: disabled
       delegate_to: localhost
-  
+
   tasks:
     - name: Stop application
       ansible.builtin.service:
         name: myapp
         state: stopped
-    
+
     - name: Deploy new version
       ansible.builtin.include_role:
         name: application
-    
+
     - name: Start application
       ansible.builtin.service:
         name: myapp
         state: started
-    
+
     - name: Wait for service to be ready
       ansible.builtin.wait_for:
         port: 8080
         delay: 5
         timeout: 60
-  
+
   post_tasks:
     - name: Add server back to load balancer
       community.general.haproxy:
@@ -247,7 +247,7 @@ ansible-playbook deploy.yml -e "rollout_percentage=100%" -e "new_version=2.0.0"
         host: "{{ inventory_hostname }}"
         state: enabled
       delegate_to: localhost
-    
+
     - name: Health check
       ansible.builtin.uri:
         url: "http://{{ inventory_hostname }}:8080/health"
@@ -274,36 +274,36 @@ ansible-playbook deploy.yml -e "rollout_percentage=100%" -e "new_version=2.0.0"
 ---
 - name: Parallel Run Verification
   hosts: migration_targets
-  
+
   tasks:
     - name: Run Chef client
       ansible.builtin.command:
         cmd: chef-client
       register: chef_run
       changed_when: "'updated' in chef_run.stdout"
-    
+
     - name: Capture Chef state
       ansible.builtin.command:
-        cmd: knife node show {{ inventory_hostname }} -a 
+        cmd: knife node show {{ inventory_hostname }} -a
       register: chef_state
       delegate_to: localhost
-    
+
     - name: Run Ansible playbook
       ansible.builtin.include_role:
         name: application
       register: ansible_run
-    
+
     - name: Capture Ansible state
       ansible.builtin.setup:
       register: ansible_state
-    
+
     - name: Compare states
       ansible.builtin.assert:
         that:
           - chef_state.rc == 0
           - ansible_run is succeeded
         msg: "Chef and Ansible runs must both succeed"
-    
+
     - name: Report differences
       ansible.builtin.debug:
         msg: "Differences detected: {{ diff }}"
@@ -391,7 +391,7 @@ awx_job_templates:
             - staging
             - production
           required: true
-    
+
   - name: Database Migration
     job_type: run
     inventory: Production
@@ -410,24 +410,24 @@ awx_workflows:
         unified_job_template: Pre-Deployment Checks
         success_nodes:
           - database_migration
-      
+
       - identifier: database_migration
         unified_job_template: Database Migration
         success_nodes:
           - app_deployment
-      
+
       - identifier: app_deployment
         unified_job_template: Deploy Web Application
         success_nodes:
           - smoke_tests
-      
+
       - identifier: smoke_tests
         unified_job_template: Smoke Tests
         success_nodes:
           - notify_success
         failure_nodes:
           - rollback
-      
+
       - identifier: rollback
         unified_job_template: Rollback Deployment
         always_nodes:
@@ -464,14 +464,14 @@ awx-cli receive --conf.host=$TOWER_HOST \
   gather_facts: false
   collections:
     - awx.awx
-  
+
   tasks:
     - name: Create organization
       awx.awx.organization:
         name: Engineering
         description: Engineering team resources
         state: present
-    
+
     - name: Create project
       awx.awx.project:
         name: Infrastructure Automation
@@ -479,13 +479,13 @@ awx-cli receive --conf.host=$TOWER_HOST \
         scm_type: git
         scm_url: https://github.com/myorg/ansible-playbooks.git
         state: present
-    
+
     - name: Create inventory
       awx.awx.inventory:
         name: Production
         organization: Engineering
         state: present
-    
+
     - name: Create job template
       awx.awx.job_template:
         name: Deploy Web Application
@@ -540,19 +540,19 @@ def build_inventory():
             'vars': {}
         }
     }
-    
+
     nodes = get_chef_nodes()
-    
+
     for node in nodes:
         hostname = node['name']
         inventory['all']['hosts'].append(hostname)
-        
+
         # Add to role-based groups
         for role in node.get('roles', []):
             if role not in inventory:
                 inventory[role] = {'hosts': []}
             inventory[role]['hosts'].append(hostname)
-        
+
         # Add hostvars
         inventory['_meta']['hostvars'][hostname] = {
             'ansible_host': node['ipaddress'],
@@ -560,7 +560,7 @@ def build_inventory():
             'platform': node['platform'],
             'platform_version': node['platform_version']
         }
-    
+
     return inventory
 
 if __name__ == '__main__':
@@ -613,7 +613,7 @@ ansible-vault encrypt group_vars/production/vault.yml
   hosts: app_servers
   vars_files:
     - group_vars/production/vault.yml
-  
+
   tasks:
     - name: Deploy database configuration
       ansible.builtin.template:
@@ -681,7 +681,7 @@ ansible-vault encrypt group_vars/production/vault.yml
 ---
 - name: Retrieve secrets from Vault
   hosts: app_servers
-  
+
   tasks:
     - name: Get database credentials
       community.hashi_vault.vault_read:
@@ -690,7 +690,7 @@ ansible-vault encrypt group_vars/production/vault.yml
         auth_method: token
         token: "{{ lookup('env', 'VAULT_TOKEN') }}"
       register: vault_secrets
-    
+
     - name: Deploy configuration
       ansible.builtin.template:
         src: database.yml.j2
@@ -750,7 +750,7 @@ graph TD
     J --> K[Investigate Issues]
     H --> L[End Maintenance]
     L --> M[Monitor for 24h]
-    
+
     style A fill:#fff3e0
     style E fill:#e3f2fd
     style G fill:#f3e5f5
@@ -767,47 +767,47 @@ graph TD
   hosts: all
   gather_facts: true
   serial: 10%  # Process 10% of servers at a time
-  
+
   pre_tasks:
     - name: Announce cutover start
       ansible.builtin.debug:
         msg: "Starting cutover for {{ inventory_hostname }} at {{ ansible_date_time.iso8601 }}"
-    
+
     - name: Final Chef client run
       ansible.builtin.command:
         cmd: chef-client
       register: final_chef_run
       ignore_errors: true
-    
+
     - name: Capture Chef-managed resources
       ansible.builtin.command:
         cmd: chef-client --why-run --format json
       register: chef_state
-    
+
     - name: Disable Chef client
       ansible.builtin.service:
         name: chef-client
         state: stopped
         enabled: false
-    
+
     - name: Remove Chef from cron
       ansible.builtin.cron:
         name: "Chef client"
         state: absent
-  
+
   tasks:
     - name: Run Ansible configuration
       ansible.builtin.include_role:
         name: "{{ item }}"
       loop: "{{ required_roles }}"
-    
+
     - name: Validate services
       ansible.builtin.service:
         name: "{{ item }}"
         state: started
       loop: "{{ critical_services }}"
       register: service_check
-    
+
     - name: Run smoke tests
       ansible.builtin.uri:
         url: "http://localhost:{{ app_port }}/health"
@@ -815,41 +815,41 @@ graph TD
       register: health_check
       retries: 3
       delay: 10
-  
+
   post_tasks:
     - name: Mark cutover complete
       ansible.builtin.file:
         path: /etc/ansible_cutover_complete
         state: touch
         mode: '0644'
-    
+
     - name: Log cutover completion
       ansible.builtin.lineinfile:
         path: /var/log/ansible-cutover.log
         line: "Cutover completed: {{ ansible_date_time.iso8601 }}"
         create: true
-  
+
   rescue:
     - name: Cutover failed - initiating rollback
       ansible.builtin.debug:
         msg: "CUTOVER FAILED - Rolling back to Chef"
-    
+
     - name: Re-enable Chef client
       ansible.builtin.service:
         name: chef-client
         state: started
         enabled: true
-    
+
     - name: Run Chef client
       ansible.builtin.command:
         cmd: chef-client
-    
+
     - name: Log rollback
       ansible.builtin.lineinfile:
         path: /var/log/ansible-cutover.log
         line: "Rollback executed: {{ ansible_date_time.iso8601 }}"
         create: true
-    
+
     - name: Notify team
       ansible.builtin.debug:
         msg: "ALERT: Cutover failed and rolled back. Check logs."
@@ -926,11 +926,11 @@ ansible-playbook test_suite.yml -i inventory/production
         labels:
           playbook: "{{ ansible_play_name }}"
           environment: production
-    
+
     - name: Include deployment tasks
       ansible.builtin.include_tasks: deploy.yml
       register: deploy_result
-    
+
     - name: Record deployment success
       community.general.prometheus:
         name: ansible_deployment_success
@@ -939,7 +939,7 @@ ansible-playbook test_suite.yml -i inventory/production
           playbook: "{{ ansible_play_name }}"
           environment: production
       when: deploy_result is succeeded
-    
+
     - name: Record deployment failure
       community.general.prometheus:
         name: ansible_deployment_failure
@@ -1008,33 +1008,33 @@ ansible-playbook test_suite.yml -i inventory/production
 ---
 - name: Rollback Deployment
   hosts: app_servers
-  
+
   vars:
     previous_version: "{{ lookup('file', '/tmp/previous_version.txt') }}"
-  
+
   tasks:
     - name: Stop current version
       ansible.builtin.service:
         name: myapp
         state: stopped
-    
+
     - name: Restore previous version
       ansible.builtin.copy:
         src: "/opt/backups/myapp-{{ previous_version }}.tar.gz"
         dest: /opt/myapp/
         remote_src: true
-    
+
     - name: Extract backup
       ansible.builtin.unarchive:
         src: "/opt/myapp/myapp-{{ previous_version }}.tar.gz"
         dest: /opt/myapp/
         remote_src: true
-    
+
     - name: Start previous version
       ansible.builtin.service:
         name: myapp
         state: started
-    
+
     - name: Verify rollback
       ansible.builtin.uri:
         url: http://localhost:8080/health

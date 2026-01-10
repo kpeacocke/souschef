@@ -79,19 +79,19 @@ end
 - name: Webserver cookbook playbook
   hosts: all
   become: yes
-  
+
   tasks:
     - name: Install nginx
       ansible.builtin.package:
         name: nginx
         state: present
-    
+
     - name: Enable and start nginx
       ansible.builtin.service:
         name: nginx
         enabled: yes
         state: started
-    
+
     - name: Configure nginx
       ansible.builtin.template:
         src: nginx.conf.j2
@@ -99,7 +99,7 @@ end
       vars:
         worker_processes: "{{ nginx_workers }}"
       notify: Reload nginx
-  
+
   handlers:
     - name: Reload nginx
       ansible.builtin.service:
@@ -224,7 +224,7 @@ Convert the InSpec profile /path/to/inspec to Ansible tests
 
 !!! tip "Review Conversions"
     Always review generated playbooks for:
-    
+
     - Correct module selection
     - Proper variable substitution
     - Guard condition conversion
