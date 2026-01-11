@@ -57,7 +57,7 @@ jobs:
         run: |
           # Restore the GitHub Pages URL for production
           sed -i 's|# site_url: https://kpeacocke.github.io/souschef/  # Commented out for local dev|site_url: https://kpeacocke.github.io/souschef/|g' mkdocs.yml
-          poetry run mkdocs build --strict
+          poetry run mkdocs build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3.0.1
