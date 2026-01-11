@@ -192,4 +192,4 @@ Now that SousChef is installed, you're ready to:
 - [Follow the Quick Start guide](quick-start.md) to begin migrating
 - [Explore the MCP tools](../user-guide/mcp-tools.md) available
 
-For detailed configuration options and model provider setup, see the [Configuration Reference](../config/CONFIGURATION.md).
+For detailed configuration options and model provider setup, see the [Configuration Reference](configuration.md).

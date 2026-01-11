@@ -909,7 +909,7 @@ Overall: PASSED with warnings
 After completing conversions:
 
 1. **[Review Deployment Strategies](deployment.md)** - Plan production deployment
-2. **[Validation Testing](overview.md#phase-4-validation--testing)** - Comprehensive testing
+2. **[Validation Testing](overview.md#phase-4-validation-testing)** - Comprehensive testing
 3. **[Examples](../user-guide/examples.md)** - Real-world conversion patterns
 
 Or explore related topics:
