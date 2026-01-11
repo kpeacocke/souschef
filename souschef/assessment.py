@@ -665,7 +665,9 @@ def _assess_single_cookbook(cookbook_path) -> dict:
 
     # Calculate complexity and effort
     complexity_score = _calculate_complexity_score(metrics)
-    base_effort = metrics["recipe_count"] * 0.5  # 0.5 days per recipe
+    # More realistic effort: 0.5-2 hours per recipe with AI assistance
+    # Base: 1 hour per recipe = 0.125 days (8-hour day)
+    base_effort = metrics["recipe_count"] * 0.125  # 0.125 days per recipe
     complexity_multiplier = 1 + (complexity_score / 100)
     estimated_effort = round(base_effort * complexity_multiplier, 1)
 
@@ -689,7 +691,7 @@ def _format_overall_metrics(metrics: dict) -> str:
 • Total Resources: {metrics["total_resources"]}
 • Average Complexity: {metrics.get("avg_complexity", 0):.1f}/100
 • Estimated Total Effort: {metrics["estimated_effort_days"]:.1f} person-days
-• Estimated Duration: {int(metrics["estimated_effort_days"] / 5)}-{int(metrics["estimated_effort_days"] / 3)} weeks"""
+• Estimated Duration: {max(1, int(metrics["estimated_effort_days"] / 2))}-{max(2, int(metrics["estimated_effort_days"]))} weeks (with 2-4 parallel engineers)"""
 
 
 def _format_cookbook_assessments(assessments: list) -> str:

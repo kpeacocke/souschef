@@ -53,15 +53,22 @@
         "**/node_modules": true,
         "**/*.egg-info": true
     },
+    "cSpell.language": "en-AU",
     "cSpell.words": [
         "charliermarsh",
         "souschef"
+    ],
+    "yaml.customTags": [
+        "!!python/name:pymdownx.superfences.fence_code_format",
+        "!!python/name:material.extensions.emoji.twemoji",
+        "!!python/name:material.extensions.emoji.to_svg"
     ],
     "sonarlint.connectedMode.project": {
         "connectionId": "kpeacocke",
         "projectKey": "kpeacocke_souschef"
     },
     "ansible.lightspeed.enabled": false,
+    "chat.mcp.gallery.enabled": true,
     "chat.mcp.serverSampling": {
         "souschef/.vscode/mcp.json: souschef": {
             "allowedModels": [

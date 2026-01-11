@@ -67,6 +67,24 @@
                 "isDefault": true
             },
             "problemMatcher": []
+        },
+        {
+            "label": "Serve Documentation",
+            "type": "shell",
+            "command": "poetry",
+            "args": ["run", "mkdocs", "serve", "-a", "127.0.0.1:8000"],
+            "options": {
+                "env": {
+                    "MKDOCS_SITE_URL": ""
+                }
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "focus": false
+            },
+            "problemMatcher": []
         }
     ]
 }

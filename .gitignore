@@ -83,3 +83,6 @@ Thumbs.db
 .codeql-db/
 codeql-results/
 *.sarif
+
+# MkDocs
+site/

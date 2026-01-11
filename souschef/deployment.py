@@ -474,7 +474,8 @@ def _validate_canary_inputs(
             raise ValueError("Steps must be between 1 and 100")
         if steps != sorted(steps):
             return None, (
-                f"Error: Rollout steps must be in ascending order: {rollout_steps}\n\n"
+                "Error: Rollout steps must be in ascending order: "
+                f"{rollout_steps}\n\n"
                 "Suggestion: Use format like '10,25,50,100'"
             )
         return steps, None

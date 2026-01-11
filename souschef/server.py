@@ -225,6 +225,12 @@ from souschef.parsers.inspec import (  # noqa: F401
     _generate_inspec_from_resource,
     _parse_inspec_control,
 )
+from souschef.parsers.inspec import (
+    convert_inspec_to_test as _convert_inspec_test,
+)
+from souschef.parsers.inspec import (
+    parse_inspec_profile as _parse_inspec,
+)
 
 # lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.metadata import (  # noqa: F401
@@ -537,6 +543,7 @@ def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
         raise RuntimeError(f"Error reading file: {e}") from e
 
 
+@mcp.tool()
 def parse_inspec_profile(path: str) -> str:
     """
     Parse an InSpec profile and extract controls.
@@ -548,45 +555,7 @@ def parse_inspec_profile(path: str) -> str:
         JSON string with parsed controls, or error message.
 
     """
-    try:
-        # Validate input
-        if not path or not path.strip():
-            return (
-                "Error: Path cannot be empty\n\n"
-                "Suggestion: Provide a path to an InSpec profile directory or control file"
-            )
-
-        profile_path = _normalize_path(path)
-
-        if not profile_path.exists():
-            return (
-                f"Error: Path does not exist: {path}\n\n"
-                "Suggestion: Check that the path is correct and the InSpec profile exists"
-            )
-
-        if profile_path.is_dir():
-            controls = _parse_controls_from_directory(profile_path)
-        elif profile_path.is_file():
-            controls = _parse_controls_from_file(profile_path)
-        else:
-            return (
-                f"Error: Invalid path type: {path}\n\n"
-                "Suggestion: Provide a directory or file path, not a special file type"
-            )
-
-        return json.dumps(
-            {
-                "profile_path": str(profile_path),
-                "controls_count": len(controls),
-                "controls": controls,
-            },
-            indent=2,
-        )
-
-    except (FileNotFoundError, RuntimeError) as e:
-        return format_error_with_context(e, "parsing InSpec profile", path)
-    except Exception as e:
-        return format_error_with_context(e, "parsing InSpec profile", path)
+    return _parse_inspec(path)
 
 
 @mcp.tool()
@@ -602,54 +571,7 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         Converted test code or error message.
 
     """
-    try:
-        # First parse the InSpec profile
-        parse_result = parse_inspec_profile(inspec_path)
-
-        # Check if parsing failed
-        if parse_result.startswith(ERROR_PREFIX):
-            return parse_result
-
-        # Parse JSON result
-        profile_data = json.loads(parse_result)
-        controls = profile_data["controls"]
-
-        if not controls:
-            return "Error: No controls found in InSpec profile"
-
-        # Convert each control
-        converted_tests = []
-
-        if output_format == "testinfra":
-            converted_tests.append("import pytest")
-            converted_tests.append("")
-            converted_tests.append("")
-            for control in controls:
-                test_code = _convert_inspec_to_testinfra(control)
-                converted_tests.append(test_code)
-
-        elif output_format == "ansible_assert":
-            converted_tests.append("---")
-            converted_tests.append("# Validation tasks converted from InSpec")
-            converted_tests.append("")
-            for control in controls:
-                assert_code = _convert_inspec_to_ansible_assert(control)
-                converted_tests.append(assert_code)
-                converted_tests.append("")
-
-        else:
-            error_msg = (
-                f"Error: Unsupported format '{output_format}'. "
-                "Use 'testinfra' or 'ansible_assert'"
-            )
-            return error_msg
-
-        return "\n".join(converted_tests)
-
-    except Exception as e:
-        return format_error_with_context(
-            e, f"converting InSpec to {output_format}", inspec_path
-        )
+    return _convert_inspec_test(inspec_path, output_format)
 
 
 def _extract_resources_from_parse_result(parse_result: str) -> list[dict[str, Any]]:
