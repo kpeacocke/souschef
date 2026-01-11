@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0](https://github.com/kpeacocke/souschef/compare/v2.2.0...v2.3.0) (2026-01-11)
+
+
+### Features
+
+* documentation ([#89](https://github.com/kpeacocke/souschef/issues/89)) ([988c863](https://github.com/kpeacocke/souschef/commit/988c8634425e059db118d4b4cdf78432a306a6fc))
+
+
+### Bug Fixes
+
+* CI use Python 3.14 ([#101](https://github.com/kpeacocke/souschef/issues/101)) ([9a9d5fb](https://github.com/kpeacocke/souschef/commit/9a9d5fba2336e5e1f59eb5c3237684cf848a7491))
+* CI workflow must run on main branch for release-please trigger ([12de1dd](https://github.com/kpeacocke/souschef/commit/12de1ddc4fa614e2c9b06a536d1e851f9fb0185e))
+* disable pymdownx.emoji to fix docs build ([#95](https://github.com/kpeacocke/souschef/issues/95)) ([556af01](https://github.com/kpeacocke/souschef/commit/556af01586282d73117073933f69ddf9aa8b5150))
+* disable Snyk PR checks (test limit reached, main-only) ([d2ed4ba](https://github.com/kpeacocke/souschef/commit/d2ed4ba52af12ef5eca1c807eda3b1817bfc036b))
+* downgrade Python to 3.13 for pymdownx.emoji compatibility ([#93](https://github.com/kpeacocke/souschef/issues/93)) ([1854aa6](https://github.com/kpeacocke/souschef/commit/1854aa64cb70dc30c69e30d49cf4f4b60611eefa))
+* enable GitHub Pages in docs workflow ([#91](https://github.com/kpeacocke/souschef/issues/91)) ([48a2206](https://github.com/kpeacocke/souschef/commit/48a220665891e7bae681f18aadf49d510ead1d10))
+* pyproject.toml Python version to 3.14 ([#103](https://github.com/kpeacocke/souschef/issues/103)) ([1c5bce3](https://github.com/kpeacocke/souschef/commit/1c5bce34f5f7d9960ab3dbffe1b85475ec8d7075))
+* remove --strict flag from mkdocs build ([#97](https://github.com/kpeacocke/souschef/issues/97)) ([899faca](https://github.com/kpeacocke/souschef/commit/899faca27d46f09676c31aa9e13db29010176b4a))
+* resolve all mkdocs warnings ([#99](https://github.com/kpeacocke/souschef/issues/99)) ([3eeb26c](https://github.com/kpeacocke/souschef/commit/3eeb26c683ffdff0d0a1d89ff2f01093c6f2bbb3))
+* update CI and docs workflows to Python 3.14 ([d0fd569](https://github.com/kpeacocke/souschef/commit/d0fd569f5b231f9d77cd7644b08a27319081133b))
+* update Python requirement to &gt;=3.14,&lt;4.0 (reverted by PR merge) ([2a2e305](https://github.com/kpeacocke/souschef/commit/2a2e3057da8486e9aab44ae8772160d6b1b62b7b))
+* use GITHUB_TOKEN in release-please workflow ([#106](https://github.com/kpeacocke/souschef/issues/106)) ([3a57f97](https://github.com/kpeacocke/souschef/commit/3a57f979dd7126771474b9af0d2ecfd5383d5029))
+
+
+### Reverts
+
+* restore RELEASE_TOKEN in release-please workflow ([bbde735](https://github.com/kpeacocke/souschef/commit/bbde73512bffb50bb69302a2ec4e64929b350550))
+
+
+### Documentation
+
+* clarify release-please trigger mechanism ([2712049](https://github.com/kpeacocke/souschef/commit/2712049118ba0ebbe2ba16353cc4fa89bcfc3a16))
+
 ## [2.1.2](https://github.com/kpeacocke/souschef/compare/v2.1.1...v2.1.2) (2026-01-05)
 
 
