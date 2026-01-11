@@ -350,7 +350,7 @@ Resolution Strategy:
 | **Data Bag Usage** | Multiple encrypted bags | Medium | Plan vault migration |
 | **Search Patterns** | Complex search queries | Medium | Design dynamic inventory |
 | **Platform-Specific** | OS-specific logic | Low | Use Ansible facts |
-| **Legacy Patterns** | Chef 11/12 syntax | Low | Modernize during migration |
+| **Legacy Patterns** | Chef 11/12 syntax | Low | Modernise during migration |
 | **Testing Gap** | No InSpec/tests | High | Generate tests |
 
 ### Risk Scoring

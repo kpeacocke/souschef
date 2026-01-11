@@ -392,7 +392,7 @@ graph LR
 
 7. **Profile Performance**
    - Use `profile_cookbook_performance` for large cookbooks
-   - Identify and optimize bottlenecks
+   - Identify and optimise bottlenecks
 
 8. **Leverage InSpec**
    - Convert existing InSpec tests with `convert_inspec_to_test`
@@ -487,7 +487,7 @@ Track these metrics to measure migration success:
 - Convert simple resources to roles
 - Build custom Ansible modules for complex logic
 - Use `parse_custom_resource` to understand interface
-- Preserve behavior, not implementation
+- Preserve behaviour, not implementation
 
 ### Challenge: Chef Search Patterns
 

@@ -7,8 +7,130 @@ Get up and running with SousChef in minutes. This guide walks you through your f
 Before you begin, make sure you have:
 
 - [x] SousChef installed ([Installation guide](installation.md))
-- [x] MCP client configured (Claude Desktop, VS Code, etc.)
+- [x] MCP client configured (choose one below)
 - [x] A Chef cookbook to migrate
+
+## MCP Client Setup
+
+Choose your preferred AI assistant and follow the setup instructions:
+
+=== "Claude Desktop"
+
+    **1. Install SousChef:**
+    ```bash
+    pip install mcp-souschef
+    ```
+
+    **2. Configure Claude Desktop:**
+
+    === "macOS"
+        ```bash
+        cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+        ```
+
+    === "Linux"
+        ```bash
+        cp config/claude-desktop.json ~/.config/Claude/claude_desktop_config.json
+        ```
+
+    === "Windows"
+        ```powershell
+        copy config\claude-desktop.json %APPDATA%\Claude\claude_desktop_config.json
+        ```
+
+    **3. Restart Claude Desktop**
+
+    **4. Verify:** Open Claude and ask "What Chef migration tools are available?"
+
+=== "VS Code + GitHub Copilot"
+
+    !!! success "MCP Support Available"
+        GitHub Copilot in VS Code supports MCP servers starting from **VS Code 1.102** (January 2026).
+
+    **Prerequisites**
+
+    - VS Code 1.102 or later
+    - GitHub Copilot extension installed
+    - Python 3.14+ installed
+
+    **Setup Steps**
+
+    1. **Install SousChef:**
+    ```bash
+    pip install mcp-souschef
+    ```
+
+    2. **Configure MCP Server:**
+
+    Copy the configuration to your VS Code user directory:
+
+    === "macOS/Linux"
+        ```bash
+        cp config/vscode-copilot.json ~/.config/Code/User/mcp.json
+        ```
+
+    === "Windows"
+        ```powershell
+        copy config\vscode-copilot.json %APPDATA%\Code\User\mcp.json
+        ```
+
+    Or create `~/.config/Code/User/mcp.json` (macOS/Linux) or `%APPDATA%\Code\User\mcp.json` (Windows) with:
+    ```json
+    {
+      "servers": {
+        "souschef": {
+          "type": "stdio",
+          "command": "uvx",
+          "args": ["--from", "mcp-souschef", "souschef"]
+        }
+      }
+    }
+    ```
+
+    3. **Activate in VS Code:**
+        - Reload VS Code window (`Cmd+Shift+P` → "Developer: Reload Window")
+        - Run `MCP: List Servers` from Command Palette
+        - Find "souschef" and start it
+        - Trust the server when prompted
+
+    4. **Start Using:**
+        - Open GitHub Copilot Chat (`Ctrl+Cmd+I` or `Ctrl+Alt+I`)
+        - Click the Tools button to enable SousChef tools
+        - Start asking questions!
+
+    **Example Prompts:**
+    ```
+    What Chef cookbooks are in /path/to/cookbooks?
+    Convert this Chef recipe to Ansible
+    Assess the complexity of migrating cookbook XYZ
+    ```
+
+    **Explicit Tool References:**
+    ```
+    #list_cookbook_structure /path/to/cookbook
+    #parse_recipe /path/to/recipe.rb
+    ```
+
+    [Learn more about MCP in VS Code →](https://code.visualstudio.com/docs/copilot/customization/mcp-servers){ .md-button }
+
+    **1. Install SousChef:**
+    ```bash
+    pip install mcp-souschef
+    ```
+
+    **2. Add to your MCP client config:**
+    ```json
+    {
+      "mcpServers": {
+        "souschef": {
+          "command": "uvx",
+          "args": ["mcp-souschef"]
+        }
+      }
+    }
+    ```
+
+    **3. Restart your MCP client**
 
 ## Your First Migration
 

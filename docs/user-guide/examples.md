@@ -1072,7 +1072,7 @@ app_port: 9091
 - [ ] Use `validate_conversion` after each major conversion
 - [ ] Test idempotency (run playbook twice, second run should show no changes)
 - [ ] Use `no_log: true` for tasks handling sensitive data
-- [ ] Organize playbooks into roles for reusability
+- [ ] Organise playbooks into roles for reusability
 - [ ] Use handlers for service restarts
 - [ ] Implement proper error handling with blocks
 - [ ] Tag tasks for selective execution

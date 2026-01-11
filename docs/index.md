@@ -1,6 +1,6 @@
 # SousChef Documentation
 
-An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
+An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure and application transformation.
 
 [![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
 [![Python Version](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
@@ -9,7 +9,18 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview
 
-SousChef is a complete enterprise-grade migration platform with **38 MCP tools** organized across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerized deployments, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with **24 primary MCP tools** organised across **8 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, SousChef provides everything needed for a successful infrastructure automation migration.
+
+!!! info "About Tool Counts"
+    **Why 24 tools in the documentation but more in the server?**
+
+    The MCP server actually provides **34 total tools** (32 public + 2 internal). This documentation focuses on the **24 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are:
+
+    - **Low-level filesystem operations** (`_read_file_internal`, `_list_directory_internal`) - Used internally by other tools
+    - **Helper utilities** - Supporting functions for the main tools
+    - **Deprecated tools** - Maintained for backward compatibility
+
+    As a user, you'll primarily interact with the 24 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -23,49 +34,67 @@ SousChef is a complete enterprise-grade migration platform with **38 MCP tools**
 - :material-domain: **Custom Enterprise Models**
 
 !!! tip "How it works"
-    You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 38 specialized tools. The model calls these tools to help with your migration.
+    You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 24 specialized tools. The model calls these tools to help with your migration.
 
 ## Core Capabilities
 
 ### :material-file-code: Chef Cookbook Analysis & Parsing
 Complete cookbook introspection and analysis tools for understanding your Chef infrastructure.
 
-[Learn more about parsing →](user-guide/mcp-tools.md#chef-cookbook-analysis-parsing){ .md-button }
+[Learn more about parsing →](user-guide/mcp-tools.md#cookbook-analysis-parsing){ .md-button }
 
 ### :material-swap-horizontal: Chef-to-Ansible Conversion Engine
 Advanced resource-to-task conversion with intelligent module selection and guard handling.
 
-[Learn more about conversion →](user-guide/mcp-tools.md#chef-to-ansible-conversion-engine){ .md-button }
-
-### :material-cloud: AWX/Ansible Automation Platform Integration
-Enterprise AWX/AAP configuration generation with job templates and workflows.
-
-[Learn more about AWX integration →](user-guide/mcp-tools.md#awx-ansible-automation-platform-integration){ .md-button }
-
-### :material-docker: Chef Habitat to Container Conversion
-Modernize Habitat applications to containerized deployments with Docker and Compose.
-
-[Learn more about Habitat conversion →](user-guide/mcp-tools.md#chef-habitat-to-container-conversion){ .md-button }
+[Learn more about conversion →](user-guide/mcp-tools.md#resource-conversion){ .md-button }
 
 ### :material-check-circle: Validation & Testing
 Comprehensive validation framework and InSpec integration for ensuring migration accuracy.
 
-[Learn more about validation →](user-guide/mcp-tools.md#conversion-validation-framework){ .md-button }
+[Learn more about validation →](user-guide/mcp-tools.md#inspec-integration){ .md-button }
+
+### :material-docker: Chef Habitat to Container Conversion
+Modernise Habitat applications to containerised deployments with Docker and Compose.
+
+[Learn more about Habitat conversion →](user-guide/mcp-tools.md#habitat){ .md-button }
 
 ## Quick Start
 
 Get started with SousChef in minutes:
 
-```bash
-# Install from PyPI
-pip install mcp-souschef
+=== "Claude Desktop"
 
-# Configure your MCP client
-cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+    ```bash
+    # Install from PyPI
+    pip install mcp-souschef
 
-# Start using with your AI assistant
-# Ask: "What Chef migration tools are available?"
-```
+    # Configure Claude Desktop (macOS)
+    cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+
+    # Restart Claude and start using
+    # Ask: "What Chef migration tools are available?"
+    ```
+
+=== "VS Code + Copilot"
+
+    ```bash
+    # Install from PyPI
+    pip install mcp-souschef
+
+    # Copy config to VS Code (macOS/Linux)
+    cp config/vscode-copilot.json ~/.config/Code/User/mcp.json
+
+    # Windows:
+    # copy config\vscode-copilot.json %APPDATA%\Code\User\mcp.json
+
+    # Reload VS Code, trust the server
+    # Use tools in Copilot Chat:
+    # "Analyze the cookbook at /path/to/cookbook"
+    pip install mcp-souschef
+
+    # Start using immediately
+    souschef-cli cookbook /path/to/cookbook
+    ```
 
 [Get started →](getting-started/installation.md){ .md-button .md-button--primary }
 
@@ -74,7 +103,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - :material-chart-line: **Migration Assessment & Reporting** - Automated complexity analysis and executive reports
 - :material-rocket: **Modern Deployment Patterns** - Blue/green, canary releases, and cloud-native strategies
 - :material-key: **Secrets Management** - Secure data bag to Ansible Vault conversion
-- :material-speedometer: **Performance Profiling** - Identify bottlenecks and optimize large-scale migrations
+- :material-speedometer: **Performance Profiling** - Identify bottlenecks and optimise large-scale migrations
 
 ## What's Next?
 

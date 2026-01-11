@@ -21,8 +21,10 @@ jobs:
   sonarcloud:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Only run if CI workflow succeeded
-    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+    # Only run if CI workflow succeeded and not from a fork (security: prevent untrusted code execution with secrets)
+    if: |
+      (github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch') &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.head_repository.full_name == github.repository)
 
     steps:
     - name: Check for SONAR_TOKEN secret
@@ -41,7 +43,8 @@ jobs:
       uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       if: steps.check-token.outputs.has_token == 'true'
       with:
-        ref: ${{ github.event.workflow_run.head_sha }}
+        # For security: always checkout repository code, never code from forks
+        # The workflow_run event provides coverage data via artifacts
         fetch-depth: 0  # Shallow clones should be disabled for better analysis
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}

@@ -1,0 +1,183 @@
+/* SousChef Custom Color Scheme - Charcoal + Teal */
+
+:root {
+  /* Light mode colors */
+  --md-default-bg-color: #FFFFFF;
+  --md-default-fg-color: #111827;
+  --md-default-fg-color--light: #4B5563;
+  --md-default-fg-color--lighter: #6B7280;
+  --md-default-fg-color--lightest: #9CA3AF;
+
+  /* Primary teal accent */
+  --md-primary-fg-color: #0F766E;
+  --md-primary-fg-color--light: #14B8A6;
+  --md-primary-fg-color--dark: #0D5F57;
+
+  /* Accent colors */
+  --md-accent-fg-color: #14B8A6;
+  --md-accent-fg-color--transparent: rgba(20, 184, 166, 0.1);
+
+  /* Borders and dividers */
+  --md-default-border-color: #E5E7EB;
+  --md-default-border-color--light: #F3F4F6;
+
+  /* Code blocks */
+  --md-code-bg-color: #F9FAFB;
+  --md-code-fg-color: #111827;
+
+  /* Admonitions and callouts */
+  --md-admonition-bg-color: #ECFEFF;
+  --md-admonition-fg-color: #111827;
+
+  /* Links */
+  --md-typeset-a-color: #0F766E;
+
+  /* Tables */
+  --md-typeset-table-color: #F9FAFB;
+  --md-typeset-table-color--light: #FFFFFF;
+}
+
+/* Dark mode colors */
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #1F2937;
+  --md-default-fg-color: #F9FAFB;
+  --md-default-fg-color--light: #D1D5DB;
+  --md-default-fg-color--lighter: #9CA3AF;
+  --md-default-fg-color--lightest: #6B7280;
+
+  /* Primary teal accent (lighter for dark mode) */
+  --md-primary-fg-color: #14B8A6;
+  --md-primary-fg-color--light: #2DD4BF;
+  --md-primary-fg-color--dark: #0F766E;
+
+  /* Accent colors */
+  --md-accent-fg-color: #2DD4BF;
+  --md-accent-fg-color--transparent: rgba(45, 212, 191, 0.1);
+
+  /* Borders and dividers */
+  --md-default-border-color: #374151;
+  --md-default-border-color--light: #4B5563;
+
+  /* Code blocks */
+  --md-code-bg-color: #111827;
+  --md-code-fg-color: #F9FAFB;
+
+  /* Admonitions and callouts */
+  --md-admonition-bg-color: rgba(15, 118, 110, 0.1);
+  --md-admonition-fg-color: #F9FAFB;
+
+  /* Links */
+  --md-typeset-a-color: #14B8A6;
+
+  /* Tables */
+  --md-typeset-table-color: #111827;
+  --md-typeset-table-color--light: #1F2937;
+}
+
+/* Apply custom colors to specific elements */
+.md-header {
+  background-color: var(--md-primary-fg-color);
+}
+
+.md-tabs {
+  background-color: var(--md-primary-fg-color);
+}
+
+.md-nav__link--active {
+  color: var(--md-primary-fg-color);
+}
+
+.md-nav__link:hover {
+  color: var(--md-accent-fg-color);
+}
+
+/* Buttons */
+.md-button {
+  color: var(--md-primary-fg-color);
+  border-color: var(--md-primary-fg-color);
+}
+
+.md-button--primary {
+  background-color: var(--md-primary-fg-color);
+  color: #FFFFFF;
+  border-color: var(--md-primary-fg-color);
+}
+
+.md-button--primary:hover {
+  background-color: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+}
+
+/* Search */
+.md-search__input {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.md-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.54);
+}
+
+/* Admonitions with teal accent */
+.md-typeset .admonition.tip,
+.md-typeset .admonition.info {
+  border-color: var(--md-primary-fg-color);
+}
+
+.md-typeset .admonition.tip > .admonition-title,
+.md-typeset .admonition.info > .admonition-title {
+  background-color: var(--md-admonition-bg-color);
+  border-color: var(--md-primary-fg-color);
+}
+
+.md-typeset .admonition.tip > .admonition-title::before,
+.md-typeset .admonition.info > .admonition-title::before {
+  color: var(--md-primary-fg-color);
+}
+
+/* Code highlighting with teal accents */
+.md-typeset code {
+  background-color: var(--md-code-bg-color);
+  color: var(--md-code-fg-color);
+}
+
+.md-typeset pre > code {
+  background-color: var(--md-code-bg-color);
+}
+
+/* Footer */
+.md-footer {
+  background-color: var(--md-primary-fg-color);
+}
+
+.md-footer-meta {
+  background-color: var(--md-primary-fg-color--dark);
+}
+
+/* Table of contents */
+.md-nav--secondary .md-nav__link--active {
+  color: var(--md-primary-fg-color);
+}
+
+/* Tags */
+.md-tag {
+  background-color: var(--md-admonition-bg-color);
+  color: var(--md-primary-fg-color);
+}
+
+/* Borders */
+.md-typeset hr {
+  border-bottom-color: var(--md-default-border-color);
+}
+
+.md-typeset table:not([class]) {
+  border-color: var(--md-default-border-color);
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--md-typeset-table-color);
+  border-color: var(--md-default-border-color);
+}
+
+.md-typeset table:not([class]) td {
+  border-color: var(--md-default-border-color);
+}

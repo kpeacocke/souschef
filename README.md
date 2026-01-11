@@ -14,7 +14,17 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview - Chef to Ansible features
 
-SousChef is a complete enterprise-grade migration platform with 38 MCP tools organized across 9 major capability areas to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerized deployments, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with **24 primary MCP tools** organised across **8 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, SousChef provides everything needed for a successful infrastructure automation migration.
+
+### About Tool Counts
+
+**Why 24 tools in the documentation but more in the server?**
+
+The MCP server provides **34 total tools** (32 public + 2 internal). This documentation focuses on the **24 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are low-level filesystem operations and helper utilities used internally by the main tools.
+
+As a user, you'll primarily interact with the 24 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
+
+> 💡 **For developers:** See `souschef/server.py` for the complete list of all 34 registered tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -27,7 +37,7 @@ SousChef is a complete enterprise-grade migration platform with 38 MCP tools org
 - **Local Models** (Ollama, llama.cpp, etc.)
 - **Custom Enterprise Models**
 
-**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 38 specialized tools. The model calls these tools to help with your migration.
+**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 24 specialized tools. The model calls these tools to help with your migration.
 
 > See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
 
@@ -281,7 +291,7 @@ profile_parsing_operation recipe /path/to/recipe.rb --detailed
 ### Prerequisites
 - Python 3.14+
 - [Poetry](https://python-poetry.org/) for dependency management
-- MCP-compatible client (Claude Desktop, VS Code with MCP extension, etc.)
+- MCP-compatible client (Claude Desktop, VS Code 1.102+ with GitHub Copilot, etc.)
 
 ### Quick Start
 
@@ -294,9 +304,21 @@ profile_parsing_operation recipe /path/to/recipe.rb --detailed
 
    Use the pre-configured files in the `config/` directory for quick setup with Claude Desktop, VS Code Copilot, or other MCP clients.
 
+   **Claude Desktop** (macOS):
    ```bash
-   # Example: Claude Desktop (macOS)
    cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+   # Restart Claude Desktop
+   ```
+
+   **VS Code + GitHub Copilot** (requires VS Code 1.102+):
+   ```bash
+   # macOS/Linux
+   cp config/vscode-copilot.json ~/.config/Code/User/mcp.json
+
+   # Windows
+   copy config\vscode-copilot.json %APPDATA%\Code\User\mcp.json
+
+   # Reload VS Code window, then trust the server when prompted
    ```
 
    ** See [config/CONFIGURATION.md](config/CONFIGURATION.md) for:**
@@ -467,10 +489,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -  Enhanced error handling with custom exceptions and actionable recovery suggestions
 -  Technical debt reduction - ALL PHASES COMPLETE: 16 functions refactored (15 C-grade eliminated, 70+ helpers extracted, average 77% complexity reduction, zero C-grade functions remaining)
 -  Performance profiling and optimization for large cookbooks (profiling module, CLI commands, MCP tools)
-
-### In Progress 🚧
--  Documentation website with MkDocs + Material theme
--  Documentation content (Getting Started, Tool Reference, Migration Guide)
+-  Code duplication elimination (InSpec functions refactored: 55 duplicate lines removed, improved architecture)
+-  Documentation website with MkDocs + Material theme (charcoal + teal colour scheme, 16 pages)
+-  Comprehensive documentation content (Getting Started, Tool Reference, Migration Guide, API docs, Examples)
 
 ### Planned 📅
 - 📅 Integration with additional test frameworks (ServerSpec, Goss)

@@ -121,7 +121,7 @@ for recipe in cookbooks/myapp/recipes/*.rb; do
 done
 ```
 
-**Organize as Role:**
+**Organise as Role:**
 
 ```
 roles/myapp/
@@ -822,7 +822,7 @@ Overall: PASSED with warnings
 - [ ] Convert data bags to vars/vault
 - [ ] Update environment-specific variables
 - [ ] Generate InSpec tests
-- [ ] Organize as role (if appropriate)
+- [ ] Organise as role (if appropriate)
 - [ ] Create README with usage examples
 - [ ] Tag in version control
 
@@ -838,7 +838,7 @@ Overall: PASSED with warnings
 4. **Validate Continuously**: Check syntax and semantics after each conversion
 5. **Test Idempotency**: Run playbooks multiple times
 6. **Document Changes**: Note any manual modifications
-7. **Organize into Roles**: Structure for reusability
+7. **Organise into Roles**: Structure for reusability
 8. **Version Control**: Commit after each successful conversion
 
 ### Don'ts ❌
@@ -847,7 +847,7 @@ Overall: PASSED with warnings
 2. **Don't Ignore Warnings**: Validation warnings indicate issues
 3. **Don't Convert Blindly**: Understand the Chef code first
 4. **Don't Forget Handlers**: Notifications must be preserved
-5. **Don't Mix Concerns**: Keep tasks focused and organized
+5. **Don't Mix Concerns**: Keep tasks focused and organised
 6. **Don't Hardcode Values**: Use variables for flexibility
 7. **Don't Skip Documentation**: Document complex conversions
 8. **Don't Rush**: Thorough conversion prevents rework

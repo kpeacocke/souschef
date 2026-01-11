@@ -1,7 +1,5 @@
 """Filesystem operations for Chef cookbook exploration."""
 
-from mcp.server.fastmcp import FastMCP
-
 from souschef.core.constants import (
     ERROR_FILE_NOT_FOUND,
     ERROR_IS_DIRECTORY,
@@ -9,11 +7,7 @@ from souschef.core.constants import (
 )
 from souschef.core.path_utils import _normalize_path
 
-# Get MCP instance to register tools
-mcp = FastMCP("souschef")
 
-
-@mcp.tool()
 def list_directory(path: str) -> list[str] | str:
     """
     List the contents of a directory.
@@ -40,7 +34,6 @@ def list_directory(path: str) -> list[str] | str:
         return f"An error occurred: {e}"
 
 
-@mcp.tool()
 def read_file(path: str) -> str:
     """
     Read the contents of a file.

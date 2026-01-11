@@ -1,7 +1,7 @@
 site_name: SousChef Documentation
 site_description: AI-powered MCP server for Chef to Ansible conversion
 site_author: SousChef Contributors
-site_url: https://kpeacocke.github.io/souschef/
+# site_url: https://kpeacocke.github.io/souschef/  # Commented out for local dev
 
 repo_name: kpeacocke/souschef
 repo_url: https://github.com/kpeacocke/souschef
@@ -10,19 +10,19 @@ edit_uri: edit/main/docs/
 theme:
   name: material
   palette:
-    # Light mode
+    # Light mode - Charcoal + Teal
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: deep purple
-      accent: purple
+      primary: teal
+      accent: teal
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    # Dark mode
+    # Dark mode - Charcoal + Teal
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: deep purple
-      accent: purple
+      primary: teal
+      accent: teal
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -70,7 +70,7 @@ markdown_extensions:
       custom_fences:
         - name: mermaid
           class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
+          format: pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.tasklist:
@@ -84,6 +84,9 @@ markdown_extensions:
   - tables
   - toc:
       permalink: true
+  - pymdownx.emoji:
+      emoji_index: materialx.emoji.twemoji
+      emoji_generator: materialx.emoji.to_svg
 
 nav:
   - Home: index.md
@@ -114,3 +117,6 @@ extra:
       link: https://github.com/kpeacocke/souschef
   version:
     provider: mike
+
+extra_css:
+  - stylesheets/custom.css

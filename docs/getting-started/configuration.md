@@ -1,6 +1,6 @@
 # Configuration
 
-Learn how to configure SousChef for your environment and customize its behavior.
+Learn how to configure SousChef for your environment and customise its behaviour.
 
 ## Configuration Files
 
@@ -63,7 +63,7 @@ The `command` field specifies how to launch the MCP server:
 
 #### Environment Variables
 
-Configure behavior through environment variables:
+Configure behaviour through environment variables:
 
 ```json
 {
