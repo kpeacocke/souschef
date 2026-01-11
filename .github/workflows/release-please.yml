@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -22,11 +22,35 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only run if both CI and SonarCloud passed
+    # Only run if the triggering workflow passed
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
+      - name: Check if both CI and SonarCloud passed
+        id: check-prerequisites
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "Checking workflows for commit: $COMMIT_SHA"
+          
+          # Get status of CI and SonarCloud for this commit
+          CI_STATUS=$(gh api "repos/${{ github.repository }}/commits/$COMMIT_SHA/check-runs" --jq '.check_runs[] | select(.name == "test (3.14)") | .conclusion' | head -1)
+          SONAR_STATUS=$(gh api "repos/${{ github.repository }}/commits/$COMMIT_SHA/check-runs" --jq '.check_runs[] | select(.name == "SonarCloud Code Analysis") | .conclusion' | head -1)
+          
+          echo "CI Status: $CI_STATUS"
+          echo "SonarCloud Status: $SONAR_STATUS"
+          
+          if [[ "$CI_STATUS" == "success" && "$SONAR_STATUS" == "success" ]]; then
+            echo "Both workflows passed"
+            echo "ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "Waiting for both workflows to pass"
+            echo "ready=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create or update release PR / Create release
+        if: ${{ steps.check-prerequisites.outputs.ready == 'true' }}
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: release
         with:
