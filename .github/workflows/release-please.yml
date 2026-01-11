@@ -1,6 +1,7 @@
 name: Release Please
 
 # Run after CI and SonarCloud complete on main
+# Trigger: workflow_run ensures both CI and SonarCloud pass before creating releases
 on:
   workflow_run:
     workflows: ["CI", "SonarCloud Analysis"]
