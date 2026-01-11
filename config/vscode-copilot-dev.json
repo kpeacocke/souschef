@@ -1,6 +1,7 @@
 {
-  "mcpServers": {
+  "servers": {
     "souschef-dev": {
+      "type": "stdio",
       "command": "poetry",
       "args": [
         "--directory",

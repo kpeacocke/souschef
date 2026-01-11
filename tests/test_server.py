@@ -2153,7 +2153,7 @@ control 'test-1' do
 end
 """
 
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.inspec._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.exists.return_value = True
@@ -2178,7 +2178,7 @@ control 'dir-test' do
 end
 """
 
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.inspec._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.exists.return_value = True
@@ -2203,7 +2203,7 @@ end
 
 def test_parse_inspec_profile_not_found():
     """Test parsing InSpec profile with non-existent path."""
-    with patch("souschef.server._normalize_path") as mock_path:
+    with patch("souschef.parsers.inspec._normalize_path") as mock_path:
         mock_instance = MagicMock()
         mock_path.return_value = mock_instance
         mock_instance.exists.return_value = False
@@ -2241,7 +2241,7 @@ def test_convert_inspec_to_test_testinfra():
         }
     )
 
-    with patch("souschef.server.parse_inspec_profile") as mock_parse:
+    with patch("souschef.parsers.inspec.parse_inspec_profile") as mock_parse:
         mock_parse.return_value = mock_parse_result
 
         result = convert_inspec_to_test("/path/to/test.rb", "testinfra")
@@ -2278,7 +2278,7 @@ def test_convert_inspec_to_test_ansible_assert():
         }
     )
 
-    with patch("souschef.server.parse_inspec_profile") as mock_parse:
+    with patch("souschef.parsers.inspec.parse_inspec_profile") as mock_parse:
         mock_parse.return_value = mock_parse_result
 
         result = convert_inspec_to_test("/path/to/test.rb", "ansible_assert")
@@ -2315,7 +2315,7 @@ def test_convert_inspec_to_test_invalid_format():
         }
     )
 
-    with patch("souschef.server.parse_inspec_profile") as mock_parse:
+    with patch("souschef.parsers.inspec.parse_inspec_profile") as mock_parse:
         mock_parse.return_value = mock_parse_result
 
         result = convert_inspec_to_test("/path/to/test.rb", "invalid")

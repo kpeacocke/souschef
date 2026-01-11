@@ -21,17 +21,32 @@ def parse_inspec_profile(path: str) -> str:
 
     """
     try:
+        # Validate input
+        if not path or not path.strip():
+            return (
+                "Error: Path cannot be empty\n\n"
+                "Suggestion: Provide a path to an InSpec profile directory "
+                "or control file"
+            )
+
         profile_path = _normalize_path(path)
 
         if not profile_path.exists():
-            return f"Error: Path does not exist: {path}"
+            return (
+                f"Error: Path does not exist: {path}\n\n"
+                "Suggestion: Check that the path is correct and the InSpec "
+                "profile exists"
+            )
 
         if profile_path.is_dir():
             controls = _parse_controls_from_directory(profile_path)
         elif profile_path.is_file():
             controls = _parse_controls_from_file(profile_path)
         else:
-            return f"Error: Invalid path type: {path}"
+            return (
+                f"Error: Invalid path type: {path}\n\n"
+                "Suggestion: Provide a directory or file path, not a special file type"
+            )
 
         return json.dumps(
             {
@@ -43,7 +58,7 @@ def parse_inspec_profile(path: str) -> str:
         )
 
     except (FileNotFoundError, RuntimeError) as e:
-        return f"Error: {e}"
+        return f"Error: {e}\n\nSuggestion: Verify the path exists and is accessible"
     except Exception as e:
         return f"An error occurred while parsing InSpec profile: {e}"
 
@@ -73,19 +88,36 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         controls = profile_data["controls"]
 
         if not controls:
-            return "Warning: No controls found to convert"
+            return "Error: No controls found in InSpec profile"
 
         # Convert each control
-        converted = []
-        for control in controls:
-            if output_format == "testinfra":
-                converted.append(_convert_inspec_to_testinfra(control))
-            elif output_format == "ansible_assert":
-                converted.append(_convert_inspec_to_ansible_assert(control))
-            else:
-                return f"Error: Unsupported output format: {output_format}"
+        converted_tests = []
 
-        return "\n".join(converted)
+        if output_format == "testinfra":
+            converted_tests.append("import pytest")
+            converted_tests.append("")
+            converted_tests.append("")
+            for control in controls:
+                test_code = _convert_inspec_to_testinfra(control)
+                converted_tests.append(test_code)
+
+        elif output_format == "ansible_assert":
+            converted_tests.append("---")
+            converted_tests.append("# Validation tasks converted from InSpec")
+            converted_tests.append("")
+            for control in controls:
+                assert_code = _convert_inspec_to_ansible_assert(control)
+                converted_tests.append(assert_code)
+                converted_tests.append("")
+
+        else:
+            error_msg = (
+                f"Error: Unsupported format '{output_format}'. "
+                "Use 'testinfra' or 'ansible_assert'"
+            )
+            return error_msg
+
+        return "\n".join(converted_tests)
 
     except json.JSONDecodeError as e:
         return f"Error parsing InSpec result: {e}"

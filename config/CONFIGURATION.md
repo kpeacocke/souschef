@@ -43,26 +43,31 @@ code ~/Library/Application\ Support/Claude/claude_desktop_config.json
 
 ### VS Code GitHub Copilot
 
+**Prerequisites**: VS Code 1.102+ with GitHub Copilot extension installed.
+
 **Production (after `pip install mcp-souschef`):**
 
 ```bash
 # macOS/Linux
-mkdir -p ~/.config/Code/User/globalStorage/github.copilot-chat
-cp config/vscode-copilot.json ~/.config/Code/User/globalStorage/github.copilot-chat/mcp.json
+cp config/vscode-copilot.json ~/.config/Code/User/mcp.json
 
 # Windows
-mkdir %APPDATA%\Code\User\globalStorage\github.copilot-chat
-copy config\vscode-copilot.json %APPDATA%\Code\User\globalStorage\github.copilot-chat\mcp.json
+copy config\\vscode-copilot.json %APPDATA%\\Code\\User\\mcp.json
+
+# Reload VS Code window: Cmd+Shift+P > \"Developer: Reload Window\"
+# Trust the souschef server when prompted
 ```
 
 **Development:**
 
 ```bash
 # 1. Copy dev config
-cp config/vscode-copilot-dev.json ~/.config/Code/User/globalStorage/github.copilot-chat/mcp.json
+cp config/vscode-copilot-dev.json ~/.config/Code/User/mcp.json
 
 # 2. Edit and replace /absolute/path/to/souschef with your actual path
-code ~/.config/Code/User/globalStorage/github.copilot-chat/mcp.json
+code ~/.config/Code/User/mcp.json
+
+# 3. Reload VS Code window and trust the server
 ```
 
 ## Model Provider Support
@@ -163,7 +168,7 @@ The provided VS Code configs work with Copilot:
 
 ### Key Principle: Client vs Server
 
-** Important:** 
+** Important:**
 - **MCP Server (SousChef)** = Provides the Chef/Ansible tools
 - **MCP Client** = Runs your chosen AI model
 - The client configuration determines which model you use
