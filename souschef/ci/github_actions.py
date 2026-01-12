@@ -10,6 +10,23 @@ from typing import Any
 
 import yaml
 
+# GitHub Actions constants
+ACTION_CHECKOUT = "actions/checkout@v4"
+ACTION_SETUP_RUBY = "ruby/setup-ruby@v1"
+ACTION_CACHE = "actions/cache@v4"
+ACTION_UPLOAD_ARTIFACT = "actions/upload-artifact@v4"
+
+STEP_NAME_CHECKOUT = "Checkout code"
+STEP_NAME_SETUP_RUBY = "Setup Ruby"
+STEP_NAME_CACHE_GEMS = "Cache gems"
+STEP_NAME_INSTALL_DEPS = "Install dependencies"
+
+GEM_BUNDLE_PATH = "vendor/bundle"
+GEM_CACHE_KEY = "gems-${{ runner.os }}-${{ hashFiles('**/Gemfile.lock') }}"
+GEM_CACHE_RESTORE_KEY = "gems-${{ runner.os }}-"
+
+BUNDLE_INSTALL_CMD = "bundle install --jobs 4 --retry 3"
+
 
 def generate_github_workflow_from_chef_ci(
     cookbook_path: str,
@@ -166,10 +183,10 @@ def _build_lint_job(patterns: dict[str, Any], enable_cache: bool) -> dict[str, A
         "name": "Lint Cookbook",
         "runs-on": "ubuntu-latest",
         "steps": [
-            {"name": "Checkout code", "uses": "actions/checkout@v4"},
+            {"name": STEP_NAME_CHECKOUT, "uses": ACTION_CHECKOUT},
             {
-                "name": "Setup Ruby",
-                "uses": "ruby/setup-ruby@v1",
+                "name": STEP_NAME_SETUP_RUBY,
+                "uses": ACTION_SETUP_RUBY,
                 "with": {"ruby-version": "3.2"},
             },
         ],
@@ -178,12 +195,12 @@ def _build_lint_job(patterns: dict[str, Any], enable_cache: bool) -> dict[str, A
     if enable_cache:
         job["steps"].append(
             {
-                "name": "Cache gems",
-                "uses": "actions/cache@v4",
+                "name": STEP_NAME_CACHE_GEMS,
+                "uses": ACTION_CACHE,
                 "with": {
-                    "path": "vendor/bundle",
-                    "key": "gems-${{ runner.os }}-${{ hashFiles('**/Gemfile.lock') }}",
-                    "restore-keys": "gems-${{ runner.os }}-",
+                    "path": GEM_BUNDLE_PATH,
+                    "key": GEM_CACHE_KEY,
+                    "restore-keys": GEM_CACHE_RESTORE_KEY,
                 },
             }
         )
@@ -191,8 +208,8 @@ def _build_lint_job(patterns: dict[str, Any], enable_cache: bool) -> dict[str, A
     job["steps"].extend(
         [
             {
-                "name": "Install dependencies",
-                "run": "bundle install --jobs 4 --retry 3",
+                "name": STEP_NAME_INSTALL_DEPS,
+                "run": BUNDLE_INSTALL_CMD,
             },
         ]
     )
@@ -224,10 +241,10 @@ def _build_unit_test_job(enable_cache: bool) -> dict[str, Any]:
         "name": "Unit Tests (ChefSpec)",
         "runs-on": "ubuntu-latest",
         "steps": [
-            {"name": "Checkout code", "uses": "actions/checkout@v4"},
+            {"name": STEP_NAME_CHECKOUT, "uses": ACTION_CHECKOUT},
             {
-                "name": "Setup Ruby",
-                "uses": "ruby/setup-ruby@v1",
+                "name": STEP_NAME_SETUP_RUBY,
+                "uses": ACTION_SETUP_RUBY,
                 "with": {"ruby-version": "3.2"},
             },
         ],
@@ -236,12 +253,12 @@ def _build_unit_test_job(enable_cache: bool) -> dict[str, Any]:
     if enable_cache:
         job["steps"].append(
             {
-                "name": "Cache gems",
-                "uses": "actions/cache@v4",
+                "name": STEP_NAME_CACHE_GEMS,
+                "uses": ACTION_CACHE,
                 "with": {
-                    "path": "vendor/bundle",
-                    "key": "gems-${{ runner.os }}-${{ hashFiles('**/Gemfile.lock') }}",
-                    "restore-keys": "gems-${{ runner.os }}-",
+                    "path": GEM_BUNDLE_PATH,
+                    "key": GEM_CACHE_KEY,
+                    "restore-keys": GEM_CACHE_RESTORE_KEY,
                 },
             }
         )
@@ -249,8 +266,8 @@ def _build_unit_test_job(enable_cache: bool) -> dict[str, Any]:
     job["steps"].extend(
         [
             {
-                "name": "Install dependencies",
-                "run": "bundle install --jobs 4 --retry 3",
+                "name": STEP_NAME_INSTALL_DEPS,
+                "run": BUNDLE_INSTALL_CMD,
             },
             {"name": "Run ChefSpec tests", "run": "bundle exec rspec"},
         ]
@@ -279,10 +296,10 @@ def _build_integration_test_job(
         "runs-on": "ubuntu-latest",
         "strategy": {"matrix": {"suite": patterns["kitchen_suites"] or ["default"]}},
         "steps": [
-            {"name": "Checkout code", "uses": "actions/checkout@v4"},
+            {"name": STEP_NAME_CHECKOUT, "uses": ACTION_CHECKOUT},
             {
-                "name": "Setup Ruby",
-                "uses": "ruby/setup-ruby@v1",
+                "name": STEP_NAME_SETUP_RUBY,
+                "uses": ACTION_SETUP_RUBY,
                 "with": {"ruby-version": "3.2"},
             },
         ],
@@ -291,12 +308,12 @@ def _build_integration_test_job(
     if enable_cache:
         job["steps"].append(
             {
-                "name": "Cache gems",
-                "uses": "actions/cache@v4",
+                "name": STEP_NAME_CACHE_GEMS,
+                "uses": ACTION_CACHE,
                 "with": {
-                    "path": "vendor/bundle",
-                    "key": "gems-${{ runner.os }}-${{ hashFiles('**/Gemfile.lock') }}",
-                    "restore-keys": "gems-${{ runner.os }}-",
+                    "path": GEM_BUNDLE_PATH,
+                    "key": GEM_CACHE_KEY,
+                    "restore-keys": GEM_CACHE_RESTORE_KEY,
                 },
             }
         )
@@ -304,8 +321,8 @@ def _build_integration_test_job(
     job["steps"].extend(
         [
             {
-                "name": "Install dependencies",
-                "run": "bundle install --jobs 4 --retry 3",
+                "name": STEP_NAME_INSTALL_DEPS,
+                "run": BUNDLE_INSTALL_CMD,
             },
             {
                 "name": "Run Test Kitchen",
@@ -318,7 +335,7 @@ def _build_integration_test_job(
         job["steps"].append(
             {
                 "name": "Upload test results",
-                "uses": "actions/upload-artifact@v4",
+                "uses": ACTION_UPLOAD_ARTIFACT,
                 "if": "always()",
                 "with": {
                     "name": "kitchen-logs-${{ matrix.suite }}",
