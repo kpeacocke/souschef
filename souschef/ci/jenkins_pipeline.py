@@ -8,7 +8,6 @@ def generate_jenkinsfile_from_chef_ci(
     cookbook_path: str,
     pipeline_name: str,
     pipeline_type: str = "declarative",
-    enable_parallel: bool = True,
 ) -> str:
     """
     Generate Jenkinsfile from Chef cookbook CI/CD patterns.
@@ -20,7 +19,6 @@ def generate_jenkinsfile_from_chef_ci(
         cookbook_path: Path to Chef cookbook.
         pipeline_name: Name for the Jenkins pipeline.
         pipeline_type: 'declarative' or 'scripted'.
-        enable_parallel: Enable parallel stage execution.
 
     Returns:
         Jenkinsfile content (Groovy DSL).
