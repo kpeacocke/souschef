@@ -14909,3 +14909,216 @@ do_install() {
                 # Key-value pairs (but not section headers) should have proper indentation
                 # (either 4 or 6 spaces depending on context)
                 assert line.startswith("    ") or line.startswith("      ")
+
+
+# CI/CD Generation MCP Tool Tests
+
+
+def test_generate_jenkinsfile_from_chef_success():
+    """Test generate_jenkinsfile_from_chef MCP tool with valid cookbook."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_jenkinsfile_from_chef(
+        cookbook_path=cookbook_path,
+        pipeline_name="test-pipeline",
+        pipeline_type="declarative",
+        enable_parallel="yes",
+    )
+
+    assert "// Jenkinsfile: test-pipeline" in result
+    assert "pipeline {" in result
+    assert "Generated from Chef cookbook CI/CD patterns" in result
+    assert "Pipeline Type: Declarative" in result
+
+
+def test_generate_jenkinsfile_from_chef_scripted_type():
+    """Test Jenkins scripted pipeline generation."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_jenkinsfile_from_chef(
+        cookbook_path=cookbook_path,
+        pipeline_name="scripted-test",
+        pipeline_type="scripted",
+        enable_parallel="no",
+    )
+
+    assert "// Jenkinsfile: scripted-test" in result
+    assert "node {" in result
+    assert "Pipeline Type: Scripted" in result
+    assert "stage('Checkout')" in result
+
+
+def test_generate_jenkinsfile_from_chef_default_params():
+    """Test Jenkinsfile generation with default parameters."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_jenkinsfile_from_chef(cookbook_path=cookbook_path)
+
+    assert "chef-to-ansible-pipeline" in result
+    assert "pipeline {" in result
+
+
+def test_generate_jenkinsfile_from_chef_nonexistent_path():
+    """Test Jenkinsfile generation with nonexistent cookbook path."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    result = generate_jenkinsfile_from_chef(
+        cookbook_path="/nonexistent/path",
+        pipeline_name="test",
+        pipeline_type="declarative",
+        enable_parallel="yes",
+    )
+
+    # Should still generate output (may be minimal)
+    assert isinstance(result, str)
+
+
+def test_generate_jenkinsfile_from_chef_enable_parallel_variations():
+    """Test enable_parallel parameter accepts different true/false values."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    # Test 'yes', 'true', '1'
+    for value in ["yes", "true", "1", "YES", "True"]:
+        result = generate_jenkinsfile_from_chef(
+            cookbook_path=cookbook_path,
+            pipeline_name="test",
+            enable_parallel=value,
+        )
+        assert "pipeline {" in result
+
+    # Test 'no', 'false', '0'
+    for value in ["no", "false", "0", "NO", "False"]:
+        result = generate_jenkinsfile_from_chef(
+            cookbook_path=cookbook_path,
+            pipeline_name="test",
+            enable_parallel=value,
+        )
+        assert "pipeline {" in result
+
+
+def test_generate_gitlab_ci_from_chef_success():
+    """Test generate_gitlab_ci_from_chef MCP tool with valid cookbook."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_gitlab_ci_from_chef(
+        cookbook_path=cookbook_path,
+        project_name="test-project",
+        enable_cache="yes",
+        enable_artifacts="yes",
+    )
+
+    assert "# .gitlab-ci.yml: test-project" in result
+    assert "Generated from Chef cookbook CI/CD patterns" in result
+    assert "stages:" in result
+    assert "- lint" in result or "- test" in result
+    assert "image: python:3.11" in result
+
+
+def test_generate_gitlab_ci_from_chef_without_cache():
+    """Test GitLab CI generation without caching."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_gitlab_ci_from_chef(
+        cookbook_path=cookbook_path,
+        project_name="test",
+        enable_cache="no",
+        enable_artifacts="yes",
+    )
+
+    assert "# .gitlab-ci.yml: test" in result
+    assert "cache:" not in result
+    assert "stages:" in result
+
+
+def test_generate_gitlab_ci_from_chef_without_artifacts():
+    """Test GitLab CI generation without artifacts."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_gitlab_ci_from_chef(
+        cookbook_path=cookbook_path,
+        project_name="test",
+        enable_cache="yes",
+        enable_artifacts="no",
+    )
+
+    assert "# .gitlab-ci.yml: test" in result
+    assert "stages:" in result
+
+
+def test_generate_gitlab_ci_from_chef_default_params():
+    """Test GitLab CI generation with default parameters."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_gitlab_ci_from_chef(cookbook_path=cookbook_path)
+
+    assert "chef-to-ansible" in result
+    assert "stages:" in result
+
+
+def test_generate_gitlab_ci_from_chef_nonexistent_path():
+    """Test GitLab CI generation with nonexistent cookbook path."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    result = generate_gitlab_ci_from_chef(
+        cookbook_path="/nonexistent/path",
+        project_name="test",
+        enable_cache="yes",
+        enable_artifacts="yes",
+    )
+
+    # Should still generate output
+    assert isinstance(result, str)
+
+
+def test_generate_gitlab_ci_from_chef_boolean_param_variations():
+    """Test GitLab CI boolean parameters accept different formats."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    # Test variations of true
+    for cache_val in ["yes", "true", "1"]:
+        for artifacts_val in ["YES", "True", "1"]:
+            result = generate_gitlab_ci_from_chef(
+                cookbook_path=cookbook_path,
+                project_name="test",
+                enable_cache=cache_val,
+                enable_artifacts=artifacts_val,
+            )
+            assert "stages:" in result
+
+    # Test variations of false
+    for cache_val in ["no", "false", "0"]:
+        for artifacts_val in ["NO", "False", "0"]:
+            result = generate_gitlab_ci_from_chef(
+                cookbook_path=cookbook_path,
+                project_name="test",
+                enable_cache=cache_val,
+                enable_artifacts=artifacts_val,
+            )
+            assert "stages:" in result
