@@ -100,6 +100,22 @@ jobs:
         fi
       continue-on-error: true
 
+    - name: Fix coverage.xml paths for SonarCloud
+      if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
+      run: |
+        if [ -f "coverage.xml" ]; then
+          echo "Fixing paths in coverage.xml..."
+          # Ensure paths are relative to project root
+          sed -i 's|filename="|filename="souschef/|g' coverage.xml
+          # Remove any double souschef/ prefixes that might exist
+          sed -i 's|filename="souschef/souschef/|filename="souschef/|g' coverage.xml
+          echo "✓ Paths fixed"
+          head -20 coverage.xml
+        else
+          echo "⚠ No coverage.xml found to fix"
+        fi
+      continue-on-error: true
+
     - name: Generate coverage if not downloaded
       if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_dispatch'
       run: |
