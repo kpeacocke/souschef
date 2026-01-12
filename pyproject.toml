@@ -71,6 +71,7 @@ testpaths = [
 [tool.coverage.run]
 source = ["souschef"]
 relative_files = true
+omit = ["tests/*", "examples/*"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -85,6 +86,12 @@ exclude_lines = [
 
 [tool.coverage.xml]
 output = "coverage.xml"
+
+[tool.coverage.paths]
+source = [
+    "souschef/",
+    "*/souschef/",
+]
 
 [tool.mutmut]
 backup = false
