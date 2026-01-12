@@ -30,11 +30,9 @@ def generate_jenkinsfile_from_chef_ci(
     ci_patterns = _analyze_chef_ci_patterns(cookbook_path)
 
     if pipeline_type == "declarative":
-        return _generate_declarative_pipeline(
-            pipeline_name, ci_patterns, enable_parallel
-        )
+        return _generate_declarative_pipeline(pipeline_name, ci_patterns)
     else:
-        return _generate_scripted_pipeline(pipeline_name, ci_patterns, enable_parallel)
+        return _generate_scripted_pipeline(pipeline_name)
 
 
 def _analyze_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
@@ -92,8 +90,63 @@ def _analyze_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
     return patterns
 
 
+def _create_lint_stage(ci_patterns: dict[str, Any]) -> str | None:
+    """Create lint stage if lint tools are detected."""
+    if not ci_patterns.get("lint_tools"):
+        return None
+
+    lint_steps = []
+    for tool in ci_patterns["lint_tools"]:
+        if tool == "cookstyle":
+            lint_steps.append("sh 'ansible-lint playbooks/'")
+        elif tool == "foodcritic":
+            lint_steps.append("sh 'yamllint -c .yamllint .'")
+    return _create_stage("Lint", lint_steps)
+
+
+def _create_unit_test_stage(ci_patterns: dict[str, Any]) -> str | None:
+    """Create unit test stage if ChefSpec is detected."""
+    if not ci_patterns.get("has_chefspec"):
+        return None
+
+    return _create_stage(
+        "Unit Tests",
+        ["sh 'molecule test --scenario-name default'"],
+    )
+
+
+def _create_integration_test_stage(ci_patterns: dict[str, Any]) -> str | None:
+    """Create integration test stage if Test Kitchen or InSpec is detected."""
+    if not (ci_patterns.get("has_kitchen") or ci_patterns.get("has_inspec")):
+        return None
+
+    test_steps = []
+    if ci_patterns.get("test_suites"):
+        for suite in ci_patterns["test_suites"]:
+            test_steps.append(f"sh 'molecule test --scenario-name {suite}'")
+    else:
+        test_steps.append("sh 'molecule test'")
+
+    return _create_stage("Integration Tests", test_steps)
+
+
+def _create_deploy_stage() -> str:
+    """Create deploy stage."""
+    return _create_stage(
+        "Deploy",
+        [
+            (
+                "sh 'ansible-playbook -i inventory/production "
+                "playbooks/site.yml --check'"
+            ),
+            "input message: 'Deploy to production?', ok: 'Deploy'",
+            "sh 'ansible-playbook -i inventory/production playbooks/site.yml'",
+        ],
+    )
+
+
 def _generate_declarative_pipeline(
-    pipeline_name: str, ci_patterns: dict[str, Any], enable_parallel: bool
+    pipeline_name: str, ci_patterns: dict[str, Any]
 ) -> str:
     """
     Generate Jenkins Declarative Pipeline.
@@ -101,7 +154,6 @@ def _generate_declarative_pipeline(
     Args:
         pipeline_name: Pipeline name.
         ci_patterns: Detected CI patterns.
-        enable_parallel: Enable parallel execution.
 
     Returns:
         Jenkinsfile with Declarative Pipeline syntax.
@@ -109,58 +161,21 @@ def _generate_declarative_pipeline(
     """
     stages = []
 
-    # Lint stage
-    if ci_patterns.get("lint_tools"):
-        lint_steps = []
-        for tool in ci_patterns["lint_tools"]:
-            if tool == "cookstyle":
-                lint_steps.append("sh 'ansible-lint playbooks/'")
-            elif tool == "foodcritic":
-                lint_steps.append("sh 'yamllint -c .yamllint .'")
-        stages.append(
-            _create_stage("Lint", lint_steps, "Linting Ansible playbooks and YAML")
-        )
+    # Add stages based on detected patterns
+    lint_stage = _create_lint_stage(ci_patterns)
+    if lint_stage:
+        stages.append(lint_stage)
 
-    # Unit test stage (ChefSpec → Ansible molecule)
-    if ci_patterns.get("has_chefspec"):
-        stages.append(
-            _create_stage(
-                "Unit Tests",
-                ["sh 'molecule test --scenario-name default'"],
-                "Running Ansible Molecule unit tests",
-            )
-        )
+    unit_stage = _create_unit_test_stage(ci_patterns)
+    if unit_stage:
+        stages.append(unit_stage)
 
-    # Integration test stage (Kitchen → Molecule)
-    if ci_patterns.get("has_kitchen") or ci_patterns.get("has_inspec"):
-        test_steps = []
-        if ci_patterns.get("test_suites"):
-            for suite in ci_patterns["test_suites"]:
-                test_steps.append(f"sh 'molecule test --scenario-name {suite}'")
-        else:
-            test_steps.append("sh 'molecule test'")
+    integration_stage = _create_integration_test_stage(ci_patterns)
+    if integration_stage:
+        stages.append(integration_stage)
 
-        stages.append(
-            _create_stage(
-                "Integration Tests", test_steps, "Running Ansible Molecule integration"
-            )
-        )
-
-    # Deploy stage
-    stages.append(
-        _create_stage(
-            "Deploy",
-            [
-                (
-                    "sh 'ansible-playbook -i inventory/production "
-                    "playbooks/site.yml --check'"
-                ),
-                "input message: 'Deploy to production?', ok: 'Deploy'",
-                "sh 'ansible-playbook -i inventory/production playbooks/site.yml'",
-            ],
-            "Deploying to production",
-        )
-    )
+    # Always add deploy stage
+    stages.append(_create_deploy_stage())
 
     # Build pipeline
     stages_groovy = "\n\n".join(stages)
@@ -202,16 +217,12 @@ pipeline {{
 """
 
 
-def _generate_scripted_pipeline(
-    pipeline_name: str, ci_patterns: dict[str, Any], enable_parallel: bool
-) -> str:
+def _generate_scripted_pipeline(pipeline_name: str) -> str:
     """
     Generate Jenkins Scripted Pipeline.
 
     Args:
         pipeline_name: Pipeline name.
-        ci_patterns: Detected CI patterns.
-        enable_parallel: Enable parallel execution.
 
     Returns:
         Jenkinsfile with Scripted Pipeline syntax.
@@ -249,14 +260,13 @@ node {{
 """
 
 
-def _create_stage(name: str, steps: list[str], description: str = "") -> str:
+def _create_stage(name: str, steps: list[str]) -> str:
     """
     Create a Jenkins Declarative Pipeline stage.
 
     Args:
         name: Stage name.
         steps: List of steps (shell commands or Jenkins DSL).
-        description: Stage description.
 
     Returns:
         Groovy stage block.
