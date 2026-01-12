@@ -56,10 +56,11 @@ ignore = ["D100", "D104", "D105", "D107", "D203", "D212"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["S101", "E501"]  # Allow assert statements, long lines in test data
-"souschef/server.py" = ["T201", "E501"]  # Allow print in main entry, long lines in templates/reports
+"souschef/server.py" = ["T201", "E501", "ISC003"]  # Allow print in main entry, long lines, explicit string concatenation
 "souschef/assessment.py" = ["E501"]  # Long lines in migration report templates
 "souschef/parsers/validation.py" = ["E501"]  # Long lines in validation messages
 "souschef/converters/resource.py" = ["C901"]  # Allow complex function for resource conversion logic
+"souschef/deployment.py" = ["ISC003"]  # Allow explicit string concatenation
 
 [tool.pytest.ini_options]
 minversion = "6.0"
