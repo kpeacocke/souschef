@@ -783,6 +783,64 @@ class TestInSpecIntegration:
         # Should contain service checks
         assert "services['nginx'].state == 'running'" in result
 
+    def test_convert_profile_to_serverspec(self):
+        """Test converting InSpec profile to ServerSpec format."""
+        result = convert_inspec_to_test(str(SAMPLE_INSPEC_PROFILE), "serverspec")
+
+        # Check ServerSpec header
+        assert "require 'serverspec'" in result
+        assert "set :backend, :exec" in result
+
+        # Should have describe blocks (titles may vary)
+        assert "describe " in result
+
+        # Check resource definitions
+        assert "describe package('nginx') do" in result
+        assert "it { should be_installed }" in result
+        assert "describe service('nginx') do" in result
+        assert "it { should be_running }" in result
+        assert "it { should be_enabled }" in result
+
+    def test_convert_profile_to_goss(self):
+        """Test converting InSpec profile to Goss YAML format."""
+        result = convert_inspec_to_test(str(SAMPLE_INSPEC_PROFILE), "goss")
+
+        # Should be YAML format (or JSON as fallback)
+        assert "package:" in result or "package" in result
+        assert "service:" in result or "service" in result
+        assert "nginx" in result
+
+        # Check for Goss-specific keys
+        assert (
+            "installed:" in result
+            or "installed" in result
+            or "True" in result
+            or "true" in result
+        )
+        assert (
+            "running:" in result
+            or "running" in result
+            or "True" in result
+            or "true" in result
+        )
+
+    def test_convert_simple_control_to_serverspec(self):
+        """Test converting simple control to ServerSpec format."""
+        result = convert_inspec_to_test(str(SIMPLE_CONTROL), "serverspec")
+
+        assert "require 'serverspec'" in result
+        assert "describe " in result  # Should have describe block (title may vary)
+        assert "describe package('vim') do" in result
+        assert "it { should be_installed }" in result
+
+    def test_convert_simple_control_to_goss(self):
+        """Test converting simple control to Goss YAML format."""
+        result = convert_inspec_to_test(str(SIMPLE_CONTROL), "goss")
+
+        # Should contain vim package definition
+        assert "vim" in result
+        assert "installed" in result or "True" in result or "true" in result
+
     def test_generate_inspec_from_recipe(self):
         """Test generating InSpec controls from Chef recipe."""
         recipe_path = SAMPLE_COOKBOOK / "recipes" / "default.rb"

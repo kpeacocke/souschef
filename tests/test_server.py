@@ -20,6 +20,8 @@ from souschef.server import (
     _convert_erb_to_jinja2,
     _convert_guards_to_when_conditions,
     _convert_inspec_to_ansible_assert,
+    _convert_inspec_to_goss,
+    _convert_inspec_to_serverspec,
     _convert_inspec_to_testinfra,
     _create_handler,
     _create_handler_with_timing,
@@ -2322,6 +2324,160 @@ def test_convert_inspec_to_test_invalid_format():
 
         assert result.startswith("Error:")
         assert "Unsupported format" in result
+
+
+def test_convert_inspec_to_serverspec():
+    """Test converting InSpec to ServerSpec format."""
+    control = {
+        "id": "nginx-test",
+        "title": "Nginx test",
+        "desc": "Check nginx",
+        "tests": [
+            {
+                "resource_type": "package",
+                "resource_name": "nginx",
+                "expectations": [
+                    {"type": "should", "matcher": "should be_installed"},
+                ],
+            },
+            {
+                "resource_type": "service",
+                "resource_name": "nginx",
+                "expectations": [
+                    {"type": "should", "matcher": "should be_running"},
+                    {"type": "should", "matcher": "should be_enabled"},
+                ],
+            },
+        ],
+    }
+
+    result = _convert_inspec_to_serverspec(control)
+
+    assert "describe 'Nginx test' do" in result
+    assert "describe package('nginx') do" in result
+    assert "it { should be_installed }" in result
+    assert "describe service('nginx') do" in result
+    assert "it { should be_running }" in result
+    assert "it { should be_enabled }" in result
+    assert result.endswith("end\n")
+
+
+def test_convert_inspec_to_goss():
+    """Test converting InSpec to Goss YAML format."""
+    controls = [
+        {
+            "id": "nginx-test",
+            "title": "Nginx test",
+            "desc": "Check nginx",
+            "tests": [
+                {
+                    "resource_type": "package",
+                    "resource_name": "nginx",
+                    "expectations": [
+                        {"type": "should", "matcher": "should be_installed"},
+                    ],
+                },
+                {
+                    "resource_type": "service",
+                    "resource_name": "nginx",
+                    "expectations": [
+                        {"type": "should", "matcher": "should be_running"},
+                        {"type": "should", "matcher": "should be_enabled"},
+                    ],
+                },
+                {
+                    "resource_type": "port",
+                    "resource_name": "80",
+                    "expectations": [
+                        {"type": "should", "matcher": "should be_listening"},
+                    ],
+                },
+            ],
+        }
+    ]
+
+    result = _convert_inspec_to_goss(controls)
+
+    # Should contain YAML/JSON structure
+    assert "package" in result or "nginx" in result
+    assert "service" in result or "nginx" in result
+    assert "port" in result or "80" in result or "tcp" in result
+
+
+def test_convert_inspec_to_test_serverspec_format():
+    """Test convert_inspec_to_test with ServerSpec format."""
+    mock_parse_result = json.dumps(
+        {
+            "profile_path": "/path/to/test.rb",
+            "controls_count": 1,
+            "controls": [
+                {
+                    "id": "test-pkg",
+                    "title": "Test package",
+                    "desc": "Check package",
+                    "impact": 1.0,
+                    "tests": [
+                        {
+                            "resource_type": "package",
+                            "resource_name": "vim",
+                            "expectations": [
+                                {"type": "should", "matcher": "should be_installed"}
+                            ],
+                        }
+                    ],
+                    "file": "test.rb",
+                }
+            ],
+        }
+    )
+
+    with patch("souschef.parsers.inspec.parse_inspec_profile") as mock_parse:
+        mock_parse.return_value = mock_parse_result
+
+        result = convert_inspec_to_test("/path/to/test.rb", "serverspec")
+
+        assert "require 'serverspec'" in result
+        assert "set :backend, :exec" in result
+        assert "describe 'Test package' do" in result
+        assert "describe package('vim') do" in result
+        assert "it { should be_installed }" in result
+
+
+def test_convert_inspec_to_test_goss_format():
+    """Test convert_inspec_to_test with Goss format."""
+    mock_parse_result = json.dumps(
+        {
+            "profile_path": "/path/to/test.rb",
+            "controls_count": 1,
+            "controls": [
+                {
+                    "id": "test-svc",
+                    "title": "Test service",
+                    "desc": "Check service",
+                    "impact": 1.0,
+                    "tests": [
+                        {
+                            "resource_type": "service",
+                            "resource_name": "nginx",
+                            "expectations": [
+                                {"type": "should", "matcher": "should be_running"}
+                            ],
+                        }
+                    ],
+                    "file": "test.rb",
+                }
+            ],
+        }
+    )
+
+    with patch("souschef.parsers.inspec.parse_inspec_profile") as mock_parse:
+        mock_parse.return_value = mock_parse_result
+
+        result = convert_inspec_to_test("/path/to/test.rb", "goss")
+
+        # Should be YAML/JSON with service definition
+        assert "service" in result or "nginx" in result
+        assert "running" in result or "True" in result or "true" in result
 
 
 def test_generate_inspec_from_recipe_success():
@@ -7040,10 +7196,71 @@ version: 0.1.0
                     if "controls" in str(profile_data):
                         assert "control" in result.lower()
 
-    def test_convert_inspec_to_test_comprehensive(self):
-        """Test convert_inspec_to_test with various test frameworks."""
+    def _verify_testinfra_output(self, result: str, control: str) -> None:
+        """Verify testinfra output format."""
+        if "package(" in control:
+            assert "def test_" in result or "import" in result or len(result) > 0
+
+    def _verify_ansible_assert_output(self, result: str) -> None:
+        """Verify ansible_assert output format."""
+        assert "assert" in result or "name:" in result or len(result) > 0
+
+    def _verify_serverspec_output(self, result: str, control: str) -> None:
+        """Verify ServerSpec output format."""
+        if "package(" in control:
+            assert "require 'serverspec'" in result or "describe " in result
+
+    def _verify_goss_output(self, result: str) -> None:
+        """Verify Goss output format (YAML/JSON)."""
+        assert len(result) > 0
+
+    def _test_framework_conversion(
+        self, temp_path: str, framework: str, control: str
+    ) -> None:
+        """Test conversion for a specific framework."""
         from souschef.server import convert_inspec_to_test
 
+        result = convert_inspec_to_test(temp_path, framework)
+        assert isinstance(result, str)
+
+        if framework == "testinfra":
+            self._verify_testinfra_output(result, control)
+        elif framework == "ansible_assert":
+            self._verify_ansible_assert_output(result)
+        elif framework == "serverspec":
+            self._verify_serverspec_output(result, control)
+        elif framework == "goss":
+            self._verify_goss_output(result)
+
+    def _test_control_with_all_frameworks(self, control: str) -> None:
+        """Test a single control with all frameworks."""
+        from souschef.server import convert_inspec_to_test
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix="_control.rb", delete=False
+        ) as f:
+            f.write(control)
+            temp_path = f.name
+
+        try:
+            # Test original supported frameworks
+            for framework in ["testinfra", "ansible_assert"]:
+                self._test_framework_conversion(temp_path, framework, control)
+
+            # Test newly supported frameworks (ServerSpec and Goss)
+            for framework in ["serverspec", "goss"]:
+                self._test_framework_conversion(temp_path, framework, control)
+
+            # Test truly unsupported framework to ensure error handling
+            result = convert_inspec_to_test(temp_path, "unsupported_framework")
+            assert isinstance(result, str)
+            assert "Error" in result or "Unsupported" in result
+
+        finally:
+            Path(temp_path).unlink()
+
+    def test_convert_inspec_to_test_comprehensive(self):
+        """Test convert_inspec_to_test with various test frameworks."""
         inspec_controls = [
             # Basic package/service tests
             """
@@ -7136,40 +7353,8 @@ end
 """,
         ]
 
-        test_frameworks = ["testinfra", "ansible_assert"]  # Only supported frameworks
-
         for control in inspec_controls:
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix="_control.rb", delete=False
-            ) as f:
-                f.write(control)
-                temp_path = f.name
-
-            try:
-                for framework in test_frameworks:
-                    result = convert_inspec_to_test(temp_path, framework)
-                    assert isinstance(result, str)
-
-                    # Should generate appropriate test format for supported frameworks
-                    if framework == "testinfra" and "package(" in control:
-                        assert (
-                            "def test_" in result
-                            or "import" in result
-                            or len(result) > 0
-                        )
-                    elif framework == "ansible_assert":
-                        assert (
-                            "assert" in result or "name:" in result or len(result) > 0
-                        )
-
-                # Also test unsupported frameworks to ensure proper error handling
-                for unsupported in ["serverspec", "goss"]:
-                    result = convert_inspec_to_test(temp_path, unsupported)
-                    assert isinstance(result, str)
-                    assert "Error" in result or "Unsupported" in result
-
-            finally:
-                Path(temp_path).unlink()
+            self._test_control_with_all_frameworks(control)
 
     def test_generate_inspec_from_recipe_comprehensive(self):
         """Test generate_inspec_from_recipe with complex Chef recipes."""

@@ -8,6 +8,14 @@ from typing import Any
 from souschef.core.constants import ERROR_PREFIX, INSPEC_END_INDENT, INSPEC_SHOULD_EXIST
 from souschef.core.path_utils import _normalize_path, _safe_join
 
+# Regex patterns used across converters
+_VERSION_PATTERN = r"match\s+/([^/]+)/"
+_MODE_PATTERN = r"cmp\s+'([^']+)'"
+_OWNER_PATTERN = r"eq\s+['\"]([^'\"]+)['\"]"
+
+# ServerSpec formatting constants
+_SERVERSPEC_END = "  end"
+
 
 def parse_inspec_profile(path: str) -> str:
     """
@@ -63,13 +71,14 @@ def parse_inspec_profile(path: str) -> str:
         return f"An error occurred while parsing InSpec profile: {e}"
 
 
-def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -> str:
+def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -> str:  # noqa: C901
     """
-    Convert InSpec controls to Ansible test format.
+    Convert InSpec controls to test framework format.
 
     Args:
         inspec_path: Path to InSpec profile or control file.
-        output_format: Output format ('testinfra' or 'ansible_assert').
+        output_format: Output format ('testinfra', 'ansible_assert',
+            'serverspec', or 'goss').
 
     Returns:
         Converted test code or error message.
@@ -110,10 +119,25 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
                 converted_tests.append(assert_code)
                 converted_tests.append("")
 
+        elif output_format == "serverspec":
+            converted_tests.append("# frozen_string_literal: true")
+            converted_tests.append("")
+            converted_tests.append("require 'serverspec'")
+            converted_tests.append("")
+            converted_tests.append("set :backend, :exec")
+            converted_tests.append("")
+            for control in controls:
+                serverspec_code = _convert_inspec_to_serverspec(control)
+                converted_tests.append(serverspec_code)
+
+        elif output_format == "goss":
+            # Goss uses a single YAML spec for all tests
+            return _convert_inspec_to_goss(controls)
+
         else:
             error_msg = (
                 f"Error: Unsupported format '{output_format}'. "
-                "Use 'testinfra' or 'ansible_assert'"
+                "Use 'testinfra', 'ansible_assert', 'serverspec', or 'goss'"
             )
             return error_msg
 
@@ -420,7 +444,7 @@ def _convert_package_to_testinfra(
         if "be_installed" in exp["matcher"]:
             lines.append("    assert pkg.is_installed")
         elif exp["type"] == "its" and exp["property"] == "version":
-            version_match = re.search(r"match\s+/([^/]+)/", exp["matcher"])
+            version_match = re.search(_VERSION_PATTERN, exp["matcher"])
             if version_match:
                 version = version_match.group(1)
                 lines.append(f'    assert pkg.version.startswith("{version}")')
@@ -532,6 +556,275 @@ def _convert_inspec_to_testinfra(control: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _convert_package_to_serverspec(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """
+    Convert package resource to ServerSpec expectations.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Name of the package.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f"  describe package('{resource_name}') do")
+    for exp in expectations:
+        if "be_installed" in exp["matcher"]:
+            lines.append("    it { should be_installed }")
+        elif exp["type"] == "its" and exp["property"] == "version":
+            version_match = re.search(_VERSION_PATTERN, exp["matcher"])
+            if version_match:
+                version = version_match.group(1)
+                lines.append(f"    its('version') {{ should match /{version}/ }}")
+    lines.append(_SERVERSPEC_END)
+
+
+def _convert_service_to_serverspec(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """
+    Convert service resource to ServerSpec expectations.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Name of the service.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f"  describe service('{resource_name}') do")
+    for exp in expectations:
+        if "be_running" in exp["matcher"]:
+            lines.append("    it { should be_running }")
+        elif "be_enabled" in exp["matcher"]:
+            lines.append("    it { should be_enabled }")
+    lines.append(_SERVERSPEC_END)
+
+
+def _convert_file_to_serverspec(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """
+    Convert file resource to ServerSpec expectations.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Path to the file.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f"  describe file('{resource_name}') do")
+    for exp in expectations:
+        if "exist" in exp["matcher"]:
+            lines.append("    it { should exist }")
+        elif exp["type"] == "its" and exp["property"] == "mode":
+            mode_match = re.search(_MODE_PATTERN, exp["matcher"])
+            if mode_match:
+                mode = mode_match.group(1)
+                lines.append(f"    its('mode') {{ should cmp '{mode}' }}")
+        elif exp["type"] == "its" and exp["property"] == "owner":
+            owner_match = re.search(_OWNER_PATTERN, exp["matcher"])
+            if owner_match:
+                owner = owner_match.group(1)
+                lines.append(f"    its('owner') {{ should eq '{owner}' }}")
+    lines.append(_SERVERSPEC_END)
+
+
+def _convert_port_to_serverspec(
+    lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
+) -> None:
+    """
+    Convert port resource to ServerSpec expectations.
+
+    Args:
+        lines: List to append test lines to.
+        resource_name: Port number or address.
+        expectations: List of InSpec expectations.
+
+    """
+    lines.append(f"  describe port({resource_name}) do")
+    for exp in expectations:
+        if "be_listening" in exp["matcher"]:
+            lines.append("    it { should be_listening }")
+    lines.append(_SERVERSPEC_END)
+
+
+def _convert_inspec_to_serverspec(control: dict[str, Any]) -> str:
+    """
+    Convert InSpec control to ServerSpec test.
+
+    Args:
+        control: Parsed InSpec control dictionary.
+
+    Returns:
+        ServerSpec test code as string.
+
+    """
+    lines = []
+
+    # Add describe block for the control
+    lines.append(f"describe '{control.get('title') or control['id']}' do")
+
+    # Convert each test within the control
+    for test in control["tests"]:
+        resource_type = test["resource_type"]
+        resource_name = test["resource_name"]
+        expectations = test["expectations"]
+
+        # Map InSpec resources to ServerSpec using dedicated converters
+        if resource_type == "package":
+            _convert_package_to_serverspec(lines, resource_name, expectations)
+        elif resource_type == "service":
+            _convert_service_to_serverspec(lines, resource_name, expectations)
+        elif resource_type == "file":
+            _convert_file_to_serverspec(lines, resource_name, expectations)
+        elif resource_type == "port":
+            _convert_port_to_serverspec(lines, resource_name, expectations)
+
+    lines.append("end")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _convert_package_to_goss(expectations: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Convert package resource to Goss specification.
+
+    Args:
+        expectations: List of InSpec expectations.
+
+    Returns:
+        Goss package specification dictionary.
+
+    """
+    spec: dict[str, Any] = {}
+    for exp in expectations:
+        if "be_installed" in exp["matcher"]:
+            spec["installed"] = True
+        elif exp["type"] == "its" and exp["property"] == "version":
+            version_match = re.search(_VERSION_PATTERN, exp["matcher"])
+            if version_match:
+                spec["versions"] = [version_match.group(1)]
+    return spec
+
+
+def _convert_service_to_goss(expectations: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Convert service resource to Goss specification.
+
+    Args:
+        expectations: List of InSpec expectations.
+
+    Returns:
+        Goss service specification dictionary.
+
+    """
+    spec: dict[str, Any] = {}
+    for exp in expectations:
+        if "be_running" in exp["matcher"]:
+            spec["running"] = True
+        elif "be_enabled" in exp["matcher"]:
+            spec["enabled"] = True
+    return spec
+
+
+def _convert_file_to_goss(expectations: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Convert file resource to Goss specification.
+
+    Args:
+        expectations: List of InSpec expectations.
+
+    Returns:
+        Goss file specification dictionary.
+
+    """
+    spec: dict[str, Any] = {}
+    for exp in expectations:
+        if "exist" in exp["matcher"]:
+            spec["exists"] = True
+        elif exp["type"] == "its" and exp["property"] == "mode":
+            mode_match = re.search(_MODE_PATTERN, exp["matcher"])
+            if mode_match:
+                spec["mode"] = mode_match.group(1)
+        elif exp["type"] == "its" and exp["property"] == "owner":
+            owner_match = re.search(_OWNER_PATTERN, exp["matcher"])
+            if owner_match:
+                spec["owner"] = owner_match.group(1)
+    return spec
+
+
+def _convert_port_to_goss(expectations: list[dict[str, Any]]) -> dict[str, Any]:
+    """
+    Convert port resource to Goss specification.
+
+    Args:
+        expectations: List of InSpec expectations.
+
+    Returns:
+        Goss port specification dictionary.
+
+    """
+    spec: dict[str, Any] = {}
+    for exp in expectations:
+        if "be_listening" in exp["matcher"]:
+            spec["listening"] = True
+    return spec
+
+
+def _convert_inspec_to_goss(controls: list[dict[str, Any]]) -> str:
+    """
+    Convert InSpec controls to Goss YAML specification.
+
+    Args:
+        controls: List of parsed InSpec control dictionaries.
+
+    Returns:
+        Goss specification as YAML string.
+
+    """
+    goss_spec: dict[str, dict[str, Any]] = {
+        "package": {},
+        "service": {},
+        "file": {},
+        "port": {},
+    }
+
+    # Process all controls and group by resource type
+    for control in controls:
+        for test in control["tests"]:
+            resource_type = test["resource_type"]
+            resource_name = test["resource_name"]
+            expectations = test["expectations"]
+
+            if resource_type == "package":
+                spec = _convert_package_to_goss(expectations)
+                goss_spec["package"][resource_name] = spec
+            elif resource_type == "service":
+                spec = _convert_service_to_goss(expectations)
+                goss_spec["service"][resource_name] = spec
+            elif resource_type == "file":
+                spec = _convert_file_to_goss(expectations)
+                goss_spec["file"][resource_name] = spec
+            elif resource_type == "port":
+                # Goss uses string format for ports
+                port_key = f"tcp://{resource_name}"
+                spec = _convert_port_to_goss(expectations)
+                goss_spec["port"][port_key] = spec
+
+    # Remove empty sections
+    goss_spec = {k: v for k, v in goss_spec.items() if v}
+
+    # Convert to YAML (using JSON for now, will need PyYAML for proper YAML)
+    try:
+        import yaml
+
+        return yaml.dump(goss_spec, default_flow_style=False, sort_keys=False)
+    except ImportError:
+        # Fallback to JSON if PyYAML not available
+        return json.dumps(goss_spec, indent=2)
+
+
 def _convert_package_to_ansible_assert(
     lines: list[str], resource_name: str, expectations: list[dict[str, Any]]
 ) -> None:
@@ -598,7 +891,7 @@ def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:
 
     """
     lines = [
-        f"- name: Verify {control['title'] or control['id']}",
+        f"- name: Verify {control.get('title') or control['id']}",
         "  ansible.builtin.assert:",
         "    that:",
     ]

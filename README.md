@@ -492,9 +492,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -  Code duplication elimination (InSpec functions refactored: 55 duplicate lines removed, improved architecture)
 -  Documentation website with MkDocs + Material theme (charcoal + teal colour scheme, 16 pages)
 -  Comprehensive documentation content (Getting Started, Tool Reference, Migration Guide, API docs, Examples)
+-  Integration with additional test frameworks (ServerSpec, Goss) - InSpec conversion now supports 4 output formats
 
 ### Planned 📅
-- 📅 Integration with additional test frameworks (ServerSpec, Goss)
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
 - 📅 Jenkins/GitLab CI pipeline generation
