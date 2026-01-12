@@ -260,8 +260,8 @@ class ValidationEngine:
             return
 
         # Check for balanced blocks (describe/do/end)
-        do_count = ruby_content.count(" do")
-        end_count = ruby_content.count("end")
+        do_count = len(re.findall(r"\bdo\b", ruby_content))
+        end_count = len(re.findall(r"\bend\b", ruby_content))
 
         if do_count != end_count:
             self._add_result(
