@@ -663,7 +663,7 @@ def _convert_inspec_to_serverspec(control: dict[str, Any]) -> str:
     lines = []
 
     # Add describe block for the control
-    lines.append(f"describe '{control['title'] or control['id']}' do")
+    lines.append(f"describe '{control.get('title') or control['id']}' do")
 
     # Convert each test within the control
     for test in control["tests"]:
@@ -891,7 +891,7 @@ def _convert_inspec_to_ansible_assert(control: dict[str, Any]) -> str:
 
     """
     lines = [
-        f"- name: Verify {control['title'] or control['id']}",
+        f"- name: Verify {control.get('title') or control['id']}",
         "  ansible.builtin.assert:",
         "    that:",
     ]
