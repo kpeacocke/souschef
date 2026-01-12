@@ -27,7 +27,7 @@ from souschef.assessment import (
 
 # Import extracted modules
 # Import private helper functions still used in server.py
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.habitat import (  # noqa: F401
     _add_service_build,
     _add_service_dependencies,
@@ -49,7 +49,7 @@ from souschef.converters.habitat import (
 )
 
 # Re-exports of playbook internal functions for backward compatibility (tests)
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.playbook import (  # noqa: F401
     _add_general_recommendations,
     _convert_chef_block_to_ansible,
@@ -88,7 +88,7 @@ from souschef.converters.playbook import (
     generate_playbook_from_recipe as _generate_playbook_from_recipe,
 )
 
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.resource import (  # noqa: F401
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
@@ -101,7 +101,7 @@ from souschef.converters.resource import (
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.constants import (  # noqa: F401
     ACTION_TO_STATE,
     ANSIBLE_SERVICE_MODULE,
@@ -113,19 +113,19 @@ from souschef.core.constants import (  # noqa: F401
 # Import core utilities
 from souschef.core.errors import format_error_with_context
 
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.path_utils import _normalize_path, _safe_join  # noqa: F401
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.ruby_utils import (  # noqa: F401
     _normalize_ruby_value,
 )
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.validation import (  # noqa: F401
     ValidationCategory,
     ValidationEngine,
@@ -137,7 +137,7 @@ from souschef.core.validation import (  # noqa: F401
 # Re-exports of deployment internal functions for backward compatibility (tests)
 # Public re-exports of deployment functions for test backward compatibility
 # Note: MCP tool wrappers exist for some of these, but tests import directly
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.deployment import (  # noqa: F401
     _analyze_cookbook_for_awx,
     _analyze_cookbooks_directory,
@@ -192,7 +192,7 @@ from souschef.deployment import (
 from souschef.filesystem import list_directory as _list_directory
 from souschef.filesystem import read_file as _read_file
 
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.attributes import (  # noqa: F401
     _extract_attributes,
     _format_attributes,
@@ -204,7 +204,7 @@ from souschef.parsers.attributes import (  # noqa: F401
 # Import parser functions
 from souschef.parsers.attributes import parse_attributes as _parse_attributes
 
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.habitat import (  # noqa: F401
     _extract_plan_array,
     _extract_plan_exports,
@@ -217,7 +217,7 @@ from souschef.parsers.habitat import (  # noqa: F401
 from souschef.parsers.habitat import parse_habitat_plan as _parse_habitat_plan
 
 # Re-export InSpec internal functions for backward compatibility (tests)
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.inspec import (  # noqa: F401
     _convert_inspec_to_ansible_assert,
     _convert_inspec_to_goss,
@@ -234,7 +234,7 @@ from souschef.parsers.inspec import (
     parse_inspec_profile as _parse_inspec,
 )
 
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.metadata import (  # noqa: F401
     _extract_metadata,
     _format_cookbook_structure,
@@ -245,7 +245,7 @@ from souschef.parsers.metadata import (
 )
 from souschef.parsers.metadata import read_cookbook_metadata as _read_cookbook_metadata
 
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.recipe import (  # noqa: F401
     _extract_conditionals,
     _extract_resources,
@@ -253,14 +253,14 @@ from souschef.parsers.recipe import (  # noqa: F401
 )
 from souschef.parsers.recipe import parse_recipe as _parse_recipe
 
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.resource import (  # noqa: F401
     _extract_resource_actions,
     _extract_resource_properties,
 )
 from souschef.parsers.resource import parse_custom_resource as _parse_custom_resource
 
-# lgtm[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.template import (  # noqa: F401
     _convert_erb_to_jinja2,
     _extract_code_block_variables,
