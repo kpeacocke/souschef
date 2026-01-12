@@ -95,6 +95,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.validate.outputs.tag }}
 
     - name: Set up Python
       uses: actions/setup-python@v6
