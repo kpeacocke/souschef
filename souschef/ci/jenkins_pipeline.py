@@ -3,11 +3,14 @@
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 def generate_jenkinsfile_from_chef_ci(
     cookbook_path: str,
     pipeline_name: str,
     pipeline_type: str = "declarative",
+    enable_parallel: bool = True,
 ) -> str:
     """
     Generate Jenkinsfile from Chef cookbook CI/CD patterns.
@@ -19,6 +22,7 @@ def generate_jenkinsfile_from_chef_ci(
         cookbook_path: Path to Chef cookbook.
         pipeline_name: Name for the Jenkins pipeline.
         pipeline_type: 'declarative' or 'scripted'.
+        enable_parallel: Enable parallel execution of test stages.
 
     Returns:
         Jenkinsfile content (Groovy DSL).
@@ -28,9 +32,11 @@ def generate_jenkinsfile_from_chef_ci(
     ci_patterns = _analyze_chef_ci_patterns(cookbook_path)
 
     if pipeline_type == "declarative":
-        return _generate_declarative_pipeline(pipeline_name, ci_patterns)
+        return _generate_declarative_pipeline(
+            pipeline_name, ci_patterns, enable_parallel
+        )
     else:
-        return _generate_scripted_pipeline(pipeline_name)
+        return _generate_scripted_pipeline(pipeline_name, enable_parallel)
 
 
 def _analyze_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
@@ -73,16 +79,17 @@ def _analyze_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
     kitchen_file = base_path / ".kitchen.yml"
     if kitchen_file.exists():
         try:
-            import yaml
-
             test_suites: list[str] = patterns["test_suites"]
             with kitchen_file.open() as f:
                 kitchen_config = yaml.safe_load(f)
-                if "suites" in kitchen_config:
+                if kitchen_config and "suites" in kitchen_config:
                     test_suites.extend(
                         suite["name"] for suite in kitchen_config["suites"]
                     )
-        except Exception:
+        except (yaml.YAMLError, OSError, KeyError, TypeError, AttributeError):
+            # Gracefully handle malformed .kitchen.yml - continue with empty config
+            # Catches: YAML syntax errors, file I/O errors, missing config keys,
+            # type mismatches in config structure, and missing dict attributes
             pass
 
     return patterns
@@ -93,12 +100,16 @@ def _create_lint_stage(ci_patterns: dict[str, Any]) -> str | None:
     if not ci_patterns.get("lint_tools"):
         return None
 
-    lint_steps = []
+    lint_steps: list[str] = []
     for tool in ci_patterns["lint_tools"]:
         if tool == "cookstyle":
             lint_steps.append("sh 'ansible-lint playbooks/'")
         elif tool == "foodcritic":
             lint_steps.append("sh 'yamllint -c .yamllint .'")
+
+    if not lint_steps:
+        return None
+
     return _create_stage("Lint", lint_steps)
 
 
@@ -144,7 +155,7 @@ def _create_deploy_stage() -> str:
 
 
 def _generate_declarative_pipeline(
-    pipeline_name: str, ci_patterns: dict[str, Any]
+    pipeline_name: str, ci_patterns: dict[str, Any], enable_parallel: bool = True
 ) -> str:
     """
     Generate Jenkins Declarative Pipeline.
@@ -152,6 +163,7 @@ def _generate_declarative_pipeline(
     Args:
         pipeline_name: Pipeline name.
         ci_patterns: Detected CI patterns.
+        enable_parallel: Enable parallel execution of test stages.
 
     Returns:
         Jenkinsfile with Declarative Pipeline syntax.
@@ -159,20 +171,36 @@ def _generate_declarative_pipeline(
     """
     stages = []
 
-    # Add stages based on detected patterns
+    # Collect test stages for potential parallel execution
+    test_stages = []
+
     lint_stage = _create_lint_stage(ci_patterns)
     if lint_stage:
-        stages.append(lint_stage)
+        test_stages.append(lint_stage)
 
     unit_stage = _create_unit_test_stage(ci_patterns)
     if unit_stage:
-        stages.append(unit_stage)
+        test_stages.append(unit_stage)
 
     integration_stage = _create_integration_test_stage(ci_patterns)
     if integration_stage:
-        stages.append(integration_stage)
+        test_stages.append(integration_stage)
 
-    # Always add deploy stage
+    # Add test stages (parallel or sequential based on enable_parallel)
+    if enable_parallel and len(test_stages) > 1:
+        # Wrap multiple test stages in parallel block
+        parallel_content = "\n".join(test_stages)
+        parallel_stage = f"""stage('Test') {{
+            parallel {{
+{_indent_content(parallel_content, 16)}
+            }}
+        }}"""
+        stages.append(parallel_stage)
+    else:
+        # Execute stages sequentially
+        stages.extend(test_stages)
+
+    # Always add deploy stage (never parallelized)
     stages.append(_create_deploy_stage())
 
     # Build pipeline
@@ -215,17 +243,42 @@ pipeline {{
 """
 
 
-def _generate_scripted_pipeline(pipeline_name: str) -> str:
+def _generate_scripted_pipeline(
+    pipeline_name: str, enable_parallel: bool = True
+) -> str:
     """
     Generate Jenkins Scripted Pipeline.
 
     Args:
         pipeline_name: Pipeline name.
+        enable_parallel: Enable parallel execution of test stages.
 
     Returns:
         Jenkinsfile with Scripted Pipeline syntax.
 
     """
+    if enable_parallel:
+        test_block = """        parallel(
+            lint: {{
+                stage('Lint') {{
+                    sh 'ansible-lint playbooks/'
+                }}
+            }},
+            test: {{
+                stage('Test') {{
+                    sh 'molecule test'
+                }}
+            }}
+        )"""
+    else:
+        test_block = """        stage('Lint') {{
+            sh 'ansible-lint playbooks/'
+        }}
+
+        stage('Test') {{
+            sh 'molecule test'
+        }}"""
+
     return f"""// Jenkinsfile: {pipeline_name}
 // Generated from Chef cookbook CI/CD patterns
 // Pipeline Type: Scripted
@@ -236,13 +289,7 @@ node {{
             checkout scm
         }}
 
-        stage('Lint') {{
-            sh 'ansible-lint playbooks/'
-        }}
-
-        stage('Test') {{
-            sh 'molecule test'
-        }}
+{test_block}
 
         stage('Deploy') {{
             input message: 'Deploy to production?', ok: 'Deploy'

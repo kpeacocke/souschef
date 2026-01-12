@@ -177,15 +177,7 @@ def test_jenkins_declarative_deploy_stage():
 
 def test_jenkins_scripted_pipeline_structure():
     """Test Scripted Pipeline has correct structure."""
-    ci_patterns = {
-        "has_kitchen": False,
-        "has_chefspec": False,
-        "has_inspec": False,
-        "lint_tools": [],
-        "test_suites": [],
-    }
-
-    result = _generate_scripted_pipeline("test", ci_patterns, False)
+    result = _generate_scripted_pipeline("test", False)
 
     assert "node {" in result
     assert "try {" in result
@@ -203,7 +195,6 @@ def test_jenkins_create_stage():
     stage = _create_stage(
         "Test Stage",
         ["sh 'command1'", "sh 'command2'"],
-        "Test description",
     )
 
     assert "stage('Test Stage')" in stage

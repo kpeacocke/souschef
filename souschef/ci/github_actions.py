@@ -1,8 +1,9 @@
 """
-GitHub Actions workflow generation from Chef cookbook CI/CD patterns.
+GitHub Actions workflow generation from Chef CI/CD patterns.
 
-Analyzes Chef testing tools (Test Kitchen, ChefSpec, Cookstyle) and generates
-equivalent GitHub Actions workflows with proper job configuration and caching.
+Analyzes Chef testing tools (Test Kitchen, ChefSpec, Cookstyle) and
+generates equivalent GitHub Actions workflows with proper job
+configuration and caching.
 """
 
 from pathlib import Path
@@ -64,13 +65,41 @@ def generate_github_workflow_from_chef_ci(
 
 def _analyze_chef_ci_patterns(cookbook_dir: Path) -> dict[str, Any]:
     """
-    Analyze Chef cookbook for CI/CD patterns.
+    Analyze Chef cookbook for CI/CD patterns and testing configurations.
+
+    This function examines a Chef cookbook directory to detect various
+    testing and linting tools, as well as Test Kitchen configurations
+    including suites and platforms.
 
     Args:
-        cookbook_dir: Path to cookbook directory.
+        cookbook_dir: Path to the Chef cookbook directory to analyze.
 
     Returns:
-        Dictionary of detected patterns.
+        Dictionary containing detected patterns with the following keys:
+            - has_kitchen (bool): Whether Test Kitchen is configured
+              (.kitchen.yml exists)
+            - has_chefspec (bool): Whether ChefSpec tests are present
+              (spec/**/*_spec.rb files)
+            - has_cookstyle (bool): Whether Cookstyle is configured
+              (.cookstyle.yml exists)
+            - has_foodcritic (bool): Whether Foodcritic (legacy) is
+              configured (.foodcritic exists)
+            - kitchen_suites (list[str]): Names of Test Kitchen suites
+              found in .kitchen.yml
+            - kitchen_platforms (list[str]): Names of Test Kitchen
+              platforms found in .kitchen.yml
+
+    Note:
+        If .kitchen.yml is malformed or cannot be parsed, the function
+        continues with empty suite and platform lists rather than
+        raising an exception.
+
+    Example:
+        >>> patterns = _analyze_chef_ci_patterns(Path("/path/to/cookbook"))
+        >>> patterns["has_kitchen"]
+        True
+        >>> patterns["kitchen_suites"]
+        ['default', 'integration']
 
     """
     patterns: dict[str, Any] = {
@@ -102,7 +131,10 @@ def _analyze_chef_ci_patterns(cookbook_dir: Path) -> dict[str, Any]:
                         patterns["kitchen_platforms"] = [
                             p.get("name", "unknown") for p in platforms
                         ]
-        except Exception:
+        except (yaml.YAMLError, OSError, KeyError, TypeError, AttributeError):
+            # Gracefully handle malformed .kitchen.yml - continue with empty config
+            # Catches: YAML syntax errors, file I/O errors, missing config keys,
+            # type mismatches in config structure, and missing dict attributes
             pass
 
     # Check for ChefSpec

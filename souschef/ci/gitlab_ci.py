@@ -3,6 +3,8 @@
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 def generate_gitlab_ci_from_chef_ci(
     cookbook_path: str,
@@ -67,16 +69,17 @@ def _analyze_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
     kitchen_file = base_path / ".kitchen.yml"
     if kitchen_file.exists():
         try:
-            import yaml
-
             test_suites: list[str] = patterns["test_suites"]
             with kitchen_file.open() as f:
                 kitchen_config = yaml.safe_load(f)
-                if "suites" in kitchen_config:
+                if kitchen_config and "suites" in kitchen_config:
                     test_suites.extend(
                         suite["name"] for suite in kitchen_config["suites"]
                     )
-        except Exception:
+        except (yaml.YAMLError, OSError, KeyError, TypeError, AttributeError):
+            # Gracefully handle malformed .kitchen.yml - continue with empty
+            # test suites. Catches: YAML syntax errors, file I/O errors,
+            # missing config keys, type mismatches
             pass
 
     return patterns

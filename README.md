@@ -189,12 +189,6 @@ generate_github_workflow_from_chef(
     enable_cache="yes",  # or "no"
     enable_artifacts="yes"  # or "no"
 )
-
-generate_gitlab_ci_from_chef(
-    cookbook_path="/path/to/cookbook",
-    enable_cache="yes",  # or "no"
-    enable_artifacts="yes"  # or "no"
-)
 ```
 
 ### 11. Conversion Validation Framework

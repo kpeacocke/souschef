@@ -2502,7 +2502,7 @@ def generate_jenkinsfile_from_chef(
         cookbook_path: Path to Chef cookbook directory.
         pipeline_name: Name for the Jenkins pipeline.
         pipeline_type: Pipeline type - 'declarative' (recommended) or 'scripted'.
-        enable_parallel: Enable parallel stage execution - 'yes' or 'no'.
+        enable_parallel: Enable parallel test execution - 'yes' or 'no'.
 
     Returns:
         Jenkinsfile content (Groovy DSL) for Jenkins pipeline.
@@ -2511,7 +2511,9 @@ def generate_jenkinsfile_from_chef(
     from souschef.ci.jenkins_pipeline import generate_jenkinsfile_from_chef_ci
 
     try:
+        # Convert string to boolean
         enable_parallel_bool = enable_parallel.lower() in ("yes", "true", "1")
+
         result = generate_jenkinsfile_from_chef_ci(
             cookbook_path=cookbook_path,
             pipeline_name=pipeline_name,
