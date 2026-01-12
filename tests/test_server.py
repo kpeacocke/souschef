@@ -7318,11 +7318,21 @@ end
                             "assert" in result or "name:" in result or len(result) > 0
                         )
 
-                # Also test unsupported frameworks to ensure proper error handling
-                for unsupported in ["serverspec", "goss"]:
-                    result = convert_inspec_to_test(temp_path, unsupported)
+                # Test newly supported frameworks (ServerSpec and Goss)
+                for framework in ["serverspec", "goss"]:
+                    result = convert_inspec_to_test(temp_path, framework)
                     assert isinstance(result, str)
-                    assert "Error" in result or "Unsupported" in result
+                    # Should not be an error for supported frameworks
+                    if framework == "serverspec" and "package(" in control:
+                        assert "require 'serverspec'" in result or "describe " in result
+                    elif framework == "goss":
+                        # Goss returns YAML/JSON
+                        assert len(result) > 0
+
+                # Test truly unsupported framework to ensure error handling
+                result = convert_inspec_to_test(temp_path, "unsupported_framework")
+                assert isinstance(result, str)
+                assert "Error" in result or "Unsupported" in result
 
             finally:
                 Path(temp_path).unlink()
