@@ -350,7 +350,7 @@ def inspec_parse(path: str, output_format: str) -> None:
 @click.option(
     "--format",
     "output_format",
-    type=click.Choice(["testinfra", "ansible_assert"]),
+    type=click.Choice(["testinfra", "ansible_assert", "serverspec", "goss"]),
     default="testinfra",
     help="Output format for converted tests",
 )

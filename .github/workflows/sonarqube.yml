@@ -83,6 +83,23 @@ jobs:
         run-id: ${{ github.event.workflow_run.id }}
       continue-on-error: true
 
+    - name: Verify coverage file location
+      if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
+      run: |
+        echo "Searching for coverage.xml..."
+        find . -name "coverage.xml" -type f
+        if [ -f "coverage.xml" ]; then
+          echo "✓ coverage.xml found in root"
+          ls -lh coverage.xml
+        else
+          echo "✗ coverage.xml not found in root, searching subdirectories..."
+          if [ -f "coverage-report/coverage.xml" ]; then
+            echo "Found in coverage-report subdirectory, moving to root"
+            mv coverage-report/coverage.xml .
+          fi
+        fi
+      continue-on-error: true
+
     - name: Generate coverage if not downloaded
       if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_dispatch'
       run: |

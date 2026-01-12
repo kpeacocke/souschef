@@ -539,7 +539,7 @@ souschef-cli inspec-convert PATH [--format FORMAT]
 
 **Options:**
 - `PATH` (required): Path to InSpec profile directory or .rb control file
-- `--format`: Output format - `testinfra` (default) or `ansible_assert`
+- `--format`: Output format - `testinfra` (default), `ansible_assert`, `serverspec`, or `goss`
 
 **Examples:**
 
@@ -578,6 +578,42 @@ souschef-cli inspec-convert PATH [--format FORMAT]
         that:
           - nginx_service.status.ActiveState == "active"
         fail_msg: "nginx service is not running"
+    ```
+
+=== "Convert to ServerSpec"
+    ```bash
+    souschef-cli inspec-convert tests/inspec/nginx-profile --format serverspec
+    ```
+
+    Output:
+    ```ruby
+    # frozen_string_literal: true
+    require 'serverspec'
+
+    describe package('nginx') do
+      it { should be_installed }
+    end
+
+    describe service('nginx') do
+      it { should be_running }
+      it { should be_enabled }
+    end
+    ```
+
+=== "Convert to Goss"
+    ```bash
+    souschef-cli inspec-convert tests/inspec/nginx-profile --format goss
+    ```
+
+    Output:
+    ```yaml
+    package:
+      nginx:
+        installed: true
+    service:
+      nginx:
+        enabled: true
+        running: true
     ```
 
 ---
