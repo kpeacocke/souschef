@@ -8,6 +8,14 @@ from typing import Any
 from souschef.core.constants import ERROR_PREFIX, INSPEC_END_INDENT, INSPEC_SHOULD_EXIST
 from souschef.core.path_utils import _normalize_path, _safe_join
 
+# Regex patterns used across converters
+_VERSION_PATTERN = r"match\s+/([^/]+)/"
+_MODE_PATTERN = r"cmp\s+'([^']+)'"
+_OWNER_PATTERN = r"eq\s+['\"]([^'\"]+)['\"]"
+
+# ServerSpec formatting constants
+_SERVERSPEC_END = "  end"
+
 
 def parse_inspec_profile(path: str) -> str:
     """
@@ -436,7 +444,7 @@ def _convert_package_to_testinfra(
         if "be_installed" in exp["matcher"]:
             lines.append("    assert pkg.is_installed")
         elif exp["type"] == "its" and exp["property"] == "version":
-            version_match = re.search(r"match\s+/([^/]+)/", exp["matcher"])
+            version_match = re.search(_VERSION_PATTERN, exp["matcher"])
             if version_match:
                 version = version_match.group(1)
                 lines.append(f'    assert pkg.version.startswith("{version}")')
@@ -565,11 +573,11 @@ def _convert_package_to_serverspec(
         if "be_installed" in exp["matcher"]:
             lines.append("    it { should be_installed }")
         elif exp["type"] == "its" and exp["property"] == "version":
-            version_match = re.search(r"match\s+/([^/]+)/", exp["matcher"])
+            version_match = re.search(_VERSION_PATTERN, exp["matcher"])
             if version_match:
                 version = version_match.group(1)
                 lines.append(f"    its('version') {{ should match /{version}/ }}")
-    lines.append("  end")
+    lines.append(_SERVERSPEC_END)
 
 
 def _convert_service_to_serverspec(
@@ -590,7 +598,7 @@ def _convert_service_to_serverspec(
             lines.append("    it { should be_running }")
         elif "be_enabled" in exp["matcher"]:
             lines.append("    it { should be_enabled }")
-    lines.append("  end")
+    lines.append(_SERVERSPEC_END)
 
 
 def _convert_file_to_serverspec(
@@ -610,16 +618,16 @@ def _convert_file_to_serverspec(
         if "exist" in exp["matcher"]:
             lines.append("    it { should exist }")
         elif exp["type"] == "its" and exp["property"] == "mode":
-            mode_match = re.search(r"cmp\s+'([^']+)'", exp["matcher"])
+            mode_match = re.search(_MODE_PATTERN, exp["matcher"])
             if mode_match:
                 mode = mode_match.group(1)
                 lines.append(f"    its('mode') {{ should cmp '{mode}' }}")
         elif exp["type"] == "its" and exp["property"] == "owner":
-            owner_match = re.search(r"eq\s+['\"]([^'\"]+)['\"]", exp["matcher"])
+            owner_match = re.search(_OWNER_PATTERN, exp["matcher"])
             if owner_match:
                 owner = owner_match.group(1)
                 lines.append(f"    its('owner') {{ should eq '{owner}' }}")
-    lines.append("  end")
+    lines.append(_SERVERSPEC_END)
 
 
 def _convert_port_to_serverspec(
@@ -638,7 +646,7 @@ def _convert_port_to_serverspec(
     for exp in expectations:
         if "be_listening" in exp["matcher"]:
             lines.append("    it { should be_listening }")
-    lines.append("  end")
+    lines.append(_SERVERSPEC_END)
 
 
 def _convert_inspec_to_serverspec(control: dict[str, Any]) -> str:
@@ -678,14 +686,11 @@ def _convert_inspec_to_serverspec(control: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _convert_package_to_goss(
-    resource_name: str, expectations: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _convert_package_to_goss(expectations: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Convert package resource to Goss specification.
 
     Args:
-        resource_name: Name of the package.
         expectations: List of InSpec expectations.
 
     Returns:
@@ -697,20 +702,17 @@ def _convert_package_to_goss(
         if "be_installed" in exp["matcher"]:
             spec["installed"] = True
         elif exp["type"] == "its" and exp["property"] == "version":
-            version_match = re.search(r"match\s+/([^/]+)/", exp["matcher"])
+            version_match = re.search(_VERSION_PATTERN, exp["matcher"])
             if version_match:
                 spec["versions"] = [version_match.group(1)]
     return spec
 
 
-def _convert_service_to_goss(
-    resource_name: str, expectations: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _convert_service_to_goss(expectations: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Convert service resource to Goss specification.
 
     Args:
-        resource_name: Name of the service.
         expectations: List of InSpec expectations.
 
     Returns:
@@ -726,14 +728,11 @@ def _convert_service_to_goss(
     return spec
 
 
-def _convert_file_to_goss(
-    resource_name: str, expectations: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _convert_file_to_goss(expectations: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Convert file resource to Goss specification.
 
     Args:
-        resource_name: Path to the file.
         expectations: List of InSpec expectations.
 
     Returns:
@@ -745,24 +744,21 @@ def _convert_file_to_goss(
         if "exist" in exp["matcher"]:
             spec["exists"] = True
         elif exp["type"] == "its" and exp["property"] == "mode":
-            mode_match = re.search(r"cmp\s+'([^']+)'", exp["matcher"])
+            mode_match = re.search(_MODE_PATTERN, exp["matcher"])
             if mode_match:
                 spec["mode"] = mode_match.group(1)
         elif exp["type"] == "its" and exp["property"] == "owner":
-            owner_match = re.search(r"eq\s+['\"]([^'\"]+)['\"]", exp["matcher"])
+            owner_match = re.search(_OWNER_PATTERN, exp["matcher"])
             if owner_match:
                 spec["owner"] = owner_match.group(1)
     return spec
 
 
-def _convert_port_to_goss(
-    resource_name: str, expectations: list[dict[str, Any]]
-) -> dict[str, Any]:
+def _convert_port_to_goss(expectations: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Convert port resource to Goss specification.
 
     Args:
-        resource_name: Port number or address.
         expectations: List of InSpec expectations.
 
     Returns:
@@ -802,18 +798,18 @@ def _convert_inspec_to_goss(controls: list[dict[str, Any]]) -> str:
             expectations = test["expectations"]
 
             if resource_type == "package":
-                spec = _convert_package_to_goss(resource_name, expectations)
+                spec = _convert_package_to_goss(expectations)
                 goss_spec["package"][resource_name] = spec
             elif resource_type == "service":
-                spec = _convert_service_to_goss(resource_name, expectations)
+                spec = _convert_service_to_goss(expectations)
                 goss_spec["service"][resource_name] = spec
             elif resource_type == "file":
-                spec = _convert_file_to_goss(resource_name, expectations)
+                spec = _convert_file_to_goss(expectations)
                 goss_spec["file"][resource_name] = spec
             elif resource_type == "port":
                 # Goss uses string format for ports
                 port_key = f"tcp://{resource_name}"
-                spec = _convert_port_to_goss(resource_name, expectations)
+                spec = _convert_port_to_goss(expectations)
                 goss_spec["port"][port_key] = spec
 
     # Remove empty sections
