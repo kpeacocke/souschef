@@ -33,6 +33,11 @@ from souschef.server import (
     read_file,
 )
 
+# CI/CD job description constants
+CI_JOB_LINT = "  • Lint (cookstyle/foodcritic)"
+CI_JOB_UNIT_TESTS = "  • Unit Tests (ChefSpec)"
+CI_JOB_INTEGRATION_TESTS = "  • Integration Tests (Test Kitchen)"
+
 
 @click.group()
 @click.version_option(version="0.1.0", prog_name="souschef")
@@ -443,15 +448,15 @@ def generate_jenkinsfile(
         # Show summary
         click.echo("\nGenerated Pipeline Stages:")
         if "stage('Lint')" in result or "stage 'Lint'" in result:
-            click.echo("  • Lint (cookstyle/foodcritic)")
+            click.echo(CI_JOB_LINT)
         if "stage('Unit Tests')" in result or "stage 'Unit Tests'" in result:
-            click.echo("  • Unit Tests (ChefSpec)")
+            click.echo(CI_JOB_UNIT_TESTS)
         integration_stage = (
             "stage('Integration Tests')" in result
             or "stage 'Integration Tests'" in result
         )
         if integration_stage:
-            click.echo("  • Integration Tests (Test Kitchen)")
+            click.echo(CI_JOB_INTEGRATION_TESTS)
 
         if parallel:
             click.echo("\nParallel execution: Enabled")
@@ -520,11 +525,11 @@ def generate_gitlab_ci(
         # Show summary
         click.echo("\nGenerated CI Jobs:")
         if "cookstyle:" in result or "foodcritic:" in result:
-            click.echo("  • Lint (cookstyle/foodcritic)")
+            click.echo(CI_JOB_LINT)
         if "unit-test:" in result or "chefspec:" in result:
-            click.echo("  • Unit Tests (ChefSpec)")
+            click.echo(CI_JOB_UNIT_TESTS)
         if "integration-test:" in result or "kitchen-" in result:
-            click.echo("  • Integration Tests (Test Kitchen)")
+            click.echo(CI_JOB_INTEGRATION_TESTS)
 
         click.echo(f"\nCache: {'Enabled' if cache else 'Disabled'}")
         click.echo(f"Artifacts: {'Enabled' if artifacts else 'Disabled'}")
@@ -606,11 +611,11 @@ def generate_github_workflow(
         # Show summary
         click.echo("\nGenerated Workflow Jobs:")
         if "lint:" in result:
-            click.echo("  • Lint (cookstyle/foodcritic)")
+            click.echo(CI_JOB_LINT)
         if "unit-test:" in result:
-            click.echo("  • Unit Tests (ChefSpec)")
+            click.echo(CI_JOB_UNIT_TESTS)
         if "integration-test:" in result:
-            click.echo("  • Integration Tests (Test Kitchen)")
+            click.echo(CI_JOB_INTEGRATION_TESTS)
 
         click.echo(f"\nCache: {'Enabled' if cache else 'Disabled'}")
         click.echo(f"Artifacts: {'Enabled' if artifacts else 'Disabled'}")
