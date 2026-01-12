@@ -2520,9 +2520,7 @@ def generate_jenkinsfile_from_chef(
         )
         return result
     except FileNotFoundError as e:
-        return format_error_with_context(
-            e, "generating Jenkinsfile", cookbook_path, "Cookbook directory not found"
-        )
+        return format_error_with_context(e, "generating Jenkinsfile", cookbook_path)
     except Exception as e:
         return format_error_with_context(e, "generating Jenkinsfile", cookbook_path)
 
@@ -2567,7 +2565,6 @@ def generate_gitlab_ci_from_chef(
             e,
             "generating .gitlab-ci.yml",
             cookbook_path,
-            "Cookbook directory not found",
         )
     except Exception as e:
         return format_error_with_context(e, "generating .gitlab-ci.yml", cookbook_path)

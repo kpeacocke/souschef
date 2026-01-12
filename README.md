@@ -5,7 +5,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 [![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
 [![Python Version](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](htmlcov/index.html)
+[![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](htmlcov/index.html)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
@@ -14,17 +14,17 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview - Chef to Ansible features
 
-SousChef is a complete enterprise-grade migration platform with **24 primary MCP tools** organised across **8 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with **26 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### About Tool Counts
 
-**Why 24 tools in the documentation but more in the server?**
+**Why 26 tools in the documentation but more in the server?**
 
-The MCP server provides **34 total tools** (32 public + 2 internal). This documentation focuses on the **24 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are low-level filesystem operations and helper utilities used internally by the main tools.
+The MCP server provides **36 total tools** (34 public + 2 internal). This documentation focuses on the **26 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are low-level filesystem operations and helper utilities used internally by the main tools.
 
-As a user, you'll primarily interact with the 24 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
+As a user, you'll primarily interact with the 26 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
-> 💡 **For developers:** See `souschef/server.py` for the complete list of all 34 registered tools.
+> 💡 **For developers:** See `souschef/server.py` for the complete list of all 36 registered tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -131,7 +131,51 @@ Modern deployment strategies and migration planning:
 - **generate_blue_green_deployment_playbook** - Create blue/green deployment playbooks
 - **generate_canary_deployment_strategy** - Generate canary deployment configurations
 
-### 10. Conversion Validation Framework
+### 10. CI/CD Pipeline Generation
+Generate Jenkins and GitLab CI pipelines from Chef cookbook CI patterns:
+
+- **generate_jenkinsfile_from_chef** - Generate Jenkinsfile (Declarative or Scripted) from Chef cookbook CI/CD patterns
+- **generate_gitlab_ci_from_chef** - Generate .gitlab-ci.yml from Chef cookbook testing tools
+
+Automatically detects and converts:
+- **Test Kitchen** configurations (.kitchen.yml) → Integration test stages
+- **ChefSpec** tests (spec/) → Unit test stages
+- **Cookstyle/Foodcritic** → Lint stages
+- Multiple test suites → Parallel execution strategies
+
+#### Example Usage
+
+```bash
+# Generate Jenkins Declarative pipeline
+souschef generate-jenkinsfile ./mycookbook
+
+# Generate Jenkins Scripted pipeline
+souschef generate-jenkinsfile ./mycookbook --pipeline-type scripted
+
+# Generate GitLab CI configuration
+souschef generate-gitlab-ci ./mycookbook
+
+# Customize with options
+souschef generate-gitlab-ci ./mycookbook --no-cache --no-artifacts
+```
+
+**MCP Tool Usage:**
+```python
+# From an AI assistant with SousChef MCP
+generate_jenkinsfile_from_chef(
+    cookbook_path="/path/to/cookbook",
+    pipeline_type="declarative",  # or "scripted"
+    enable_parallel="yes"  # or "no"
+)
+
+generate_gitlab_ci_from_chef(
+    cookbook_path="/path/to/cookbook",
+    enable_cache="yes",  # or "no"
+    enable_artifacts="yes"  # or "no"
+)
+```
+
+### 11. Conversion Validation Framework
 Comprehensive validation of Chef-to-Ansible conversions:
 
 - **validate_conversion** - Validate conversions across multiple dimensions
@@ -493,11 +537,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -  Documentation website with MkDocs + Material theme (charcoal + teal colour scheme, 16 pages)
 -  Comprehensive documentation content (Getting Started, Tool Reference, Migration Guide, API docs, Examples)
 -  Integration with additional test frameworks (ServerSpec, Goss) - InSpec conversion now supports 4 output formats
+-  Jenkins/GitLab CI pipeline generation from Chef cookbook CI patterns (Test Kitchen, ChefSpec, Cookstyle)
 
 ### Planned 📅
 - 📅 Visual migration planning and dependency mapping interface
 - 📅 Terraform provider for infrastructure state management
-- 📅 Jenkins/GitLab CI pipeline generation
 
 ## 🙋‍♀️ Support & Community
 
