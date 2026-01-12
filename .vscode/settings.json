@@ -59,8 +59,9 @@
         "souschef"
     ],
     "yaml.customTags": [
-        "!!python/name:*",
-        "!!python/object:*"
+        "!!python/name:pymdownx.superfences.fence_code_format",
+        "!!python/name:material.extensions.emoji.twemoji",
+        "!!python/name:material.extensions.emoji.to_svg"
     ],
     "sonarlint.connectedMode.project": {
         "connectionId": "kpeacocke",
