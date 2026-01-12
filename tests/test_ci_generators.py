@@ -4,7 +4,17 @@ import tempfile
 from pathlib import Path
 
 import pytest
+import yaml
 
+from souschef.ci.github_actions import (
+    _analyze_chef_ci_patterns as github_analyze_patterns,
+)
+from souschef.ci.github_actions import (
+    _build_integration_test_job,
+    _build_lint_job,
+    _build_unit_test_job,
+    generate_github_workflow_from_chef_ci,
+)
 from souschef.ci.gitlab_ci import (
     _analyze_chef_ci_patterns as gitlab_analyze_patterns,
 )
@@ -684,3 +694,201 @@ def test_gitlab_kitchen_yaml_read_exception():
 
         assert patterns["has_kitchen"] is True
         assert patterns["test_suites"] == []
+
+
+# GitHub Actions Workflow Tests
+
+
+def test_generate_github_workflow_basic():
+    """Test basic GitHub Actions workflow generation."""
+    result = generate_github_workflow_from_chef_ci(
+        str(SAMPLE_COOKBOOK),
+        workflow_name="Test Workflow",
+        enable_cache=True,
+        enable_artifacts=True,
+    )
+
+    workflow = yaml.safe_load(result)
+    assert workflow["name"] == "Test Workflow"
+    assert "on" in workflow
+    assert "jobs" in workflow
+
+
+def test_generate_github_workflow_with_lint():
+    """Test workflow with lint job."""
+    result = generate_github_workflow_from_chef_ci(
+        str(SAMPLE_COOKBOOK),
+        enable_cache=True,
+        enable_artifacts=True,
+    )
+
+    workflow = yaml.safe_load(result)
+    assert "lint" in workflow["jobs"]
+    lint_job = workflow["jobs"]["lint"]
+    assert lint_job["runs-on"] == "ubuntu-latest"
+    assert any("Cookstyle" in step.get("name", "") for step in lint_job["steps"])
+
+
+def test_generate_github_workflow_with_unit_tests():
+    """Test workflow with ChefSpec unit tests."""
+    result = generate_github_workflow_from_chef_ci(
+        str(SAMPLE_COOKBOOK),
+        enable_cache=True,
+        enable_artifacts=True,
+    )
+
+    workflow = yaml.safe_load(result)
+    assert "unit-test" in workflow["jobs"]
+    unit_job = workflow["jobs"]["unit-test"]
+    assert any("ChefSpec" in step.get("name", "") for step in unit_job["steps"])
+
+
+def test_generate_github_workflow_with_integration_tests():
+    """Test workflow with Test Kitchen integration tests."""
+    result = generate_github_workflow_from_chef_ci(
+        str(SAMPLE_COOKBOOK),
+        enable_cache=True,
+        enable_artifacts=True,
+    )
+
+    workflow = yaml.safe_load(result)
+    assert "integration-test" in workflow["jobs"]
+    integration_job = workflow["jobs"]["integration-test"]
+    assert "strategy" in integration_job
+    assert "matrix" in integration_job["strategy"]
+
+
+def test_generate_github_workflow_without_cache():
+    """Test workflow generation without caching."""
+    result = generate_github_workflow_from_chef_ci(
+        str(SAMPLE_COOKBOOK),
+        enable_cache=False,
+        enable_artifacts=True,
+    )
+
+    workflow = yaml.safe_load(result)
+    lint_job = workflow["jobs"].get("lint", {})
+    # Should not have cache step
+    cache_steps = [
+        s for s in lint_job.get("steps", []) if "cache" in s.get("name", "").lower()
+    ]
+    assert len(cache_steps) == 0
+
+
+def test_generate_github_workflow_without_artifacts():
+    """Test workflow generation without artifacts."""
+    result = generate_github_workflow_from_chef_ci(
+        str(SAMPLE_COOKBOOK),
+        enable_cache=True,
+        enable_artifacts=False,
+    )
+
+    workflow = yaml.safe_load(result)
+    integration_job = workflow["jobs"].get("integration-test", {})
+    # Should not have upload artifact step
+    artifact_steps = [
+        s
+        for s in integration_job.get("steps", [])
+        if "upload" in s.get("name", "").lower()
+    ]
+    assert len(artifact_steps) == 0
+
+
+def test_github_analyze_patterns():
+    """Test pattern analysis for GitHub Actions."""
+    patterns = github_analyze_patterns(SAMPLE_COOKBOOK)
+
+    assert patterns["has_kitchen"] is True
+    assert patterns["has_chefspec"] is True
+    assert patterns["has_cookstyle"] is True
+    assert len(patterns["kitchen_suites"]) > 0
+
+
+def test_github_analyze_patterns_empty_dir():
+    """Test pattern analysis with empty directory."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        patterns = github_analyze_patterns(Path(tmpdir))
+
+        assert patterns["has_kitchen"] is False
+        assert patterns["has_chefspec"] is False
+        assert patterns["has_cookstyle"] is False
+        assert patterns["kitchen_suites"] == []
+
+
+def test_github_build_lint_job():
+    """Test lint job building."""
+    patterns = {"has_cookstyle": True, "has_foodcritic": False}
+    job = _build_lint_job(patterns, enable_cache=True)
+
+    assert job["name"] == "Lint Cookbook"
+    assert job["runs-on"] == "ubuntu-latest"
+    assert any("Cookstyle" in step.get("name", "") for step in job["steps"])
+    assert any("cache" in step.get("name", "").lower() for step in job["steps"])
+
+
+def test_github_build_lint_job_without_cache():
+    """Test lint job without caching."""
+    patterns = {"has_cookstyle": True, "has_foodcritic": False}
+    job = _build_lint_job(patterns, enable_cache=False)
+
+    cache_steps = [s for s in job["steps"] if "cache" in s.get("name", "").lower()]
+    assert len(cache_steps) == 0
+
+
+def test_github_build_unit_test_job():
+    """Test unit test job building."""
+    job = _build_unit_test_job(enable_cache=True)
+
+    assert job["name"] == "Unit Tests (ChefSpec)"
+    assert any("ChefSpec" in step.get("name", "") for step in job["steps"])
+    assert any("rspec" in step.get("run", "") for step in job["steps"])
+
+
+def test_github_build_integration_test_job():
+    """Test integration test job building."""
+    patterns = {"kitchen_suites": ["default", "database"]}
+    job = _build_integration_test_job(
+        patterns, enable_cache=True, enable_artifacts=True
+    )
+
+    assert job["name"] == "Integration Tests (Test Kitchen)"
+    assert "strategy" in job
+    assert job["strategy"]["matrix"]["suite"] == ["default", "database"]
+    assert any("upload" in s.get("name", "").lower() for s in job["steps"])
+
+
+def test_github_build_integration_test_job_no_suites():
+    """Test integration job when no suites defined."""
+    patterns = {"kitchen_suites": []}
+    job = _build_integration_test_job(
+        patterns, enable_cache=True, enable_artifacts=True
+    )
+
+    # Should default to ["default"]
+    assert job["strategy"]["matrix"]["suite"] == ["default"]
+
+
+def test_github_workflow_nonexistent_cookbook():
+    """Test workflow generation with nonexistent cookbook."""
+    with pytest.raises(FileNotFoundError):
+        generate_github_workflow_from_chef_ci("/nonexistent/path")
+
+
+def test_github_workflow_triggers():
+    """Test workflow trigger configuration."""
+    result = generate_github_workflow_from_chef_ci(str(SAMPLE_COOKBOOK))
+
+    workflow = yaml.safe_load(result)
+    assert "push" in workflow["on"]
+    assert "pull_request" in workflow["on"]
+    assert workflow["on"]["push"]["branches"] == ["main", "develop"]
+
+
+def test_github_pattern_detection_with_multiple_suites():
+    """Test pattern detection with multiple Kitchen suites."""
+    patterns = github_analyze_patterns(SAMPLE_COOKBOOK)
+
+    # Sample cookbook should have suites
+    assert patterns["has_kitchen"] is True
+    assert isinstance(patterns["kitchen_suites"], list)
+    assert len(patterns["kitchen_suites"]) >= 1

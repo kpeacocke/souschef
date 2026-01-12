@@ -14,17 +14,17 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview - Chef to Ansible features
 
-SousChef is a complete enterprise-grade migration platform with **26 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with **27 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### About Tool Counts
 
-**Why 26 tools in the documentation but more in the server?**
+**Why 27 tools in the documentation but more in the server?**
 
-The MCP server provides **36 total tools** (34 public + 2 internal). This documentation focuses on the **26 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are low-level filesystem operations and helper utilities used internally by the main tools.
+The MCP server provides **37 total tools** (35 public + 2 internal). This documentation focuses on the **27 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are low-level filesystem operations and helper utilities used internally by the main tools.
 
-As a user, you'll primarily interact with the 26 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
+As a user, you'll primarily interact with the 27 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
-> 💡 **For developers:** See `souschef/server.py` for the complete list of all 36 registered tools.
+> 💡 **For developers:** See `souschef/server.py` for the complete list of all 37 registered tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -132,10 +132,11 @@ Modern deployment strategies and migration planning:
 - **generate_canary_deployment_strategy** - Generate canary deployment configurations
 
 ### 10. CI/CD Pipeline Generation
-Generate Jenkins and GitLab CI pipelines from Chef cookbook CI patterns:
+Generate Jenkins, GitLab CI, and GitHub Actions workflows from Chef cookbook CI patterns:
 
 - **generate_jenkinsfile_from_chef** - Generate Jenkinsfile (Declarative or Scripted) from Chef cookbook CI/CD patterns
 - **generate_gitlab_ci_from_chef** - Generate .gitlab-ci.yml from Chef cookbook testing tools
+- **generate_github_workflow_from_chef** - Generate GitHub Actions workflow from Chef cookbook CI/CD patterns
 
 Automatically detects and converts:
 - **Test Kitchen** configurations (.kitchen.yml) → Integration test stages
@@ -155,17 +156,38 @@ souschef generate-jenkinsfile ./mycookbook --pipeline-type scripted
 # Generate GitLab CI configuration
 souschef generate-gitlab-ci ./mycookbook
 
+# Generate GitHub Actions workflow
+souschef generate-github-workflow ./mycookbook
+
 # Customize with options
 souschef generate-gitlab-ci ./mycookbook --no-cache --no-artifacts
+souschef generate-github-workflow ./mycookbook --workflow-name "My CI" --no-cache
 ```
 
 **MCP Tool Usage:**
 ```python
 # From an AI assistant with SousChef MCP
+
+# Generate Jenkins pipeline
 generate_jenkinsfile_from_chef(
     cookbook_path="/path/to/cookbook",
     pipeline_type="declarative",  # or "scripted"
     enable_parallel="yes"  # or "no"
+)
+
+# Generate GitLab CI
+generate_gitlab_ci_from_chef(
+    cookbook_path="/path/to/cookbook",
+    enable_cache="yes",  # or "no"
+    enable_artifacts="yes"  # or "no"
+)
+
+# Generate GitHub Actions workflow
+generate_github_workflow_from_chef(
+    cookbook_path="/path/to/cookbook",
+    workflow_name="Chef Cookbook CI",
+    enable_cache="yes",  # or "no"
+    enable_artifacts="yes"  # or "no"
 )
 
 generate_gitlab_ci_from_chef(

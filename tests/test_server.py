@@ -49,6 +49,7 @@ from souschef.server import (
     convert_inspec_to_test,
     convert_resource_to_task,
     generate_compose_from_habitat,
+    generate_github_workflow_from_chef,
     generate_inspec_from_recipe,
     list_cookbook_structure,
     list_directory,
@@ -15122,3 +15123,97 @@ def test_generate_gitlab_ci_from_chef_boolean_param_variations():
                 enable_artifacts=artifacts_val,
             )
             assert "stages:" in result
+
+
+def test_generate_github_workflow_from_chef_success():
+    """Test generate_github_workflow_from_chef with valid cookbook."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(
+        cookbook_path=cookbook_path,
+        workflow_name="Test Workflow",
+        enable_cache="yes",
+        enable_artifacts="yes",
+    )
+
+    assert "name: Test Workflow" in result
+    assert "on:" in result
+    assert "jobs:" in result
+
+
+def test_generate_github_workflow_from_chef_without_cache():
+    """Test generate_github_workflow_from_chef without caching."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(
+        cookbook_path=cookbook_path,
+        enable_cache="no",
+        enable_artifacts="yes",
+    )
+
+    assert "name:" in result
+    # Cache step should not be present
+    assert result.count("actions/cache") == 0
+
+
+def test_generate_github_workflow_from_chef_without_artifacts():
+    """Test generate_github_workflow_from_chef without artifacts."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(
+        cookbook_path=cookbook_path,
+        enable_cache="yes",
+        enable_artifacts="no",
+    )
+
+    assert "name:" in result
+    # Upload artifact step should not be present
+    assert "upload-artifact" not in result
+
+
+def test_generate_github_workflow_from_chef_default_params():
+    """Test generate_github_workflow_from_chef with default parameters."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(cookbook_path=cookbook_path)
+
+    assert "name: Chef Cookbook CI" in result
+    assert "on:" in result
+
+
+def test_generate_github_workflow_from_chef_nonexistent_path():
+    """Test generate_github_workflow_from_chef with nonexistent path."""
+    result = generate_github_workflow_from_chef(cookbook_path="/nonexistent/path")
+
+    assert "Could not find file" in result
+
+
+@pytest.mark.parametrize(
+    "cache,artifacts",
+    [
+        ("yes", "yes"),
+        ("no", "no"),
+        ("true", "true"),
+        ("false", "false"),
+        ("1", "1"),
+        ("0", "0"),
+    ],
+)
+def test_generate_github_workflow_from_chef_boolean_param_variations(cache, artifacts):
+    """Test boolean parameter variations for GitHub workflow generation."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(
+        cookbook_path=cookbook_path,
+        enable_cache=cache,
+        enable_artifacts=artifacts,
+    )
+
+    # Should not error regardless of boolean string format
+    assert "name:" in result
+    assert "jobs:" in result

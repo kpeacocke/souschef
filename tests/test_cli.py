@@ -1017,3 +1017,102 @@ def test_generate_gitlab_ci_command_nonexistent_path(runner, tmp_path):
 
     # Click validates path existence, so this should fail
     assert result.exit_code != 0
+
+
+def test_generate_github_workflow_command_success(runner, tmp_path):
+    """Test generate-github-workflow command with valid cookbook."""
+    output_file = tmp_path / "ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-github-workflow",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert output_file.exists()
+    assert "Generated GitHub Actions workflow" in result.output
+
+
+def test_generate_github_workflow_command_with_workflow_name(runner, tmp_path):
+    """Test generate-github-workflow with custom workflow name."""
+    output_file = tmp_path / "ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-github-workflow",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--workflow-name",
+            "Custom CI",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Custom CI" in output_file.read_text()
+
+
+def test_generate_github_workflow_command_without_cache(runner, tmp_path):
+    """Test generate-github-workflow with caching disabled."""
+    output_file = tmp_path / "ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-github-workflow",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--no-cache",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Cache: Disabled" in result.output
+
+
+def test_generate_github_workflow_command_without_artifacts(runner, tmp_path):
+    """Test generate-github-workflow with artifacts disabled."""
+    output_file = tmp_path / "ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-github-workflow",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--no-artifacts",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Artifacts: Disabled" in result.output
+
+
+def test_generate_github_workflow_command_default_output(runner, tmp_path):
+    """Test generate-github-workflow with default output path."""
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(
+            cli,
+            ["generate-github-workflow", str(FIXTURES_DIR)],
+        )
+
+        assert result.exit_code == 0
+        workflows_dir = Path(".github/workflows")
+        assert workflows_dir.exists()
+        assert (workflows_dir / "ci.yml").exists()
+
+
+def test_generate_github_workflow_command_nonexistent_path(runner, tmp_path):
+    """Test generate-github-workflow with nonexistent cookbook path."""
+    nonexistent = tmp_path / "nonexistent"
+    result = runner.invoke(
+        cli,
+        ["generate-github-workflow", str(nonexistent)],
+    )
+
+    # Click validates path existence, so this should fail
+    assert result.exit_code != 0

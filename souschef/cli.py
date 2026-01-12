@@ -18,6 +18,7 @@ from souschef.profiling import (
 from souschef.server import (
     convert_inspec_to_test,
     convert_resource_to_task,
+    generate_github_workflow_from_chef,
     generate_gitlab_ci_from_chef,
     generate_inspec_from_recipe,
     generate_jenkinsfile_from_chef,
@@ -530,6 +531,92 @@ def generate_gitlab_ci(
 
     except Exception as e:
         click.echo(f"Error generating GitLab CI configuration: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("cookbook_path", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path for workflow (default: ./.github/workflows/ci.yml)",
+)
+@click.option(
+    "--workflow-name",
+    default="Chef Cookbook CI",
+    help="GitHub Actions workflow name (default: Chef Cookbook CI)",
+)
+@click.option(
+    "--cache/--no-cache",
+    default=True,
+    help="Enable dependency caching (default: enabled)",
+)
+@click.option(
+    "--artifacts/--no-artifacts",
+    default=True,
+    help="Enable test report artifacts (default: enabled)",
+)
+def generate_github_workflow(
+    cookbook_path: str,
+    output: str | None,
+    workflow_name: str,
+    cache: bool,
+    artifacts: bool,
+) -> None:
+    """
+    Generate GitHub Actions workflow for Chef cookbook CI/CD.
+
+    COOKBOOK_PATH: Path to the Chef cookbook root directory
+
+    This command analyzes the cookbook for CI patterns (Test Kitchen,
+    lint tools, test suites) and generates an appropriate GitHub Actions
+    workflow with jobs for linting, testing, and convergence.
+
+    Examples:
+      souschef generate-github-workflow ./mycookbook
+
+      souschef generate-github-workflow ./mycookbook -o .github/workflows/test.yml
+
+      souschef generate-github-workflow ./mycookbook --no-cache
+
+      souschef generate-github-workflow ./mycookbook --workflow-name "CI Pipeline"
+
+    """
+    try:
+        result = generate_github_workflow_from_chef(
+            cookbook_path=cookbook_path,
+            workflow_name=workflow_name,
+            enable_cache="yes" if cache else "no",
+            enable_artifacts="yes" if artifacts else "no",
+        )
+
+        # Determine output path
+        if output:
+            output_path = Path(output)
+        else:
+            workflows_dir = Path.cwd() / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            output_path = workflows_dir / "ci.yml"
+
+        # Write workflow file
+        output_path.write_text(result)
+        click.echo(f"✓ Generated GitHub Actions workflow: {output_path}")
+
+        # Show summary
+        click.echo("\nGenerated Workflow Jobs:")
+        if "lint:" in result:
+            click.echo("  • Lint (cookstyle/foodcritic)")
+        if "unit-test:" in result:
+            click.echo("  • Unit Tests (ChefSpec)")
+        if "integration-test:" in result:
+            click.echo("  • Integration Tests (Test Kitchen)")
+
+        click.echo(f"\nCache: {'Enabled' if cache else 'Disabled'}")
+        click.echo(f"Artifacts: {'Enabled' if artifacts else 'Disabled'}")
+
+    except Exception as e:
+        click.echo(f"Error generating GitHub Actions workflow: {e}", err=True)
         sys.exit(1)
 
 

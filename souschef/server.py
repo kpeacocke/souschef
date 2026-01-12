@@ -2570,6 +2570,53 @@ def generate_gitlab_ci_from_chef(
         return format_error_with_context(e, "generating .gitlab-ci.yml", cookbook_path)
 
 
+@mcp.tool()
+def generate_github_workflow_from_chef(
+    cookbook_path: str,
+    workflow_name: str = "Chef Cookbook CI",
+    enable_cache: str = "yes",
+    enable_artifacts: str = "yes",
+) -> str:
+    """
+    Generate GitHub Actions workflow from Chef cookbook CI/CD patterns.
+
+    Analyzes Chef testing tools and generates equivalent GitHub Actions workflow
+    with caching, artifacts, and matrix strategy support.
+
+    Args:
+        cookbook_path: Path to Chef cookbook directory.
+        workflow_name: GitHub Actions workflow name.
+        enable_cache: Enable caching for dependencies - 'yes' or 'no'.
+        enable_artifacts: Enable artifacts for test results - 'yes' or 'no'.
+
+    Returns:
+        GitHub Actions workflow YAML content (.github/workflows/*.yml).
+
+    """
+    from souschef.ci.github_actions import generate_github_workflow_from_chef_ci
+
+    try:
+        enable_cache_bool = enable_cache.lower() in ("yes", "true", "1")
+        enable_artifacts_bool = enable_artifacts.lower() in ("yes", "true", "1")
+        result = generate_github_workflow_from_chef_ci(
+            cookbook_path=cookbook_path,
+            workflow_name=workflow_name,
+            enable_cache=enable_cache_bool,
+            enable_artifacts=enable_artifacts_bool,
+        )
+        return result
+    except FileNotFoundError as e:
+        return format_error_with_context(
+            e,
+            "generating GitHub Actions workflow",
+            cookbook_path,
+        )
+    except Exception as e:
+        return format_error_with_context(
+            e, "generating GitHub Actions workflow", cookbook_path
+        )
+
+
 # AWX/AAP deployment wrappers for backward compatibility
 def main() -> None:
     """
