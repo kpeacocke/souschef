@@ -862,3 +862,257 @@ def test_convert_command_json_decode_error_in_result(runner, monkeypatch):
         assert result.exit_code == 0
         # Will output YAML because JSON parsing failed
         assert len(result.output) > 0
+
+
+# CI Generation CLI tests
+def test_generate_jenkinsfile_command_success(runner, tmp_path):
+    """Test generate-jenkinsfile command with default parameters."""
+    output_file = tmp_path / "Jenkinsfile"
+    result = runner.invoke(
+        cli,
+        ["generate-jenkinsfile", str(FIXTURES_DIR), "-o", str(output_file)],
+    )
+
+    assert result.exit_code == 0
+    assert output_file.exists()
+    assert "Generated declarative Jenkinsfile" in result.output
+    assert "Pipeline Stages:" in result.output
+
+
+def test_generate_jenkinsfile_command_scripted_type(runner, tmp_path):
+    """Test generate-jenkinsfile with scripted pipeline type."""
+    output_file = tmp_path / "Jenkinsfile"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-jenkinsfile",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--pipeline-type",
+            "scripted",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert output_file.exists()
+    assert "Generated scripted Jenkinsfile" in result.output
+    content = output_file.read_text()
+    assert "node" in content
+
+
+def test_generate_jenkinsfile_command_no_parallel(runner, tmp_path):
+    """Test generate-jenkinsfile with parallel disabled."""
+    output_file = tmp_path / "Jenkinsfile"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-jenkinsfile",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--no-parallel",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Parallel execution: Disabled" in result.output
+
+
+def test_generate_jenkinsfile_command_default_output(runner, tmp_path):
+    """Test generate-jenkinsfile with default output path."""
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(
+            cli,
+            ["generate-jenkinsfile", str(FIXTURES_DIR)],
+        )
+
+        assert result.exit_code == 0
+        jenkinsfile = Path("Jenkinsfile")
+        assert jenkinsfile.exists()
+
+
+def test_generate_jenkinsfile_command_nonexistent_path(runner, tmp_path):
+    """Test generate-jenkinsfile with nonexistent cookbook path."""
+    nonexistent = tmp_path / "nonexistent"
+    result = runner.invoke(
+        cli,
+        ["generate-jenkinsfile", str(nonexistent)],
+    )
+
+    # Click validates path existence, so this should fail
+    assert result.exit_code != 0
+
+
+def test_generate_gitlab_ci_command_success(runner, tmp_path):
+    """Test generate-gitlab-ci command with default parameters."""
+    output_file = tmp_path / ".gitlab-ci.yml"
+    result = runner.invoke(
+        cli,
+        ["generate-gitlab-ci", str(FIXTURES_DIR), "-o", str(output_file)],
+    )
+
+    assert result.exit_code == 0
+    assert output_file.exists()
+    assert "Generated GitLab CI configuration" in result.output
+    assert "CI Jobs:" in result.output
+
+
+def test_generate_gitlab_ci_command_no_cache(runner, tmp_path):
+    """Test generate-gitlab-ci with cache disabled."""
+    output_file = tmp_path / ".gitlab-ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-gitlab-ci",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--no-cache",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Cache: Disabled" in result.output
+
+
+def test_generate_gitlab_ci_command_no_artifacts(runner, tmp_path):
+    """Test generate-gitlab-ci with artifacts disabled."""
+    output_file = tmp_path / ".gitlab-ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-gitlab-ci",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--no-artifacts",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Artifacts: Disabled" in result.output
+
+
+def test_generate_gitlab_ci_command_default_output(runner, tmp_path):
+    """Test generate-gitlab-ci with default output path."""
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(
+            cli,
+            ["generate-gitlab-ci", str(FIXTURES_DIR)],
+        )
+
+        assert result.exit_code == 0
+        gitlab_ci = Path(".gitlab-ci.yml")
+        assert gitlab_ci.exists()
+
+
+def test_generate_gitlab_ci_command_nonexistent_path(runner, tmp_path):
+    """Test generate-gitlab-ci with nonexistent cookbook path."""
+    nonexistent = tmp_path / "nonexistent"
+    result = runner.invoke(
+        cli,
+        ["generate-gitlab-ci", str(nonexistent)],
+    )
+
+    # Click validates path existence, so this should fail
+    assert result.exit_code != 0
+
+
+def test_generate_github_workflow_command_success(runner, tmp_path):
+    """Test generate-github-workflow command with valid cookbook."""
+    output_file = tmp_path / "ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-github-workflow",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert output_file.exists()
+    assert "Generated GitHub Actions workflow" in result.output
+
+
+def test_generate_github_workflow_command_with_workflow_name(runner, tmp_path):
+    """Test generate-github-workflow with custom workflow name."""
+    output_file = tmp_path / "ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-github-workflow",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--workflow-name",
+            "Custom CI",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Custom CI" in output_file.read_text()
+
+
+def test_generate_github_workflow_command_without_cache(runner, tmp_path):
+    """Test generate-github-workflow with caching disabled."""
+    output_file = tmp_path / "ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-github-workflow",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--no-cache",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Cache: Disabled" in result.output
+
+
+def test_generate_github_workflow_command_without_artifacts(runner, tmp_path):
+    """Test generate-github-workflow with artifacts disabled."""
+    output_file = tmp_path / "ci.yml"
+    result = runner.invoke(
+        cli,
+        [
+            "generate-github-workflow",
+            str(FIXTURES_DIR),
+            "-o",
+            str(output_file),
+            "--no-artifacts",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Artifacts: Disabled" in result.output
+
+
+def test_generate_github_workflow_command_default_output(runner, tmp_path):
+    """Test generate-github-workflow with default output path."""
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(
+            cli,
+            ["generate-github-workflow", str(FIXTURES_DIR)],
+        )
+
+        assert result.exit_code == 0
+        workflows_dir = Path(".github/workflows")
+        assert workflows_dir.exists()
+        assert (workflows_dir / "ci.yml").exists()
+
+
+def test_generate_github_workflow_command_nonexistent_path(runner, tmp_path):
+    """Test generate-github-workflow with nonexistent cookbook path."""
+    nonexistent = tmp_path / "nonexistent"
+    result = runner.invoke(
+        cli,
+        ["generate-github-workflow", str(nonexistent)],
+    )
+
+    # Click validates path existence, so this should fail
+    assert result.exit_code != 0

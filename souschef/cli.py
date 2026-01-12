@@ -18,7 +18,10 @@ from souschef.profiling import (
 from souschef.server import (
     convert_inspec_to_test,
     convert_resource_to_task,
+    generate_github_workflow_from_chef,
+    generate_gitlab_ci_from_chef,
     generate_inspec_from_recipe,
+    generate_jenkinsfile_from_chef,
     list_cookbook_structure,
     list_directory,
     parse_attributes,
@@ -29,6 +32,11 @@ from souschef.server import (
     read_cookbook_metadata,
     read_file,
 )
+
+# CI/CD job description constants
+CI_JOB_LINT = "  • Lint (cookstyle/foodcritic)"
+CI_JOB_UNIT_TESTS = "  • Unit Tests (ChefSpec)"
+CI_JOB_INTEGRATION_TESTS = "  • Integration Tests (Test Kitchen)"
 
 
 @click.group()
@@ -380,6 +388,241 @@ def inspec_generate(path: str, output_format: str) -> None:
     """
     result = generate_inspec_from_recipe(path)
     _output_result(result, output_format)
+
+
+@cli.command()
+@click.argument("cookbook_path", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path for Jenkinsfile (default: ./Jenkinsfile)",
+)
+@click.option(
+    "--pipeline-type",
+    type=click.Choice(["declarative", "scripted"]),
+    default="declarative",
+    help="Jenkins pipeline type (default: declarative)",
+)
+@click.option(
+    "--parallel/--no-parallel",
+    default=True,
+    help="Enable parallel test execution (default: enabled)",
+)
+def generate_jenkinsfile(
+    cookbook_path: str, output: str | None, pipeline_type: str, parallel: bool
+) -> None:
+    """
+    Generate Jenkinsfile for Chef cookbook CI/CD.
+
+    COOKBOOK_PATH: Path to the Chef cookbook root directory
+
+    This command analyzes the cookbook for CI patterns (Test Kitchen,
+    lint tools, test suites) and generates an appropriate Jenkinsfile
+    with stages for linting, testing, and convergence.
+
+    Examples:
+      souschef generate-jenkinsfile ./mycookbook
+
+      souschef generate-jenkinsfile ./mycookbook -o Jenkinsfile.new
+
+      souschef generate-jenkinsfile ./mycookbook --pipeline-type scripted
+
+      souschef generate-jenkinsfile ./mycookbook --no-parallel
+
+    """
+    try:
+        result = generate_jenkinsfile_from_chef(
+            cookbook_path=cookbook_path,
+            pipeline_type=pipeline_type,
+            enable_parallel="yes" if parallel else "no",
+        )
+
+        # Determine output path
+        output_path = Path(output) if output else Path.cwd() / "Jenkinsfile"
+
+        # Write Jenkinsfile
+        output_path.write_text(result)
+        click.echo(f"✓ Generated {pipeline_type} Jenkinsfile: {output_path}")
+
+        # Show summary
+        click.echo("\nGenerated Pipeline Stages:")
+        if "stage('Lint')" in result or "stage 'Lint'" in result:
+            click.echo(CI_JOB_LINT)
+        if "stage('Unit Tests')" in result or "stage 'Unit Tests'" in result:
+            click.echo(CI_JOB_UNIT_TESTS)
+        integration_stage = (
+            "stage('Integration Tests')" in result
+            or "stage 'Integration Tests'" in result
+        )
+        if integration_stage:
+            click.echo(CI_JOB_INTEGRATION_TESTS)
+
+        if parallel:
+            click.echo("\nParallel execution: Enabled")
+        else:
+            click.echo("\nParallel execution: Disabled")
+
+    except Exception as e:
+        click.echo(f"Error generating Jenkinsfile: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("cookbook_path", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path for .gitlab-ci.yml (default: ./.gitlab-ci.yml)",
+)
+@click.option(
+    "--cache/--no-cache",
+    default=True,
+    help="Enable dependency caching (default: enabled)",
+)
+@click.option(
+    "--artifacts/--no-artifacts",
+    default=True,
+    help="Enable test report artifacts (default: enabled)",
+)
+def generate_gitlab_ci(
+    cookbook_path: str, output: str | None, cache: bool, artifacts: bool
+) -> None:
+    """
+    Generate .gitlab-ci.yml for Chef cookbook CI/CD.
+
+    COOKBOOK_PATH: Path to the Chef cookbook root directory
+
+    This command analyzes the cookbook for CI patterns (Test Kitchen,
+    lint tools, test suites) and generates an appropriate GitLab CI
+    configuration with jobs for linting, testing, and convergence.
+
+    Examples:
+      souschef generate-gitlab-ci ./mycookbook
+
+      souschef generate-gitlab-ci ./mycookbook -o .gitlab-ci.test.yml
+
+      souschef generate-gitlab-ci ./mycookbook --no-cache
+
+      souschef generate-gitlab-ci ./mycookbook --no-artifacts
+
+    """
+    try:
+        result = generate_gitlab_ci_from_chef(
+            cookbook_path=cookbook_path,
+            enable_cache="yes" if cache else "no",
+            enable_artifacts="yes" if artifacts else "no",
+        )
+
+        # Determine output path
+        output_path = Path(output) if output else Path.cwd() / ".gitlab-ci.yml"
+
+        # Write GitLab CI config
+        output_path.write_text(result)
+        click.echo(f"✓ Generated GitLab CI configuration: {output_path}")
+
+        # Show summary
+        click.echo("\nGenerated CI Jobs:")
+        if "cookstyle:" in result or "foodcritic:" in result:
+            click.echo(CI_JOB_LINT)
+        if "unit-test:" in result or "chefspec:" in result:
+            click.echo(CI_JOB_UNIT_TESTS)
+        if "integration-test:" in result or "kitchen-" in result:
+            click.echo(CI_JOB_INTEGRATION_TESTS)
+
+        click.echo(f"\nCache: {'Enabled' if cache else 'Disabled'}")
+        click.echo(f"Artifacts: {'Enabled' if artifacts else 'Disabled'}")
+
+    except Exception as e:
+        click.echo(f"Error generating GitLab CI configuration: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("cookbook_path", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Output file path for workflow (default: ./.github/workflows/ci.yml)",
+)
+@click.option(
+    "--workflow-name",
+    default="Chef Cookbook CI",
+    help="GitHub Actions workflow name (default: Chef Cookbook CI)",
+)
+@click.option(
+    "--cache/--no-cache",
+    default=True,
+    help="Enable dependency caching (default: enabled)",
+)
+@click.option(
+    "--artifacts/--no-artifacts",
+    default=True,
+    help="Enable test report artifacts (default: enabled)",
+)
+def generate_github_workflow(
+    cookbook_path: str,
+    output: str | None,
+    workflow_name: str,
+    cache: bool,
+    artifacts: bool,
+) -> None:
+    """
+    Generate GitHub Actions workflow for Chef cookbook CI/CD.
+
+    COOKBOOK_PATH: Path to the Chef cookbook root directory
+
+    This command analyzes the cookbook for CI patterns (Test Kitchen,
+    lint tools, test suites) and generates an appropriate GitHub Actions
+    workflow with jobs for linting, testing, and convergence.
+
+    Examples:
+      souschef generate-github-workflow ./mycookbook
+
+      souschef generate-github-workflow ./mycookbook -o .github/workflows/test.yml
+
+      souschef generate-github-workflow ./mycookbook --no-cache
+
+      souschef generate-github-workflow ./mycookbook --workflow-name "CI Pipeline"
+
+    """
+    try:
+        result = generate_github_workflow_from_chef(
+            cookbook_path=cookbook_path,
+            workflow_name=workflow_name,
+            enable_cache="yes" if cache else "no",
+            enable_artifacts="yes" if artifacts else "no",
+        )
+
+        # Determine output path
+        if output:
+            output_path = Path(output)
+        else:
+            workflows_dir = Path.cwd() / ".github" / "workflows"
+            workflows_dir.mkdir(parents=True, exist_ok=True)
+            output_path = workflows_dir / "ci.yml"
+
+        # Write workflow file
+        output_path.write_text(result)
+        click.echo(f"✓ Generated GitHub Actions workflow: {output_path}")
+
+        # Show summary
+        click.echo("\nGenerated Workflow Jobs:")
+        if "lint:" in result:
+            click.echo(CI_JOB_LINT)
+        if "unit-test:" in result:
+            click.echo(CI_JOB_UNIT_TESTS)
+        if "integration-test:" in result:
+            click.echo(CI_JOB_INTEGRATION_TESTS)
+
+        click.echo(f"\nCache: {'Enabled' if cache else 'Disabled'}")
+        click.echo(f"Artifacts: {'Enabled' if artifacts else 'Disabled'}")
+
+    except Exception as e:
+        click.echo(f"Error generating GitHub Actions workflow: {e}", err=True)
+        sys.exit(1)
 
 
 def _output_json_format(result: str) -> None:
