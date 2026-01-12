@@ -139,8 +139,6 @@ jobs:
     timeout-minutes: 10
     needs: build
     environment: pypi
-    # Make PyPI publishing optional - don't fail the entire release if PyPI is not configured
-    continue-on-error: true
     permissions:
       contents: read
       id-token: write
