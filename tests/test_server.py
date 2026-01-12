@@ -7196,10 +7196,71 @@ version: 0.1.0
                     if "controls" in str(profile_data):
                         assert "control" in result.lower()
 
-    def test_convert_inspec_to_test_comprehensive(self):
-        """Test convert_inspec_to_test with various test frameworks."""
+    def _verify_testinfra_output(self, result: str, control: str) -> None:
+        """Verify testinfra output format."""
+        if "package(" in control:
+            assert "def test_" in result or "import" in result or len(result) > 0
+
+    def _verify_ansible_assert_output(self, result: str) -> None:
+        """Verify ansible_assert output format."""
+        assert "assert" in result or "name:" in result or len(result) > 0
+
+    def _verify_serverspec_output(self, result: str, control: str) -> None:
+        """Verify ServerSpec output format."""
+        if "package(" in control:
+            assert "require 'serverspec'" in result or "describe " in result
+
+    def _verify_goss_output(self, result: str) -> None:
+        """Verify Goss output format (YAML/JSON)."""
+        assert len(result) > 0
+
+    def _test_framework_conversion(
+        self, temp_path: str, framework: str, control: str
+    ) -> None:
+        """Test conversion for a specific framework."""
         from souschef.server import convert_inspec_to_test
 
+        result = convert_inspec_to_test(temp_path, framework)
+        assert isinstance(result, str)
+
+        if framework == "testinfra":
+            self._verify_testinfra_output(result, control)
+        elif framework == "ansible_assert":
+            self._verify_ansible_assert_output(result)
+        elif framework == "serverspec":
+            self._verify_serverspec_output(result, control)
+        elif framework == "goss":
+            self._verify_goss_output(result)
+
+    def _test_control_with_all_frameworks(self, control: str) -> None:
+        """Test a single control with all frameworks."""
+        from souschef.server import convert_inspec_to_test
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix="_control.rb", delete=False
+        ) as f:
+            f.write(control)
+            temp_path = f.name
+
+        try:
+            # Test original supported frameworks
+            for framework in ["testinfra", "ansible_assert"]:
+                self._test_framework_conversion(temp_path, framework, control)
+
+            # Test newly supported frameworks (ServerSpec and Goss)
+            for framework in ["serverspec", "goss"]:
+                self._test_framework_conversion(temp_path, framework, control)
+
+            # Test truly unsupported framework to ensure error handling
+            result = convert_inspec_to_test(temp_path, "unsupported_framework")
+            assert isinstance(result, str)
+            assert "Error" in result or "Unsupported" in result
+
+        finally:
+            Path(temp_path).unlink()
+
+    def test_convert_inspec_to_test_comprehensive(self):
+        """Test convert_inspec_to_test with various test frameworks."""
         inspec_controls = [
             # Basic package/service tests
             """
@@ -7292,50 +7353,8 @@ end
 """,
         ]
 
-        test_frameworks = ["testinfra", "ansible_assert"]  # Only supported frameworks
-
         for control in inspec_controls:
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix="_control.rb", delete=False
-            ) as f:
-                f.write(control)
-                temp_path = f.name
-
-            try:
-                for framework in test_frameworks:
-                    result = convert_inspec_to_test(temp_path, framework)
-                    assert isinstance(result, str)
-
-                    # Should generate appropriate test format for supported frameworks
-                    if framework == "testinfra" and "package(" in control:
-                        assert (
-                            "def test_" in result
-                            or "import" in result
-                            or len(result) > 0
-                        )
-                    elif framework == "ansible_assert":
-                        assert (
-                            "assert" in result or "name:" in result or len(result) > 0
-                        )
-
-                # Test newly supported frameworks (ServerSpec and Goss)
-                for framework in ["serverspec", "goss"]:
-                    result = convert_inspec_to_test(temp_path, framework)
-                    assert isinstance(result, str)
-                    # Should not be an error for supported frameworks
-                    if framework == "serverspec" and "package(" in control:
-                        assert "require 'serverspec'" in result or "describe " in result
-                    elif framework == "goss":
-                        # Goss returns YAML/JSON
-                        assert len(result) > 0
-
-                # Test truly unsupported framework to ensure error handling
-                result = convert_inspec_to_test(temp_path, "unsupported_framework")
-                assert isinstance(result, str)
-                assert "Error" in result or "Unsupported" in result
-
-            finally:
-                Path(temp_path).unlink()
+            self._test_control_with_all_frameworks(control)
 
     def test_generate_inspec_from_recipe_comprehensive(self):
         """Test generate_inspec_from_recipe with complex Chef recipes."""
