@@ -20,6 +20,8 @@ from souschef.server import (
     _convert_erb_to_jinja2,
     _convert_guards_to_when_conditions,
     _convert_inspec_to_ansible_assert,
+    _convert_inspec_to_goss,
+    _convert_inspec_to_serverspec,
     _convert_inspec_to_testinfra,
     _create_handler,
     _create_handler_with_timing,
@@ -2322,6 +2324,160 @@ def test_convert_inspec_to_test_invalid_format():
 
         assert result.startswith("Error:")
         assert "Unsupported format" in result
+
+
+def test_convert_inspec_to_serverspec():
+    """Test converting InSpec to ServerSpec format."""
+    control = {
+        "id": "nginx-test",
+        "title": "Nginx test",
+        "desc": "Check nginx",
+        "tests": [
+            {
+                "resource_type": "package",
+                "resource_name": "nginx",
+                "expectations": [
+                    {"type": "should", "matcher": "should be_installed"},
+                ],
+            },
+            {
+                "resource_type": "service",
+                "resource_name": "nginx",
+                "expectations": [
+                    {"type": "should", "matcher": "should be_running"},
+                    {"type": "should", "matcher": "should be_enabled"},
+                ],
+            },
+        ],
+    }
+
+    result = _convert_inspec_to_serverspec(control)
+
+    assert "describe 'Nginx test' do" in result
+    assert "describe package('nginx') do" in result
+    assert "it { should be_installed }" in result
+    assert "describe service('nginx') do" in result
+    assert "it { should be_running }" in result
+    assert "it { should be_enabled }" in result
+    assert result.endswith("end\n")
+
+
+def test_convert_inspec_to_goss():
+    """Test converting InSpec to Goss YAML format."""
+    controls = [
+        {
+            "id": "nginx-test",
+            "title": "Nginx test",
+            "desc": "Check nginx",
+            "tests": [
+                {
+                    "resource_type": "package",
+                    "resource_name": "nginx",
+                    "expectations": [
+                        {"type": "should", "matcher": "should be_installed"},
+                    ],
+                },
+                {
+                    "resource_type": "service",
+                    "resource_name": "nginx",
+                    "expectations": [
+                        {"type": "should", "matcher": "should be_running"},
+                        {"type": "should", "matcher": "should be_enabled"},
+                    ],
+                },
+                {
+                    "resource_type": "port",
+                    "resource_name": "80",
+                    "expectations": [
+                        {"type": "should", "matcher": "should be_listening"},
+                    ],
+                },
+            ],
+        }
+    ]
+
+    result = _convert_inspec_to_goss(controls)
+
+    # Should contain YAML/JSON structure
+    assert "package" in result or "nginx" in result
+    assert "service" in result or "nginx" in result
+    assert "port" in result or "80" in result or "tcp" in result
+
+
+def test_convert_inspec_to_test_serverspec_format():
+    """Test convert_inspec_to_test with ServerSpec format."""
+    mock_parse_result = json.dumps(
+        {
+            "profile_path": "/path/to/test.rb",
+            "controls_count": 1,
+            "controls": [
+                {
+                    "id": "test-pkg",
+                    "title": "Test package",
+                    "desc": "Check package",
+                    "impact": 1.0,
+                    "tests": [
+                        {
+                            "resource_type": "package",
+                            "resource_name": "vim",
+                            "expectations": [
+                                {"type": "should", "matcher": "should be_installed"}
+                            ],
+                        }
+                    ],
+                    "file": "test.rb",
+                }
+            ],
+        }
+    )
+
+    with patch("souschef.parsers.inspec.parse_inspec_profile") as mock_parse:
+        mock_parse.return_value = mock_parse_result
+
+        result = convert_inspec_to_test("/path/to/test.rb", "serverspec")
+
+        assert "require 'serverspec'" in result
+        assert "set :backend, :exec" in result
+        assert "describe 'Test package' do" in result
+        assert "describe package('vim') do" in result
+        assert "it { should be_installed }" in result
+
+
+def test_convert_inspec_to_test_goss_format():
+    """Test convert_inspec_to_test with Goss format."""
+    mock_parse_result = json.dumps(
+        {
+            "profile_path": "/path/to/test.rb",
+            "controls_count": 1,
+            "controls": [
+                {
+                    "id": "test-svc",
+                    "title": "Test service",
+                    "desc": "Check service",
+                    "impact": 1.0,
+                    "tests": [
+                        {
+                            "resource_type": "service",
+                            "resource_name": "nginx",
+                            "expectations": [
+                                {"type": "should", "matcher": "should be_running"}
+                            ],
+                        }
+                    ],
+                    "file": "test.rb",
+                }
+            ],
+        }
+    )
+
+    with patch("souschef.parsers.inspec.parse_inspec_profile") as mock_parse:
+        mock_parse.return_value = mock_parse_result
+
+        result = convert_inspec_to_test("/path/to/test.rb", "goss")
+
+        # Should be YAML/JSON with service definition
+        assert "service" in result or "nginx" in result
+        assert "running" in result or "True" in result or "true" in result
 
 
 def test_generate_inspec_from_recipe_success():

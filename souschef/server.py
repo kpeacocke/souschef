@@ -220,6 +220,8 @@ from souschef.parsers.habitat import parse_habitat_plan as _parse_habitat_plan
 # lgtm[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.inspec import (  # noqa: F401
     _convert_inspec_to_ansible_assert,
+    _convert_inspec_to_goss,
+    _convert_inspec_to_serverspec,
     _convert_inspec_to_testinfra,
     _extract_inspec_describe_blocks,
     _generate_inspec_from_resource,
@@ -561,11 +563,11 @@ def parse_inspec_profile(path: str) -> str:
 @mcp.tool()
 def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -> str:
     """
-    Convert InSpec controls to Ansible test format.
+    Convert InSpec controls to test framework format.
 
     Args:
         inspec_path: Path to InSpec profile or control file.
-        output_format: Output format ('testinfra' or 'ansible_assert').
+        output_format: Output format ('testinfra', 'ansible_assert', 'serverspec', or 'goss').
 
     Returns:
         Converted test code or error message.

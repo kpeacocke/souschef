@@ -593,7 +593,9 @@ def test_convert_inspec_to_test_handles_any_content(content):
 
 
 @given(
-    format_type=st.sampled_from(["testinfra", "ansible_assert", "invalid_format"]),
+    format_type=st.sampled_from(
+        ["testinfra", "ansible_assert", "serverspec", "goss", "invalid_format"]
+    ),
 )
 @settings(max_examples=30)
 def test_convert_inspec_different_formats(format_type):
@@ -624,6 +626,14 @@ end
                 # Valid ansible should contain YAML
                 if "Error:" not in result:
                     assert "---" in result
+            elif format_type == "serverspec":
+                # Valid serverspec should contain serverspec require
+                if "Error:" not in result:
+                    assert "require 'serverspec'" in result
+            elif format_type == "goss":
+                # Valid goss should be YAML/JSON format
+                if "Error:" not in result:
+                    assert "test-pkg" in result or "package" in result
             else:
                 # Invalid format should return error
                 assert result.startswith("Error:")

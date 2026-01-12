@@ -234,9 +234,42 @@ class ValidationEngine:
         if "import pytest" in result:
             # Testinfra format
             self._validate_python_syntax(result)
-        elif "---" in result:
-            # Ansible assert format
+        elif "require 'serverspec'" in result:
+            # ServerSpec format (Ruby)
+            self._validate_ruby_syntax(result)
+        elif "---" in result or ("package:" in result and "service:" in result):
+            # Ansible assert or Goss YAML format
             self._validate_yaml_syntax(result)
+
+    def _validate_ruby_syntax(self, ruby_content: str) -> None:
+        """
+        Validate Ruby syntax.
+
+        Args:
+            ruby_content: Ruby content to validate.
+
+        """
+        # Basic Ruby syntax checks
+        if not ruby_content.strip():
+            self._add_result(
+                ValidationLevel.ERROR,
+                ValidationCategory.SYNTAX,
+                "Empty Ruby content",
+                suggestion="Ensure the conversion produced valid Ruby code",
+            )
+            return
+
+        # Check for balanced blocks (describe/do/end)
+        do_count = ruby_content.count(" do")
+        end_count = ruby_content.count("end")
+
+        if do_count != end_count:
+            self._add_result(
+                ValidationLevel.ERROR,
+                ValidationCategory.SYNTAX,
+                f"Unbalanced Ruby blocks: {do_count} 'do' but {end_count} 'end'",
+                suggestion="Check that all 'do' blocks have matching 'end' keywords",
+            )
 
     def _validate_yaml_syntax(self, yaml_content: str) -> None:
         """
