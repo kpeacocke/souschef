@@ -367,21 +367,25 @@ Convert a Chef resource to an Ansible task with automatic module selection.
 
 Convert InSpec controls to Ansible test format.
 
-**What it does**: Converts Chef InSpec test suites (compliance and testing code) into Ansible-compatible testing formats like Testinfra (Python-based) or Ansible's built-in `assert` module. InSpec is Chef's testing framework - think of it like unit tests for infrastructure.
+**What it does**: Converts Chef InSpec test suites (compliance and testing code) into Ansible-compatible testing formats like Testinfra (Python-based), Ansible's built-in `assert` module, ServerSpec (Ruby-based), or Goss (YAML-based). InSpec is Chef's testing framework - think of it like unit tests for infrastructure.
 
-**Why you need this**: If your Chef cookbooks have InSpec tests (they should!), you want to preserve that testing in Ansible. These tests verify your infrastructure is configured correctly. This tool automatically converts InSpec's Ruby-based syntax to Ansible testing syntax, saving hours of manual test rewriting.
+**Why you need this**: If your Chef cookbooks have InSpec tests (they should!), you want to preserve that testing in Ansible. These tests verify your infrastructure is configured correctly. This tool automatically converts InSpec's Ruby-based syntax to multiple testing formats, saving hours of manual test rewriting.
 
 **What you get**:
-- InSpec controls converted to Testinfra Python tests or Ansible assert tasks
+- InSpec controls converted to Testinfra, Ansible assert, ServerSpec, or Goss format
 - All test cases preserved with equivalent checks
 - Directory structure for test organisation
 - Ready-to-run test files
 
-**Real-world example**: Your InSpec test `describe service('nginx') do it { should be_running } end` becomes Testinfra's `def test_nginx_running(host): assert host.service("nginx").is_running` or Ansible's `assert: that: "'nginx' in services"`. Same test, different syntax.
+**Real-world example**: Your InSpec test `describe service('nginx') do it { should be_running } end` becomes:
+- Testinfra: `def test_nginx_running(host): assert host.service("nginx").is_running`
+- Ansible: `assert: that: "'nginx' in services"`
+- ServerSpec: `describe service('nginx') do it { should be_running } end`
+- Goss: `service: nginx: running: true`
 
 **Parameters:**
 - `inspec_path` (string, required): Path to InSpec profile or control file
-- `output_format` (string, optional, default: "testinfra"): Output format ('testinfra' or 'ansible_assert')
+- `output_format` (string, optional, default: "testinfra"): Output format ('testinfra', 'ansible_assert', 'serverspec', or 'goss')
 
 **Returns:**
 - Converted test code in specified format, or error message
