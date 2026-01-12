@@ -13,6 +13,7 @@ anthropic = ">=0.75.0"
 click = ">=8.1.0"
 mcp = ">=1.25.0"
 python-dotenv = ">=1.2.1"
+pyyaml = ">=6.0.0"
 zod = ">=0.8.0"
 
 [tool.poetry.group.dev.dependencies]
