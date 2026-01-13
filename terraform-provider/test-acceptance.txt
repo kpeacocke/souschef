@@ -1,0 +1,14 @@
+=== RUN   TestAccAssessmentDataSource
+    data_source_assessment_test.go:11: Step 1/1 error: Error running pre-apply refresh: exit status 1
+        
+        Error: Error assessing cookbook
+        
+          with data.souschef_assessment.test,
+          on terraform_plugin_test.tf line 2, in data "souschef_assessment" "test":
+           2: data "souschef_assessment" "test" {
+        
+        Could not assess cookbook: exec: "souschef": executable file not found in
+        $PATH
+        
+--- FAIL: TestAccAssessmentDataSource (9.66s)
+=== RUN   TestAccMigrationResource

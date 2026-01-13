@@ -92,6 +92,55 @@ jobs:
         path: coverage.xml
         retention-days: 1
 
+  test-terraform-provider:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: test
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+    - name: Set up Go
+      uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v6
+      with:
+        go-version: '1.24.x'
+        cache-dependency-path: terraform-provider/go.sum
+
+    - name: Set up Python
+      uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a # v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Install Python dependencies
+      run: poetry install --no-interaction
+
+    - name: Set souschef path for Terraform tests
+      run: |
+        SOUSCHEF_PATH=$(realpath $(poetry run which souschef))
+        echo "TF_VAR_souschef_path=$SOUSCHEF_PATH" >> $GITHUB_ENV
+        echo "Souschef CLI path: $SOUSCHEF_PATH"
+
+    - name: Run Go unit tests
+      working-directory: terraform-provider
+      run: |
+        go test ./internal/provider -v -timeout 5m
+
+    - name: Run Terraform provider acceptance tests
+      env:
+        TF_ACC: "1"
+      run: |
+        cd terraform-provider
+        go test ./internal/provider -v -timeout 15m
+
   test-cli:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -128,22 +177,22 @@ jobs:
     - name: Test CLI functionality
       run: |
         # Test basic CLI commands
-        poetry run souschef-cli --help
+        poetry run souschef --help
 
         # Test with fixture files
-        poetry run souschef-cli ls tests/fixtures/sample_cookbook
-        poetry run souschef-cli structure tests/fixtures/sample_cookbook
-        poetry run souschef-cli metadata tests/fixtures/sample_cookbook/metadata.rb
+        poetry run souschef ls tests/fixtures/sample_cookbook
+        poetry run souschef structure tests/fixtures/sample_cookbook
+        poetry run souschef metadata tests/fixtures/sample_cookbook/metadata.rb
 
         # Test recipe parsing
         if [ -f tests/fixtures/sample_cookbook/recipes/default.rb ]; then
-          poetry run souschef-cli recipe tests/fixtures/sample_cookbook/recipes/default.rb
+          poetry run souschef recipe tests/fixtures/sample_cookbook/recipes/default.rb
         fi
 
         # Test template parsing
         TEMPLATE_FILE=$(find tests/fixtures/sample_cookbook/templates/default -name '*.erb' -type f | head -n 1)
         if [ -n "$TEMPLATE_FILE" ]; then
-          poetry run souschef-cli template "$TEMPLATE_FILE"
+          poetry run souschef template "$TEMPLATE_FILE"
         fi
 
   security:
@@ -245,7 +294,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [test, test-cli, security, ansible-lint]
+    needs: [test, test-terraform-provider, test-cli, security, ansible-lint]
     permissions:
       contents: read
 
