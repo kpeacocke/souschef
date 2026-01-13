@@ -37,8 +37,8 @@ mkdocstrings = {extras = ["python"], version = "^0.26.0"}
 mkdocs-git-revision-date-localized-plugin = "^1.2.0"
 
 [tool.poetry.scripts]
-souschef = "souschef.server:main"
-souschef-cli = "souschef.cli:main"
+souschef = "souschef.cli:main"
+souschef-mcp = "souschef.server:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]

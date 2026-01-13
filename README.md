@@ -37,9 +37,16 @@ As a user, you'll primarily interact with the 27 documented tools. Your AI assis
 - **Local Models** (Ollama, llama.cpp, etc.)
 - **Custom Enterprise Models**
 
-**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 24 specialized tools. The model calls these tools to help with your migration.
+**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 27 specialized tools. The model calls these tools to help with your migration.
 
 > See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
+
+## Quick Links
+
+- **[Terraform Provider](terraform-provider/README.md)** - Manage migrations with infrastructure-as-code
+- **[User Guide](docs/user-guide/)** - Complete documentation
+- **[API Reference](docs/api-reference/)** - Detailed tool documentation
+- **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
 
 ## Installation
 

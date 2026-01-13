@@ -11,6 +11,7 @@ from typing import NoReturn
 
 import click
 
+from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.profiling import (
     generate_cookbook_performance_report,
     profile_function,
@@ -755,6 +756,324 @@ def profile_operation(operation: str, path: str, detailed: bool) -> None:
 
     except Exception as e:
         click.echo(f"Error profiling operation: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("convert-recipe")
+@click.option(
+    "--cookbook-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the Chef cookbook directory",
+)
+@click.option(
+    "--recipe-name",
+    default="default",
+    help="Name of the recipe to convert (default: default)",
+)
+@click.option(
+    "--output-path",
+    required=True,
+    type=click.Path(),
+    help="Directory where Ansible playbook will be written",
+)
+def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> None:
+    r"""
+    Convert a Chef recipe to an Ansible playbook.
+
+    This command converts a Chef recipe to an Ansible playbook and writes
+    it to the specified output path. Used by the Terraform provider.
+
+    Example:
+        souschef convert-recipe --cookbook-path /chef/cookbooks/nginx \\
+                                --recipe-name default \\
+                                --output-path /ansible/playbooks
+
+    """
+    try:
+        cookbook_dir = Path(cookbook_path)
+        output_dir = Path(output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Check recipe exists
+        recipe_file = cookbook_dir / "recipes" / f"{recipe_name}.rb"
+        if not recipe_file.exists():
+            click.echo(
+                f"Error: Recipe {recipe_name}.rb not found in {cookbook_path}/recipes",
+                err=True,
+            )
+            sys.exit(1)
+
+        # Get cookbook name
+        metadata_file = cookbook_dir / "metadata.rb"
+        cookbook_name = cookbook_dir.name  # Default to directory name
+
+        if metadata_file.exists():
+            metadata_result = read_cookbook_metadata(str(metadata_file))
+            # Try to parse cookbook name from metadata
+            for line in metadata_result.split("\n"):
+                if line.startswith("name"):
+                    cookbook_name = line.split(":", 1)[1].strip()
+                    break
+
+        # Generate playbook
+        click.echo(f"Converting {cookbook_name}::{recipe_name} to Ansible...")
+        playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
+
+        # Write output
+        output_file = output_dir / f"{recipe_name}.yml"
+        output_file.write_text(playbook_yaml)
+
+        click.echo(f"✓ Playbook written to: {output_file}")
+        click.echo(f"  Size: {len(playbook_yaml)} bytes")
+
+    except Exception as e:
+        click.echo(f"Error converting recipe: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("assess-cookbook")
+@click.option(
+    "--cookbook-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the Chef cookbook directory",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+    help="Output format (default: json)",
+)
+def assess_cookbook(cookbook_path: str, output_format: str) -> None:
+    """
+    Assess a Chef cookbook for migration complexity.
+
+    Analyzes the cookbook and provides complexity level, recipe/resource counts,
+    estimated migration effort, and recommendations. Used by Terraform provider.
+
+    Example:
+        souschef assess-cookbook --cookbook-path /chef/cookbooks/nginx --format json
+
+    """
+    try:
+        cookbook_dir = Path(cookbook_path)
+        if not cookbook_dir.exists():
+            click.echo(
+                f"Error: Cookbook path does not exist: {cookbook_path}",
+                err=True,
+            )
+            sys.exit(1)
+
+        if not cookbook_dir.is_dir():
+            click.echo(f"Error: {cookbook_path} is not a directory", err=True)
+            sys.exit(1)
+
+        # Analyze cookbook
+        analysis = _analyze_cookbook_for_assessment(cookbook_dir)
+
+        if output_format == "json":
+            click.echo(json.dumps(analysis))
+        else:
+            _display_assessment_text(cookbook_dir.name, analysis)
+
+    except Exception as e:
+        click.echo(f"Error assessing cookbook: {e}", err=True)
+        sys.exit(1)
+
+
+def _analyze_cookbook_for_assessment(cookbook_dir: Path) -> dict:
+    """Analyze cookbook and return assessment data."""
+    recipe_count = 0
+    resource_count = 0
+    recipes_dir = cookbook_dir / "recipes"
+
+    if recipes_dir.exists():
+        recipe_files = list(recipes_dir.glob("*.rb"))
+        recipe_count = len(recipe_files)
+        for recipe_file in recipe_files:
+            content = recipe_file.read_text()
+            resource_count += content.count(" do\n") + content.count(" do\r\n")
+
+    # Determine complexity
+    if recipe_count == 0:
+        complexity = "Low"
+        estimated_hours = 0.5
+    elif recipe_count <= 3 and resource_count <= 10:
+        complexity = "Low"
+        estimated_hours = resource_count * 0.5
+    elif recipe_count <= 10 and resource_count <= 50:
+        complexity = "Medium"
+        estimated_hours = resource_count * 1.0
+    else:
+        complexity = "High"
+        estimated_hours = resource_count * 1.5
+
+    recommendations = (
+        f"Cookbook has {recipe_count} recipes with {resource_count} resources. "
+    )
+    if complexity == "Low":
+        recommendations += "Straightforward migration recommended."
+    elif complexity == "Medium":
+        recommendations += "Moderate effort required. Consider phased approach."
+    else:
+        recommendations += (
+            "Complex migration. Recommend incremental migration strategy."
+        )
+
+    return {
+        "complexity": complexity,
+        "recipe_count": recipe_count,
+        "resource_count": resource_count,
+        "estimated_hours": estimated_hours,
+        "recommendations": recommendations,
+    }
+
+
+def _display_assessment_text(cookbook_name: str, analysis: dict) -> None:
+    """Display assessment in human-readable text format."""
+    click.echo(f"\nCookbook: {cookbook_name}")
+    click.echo("=" * 50)
+    click.echo(f"Complexity: {analysis['complexity']}")
+    click.echo(f"Recipe Count: {analysis['recipe_count']}")
+    click.echo(f"Resource Count: {analysis['resource_count']}")
+    click.echo(f"Estimated Hours: {analysis['estimated_hours']}")
+    click.echo(f"\nRecommendations:\n{analysis['recommendations']}")
+
+
+@cli.command("convert-habitat")
+@click.option(
+    "--plan-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the Habitat plan.sh file",
+)
+@click.option(
+    "--output-path",
+    required=True,
+    type=click.Path(),
+    help="Directory where Dockerfile will be written",
+)
+@click.option(
+    "--base-image",
+    default="ubuntu:latest",
+    help="Base Docker image to use (default: ubuntu:latest)",
+)
+def convert_habitat(plan_path: str, output_path: str, base_image: str) -> None:
+    r"""
+    Convert a Chef Habitat plan to a Dockerfile.
+
+    Analyses the Habitat plan.sh file and generates an equivalent Dockerfile
+    for containerised deployment. Used by Terraform provider.
+
+    Example:
+        souschef convert-habitat --plan-path /hab/plans/nginx/plan.sh \
+            --output-path /docker/nginx --base-image ubuntu:22.04
+
+    """
+    try:
+        plan_file = Path(plan_path)
+        if not plan_file.exists():
+            click.echo(f"Error: Plan file does not exist: {plan_path}", err=True)
+            sys.exit(1)
+
+        if not plan_file.is_file():
+            click.echo(f"Error: {plan_path} is not a file", err=True)
+            sys.exit(1)
+
+        output_dir = Path(output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Call server function to convert
+        from souschef.server import convert_habitat_to_dockerfile
+
+        dockerfile_content = convert_habitat_to_dockerfile(str(plan_path), base_image)
+
+        # Write Dockerfile
+        dockerfile_path = output_dir / "Dockerfile"
+        dockerfile_path.write_text(dockerfile_content)
+
+        click.echo(f"Successfully converted Habitat plan to {dockerfile_path}")
+        click.echo(f"Dockerfile size: {len(dockerfile_content)} bytes")
+
+    except Exception as e:
+        click.echo(f"Error converting Habitat plan: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("convert-inspec")
+@click.option(
+    "--profile-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the InSpec profile directory",
+)
+@click.option(
+    "--output-path",
+    required=True,
+    type=click.Path(),
+    help="Directory where converted tests will be written",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["testinfra", "serverspec", "goss", "ansible"]),
+    default="testinfra",
+    help="Output test framework format (default: testinfra)",
+)
+def convert_inspec(profile_path: str, output_path: str, output_format: str) -> None:
+    r"""
+    Convert a Chef InSpec profile to various test frameworks.
+
+    Analyses the InSpec profile and generates equivalent tests in the
+    specified framework. Supports TestInfra, Serverspec, Goss, and Ansible.
+
+    Example:
+        souschef convert-inspec --profile-path /inspec/profiles/linux \
+            --output-path /tests/testinfra --format testinfra
+
+    """
+    try:
+        profile_dir = Path(profile_path)
+        if not profile_dir.exists():
+            click.echo(
+                f"Error: Profile path does not exist: {profile_path}",
+                err=True,
+            )
+            sys.exit(1)
+
+        if not profile_dir.is_dir():
+            click.echo(f"Error: {profile_path} is not a directory", err=True)
+            sys.exit(1)
+
+        output_dir = Path(output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Call server function to convert
+        from souschef.server import convert_inspec_to_test
+
+        test_content = convert_inspec_to_test(str(profile_path), output_format)
+
+        # Determine output filename based on format
+        filename_map = {
+            "testinfra": "test_spec.py",
+            "serverspec": "spec_helper.rb",
+            "goss": "goss.yaml",
+            "ansible": "assert.yml",
+        }
+        output_filename = filename_map.get(output_format, "test.txt")
+
+        # Write test file
+        test_file_path = output_dir / output_filename
+        test_file_path.write_text(test_content)
+
+        click.echo(f"Successfully converted InSpec profile to {output_format} format")
+        click.echo(f"Test file: {test_file_path}")
+        click.echo(f"File size: {len(test_content)} bytes")
+
+    except Exception as e:
+        click.echo(f"Error converting InSpec profile: {e}", err=True)
         sys.exit(1)
 
 
