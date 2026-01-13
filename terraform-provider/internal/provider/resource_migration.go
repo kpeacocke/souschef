@@ -123,10 +123,6 @@ func (r *migrationResource) Create(ctx context.Context, req resource.CreateReque
 	cookbookPath := plan.CookbookPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
 
-	// TODO: This CLI command doesn't exist yet. Options:
-	// 1. Add 'souschef convert-recipe' CLI command
-	// 2. Call MCP server directly via protocol
-	// 3. Import souschef Python package and call converters directly
 	// Call souschef CLI to convert recipe
 	cmd := exec.CommandContext(ctx, r.client.Path, "convert-recipe",
 		"--cookbook-path", cookbookPath,
