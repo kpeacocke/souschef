@@ -7,9 +7,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-const (
+var (
 	testAssessmentResourceName = "data.souschef_assessment.test"
-	testCookbookPath           = "/tmp/cookbooks/test"
+	testCookbookPath           = getFixturePath("sample_cookbook")
 )
 
 func TestAccAssessmentDataSource(t *testing.T) {
