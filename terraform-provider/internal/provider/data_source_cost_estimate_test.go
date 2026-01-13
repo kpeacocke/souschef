@@ -50,8 +50,12 @@ func TestAccCostEstimateDataSource(t *testing.T) {
 
 func testAccCostEstimateDataSourceConfig(cookbookPath string, hourlyRate, infraCost float64) string {
 	config := fmt.Sprintf(`
+variable "souschef_path" {
+  type = string
+}
+
 provider "souschef" {
-  souschef_path = "/workspaces/souschef/.venv/bin/souschef"
+  souschef_path = var.souschef_path
 }
 
 data "souschef_cost_estimate" "test" {
