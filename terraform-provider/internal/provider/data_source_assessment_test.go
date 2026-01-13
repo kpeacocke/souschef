@@ -36,6 +36,10 @@ func TestAccAssessmentDataSource(t *testing.T) {
 
 func testAccAssessmentDataSourceConfig(cookbookPath string) string {
 	return fmt.Sprintf(`
+provider "souschef" {
+  souschef_path = "/workspaces/souschef/.venv/bin/souschef"
+}
+
 data "souschef_assessment" "test" {
   cookbook_path = %[1]q
 }

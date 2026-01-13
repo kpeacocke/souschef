@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -16,6 +17,12 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 }
 
 func testAccPreCheck(t *testing.T) {
-	// You can add code here to run prior to any test case execution
-	// For example, verify SousChef CLI is available
+	// Set default souschef path for testing if not set
+	if os.Getenv("SOUSCHEF_PATH") == "" {
+		// Try common locations
+		venvPath := "/workspaces/souschef/.venv/bin/souschef"
+		if _, err := os.Stat(venvPath); err == nil {
+			os.Setenv("TF_VAR_souschef_path", venvPath)
+		}
+	}
 }

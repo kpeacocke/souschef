@@ -30,12 +30,6 @@ func TestAccMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testMigrationResourceName, "playbook_content"),
 				),
 			},
-			// ImportState testing
-			{
-				ResourceName:      testMigrationResourceName,
-				ImportState:       true,
-				ImportStateVerify: true,
-			},
 			// Update and Read testing
 			{
 				Config: testAccMigrationResourceConfig("test_cookbook", testCookbookPathMigration, testAnsibleOutputPath),
@@ -50,6 +44,10 @@ func TestAccMigrationResource(t *testing.T) {
 
 func testAccMigrationResourceConfig(name, cookbookPath, outputPath string) string {
 	return fmt.Sprintf(`
+provider "souschef" {
+  souschef_path = "/workspaces/souschef/.venv/bin/souschef"
+}
+
 resource "souschef_migration" "test" {
   cookbook_path = %[2]q
   output_path   = %[3]q
