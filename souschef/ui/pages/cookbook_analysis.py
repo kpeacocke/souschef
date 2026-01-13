@@ -1,17 +1,16 @@
 """Cookbook Analysis Page for SousChef UI."""
 
-import streamlit as st
-import pandas as pd
-from pathlib import Path
-from typing import List, Dict, Any
 import sys
-import os
+from pathlib import Path
+
+import pandas as pd
+import streamlit as st
 
 # Add the parent directory to the path so we can import souschef modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from souschef.parsers.metadata import read_cookbook_metadata
 from souschef.assessment import assess_chef_migration_complexity
+from souschef.parsers.metadata import read_cookbook_metadata
 
 
 def show_cookbook_analysis_page():
@@ -22,7 +21,7 @@ def show_cookbook_analysis_page():
     cookbook_path = st.text_input(
         "Cookbook Directory Path",
         placeholder="/path/to/your/cookbooks",
-        help="Enter the absolute path to your Chef cookbooks directory"
+        help="Enter the absolute path to your Chef cookbooks directory",
     )
 
     if cookbook_path:
@@ -46,38 +45,48 @@ def show_cookbook_analysis_page():
                                 name = metadata.get("name", cookbook.name)
                                 version = metadata.get("version", "Unknown")
                                 maintainer = metadata.get("maintainer", "Unknown")
-                                description = metadata.get("description", "No description")
+                                description = metadata.get(
+                                    "description", "No description"
+                                )
                                 dependencies = len(metadata.get("depends", []))
 
-                                cookbook_data.append({
-                                    "Name": name,
-                                    "Version": version,
-                                    "Maintainer": maintainer,
-                                    "Description": description[:50] + "..." if len(description) > 50 else description,
-                                    "Dependencies": dependencies,
-                                    "Path": str(cookbook),
-                                    "Has Metadata": "Yes"
-                                })
+                                cookbook_data.append(
+                                    {
+                                        "Name": name,
+                                        "Version": version,
+                                        "Maintainer": maintainer,
+                                        "Description": description[:50] + "..."
+                                        if len(description) > 50
+                                        else description,
+                                        "Dependencies": dependencies,
+                                        "Path": str(cookbook),
+                                        "Has Metadata": "Yes",
+                                    }
+                                )
                             except Exception as e:
-                                cookbook_data.append({
+                                cookbook_data.append(
+                                    {
+                                        "Name": cookbook.name,
+                                        "Version": "Error",
+                                        "Maintainer": "Error",
+                                        "Description": f"Parse error: {str(e)[:50]}",
+                                        "Dependencies": 0,
+                                        "Path": str(cookbook),
+                                        "Has Metadata": "No",
+                                    }
+                                )
+                        else:
+                            cookbook_data.append(
+                                {
                                     "Name": cookbook.name,
-                                    "Version": "Error",
-                                    "Maintainer": "Error",
-                                    "Description": f"Parse error: {str(e)[:50]}",
+                                    "Version": "No metadata",
+                                    "Maintainer": "Unknown",
+                                    "Description": "No metadata.rb found",
                                     "Dependencies": 0,
                                     "Path": str(cookbook),
-                                    "Has Metadata": "No"
-                                })
-                        else:
-                            cookbook_data.append({
-                                "Name": cookbook.name,
-                                "Version": "No metadata",
-                                "Maintainer": "Unknown",
-                                "Description": "No metadata.rb found",
-                                "Dependencies": 0,
-                                "Path": str(cookbook),
-                                "Has Metadata": "❌"
-                            })
+                                    "Has Metadata": "No",
+                                }
+                            )
 
                     df = pd.DataFrame(cookbook_data)
                     st.dataframe(df, use_container_width=True)
@@ -85,14 +94,23 @@ def show_cookbook_analysis_page():
                     # Analysis actions
                     selected_cookbooks = st.multiselect(
                         "Select cookbooks to analyze",
-                        [cb["Name"] for cb in cookbook_data if cb["Has Metadata"] == "Yes"]
+                        [
+                            cb["Name"]
+                            for cb in cookbook_data
+                            if cb["Has Metadata"] == "Yes"
+                        ],
                     )
 
-                    if selected_cookbooks and st.button("Analyze Selected Cookbooks", type="primary"):
+                    if selected_cookbooks and st.button(
+                        "Analyze Selected Cookbooks", type="primary"
+                    ):
                         analyze_selected_cookbooks(cookbook_path, selected_cookbooks)
 
                 else:
-                    st.warning("No subdirectories found in the specified path. Are these individual cookbooks?")
+                    st.warning(
+                        "No subdirectories found in the specified path. "
+                        "Are these individual cookbooks?"
+                    )
 
             except Exception as e:
                 st.error(f"Error reading directory: {e}")
@@ -103,7 +121,8 @@ def show_cookbook_analysis_page():
     # Instructions
     with st.expander("How to Use"):
         st.markdown("""
-        1. **Enter Cookbook Path**: Provide the absolute path to your cookbooks directory
+        1. **Enter Cookbook Path**: Provide the absolute path to your cookbooks
+           directory
         2. **Review Cookbooks**: The interface will list all cookbooks with metadata
         3. **Select Cookbooks**: Choose which cookbooks to analyze
         4. **Run Analysis**: Click "Analyze Selected Cookbooks" to get detailed insights
@@ -123,9 +142,9 @@ def show_cookbook_analysis_page():
         """)
 
 
-def analyze_selected_cookbooks(cookbook_path: str, selected_cookbooks: List[str]):
+def analyze_selected_cookbooks(cookbook_path: str, selected_cookbooks: list[str]):
     """Analyze the selected cookbooks and display results."""
-    st.subheader("🔬 Analysis Results")
+    st.subheader("Analysis Results")
 
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -134,7 +153,7 @@ def analyze_selected_cookbooks(cookbook_path: str, selected_cookbooks: List[str]
     total = len(selected_cookbooks)
 
     for i, cookbook_name in enumerate(selected_cookbooks):
-        status_text.text(f"Analyzing {cookbook_name}... ({i+1}/{total})")
+        status_text.text(f"Analyzing {cookbook_name}... ({i + 1}/{total})")
         progress_bar.progress((i + 1) / total)
 
         # Find the cookbook directory
@@ -163,24 +182,26 @@ def analyze_selected_cookbooks(cookbook_path: str, selected_cookbooks: List[str]
                     "complexity": assessment.get("complexity", "Unknown"),
                     "estimated_hours": assessment.get("estimated_hours", 0),
                     "recommendations": assessment.get("recommendations", ""),
-                    "status": "✅ Analyzed"
+                    "status": "Analyzed",
                 }
 
                 results.append(analysis)
 
             except Exception as e:
-                results.append({
-                    "name": cookbook_name,
-                    "path": str(cookbook_dir),
-                    "version": "Error",
-                    "maintainer": "Error",
-                    "description": f"Analysis failed: {e}",
-                    "dependencies": 0,
-                    "complexity": "Error",
-                    "estimated_hours": 0,
-                    "recommendations": f"Error: {e}",
-                    "status": "❌ Failed"
-                })
+                results.append(
+                    {
+                        "name": cookbook_name,
+                        "path": str(cookbook_dir),
+                        "version": "Error",
+                        "maintainer": "Error",
+                        "description": f"Analysis failed: {e}",
+                        "dependencies": 0,
+                        "complexity": "Error",
+                        "estimated_hours": 0,
+                        "recommendations": f"Error: {e}",
+                        "status": "Failed",
+                    }
+                )
 
     progress_bar.empty()
     status_text.empty()
@@ -207,11 +228,13 @@ def analyze_selected_cookbooks(cookbook_path: str, selected_cookbooks: List[str]
         st.dataframe(df, use_container_width=True)
 
         # Detailed analysis
-        st.subheader("📊 Detailed Analysis")
+        st.subheader("Detailed Analysis")
 
         for result in results:
-            if result["status"] == "✅ Analyzed":
-                with st.expander(f"📖 {result['name']} - {result['complexity']} Complexity"):
+            if result["status"] == "Analyzed":
+                with st.expander(
+                    f"{result['name']} - {result['complexity']} Complexity"
+                ):
                     col1, col2 = st.columns(2)
 
                     with col1:
@@ -220,7 +243,9 @@ def analyze_selected_cookbooks(cookbook_path: str, selected_cookbooks: List[str]
                         st.write(f"**Dependencies:** {result['dependencies']}")
 
                     with col2:
-                        st.write(f"**Estimated Hours:** {result['estimated_hours']:.1f}")
+                        st.write(
+                            f"**Estimated Hours:** {result['estimated_hours']:.1f}"
+                        )
                         st.write(f"**Complexity:** {result['complexity']}")
 
                     st.write(f"**Recommendations:** {result['recommendations']}")
@@ -228,11 +253,11 @@ def analyze_selected_cookbooks(cookbook_path: str, selected_cookbooks: List[str]
         # Download option
         if successful > 0:
             st.download_button(
-                label="📥 Download Analysis Report",
+                label="Download Analysis Report",
                 data=pd.DataFrame(results).to_json(indent=2),
                 file_name="cookbook_analysis.json",
                 mime="application/json",
-                help="Download the analysis results as JSON"
+                help="Download the analysis results as JSON",
             )
 
 

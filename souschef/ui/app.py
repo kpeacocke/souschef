@@ -1,23 +1,24 @@
-"""Visual Migration Planning Interface for SousChef.
+"""
+Visual Migration Planning Interface for SousChef.
 
 A Streamlit-based web interface for Chef to Ansible migration planning,
 assessment, and visualization.
 """
 
-import streamlit as st
-from pathlib import Path
 import sys
-import os
+from pathlib import Path
+
+import streamlit as st
 
 # Add the parent directory to the path so we can import souschef modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import page modules
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 
 
 def main():
-    """Main Streamlit application."""
+    """Run the main Streamlit application."""
     st.set_page_config(
         page_title="SousChef - Chef to Ansible Migration",
         layout="wide",
@@ -30,7 +31,13 @@ def main():
     # Sidebar navigation
     page = st.sidebar.selectbox(
         "Navigation",
-        ["Dashboard", "Cookbook Analysis", "Migration Planning", "Dependency Mapping", "Validation Reports"]
+        [
+            "Dashboard",
+            "Cookbook Analysis",
+            "Migration Planning",
+            "Dependency Mapping",
+            "Validation Reports",
+        ],
     )
 
     # Main content area
@@ -72,11 +79,15 @@ def show_dashboard():
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("Analyze Cookbook Directory", type="primary", use_container_width=True):
+        if st.button(
+            "Analyze Cookbook Directory", type="primary", use_container_width=True
+        ):
             st.rerun()  # This will trigger navigation to cookbook analysis
 
     with col2:
-        if st.button("Generate Migration Plan", type="secondary", use_container_width=True):
+        if st.button(
+            "Generate Migration Plan", type="secondary", use_container_width=True
+        ):
             st.rerun()  # This will trigger navigation to migration planning
 
     # Recent activity

@@ -1091,7 +1091,15 @@ def ui(port: int) -> None:
         import sys
 
         # Launch Streamlit app
-        cmd = [sys.executable, "-m", "streamlit", "run", "souschef/ui/app.py", "--server.port", str(port)]
+        cmd = [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            "souschef/ui/app.py",
+            "--server.port",
+            str(port),
+        ]
         click.echo(f"Starting SousChef UI on http://localhost:{port}")
         click.echo("Press Ctrl+C to stop the server")
 
@@ -1101,7 +1109,9 @@ def ui(port: int) -> None:
         click.echo(f"Error starting UI: {e}", err=True)
         sys.exit(1)
     except ImportError:
-        click.echo("Streamlit is not installed. Install with: pip install streamlit", err=True)
+        click.echo(
+            "Streamlit is not installed. Install with: pip install streamlit", err=True
+        )
         sys.exit(1)
 
 
