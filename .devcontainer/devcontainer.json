@@ -88,9 +88,18 @@
                     }
                 },
                 "terminal.integrated.enablePersistentSessions": true,
-                "terminal.integrated.shellIntegration.enabled": true
+                "terminal.integrated.shellIntegration.enabled": true,
+
+                // Go configuration
+                "go.testFlags": ["-v", "-timeout=5m"],
+                "go.testEnvVars": {
+                    "TF_ACC": "1"
+                },
+                "go.coverOnSave": false,
+                "go.coverOnTestPackage": false
             },
             "extensions": [
+                "golang.go",
                 "ms-python.python",
                 "ms-python.vscode-pylance",
                 "charliermarsh.ruff",
