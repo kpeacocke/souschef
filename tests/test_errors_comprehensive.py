@@ -36,9 +36,8 @@ class TestSousChefError:
 
     def test_error_can_be_raised_and_caught(self):
         """Test that error can be raised and caught."""
-        with pytest.raises(SousChefError) as exc_info:
+        with pytest.raises(SousChefError, match="Test error"):
             raise SousChefError("Test error")
-        assert "Test error" in str(exc_info.value)
 
 
 class TestChefFileNotFoundError:

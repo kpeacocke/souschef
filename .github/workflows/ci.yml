@@ -92,15 +92,31 @@ jobs:
         path: coverage.xml
         retention-days: 1
 
-  test-cli:
+        fail_ci_if_error: false
+
+    - name: Upload coverage for SonarCloud
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      if: matrix.python-version == '3.14'
+      with:
+        name: coverage-report
+        path: coverage.xml
+        retention-days: 1
+
+  test-terraform-provider:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: test
     permissions:
       contents: read
 
     steps:
     - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+    - name: Set up Go
+      uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v6
+      with:
+        go-version: '1.24'
+        cache-dependency-path: terraform-provider/go.sum
 
     - name: Set up Python
       uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6
@@ -113,6 +129,24 @@ jobs:
         version: latest
         virtualenvs-create: true
         virtualenvs-in-project: true
+
+    - name: Install Python dependencies
+      run: poetry install --no-interaction
+
+    - name: Run Go unit tests
+      working-directory: terraform-provider
+      run: |
+        go test ./internal/provider -v -timeout 5m
+
+    - name: Run Terraform provider acceptance tests
+      env:
+        TF_ACC: "1"
+      run: |
+        cd terraform-provider
+        go test ./internal/provider -v -timeout 15m
+
+  test-cli:
+```
 
     - name: Cache Poetry dependencies
       uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5
@@ -245,7 +279,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [test, test-cli, security, ansible-lint]
+    needs: [test, test-terraform-provider, test-cli, security, ansible-lint]
     permissions:
       contents: read
 

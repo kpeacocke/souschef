@@ -84,9 +84,6 @@ from souschef.converters.playbook import (
 from souschef.converters.playbook import (
     generate_dynamic_inventory_script as _generate_dynamic_inventory_script,
 )
-from souschef.converters.playbook import (
-    generate_playbook_from_recipe as _generate_playbook_from_recipe,
-)
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.resource import (  # noqa: F401
@@ -2359,7 +2356,11 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
         Generated Ansible playbook content.
 
     """
-    return _generate_playbook_from_recipe(recipe_path)
+    from souschef.converters.playbook import (
+        generate_playbook_from_recipe as _generate_playbook,
+    )
+
+    return _generate_playbook(recipe_path)
 
 
 def convert_chef_search_to_inventory(search_query: str) -> str:
