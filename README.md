@@ -325,12 +325,34 @@ profile_cookbook_performance /path/to/large_cookbook
 profile_parsing_operation recipe /path/to/recipe.rb --detailed
 ```
 
+### 10. Visual Migration Planning Interface
+Interactive web-based interface for Chef-to-Ansible migration planning and visualization:
+
+- **Cookbook Analysis Dashboard**: Interactive directory scanning with metadata parsing and complexity assessment
+- **Migration Planning Wizard**: Step-by-step migration planning with effort estimation and risk analysis
+- **Dependency Mapping**: Visual dependency graphs showing cookbook relationships and migration ordering
+- **Validation Reports**: Conversion validation results with syntax checking and best practice compliance
+- **Progress Tracking**: Real-time migration progress with completion metrics and bottleneck identification
+
+**Launch the UI:**
+```bash
+# Using Poetry (development)
+poetry run souschef ui
+
+# Using pip (installed)
+souschef ui
+
+# Custom port
+souschef ui --port 8080
+```
+
 **Features:**
--  Execution time and peak memory tracking for all parsing operations
--  Detailed cProfile statistics with top function calls
--  Automatic performance recommendations based on thresholds
--  Before/after comparison for optimization validation
--  Integration with CLI and MCP for AI-assisted profiling
+- Clean, professional design matching documentation standards
+- Real-time cookbook analysis with progress indicators
+- Interactive dependency visualization (coming soon)
+- Migration planning wizards (coming soon)
+- Validation reporting dashboard (coming soon)
+- Cross-platform compatibility (Linux, macOS, Windows)
 
 ## Enterprise Features
 
@@ -429,6 +451,7 @@ souschef-cli inspec-convert controls.rb --format testinfra
 - `inspec-parse` - Parse InSpec profiles and controls
 - `inspec-convert` - Convert InSpec to Testinfra/Ansible tests
 - `inspec-generate` - Generate InSpec validation from recipes
+- `ui` - Launch the Visual Migration Planning Interface
 - `ls` / `cat` - File system operations
 
 ### Development Setup
@@ -561,9 +584,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -  Comprehensive documentation content (Getting Started, Tool Reference, Migration Guide, API docs, Examples)
 -  Integration with additional test frameworks (ServerSpec, Goss) - InSpec conversion now supports 4 output formats
 -  Jenkins/GitLab CI pipeline generation from Chef cookbook CI patterns (Test Kitchen, ChefSpec, Cookstyle)
+-  Visual migration planning interface with Streamlit-based web UI for interactive cookbook analysis and migration planning
 
 ### Planned 📅
-- 📅 Visual migration planning and dependency mapping interface
+- 📅 Interactive dependency mapping and visualization interface
+- 📅 Migration planning wizard with effort estimation
+- 📅 Validation reports dashboard with conversion quality metrics
 - 📅 Terraform provider for infrastructure state management
 
 ## 🙋‍♀️ Support & Community

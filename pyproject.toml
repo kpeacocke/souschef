@@ -35,6 +35,7 @@ mkdocs = "^1.6.0"
 mkdocs-material = "^9.5.0"
 mkdocstrings = {extras = ["python"], version = "^0.26.0"}
 mkdocs-git-revision-date-localized-plugin = "^1.2.0"
+streamlit = "^1.28.0"
 
 [tool.poetry.scripts]
 souschef = "souschef.cli:main"
