@@ -16,8 +16,10 @@ The Terraform provider allows you to:
 ### Prerequisites
 
 - Terraform >= 1.0
-- SousChef CLI installed and available in PATH
+- SousChef MCP server running or CLI installed
 - Go >= 1.21 (for building from source)
+
+> **Note**: The current provider implementation calls SousChef via CLI commands. Future versions will integrate directly with the MCP protocol for better performance and richer functionality.
 
 ### Building from Source
 
@@ -412,10 +414,12 @@ ls -la /path/to/output
 
 ## Limitations
 
-- The provider requires the SousChef CLI to be installed
+- **Alpha Release**: The provider is in early development and requires additional CLI commands to be implemented
+- The provider requires the SousChef CLI to be installed and extended with `convert-recipe` and `assess-cookbook` commands
 - Migrations run locally on the Terraform executor
 - Large cookbooks may take significant time to convert
 - The provider does not currently support remote execution
+- **Recommended**: Use the MCP server directly until CLI integration is complete
 
 ## Next Steps
 

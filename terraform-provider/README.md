@@ -6,7 +6,9 @@ This Terraform provider enables infrastructure-as-code management of Chef to Ans
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
 - [Go](https://golang.org/doc/install) >= 1.21 (for building)
-- [SousChef](https://github.com/kpeacocke/souschef) CLI installed
+- [SousChef](https://github.com/kpeacocke/souschef) MCP server or CLI
+
+> **⚠️ Alpha Status**: This provider is in early development. The CLI commands `convert-recipe` and `assess-cookbook` need to be implemented. For production use, consider using the MCP server directly until the provider reaches stable release.
 
 ## Building
 

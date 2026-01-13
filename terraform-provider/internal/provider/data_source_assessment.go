@@ -112,6 +112,10 @@ func (d *assessmentDataSource) Read(ctx context.Context, req datasource.ReadRequ
 
 	cookbookPath := config.CookbookPath.ValueString()
 
+	// TODO: This CLI command doesn't exist yet. Options:
+	// 1. Add 'souschef assess-cookbook' CLI command
+	// 2. Call MCP assessment.py functions directly
+	// 3. Use MCP protocol to call assess_migration_complexity tool
 	// Call souschef CLI to assess cookbook
 	cmd := exec.CommandContext(ctx, d.client.Path, "assess-cookbook",
 		"--cookbook-path", cookbookPath,
