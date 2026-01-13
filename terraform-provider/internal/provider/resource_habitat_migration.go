@@ -42,6 +42,8 @@ type habitatMigrationResourceModel struct {
 	DockerfileContent types.String `tfsdk:"dockerfile_content"`
 }
 
+const errReadingDockerfile = "Error reading Dockerfile"
+
 // Metadata returns the resource type name
 func (r *habitatMigrationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_habitat_migration"
@@ -148,7 +150,7 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 	content, err := os.ReadFile(dockerfilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading Dockerfile",
+			errReadingDockerfile,
 			fmt.Sprintf("Could not read generated Dockerfile: %s", err),
 		)
 		return
@@ -186,7 +188,7 @@ func (r *habitatMigrationResource) Read(ctx context.Context, req resource.ReadRe
 	content, err := os.ReadFile(dockerfilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading Dockerfile",
+			errReadingDockerfile,
 			fmt.Sprintf("Could not read Dockerfile: %s", err),
 		)
 		return
@@ -232,7 +234,7 @@ func (r *habitatMigrationResource) Update(ctx context.Context, req resource.Upda
 	content, err := os.ReadFile(dockerfilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading Dockerfile",
+			errReadingDockerfile,
 			fmt.Sprintf("Could not read updated Dockerfile: %s", err),
 		)
 		return

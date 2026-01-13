@@ -56,7 +56,7 @@ func TestAccInSpecMigrationResource(t *testing.T) {
 	})
 }
 
-func testAccInSpecMigrationResourceConfig(name, profilePath, outputPath, outputFormat string) string {
+func testAccInSpecMigrationResourceConfig(_, profilePath, outputPath, outputFormat string) string {
 	return fmt.Sprintf(`
 provider "souschef" {
   souschef_path = "/workspaces/souschef/.venv/bin/souschef"

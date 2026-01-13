@@ -42,7 +42,7 @@ func TestAccHabitatMigrationResource(t *testing.T) {
 	})
 }
 
-func testAccHabitatMigrationResourceConfig(name, planPath, outputPath, baseImage string) string {
+func testAccHabitatMigrationResourceConfig(_, planPath, outputPath, baseImage string) string {
 	config := fmt.Sprintf(`
 provider "souschef" {
   souschef_path = "/workspaces/souschef/.venv/bin/souschef"

@@ -16,7 +16,7 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 	"souschef": providerserver.NewProtocol6WithError(New("test")()),
 }
 
-func testAccPreCheck(t *testing.T) {
+func testAccPreCheck(_ *testing.T) {
 	// Set default souschef path for testing if not set
 	if os.Getenv("SOUSCHEF_PATH") == "" {
 		// Try common locations

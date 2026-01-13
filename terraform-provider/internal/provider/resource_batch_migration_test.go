@@ -36,7 +36,7 @@ func TestAccBatchMigrationResource(t *testing.T) {
 	})
 }
 
-func testAccBatchMigrationResourceConfig(name, cookbookPath, outputPath string, recipeNames []string) string {
+func testAccBatchMigrationResourceConfig(_, cookbookPath, outputPath string, recipeNames []string) string {
 	recipesHCL := "["
 	for i, recipe := range recipeNames {
 		if i > 0 {

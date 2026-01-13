@@ -40,6 +40,15 @@ type inspecMigrationResourceModel struct {
 	TestContent  types.String `tfsdk:"test_content"`
 }
 
+const (
+	testinfraFilename   = "test_spec.py"
+	serverspecFilename  = "spec_helper.rb"
+	gossFilename        = "goss.yaml"
+	ansibleFilename     = "assert.yml"
+	defaultTestFilename = "test.txt"
+	errReadingTestFile  = "Error reading test file"
+)
+
 // Metadata returns the resource type name
 func (r *inspecMigrationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_inspec_migration"
@@ -138,15 +147,15 @@ func (r *inspecMigrationResource) Create(ctx context.Context, req resource.Creat
 	var testFilename string
 	switch outputFormat {
 	case "testinfra":
-		testFilename = "test_spec.py"
+		testFilename = testinfraFilename
 	case "serverspec":
-		testFilename = "spec_helper.rb"
+		testFilename = serverspecFilename
 	case "goss":
-		testFilename = "goss.yaml"
+		testFilename = gossFilename
 	case "ansible":
-		testFilename = "assert.yml"
+		testFilename = ansibleFilename
 	default:
-		testFilename = "test.txt"
+		testFilename = defaultTestFilename
 	}
 
 	// Read generated test file
@@ -154,7 +163,7 @@ func (r *inspecMigrationResource) Create(ctx context.Context, req resource.Creat
 	content, err := os.ReadFile(testFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading test file",
+			errReadingTestFile,
 			fmt.Sprintf("Could not read generated test file: %s", err),
 		)
 		return
@@ -208,7 +217,7 @@ func (r *inspecMigrationResource) Read(ctx context.Context, req resource.ReadReq
 	content, err := os.ReadFile(testFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading test file",
+			errReadingTestFile,
 			fmt.Sprintf("Could not read test file: %s", err),
 		)
 		return
@@ -250,22 +259,22 @@ func (r *inspecMigrationResource) Update(ctx context.Context, req resource.Updat
 	var testFilename string
 	switch outputFormat {
 	case "testinfra":
-		testFilename = "test_spec.py"
+		testFilename = testinfraFilename
 	case "serverspec":
-		testFilename = "spec_helper.rb"
+		testFilename = serverspecFilename
 	case "goss":
-		testFilename = "goss.yaml"
+		testFilename = gossFilename
 	case "ansible":
-		testFilename = "assert.yml"
+		testFilename = ansibleFilename
 	default:
-		testFilename = "test.txt"
+		testFilename = defaultTestFilename
 	}
 
 	testFilePath := filepath.Join(outputPath, testFilename)
 	content, err := os.ReadFile(testFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading test file",
+			errReadingTestFile,
 			fmt.Sprintf("Could not read updated test file: %s", err),
 		)
 		return
@@ -298,15 +307,15 @@ func (r *inspecMigrationResource) Delete(ctx context.Context, req resource.Delet
 	var testFilename string
 	switch outputFormat {
 	case "testinfra":
-		testFilename = "test_spec.py"
+		testFilename = testinfraFilename
 	case "serverspec":
-		testFilename = "spec_helper.rb"
+		testFilename = serverspecFilename
 	case "goss":
-		testFilename = "goss.yaml"
+		testFilename = gossFilename
 	case "ansible":
-		testFilename = "assert.yml"
+		testFilename = ansibleFilename
 	default:
-		testFilename = "test.txt"
+		testFilename = defaultTestFilename
 	}
 
 	testFilePath := filepath.Join(outputPath, testFilename)

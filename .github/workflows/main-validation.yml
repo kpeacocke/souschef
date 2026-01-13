@@ -83,9 +83,6 @@ jobs:
         path: coverage.xml
         retention-days: 1
 
-        path: coverage.xml
-        retention-days: 1
-
   test-terraform-provider:
     runs-on: ubuntu-latest
     timeout-minutes: 15
