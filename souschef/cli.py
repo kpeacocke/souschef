@@ -11,7 +11,6 @@ from typing import NoReturn
 
 import click
 
-from souschef.assessment import assess_chef_migration_complexity
 from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.profiling import (
     generate_cookbook_performance_report,
@@ -819,9 +818,7 @@ def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> No
 
         # Generate playbook
         click.echo(f"Converting {cookbook_name}::{recipe_name} to Ansible...")
-        playbook_yaml = generate_playbook_from_recipe(
-            str(recipe_file), cookbook_name, recipe_name
-        )
+        playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
 
         # Write output
         output_file = output_dir / f"{recipe_name}.yml"
@@ -873,30 +870,76 @@ def assess_cookbook(cookbook_path: str, output_format: str) -> None:
             click.echo(f"Error: {cookbook_path} is not a directory", err=True)
             sys.exit(1)
 
-        # Run assessment
-        result = assess_chef_migration_complexity(str(cookbook_path))
+        # Analyze cookbook
+        analysis = _analyze_cookbook_for_assessment(cookbook_dir)
 
         if output_format == "json":
-            # Output raw JSON for Terraform provider
-            click.echo(result)
+            click.echo(json.dumps(analysis))
         else:
-            # Parse JSON and display nicely for humans
-            try:
-                data = json.loads(result)
-                click.echo(f"\nCookbook: {cookbook_dir.name}")
-                click.echo("=" * 50)
-                click.echo(f"Complexity: {data.get('complexity', 'Unknown')}")
-                click.echo(f"Recipe Count: {data.get('recipe_count', 0)}")
-                click.echo(f"Resource Count: {data.get('resource_count', 0)}")
-                click.echo(f"Estimated Hours: {data.get('estimated_hours', 0.0)}")
-                recommendations = data.get("recommendations", "None")
-                click.echo(f"\nRecommendations:\n{recommendations}")
-            except json.JSONDecodeError:
-                click.echo(result)
+            _display_assessment_text(cookbook_dir.name, analysis)
 
     except Exception as e:
         click.echo(f"Error assessing cookbook: {e}", err=True)
         sys.exit(1)
+
+
+def _analyze_cookbook_for_assessment(cookbook_dir: Path) -> dict:
+    """Analyze cookbook and return assessment data."""
+    recipe_count = 0
+    resource_count = 0
+    recipes_dir = cookbook_dir / "recipes"
+
+    if recipes_dir.exists():
+        recipe_files = list(recipes_dir.glob("*.rb"))
+        recipe_count = len(recipe_files)
+        for recipe_file in recipe_files:
+            content = recipe_file.read_text()
+            resource_count += content.count(" do\n") + content.count(" do\r\n")
+
+    # Determine complexity
+    if recipe_count == 0:
+        complexity = "Low"
+        estimated_hours = 0.5
+    elif recipe_count <= 3 and resource_count <= 10:
+        complexity = "Low"
+        estimated_hours = resource_count * 0.5
+    elif recipe_count <= 10 and resource_count <= 50:
+        complexity = "Medium"
+        estimated_hours = resource_count * 1.0
+    else:
+        complexity = "High"
+        estimated_hours = resource_count * 1.5
+
+    recommendations = (
+        f"Cookbook has {recipe_count} recipes with {resource_count} resources. "
+    )
+    if complexity == "Low":
+        recommendations += "Straightforward migration recommended."
+    elif complexity == "Medium":
+        recommendations += "Moderate effort required. Consider phased approach."
+    else:
+        recommendations += (
+            "Complex migration. Recommend incremental migration strategy."
+        )
+
+    return {
+        "complexity": complexity,
+        "recipe_count": recipe_count,
+        "resource_count": resource_count,
+        "estimated_hours": estimated_hours,
+        "recommendations": recommendations,
+    }
+
+
+def _display_assessment_text(cookbook_name: str, analysis: dict) -> None:
+    """Display assessment in human-readable text format."""
+    click.echo(f"\nCookbook: {cookbook_name}")
+    click.echo("=" * 50)
+    click.echo(f"Complexity: {analysis['complexity']}")
+    click.echo(f"Recipe Count: {analysis['recipe_count']}")
+    click.echo(f"Resource Count: {analysis['resource_count']}")
+    click.echo(f"Estimated Hours: {analysis['estimated_hours']}")
+    click.echo(f"\nRecommendations:\n{analysis['recommendations']}")
 
 
 def main() -> NoReturn:

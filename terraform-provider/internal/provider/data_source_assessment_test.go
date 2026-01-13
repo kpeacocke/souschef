@@ -9,7 +9,7 @@ import (
 
 const (
 	testAssessmentResourceName = "data.souschef_assessment.test"
-	testCookbookPath          = "/tmp/cookbooks/test"
+	testCookbookPath           = "/tmp/cookbooks/test"
 )
 
 func TestAccAssessmentDataSource(t *testing.T) {
