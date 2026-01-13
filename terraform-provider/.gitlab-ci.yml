@@ -1,0 +1,78 @@
+# .gitlab-ci.yml: chef-to-ansible
+# Generated from Chef cookbook CI/CD patterns
+
+image: python:3.11
+
+stages:
+  - lint
+  - test
+  - deploy
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+variables:
+  PIP_CACHE_DIR: $CI_PROJECT_DIR/.cache/pip
+  ANSIBLE_FORCE_COLOR: 'true'
+
+before_script:
+  - python -m venv venv
+  - source venv/bin/activate
+  - pip install --upgrade pip
+  - pip install ansible ansible-lint molecule molecule-docker
+
+lint:ansible:
+  stage: lint
+  script:
+  - ansible-lint playbooks/
+  artifacts:
+    reports:
+      junit: test-results/*.xml
+    paths:
+      - test-results/
+    expire_in: 1 week
+
+test:unit:
+  stage: test
+  script:
+  - molecule test --scenario-name default
+  artifacts:
+    reports:
+      junit: test-results/*.xml
+    paths:
+      - test-results/
+    expire_in: 1 week
+
+test:integration:default:
+  stage: test
+  script:
+  - molecule test --scenario-name default
+  artifacts:
+    reports:
+      junit: test-results/*.xml
+    paths:
+      - test-results/
+    expire_in: 1 week
+
+test:integration:database:
+  stage: test
+  script:
+  - molecule test --scenario-name database
+  artifacts:
+    reports:
+      junit: test-results/*.xml
+    paths:
+      - test-results/
+    expire_in: 1 week
+
+deploy:production:
+  stage: deploy
+  script:
+  - ansible-playbook -i inventory/production playbooks/site.yml --check
+  - ansible-playbook -i inventory/production playbooks/site.yml
+  when: manual
+  only:
+    - main
+    - master
