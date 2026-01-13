@@ -7,9 +7,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-const (
+var (
 	testCostEstimateResourceName = "data.souschef_cost_estimate.test"
-	testCostCookbookPath         = "/workspaces/souschef/tests/fixtures/sample_cookbook"
+	testCostCookbookPath         = getFixturePath("sample_cookbook")
 )
 
 func TestAccCostEstimateDataSource(t *testing.T) {

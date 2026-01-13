@@ -7,9 +7,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-const (
+var (
 	testInSpecMigrationResourceName = "souschef_inspec_migration.test"
-	testInSpecProfilePath           = "/workspaces/souschef/tests/fixtures/sample_inspec_profile"
+	testInSpecProfilePath           = getFixturePath("sample_inspec_profile")
 	testInSpecOutputPath            = "/tmp/tests"
 )
 

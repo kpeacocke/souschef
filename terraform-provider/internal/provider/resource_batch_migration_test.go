@@ -7,9 +7,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-const (
+var (
 	testBatchMigrationResourceName = "souschef_batch_migration.test"
-	testBatchCookbookPath          = "/workspaces/souschef/tests/fixtures/sample_cookbook"
+	testBatchCookbookPath          = getFixturePath("sample_cookbook")
 	testBatchOutputPath            = "/tmp/ansible/batch"
 )
 

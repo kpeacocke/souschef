@@ -7,9 +7,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-const (
+var (
 	testHabitatMigrationResourceName = "souschef_habitat_migration.test"
-	testHabitatPlanPath              = "/workspaces/souschef/tests/fixtures/habitat_package/plan.sh"
+	testHabitatPlanPath              = getFixturePath("habitat_package") + "/plan.sh"
 	testHabitatOutputPath            = "/tmp/docker"
 )
 
