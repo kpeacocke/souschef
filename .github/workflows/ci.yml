@@ -128,22 +128,22 @@ jobs:
     - name: Test CLI functionality
       run: |
         # Test basic CLI commands
-        poetry run souschef-cli --help
+        poetry run souschef --help
 
         # Test with fixture files
-        poetry run souschef-cli ls tests/fixtures/sample_cookbook
-        poetry run souschef-cli structure tests/fixtures/sample_cookbook
-        poetry run souschef-cli metadata tests/fixtures/sample_cookbook/metadata.rb
+        poetry run souschef ls tests/fixtures/sample_cookbook
+        poetry run souschef structure tests/fixtures/sample_cookbook
+        poetry run souschef metadata tests/fixtures/sample_cookbook/metadata.rb
 
         # Test recipe parsing
         if [ -f tests/fixtures/sample_cookbook/recipes/default.rb ]; then
-          poetry run souschef-cli recipe tests/fixtures/sample_cookbook/recipes/default.rb
+          poetry run souschef recipe tests/fixtures/sample_cookbook/recipes/default.rb
         fi
 
         # Test template parsing
         TEMPLATE_FILE=$(find tests/fixtures/sample_cookbook/templates/default -name '*.erb' -type f | head -n 1)
         if [ -n "$TEMPLATE_FILE" ]; then
-          poetry run souschef-cli template "$TEMPLATE_FILE"
+          poetry run souschef template "$TEMPLATE_FILE"
         fi
 
   security:
