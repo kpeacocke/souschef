@@ -11,6 +11,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -65,7 +67,11 @@ func (r *habitatMigrationResource) Schema(ctx context.Context, req resource.Sche
 			},
 			"base_image": schema.StringAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "Base Docker image to use (default: ubuntu:latest)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"package_name": schema.StringAttribute{
 				Computed:            true,
@@ -109,7 +115,7 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 	planPath := plan.PlanPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
 	baseImage := "ubuntu:latest"
-	if !plan.BaseImage.IsNull() {
+	if !plan.BaseImage.IsNull() && plan.BaseImage.ValueString() != "" {
 		baseImage = plan.BaseImage.ValueString()
 	}
 
@@ -153,6 +159,7 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 
 	// Set state
 	plan.ID = types.StringValue(fmt.Sprintf("habitat-%s", packageName))
+	plan.BaseImage = types.StringValue(baseImage)
 	plan.PackageName = types.StringValue(packageName)
 	plan.DockerfileContent = types.StringValue(string(content))
 
@@ -203,7 +210,7 @@ func (r *habitatMigrationResource) Update(ctx context.Context, req resource.Upda
 	planPath := plan.PlanPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
 	baseImage := "ubuntu:latest"
-	if !plan.BaseImage.IsNull() {
+	if !plan.BaseImage.IsNull() && plan.BaseImage.ValueString() != "" {
 		baseImage = plan.BaseImage.ValueString()
 	}
 
@@ -231,6 +238,13 @@ func (r *habitatMigrationResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
+	// Extract package name from plan path
+	packageName := filepath.Base(filepath.Dir(planPath))
+
+	// Set state
+	plan.ID = types.StringValue(fmt.Sprintf("habitat-%s", packageName))
+	plan.BaseImage = types.StringValue(baseImage)
+	plan.PackageName = types.StringValue(packageName)
 	plan.DockerfileContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, plan)

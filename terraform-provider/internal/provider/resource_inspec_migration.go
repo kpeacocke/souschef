@@ -271,6 +271,12 @@ func (r *inspecMigrationResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
+	// Extract profile name from path
+	profileName := filepath.Base(profilePath)
+
+	// Set state
+	plan.ID = types.StringValue(fmt.Sprintf("inspec-%s-%s", profileName, outputFormat))
+	plan.ProfileName = types.StringValue(profileName)
 	plan.TestContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, plan)
