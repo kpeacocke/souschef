@@ -17,6 +17,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Import page modules
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 
+# Constants for repeated strings
+NAV_MIGRATION_PLANNING = "Migration Planning"
+NAV_DEPENDENCY_MAPPING = "Dependency Mapping"
+NAV_VALIDATION_REPORTS = "Validation Reports"
+MIME_TEXT_MARKDOWN = "text/markdown"
+MIME_APPLICATION_JSON = "application/json"
+SECTION_CIRCULAR_DEPENDENCIES = "Circular Dependencies"
+
 
 class ProgressTracker:
     """Track progress for long-running operations."""
@@ -95,9 +103,9 @@ def main():
         [
             "Dashboard",
             "Cookbook Analysis",
-            "Migration Planning",
-            "Dependency Mapping",
-            "Validation Reports",
+            NAV_MIGRATION_PLANNING,
+            NAV_DEPENDENCY_MAPPING,
+            NAV_VALIDATION_REPORTS,
         ],
         help="Choose the section you want to work with. "
         "Use arrow keys to navigate options.",
@@ -109,11 +117,11 @@ def main():
         show_dashboard()
     elif page == "Cookbook Analysis":
         show_cookbook_analysis_page()
-    elif page == "Migration Planning":
+    elif page == NAV_MIGRATION_PLANNING:
         show_migration_planning()
-    elif page == "Dependency Mapping":
+    elif page == NAV_DEPENDENCY_MAPPING:
         show_dependency_mapping()
-    elif page == "Validation Reports":
+    elif page == NAV_VALIDATION_REPORTS:
         show_validation_reports()
 
 
@@ -221,7 +229,7 @@ def show_migration_planning():
                 "phased": "Phased Migration (Recommended)",
                 "big_bang": "Big Bang Migration",
                 "parallel": "Parallel Migration",
-            }.get(x, x),
+            }.get(x, str(x)),
         )
 
     with col2:
@@ -410,7 +418,7 @@ Generated: {st.session_state.get("timestamp", "Unknown")}
                 label="Download Migration Plan",
                 data=plan_content,
                 file_name="migration_plan.md",
-                mime="text/markdown",
+                mime=MIME_TEXT_MARKDOWN,
                 help="Download the complete migration plan as Markdown",
             )
 
@@ -443,7 +451,7 @@ def display_migration_plan_results():
 
 def show_dependency_mapping():
     """Show dependency mapping visualization."""
-    st.header("Dependency Mapping")
+    st.header(NAV_DEPENDENCY_MAPPING)
 
     # Import assessment functions
     from souschef.assessment import analyze_cookbook_dependencies
@@ -472,7 +480,7 @@ def show_dependency_mapping():
                 "direct": "Direct Dependencies Only",
                 "transitive": "Include Transitive Dependencies",
                 "full": "Full Dependency Graph",
-            }.get(x, x),
+            }.get(x, str(x)),
         )
 
     with col2:
@@ -484,7 +492,7 @@ def show_dependency_mapping():
                 "text": "Text Summary",
                 "graph": "Static Graph View",
                 "interactive": "Interactive Graph",
-            }.get(x, x),
+            }.get(x, str(x)),
         )
 
     # Analysis button
@@ -530,6 +538,112 @@ def show_dependency_mapping():
         display_dependency_analysis_results()
 
 
+def _setup_dependency_mapping_ui():
+    """Set up the dependency mapping UI header and description."""
+    st.header(NAV_DEPENDENCY_MAPPING)
+
+    st.markdown("""
+    Visualize and analyze cookbook dependencies to understand migration order
+    and identify potential circular dependencies.
+    """)
+
+
+def _get_dependency_mapping_inputs():
+    """Collect user inputs for dependency analysis."""
+    # Cookbook path input
+    cookbook_path = st.text_input(
+        "Cookbook Directory Path",
+        placeholder="/path/to/your/cookbooks",
+        help="Enter the path to your cookbooks directory for dependency analysis",
+    )
+
+    # Analysis options
+    col1, col2 = st.columns(2)
+
+    with col1:
+        dependency_depth = st.selectbox(
+            "Analysis Depth",
+            ["direct", "transitive", "full"],
+            help="How deep to analyze dependencies",
+            format_func=lambda x: {
+                "direct": "Direct Dependencies Only",
+                "transitive": "Include Transitive Dependencies",
+                "full": "Full Dependency Graph",
+            }.get(x, str(x)),
+        )
+
+    with col2:
+        visualization_type = st.selectbox(
+            "Visualization",
+            ["text", "graph", "interactive"],
+            help="How to display dependency information",
+            format_func=lambda x: {
+                "text": "Text Summary",
+                "graph": "Static Graph View",
+                "interactive": "Interactive Graph",
+            }.get(x, str(x)),
+        )
+
+    return cookbook_path, dependency_depth, visualization_type
+
+
+def _handle_dependency_analysis_execution(
+    cookbook_path, dependency_depth, visualization_type
+):
+    """Handle the dependency analysis execution when button is clicked."""
+    # Analysis button
+    if st.button("Analyze Dependencies", type="primary", use_container_width=True):
+        if not cookbook_path.strip():
+            st.error("Please enter a cookbook directory path.")
+            return
+
+        _perform_dependency_analysis(
+            cookbook_path.strip(), dependency_depth, visualization_type
+        )
+
+
+def _perform_dependency_analysis(cookbook_path, dependency_depth, visualization_type):
+    """Perform the actual dependency analysis."""
+    # Import assessment functions
+    from souschef.assessment import analyze_cookbook_dependencies
+
+    # Create progress tracker
+    progress_tracker = ProgressTracker(
+        total_steps=5, description="Analyzing cookbook dependencies..."
+    )
+
+    try:
+        progress_tracker.update(1, "Scanning cookbook directory...")
+
+        # Analyze dependencies
+        analysis_result = analyze_cookbook_dependencies(cookbook_path, dependency_depth)
+
+        progress_tracker.update(2, "Parsing dependency relationships...")
+        progress_tracker.update(3, "Detecting circular dependencies...")
+        progress_tracker.update(4, "Generating migration recommendations...")
+
+        # Store results
+        st.session_state.dep_analysis_result = analysis_result
+        st.session_state.dep_cookbook_path = cookbook_path
+        st.session_state.dep_depth = dependency_depth
+        st.session_state.dep_viz_type = visualization_type
+
+        progress_tracker.complete("Dependency analysis completed!")
+        st.success("Analysis completed successfully!")
+        st.rerun()
+
+    except Exception as e:
+        progress_tracker.close()
+        st.error(f"Error analyzing dependencies: {e}")
+
+
+def _display_dependency_analysis_results_if_available():
+    """Display dependency analysis results if they exist in session state."""
+    # Display results if available
+    if "dep_analysis_result" in st.session_state:
+        display_dependency_analysis_results()
+
+
 def _extract_dependency_relationships(lines):
     """Extract dependency relationships from analysis lines."""
     dependencies = {}
@@ -562,26 +676,52 @@ def _extract_circular_and_community_deps(lines):
     current_section = None
 
     for line in lines:
-        line = line.strip()
-        if "Circular Dependencies:" in line:
-            current_section = "circular"
-        elif "Community Cookbooks:" in line:
-            current_section = "community"
-        elif line.startswith("- ") and current_section:
-            if current_section == "circular":
-                # Parse circular dependency pairs
-                dep_text = line[2:].strip()
-                if "->" in dep_text:
-                    parts = dep_text.split("->")
-                    if len(parts) >= 2:
-                        circular_deps.append((parts[0].strip(), parts[1].strip()))
-            elif current_section == "community":
-                # Community cookbooks
-                cookbook = line[2:].strip()
-                if cookbook:
-                    community_cookbooks.append(cookbook)
+        current_section = _update_current_section(line, current_section)
+        if _is_list_item(line) and current_section:
+            _process_list_item(
+                line, current_section, circular_deps, community_cookbooks
+            )
 
     return circular_deps, community_cookbooks
+
+
+def _update_current_section(line, current_section):
+    """Update the current section based on the line content."""
+    line = line.strip()
+    if "Circular Dependencies:" in line:
+        return "circular"
+    elif "Community Cookbooks:" in line:
+        return "community"
+    return current_section
+
+
+def _is_list_item(line):
+    """Check if the line is a list item."""
+    return line.strip().startswith("- ")
+
+
+def _process_list_item(line, current_section, circular_deps, community_cookbooks):
+    """Process a list item based on the current section."""
+    if current_section == "circular":
+        _process_circular_dependency_item(line, circular_deps)
+    elif current_section == "community":
+        _process_community_cookbook_item(line, community_cookbooks)
+
+
+def _process_circular_dependency_item(line, circular_deps):
+    """Process a circular dependency list item."""
+    dep_text = line[2:].strip()
+    if "->" in dep_text:
+        parts = dep_text.split("->")
+        if len(parts) >= 2:
+            circular_deps.append((parts[0].strip(), parts[1].strip()))
+
+
+def _process_community_cookbook_item(line, community_cookbooks):
+    """Process a community cookbook list item."""
+    cookbook = line[2:].strip()
+    if cookbook:
+        community_cookbooks.append(cookbook)
 
 
 def _parse_dependency_analysis(analysis_result):
@@ -635,17 +775,17 @@ def _calculate_graph_positions(graph, layout_algorithm):
 
     # Calculate positions using selected layout algorithm
     if layout_algorithm == "spring":
-        pos = nx.spring_layout(graph, k=2, iterations=50, seed=42)
+        pos = nx.spring_layout(graph, k=2, iterations=50)
     elif layout_algorithm == "circular":
         pos = nx.circular_layout(graph)
     elif layout_algorithm == "kamada_kawai":
         try:
-            pos = nx.kamada_kawai_layout(graph, seed=42)
+            pos = nx.kamada_kawai_layout(graph)
         except Exception:
             # Fallback to spring layout if kamada_kawai fails
-            pos = nx.spring_layout(graph, k=2, iterations=50, seed=42)
+            pos = nx.spring_layout(graph, k=2, iterations=50)
     else:
-        pos = nx.spring_layout(graph, k=2, iterations=50, seed=42)
+        pos = nx.spring_layout(graph, k=2, iterations=50)
 
     return pos, layout_algorithm
 
@@ -696,7 +836,7 @@ def _create_plotly_edge_traces(graph, pos):
                 line={"width": 3, "color": "red"},
                 hoverinfo="none",
                 mode="lines",
-                name="Circular Dependencies",
+                name=SECTION_CIRCULAR_DEPENDENCIES,
             )
         )
 
@@ -970,13 +1110,35 @@ def _display_dependency_summary_metrics(
 
     with col3:
         st.metric(
-            "Circular Dependencies",
+            SECTION_CIRCULAR_DEPENDENCIES,
             circular_deps,
             delta="⚠️ Check" if circular_deps > 0 else "✅ OK",
         )
 
     with col4:
         st.metric("Community Cookbooks", community_cookbooks)
+
+
+def _handle_graph_caching():
+    """Handle graph data caching logic."""
+    # Cache control
+    with st.expander("⚙️ Graph Settings"):
+        cache_enabled = st.checkbox(
+            "Enable Graph Caching",
+            value=st.session_state.get("graph_cache_enabled", True),
+            help="Cache graph data to improve performance for repeated views",
+        )
+        st.session_state["graph_cache_enabled"] = cache_enabled
+
+        if st.button(
+            "🗑️ Clear Graph Cache", help="Clear cached graph data to free memory"
+        ):
+            # Clear all cached graphs
+            keys_to_remove = [k for k in st.session_state if k.startswith("graph_")]
+            for key in keys_to_remove:
+                del st.session_state[key]
+            st.success("Graph cache cleared!")
+            st.rerun()
 
 
 def _display_dependency_graph_visualization(analysis_result, viz_type, selected_layout):
@@ -1003,24 +1165,7 @@ def _display_dependency_graph_visualization(analysis_result, viz_type, selected_
             ):
                 st.session_state[cache_key] = graph_data
 
-        # Cache control
-        with st.expander("⚙️ Graph Settings"):
-            cache_enabled = st.checkbox(
-                "Enable Graph Caching",
-                value=st.session_state.get("graph_cache_enabled", True),
-                help="Cache graph data to improve performance for repeated views",
-            )
-            st.session_state["graph_cache_enabled"] = cache_enabled
-
-            if st.button(
-                "🗑️ Clear Graph Cache", help="Clear cached graph data to free memory"
-            ):
-                # Clear all cached graphs
-                keys_to_remove = [k for k in st.session_state if k.startswith("graph_")]
-                for key in keys_to_remove:
-                    del st.session_state[key]
-                st.success("Graph cache cleared!")
-                st.rerun()
+        _handle_graph_caching()
 
         if graph_data:
             _display_graph_with_export_options(graph_data, viz_type)
@@ -1059,7 +1204,7 @@ def _display_graph_with_export_options(graph_data, viz_type):
                 label="📊 Export as JSON",
                 data=json_data,
                 file_name="dependency_graph.json",
-                mime="application/json",
+                mime=MIME_APPLICATION_JSON,
                 help="Download graph data as JSON",
             )
 
@@ -1163,7 +1308,7 @@ def _display_dependency_analysis_sections(analysis_result):
                 with st.expander("🔗 Dependency Graph"):
                     st.markdown(section.replace("## Dependency Graph", ""))
             elif "Circular Dependencies" in section:
-                with st.expander("⚠️ Circular Dependencies"):
+                with st.expander(f"⚠️ {SECTION_CIRCULAR_DEPENDENCIES}"):
                     st.markdown(section.replace("## Circular Dependencies", ""))
             elif "Community Cookbooks" in section:
                 with st.expander("🌐 Community Cookbooks"):
@@ -1232,7 +1377,7 @@ def _display_dependency_export_options(
             label="📥 Download Full Analysis",
             data=analysis_result,
             file_name="dependency_analysis.md",
-            mime="text/markdown",
+            mime=MIME_TEXT_MARKDOWN,
             help="Download complete dependency analysis",
         )
 
@@ -1256,7 +1401,7 @@ def _display_dependency_export_options(
             label="📊 Download JSON Summary",
             data=json.dumps(analysis_json, indent=2),
             file_name="dependency_analysis.json",
-            mime="application/json",
+            mime=MIME_APPLICATION_JSON,
             help="Download analysis summary as JSON",
         )
 
@@ -1300,7 +1445,7 @@ def display_dependency_analysis_results():
                 "spring": "Spring Layout",
                 "circular": "Circular Layout",
                 "kamada_kawai": "Kamada-Kawai Layout",
-            }.get(x, x),
+            }.get(x, str(x)),
         )
 
         _display_dependency_graph_visualization(
@@ -1353,7 +1498,7 @@ def show_validation_reports():
                 "security": "Security Best Practices",
                 "performance": "Performance Analysis",
                 "full": "Complete Validation Suite",
-            }.get(x, x),
+            }.get(x, str(x)),
         )
 
     with col2:
@@ -1365,7 +1510,7 @@ def show_validation_reports():
                 "text": "Text Report",
                 "json": "JSON Data",
                 "html": "HTML Report",
-            }.get(x, x),
+            }.get(x, str(x)),
         )
 
     # File/Directory input
@@ -1606,12 +1751,18 @@ def _display_validation_export_options(
             label="📥 Download Full Report",
             data=validation_result,
             file_name="validation_report.md",
-            mime="text/markdown",
+            mime=MIME_TEXT_MARKDOWN,
             help="Download complete validation report",
         )
 
     with col2:
         # Create JSON summary
+        if errors > 0:
+            status = "failed"
+        elif warnings > 0:
+            status = "warning"
+        else:
+            status = "passed"
         report_json = {
             "input_path": input_path,
             "validation_type": validation_type,
@@ -1622,11 +1773,7 @@ def _display_validation_export_options(
                 "warnings": warnings,
                 "errors": errors,
             },
-            "status": "failed"
-            if errors > 0
-            else "warning"
-            if warnings > 0
-            else "passed",
+            "status": status,
             "full_report": validation_result,
         }
 
@@ -1636,7 +1783,7 @@ def _display_validation_export_options(
             label="📊 Download JSON Summary",
             data=json.dumps(report_json, indent=2),
             file_name="validation_report.json",
-            mime="application/json",
+            mime=MIME_APPLICATION_JSON,
             help="Download validation summary as JSON",
         )
 

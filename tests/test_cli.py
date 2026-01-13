@@ -1811,7 +1811,7 @@ def test_generate_jenkinsfile_command_error_handling(runner, tmp_path, monkeypat
 
     # Mock the generation function to raise an exception
     def mock_generate(*args, **kwargs):
-        raise Exception("Mock generation error")
+        raise RuntimeError("Mock generation error")
 
     monkeypatch.setattr(souschef.cli, "generate_jenkinsfile_from_chef", mock_generate)
 
@@ -1831,7 +1831,7 @@ def test_generate_gitlab_ci_command_error_handling(runner, tmp_path, monkeypatch
 
     # Mock the generation function to raise an exception
     def mock_generate(*args, **kwargs):
-        raise Exception("Mock generation error")
+        raise RuntimeError("Mock generation error")
 
     monkeypatch.setattr(souschef.cli, "generate_gitlab_ci_from_chef", mock_generate)
 
@@ -1851,7 +1851,7 @@ def test_generate_github_workflow_command_error_handling(runner, tmp_path, monke
 
     # Mock the generation function to raise an exception
     def mock_generate(*args, **kwargs):
-        raise Exception("Mock generation error")
+        raise RuntimeError("Mock generation error")
 
     monkeypatch.setattr(
         souschef.cli, "generate_github_workflow_from_chef", mock_generate
@@ -1874,7 +1874,7 @@ def test_convert_recipe_command_conversion_error(runner, tmp_path, monkeypatch):
 
     # Mock the conversion function to raise an exception
     def mock_generate(*args, **kwargs):
-        raise Exception("Mock conversion error")
+        raise RuntimeError("Mock conversion error")
 
     monkeypatch.setattr(souschef.cli, "generate_playbook_from_recipe", mock_generate)
 
@@ -1904,7 +1904,7 @@ def test_assess_cookbook_command_analysis_error(runner, monkeypatch):
 
     # Mock the analysis function to raise an exception
     def mock_analyze(*args, **kwargs):
-        raise Exception("Mock analysis error")
+        raise RuntimeError("Mock analysis error")
 
     monkeypatch.setattr(souschef.cli, "_analyze_cookbook_for_assessment", mock_analyze)
 
@@ -1927,7 +1927,7 @@ def test_convert_habitat_command_conversion_error(runner, tmp_path, monkeypatch)
 
     # Mock the conversion function to raise an exception
     def mock_convert(*args, **kwargs):
-        raise Exception("Mock conversion error")
+        raise RuntimeError("Mock conversion error")
 
     monkeypatch.setattr(souschef.server, "convert_habitat_to_dockerfile", mock_convert)
 
@@ -1958,7 +1958,7 @@ def test_convert_inspec_command_conversion_error(runner, tmp_path, monkeypatch):
 
     # Mock the conversion function to raise an exception
     def mock_convert(*args, **kwargs):
-        raise Exception("Mock conversion error")
+        raise RuntimeError("Mock conversion error")
 
     monkeypatch.setattr(souschef.server, "convert_inspec_to_test", mock_convert)
 
@@ -1989,7 +1989,7 @@ def test_profile_command_error_handling(runner, monkeypatch):
 
     # Mock the profiling function to raise an exception
     def mock_generate(*args, **kwargs):
-        raise Exception("Mock profiling error")
+        raise RuntimeError("Mock profiling error")
 
     monkeypatch.setattr(
         souschef.cli, "generate_cookbook_performance_report", mock_generate
@@ -2010,7 +2010,7 @@ def test_profile_operation_command_error_handling(runner, monkeypatch):
 
     # Mock the profiling function to raise an exception
     def mock_profile(*args, **kwargs):
-        raise Exception("Mock profiling error")
+        raise RuntimeError("Mock profiling error")
 
     monkeypatch.setattr(souschef.cli, "profile_function", mock_profile)
 

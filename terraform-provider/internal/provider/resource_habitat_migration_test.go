@@ -38,12 +38,13 @@ func TestAccHabitatMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testHabitatMigrationResourceName, "dockerfile_content"),
 				),
 			},
-			// TODO: ImportState testing - requires custom import ID parser implementation
-			// {
-			// 	ResourceName:      testHabitatMigrationResourceName,
-			// 	ImportState:       true,
-			// 	ImportStateVerify: true,
-			// },
+			// ImportState testing
+			{
+				ResourceName:      testHabitatMigrationResourceName,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("%s|%s|ubuntu:22.04", testHabitatPlanPath, testHabitatOutputPath),
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

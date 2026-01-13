@@ -22,6 +22,9 @@ from souschef.assessment import (
     generate_migration_report as _generate_migration_report,
 )
 from souschef.assessment import (
+    parse_chef_migration_assessment as _parse_chef_migration_assessment,
+)
+from souschef.assessment import (
     validate_conversion as _validate_conversion,
 )
 
@@ -240,6 +243,9 @@ from souschef.parsers.metadata import (  # noqa: F401
 from souschef.parsers.metadata import (
     list_cookbook_structure as _list_cookbook_structure,
 )
+from souschef.parsers.metadata import (
+    parse_cookbook_metadata as _parse_cookbook_metadata,
+)
 from souschef.parsers.metadata import read_cookbook_metadata as _read_cookbook_metadata
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
@@ -357,6 +363,21 @@ def read_cookbook_metadata(path: str) -> str:
 
     """
     return _read_cookbook_metadata(path)
+
+
+@mcp.tool()
+def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
+    """
+    Parse Chef cookbook metadata.rb file and return as dictionary.
+
+    Args:
+        path: Path to the metadata.rb file.
+
+    Returns:
+        Dictionary containing extracted metadata fields.
+
+    """
+    return _parse_cookbook_metadata(path)
 
 
 @mcp.tool()
@@ -1236,33 +1257,56 @@ def parse_ruby_hash(content: str) -> dict:
     i = 0
     while i < len(content):
         # Skip whitespace
-        while i < len(content) and content[i].isspace():
-            i += 1
+        i = _skip_whitespace(content, i)
         if i >= len(content):
             break
 
-        # Look for key => value patterns
-        if content[i] in "'\"":
-            # Parse quoted key
-            key, i = _parse_quoted_key(content, i)
-
-            # Skip whitespace and =>
-            while i < len(content) and (content[i].isspace() or content[i] in "=>"):
-                i += 1
-
-            if i < len(content) and content[i] == "{":
-                # Nested hash
-                nested_dict, i = _parse_nested_hash(content, i)
-                result[key] = nested_dict
-            else:
-                # Simple value
-                value, i = _parse_simple_value(content, i)
-                result[key] = value
+        # Parse key-value pair
+        key, value, i = _parse_key_value_pair(content, i)
+        if key is not None:
+            result[key] = value
 
         # Skip to next item
         i = _skip_to_next_item(content, i)
 
     return result
+
+
+def _skip_whitespace(content: str, i: int) -> int:
+    """Skip whitespace characters and return new index."""
+    while i < len(content) and content[i].isspace():
+        i += 1
+    return i
+
+
+def _parse_key_value_pair(content: str, i: int) -> tuple[str | None, Any, int]:
+    """Parse a single key => value pair and return (key, value, new_index)."""
+    # Look for key => value patterns
+    if content[i] in "'\"":
+        # Parse quoted key
+        key, i = _parse_quoted_key(content, i)
+
+        # Skip whitespace and =>
+        i = _skip_whitespace_and_arrows(content, i)
+
+        value: Any
+        if i < len(content) and content[i] == "{":
+            # Nested hash
+            value, i = _parse_nested_hash(content, i)
+        else:
+            # Simple value
+            value, i = _parse_simple_value(content, i)
+
+        return key, value, i
+
+    return None, None, i
+
+
+def _skip_whitespace_and_arrows(content: str, i: int) -> int:
+    """Skip whitespace and => symbols."""
+    while i < len(content) and (content[i].isspace() or content[i] in "=>"):
+        i += 1
+    return i
 
 
 def _extract_attributes_block(content: str, block_type: str) -> dict:
@@ -2712,6 +2756,29 @@ def generate_github_workflow_from_chef(
         return format_error_with_context(
             e, "generating GitHub Actions workflow", cookbook_path
         )
+
+
+@mcp.tool()
+def parse_chef_migration_assessment(
+    cookbook_paths: str,
+    migration_scope: str = "full",
+    target_platform: str = "ansible_awx",
+) -> dict[str, Any]:
+    """
+    Parse Chef cookbook migration assessment and return as dictionary.
+
+    Args:
+        cookbook_paths: Comma-separated paths to Chef cookbooks or cookbook directory
+        migration_scope: Scope of migration (full, recipes_only, infrastructure_only)
+        target_platform: Target platform (ansible_awx, ansible_core, ansible_tower)
+
+    Returns:
+        Dictionary containing assessment data with complexity, recommendations, etc.
+
+    """
+    return _parse_chef_migration_assessment(
+        cookbook_paths, migration_scope, target_platform
+    )
 
 
 # AWX/AAP deployment wrappers for backward compatibility

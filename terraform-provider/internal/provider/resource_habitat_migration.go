@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -42,7 +43,11 @@ type habitatMigrationResourceModel struct {
 	DockerfileContent types.String `tfsdk:"dockerfile_content"`
 }
 
-const errReadingDockerfile = "Error reading Dockerfile"
+const (
+	errReadingDockerfile = "Error reading Dockerfile"
+	defaultBaseImage     = "ubuntu:latest"
+	habitatIDFormat      = "habitat-%s"
+)
 
 // Metadata returns the resource type name
 func (r *habitatMigrationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -116,7 +121,7 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 
 	planPath := plan.PlanPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
-	baseImage := "ubuntu:latest"
+	baseImage := defaultBaseImage
 	if !plan.BaseImage.IsNull() && plan.BaseImage.ValueString() != "" {
 		baseImage = plan.BaseImage.ValueString()
 	}
@@ -160,7 +165,7 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 	packageName := filepath.Base(filepath.Dir(planPath))
 
 	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf("habitat-%s", packageName))
+	plan.ID = types.StringValue(fmt.Sprintf(habitatIDFormat, packageName))
 	plan.BaseImage = types.StringValue(baseImage)
 	plan.PackageName = types.StringValue(packageName)
 	plan.DockerfileContent = types.StringValue(string(content))
@@ -211,7 +216,7 @@ func (r *habitatMigrationResource) Update(ctx context.Context, req resource.Upda
 
 	planPath := plan.PlanPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
-	baseImage := "ubuntu:latest"
+	baseImage := defaultBaseImage
 	if !plan.BaseImage.IsNull() && plan.BaseImage.ValueString() != "" {
 		baseImage = plan.BaseImage.ValueString()
 	}
@@ -244,7 +249,7 @@ func (r *habitatMigrationResource) Update(ctx context.Context, req resource.Upda
 	packageName := filepath.Base(filepath.Dir(planPath))
 
 	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf("habitat-%s", packageName))
+	plan.ID = types.StringValue(fmt.Sprintf(habitatIDFormat, packageName))
 	plan.BaseImage = types.StringValue(baseImage)
 	plan.PackageName = types.StringValue(packageName)
 	plan.DockerfileContent = types.StringValue(string(content))
@@ -273,5 +278,60 @@ func (r *habitatMigrationResource) Delete(ctx context.Context, req resource.Dele
 
 // ImportState imports an existing resource into Terraform
 func (r *habitatMigrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Import ID format: plan_path|output_path|base_image (base_image is optional)
+	parts := strings.Split(req.ID, "|")
+	if len(parts) < 2 || len(parts) > 3 {
+		resp.Diagnostics.AddError(
+			"Invalid import ID",
+			"Import ID must be in format: plan_path|output_path or plan_path|output_path|base_image",
+		)
+		return
+	}
+
+	planPath := parts[0]
+	outputPath := parts[1]
+	baseImage := defaultBaseImage // default
+	if len(parts) == 3 && parts[2] != "" {
+		baseImage = parts[2]
+	}
+
+	// Validate that the plan file exists
+	if _, err := os.Stat(planPath); os.IsNotExist(err) {
+		resp.Diagnostics.AddError(
+			"Plan file not found",
+			fmt.Sprintf("Plan file does not exist: %s", planPath),
+		)
+		return
+	}
+
+	// Check if Dockerfile exists
+	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
+	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
+		resp.Diagnostics.AddError(
+			"Dockerfile not found",
+			fmt.Sprintf("Dockerfile does not exist: %s", dockerfilePath),
+		)
+		return
+	}
+
+	// Read Dockerfile content
+	content, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			errReadingDockerfile,
+			fmt.Sprintf("Could not read Dockerfile: %s", err),
+		)
+		return
+	}
+
+	// Extract package name from plan path (parent directory name)
+	packageName := filepath.Base(filepath.Dir(planPath))
+
+	// Set state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("plan_path"), planPath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("output_path"), outputPath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("base_image"), baseImage)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("package_name"), packageName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("dockerfile_content"), string(content))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf(habitatIDFormat, packageName))...)
 }

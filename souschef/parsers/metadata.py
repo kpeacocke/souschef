@@ -45,6 +45,36 @@ def read_cookbook_metadata(path: str) -> str:
         return f"An error occurred: {e}"
 
 
+def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
+    """
+    Parse Chef cookbook metadata.rb file and return as dictionary.
+
+    Args:
+        path: Path to the metadata.rb file.
+
+    Returns:
+        Dictionary containing extracted metadata fields.
+
+    """
+    try:
+        file_path = _normalize_path(path)
+        content = file_path.read_text(encoding="utf-8")
+
+        metadata = _extract_metadata(content)
+        return metadata
+
+    except ValueError as e:
+        return {"error": str(e)}
+    except FileNotFoundError:
+        return {"error": ERROR_FILE_NOT_FOUND.format(path=path)}
+    except IsADirectoryError:
+        return {"error": ERROR_IS_DIRECTORY.format(path=path)}
+    except PermissionError:
+        return {"error": ERROR_PERMISSION_DENIED.format(path=path)}
+    except Exception as e:
+        return {"error": f"An error occurred: {e}"}
+
+
 def _scan_cookbook_directory(
     cookbook_path, dir_name: str
 ) -> tuple[str, list[str]] | None:
