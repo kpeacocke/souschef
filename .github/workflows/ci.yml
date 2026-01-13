@@ -125,7 +125,7 @@ jobs:
 
     - name: Set souschef path for Terraform tests
       run: |
-        SOUSCHEF_PATH=$(poetry run which souschef)
+        SOUSCHEF_PATH=$(realpath $(poetry run which souschef))
         echo "TF_VAR_souschef_path=$SOUSCHEF_PATH" >> $GITHUB_ENV
         echo "Souschef CLI path: $SOUSCHEF_PATH"
 
