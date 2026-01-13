@@ -103,6 +103,7 @@ type SousChefClient struct {
 func (p *SousChefProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewAssessmentDataSource,
+		NewCostEstimateDataSource,
 	}
 }
 
@@ -110,5 +111,8 @@ func (p *SousChefProvider) DataSources(_ context.Context) []func() datasource.Da
 func (p *SousChefProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewMigrationResource,
+		NewBatchMigrationResource,
+		NewHabitatMigrationResource,
+		NewInSpecMigrationResource,
 	}
 }

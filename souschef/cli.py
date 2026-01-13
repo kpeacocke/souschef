@@ -942,6 +942,141 @@ def _display_assessment_text(cookbook_name: str, analysis: dict) -> None:
     click.echo(f"\nRecommendations:\n{analysis['recommendations']}")
 
 
+@cli.command("convert-habitat")
+@click.option(
+    "--plan-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the Habitat plan.sh file",
+)
+@click.option(
+    "--output-path",
+    required=True,
+    type=click.Path(),
+    help="Directory where Dockerfile will be written",
+)
+@click.option(
+    "--base-image",
+    default="ubuntu:latest",
+    help="Base Docker image to use (default: ubuntu:latest)",
+)
+def convert_habitat(plan_path: str, output_path: str, base_image: str) -> None:
+    r"""
+    Convert a Chef Habitat plan to a Dockerfile.
+
+    Analyses the Habitat plan.sh file and generates an equivalent Dockerfile
+    for containerised deployment. Used by Terraform provider.
+
+    Example:
+        souschef convert-habitat --plan-path /hab/plans/nginx/plan.sh \
+            --output-path /docker/nginx --base-image ubuntu:22.04
+
+    """
+    try:
+        plan_file = Path(plan_path)
+        if not plan_file.exists():
+            click.echo(f"Error: Plan file does not exist: {plan_path}", err=True)
+            sys.exit(1)
+
+        if not plan_file.is_file():
+            click.echo(f"Error: {plan_path} is not a file", err=True)
+            sys.exit(1)
+
+        output_dir = Path(output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Call server function to convert
+        from souschef.server import convert_habitat_to_dockerfile
+
+        dockerfile_content = convert_habitat_to_dockerfile(str(plan_path), base_image)
+
+        # Write Dockerfile
+        dockerfile_path = output_dir / "Dockerfile"
+        dockerfile_path.write_text(dockerfile_content)
+
+        click.echo(f"Successfully converted Habitat plan to {dockerfile_path}")
+        click.echo(f"Dockerfile size: {len(dockerfile_content)} bytes")
+
+    except Exception as e:
+        click.echo(f"Error converting Habitat plan: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("convert-inspec")
+@click.option(
+    "--profile-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the InSpec profile directory",
+)
+@click.option(
+    "--output-path",
+    required=True,
+    type=click.Path(),
+    help="Directory where converted tests will be written",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["testinfra", "serverspec", "goss", "ansible"]),
+    default="testinfra",
+    help="Output test framework format (default: testinfra)",
+)
+def convert_inspec(profile_path: str, output_path: str, output_format: str) -> None:
+    r"""
+    Convert a Chef InSpec profile to various test frameworks.
+
+    Analyses the InSpec profile and generates equivalent tests in the
+    specified framework. Supports TestInfra, Serverspec, Goss, and Ansible.
+
+    Example:
+        souschef convert-inspec --profile-path /inspec/profiles/linux \
+            --output-path /tests/testinfra --format testinfra
+
+    """
+    try:
+        profile_dir = Path(profile_path)
+        if not profile_dir.exists():
+            click.echo(
+                f"Error: Profile path does not exist: {profile_path}",
+                err=True,
+            )
+            sys.exit(1)
+
+        if not profile_dir.is_dir():
+            click.echo(f"Error: {profile_path} is not a directory", err=True)
+            sys.exit(1)
+
+        output_dir = Path(output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Call server function to convert
+        from souschef.server import convert_inspec_to_test
+
+        test_content = convert_inspec_to_test(str(profile_path), output_format)
+
+        # Determine output filename based on format
+        filename_map = {
+            "testinfra": "test_spec.py",
+            "serverspec": "spec_helper.rb",
+            "goss": "goss.yaml",
+            "ansible": "assert.yml",
+        }
+        output_filename = filename_map.get(output_format, "test.txt")
+
+        # Write test file
+        test_file_path = output_dir / output_filename
+        test_file_path.write_text(test_content)
+
+        click.echo(f"Successfully converted InSpec profile to {output_format} format")
+        click.echo(f"Test file: {test_file_path}")
+        click.echo(f"File size: {len(test_content)} bytes")
+
+    except Exception as e:
+        click.echo(f"Error converting InSpec profile: {e}", err=True)
+        sys.exit(1)
+
+
 def main() -> NoReturn:
     """Run the CLI."""
     cli()
