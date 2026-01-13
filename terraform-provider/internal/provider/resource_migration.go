@@ -17,6 +17,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+const errorReadingPlaybook = "Error reading playbook"
+
 // Ensure the implementation satisfies the expected interfaces
 var (
 	_ resource.Resource                = &migrationResource{}
@@ -148,7 +150,7 @@ func (r *migrationResource) Create(ctx context.Context, req resource.CreateReque
 	content, err := os.ReadFile(playbookPath)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading playbook",
+			errorReadingPlaybook,
 			fmt.Sprintf("Could not read generated playbook: %s", err),
 		)
 		return
@@ -190,7 +192,7 @@ func (r *migrationResource) Read(ctx context.Context, req resource.ReadRequest, 
 	content, err := os.ReadFile(playbookPath)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading playbook",
+			errorReadingPlaybook,
 			fmt.Sprintf("Could not read playbook: %s", err),
 		)
 		return
@@ -236,7 +238,7 @@ func (r *migrationResource) Update(ctx context.Context, req resource.UpdateReque
 	content, err := os.ReadFile(playbookPath)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading playbook",
+			errorReadingPlaybook,
 			fmt.Sprintf("Could not read updated playbook: %s", err),
 		)
 		return

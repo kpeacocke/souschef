@@ -7,6 +7,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
+const (
+	testMigrationResourceName = "souschef_migration.test"
+	testCookbookPathMigration = "/tmp/cookbooks/test"
+	testAnsibleOutputPath     = "/tmp/ansible"
+)
+
 func TestAccMigrationResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -14,27 +20,27 @@ func TestAccMigrationResource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: testAccMigrationResourceConfig("test_cookbook", "/tmp/cookbooks/test", "/tmp/ansible"),
+				Config: testAccMigrationResourceConfig("test_cookbook", testCookbookPathMigration, testAnsibleOutputPath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_migration.test", "cookbook_path", "/tmp/cookbooks/test"),
-					resource.TestCheckResourceAttr("souschef_migration.test", "output_path", "/tmp/ansible"),
-					resource.TestCheckResourceAttr("souschef_migration.test", "recipe_name", "default"),
-					resource.TestCheckResourceAttrSet("souschef_migration.test", "id"),
-					resource.TestCheckResourceAttrSet("souschef_migration.test", "cookbook_name"),
-					resource.TestCheckResourceAttrSet("souschef_migration.test", "playbook_content"),
+					resource.TestCheckResourceAttr(testMigrationResourceName, "cookbook_path", testCookbookPathMigration),
+					resource.TestCheckResourceAttr(testMigrationResourceName, "output_path", testAnsibleOutputPath),
+					resource.TestCheckResourceAttr(testMigrationResourceName, "recipe_name", "default"),
+					resource.TestCheckResourceAttrSet(testMigrationResourceName, "id"),
+					resource.TestCheckResourceAttrSet(testMigrationResourceName, "cookbook_name"),
+					resource.TestCheckResourceAttrSet(testMigrationResourceName, "playbook_content"),
 				),
 			},
 			// ImportState testing
 			{
-				ResourceName:      "souschef_migration.test",
+				ResourceName:      testMigrationResourceName,
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
 			// Update and Read testing
 			{
-				Config: testAccMigrationResourceConfig("test_cookbook", "/tmp/cookbooks/test", "/tmp/ansible"),
+				Config: testAccMigrationResourceConfig("test_cookbook", testCookbookPathMigration, testAnsibleOutputPath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_migration.test", "cookbook_path", "/tmp/cookbooks/test"),
+					resource.TestCheckResourceAttr(testMigrationResourceName, "cookbook_path", testCookbookPathMigration),
 				),
 			},
 			// Delete testing automatically occurs in TestCase

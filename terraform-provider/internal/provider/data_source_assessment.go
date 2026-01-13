@@ -31,13 +31,13 @@ type assessmentDataSource struct {
 
 // assessmentDataSourceModel maps the data source schema data.
 type assessmentDataSourceModel struct {
-	ID           types.String `tfsdk:"id"`
-	CookbookPath types.String `tfsdk:"cookbook_path"`
-	Complexity   types.String `tfsdk:"complexity"`
-	RecipeCount  types.Int64  `tfsdk:"recipe_count"`
-	ResourceCount types.Int64 `tfsdk:"resource_count"`
-	EstimatedHours types.Float64 `tfsdk:"estimated_hours"`
-	Recommendations types.String `tfsdk:"recommendations"`
+	ID              types.String  `tfsdk:"id"`
+	CookbookPath    types.String  `tfsdk:"cookbook_path"`
+	Complexity      types.String  `tfsdk:"complexity"`
+	RecipeCount     types.Int64   `tfsdk:"recipe_count"`
+	ResourceCount   types.Int64   `tfsdk:"resource_count"`
+	EstimatedHours  types.Float64 `tfsdk:"estimated_hours"`
+	Recommendations types.String  `tfsdk:"recommendations"`
 }
 
 // Metadata returns the data source type name.

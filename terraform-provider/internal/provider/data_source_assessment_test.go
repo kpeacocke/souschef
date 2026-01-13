@@ -7,6 +7,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
+const (
+	testAssessmentResourceName = "data.souschef_assessment.test"
+	testCookbookPath          = "/tmp/cookbooks/test"
+)
+
 func TestAccAssessmentDataSource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -14,15 +19,15 @@ func TestAccAssessmentDataSource(t *testing.T) {
 		Steps: []resource.TestStep{
 			// Read testing
 			{
-				Config: testAccAssessmentDataSourceConfig("/tmp/cookbooks/test"),
+				Config: testAccAssessmentDataSourceConfig(testCookbookPath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.souschef_assessment.test", "cookbook_path", "/tmp/cookbooks/test"),
-					resource.TestCheckResourceAttrSet("data.souschef_assessment.test", "id"),
-					resource.TestCheckResourceAttrSet("data.souschef_assessment.test", "complexity"),
-					resource.TestCheckResourceAttrSet("data.souschef_assessment.test", "recipe_count"),
-					resource.TestCheckResourceAttrSet("data.souschef_assessment.test", "resource_count"),
-					resource.TestCheckResourceAttrSet("data.souschef_assessment.test", "estimated_hours"),
-					resource.TestCheckResourceAttrSet("data.souschef_assessment.test", "recommendations"),
+					resource.TestCheckResourceAttr(testAssessmentResourceName, "cookbook_path", testCookbookPath),
+					resource.TestCheckResourceAttrSet(testAssessmentResourceName, "id"),
+					resource.TestCheckResourceAttrSet(testAssessmentResourceName, "complexity"),
+					resource.TestCheckResourceAttrSet(testAssessmentResourceName, "recipe_count"),
+					resource.TestCheckResourceAttrSet(testAssessmentResourceName, "resource_count"),
+					resource.TestCheckResourceAttrSet(testAssessmentResourceName, "estimated_hours"),
+					resource.TestCheckResourceAttrSet(testAssessmentResourceName, "recommendations"),
 				),
 			},
 		},
