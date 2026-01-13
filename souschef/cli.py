@@ -11,7 +11,7 @@ from typing import NoReturn
 
 import click
 
-from souschef.assessment import assess_migration_complexity
+from souschef.assessment import assess_chef_migration_complexity
 from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.profiling import (
     generate_cookbook_performance_report,
@@ -874,7 +874,7 @@ def assess_cookbook(cookbook_path: str, output_format: str) -> None:
             sys.exit(1)
 
         # Run assessment
-        result = assess_migration_complexity(str(cookbook_path))
+        result = assess_chef_migration_complexity(str(cookbook_path))
 
         if output_format == "json":
             # Output raw JSON for Terraform provider
