@@ -1,8 +1,9 @@
 name: Release Please
 
-# Run after CI and SonarCloud complete on main
-# Trigger: workflow_run ensures both CI and SonarCloud pass before creating releases
+# Run on push to main after CI and SonarCloud complete
 on:
+  push:
+    branches: [main]
   workflow_run:
     workflows: ["CI", "SonarCloud Analysis"]
     types: [completed]
@@ -22,11 +23,17 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only run if the triggering workflow passed
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only run if the triggering workflow passed (or if direct push)
+    if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
       - name: Check if both CI and SonarCloud passed
+        if: ${{ github.event_name != 'push' }}
         id: check-prerequisites
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,7 +57,7 @@ jobs:
           fi
 
       - name: Create or update release PR / Create release
-        if: ${{ steps.check-prerequisites.outputs.ready == 'true' }}
+        if: ${{ github.event_name == 'push' || steps.check-prerequisites.outputs.ready == 'true' }}
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: release
         with:
