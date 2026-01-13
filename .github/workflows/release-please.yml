@@ -33,12 +33,17 @@ jobs:
           fetch-depth: 0
 
       - name: Check if both CI and SonarCloud passed
-        if: ${{ github.event_name != 'push' }}
         id: check-prerequisites
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+          # Determine which commit to check
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            COMMIT_SHA="${{ github.sha }}"
+          else
+            COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+          fi
+          
           echo "Checking workflows for commit: $COMMIT_SHA"
           
           # Get status of CI and SonarCloud for this commit
@@ -49,15 +54,16 @@ jobs:
           echo "SonarCloud Status: $SONAR_STATUS"
           
           if [[ "$CI_STATUS" == "success" && "$SONAR_STATUS" == "success" ]]; then
-            echo "Both workflows passed"
+            echo "✓ Both workflows passed"
             echo "ready=true" >> $GITHUB_OUTPUT
           else
-            echo "Waiting for both workflows to pass"
+            echo "✗ Waiting for both workflows to pass"
             echo "ready=false" >> $GITHUB_OUTPUT
+            exit 1
           fi
 
       - name: Create or update release PR / Create release
-        if: ${{ github.event_name == 'push' || steps.check-prerequisites.outputs.ready == 'true' }}
+        if: ${{ steps.check-prerequisites.outputs.ready == 'true' }}
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: release
         with:
