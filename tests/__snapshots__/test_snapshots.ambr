@@ -42,6 +42,9 @@
   # Original: environments/production.rb
   # Target: inventory/group_vars/production.yml
   
+  app:
+    debug: false
+    log_level: info
   chef_migration_metadata:
     converted_by: souschef
     overrides_location: environment_overrides (requires extra_vars or host_vars)
@@ -52,7 +55,7 @@
     postgresql: ~> 3.1
   environment_description: Production environment
   environment_name: production
-  log_level: info
+  worker_processes: 4
   
   
   ---
