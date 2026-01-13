@@ -1,11 +1,11 @@
 name: Release Please
 
-# Run on push to main after CI and SonarCloud complete
+# Trigger on push to main to create release PRs and on CI/SonarCloud completion to handle releases
 on:
   push:
     branches: [main]
   workflow_run:
-    workflows: ["CI", "SonarCloud Analysis"]
+    workflows: ["CI"]
     types: [completed]
     branches: [main]
 
@@ -23,47 +23,11 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only run if the triggering workflow passed (or if direct push)
+    # Skip if workflow_run triggered but didn't succeed
     if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Check if both CI and SonarCloud passed
-        id: check-prerequisites
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Determine which commit to check
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            COMMIT_SHA="${{ github.sha }}"
-          else
-            COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
-          fi
-          
-          echo "Checking workflows for commit: $COMMIT_SHA"
-          
-          # Get status of CI and SonarCloud for this commit
-          CI_STATUS=$(gh api "repos/${{ github.repository }}/commits/$COMMIT_SHA/check-runs" --jq '.check_runs[] | select(.name == "test (3.14)") | .conclusion' | head -1)
-          SONAR_STATUS=$(gh api "repos/${{ github.repository }}/commits/$COMMIT_SHA/check-runs" --jq '.check_runs[] | select(.name == "SonarCloud Code Analysis") | .conclusion' | head -1)
-          
-          echo "CI Status: $CI_STATUS"
-          echo "SonarCloud Status: $SONAR_STATUS"
-          
-          if [[ "$CI_STATUS" == "success" && "$SONAR_STATUS" == "success" ]]; then
-            echo "✓ Both workflows passed"
-            echo "ready=true" >> $GITHUB_OUTPUT
-          else
-            echo "✗ Waiting for both workflows to pass"
-            echo "ready=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
-      - name: Create or update release PR / Create release
-        if: ${{ steps.check-prerequisites.outputs.ready == 'true' }}
+      - name: Run Release Please
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: release
         with:
@@ -71,18 +35,9 @@ jobs:
           manifest-file: .release-please-manifest.json
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Auto-merge release PR
-        if: ${{ steps.release.outputs.prs_created == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_JSON: ${{ steps.release.outputs.pr }}
+      - name: Log outputs
         run: |
-          PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
-          echo "Enabling auto-merge for release PR #$PR_NUMBER..."
-          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch --repo ${{ github.repository }}
-
-      - name: Log release created
-        if: ${{ steps.release.outputs.release_created }}
-        run: |
-          echo "✓ Release v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }} created"
-          echo "  Tag: ${{ steps.release.outputs.tag_name }}"
+          echo "Release created: ${{ steps.release.outputs.release_created }}"
+          echo "PR created: ${{ steps.release.outputs.pr }}"
+          echo "Releases created: ${{ steps.release.outputs.releases_created }}"
+          echo "PRs created: ${{ steps.release.outputs.prs_created }}"
