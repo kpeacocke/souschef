@@ -37,15 +37,24 @@ func TestAccMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttr(testMigrationResourceName, "cookbook_path", testCookbookPathMigration),
 				),
 			},
-			// Delete testing automatically occurs in TestCase
+			// TODO: ImportState testing - requires custom import ID parser implementation
+			// {
+			// 	ResourceName:      testMigrationResourceName,
+			// 	ImportState:       true,
+			// 	ImportStateVerify: true,
+			// },
 		},
 	})
 }
 
 func testAccMigrationResourceConfig(name, cookbookPath, outputPath string) string {
 	return fmt.Sprintf(`
+variable "souschef_path" {
+  type = string
+}
+
 provider "souschef" {
-  souschef_path = "/workspaces/souschef/.venv/bin/souschef"
+  souschef_path = var.souschef_path
 }
 
 resource "souschef_migration" "test" {

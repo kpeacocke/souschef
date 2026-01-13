@@ -32,6 +32,7 @@ func TestAccBatchMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.default"),
 				),
 			},
+			// TODO: ImportState testing - requires custom import ID parser implementation
 		},
 	})
 }
@@ -47,8 +48,12 @@ func testAccBatchMigrationResourceConfig(_, cookbookPath, outputPath string, rec
 	recipesHCL += "]"
 
 	return fmt.Sprintf(`
+variable "souschef_path" {
+  type = string
+}
+
 provider "souschef" {
-  souschef_path = "/workspaces/souschef/.venv/bin/souschef"
+  souschef_path = var.souschef_path
 }
 
 resource "souschef_batch_migration" "test" {

@@ -38,14 +38,24 @@ func TestAccHabitatMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testHabitatMigrationResourceName, "dockerfile_content"),
 				),
 			},
+			// TODO: ImportState testing - requires custom import ID parser implementation
+			// {
+			// 	ResourceName:      testHabitatMigrationResourceName,
+			// 	ImportState:       true,
+			// 	ImportStateVerify: true,
+			// },
 		},
 	})
 }
 
 func testAccHabitatMigrationResourceConfig(_, planPath, outputPath, baseImage string) string {
 	config := fmt.Sprintf(`
+variable "souschef_path" {
+  type = string
+}
+
 provider "souschef" {
-  souschef_path = "/workspaces/souschef/.venv/bin/souschef"
+  souschef_path = var.souschef_path
 }
 
 resource "souschef_habitat_migration" "test" {

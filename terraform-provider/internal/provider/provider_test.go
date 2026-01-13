@@ -18,7 +18,7 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 
 func testAccPreCheck(_ *testing.T) {
 	// Set default souschef path for testing if not set
-	if os.Getenv("SOUSCHEF_PATH") == "" {
+	if os.Getenv("TF_VAR_souschef_path") == "" {
 		// Try common locations
 		venvPath := "/workspaces/souschef/.venv/bin/souschef"
 		if _, err := os.Stat(venvPath); err == nil {

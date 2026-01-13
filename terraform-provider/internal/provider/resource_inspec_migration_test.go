@@ -52,14 +52,24 @@ func TestAccInSpecMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttr(testInSpecMigrationResourceName, "output_format", "goss"),
 				),
 			},
+			// TODO: ImportState testing - requires custom import ID parser implementation
+			// {
+			// 	ResourceName:      testInSpecMigrationResourceName,
+			// 	ImportState:       true,
+			// 	ImportStateVerify: true,
+			// },
 		},
 	})
 }
 
 func testAccInSpecMigrationResourceConfig(_, profilePath, outputPath, outputFormat string) string {
 	return fmt.Sprintf(`
+variable "souschef_path" {
+  type = string
+}
+
 provider "souschef" {
-  souschef_path = "/workspaces/souschef/.venv/bin/souschef"
+  souschef_path = var.souschef_path
 }
 
 resource "souschef_inspec_migration" "test" {
