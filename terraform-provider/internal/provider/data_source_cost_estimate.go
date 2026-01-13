@@ -28,17 +28,17 @@ type costEstimateDataSource struct {
 
 // costEstimateDataSourceModel describes the data source data model
 type costEstimateDataSourceModel struct {
-	ID                   types.String  `tfsdk:"id"`
-	CookbookPath         types.String  `tfsdk:"cookbook_path"`
-	Complexity           types.String  `tfsdk:"complexity"`
-	RecipeCount          types.Int64   `tfsdk:"recipe_count"`
-	ResourceCount        types.Int64   `tfsdk:"resource_count"`
-	EstimatedHours       types.Float64 `tfsdk:"estimated_hours"`
-	EstimatedCostUSD     types.Float64 `tfsdk:"estimated_cost_usd"`
-	DeveloperHourlyRate  types.Float64 `tfsdk:"developer_hourly_rate"`
-	InfrastructureCost   types.Float64 `tfsdk:"infrastructure_cost"`
-	TotalProjectCostUSD  types.Float64 `tfsdk:"total_project_cost_usd"`
-	Recommendations      types.String  `tfsdk:"recommendations"`
+	ID                  types.String  `tfsdk:"id"`
+	CookbookPath        types.String  `tfsdk:"cookbook_path"`
+	Complexity          types.String  `tfsdk:"complexity"`
+	RecipeCount         types.Int64   `tfsdk:"recipe_count"`
+	ResourceCount       types.Int64   `tfsdk:"resource_count"`
+	EstimatedHours      types.Float64 `tfsdk:"estimated_hours"`
+	EstimatedCostUSD    types.Float64 `tfsdk:"estimated_cost_usd"`
+	DeveloperHourlyRate types.Float64 `tfsdk:"developer_hourly_rate"`
+	InfrastructureCost  types.Float64 `tfsdk:"infrastructure_cost"`
+	TotalProjectCostUSD types.Float64 `tfsdk:"total_project_cost_usd"`
+	Recommendations     types.String  `tfsdk:"recommendations"`
 }
 
 // Metadata returns the data source type name
@@ -142,15 +142,15 @@ func (d *costEstimateDataSource) Read(ctx context.Context, req datasource.ReadRe
 
 	// Get assessment data using existing assess-cookbook command
 	// This would normally call the CLI, but for cost estimation we'll calculate based on patterns
-	
+
 	// For now, we'll do a simple analysis similar to assessment
 	// In production, this would call: souschef assess-cookbook --cookbook-path <path> --format json
-	
+
 	// Simplified analysis (in production this would parse actual cookbook)
-	recipeCount := int64(1)     // Placeholder
-	resourceCount := int64(10)  // Placeholder
+	recipeCount := int64(1)    // Placeholder
+	resourceCount := int64(10) // Placeholder
 	complexity := "Medium"
-	
+
 	var estimatedHours float64
 	switch complexity {
 	case "Low":

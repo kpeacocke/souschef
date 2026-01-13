@@ -32,12 +32,12 @@ type inspecMigrationResource struct {
 
 // inspecMigrationResourceModel describes the resource data model
 type inspecMigrationResourceModel struct {
-	ID            types.String `tfsdk:"id"`
-	ProfilePath   types.String `tfsdk:"profile_path"`
-	OutputPath    types.String `tfsdk:"output_path"`
-	OutputFormat  types.String `tfsdk:"output_format"`
-	ProfileName   types.String `tfsdk:"profile_name"`
-	TestContent   types.String `tfsdk:"test_content"`
+	ID           types.String `tfsdk:"id"`
+	ProfilePath  types.String `tfsdk:"profile_path"`
+	OutputPath   types.String `tfsdk:"output_path"`
+	OutputFormat types.String `tfsdk:"output_format"`
+	ProfileName  types.String `tfsdk:"profile_name"`
+	TestContent  types.String `tfsdk:"test_content"`
 }
 
 // Metadata returns the resource type name

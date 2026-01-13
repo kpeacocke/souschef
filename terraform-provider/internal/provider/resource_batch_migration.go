@@ -337,7 +337,7 @@ func (r *batchMigrationResource) ImportState(ctx context.Context, req resource.I
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cookbook_path"), parts[0])...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("output_path"), parts[1])...)
-	
+
 	recipeNames := strings.Split(parts[2], ",")
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("recipe_names"), recipeNames)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
