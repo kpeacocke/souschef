@@ -16,10 +16,8 @@ The Terraform provider allows you to:
 ### Prerequisites
 
 - Terraform >= 1.0
-- SousChef MCP server running or CLI installed
+- SousChef CLI installed (>= 2.4.0) and available in PATH
 - Go >= 1.21 (for building from source)
-
-> **Note**: The current provider implementation calls SousChef via CLI commands. Future versions will integrate directly with the MCP protocol for better performance and richer functionality.
 
 ### Building from Source
 
@@ -156,7 +154,7 @@ locals {
 
 resource "souschef_migration" "web_recipes" {
   for_each = toset(local.recipes)
-  
+
   cookbook_path = local.web_cookbook
   output_path   = "/ansible/playbooks"
   recipe_name   = each.value
@@ -174,7 +172,7 @@ data "souschef_assessment" "app_server" {
 
 resource "souschef_migration" "app_server" {
   count = contains(["Low", "Medium"], data.souschef_assessment.app_server.complexity) ? 1 : 0
-  
+
   cookbook_path = data.souschef_assessment.app_server.cookbook_path
   output_path   = "/ansible/playbooks"
 }
@@ -202,14 +200,14 @@ locals {
 # Assess all cookbooks
 data "souschef_assessment" "cookbooks" {
   for_each = local.cookbooks
-  
+
   cookbook_path = each.value
 }
 
 # Migrate all cookbooks
 resource "souschef_migration" "cookbooks" {
   for_each = local.cookbooks
-  
+
   cookbook_path = each.value
   output_path   = local.output_base
   recipe_name   = "default"
@@ -273,7 +271,7 @@ Structure output paths logically:
 ```terraform
 resource "souschef_migration" "recipes" {
   for_each = var.recipes
-  
+
   cookbook_path = var.cookbook_path
   output_path   = "${var.output_base}/${each.key}"
   recipe_name   = each.value
@@ -308,7 +306,7 @@ resource "souschef_migration" "app" {
 resource "local_file" "app_playbook" {
   filename = "${path.module}/playbooks/${var.cookbook_name}.yml"
   content  = souschef_migration.app.playbook_content
-  
+
   lifecycle {
     create_before_destroy = true
   }
@@ -342,17 +340,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install SousChef
         run: pip install mcp-souschef
-      
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-      
+
       - name: Terraform Init
         run: terraform init
         working-directory: terraform
-      
+
       - name: Terraform Plan
         run: terraform plan
         working-directory: terraform
@@ -414,12 +412,10 @@ ls -la /path/to/output
 
 ## Limitations
 
-- **Alpha Release**: The provider is in early development and requires additional CLI commands to be implemented
-- The provider requires the SousChef CLI to be installed and extended with `convert-recipe` and `assess-cookbook` commands
+- The provider requires the SousChef CLI to be installed (>= 2.4.0)
 - Migrations run locally on the Terraform executor
 - Large cookbooks may take significant time to convert
 - The provider does not currently support remote execution
-- **Recommended**: Use the MCP server directly until CLI integration is complete
 
 ## Next Steps
 

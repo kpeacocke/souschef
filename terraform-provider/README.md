@@ -6,9 +6,7 @@ This Terraform provider enables infrastructure-as-code management of Chef to Ans
 
 - [Terraform](https://www.terraform.io/downloads.html) >= 1.0
 - [Go](https://golang.org/doc/install) >= 1.21 (for building)
-- [SousChef](https://github.com/kpeacocke/souschef) MCP server or CLI
-
-> **⚠️ Alpha Status**: This provider is in early development. The CLI commands `convert-recipe` and `assess-cookbook` need to be implemented. For production use, consider using the MCP server directly until the provider reaches stable release.
+- [SousChef](https://github.com/kpeacocke/souschef) CLI installed (>= 2.4.0)
 
 ## Building
 
@@ -130,7 +128,7 @@ data "souschef_assessment" "web_server" {
 # Only proceed with migration if complexity is Low or Medium
 resource "souschef_migration" "web_server" {
   count = contains(["Low", "Medium"], data.souschef_assessment.web_server.complexity) ? 1 : 0
-  
+
   cookbook_path = data.souschef_assessment.web_server.cookbook_path
   output_path   = "/ansible/playbooks"
   recipe_name   = "default"
