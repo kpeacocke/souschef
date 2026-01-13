@@ -11,6 +11,8 @@ from typing import NoReturn
 
 import click
 
+from souschef.assessment import assess_migration_complexity
+from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.profiling import (
     generate_cookbook_performance_report,
     profile_function,
@@ -755,6 +757,145 @@ def profile_operation(operation: str, path: str, detailed: bool) -> None:
 
     except Exception as e:
         click.echo(f"Error profiling operation: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("convert-recipe")
+@click.option(
+    "--cookbook-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the Chef cookbook directory",
+)
+@click.option(
+    "--recipe-name",
+    default="default",
+    help="Name of the recipe to convert (default: default)",
+)
+@click.option(
+    "--output-path",
+    required=True,
+    type=click.Path(),
+    help="Directory where Ansible playbook will be written",
+)
+def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> None:
+    r"""
+    Convert a Chef recipe to an Ansible playbook.
+
+    This command converts a Chef recipe to an Ansible playbook and writes
+    it to the specified output path. Used by the Terraform provider.
+
+    Example:
+        souschef convert-recipe --cookbook-path /chef/cookbooks/nginx \\
+                                --recipe-name default \\
+                                --output-path /ansible/playbooks
+
+    """
+    try:
+        cookbook_dir = Path(cookbook_path)
+        output_dir = Path(output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Check recipe exists
+        recipe_file = cookbook_dir / "recipes" / f"{recipe_name}.rb"
+        if not recipe_file.exists():
+            click.echo(
+                f"Error: Recipe {recipe_name}.rb not found in {cookbook_path}/recipes",
+                err=True,
+            )
+            sys.exit(1)
+
+        # Get cookbook name
+        metadata_file = cookbook_dir / "metadata.rb"
+        cookbook_name = cookbook_dir.name  # Default to directory name
+
+        if metadata_file.exists():
+            metadata_result = read_cookbook_metadata(str(metadata_file))
+            # Try to parse cookbook name from metadata
+            for line in metadata_result.split("\n"):
+                if line.startswith("name"):
+                    cookbook_name = line.split(":", 1)[1].strip()
+                    break
+
+        # Generate playbook
+        click.echo(f"Converting {cookbook_name}::{recipe_name} to Ansible...")
+        playbook_yaml = generate_playbook_from_recipe(
+            str(recipe_file), cookbook_name, recipe_name
+        )
+
+        # Write output
+        output_file = output_dir / f"{recipe_name}.yml"
+        output_file.write_text(playbook_yaml)
+
+        click.echo(f"✓ Playbook written to: {output_file}")
+        click.echo(f"  Size: {len(playbook_yaml)} bytes")
+
+    except Exception as e:
+        click.echo(f"Error converting recipe: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("assess-cookbook")
+@click.option(
+    "--cookbook-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the Chef cookbook directory",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+    help="Output format (default: json)",
+)
+def assess_cookbook(cookbook_path: str, output_format: str) -> None:
+    """
+    Assess a Chef cookbook for migration complexity.
+
+    Analyzes the cookbook and provides complexity level, recipe/resource counts,
+    estimated migration effort, and recommendations. Used by Terraform provider.
+
+    Example:
+        souschef assess-cookbook --cookbook-path /chef/cookbooks/nginx --format json
+
+    """
+    try:
+        cookbook_dir = Path(cookbook_path)
+        if not cookbook_dir.exists():
+            click.echo(
+                f"Error: Cookbook path does not exist: {cookbook_path}",
+                err=True,
+            )
+            sys.exit(1)
+
+        if not cookbook_dir.is_dir():
+            click.echo(f"Error: {cookbook_path} is not a directory", err=True)
+            sys.exit(1)
+
+        # Run assessment
+        result = assess_migration_complexity(str(cookbook_path))
+
+        if output_format == "json":
+            # Output raw JSON for Terraform provider
+            click.echo(result)
+        else:
+            # Parse JSON and display nicely for humans
+            try:
+                data = json.loads(result)
+                click.echo(f"\nCookbook: {cookbook_dir.name}")
+                click.echo("=" * 50)
+                click.echo(f"Complexity: {data.get('complexity', 'Unknown')}")
+                click.echo(f"Recipe Count: {data.get('recipe_count', 0)}")
+                click.echo(f"Resource Count: {data.get('resource_count', 0)}")
+                click.echo(f"Estimated Hours: {data.get('estimated_hours', 0.0)}")
+                recommendations = data.get("recommendations", "None")
+                click.echo(f"\nRecommendations:\n{recommendations}")
+            except json.JSONDecodeError:
+                click.echo(result)
+
+    except Exception as e:
+        click.echo(f"Error assessing cookbook: {e}", err=True)
         sys.exit(1)
 
 
