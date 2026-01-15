@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.2](https://github.com/kpeacocke/souschef/compare/v2.5.1...v2.5.2) (2026-01-15)
+
+
+### Bug Fixes
+
+* import souschef in test_cli.py ([#160](https://github.com/kpeacocke/souschef/issues/160)) ([901fb0e](https://github.com/kpeacocke/souschef/commit/901fb0e9e9f35518263c935951f44bf72202dc53))
+
+## [2.5.1](https://github.com/kpeacocke/souschef/compare/v2.5.0...v2.5.1) (2026-01-15)
+
+
+### Bug Fixes
+
+* add missing souschef import in test_cli.py ([#158](https://github.com/kpeacocke/souschef/issues/158)) ([c15e9a2](https://github.com/kpeacocke/souschef/commit/c15e9a2f823db5ed060f3aeb8a6824cc529ce047))
+
+## [2.5.0](https://github.com/kpeacocke/souschef/compare/v2.4.0...v2.5.0) (2026-01-15)
+
+
+### Features
+
+* UI & Container ([#155](https://github.com/kpeacocke/souschef/issues/155)) ([e266dd1](https://github.com/kpeacocke/souschef/commit/e266dd152d31b17233ffeed05cfa48d91b858c9b))
+
 ## [2.4.0](https://github.com/kpeacocke/souschef/compare/v2.3.1...v2.4.0) (2026-01-13)
 
 

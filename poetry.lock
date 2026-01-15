@@ -5099,4 +5099,4 @@ ui = ["pandas"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.14,<4.0"
-content-hash = "5f253f3200c81e53f969abbacc5c8d5e961dbfc64d82858bdb1d779863907c73"
+content-hash = "67a6074421c54ab5bad91fa3a9fff2ab3df5477a98fa6c4df9458ccbbd855462"
