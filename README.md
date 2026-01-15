@@ -346,6 +346,29 @@ souschef ui
 souschef ui --port 8080
 ```
 
+**Run in Docker:**
+```bash
+# Build the image
+docker build -t souschef-ui .
+
+# Run the container
+docker run -p 8501:8501 souschef-ui
+
+# Or use docker-compose
+docker-compose up
+```
+
+**Docker Compose (recommended for development):**
+```yaml
+version: '3.8'
+services:
+  souschef-ui:
+    build: .
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+```
+
 **Features:**
 - Clean, professional design matching documentation standards
 - Real-time cookbook analysis with progress indicators
