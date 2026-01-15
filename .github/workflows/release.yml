@@ -37,6 +37,11 @@ jobs:
         fetch-depth: 0
         ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
     - name: Determine release tag
       id: get-tag
       env:
@@ -141,6 +146,7 @@ jobs:
     needs: build
     permissions:
       contents: read
+      id-token: write  # Required for attestations
 
     steps:
     - name: Download package artifacts
