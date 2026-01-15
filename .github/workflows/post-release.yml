@@ -45,17 +45,24 @@ jobs:
           exit 0
         fi
 
-        # Merge main into develop directly (since this is automated and trusted)
-        echo "Merging main into develop..."
-        if git checkout develop && git pull origin develop && git merge origin/main --no-ff -m "chore: sync main to develop
+        # Rebase develop onto main to avoid merge commits
+        echo "Rebasing develop onto main..."
+        if git checkout develop && git pull origin develop && git rebase origin/main; then
+          echo "✓ Rebase successful"
+          git push origin develop --force-with-lease
+          echo "✓ Develop branch updated successfully"
+        else
+          echo "✗ Rebase failed, falling back to merge"
+          git rebase --abort || true
+          git merge origin/main --no-ff -m "chore: sync main to develop
 
 Automatic sync to keep develop up to date with main.
 
 Latest commit: ${LATEST_COMMIT}
-Triggered by: ${{ github.event_name }}"; then
-          echo "✓ Merge successful"
+Triggered by: ${{ github.event_name }}"
           git push origin develop
-          echo "✓ Develop branch updated successfully"
+          echo "✓ Develop branch updated with merge commit"
+        fi
         else
           echo "✗ Merge conflict detected"
           echo "Please resolve conflicts manually"

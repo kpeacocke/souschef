@@ -15,6 +15,9 @@ mcp = ">=1.25.0"
 python-dotenv = ">=1.2.1"
 pyyaml = ">=6.0.0"
 zod = ">=0.8.0"
+pandas = ">=2.0.0"
+streamlit = ">=1.28.0"
+plotly = ">=5.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=9.0.2"

@@ -671,8 +671,8 @@ def _extract_dependency_relationships(lines):
 
 def _extract_circular_and_community_deps(lines):
     """Extract circular dependencies and community cookbooks."""
-    circular_deps = []
-    community_cookbooks = []
+    circular_deps: list[tuple[str, str]] = []
+    community_cookbooks: list[str] = []
     current_section = None
 
     for line in lines:
@@ -738,7 +738,7 @@ def _create_networkx_graph(dependencies, circular_deps, community_cookbooks):
     """Create NetworkX graph from dependency data."""
     import networkx as nx
 
-    graph = nx.DiGraph()
+    graph: nx.DiGraph = nx.DiGraph()
 
     # Add nodes and edges
     for cookbook, deps in dependencies.items():
