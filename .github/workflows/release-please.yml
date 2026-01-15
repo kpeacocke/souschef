@@ -2,10 +2,13 @@ name: Release Please
 
 # Run after CI and SonarCloud complete on main
 # Trigger: workflow_run ensures both CI and SonarCloud pass before creating releases
+# Also trigger on direct push to main as fallback
 on:
   workflow_run:
     workflows: ["CI", "SonarCloud Analysis"]
     types: [completed]
+    branches: [main]
+  push:
     branches: [main]
 
 concurrency:
@@ -22,11 +25,14 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only run if the triggering workflow passed
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only run if triggered by workflow_run completion (with success check) or direct push
+    if: |
+      github.event_name == 'push' ||
+      (github.event.workflow_run.conclusion == 'success')
 
     steps:
       - name: Check if both CI and SonarCloud passed
+        if: github.event_name == 'workflow_run'
         id: check-prerequisites
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,7 +42,7 @@ jobs:
 
           # Get status of CI and SonarCloud for this commit
           CI_STATUS=$(gh api "repos/${{ github.repository }}/commits/$COMMIT_SHA/check-runs" --jq '.check_runs[] | select(.name == "test (3.14)") | .conclusion' | head -1)
-          SONAR_STATUS=$(gh api "repos/${{ github.repository }}/commits/$COMMIT_SHA/check-runs" --jq '.check_runs[] | select(.name == "SonarCloud Code Analysis") | .conclusion' | head -1)
+          SONAR_STATUS=$(gh api "repos/${{ github.repository }}/commits/$COMMIT_SHA/check-runs" --jq '.check_runs[] | select(.name == "sonarcloud") | .conclusion' | head -1)
 
           echo "CI Status: $CI_STATUS"
           echo "SonarCloud Status: $SONAR_STATUS"
@@ -50,7 +56,7 @@ jobs:
           fi
 
       - name: Create or update release PR / Create release
-        if: ${{ steps.check-prerequisites.outputs.ready == 'true' }}
+        if: steps.check-prerequisites.outputs.ready == 'true' || github.event_name == 'push'
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         id: release
         with:
