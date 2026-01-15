@@ -1,14 +1,12 @@
 ---
 name: Sync Main to Develop
 
-# This workflow runs after any push to main to keep develop in sync
-# Includes releases, hotfixes, and dependency updates
+# This workflow runs after releases to keep develop in sync with main
+# Ensures develop always has the latest released changes
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:  # Allow manual trigger
-
+  release:
+    types: [published
 permissions:
   contents: write
   pull-requests: write
