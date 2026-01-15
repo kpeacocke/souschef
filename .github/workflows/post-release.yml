@@ -6,7 +6,9 @@ name: Sync Main to Develop
 
 on:
   release:
-    types: [published
+    types: [published]
+  workflow_dispatch:  # Allow manual trigger
+
 permissions:
   contents: write
   pull-requests: write
