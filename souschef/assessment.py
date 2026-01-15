@@ -7,6 +7,7 @@ generating migration plans, analyzing dependencies, and validating conversions.
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 from souschef.core import METADATA_FILENAME, _normalize_path, _safe_join
@@ -36,12 +37,75 @@ def assess_chef_migration_complexity(
 
     """
     try:
-        # Validate inputs
+        # Validate and parse inputs
         error_msg = _validate_assessment_inputs(
             cookbook_paths, migration_scope, target_platform
         )
         if error_msg:
             return error_msg
+
+        # Process cookbook analysis
+        return _process_cookbook_assessment(
+            cookbook_paths, migration_scope, target_platform
+        )
+
+    except Exception as e:
+        return format_error_with_context(
+            e, "assessing Chef migration complexity", cookbook_paths
+        )
+
+
+def _process_cookbook_assessment(
+    cookbook_paths: str, migration_scope: str, target_platform: str
+) -> str:
+    """Process the cookbook assessment workflow."""
+    # Parse cookbook paths (may be empty if none exist)
+    valid_paths = _parse_cookbook_paths(cookbook_paths)
+
+    # Analyze all cookbooks (handles empty list gracefully)
+    cookbook_assessments, overall_metrics = _analyze_cookbook_metrics(valid_paths)
+
+    # Generate recommendations and reports
+    recommendations = _generate_migration_recommendations_from_assessment(
+        cookbook_assessments, overall_metrics, target_platform
+    )
+    roadmap = _create_migration_roadmap(cookbook_assessments)
+
+    # Format final assessment report
+    return _format_assessment_report(
+        migration_scope,
+        target_platform,
+        overall_metrics,
+        cookbook_assessments,
+        recommendations,
+        roadmap,
+    )
+
+
+def parse_chef_migration_assessment(
+    cookbook_paths: str,
+    migration_scope: str = "full",
+    target_platform: str = "ansible_awx",
+) -> dict[str, Any]:
+    """
+    Parse Chef cookbook migration assessment and return as dictionary.
+
+    Args:
+        cookbook_paths: Comma-separated paths to Chef cookbooks or cookbook directory
+        migration_scope: Scope of migration (full, recipes_only, infrastructure_only)
+        target_platform: Target platform (ansible_awx, ansible_core, ansible_tower)
+
+    Returns:
+        Dictionary containing assessment data with complexity, recommendations, etc.
+
+    """
+    try:
+        # Validate inputs
+        error_msg = _validate_assessment_inputs(
+            cookbook_paths, migration_scope, target_platform
+        )
+        if error_msg:
+            return {"error": error_msg}
 
         # Parse cookbook paths (may be empty if none exist)
         valid_paths = _parse_cookbook_paths(cookbook_paths)
@@ -55,19 +119,35 @@ def assess_chef_migration_complexity(
         )
         roadmap = _create_migration_roadmap(cookbook_assessments)
 
-        # Format final assessment report
-        return _format_assessment_report(
-            migration_scope,
-            target_platform,
-            overall_metrics,
-            cookbook_assessments,
-            recommendations,
-            roadmap,
-        )
+        return {
+            "migration_scope": migration_scope,
+            "target_platform": target_platform,
+            "overall_metrics": overall_metrics,
+            "cookbook_assessments": cookbook_assessments,
+            "recommendations": recommendations,
+            "roadmap": roadmap,
+            "complexity": _get_overall_complexity_level(overall_metrics),
+            "estimated_hours": overall_metrics.get("estimated_effort_days", 0)
+            * 8,  # Convert days to hours
+        }
+
     except Exception as e:
-        return format_error_with_context(
-            e, "assessing Chef migration complexity", cookbook_paths
-        )
+        return {
+            "error": format_error_with_context(
+                e, "assessing Chef migration complexity", cookbook_paths
+            )
+        }
+
+
+def _get_overall_complexity_level(metrics: dict[str, int]) -> str:
+    """Get overall complexity level based on metrics."""
+    avg_complexity = metrics.get("avg_complexity", 0)
+    if avg_complexity < 30:
+        return "Low"
+    elif avg_complexity < 70:
+        return "Medium"
+    else:
+        return "High"
 
 
 def _validate_migration_plan_inputs(
@@ -654,9 +734,10 @@ def _determine_migration_priority(complexity_score: int) -> str:
     return "medium"
 
 
-def _assess_single_cookbook(cookbook_path) -> dict:
+def _assess_single_cookbook(cookbook_path: Path) -> dict:
     """Assess complexity of a single cookbook."""
-    cookbook = _normalize_path(cookbook_path)
+    # cookbook_path is already normalized to a Path object
+    cookbook = cookbook_path
 
     # Collect metrics
     artifact_counts = _count_cookbook_artifacts(cookbook)

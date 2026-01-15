@@ -1,3 +1,4 @@
+---
 name: Sync Main to Develop
 
 # This workflow runs after any push to main to keep develop in sync
@@ -39,91 +40,76 @@ jobs:
         LATEST_COMMIT=$(git log -1 --pretty=format:"%h - %s" origin/main)
         echo "Latest commit: $LATEST_COMMIT"
 
+        # Define commit message
+        MESSAGE="chore: sync main to develop\n\nLatest: ${LATEST_COMMIT}"
+
         # Check if develop is already up to date with main
         if git merge-base --is-ancestor origin/main develop; then
-          echo "✓ Develop is already up to date with main"
-          exit 0
+        echo "✓ Develop is already up to date with main"
+        exit 0
         fi
 
-        # Create a branch for the merge (always use PR due to branch protection)
-        MERGE_BRANCH="auto-sync/main-to-develop-$(date +%Y%m%d-%H%M%S)"
-        git checkout -b "$MERGE_BRANCH"
+        # Rebase develop onto main to avoid merge commits
+        echo "Rebasing develop onto main..."
+        if git checkout develop && git pull origin develop && git rebase origin/main; then
+          echo "✓ Rebase successful"
+          git push origin develop --force-with-lease
+          echo "✓ Develop branch updated successfully"
+        else
+          echo "✗ Rebase failed, falling back to merge"
+          git rebase --abort || true
+          git merge origin/main --no-ff -m "$MESSAGE"
+          git push origin develop
+          echo "✓ Develop branch updated with merge commit"
+        fi
 
-        # Merge main into the branch
-        echo "Merging main into ${MERGE_BRANCH}..."
-        if git merge origin/main --no-ff -m "chore: sync main to develop
 
-        Automatic sync to keep develop up to date with main.
-
-        Latest commit: ${LATEST_COMMIT}
-        Triggered by: ${{ github.event_name }}"; then
+        # Merge main into develop (if not already done)
+        echo "Merging main into develop..."
+        if git merge origin/main --no-ff -m "$MESSAGE"; then
           echo "✓ Merge successful"
 
           # Push the branch
-          git push -u origin "$MERGE_BRANCH"
+          git push -u origin develop
 
           # Create PR using GitHub CLI (labels are optional)
           gh pr create \
             --base develop \
-            --head "$MERGE_BRANCH" \
+            --head develop \
             --title "chore: sync main to develop" \
-            --body "🔄 Automatic sync from main to develop.
-
-          **Latest commit:** ${LATEST_COMMIT}
-          **Triggered by:** ${{ github.event_name }}
-
-          This PR was automatically created to sync changes from main to develop.
-          All changes merged successfully without conflicts." || true
+            --body "Sync main to develop. Latest: ${LATEST_COMMIT}. Triggered by: ${{ github.event_name }}." || true
 
           # Try to add labels (non-critical, continue on error)
-          gh pr edit --add-label "automated" 2>/dev/null || echo "Note: Could not add 'automated' label (label may not exist)"
-          gh pr edit --add-label "sync" 2>/dev/null || echo "Note: Could not add 'sync' label (label may not exist)"
+          gh pr edit --add-label "automated" 2>/dev/null || echo "Could not add 'automated' label"
+          gh pr edit --add-label "sync" 2>/dev/null || echo "Could not add 'sync' label"
 
-          # Enable auto-merge on the PR
-          PR_NUMBER=$(gh pr view "$MERGE_BRANCH" --json number -q .number)
-          gh pr merge "$PR_NUMBER" --auto --squash
+          # Wait for checks to complete before enabling auto-merge
+          PR_NUMBER=$(gh pr view develop --json number -q .number)
+          echo "Waiting for checks on PR #$PR_NUMBER..."
 
-          echo "✓ Created PR #${PR_NUMBER} with auto-merge enabled"
+          # Wait up to 10 minutes for checks to complete
+          for i in {1..60}; do
+            CHECKS_STATUS=$(gh pr checks "$PR_NUMBER" \
+            --json statusCheckRollup \
+            --jq 'all(.statusCheckRollup[]; .status == "COMPLETED")')
+            if [ "$CHECKS_STATUS" = "true" ]; then
+              echo "All checks passed, enabling auto-merge..."
+              gh pr merge "$PR_NUMBER" --auto --squash
+              echo "✓ Auto-merge enabled for PR #$PR_NUMBER"
+              break
+            fi
+            echo "Checks not complete yet, waiting... ($i/60)"
+            sleep 10
+          done
+
+          if [ "$CHECKS_STATUS" != "true" ]; then
+            echo "⚠️ Checks did not complete within timeout, PR #$PR_NUMBER created but auto-merge not enabled"
+          fi
         else
           echo "✗ Merge conflict detected"
-          echo "Creating PR for manual conflict resolution..."
-
-          # Abort the merge
+          echo "Please resolve conflicts manually"
           git merge --abort
-
-          # Try merge again to capture conflicts
-          git merge origin/main --no-ff -m "chore: sync main to develop" || true
-
-          # Push the branch with conflicts
-          git push -u origin "$MERGE_BRANCH"
-
-          # Create PR using GitHub CLI (labels are optional)
-          gh pr create \
-            --base develop \
-            --head "$MERGE_BRANCH" \
-            --title "chore: sync main to develop (⚠️ conflicts)" \
-            --body "🔄 Automatic sync from main to develop.
-
-          **Latest commit:** ${LATEST_COMMIT}
-          **Triggered by:** ${{ github.event_name }}
-
-          ⚠️ **Merge conflicts detected** - manual resolution required.
-
-          Please review and resolve conflicts before merging." || true
-
-          # Try to add labels (non-critical, continue on error)
-          gh pr edit --add-label "automated" 2>/dev/null || echo "Note: Could not add 'automated' label (label may not exist)"
-          gh pr edit --add-label "sync" 2>/dev/null || echo "Note: Could not add 'sync' label (label may not exist)"
-          gh pr edit --add-label "conflicts" 2>/dev/null || echo "Note: Could not add 'conflicts' label (label may not exist)"
-
-          echo "✓ Created PR for manual conflict resolution"
+          exit 1
         fi
       env:
         GH_TOKEN: ${{ github.token }}
-
-    - name: Add sync confirmation comment
-      if: success()
-      uses: actions/github-script@v8
-      with:
-        script: |
-          console.log('✅ Sync PR created successfully');
