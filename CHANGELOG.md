@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.8](https://github.com/kpeacocke/souschef/compare/v2.5.7...v2.5.8) (2026-01-15)
+
+
+### Bug Fixes
+
+* correct YAML syntax in post-release workflow ([fcfa23d](https://github.com/kpeacocke/souschef/commit/fcfa23d0a0dd9abc4a82d9017c0606d878877d78))
+* post-release workflow should only trigger after releases, not on every push to main ([9bd1d92](https://github.com/kpeacocke/souschef/commit/9bd1d9230f7229c53a00210e152df8ed7cc43ff8))
+* post-release workflow timing ([4c3a77c](https://github.com/kpeacocke/souschef/commit/4c3a77cfc5c58487a0fc38fea627de714bacedf9))
+
 ## [2.5.7](https://github.com/kpeacocke/souschef/compare/v2.5.6...v2.5.7) (2026-01-15)
 
 
