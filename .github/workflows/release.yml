@@ -141,38 +141,18 @@ jobs:
     needs: build
     permissions:
       contents: read
-      id-token: write
 
     steps:
-    - name: Check for PyPI token
-      id: check-token
-      env:
-        PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        if [ -n "$PYPI_TOKEN" ]; then
-          echo "Using API token authentication"
-          echo "auth_method=token" >> $GITHUB_OUTPUT
-        else
-          echo "Using trusted publishing (OIDC)"
-          echo "auth_method=oidc" >> $GITHUB_OUTPUT
-        fi
-
     - name: Download package artifacts
       uses: actions/download-artifact@v7
       with:
         name: release-packages
         path: dist/
 
-    - name: Publish with API token
-      if: steps.check-token.outputs.auth_method == 'token'
+    - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # v1.13.0
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
-
-    - name: Publish with trusted publishing
-      if: steps.check-token.outputs.auth_method == 'oidc'
-      uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # v1.13.0
-      with:
         attestations: true
 
   attach-to-release:
