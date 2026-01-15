@@ -1,5 +1,5 @@
 # Dockerfile for SousChef UI
-FROM python:3.14-slim as base
+FROM python:3.14-slim AS base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -7,19 +7,17 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
+# Install system dependencies and create non-root user
 RUN apt-get update && apt-get install -y \
     curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash app
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /bin/bash app
 
 # Set work directory
 WORKDIR /app
 
 # Install Python dependencies
-FROM base as dependencies
+FROM base AS dependencies
 
 # Copy dependency files
 COPY pyproject.toml poetry.lock ./
@@ -34,7 +32,7 @@ RUN poetry config virtualenvs.create false
 RUN poetry install --only=main --extras=ui --no-dev
 
 # Production stage
-FROM base as production
+FROM base AS production
 
 # Copy installed dependencies from dependencies stage
 COPY --from=dependencies /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
