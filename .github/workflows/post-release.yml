@@ -73,8 +73,15 @@ jobs:
             # Create pull request
             if gh pr create --title "$MESSAGE" --body "Automated sync of main branch to develop after release." --base develop --head "$TEMP_BRANCH" --label "automated-sync"; then
               echo "✓ Pull request created successfully"
+
+              # Clean up the temporary branch after successful PR creation
+              echo "Cleaning up temporary branch: $TEMP_BRANCH"
+              git push origin --delete "$TEMP_BRANCH" || echo "Warning: Failed to delete temporary branch $TEMP_BRANCH"
             else
               echo "✗ Failed to create pull request"
+              # Clean up the temporary branch even if PR creation failed
+              echo "Cleaning up temporary branch after PR creation failure: $TEMP_BRANCH"
+              git push origin --delete "$TEMP_BRANCH" || echo "Warning: Failed to delete temporary branch $TEMP_BRANCH"
               exit 1
             fi
           fi
