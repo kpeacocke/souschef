@@ -1,11 +1,18 @@
 [tool.poetry]
 name = "mcp-souschef"
-version = "2.5.2"
+version = "2.5.7"
 description = "AI-powered MCP server for Chef to Ansible conversion"
 readme = "README.md"
+homepage = "https://github.com/kpeacocke/souschef"
+repository = "https://github.com/kpeacocke/souschef"
+documentation = "https://kpeacocke.github.io/souschef/"
+keywords = ["chef", "ansible", "migration", "infrastructure", "automation", "mcp", "ai", "conversion"]
 authors = ["SousChef Contributors"]
 license = "MIT"
 packages = [{include = "souschef"}]
+classifiers = ["Development Status :: 4 - Beta", "Intended Audience :: Developers", "Intended Audience :: System Administrators", "License :: OSI Approved :: MIT License", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.14", "Topic :: Software Development :: Libraries :: Python Modules", "Topic :: System :: Systems Administration", "Topic :: Utilities"]
+
+[tool.poetry.urls]
 
 [tool.poetry.dependencies]
 python = ">=3.14,<4.0"
