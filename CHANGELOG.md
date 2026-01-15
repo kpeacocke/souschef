@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.4](https://github.com/kpeacocke/souschef/compare/v2.5.3...v2.5.4) (2026-01-15)
+
+
+### Bug Fixes
+
+* add missing permissions for releases in workflow configuration ([a6c2686](https://github.com/kpeacocke/souschef/commit/a6c2686cd95e88f290621ba66bd6d47a459d456f))
+* remove unnecessary permissions for releases in workflow configuration ([a265f01](https://github.com/kpeacocke/souschef/commit/a265f016294cb9992c40443fde9f15f0b22117ba))
+* update pyproject.toml version parsing to open in binary mode ([ee983b4](https://github.com/kpeacocke/souschef/commit/ee983b4c1467adb87a7c12cc72519054fba3337e))
+* use correct GitHub Actions permissions for release-please ([ef33f43](https://github.com/kpeacocke/souschef/commit/ef33f43055eb20dd8b5c0645d52183c51b22ca5b))
+
 ## [2.5.2](https://github.com/kpeacocke/souschef/compare/v2.5.1...v2.5.2) (2026-01-15)
 
 
