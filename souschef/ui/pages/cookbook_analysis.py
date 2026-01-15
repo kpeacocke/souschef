@@ -47,22 +47,54 @@ def _get_cookbook_path_input():
 
 def _validate_and_list_cookbooks(cookbook_path):
     """Validate the cookbook path and list available cookbooks."""
-    if Path(cookbook_path).exists():
-        st.success(f"Found directory: {cookbook_path}")
-        _list_and_display_cookbooks(cookbook_path)
+    safe_dir = _get_safe_cookbook_directory(cookbook_path)
+    if safe_dir is None:
+        return
+
+    if safe_dir.exists() and safe_dir.is_dir():
+        st.success(f"Found directory: {safe_dir}")
+        _list_and_display_cookbooks(safe_dir)
     else:
-        st.error(f"Directory not found: {cookbook_path}")
+        st.error(f"Directory not found: {safe_dir}")
 
 
-def _list_and_display_cookbooks(cookbook_path):
+def _get_safe_cookbook_directory(cookbook_path):
+    """
+    Resolve the user-provided cookbook path to a safe directory.
+
+    The path is resolved against a base directory and normalized to
+    prevent directory traversal outside the allowed root.
+    """
+    try:
+        base_dir = Path.cwd().resolve()
+        user_path = Path(cookbook_path.strip())
+        if not user_path.is_absolute():
+            candidate = (base_dir / user_path).resolve()
+        else:
+            candidate = user_path.resolve()
+    except Exception as exc:
+        st.error(f"Invalid path: {exc}")
+        return None
+
+    # Ensure the final path is within the allowed base directory.
+    try:
+        candidate.relative_to(base_dir)
+    except ValueError:
+        st.error("The specified path is outside the allowed cookbook directory root.")
+        return None
+
+    return candidate
+
+
+def _list_and_display_cookbooks(cookbook_path: Path):
     """List cookbooks in the directory and display them."""
     try:
-        cookbooks = [d for d in Path(cookbook_path).iterdir() if d.is_dir()]
+        cookbooks = [d for d in cookbook_path.iterdir() if d.is_dir()]
         if cookbooks:
             st.subheader("Available Cookbooks")
             cookbook_data = _collect_cookbook_data(cookbooks)
             _display_cookbook_table(cookbook_data)
-            _handle_cookbook_selection(cookbook_path, cookbook_data)
+            _handle_cookbook_selection(str(cookbook_path), cookbook_data)
         else:
             st.warning(
                 "No subdirectories found in the specified path. "
