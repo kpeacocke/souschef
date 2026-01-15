@@ -11,7 +11,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   sync-develop:
@@ -30,7 +29,7 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
-    - name: Merge main into develop
+    - name: Sync develop with main
       run: |
         # Checkout develop
         git checkout develop
@@ -40,76 +39,24 @@ jobs:
         LATEST_COMMIT=$(git log -1 --pretty=format:"%h - %s" origin/main)
         echo "Latest commit: $LATEST_COMMIT"
 
-        # Define commit message
-        MESSAGE="chore: sync main to develop\n\nLatest: ${LATEST_COMMIT}"
-
         # Check if develop is already up to date with main
         if git merge-base --is-ancestor origin/main develop; then
-        echo "✓ Develop is already up to date with main"
-        exit 0
+          echo "✓ Develop is already up to date with main"
+          exit 0
         fi
 
-        # Rebase develop onto main to avoid merge commits
-        echo "Rebasing develop onto main..."
-        if git checkout develop && git pull origin develop && git rebase origin/main; then
-          echo "✓ Rebase successful"
-          git push origin develop --force-with-lease
-          echo "✓ Develop branch updated successfully"
-        else
-          echo "✗ Rebase failed, falling back to merge"
-          git rebase --abort || true
-          git merge origin/main --no-ff -m "$MESSAGE"
-          git push origin develop
-          echo "✓ Develop branch updated with merge commit"
-        fi
+        # Define commit message
+        MESSAGE="chore: sync main to develop - Latest: ${LATEST_COMMIT} - Triggered by: ${{ github.event_name }}"
 
-
-        # Merge main into develop (if not already done)
+        # Merge main into develop
         echo "Merging main into develop..."
         if git merge origin/main --no-ff -m "$MESSAGE"; then
           echo "✓ Merge successful"
-
-          # Push the branch
-          git push -u origin develop
-
-          # Create PR using GitHub CLI (labels are optional)
-          gh pr create \
-            --base develop \
-            --head develop \
-            --title "chore: sync main to develop" \
-            --body "Sync main to develop. Latest: ${LATEST_COMMIT}. Triggered by: ${{ github.event_name }}." || true
-
-          # Try to add labels (non-critical, continue on error)
-          gh pr edit --add-label "automated" 2>/dev/null || echo "Could not add 'automated' label"
-          gh pr edit --add-label "sync" 2>/dev/null || echo "Could not add 'sync' label"
-
-          # Wait for checks to complete before enabling auto-merge
-          PR_NUMBER=$(gh pr view develop --json number -q .number)
-          echo "Waiting for checks on PR #$PR_NUMBER..."
-
-          # Wait up to 10 minutes for checks to complete
-          for i in {1..60}; do
-            CHECKS_STATUS=$(gh pr checks "$PR_NUMBER" \
-            --json statusCheckRollup \
-            --jq 'all(.statusCheckRollup[]; .status == "COMPLETED")')
-            if [ "$CHECKS_STATUS" = "true" ]; then
-              echo "All checks passed, enabling auto-merge..."
-              gh pr merge "$PR_NUMBER" --auto --squash
-              echo "✓ Auto-merge enabled for PR #$PR_NUMBER"
-              break
-            fi
-            echo "Checks not complete yet, waiting... ($i/60)"
-            sleep 10
-          done
-
-          if [ "$CHECKS_STATUS" != "true" ]; then
-            echo "⚠️ Checks did not complete within timeout, PR #$PR_NUMBER created but auto-merge not enabled"
-          fi
+          git push origin develop
+          echo "✓ Develop branch updated successfully"
         else
           echo "✗ Merge conflict detected"
           echo "Please resolve conflicts manually"
           git merge --abort
           exit 1
         fi
-      env:
-        GH_TOKEN: ${{ github.token }}
