@@ -38,7 +38,7 @@ pytest-timeout = "^2.4.0"
 types-pyyaml = "^6.0.12.20250915"
 mkdocs = "^1.6.0"
 mkdocs-material = "^9.5.0"
-mkdocstrings = {extras = ["python"], version = "^0.26.0"}
+mkdocstrings = {extras = ["python"], version = ">=0.26,<1.1"}
 mkdocs-git-revision-date-localized-plugin = "^1.2.0"
 streamlit = "^1.28.0"
 networkx = "^3.2.0"
