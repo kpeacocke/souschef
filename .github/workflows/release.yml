@@ -78,7 +78,8 @@ jobs:
         TAG: ${{ steps.get-tag.outputs.tag }}
       run: |
         TAG_VERSION="${TAG#v}"
-        PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        # Use Python to parse TOML since it's more reliable than sed
+        PYPROJECT_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml'))['tool']['poetry']['version'])")
         if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
           echo "Error: Tag version ($TAG_VERSION) != pyproject.toml version ($PYPROJECT_VERSION)"
           exit 1
@@ -138,21 +139,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: build
-    environment: pypi
     permissions:
       contents: read
-      id-token: write
 
     steps:
+    - name: Check for PyPI token
+      id: check-token
+      env:
+        PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        if [ -z "$PYPI_TOKEN" ]; then
+          echo "PYPI_API_TOKEN not set, skipping PyPI publish"
+          echo "has_token=false" >> $GITHUB_OUTPUT
+        else
+          echo "has_token=true" >> $GITHUB_OUTPUT
+        fi
+
     - name: Download package artifacts
+      if: steps.check-token.outputs.has_token == 'true'
       uses: actions/download-artifact@v7
       with:
         name: release-packages
         path: dist/
 
     - name: Publish package to PyPI
+      if: steps.check-token.outputs.has_token == 'true'
       uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # v1.13.0
       with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
         attestations: true
 
   attach-to-release:
