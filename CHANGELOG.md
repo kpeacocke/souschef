@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.7](https://github.com/kpeacocke/souschef/compare/v2.5.6...v2.5.7) (2026-01-15)
+
+
+### Bug Fixes
+
+* improve post-release workflow and README badge ([#166](https://github.com/kpeacocke/souschef/issues/166)) ([2114dd0](https://github.com/kpeacocke/souschef/commit/2114dd05650ff6f1ddafe9a1198360752a644e4d))
+* improve post-release workflow and README badge ([#166](https://github.com/kpeacocke/souschef/issues/166)) ([2114dd0](https://github.com/kpeacocke/souschef/commit/2114dd05650ff6f1ddafe9a1198360752a644e4d))
+
 ## [2.5.6](https://github.com/kpeacocke/souschef/compare/v2.5.5...v2.5.6) (2026-01-15)
 
 

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mcp-souschef"
-version = "2.5.6"
+version = "2.5.7"
 description = "AI-powered MCP server for Chef to Ansible conversion"
 readme = "README.md"
 homepage = "https://github.com/kpeacocke/souschef"
