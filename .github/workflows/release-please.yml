@@ -4,6 +4,7 @@ name: Release Please
 on:
   push:
     branches: [main]
+  workflow_dispatch: # Allow manual trigger
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
