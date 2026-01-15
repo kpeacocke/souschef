@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 import networkx as nx
+import plotly.graph_objects as go
 
 from souschef.ui.app import ProgressTracker, create_dependency_graph
 
@@ -80,8 +81,8 @@ Community Cookbooks:
 
         with patch("streamlit.error"):
             result = create_dependency_graph(analysis_text, "interactive")
-            # Should return a plotly figure or None
-            assert result is not None or result is None  # Allow for error cases
+            # For valid minimal dependency data, we expect a Plotly figure
+            assert isinstance(result, go.Figure)
 
     def test_create_dependency_graph_with_circular(self):
         """Test graph creation with circular dependencies."""
@@ -102,8 +103,8 @@ Community Cookbooks:
 
         with patch("streamlit.error"):
             result = create_dependency_graph(analysis_text, "interactive")
-            # Should handle circular dependencies gracefully
-            assert result is not None or result is None
+            # Should handle circular dependencies gracefully and return a Plotly figure
+            assert isinstance(result, go.Figure)
 
     @patch("matplotlib.pyplot.figure")
     @patch("matplotlib.pyplot.tight_layout")
@@ -162,5 +163,5 @@ class TestUIIntegration:
         """Test error handling in graph creation."""
         # Test with malformed input
         result = create_dependency_graph("invalid input", "interactive")
-        # Should handle errors gracefully
-        assert result is None or hasattr(result, "data")  # plotly figure or None
+        # Should handle errors gracefully by returning None
+        assert result is None

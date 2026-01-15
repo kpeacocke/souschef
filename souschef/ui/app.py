@@ -792,7 +792,7 @@ def _calculate_graph_positions(graph, layout_algorithm):
 
 def _create_plotly_edge_traces(graph, pos):
     """Create edge traces for Plotly graph."""
-    import plotly.graph_objects as go
+    import plotly.graph_objects as go  # type: ignore[import-untyped]
 
     edge_traces = []
 
@@ -1211,7 +1211,7 @@ def _display_graph_with_export_options(graph_data, viz_type):
         with col3:
             # Export as PNG (requires kaleido)
             try:
-                import plotly.io as pio
+                import plotly.io as pio  # type: ignore[import-untyped]
 
                 png_data = pio.to_image(graph_data, format="png")
                 st.download_button(

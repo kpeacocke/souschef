@@ -7,6 +7,7 @@ generating migration plans, analyzing dependencies, and validating conversions.
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 from souschef.core import METADATA_FILENAME, _normalize_path, _safe_join
@@ -733,13 +734,10 @@ def _determine_migration_priority(complexity_score: int) -> str:
     return "medium"
 
 
-def _assess_single_cookbook(cookbook_path) -> dict:
+def _assess_single_cookbook(cookbook_path: Path) -> dict:
     """Assess complexity of a single cookbook."""
-    if isinstance(cookbook_path, str):
-        cookbook = _normalize_path(cookbook_path)
-    else:
-        # Already a Path object
-        cookbook = cookbook_path
+    # cookbook_path is already normalized to a Path object
+    cookbook = cookbook_path
 
     # Collect metrics
     artifact_counts = _count_cookbook_artifacts(cookbook)

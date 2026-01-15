@@ -3,7 +3,7 @@
 import sys
 from pathlib import Path
 
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 import streamlit as st
 
 # Add the parent directory to the path so we can import souschef modules
@@ -119,10 +119,14 @@ def _extract_cookbook_info(metadata, cookbook, metadata_status):
 
 
 def _normalize_description(description):
-    """Normalize description to string format."""
-    if isinstance(description, list):
-        return " ".join(description)
-    elif not isinstance(description, str):
+    """
+    Normalize description to string format.
+
+    The metadata parser currently returns a string for the description
+    field, but this helper defensively converts any unexpected value to
+    a string to keep the UI resilient to future changes.
+    """
+    if not isinstance(description, str):
         return str(description)
     return description
 

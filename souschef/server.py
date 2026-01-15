@@ -1163,7 +1163,37 @@ def _parse_chef_environment_content(content: str) -> dict:
 
 
 def _convert_ruby_literal(value: str) -> Any:
-    """Convert Ruby literal values to Python types."""
+    """
+    Convert Ruby literal values to equivalent Python types.
+
+    This function handles the conversion of Ruby's basic literal values
+    to their Python equivalents during Chef environment parsing.
+
+    Args:
+        value: String representation of a Ruby literal value.
+
+    Returns:
+        The converted Python value:
+        - "true" -> True (bool)
+        - "false" -> False (bool)
+        - "nil" -> None
+        - Integer strings -> int (e.g., "42" -> 42)
+        - Float strings -> float (e.g., "3.14" -> 3.14, "1e10" -> 10000000000.0)
+        - Unrecognized values -> original string unchanged
+
+    Examples:
+        >>> _convert_ruby_literal("true")
+        True
+        >>> _convert_ruby_literal("42")
+        42
+        >>> _convert_ruby_literal("3.14")
+        3.14
+        >>> _convert_ruby_literal("nil")
+        None
+        >>> _convert_ruby_literal("some_string")
+        'some_string'
+
+    """
     # Handle boolean and nil values
     literal_map = {
         "true": True,
