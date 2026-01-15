@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0](https://github.com/kpeacocke/souschef/compare/v2.3.1...v2.4.0) (2026-01-13)
+
+
+### Features
+
+* add coverage.xml path fixes and update coverage configuration ([4f225f6](https://github.com/kpeacocke/souschef/commit/4f225f6fbbb18f3638c0518e07c2d1ffff0621f8))
+* add ServerSpec and Goss test framework converters ([#124](https://github.com/kpeacocke/souschef/issues/124)) ([3cedb08](https://github.com/kpeacocke/souschef/commit/3cedb089f2cb980b7279ee7839d208cb7a7b6a3a))
+* enhance linting rules and update SonarCloud issue configurations ([52b499e](https://github.com/kpeacocke/souschef/commit/52b499ea0efd0f1c8a2c234d69a69813608c70ce))
+* polish and ci generation and enhancements ([#133](https://github.com/kpeacocke/souschef/issues/133)) ([6e99528](https://github.com/kpeacocke/souschef/commit/6e99528ee840ba882a0756498a81004f9489a64c))
+* streamline SonarCloud coverage generation and remove redundant steps ([22a0311](https://github.com/kpeacocke/souschef/commit/22a03111d0e72e106591b43091a4e68e884a8e16))
+* terraform! ([#143](https://github.com/kpeacocke/souschef/issues/143)) ([9fc59fe](https://github.com/kpeacocke/souschef/commit/9fc59fe94450135219d618f5899dfa298230f939))
+* workflow fixes ([#134](https://github.com/kpeacocke/souschef/issues/134)) ([ad72489](https://github.com/kpeacocke/souschef/commit/ad72489e952ebb7f714f8eb1c0110545459db487))
+* workflow fixes ([#134](https://github.com/kpeacocke/souschef/issues/134)) ([#135](https://github.com/kpeacocke/souschef/issues/135)) ([565502f](https://github.com/kpeacocke/souschef/commit/565502f9963c1b0a157e395ce4b99d0ef0ed7e45))
+
+
+### Bug Fixes
+
+* improve SonarCloud configuration and workflow ([#137](https://github.com/kpeacocke/souschef/issues/137)) ([6b97a87](https://github.com/kpeacocke/souschef/commit/6b97a8761c11de5e815dbe18a6a341e4aaf0bf8b))
+* workflows ([#139](https://github.com/kpeacocke/souschef/issues/139)) ([4a0ee77](https://github.com/kpeacocke/souschef/commit/4a0ee77c0d88afb35de3110d88e5a98968b6c992))
+
 ## [2.3.0](https://github.com/kpeacocke/souschef/compare/v2.2.0...v2.3.0) (2026-01-11)
 
 
