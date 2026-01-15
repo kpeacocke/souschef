@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.5](https://github.com/kpeacocke/souschef/compare/v2.5.4...v2.5.5) (2026-01-15)
+
+
+### Bug Fixes
+
+* add Python setup to validate job and id-token permission for PyPI attestations ([59ee988](https://github.com/kpeacocke/souschef/commit/59ee98885a8351b16830b939005a7824bae232c0))
+
 ## [2.5.4](https://github.com/kpeacocke/souschef/compare/v2.5.3...v2.5.4) (2026-01-15)
 
 
