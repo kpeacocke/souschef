@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -47,6 +48,7 @@ const (
 	ansibleFilename     = "assert.yml"
 	defaultTestFilename = "test.txt"
 	errReadingTestFile  = "Error reading test file"
+	inspecIDFormat      = "inspec-%s-%s"
 )
 
 // Metadata returns the resource type name
@@ -173,7 +175,7 @@ func (r *inspecMigrationResource) Create(ctx context.Context, req resource.Creat
 	profileName := filepath.Base(profilePath)
 
 	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf("inspec-%s-%s", profileName, outputFormat))
+	plan.ID = types.StringValue(fmt.Sprintf(inspecIDFormat, profileName, outputFormat))
 	plan.ProfileName = types.StringValue(profileName)
 	plan.TestContent = types.StringValue(string(content))
 
@@ -284,7 +286,7 @@ func (r *inspecMigrationResource) Update(ctx context.Context, req resource.Updat
 	profileName := filepath.Base(profilePath)
 
 	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf("inspec-%s-%s", profileName, outputFormat))
+	plan.ID = types.StringValue(fmt.Sprintf(inspecIDFormat, profileName, outputFormat))
 	plan.ProfileName = types.StringValue(profileName)
 	plan.TestContent = types.StringValue(string(content))
 
@@ -329,5 +331,72 @@ func (r *inspecMigrationResource) Delete(ctx context.Context, req resource.Delet
 
 // ImportState imports an existing resource into Terraform
 func (r *inspecMigrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Import ID format: profile_path|output_path|output_format
+	parts := strings.Split(req.ID, "|")
+	if len(parts) != 3 {
+		resp.Diagnostics.AddError(
+			"Invalid import ID",
+			"Import ID must be in format: profile_path|output_path|output_format",
+		)
+		return
+	}
+
+	profilePath := parts[0]
+	outputPath := parts[1]
+	outputFormat := parts[2]
+
+	// Validate that the profile directory exists
+	if _, err := os.Stat(profilePath); os.IsNotExist(err) {
+		resp.Diagnostics.AddError(
+			"Profile not found",
+			fmt.Sprintf("Profile path does not exist: %s", profilePath),
+		)
+		return
+	}
+
+	// Determine test filename based on output format
+	var testFilename string
+	switch outputFormat {
+	case "testinfra":
+		testFilename = testinfraFilename
+	case "serverspec":
+		testFilename = serverspecFilename
+	case "goss":
+		testFilename = gossFilename
+	case "ansible":
+		testFilename = ansibleFilename
+	default:
+		testFilename = defaultTestFilename
+	}
+
+	// Check if test file exists
+	testFilePath := filepath.Join(outputPath, testFilename)
+	if _, err := os.Stat(testFilePath); os.IsNotExist(err) {
+		resp.Diagnostics.AddError(
+			"Test file not found",
+			fmt.Sprintf("Test file does not exist: %s", testFilePath),
+		)
+		return
+	}
+
+	// Read test content
+	content, err := os.ReadFile(testFilePath)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			errReadingTestFile,
+			fmt.Sprintf("Could not read test file: %s", err),
+		)
+		return
+	}
+
+	// Extract profile name from path
+	profileName := filepath.Base(profilePath)
+
+	// Set state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("profile_path"), profilePath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("output_path"), outputPath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("output_format"), outputFormat)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("profile_name"), profileName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("test_content"), string(content))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf(inspecIDFormat, profileName, outputFormat))...)
 }

@@ -52,12 +52,13 @@ func TestAccInSpecMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttr(testInSpecMigrationResourceName, "output_format", "goss"),
 				),
 			},
-			// TODO: ImportState testing - requires custom import ID parser implementation
-			// {
-			// 	ResourceName:      testInSpecMigrationResourceName,
-			// 	ImportState:       true,
-			// 	ImportStateVerify: true,
-			// },
+			// ImportState testing
+			{
+				ResourceName:      testInSpecMigrationResourceName,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("%s|%s|goss", testInSpecProfilePath, testInSpecOutputPath),
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

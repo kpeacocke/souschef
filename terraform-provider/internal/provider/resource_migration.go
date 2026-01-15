@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -277,7 +278,59 @@ func (r *migrationResource) Delete(ctx context.Context, req resource.DeleteReque
 	})
 }
 
-// ImportState imports the resource state.
+// ImportState imports an existing resource into Terraform
 func (r *migrationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	// Import ID format: cookbook_path|output_path|recipe_name
+	parts := strings.Split(req.ID, "|")
+	if len(parts) != 3 {
+		resp.Diagnostics.AddError(
+			"Invalid import ID",
+			"Import ID must be in format: cookbook_path|output_path|recipe_name",
+		)
+		return
+	}
+
+	cookbookPath := parts[0]
+	outputPath := parts[1]
+	recipeName := parts[2]
+
+	// Validate that the cookbook exists
+	if _, err := os.Stat(cookbookPath); os.IsNotExist(err) {
+		resp.Diagnostics.AddError(
+			"Cookbook not found",
+			fmt.Sprintf("Cookbook path does not exist: %s", cookbookPath),
+		)
+		return
+	}
+
+	// Check if playbook exists
+	playbookPath := filepath.Join(outputPath, recipeName+".yml")
+	if _, err := os.Stat(playbookPath); os.IsNotExist(err) {
+		resp.Diagnostics.AddError(
+			"Playbook not found",
+			fmt.Sprintf("Playbook does not exist: %s", playbookPath),
+		)
+		return
+	}
+
+	// Read playbook content
+	content, err := os.ReadFile(playbookPath)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			errorReadingPlaybook,
+			fmt.Sprintf("Could not read playbook: %s", err),
+		)
+		return
+	}
+
+	// Extract cookbook name from path
+	cookbookName := filepath.Base(cookbookPath)
+
+	// Set state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cookbook_path"), cookbookPath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("output_path"), outputPath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("recipe_name"), recipeName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cookbook_name"), cookbookName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("playbook_content"), string(content))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf("%s-%s", cookbookName, recipeName))...)
 }
