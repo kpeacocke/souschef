@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.6](https://github.com/kpeacocke/souschef/compare/v2.5.5...v2.5.6) (2026-01-15)
+
+
+### Bug Fixes
+
+* update pyproject.toml with additional metadata and classifiers ([fa2dbe3](https://github.com/kpeacocke/souschef/commit/fa2dbe34403b5ce647475780fb7148d46a35a3ff))
+
 ## [2.5.5](https://github.com/kpeacocke/souschef/compare/v2.5.4...v2.5.5) (2026-01-15)
 
 
