@@ -5,7 +5,7 @@ rules:
     max: 120
   indentation:
     spaces: 2
-    indent-sequences: false
+    indent-sequences: true
   truthy:
     allowed-values: ['true', 'false']
     check-keys: false

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+import souschef.cli
 from souschef.cli import cli
 
 # Define the fixtures directory
@@ -1807,7 +1808,6 @@ def test_ui_command_subprocess_error(runner, monkeypatch):
 # Error Handling Tests for CI Generation Commands
 def test_generate_jenkinsfile_command_error_handling(runner, tmp_path, monkeypatch):
     """Test generate-jenkinsfile command error handling."""
-    import souschef.cli
 
     # Mock the generation function to raise an exception
     def mock_generate(*args, **kwargs):
@@ -1827,7 +1827,6 @@ def test_generate_jenkinsfile_command_error_handling(runner, tmp_path, monkeypat
 
 def test_generate_gitlab_ci_command_error_handling(runner, tmp_path, monkeypatch):
     """Test generate-gitlab-ci command error handling."""
-    import souschef.cli
 
     # Mock the generation function to raise an exception
     def mock_generate(*args, **kwargs):
@@ -1847,7 +1846,6 @@ def test_generate_gitlab_ci_command_error_handling(runner, tmp_path, monkeypatch
 
 def test_generate_github_workflow_command_error_handling(runner, tmp_path, monkeypatch):
     """Test generate-github-workflow command error handling."""
-    import souschef.cli
 
     # Mock the generation function to raise an exception
     def mock_generate(*args, **kwargs):
@@ -1870,7 +1868,6 @@ def test_generate_github_workflow_command_error_handling(runner, tmp_path, monke
 # Additional Error Handling Tests
 def test_convert_recipe_command_conversion_error(runner, tmp_path, monkeypatch):
     """Test convert-recipe command when conversion fails."""
-    import souschef.cli
 
     # Mock the conversion function to raise an exception
     def mock_generate(*args, **kwargs):
@@ -1900,7 +1897,6 @@ def test_convert_recipe_command_conversion_error(runner, tmp_path, monkeypatch):
 
 def test_assess_cookbook_command_analysis_error(runner, monkeypatch):
     """Test assess-cookbook command when analysis fails."""
-    import souschef.cli
 
     # Mock the analysis function to raise an exception
     def mock_analyze(*args, **kwargs):
@@ -1985,7 +1981,6 @@ def test_convert_inspec_command_conversion_error(runner, tmp_path, monkeypatch):
 
 def test_profile_command_error_handling(runner, monkeypatch):
     """Test profile command error handling."""
-    import souschef.cli
 
     # Mock the profiling function to raise an exception
     def mock_generate(*args, **kwargs):
@@ -2006,7 +2001,6 @@ def test_profile_command_error_handling(runner, monkeypatch):
 
 def test_profile_operation_command_error_handling(runner, monkeypatch):
     """Test profile-operation command error handling."""
-    import souschef.cli
 
     # Mock the profiling function to raise an exception
     def mock_profile(*args, **kwargs):
