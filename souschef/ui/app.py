@@ -26,6 +26,11 @@ MIME_APPLICATION_JSON = "application/json"
 SECTION_CIRCULAR_DEPENDENCIES = "Circular Dependencies"
 
 
+def health_check():
+    """Return simple health check endpoint for Docker."""
+    return {"status": "healthy", "service": "souschef-ui"}
+
+
 class ProgressTracker:
     """Track progress for long-running operations."""
 
