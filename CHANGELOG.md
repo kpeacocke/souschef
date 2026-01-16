@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1](https://github.com/kpeacocke/souschef/compare/v2.6.0...v2.6.1) (2026-01-16)
+
+
+### Bug Fixes
+
+* add VERSION constant to constants.py for health check ([cdd29d3](https://github.com/kpeacocke/souschef/commit/cdd29d31c1996428684123bac78a984279e80da4))
+* release-please workflow trigger fixes ([9f5f860](https://github.com/kpeacocke/souschef/commit/9f5f8603e155411bc48d74f3ecba0313e63e8bbf))
+
 ## [2.6.0](https://github.com/kpeacocke/souschef/compare/v2.5.8...v2.6.0) (2026-01-16)
 
 
