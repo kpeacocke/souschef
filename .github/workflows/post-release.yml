@@ -12,6 +12,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write  # For notifications if needed
 
 jobs:
   sync-develop:
@@ -59,11 +60,24 @@ jobs:
         if git merge origin/main --no-ff -m "$MESSAGE"; then
           echo "✓ Merge successful"
 
-          # Try to push directly first
+          # Try to push directly first (most common case)
           if git push origin develop; then
             echo "✓ Develop branch updated successfully via direct push"
           else
-            echo "✗ Direct push failed, creating pull request..."
+            echo "✗ Direct push failed, this may be due to branch protection rules"
+            echo "Creating pull request instead..."
+
+            # Ensure gh CLI is available
+            if ! command -v gh &> /dev/null; then
+              echo "Installing GitHub CLI..."
+              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+              sudo apt update
+              sudo apt install gh
+            fi
+
+            # Authenticate gh CLI
+            echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
             # Create a temporary branch for the PR
             TEMP_BRANCH="auto-sync/main-to-develop-$(date +%Y%m%d-%H%M%S)"
@@ -75,6 +89,7 @@ jobs:
               echo "✓ Pull request created successfully"
             else
               echo "✗ Failed to create pull request"
+              echo "Manual intervention required: create PR from $TEMP_BRANCH to develop"
               exit 1
             fi
           fi
