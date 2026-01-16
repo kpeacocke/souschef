@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0](https://github.com/kpeacocke/souschef/compare/v2.5.8...v2.6.0) (2026-01-16)
+
+
+### Features
+
+* Add containerization support for SousChef UI ([2779a73](https://github.com/kpeacocke/souschef/commit/2779a73ab8bc7b8dfe4ab6aba87178691c94d3bf))
+* Add containerization support for SousChef UI ([#169](https://github.com/kpeacocke/souschef/issues/169)) ([290aadb](https://github.com/kpeacocke/souschef/commit/290aadb22e43ca0435a5951af56983204a094e3d))
+
+
+### Bug Fixes
+
+* Add build dependencies to Dockerfile ([9c2e732](https://github.com/kpeacocke/souschef/commit/9c2e732ed4c4c5027eb5b42f103a668544069f1f))
+* Add build dependencies to Dockerfile ([98c06bb](https://github.com/kpeacocke/souschef/commit/98c06bb34cfd21b6a3b4884c7423f894f6ccf0cc))
+* Merge consecutive RUN instructions in Dockerfile ([b87ffa6](https://github.com/kpeacocke/souschef/commit/b87ffa62d800aebe21e05f98fefd81c0d950d5bf))
+
 ## [2.5.8](https://github.com/kpeacocke/souschef/compare/v2.5.7...v2.5.8) (2026-01-15)
 
 
