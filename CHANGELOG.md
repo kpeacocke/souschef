@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.1](https://github.com/kpeacocke/souschef/compare/v2.7.0...v2.7.1) (2026-01-16)
+
+
+### Bug Fixes
+
+* disable PyPI attestations to resolve publishing failures ([fb5b085](https://github.com/kpeacocke/souschef/commit/fb5b0857f040f929aa8482667965907cec8acb91))
+
 ## [2.7.0](https://github.com/kpeacocke/souschef/compare/v2.6.1...v2.7.0) (2026-01-16)
 
 
