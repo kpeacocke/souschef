@@ -1,6 +1,7 @@
 """Constants used throughout SousChef."""
 
 __all__ = [
+    "VERSION",
     "ANSIBLE_SERVICE_MODULE",
     "METADATA_FILENAME",
     "ERROR_PREFIX",
@@ -38,6 +39,9 @@ __all__ = [
     "RESOURCE_MAPPINGS",
     "ACTION_TO_STATE",
 ]
+
+# Version
+VERSION = "2.6.0"
 
 # Ansible module names
 ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"

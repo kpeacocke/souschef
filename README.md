@@ -2,7 +2,7 @@
 
 An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 
-[![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
+[![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](htmlcov/index.html)
@@ -344,6 +344,29 @@ souschef ui
 
 # Custom port
 souschef ui --port 8080
+```
+
+**Run in Docker:**
+```bash
+# Build the image
+docker build -t souschef-ui .
+
+# Run the container
+docker run -p 8501:8501 souschef-ui
+
+# Or use docker-compose
+docker-compose up
+```
+
+**Docker Compose (recommended for development):**
+```yaml
+version: '3.8'
+services:
+  souschef-ui:
+    build: .
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
 ```
 
 **Features:**

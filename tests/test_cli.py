@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-import souschef.cli
+import souschef
 from souschef.cli import cli
 
 # Define the fixtures directory

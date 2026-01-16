@@ -5,6 +5,8 @@ name: Sync Main to Develop
 # Includes releases, hotfixes, and dependency updates
 
 on:
+  release:
+    types: [published]
   push:
     branches: [main]
   workflow_dispatch:  # Allow manual trigger
@@ -19,22 +21,24 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - name: Checkout main branch
+    - name: Checkout repository
       uses: actions/checkout@v6
       with:
         fetch-depth: 0  # Need full history for merging
-        ref: main
+        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Configure Git identity
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
-    - name: Merge main into develop
+    - name: Sync develop with main
       run: |
+        # Fetch latest from all remotes
+        git fetch --all
+
         # Checkout develop
         git checkout develop
-        git pull origin develop
 
         # Get the latest commit info
         LATEST_COMMIT=$(git log -1 --pretty=format:"%h - %s" origin/main)
@@ -44,72 +48,19 @@ jobs:
         MESSAGE="chore: sync main to develop\n\nLatest: ${LATEST_COMMIT}"
 
         # Check if develop is already up to date with main
-        if git merge-base --is-ancestor origin/main develop; then
-        echo "✓ Develop is already up to date with main"
-        exit 0
+        if git merge-base --is-ancestor origin/main origin/develop; then
+          echo "✓ Develop is already up to date with main"
+          exit 0
         fi
 
-        # Rebase develop onto main to avoid merge commits
-        echo "Rebasing develop onto main..."
-        if git checkout develop && git pull origin develop && git rebase origin/main; then
-          echo "✓ Rebase successful"
-          git push origin develop --force-with-lease
+        # Reset develop to match main to keep it in sync
+        echo "Resetting develop to match main..."
+        git reset --hard origin/main
+
+        # Push the updated develop
+        if git push origin develop; then
           echo "✓ Develop branch updated successfully"
         else
-          echo "✗ Rebase failed, falling back to merge"
-          git rebase --abort || true
-          git merge origin/main --no-ff -m "$MESSAGE"
-          git push origin develop
-          echo "✓ Develop branch updated with merge commit"
-        fi
-
-
-        # Merge main into develop (if not already done)
-        echo "Merging main into develop..."
-        if git merge origin/main --no-ff -m "$MESSAGE"; then
-          echo "✓ Merge successful"
-
-          # Push the branch
-          git push -u origin develop
-
-          # Create PR using GitHub CLI (labels are optional)
-          gh pr create \
-            --base develop \
-            --head develop \
-            --title "chore: sync main to develop" \
-            --body "Sync main to develop. Latest: ${LATEST_COMMIT}. Triggered by: ${{ github.event_name }}." || true
-
-          # Try to add labels (non-critical, continue on error)
-          gh pr edit --add-label "automated" 2>/dev/null || echo "Could not add 'automated' label"
-          gh pr edit --add-label "sync" 2>/dev/null || echo "Could not add 'sync' label"
-
-          # Wait for checks to complete before enabling auto-merge
-          PR_NUMBER=$(gh pr view develop --json number -q .number)
-          echo "Waiting for checks on PR #$PR_NUMBER..."
-
-          # Wait up to 10 minutes for checks to complete
-          for i in {1..60}; do
-            CHECKS_STATUS=$(gh pr checks "$PR_NUMBER" \
-            --json statusCheckRollup \
-            --jq 'all(.statusCheckRollup[]; .status == "COMPLETED")')
-            if [ "$CHECKS_STATUS" = "true" ]; then
-              echo "All checks passed, enabling auto-merge..."
-              gh pr merge "$PR_NUMBER" --auto --squash
-              echo "✓ Auto-merge enabled for PR #$PR_NUMBER"
-              break
-            fi
-            echo "Checks not complete yet, waiting... ($i/60)"
-            sleep 10
-          done
-
-          if [ "$CHECKS_STATUS" != "true" ]; then
-            echo "⚠️ Checks did not complete within timeout, PR #$PR_NUMBER created but auto-merge not enabled"
-          fi
-        else
-          echo "✗ Merge conflict detected"
-          echo "Please resolve conflicts manually"
-          git merge --abort
+          echo "✗ Push failed"
           exit 1
         fi
-      env:
-        GH_TOKEN: ${{ github.token }}
