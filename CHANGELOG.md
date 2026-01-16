@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.1](https://github.com/kpeacocke/souschef/compare/v2.7.0...v2.7.1) (2026-01-16)
+
+
+### Bug Fixes
+
+* disable PyPI attestations to resolve publishing failures ([fb5b085](https://github.com/kpeacocke/souschef/commit/fb5b0857f040f929aa8482667965907cec8acb91))
+
+## [2.7.0](https://github.com/kpeacocke/souschef/compare/v2.6.1...v2.7.0) (2026-01-16)
+
+
+### Features
+
+* configure devcontainer to mount docker.sock from host ([30277f9](https://github.com/kpeacocke/souschef/commit/30277f90be4b0d26d068861faa2a8104e25e7189))
+
+## [2.6.1](https://github.com/kpeacocke/souschef/compare/v2.6.0...v2.6.1) (2026-01-16)
+
+
+### Bug Fixes
+
+* add VERSION constant to constants.py for health check ([cdd29d3](https://github.com/kpeacocke/souschef/commit/cdd29d31c1996428684123bac78a984279e80da4))
+* release-please workflow trigger fixes ([9f5f860](https://github.com/kpeacocke/souschef/commit/9f5f8603e155411bc48d74f3ecba0313e63e8bbf))
+
+## [2.6.0](https://github.com/kpeacocke/souschef/compare/v2.5.8...v2.6.0) (2026-01-16)
+
+
+### Features
+
+* Add containerization support for SousChef UI ([2779a73](https://github.com/kpeacocke/souschef/commit/2779a73ab8bc7b8dfe4ab6aba87178691c94d3bf))
+* Add containerization support for SousChef UI ([#169](https://github.com/kpeacocke/souschef/issues/169)) ([290aadb](https://github.com/kpeacocke/souschef/commit/290aadb22e43ca0435a5951af56983204a094e3d))
+
+
+### Bug Fixes
+
+* Add build dependencies to Dockerfile ([9c2e732](https://github.com/kpeacocke/souschef/commit/9c2e732ed4c4c5027eb5b42f103a668544069f1f))
+* Add build dependencies to Dockerfile ([98c06bb](https://github.com/kpeacocke/souschef/commit/98c06bb34cfd21b6a3b4884c7423f894f6ccf0cc))
+* Merge consecutive RUN instructions in Dockerfile ([b87ffa6](https://github.com/kpeacocke/souschef/commit/b87ffa62d800aebe21e05f98fefd81c0d950d5bf))
+
+## [2.5.8](https://github.com/kpeacocke/souschef/compare/v2.5.7...v2.5.8) (2026-01-15)
+
+
+### Bug Fixes
+
+* correct YAML syntax in post-release workflow ([fcfa23d](https://github.com/kpeacocke/souschef/commit/fcfa23d0a0dd9abc4a82d9017c0606d878877d78))
+* post-release workflow should only trigger after releases, not on every push to main ([9bd1d92](https://github.com/kpeacocke/souschef/commit/9bd1d9230f7229c53a00210e152df8ed7cc43ff8))
+* post-release workflow timing ([4c3a77c](https://github.com/kpeacocke/souschef/commit/4c3a77cfc5c58487a0fc38fea627de714bacedf9))
+
 ## [2.5.7](https://github.com/kpeacocke/souschef/compare/v2.5.6...v2.5.7) (2026-01-15)
 
 
