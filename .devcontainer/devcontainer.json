@@ -36,6 +36,9 @@
         },
         "ghcr.io/devcontainers/features/node:1": {
             "version": "lts"
+        },
+        "ghcr.io/devcontainers/features/go:1": {
+            "version": "1.24"
         }
     },
     "customizations": {
@@ -85,9 +88,18 @@
                     }
                 },
                 "terminal.integrated.enablePersistentSessions": true,
-                "terminal.integrated.shellIntegration.enabled": true
+                "terminal.integrated.shellIntegration.enabled": true,
+
+                // Go configuration
+                "go.testFlags": ["-v", "-timeout=5m"],
+                "go.testEnvVars": {
+                    "TF_ACC": "1"
+                },
+                "go.coverOnSave": false,
+                "go.coverOnTestPackage": false
             },
             "extensions": [
+                "golang.go",
                 "ms-python.python",
                 "ms-python.vscode-pylance",
                 "charliermarsh.ruff",
@@ -109,6 +121,7 @@
     "postCreateCommand": "chmod +x .devcontainer/post-create.sh && .devcontainer/post-create.sh",
     "remoteUser": "vscode",
     "mounts": [
+        "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
         "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig.host,type=bind,consistency=cached",
         "source=souschef-zsh-history,target=/home/vscode/.zsh_history,type=volume"
     ]

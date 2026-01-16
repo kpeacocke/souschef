@@ -2,7 +2,7 @@
 
 An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 
-[![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
+[![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](htmlcov/index.html)
@@ -37,9 +37,16 @@ As a user, you'll primarily interact with the 27 documented tools. Your AI assis
 - **Local Models** (Ollama, llama.cpp, etc.)
 - **Custom Enterprise Models**
 
-**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 24 specialized tools. The model calls these tools to help with your migration.
+**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 27 specialized tools. The model calls these tools to help with your migration.
 
 > See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
+
+## Quick Links
+
+- **[Terraform Provider](terraform-provider/README.md)** - Manage migrations with infrastructure-as-code
+- **[User Guide](docs/user-guide/)** - Complete documentation
+- **[API Reference](docs/api-reference/)** - Detailed tool documentation
+- **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
 
 ## Installation
 
@@ -318,14 +325,84 @@ profile_cookbook_performance /path/to/large_cookbook
 profile_parsing_operation recipe /path/to/recipe.rb --detailed
 ```
 
-**Features:**
--  Execution time and peak memory tracking for all parsing operations
--  Detailed cProfile statistics with top function calls
--  Automatic performance recommendations based on thresholds
--  Before/after comparison for optimization validation
--  Integration with CLI and MCP for AI-assisted profiling
+### 10. Visual Migration Planning Interface
+Interactive web-based interface for Chef-to-Ansible migration planning and visualization:
 
-## Enterprise Features
+- **Cookbook Analysis Dashboard**: Interactive directory scanning with metadata parsing and complexity assessment
+- **Migration Planning Wizard**: Step-by-step migration planning with effort estimation and risk analysis
+- **Dependency Mapping**: Visual dependency graphs showing cookbook relationships and migration ordering
+- **Validation Reports**: Conversion validation results with syntax checking and best practice compliance
+- **Progress Tracking**: Real-time migration progress with completion metrics and bottleneck identification
+
+**Launch the UI:**
+```bash
+# Using Poetry (development)
+poetry run souschef ui
+
+# Using pip (installed)
+souschef ui
+
+# Custom port
+souschef ui --port 8080
+```
+
+**Run in Docker:**
+```bash
+# Build the image
+docker build -t souschef-ui .
+
+# Run the container
+docker run -p 8501:8501 souschef-ui
+
+# Or use docker-compose
+docker-compose up
+```
+
+**Docker Compose (recommended for development):**
+```yaml
+version: '3.8'
+services:
+  souschef-ui:
+    build: .
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+```
+
+**Features:**
+- Clean, professional design matching documentation standards
+- Real-time cookbook analysis with progress indicators
+- **Interactive dependency visualization** with Plotly graphs and NetworkX analysis
+- **Static graph visualization** with matplotlib for reports and documentation
+- **Real-time progress tracking** for all analysis operations
+- Migration planning wizards with effort estimation
+- Validation reporting dashboard with conversion quality metrics
+- Cross-platform compatibility (Linux, macOS, Windows)
+
+### Advanced UI Features
+
+#### Interactive Dependency Visualization
+The UI includes sophisticated dependency graph visualization powered by NetworkX and Plotly:
+
+- **Graph Analysis**: Automatic detection of cookbook dependencies, circular references, and migration ordering
+- **Interactive Exploration**: Zoom, pan, and hover over nodes to explore complex dependency relationships
+- **Color Coding**: Visual distinction between cookbooks, dependencies, community cookbooks, and circular dependencies
+- **Static Export**: Matplotlib-based static graphs for reports and documentation
+- **Large Graph Support**: Optimized layouts for complex cookbook ecosystems
+
+#### Real-Time Progress Tracking
+All analysis operations include comprehensive progress feedback:
+
+- **Progress Bars**: Visual progress indicators for long-running operations
+- **Status Updates**: Real-time status messages during analysis phases
+- **Operation Tracking**: Separate progress tracking for dependency analysis, validation, and migration planning
+- **Error Handling**: Graceful error display with recovery suggestions
+
+#### Enhanced User Experience
+- **Responsive Design**: Clean, professional interface that works across different screen sizes
+- **Export Options**: Download analysis results, graphs, and migration plans
+- **Session Persistence**: Maintain analysis state across page refreshes
+- **Quick Actions**: One-click access to common migration tasks
 
 ### Migration Assessment & Reporting
 - **Complexity Analysis**: Automated assessment of migration effort and risk factors
@@ -422,6 +499,7 @@ souschef-cli inspec-convert controls.rb --format testinfra
 - `inspec-parse` - Parse InSpec profiles and controls
 - `inspec-convert` - Convert InSpec to Testinfra/Ansible tests
 - `inspec-generate` - Generate InSpec validation from recipes
+- `ui` - Launch the Visual Migration Planning Interface
 - `ls` / `cat` - File system operations
 
 ### Development Setup
@@ -554,9 +632,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -  Comprehensive documentation content (Getting Started, Tool Reference, Migration Guide, API docs, Examples)
 -  Integration with additional test frameworks (ServerSpec, Goss) - InSpec conversion now supports 4 output formats
 -  Jenkins/GitLab CI pipeline generation from Chef cookbook CI patterns (Test Kitchen, ChefSpec, Cookstyle)
+-  Visual migration planning interface with Streamlit-based web UI for interactive cookbook analysis and migration planning
+-  **Interactive dependency mapping and visualization** with Plotly graphs and NetworkX analysis
+-  **Real-time progress tracking** for all analysis operations with Streamlit progress bars
+-  **Static graph visualization** with matplotlib for reports and documentation
 
 ### Planned 📅
-- 📅 Visual migration planning and dependency mapping interface
+- 📅 Enhanced graph layout algorithms for large dependency networks (force-directed, hierarchical)
+- 📅 Export functionality for graphs (PNG, SVG, PDF formats)
+- 📅 UI configuration options and themes
+- 📅 Performance caching for expensive analysis operations
+- 📅 Mobile-responsive design improvements
+- 📅 Accessibility enhancements (ARIA labels, keyboard navigation)
+- 📅 Integration testing for UI components
+- 📅 Advanced filtering and search in dependency graphs
+- 📅 Migration templates and presets
 - 📅 Terraform provider for infrastructure state management
 
 ## 🙋‍♀️ Support & Community

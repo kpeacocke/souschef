@@ -1,3 +1,4 @@
-paths_to_mutate = "souschef/"
+paths_to_mutate = "souschef/core/"
 tests_dir = "tests/"
 backup = false
+test_command = "MUTMUT=1 poetry run pytest -x --tb=short"

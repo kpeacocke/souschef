@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+import souschef
 from souschef.cli import cli
 
 # Define the fixtures directory
@@ -1116,3 +1117,903 @@ def test_generate_github_workflow_command_nonexistent_path(runner, tmp_path):
 
     # Click validates path existence, so this should fail
     assert result.exit_code != 0
+
+
+# Convert Recipe Command Tests
+def test_convert_recipe_command_success(runner, tmp_path):
+    """Test convert-recipe command with valid inputs."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-recipe",
+            "--cookbook-path",
+            str(FIXTURES_DIR),
+            "--recipe-name",
+            "default",
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "✓ Playbook written to:" in result.output
+    assert "Playbook written to:" in result.output
+
+    # Check that output file was created
+    output_file = output_dir / "default.yml"
+    assert output_file.exists()
+
+
+def test_convert_recipe_command_nonexistent_cookbook(runner, tmp_path):
+    """Test convert-recipe with nonexistent cookbook path."""
+    nonexistent = tmp_path / "nonexistent"
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-recipe",
+            "--cookbook-path",
+            str(nonexistent),
+            "--recipe-name",
+            "default",
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "does not exist" in result.output.lower()
+
+
+def test_convert_recipe_command_nonexistent_recipe(runner, tmp_path):
+    """Test convert-recipe with nonexistent recipe file."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-recipe",
+            "--cookbook-path",
+            str(FIXTURES_DIR),
+            "--recipe-name",
+            "nonexistent",
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "not found" in result.output.lower()
+
+
+def test_convert_recipe_command_invalid_output_path(runner):
+    """Test convert-recipe with invalid output path."""
+    # Try to write to a file instead of directory
+    result = runner.invoke(
+        cli,
+        [
+            "convert-recipe",
+            "--cookbook-path",
+            str(FIXTURES_DIR),
+            "--recipe-name",
+            "default",
+            "--output-path",
+            "/dev/null/file",  # Invalid path
+        ],
+    )
+
+    assert result.exit_code != 0
+
+
+# Assess Cookbook Command Tests
+def test_assess_cookbook_command_text_format(runner):
+    """Test assess-cookbook command with text output."""
+    result = runner.invoke(
+        cli,
+        [
+            "assess-cookbook",
+            "--cookbook-path",
+            str(FIXTURES_DIR),
+            "--format",
+            "text",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Cookbook:" in result.output or "Complexity:" in result.output
+
+
+def test_assess_cookbook_command_json_format(runner):
+    """Test assess-cookbook command with JSON output."""
+    result = runner.invoke(
+        cli,
+        [
+            "assess-cookbook",
+            "--cookbook-path",
+            str(FIXTURES_DIR),
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    # Should be valid JSON
+    try:
+        data = json.loads(result.output)
+        assert isinstance(data, dict)
+        assert "complexity" in data
+        assert "recipe_count" in data
+        assert "resource_count" in data
+    except json.JSONDecodeError:
+        pytest.fail("Output should be valid JSON")
+
+
+def test_assess_cookbook_command_nonexistent_path(runner, tmp_path):
+    """Test assess-cookbook with nonexistent path."""
+    nonexistent = tmp_path / "nonexistent"
+    result = runner.invoke(
+        cli,
+        [
+            "assess-cookbook",
+            "--cookbook-path",
+            str(nonexistent),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "does not exist" in result.output.lower()
+
+
+def test_assess_cookbook_command_file_instead_of_directory(runner, tmp_path):
+    """Test assess-cookbook with file instead of directory."""
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("test")
+
+    result = runner.invoke(
+        cli,
+        [
+            "assess-cookbook",
+            "--cookbook-path",
+            str(test_file),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "not a directory" in result.output.lower()
+
+
+# Convert Habitat Command Tests
+def test_convert_habitat_command_success(runner, tmp_path):
+    """Test convert-habitat command with valid inputs."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    # Create a mock plan.sh file
+    plan_file = tmp_path / "plan.sh"
+    plan_file.write_text("""
+pkg_name=test
+pkg_version=1.0.0
+pkg_description="Test package"
+
+do_build() {
+    echo "Building..."
+}
+
+do_install() {
+    echo "Installing..."
+}
+""")
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-habitat",
+            "--plan-path",
+            str(plan_file),
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Successfully converted" in result.output
+
+    # Check that Dockerfile was created
+    dockerfile = output_dir / "Dockerfile"
+    assert dockerfile.exists()
+
+
+def test_convert_habitat_command_custom_base_image(runner, tmp_path):
+    """Test convert-habitat with custom base image."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    # Create a mock plan.sh file
+    plan_file = tmp_path / "plan.sh"
+    plan_file.write_text("""
+pkg_name=test
+pkg_version=1.0.0
+""")
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-habitat",
+            "--plan-path",
+            str(plan_file),
+            "--output-path",
+            str(output_dir),
+            "--base-image",
+            "alpine:latest",
+        ],
+    )
+
+    assert result.exit_code == 0
+    dockerfile = output_dir / "Dockerfile"
+    content = dockerfile.read_text()
+    assert "alpine:latest" in content
+
+
+def test_convert_habitat_command_nonexistent_plan(runner, tmp_path):
+    """Test convert-habitat with nonexistent plan file."""
+    nonexistent = tmp_path / "nonexistent.sh"
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-habitat",
+            "--plan-path",
+            str(nonexistent),
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "does not exist" in result.output.lower()
+
+
+def test_convert_habitat_command_directory_instead_of_file(runner, tmp_path):
+    """Test convert-habitat with directory instead of file."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-habitat",
+            "--plan-path",
+            str(tmp_path),  # Pass directory instead of file
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "not a file" in result.output.lower()
+
+
+# Convert InSpec Command Tests
+def test_convert_inspec_command_testinfra(runner, tmp_path):
+    """Test convert-inspec command with testinfra format."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    # Create a mock InSpec profile directory
+    profile_dir = tmp_path / "inspec_profile"
+    profile_dir.mkdir()
+    (profile_dir / "controls").mkdir()
+
+    # Create a basic control file
+    control_file = profile_dir / "controls" / "example.rb"
+    control_file.write_text("""
+control 'test-1' do
+  impact 1.0
+  title 'Test control'
+  desc 'A test control'
+
+  describe file('/etc/passwd') do
+    it { should exist }
+  end
+end
+""")
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-inspec",
+            "--profile-path",
+            str(profile_dir),
+            "--output-path",
+            str(output_dir),
+            "--format",
+            "testinfra",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Successfully converted" in result.output
+
+    # Check that test file was created
+    test_file = output_dir / "test_spec.py"
+    assert test_file.exists()
+
+
+def test_convert_inspec_command_serverspec(runner, tmp_path):
+    """Test convert-inspec command with serverspec format."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    # Create a mock InSpec profile directory
+    profile_dir = tmp_path / "inspec_profile"
+    profile_dir.mkdir()
+    (profile_dir / "controls").mkdir()
+
+    control_file = profile_dir / "controls" / "example.rb"
+    control_file.write_text("""
+control 'test-1' do
+  describe file('/etc/passwd') do
+    it { should exist }
+  end
+end
+""")
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-inspec",
+            "--profile-path",
+            str(profile_dir),
+            "--output-path",
+            str(output_dir),
+            "--format",
+            "serverspec",
+        ],
+    )
+
+    assert result.exit_code == 0
+    test_file = output_dir / "spec_helper.rb"
+    assert test_file.exists()
+
+
+def test_convert_inspec_command_goss(runner, tmp_path):
+    """Test convert-inspec command with goss format."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    # Create a mock InSpec profile directory
+    profile_dir = tmp_path / "inspec_profile"
+    profile_dir.mkdir()
+    (profile_dir / "controls").mkdir()
+
+    control_file = profile_dir / "controls" / "example.rb"
+    control_file.write_text("""
+control 'test-1' do
+  describe file('/etc/passwd') do
+    it { should exist }
+  end
+end
+""")
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-inspec",
+            "--profile-path",
+            str(profile_dir),
+            "--output-path",
+            str(output_dir),
+            "--format",
+            "goss",
+        ],
+    )
+
+    assert result.exit_code == 0
+    test_file = output_dir / "goss.yaml"
+    assert test_file.exists()
+
+
+def test_convert_inspec_command_ansible(runner, tmp_path):
+    """Test convert-inspec command with ansible format."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    # Create a mock InSpec profile directory
+    profile_dir = tmp_path / "inspec_profile"
+    profile_dir.mkdir()
+    (profile_dir / "controls").mkdir()
+
+    control_file = profile_dir / "controls" / "example.rb"
+    control_file.write_text("""
+control 'test-1' do
+  describe file('/etc/passwd') do
+    it { should exist }
+  end
+end
+""")
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-inspec",
+            "--profile-path",
+            str(profile_dir),
+            "--output-path",
+            str(output_dir),
+            "--format",
+            "ansible",
+        ],
+    )
+
+    assert result.exit_code == 0
+    test_file = output_dir / "assert.yml"
+    assert test_file.exists()
+
+
+def test_convert_inspec_command_nonexistent_profile(runner, tmp_path):
+    """Test convert-inspec with nonexistent profile path."""
+    nonexistent = tmp_path / "nonexistent"
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-inspec",
+            "--profile-path",
+            str(nonexistent),
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "does not exist" in result.output.lower()
+
+
+def test_convert_inspec_command_file_instead_of_directory(runner, tmp_path):
+    """Test convert-inspec with file instead of directory."""
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("test")
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-inspec",
+            "--profile-path",
+            str(test_file),
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "not a directory" in result.output.lower()
+
+
+# Profile Command Tests
+def test_profile_command_success(runner, tmp_path):
+    """Test profile command with valid cookbook."""
+    result = runner.invoke(
+        cli,
+        ["profile", str(FIXTURES_DIR)],
+    )
+
+    assert result.exit_code == 0
+    assert (
+        "Profiling cookbook" in result.output or "Performance report" in result.output
+    )
+
+
+def test_profile_command_with_output_file(runner, tmp_path):
+    """Test profile command with output file."""
+    output_file = tmp_path / "profile_report.txt"
+
+    result = runner.invoke(
+        cli,
+        ["profile", str(FIXTURES_DIR), "--output", str(output_file)],
+    )
+
+    assert result.exit_code == 0
+    assert output_file.exists()
+    assert output_file.stat().st_size > 0
+
+
+def test_profile_command_nonexistent_cookbook(runner, tmp_path):
+    """Test profile command with nonexistent cookbook."""
+    nonexistent = tmp_path / "nonexistent"
+
+    result = runner.invoke(
+        cli,
+        ["profile", str(nonexistent)],
+    )
+
+    assert result.exit_code != 0
+    assert "does not exist" in result.output.lower()
+
+
+# Profile Operation Command Tests
+def test_profile_operation_command_recipe(runner):
+    """Test profile-operation command with recipe."""
+    recipe_path = FIXTURES_DIR / "recipes" / "default.rb"
+
+    result = runner.invoke(
+        cli,
+        ["profile-operation", "recipe", str(recipe_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "Profiling recipe parsing" in result.output
+
+
+def test_profile_operation_command_attributes(runner):
+    """Test profile-operation command with attributes."""
+    attributes_path = FIXTURES_DIR / "attributes" / "default.rb"
+
+    result = runner.invoke(
+        cli,
+        ["profile-operation", "attributes", str(attributes_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "Profiling attributes parsing" in result.output
+
+
+def test_profile_operation_command_resource(runner):
+    """Test profile-operation command with resource."""
+    resource_path = FIXTURES_DIR / "resources" / "simple.rb"
+
+    result = runner.invoke(
+        cli,
+        ["profile-operation", "resource", str(resource_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "Profiling resource parsing" in result.output
+
+
+def test_profile_operation_command_template(runner):
+    """Test profile-operation command with template."""
+    template_path = FIXTURES_DIR / "templates" / "default" / "config.yml.erb"
+
+    result = runner.invoke(
+        cli,
+        ["profile-operation", "template", str(template_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "Profiling template parsing" in result.output
+
+
+def test_profile_operation_command_detailed(runner):
+    """Test profile-operation command with detailed flag."""
+    recipe_path = FIXTURES_DIR / "recipes" / "default.rb"
+
+    result = runner.invoke(
+        cli,
+        ["profile-operation", "recipe", str(recipe_path), "--detailed"],
+    )
+
+    assert result.exit_code == 0
+    assert (
+        "Detailed Function Statistics" in result.output
+        or "function statistics" in result.output.lower()
+    )
+
+
+def test_profile_operation_command_invalid_operation(runner, tmp_path):
+    """Test profile-operation command with invalid operation."""
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("test")
+
+    result = runner.invoke(
+        cli,
+        ["profile-operation", "invalid", str(test_file)],
+    )
+
+    assert result.exit_code != 0
+
+
+def test_profile_operation_command_nonexistent_file(runner, tmp_path):
+    """Test profile-operation command with nonexistent file."""
+    nonexistent = tmp_path / "nonexistent.rb"
+
+    result = runner.invoke(
+        cli,
+        ["profile-operation", "recipe", str(nonexistent)],
+    )
+
+    assert result.exit_code != 0
+
+
+# UI Command Tests
+def test_ui_command_success(runner, monkeypatch):
+    """Test ui command launches successfully."""
+    # Mock subprocess.run to avoid actually starting Streamlit
+    import subprocess
+
+    def mock_run(cmd, **kwargs):
+        # Simulate successful execution
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    result = runner.invoke(
+        cli,
+        ["ui", "--port", "8502"],
+    )
+
+    assert result.exit_code == 0
+    assert "Starting SousChef UI" in result.output
+    assert "http://localhost:8502" in result.output
+
+
+def test_ui_command_default_port(runner, monkeypatch):
+    """Test ui command with default port."""
+    import subprocess
+
+    def mock_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    result = runner.invoke(cli, ["ui"])
+
+    assert result.exit_code == 0
+    assert "http://localhost:8501" in result.output
+
+
+def test_ui_command_streamlit_not_installed(runner, monkeypatch):
+    """Test ui command when streamlit is not installed."""
+    import subprocess
+
+    def mock_run(cmd, **kwargs):
+        # Simulate ImportError by raising CalledProcessError
+        raise subprocess.CalledProcessError(
+            1, cmd, "ModuleNotFoundError: No module named 'streamlit'"
+        )
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    result = runner.invoke(cli, ["ui"])
+
+    assert result.exit_code != 0
+    assert "returned non-zero exit status" in result.output
+
+
+def test_ui_command_subprocess_error(runner, monkeypatch):
+    """Test ui command when subprocess fails."""
+    import subprocess
+
+    def mock_run(cmd, **kwargs):
+        raise subprocess.CalledProcessError(1, cmd, "Some error")
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    result = runner.invoke(cli, ["ui"])
+
+    assert result.exit_code != 0
+
+
+# Error Handling Tests for CI Generation Commands
+def test_generate_jenkinsfile_command_error_handling(runner, tmp_path, monkeypatch):
+    """Test generate-jenkinsfile command error handling."""
+
+    # Mock the generation function to raise an exception
+    def mock_generate(*args, **kwargs):
+        raise RuntimeError("Mock generation error")
+
+    monkeypatch.setattr(souschef.cli, "generate_jenkinsfile_from_chef", mock_generate)
+
+    output_file = tmp_path / "Jenkinsfile"
+    result = runner.invoke(
+        cli,
+        ["generate-jenkinsfile", str(FIXTURES_DIR), "-o", str(output_file)],
+    )
+
+    assert result.exit_code != 0
+    assert "Error generating Jenkinsfile" in result.output
+
+
+def test_generate_gitlab_ci_command_error_handling(runner, tmp_path, monkeypatch):
+    """Test generate-gitlab-ci command error handling."""
+
+    # Mock the generation function to raise an exception
+    def mock_generate(*args, **kwargs):
+        raise RuntimeError("Mock generation error")
+
+    monkeypatch.setattr(souschef.cli, "generate_gitlab_ci_from_chef", mock_generate)
+
+    output_file = tmp_path / ".gitlab-ci.yml"
+    result = runner.invoke(
+        cli,
+        ["generate-gitlab-ci", str(FIXTURES_DIR), "-o", str(output_file)],
+    )
+
+    assert result.exit_code != 0
+    assert "Error generating GitLab CI configuration" in result.output
+
+
+def test_generate_github_workflow_command_error_handling(runner, tmp_path, monkeypatch):
+    """Test generate-github-workflow command error handling."""
+
+    # Mock the generation function to raise an exception
+    def mock_generate(*args, **kwargs):
+        raise RuntimeError("Mock generation error")
+
+    monkeypatch.setattr(
+        souschef.cli, "generate_github_workflow_from_chef", mock_generate
+    )
+
+    output_file = tmp_path / "ci.yml"
+    result = runner.invoke(
+        cli,
+        ["generate-github-workflow", str(FIXTURES_DIR), "-o", str(output_file)],
+    )
+
+    assert result.exit_code != 0
+    assert "Error generating GitHub Actions workflow" in result.output
+
+
+# Additional Error Handling Tests
+def test_convert_recipe_command_conversion_error(runner, tmp_path, monkeypatch):
+    """Test convert-recipe command when conversion fails."""
+
+    # Mock the conversion function to raise an exception
+    def mock_generate(*args, **kwargs):
+        raise RuntimeError("Mock conversion error")
+
+    monkeypatch.setattr(souschef.cli, "generate_playbook_from_recipe", mock_generate)
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-recipe",
+            "--cookbook-path",
+            str(FIXTURES_DIR),
+            "--recipe-name",
+            "default",
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Error converting recipe" in result.output
+
+
+def test_assess_cookbook_command_analysis_error(runner, monkeypatch):
+    """Test assess-cookbook command when analysis fails."""
+
+    # Mock the analysis function to raise an exception
+    def mock_analyze(*args, **kwargs):
+        raise RuntimeError("Mock analysis error")
+
+    monkeypatch.setattr(souschef.cli, "_analyze_cookbook_for_assessment", mock_analyze)
+
+    result = runner.invoke(
+        cli,
+        [
+            "assess-cookbook",
+            "--cookbook-path",
+            str(FIXTURES_DIR),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Error assessing cookbook" in result.output
+
+
+def test_convert_habitat_command_conversion_error(runner, tmp_path, monkeypatch):
+    """Test convert-habitat command when conversion fails."""
+    import souschef.server
+
+    # Mock the conversion function to raise an exception
+    def mock_convert(*args, **kwargs):
+        raise RuntimeError("Mock conversion error")
+
+    monkeypatch.setattr(souschef.server, "convert_habitat_to_dockerfile", mock_convert)
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    plan_file = tmp_path / "plan.sh"
+    plan_file.write_text("pkg_name=test")
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-habitat",
+            "--plan-path",
+            str(plan_file),
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Error converting Habitat plan" in result.output
+
+
+def test_convert_inspec_command_conversion_error(runner, tmp_path, monkeypatch):
+    """Test convert-inspec command when conversion fails."""
+    import souschef.server
+
+    # Mock the conversion function to raise an exception
+    def mock_convert(*args, **kwargs):
+        raise RuntimeError("Mock conversion error")
+
+    monkeypatch.setattr(souschef.server, "convert_inspec_to_test", mock_convert)
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir()
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-inspec",
+            "--profile-path",
+            str(profile_dir),
+            "--output-path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Error converting InSpec profile" in result.output
+
+
+def test_profile_command_error_handling(runner, monkeypatch):
+    """Test profile command error handling."""
+
+    # Mock the profiling function to raise an exception
+    def mock_generate(*args, **kwargs):
+        raise RuntimeError("Mock profiling error")
+
+    monkeypatch.setattr(
+        souschef.cli, "generate_cookbook_performance_report", mock_generate
+    )
+
+    result = runner.invoke(
+        cli,
+        ["profile", str(FIXTURES_DIR)],
+    )
+
+    assert result.exit_code != 0
+    assert "Error profiling cookbook" in result.output
+
+
+def test_profile_operation_command_error_handling(runner, monkeypatch):
+    """Test profile-operation command error handling."""
+
+    # Mock the profiling function to raise an exception
+    def mock_profile(*args, **kwargs):
+        raise RuntimeError("Mock profiling error")
+
+    monkeypatch.setattr(souschef.cli, "profile_function", mock_profile)
+
+    recipe_path = FIXTURES_DIR / "recipes" / "default.rb"
+
+    result = runner.invoke(
+        cli,
+        ["profile-operation", "recipe", str(recipe_path)],
+    )
+
+    assert result.exit_code != 0
+    assert "Error profiling operation" in result.output

@@ -1,11 +1,18 @@
 [tool.poetry]
 name = "mcp-souschef"
-version = "2.3.1"
+version = "2.7.1"
 description = "AI-powered MCP server for Chef to Ansible conversion"
 readme = "README.md"
+homepage = "https://github.com/kpeacocke/souschef"
+repository = "https://github.com/kpeacocke/souschef"
+documentation = "https://kpeacocke.github.io/souschef/"
+keywords = ["chef", "ansible", "migration", "infrastructure", "automation", "mcp", "ai", "conversion"]
 authors = ["SousChef Contributors"]
 license = "MIT"
 packages = [{include = "souschef"}]
+classifiers = ["Development Status :: 4 - Beta", "Intended Audience :: Developers", "Intended Audience :: System Administrators", "License :: OSI Approved :: MIT License", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.14", "Topic :: Software Development :: Libraries :: Python Modules", "Topic :: System :: Systems Administration", "Topic :: Utilities"]
+
+[tool.poetry.urls]
 
 [tool.poetry.dependencies]
 python = ">=3.14,<4.0"
@@ -15,7 +22,12 @@ mcp = ">=1.25.0"
 python-dotenv = ">=1.2.1"
 pyyaml = ">=6.0.0"
 zod = ">=0.8.0"
+pandas = {version = ">=2.0.0", optional = true}
+streamlit = ">=1.28.0"
+plotly = ">=5.0.0"
 
+[tool.poetry.extras]
+ui = ["pandas"]
 [tool.poetry.group.dev.dependencies]
 pytest = ">=9.0.2"
 pytest-cov = ">=7.0.0"
@@ -28,17 +40,22 @@ twine = ">=6.0.0"
 pre-commit = ">=4.5.1"
 mutmut = ">=3.4.0"
 syrupy = "^5.0.0"
-ansible-lint = "^25.12.2"
+ansible-lint = ">=25.12.2,<27.0.0"
 pytest-timeout = "^2.4.0"
 types-pyyaml = "^6.0.12.20250915"
 mkdocs = "^1.6.0"
 mkdocs-material = "^9.5.0"
-mkdocstrings = {extras = ["python"], version = "^0.26.0"}
+mkdocstrings = {extras = ["python"], version = ">=0.26,<1.1"}
 mkdocs-git-revision-date-localized-plugin = "^1.2.0"
+streamlit = "^1.28.0"
+networkx = "^3.2.0"
+plotly = "^5.17.0"
+matplotlib = "^3.8.0"
+types-networkx = "^3.6.1.20251220"
 
 [tool.poetry.scripts]
-souschef = "souschef.server:main"
-souschef-cli = "souschef.cli:main"
+souschef = "souschef.cli:main"
+souschef-mcp = "souschef.server:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]
@@ -56,10 +73,11 @@ ignore = ["D100", "D104", "D105", "D107", "D203", "D212"]
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["S101", "E501"]  # Allow assert statements, long lines in test data
-"souschef/server.py" = ["T201", "E501"]  # Allow print in main entry, long lines in templates/reports
+"souschef/server.py" = ["T201", "E501", "ISC003"]  # Allow print in main entry, long lines, explicit string concatenation
 "souschef/assessment.py" = ["E501"]  # Long lines in migration report templates
 "souschef/parsers/validation.py" = ["E501"]  # Long lines in validation messages
 "souschef/converters/resource.py" = ["C901"]  # Allow complex function for resource conversion logic
+"souschef/deployment.py" = ["ISC003"]  # Allow explicit string concatenation
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -71,6 +89,7 @@ testpaths = [
 [tool.coverage.run]
 source = ["souschef"]
 relative_files = true
+omit = ["tests/*", "examples/*"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -85,6 +104,12 @@ exclude_lines = [
 
 [tool.coverage.xml]
 output = "coverage.xml"
+
+[tool.coverage.paths]
+source = [
+    "souschef/",
+    "*/souschef/",
+]
 
 [tool.mutmut]
 backup = false
