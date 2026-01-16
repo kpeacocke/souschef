@@ -20,9 +20,16 @@ WORKDIR /app
 FROM base AS dependencies
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y \
+        build-essential \
+        gcc \
+        g++ \
+        python3-dev \
+        pkg-config \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && gcc --version
 
 # Copy dependency files
 COPY pyproject.toml poetry.lock ./
