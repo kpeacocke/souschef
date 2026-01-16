@@ -1,0 +1,26 @@
+# Binaries
+terraform-provider-souschef
+*.exe
+
+# Test binary
+*.test
+
+# Output of go coverage tool
+*.out
+
+# Terraform files
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+.terraform.lock.hcl
+
+# Crash log files
+crash.log
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/

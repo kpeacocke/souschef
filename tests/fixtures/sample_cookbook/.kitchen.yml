@@ -1,0 +1,24 @@
+---
+driver:
+  name: docker
+
+provisioner:
+  name: chef_zero
+  product_name: chef
+  product_version: 18
+
+platforms:
+  - name: ubuntu-22.04
+  - name: centos-8
+
+suites:
+  - name: default
+    run_list:
+      - recipe[sample_cookbook::default]
+    attributes:
+  - name: database
+    run_list:
+      - recipe[sample_cookbook::database]
+    attributes:
+      mysql:
+        version: '8.0'

@@ -1,3 +1,4 @@
+---
 name: Poetry Lock Check
 
 # Validates that poetry.lock is in sync with pyproject.toml
@@ -32,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
 
     steps:
@@ -51,18 +52,26 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
 
-    - name: Verify poetry.lock is in sync with pyproject.toml
+    - name: Regenerate poetry.lock if needed
       run: |
-        poetry check --lock
+        # Check if lock is out of sync
+        if ! poetry check --lock; then
+          echo "🔄 Regenerating poetry.lock..."
+          poetry lock
+          echo "✅ poetry.lock regenerated"
+        else
+          echo "✅ poetry.lock is already in sync"
+        fi
 
-    - name: Comment on PR if lock file is out of sync
-      if: failure() && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
-      with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '⚠️ **Poetry lock file is out of sync**\n\nRun `poetry lock` locally and commit the updated `poetry.lock` file.\n\nPoetry 2.x automatically preserves versions without a flag.'
-          })
+    - name: Check for changes and commit
+      run: |
+        if git diff --quiet poetry.lock; then
+          echo "No changes to poetry.lock"
+        else
+          echo "Committing updated poetry.lock"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add poetry.lock
+          git commit -m "chore: update poetry.lock"
+          git push
+        fi

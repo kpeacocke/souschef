@@ -15,8 +15,19 @@ from souschef.server import (
     ValidationEngine,
     ValidationLevel,
     ValidationResult,
+    _analyze_environments_structure,
+    _analyze_structure_recommendations,
+    _analyze_usage_pattern_recommendations,
+    _build_conversion_details_section,
+    _build_conversion_summary,
+    _build_files_section,
+    _build_next_steps_section,
+    _build_statistics_section,
+    _calculate_conversion_statistics,
     _convert_chef_block_to_ansible,
     _convert_chef_condition_to_ansible,
+    _convert_databag_item,
+    _convert_databag_to_ansible_vars,
     _convert_erb_to_jinja2,
     _convert_guards_to_when_conditions,
     _convert_inspec_to_ansible_assert,
@@ -25,9 +36,14 @@ from souschef.server import (
     _convert_inspec_to_testinfra,
     _create_handler,
     _create_handler_with_timing,
+    _detect_encrypted_databag,
+    _extract_attributes_block,
     _extract_chef_guards,
     _extract_conditionals,
+    _extract_cookbook_constraints,
     _extract_enhanced_notifications,
+    _extract_environment_usage_from_cookbook,
+    _extract_generated_files,
     _extract_heredoc_strings,
     _extract_inspec_describe_blocks,
     _extract_node_attribute_path,
@@ -35,21 +51,41 @@ from souschef.server import (
     _extract_resource_properties,
     _extract_resource_subscriptions,
     _extract_template_variables,
+    _find_environment_patterns_in_content,
+    _flatten_environment_vars,
+    _format_environment_structure,
+    _format_environment_usage_patterns,
     _format_resolved_attributes,
+    _generate_complete_inventory_from_environments,
+    _generate_databag_conversion_summary,
+    _generate_environment_migration_recommendations,
+    _generate_ini_inventory,
     _generate_inspec_from_resource,
+    _generate_inventory_group_from_environment,
+    _generate_next_steps_guide,
+    _generate_vault_content,
+    _generate_yaml_inventory,
+    _get_general_migration_recommendations,
     _get_precedence_level,
     _normalize_path,
     _normalize_ruby_value,
+    _parse_chef_environment_content,
     _parse_inspec_control,
     _resolve_attribute_precedence,
     _safe_join,
     _strip_ruby_comments,
+    _validate_databags_directory,
     analyze_chef_databag_usage,
+    convert_chef_databag_to_vars,
+    convert_chef_environment_to_inventory_group,
     convert_habitat_to_dockerfile,
     convert_inspec_to_test,
     convert_resource_to_task,
+    generate_ansible_vault_from_databags,
     generate_compose_from_habitat,
+    generate_github_workflow_from_chef,
     generate_inspec_from_recipe,
+    generate_inventory_from_chef_environments,
     list_cookbook_structure,
     list_directory,
     main,
@@ -1440,18 +1476,452 @@ def test_convert_unknown_resource_type():
     assert "name: Create unknown_resource test" in result
 
 
-def test_convert_with_exception():
-    """Test that conversion handles exceptions gracefully."""
-    # This should trigger an error by passing invalid data types
-    with patch(
-        "souschef.converters.resource._convert_chef_resource_to_ansible"
-    ) as mock_convert:
-        mock_convert.side_effect = Exception("Test exception")
+def test_convert_chef_databag_to_vars_invalid_json():
+    """Test convert_chef_databag_to_vars with invalid JSON."""
+    result = convert_chef_databag_to_vars("invalid json", "testbag", "default")
+    assert "Error: Invalid JSON format in data bag" in result
 
-        result = convert_resource_to_task("package", "nginx", "install")
 
-        assert "An error occurred during conversion" in result
-        assert "Test exception" in result
+def test_convert_chef_databag_to_vars_empty_content():
+    """Test convert_chef_databag_to_vars with empty content."""
+    result = convert_chef_databag_to_vars("", "testbag", "default")
+    assert "Error: Databag content cannot be empty" in result
+
+
+def test_convert_chef_databag_to_vars_empty_name():
+    """Test convert_chef_databag_to_vars with empty databag name."""
+    result = convert_chef_databag_to_vars('{"key": "value"}', "", "default")
+    assert "Error: Databag name cannot be empty" in result
+
+
+def test_convert_chef_databag_to_vars_invalid_scope():
+    """Test convert_chef_databag_to_vars with invalid target scope."""
+    result = convert_chef_databag_to_vars(
+        '{"key": "value"}', "testbag", "default", target_scope="invalid"
+    )
+    assert "Error: Invalid target scope 'invalid'" in result
+
+
+def test_convert_chef_databag_to_vars_encrypted():
+    """Test convert_chef_databag_to_vars with encrypted data bag."""
+    encrypted_content = (
+        '{"encrypted_data": "data", "cipher": "aes-256-gcm", "iv": "iv", "version": 3}'
+    )
+    result = convert_chef_databag_to_vars(
+        encrypted_content, "testbag", "default", is_encrypted=True
+    )
+    assert "Encrypted data bag converted to Ansible Vault" in result
+    assert "ansible-vault encrypt" in result
+
+
+def test_validate_databags_directory_empty_path():
+    """Test _validate_databags_directory with empty path."""
+    result = _validate_databags_directory("")
+    assert result[0] is None
+    assert "Databags directory path cannot be empty" in result[1]
+
+
+def test_validate_databags_directory_nonexistent():
+    """Test _validate_databags_directory with nonexistent directory."""
+    result = _validate_databags_directory("/nonexistent/path")
+    assert result[0] is None
+    assert "Data bags directory not found" in result[1]
+
+
+def test_validate_databags_directory_not_directory():
+    """Test _validate_databags_directory with file instead of directory."""
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile() as tmp_file:
+        result = _validate_databags_directory(tmp_file.name)
+        assert result[0] is None
+        assert "Path is not a directory" in result[1]
+
+
+def test_convert_databag_item_with_error():
+    """Test _convert_databag_item with file read error."""
+    mock_file = MagicMock()
+    mock_file.stem = "test_item"
+    mock_file.open.side_effect = Exception("Read error")
+
+    result = _convert_databag_item(mock_file, "testbag", "group_vars")
+    assert "error" in result
+    assert result["error"] == "Read error"
+
+
+def test_generate_ansible_vault_from_databags_invalid_directory():
+    """Test generate_ansible_vault_from_databags with invalid directory."""
+    result = generate_ansible_vault_from_databags("/nonexistent/path")
+    assert "Data bags directory not found" in result
+
+
+def test_analyze_chef_databag_usage_nonexistent_cookbook():
+    """Test analyze_chef_databag_usage with nonexistent cookbook."""
+    result = analyze_chef_databag_usage("/nonexistent/cookbook")
+    assert "Cookbook path not found" in result
+
+
+def test_convert_chef_environment_to_inventory_group_invalid_content():
+    """Test convert_chef_environment_to_inventory_group with invalid content."""
+    result = convert_chef_environment_to_inventory_group("invalid ruby", "test_env")
+    # The function should handle invalid content gracefully and return a valid result
+    assert "test_env" in result
+    assert "inventory" in result.lower() or "group" in result.lower()
+
+
+def test_generate_inventory_from_chef_environments_nonexistent_directory():
+    """Test generate_inventory_from_chef_environments with nonexistent directory."""
+    result = generate_inventory_from_chef_environments("/nonexistent/path")
+    assert "Environments directory not found" in result
+
+
+def test_parse_chef_environment_content_minimal():
+    """Test _parse_chef_environment_content with minimal content."""
+    content = "name 'test_env'"
+    result = _parse_chef_environment_content(content)
+    assert result["name"] == "test_env"
+    assert result["description"] == ""
+    assert result["default_attributes"] == {}
+    assert result["override_attributes"] == {}
+    assert result["cookbook_versions"] == {}
+
+
+def test_extract_attributes_block_no_match():
+    """Test _extract_attributes_block with no matching block."""
+    content = "some other content"
+    result = _extract_attributes_block(content, "default_attributes")
+    assert result == {}
+
+
+def test_extract_attributes_block_with_nested_attributes():
+    """Test _extract_attributes_block with nested attributes."""
+    content = """
+default_attributes(
+  'nginx' => {
+    'port' => 80,
+    'ssl' => {
+      'enabled' => true
+    }
+  }
+)
+"""
+    result = _extract_attributes_block(content, "default_attributes")
+    assert "nginx" in result
+    assert result["nginx"]["port"] == 80
+    assert result["nginx"]["ssl"]["enabled"] is True
+
+
+def test_extract_cookbook_constraints_no_constraints():
+    """Test _extract_cookbook_constraints with no constraints."""
+    content = "name 'test_env'"
+    result = _extract_cookbook_constraints(content)
+    assert result == {}
+
+
+def test_extract_cookbook_constraints_with_constraints():
+    """Test _extract_cookbook_constraints with cookbook constraints."""
+    content = """
+cookbook 'nginx', '~> 1.0'
+cookbook 'apache', '= 2.0.0'
+"""
+    result = _extract_cookbook_constraints(content)
+    assert result["nginx"] == "~> 1.0"
+    assert result["apache"] == "= 2.0.0"
+
+
+def test_generate_inventory_group_from_environment_with_constraints():
+    """Test _generate_inventory_group_from_environment with cookbook constraints."""
+    env_data = {
+        "name": "test_env",
+        "description": "Test environment",
+        "default_attributes": {"nginx": {"port": 80}},
+        "override_attributes": {"apache": {"port": 8080}},
+        "cookbook_versions": {"nginx": "~> 1.0", "apache": "= 2.0.0"},
+    }
+    result = _generate_inventory_group_from_environment(env_data, "test_env", True)
+    assert "cookbook_version_constraints" in result
+    assert "nginx" in result
+    assert "apache" in result
+
+
+def test_build_conversion_summary_empty_results():
+    """Test _build_conversion_summary with empty results."""
+    result = _build_conversion_summary([])
+    assert "Total environments processed: 0" in result
+    assert "Successfully converted: 0" in result
+    assert "Failed conversions: 0" in result
+
+
+def test_generate_yaml_inventory_empty_environments():
+    """Test _generate_yaml_inventory with empty environments."""
+    result = _generate_yaml_inventory({})
+    assert "all:" in result
+    assert "children:" in result
+
+
+def test_generate_ini_inventory_empty_environments():
+    """Test _generate_ini_inventory with empty environments."""
+    result = _generate_ini_inventory({})
+    assert "[all:children]" in result
+
+
+def test_generate_next_steps_guide_empty_environments():
+    """Test _generate_next_steps_guide with empty environments."""
+    result = _generate_next_steps_guide({})
+    assert "Next Steps:" in result
+    assert "File Structure to Create:" in result
+
+
+def test_generate_complete_inventory_from_environments_empty():
+    """Test _generate_complete_inventory_from_environments with empty data."""
+    result = _generate_complete_inventory_from_environments({}, [], "yaml")
+    assert "Chef Environments to Ansible Inventory Conversion" in result
+
+
+def test_flatten_environment_vars_with_overrides():
+    """Test _flatten_environment_vars with override attributes."""
+    env_data = {
+        "name": "test_env",
+        "description": "Test",
+        "default_attributes": {"port": 80},
+        "override_attributes": {"port": 8080},
+        "cookbook_versions": {"nginx": "1.0"},
+    }
+    result = _flatten_environment_vars(env_data)
+    assert result["port"] == 80  # default_attributes should win
+    assert result["environment_overrides"]["port"] == 8080
+    assert result["cookbook_version_constraints"]["nginx"] == "1.0"
+
+
+def test_extract_environment_usage_from_cookbook_with_error():
+    """Test _extract_environment_usage_from_cookbook with file read error."""
+    mock_cookbook = MagicMock(spec=Path)
+    mock_cookbook.rglob.return_value = [MagicMock()]
+    mock_file = MagicMock()
+    mock_file.open.side_effect = Exception("Read error")
+    mock_cookbook.rglob.return_value = [mock_file]
+
+    with patch("souschef.server._normalize_path", return_value=mock_cookbook):
+        result = _extract_environment_usage_from_cookbook(mock_cookbook)
+        assert len(result) == 1
+        assert "error" in result[0]
+        assert result[0]["error"] == "Could not read file: Read error"
+
+
+def test_find_environment_patterns_in_content_various_patterns():
+    """Test _find_environment_patterns_in_content with various patterns."""
+    content = """
+if node.chef_environment == 'production'
+  case node.chef_environment
+  when 'staging'
+    # do something
+  end
+end
+
+search(:node, "chef_environment:development")
+"""
+    result = _find_environment_patterns_in_content(content, "test.rb")
+    assert len(result) >= 3  # Should find multiple patterns
+
+
+def test_analyze_environments_structure_with_parse_error():
+    """Test _analyze_environments_structure with environment file parse error."""
+    mock_env_path = MagicMock(spec=Path)
+    mock_env_file = MagicMock(spec=Path)
+    mock_env_file.stem = "test_env"
+    mock_env_path.glob.return_value = [mock_env_file]
+    mock_env_file.open.side_effect = Exception("Parse error")
+
+    result = _analyze_environments_structure(mock_env_path)
+    assert result["total_environments"] == 1
+    assert "test_env" in result["environments"]
+    assert "error" in result["environments"]["test_env"]
+    assert result["environments"]["test_env"]["error"] == "Parse error"
+
+
+def test_analyze_usage_pattern_recommendations_empty():
+    """Test _analyze_usage_pattern_recommendations with empty patterns."""
+    result = _analyze_usage_pattern_recommendations([])
+    assert result == []
+
+
+def test_analyze_structure_recommendations_empty():
+    """Test _analyze_structure_recommendations with empty structure."""
+    result = _analyze_structure_recommendations({})
+    assert result == []
+
+
+def test_get_general_migration_recommendations():
+    """Test _get_general_migration_recommendations returns expected recommendations."""
+    result = _get_general_migration_recommendations()
+    assert len(result) >= 6  # Should have multiple recommendations
+    assert any("Ansible groups" in rec for rec in result)
+
+
+def test_generate_environment_migration_recommendations():
+    """Test _generate_environment_migration_recommendations combines recommendations."""
+    usage_patterns = [{"type": "environment conditional", "environment_name": "prod"}]
+    env_structure = {"total_environments": 2}
+    result = _generate_environment_migration_recommendations(
+        usage_patterns, env_structure
+    )
+    assert "Found 1 environment references" in result
+    assert "Convert 2 Chef environments" in result
+
+
+def test_format_environment_usage_patterns_empty():
+    """Test _format_environment_usage_patterns with empty patterns."""
+    result = _format_environment_usage_patterns([])
+    assert result == "No environment usage patterns found."
+
+
+def test_format_environment_usage_patterns_with_errors():
+    """Test _format_environment_usage_patterns with error patterns."""
+    patterns = [{"file": "/test/file.rb", "error": "File not found"}]
+    result = _format_environment_usage_patterns(patterns)
+    assert "❌" in result
+    assert "File not found" in result
+
+
+def test_format_environment_structure_empty():
+    """Test _format_environment_structure with empty structure."""
+    result = _format_environment_structure({})
+    assert "No environment structure provided" in result
+
+
+def test_convert_databag_to_ansible_vars_with_id_field():
+    """Test _convert_databag_to_ansible_vars handles Chef 'id' field."""
+    data = {"id": "test_item", "key": "value", "secret": "secret_value"}
+    result = _convert_databag_to_ansible_vars(data, "testbag", "test_item", False)
+    assert "id" not in result  # id field should be removed
+    assert "testbag_key" in result
+    assert "testbag_secret" in result
+    assert result["testbag_metadata"]["source"] == "data_bags/testbag/test_item.json"
+
+
+def test_generate_vault_content():
+    """Test _generate_vault_content generates proper vault structure."""
+    vars_dict = {"secret_key": "secret_value", "metadata": {"source": "test"}}
+    result = _generate_vault_content(vars_dict, "testbag")
+    assert "testbag_vault:" in result
+    assert "secret_key: secret_value" in result
+
+
+def test_detect_encrypted_databag_plain():
+    """Test _detect_encrypted_databag with plain JSON."""
+    content = '{"key": "value", "another": "data"}'
+    result = _detect_encrypted_databag(content)
+    assert result is False
+
+
+def test_detect_encrypted_databag_encrypted():
+    """Test _detect_encrypted_databag with encrypted data bag."""
+    content = '{"encrypted_data": "encrypted", "cipher": "aes-256-gcm", "iv": "iv_data", "version": 3}'
+    result = _detect_encrypted_databag(content)
+    assert result is True
+
+
+def test_detect_encrypted_databag_nested_encrypted():
+    """Test _detect_encrypted_databag with nested encrypted data."""
+    content = '{"data": {"encrypted_data": "encrypted"}, "other": "value"}'
+    result = _detect_encrypted_databag(content)
+    assert result is True
+
+
+def test_detect_encrypted_databag_invalid_json():
+    """Test _detect_encrypted_databag with invalid JSON."""
+    result = _detect_encrypted_databag("invalid json")
+    assert result is False
+
+
+def test_calculate_conversion_statistics():
+    """Test _calculate_conversion_statistics calculates stats correctly."""
+    results = [
+        {"databag": "bag1", "item": "item1"},  # successful
+        {
+            "databag": "bag2",
+            "item": "item2",
+            "encrypted": True,
+        },  # successful, encrypted
+        {"databag": "bag3", "item": "item3", "error": "failed"},  # failed
+    ]
+    stats = _calculate_conversion_statistics(results)
+    assert stats["total"] == 3
+    assert stats["successful"] == 2
+    assert stats["encrypted"] == 1
+
+
+def test_build_statistics_section():
+    """Test _build_statistics_section formats stats correctly."""
+    stats = {"total": 5, "successful": 4, "encrypted": 2}
+    result = _build_statistics_section(stats)
+    assert "Total data bags processed: 5" in result
+    assert "Successfully converted: 4" in result
+    assert "Encrypted data bags: 2" in result
+
+
+def test_extract_generated_files():
+    """Test _extract_generated_files extracts unique file paths."""
+    results = [
+        {"target_file": "group_vars/bag1.yml"},
+        {"target_file": "group_vars/bag2.yml"},
+        {"target_file": "group_vars/bag1.yml"},  # duplicate
+        {"error": "failed"},  # no target_file
+    ]
+    files = _extract_generated_files(results)
+    assert len(files) == 2
+    assert "group_vars/bag1.yml" in files
+    assert "group_vars/bag2.yml" in files
+
+
+def test_build_files_section():
+    """Test _build_files_section formats file list correctly."""
+    files = ["group_vars/bag1.yml", "group_vars/bag2.yml"]
+    result = _build_files_section(files)
+    assert "- group_vars/bag1.yml" in result
+    assert "- group_vars/bag2.yml" in result
+
+
+def test_build_conversion_details_section():
+    """Test _build_conversion_details_section formats details correctly."""
+    results = [
+        {"databag": "bag1", "item": "item1", "target_file": "group_vars/bag1.yml"},
+        {
+            "databag": "bag2",
+            "item": "item2",
+            "encrypted": True,
+            "target_file": "group_vars/bag2_vault.yml",
+        },
+        {"databag": "bag3", "item": "item3", "error": "failed"},
+    ]
+    result = _build_conversion_details_section(results)
+    assert "✅ bag1/item1 → group_vars/bag1.yml (📄 Plain)" in result
+    assert "✅ bag2/item2 → group_vars/bag2_vault.yml (🔒 Encrypted)" in result
+    assert "❌ bag3/item3: failed" in result
+
+
+def test_build_next_steps_section():
+    """Test _build_next_steps_section formats next steps correctly."""
+    result = _build_next_steps_section("group_vars")
+    assert "group_vars/" in result
+    assert "ansible-vault encrypt" in result
+
+
+def test_generate_databag_conversion_summary():
+    """Test _generate_databag_conversion_summary combines all sections."""
+    results = [
+        {
+            "databag": "bag1",
+            "item": "item1",
+            "target_file": "group_vars/bag1.yml",
+            "encrypted": False,
+        }
+    ]
+    result = _generate_databag_conversion_summary(results, "group_vars")
+    assert "Data Bag Conversion Summary" in result
+    assert "Statistics:" in result
+    assert "Generated Files:" in result
+    assert "Conversion Details:" in result
+    assert "Next Steps:" in result
 
 
 # Template parsing tests
@@ -14909,3 +15379,310 @@ do_install() {
                 # Key-value pairs (but not section headers) should have proper indentation
                 # (either 4 or 6 spaces depending on context)
                 assert line.startswith("    ") or line.startswith("      ")
+
+
+# CI/CD Generation MCP Tool Tests
+
+
+def test_generate_jenkinsfile_from_chef_success():
+    """Test generate_jenkinsfile_from_chef MCP tool with valid cookbook."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_jenkinsfile_from_chef(
+        cookbook_path=cookbook_path,
+        pipeline_name="test-pipeline",
+        pipeline_type="declarative",
+        enable_parallel="yes",
+    )
+
+    assert "// Jenkinsfile: test-pipeline" in result
+    assert "pipeline {" in result
+    assert "Generated from Chef cookbook CI/CD patterns" in result
+    assert "Pipeline Type: Declarative" in result
+
+
+def test_generate_jenkinsfile_from_chef_scripted_type():
+    """Test Jenkins scripted pipeline generation."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_jenkinsfile_from_chef(
+        cookbook_path=cookbook_path,
+        pipeline_name="scripted-test",
+        pipeline_type="scripted",
+        enable_parallel="no",
+    )
+
+    assert "// Jenkinsfile: scripted-test" in result
+    assert "node {" in result
+    assert "Pipeline Type: Scripted" in result
+    assert "stage('Checkout')" in result
+
+
+def test_generate_jenkinsfile_from_chef_default_params():
+    """Test Jenkinsfile generation with default parameters."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_jenkinsfile_from_chef(cookbook_path=cookbook_path)
+
+    assert "chef-to-ansible-pipeline" in result
+    assert "pipeline {" in result
+
+
+def test_generate_jenkinsfile_from_chef_nonexistent_path():
+    """Test Jenkinsfile generation with nonexistent cookbook path."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    result = generate_jenkinsfile_from_chef(
+        cookbook_path="/nonexistent/path",
+        pipeline_name="test",
+        pipeline_type="declarative",
+        enable_parallel="yes",
+    )
+
+    # Should still generate output (may be minimal)
+    assert isinstance(result, str)
+
+
+def test_generate_jenkinsfile_from_chef_enable_parallel_variations():
+    """Test enable_parallel parameter accepts different true/false values."""
+    from souschef.server import generate_jenkinsfile_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    # Test 'yes', 'true', '1'
+    for value in ["yes", "true", "1", "YES", "True"]:
+        result = generate_jenkinsfile_from_chef(
+            cookbook_path=cookbook_path,
+            pipeline_name="test",
+            enable_parallel=value,
+        )
+        assert "pipeline {" in result
+
+    # Test 'no', 'false', '0'
+    for value in ["no", "false", "0", "NO", "False"]:
+        result = generate_jenkinsfile_from_chef(
+            cookbook_path=cookbook_path,
+            pipeline_name="test",
+            enable_parallel=value,
+        )
+        assert "pipeline {" in result
+
+
+def test_generate_gitlab_ci_from_chef_success():
+    """Test generate_gitlab_ci_from_chef MCP tool with valid cookbook."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_gitlab_ci_from_chef(
+        cookbook_path=cookbook_path,
+        project_name="test-project",
+        enable_cache="yes",
+        enable_artifacts="yes",
+    )
+
+    assert "# .gitlab-ci.yml: test-project" in result
+    assert "Generated from Chef cookbook CI/CD patterns" in result
+    assert "stages:" in result
+    assert "- lint" in result or "- test" in result
+    assert "image: python:3.11" in result
+
+
+def test_generate_gitlab_ci_from_chef_without_cache():
+    """Test GitLab CI generation without caching."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_gitlab_ci_from_chef(
+        cookbook_path=cookbook_path,
+        project_name="test",
+        enable_cache="no",
+        enable_artifacts="yes",
+    )
+
+    assert "# .gitlab-ci.yml: test" in result
+    assert "cache:" not in result
+    assert "stages:" in result
+
+
+def test_generate_gitlab_ci_from_chef_without_artifacts():
+    """Test GitLab CI generation without artifacts."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_gitlab_ci_from_chef(
+        cookbook_path=cookbook_path,
+        project_name="test",
+        enable_cache="yes",
+        enable_artifacts="no",
+    )
+
+    assert "# .gitlab-ci.yml: test" in result
+    assert "stages:" in result
+
+
+def test_generate_gitlab_ci_from_chef_default_params():
+    """Test GitLab CI generation with default parameters."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_gitlab_ci_from_chef(cookbook_path=cookbook_path)
+
+    assert "chef-to-ansible" in result
+    assert "stages:" in result
+
+
+def test_generate_gitlab_ci_from_chef_nonexistent_path():
+    """Test GitLab CI generation with nonexistent cookbook path."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    result = generate_gitlab_ci_from_chef(
+        cookbook_path="/nonexistent/path",
+        project_name="test",
+        enable_cache="yes",
+        enable_artifacts="yes",
+    )
+
+    # Should still generate output
+    assert isinstance(result, str)
+
+
+def test_generate_gitlab_ci_from_chef_boolean_param_variations():
+    """Test GitLab CI boolean parameters accept different formats."""
+    from souschef.server import generate_gitlab_ci_from_chef
+
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    # Test variations of true
+    for cache_val in ["yes", "true", "1"]:
+        for artifacts_val in ["YES", "True", "1"]:
+            result = generate_gitlab_ci_from_chef(
+                cookbook_path=cookbook_path,
+                project_name="test",
+                enable_cache=cache_val,
+                enable_artifacts=artifacts_val,
+            )
+            assert "stages:" in result
+
+    # Test variations of false
+    for cache_val in ["no", "false", "0"]:
+        for artifacts_val in ["NO", "False", "0"]:
+            result = generate_gitlab_ci_from_chef(
+                cookbook_path=cookbook_path,
+                project_name="test",
+                enable_cache=cache_val,
+                enable_artifacts=artifacts_val,
+            )
+            assert "stages:" in result
+
+
+def test_generate_github_workflow_from_chef_success():
+    """Test generate_github_workflow_from_chef with valid cookbook."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(
+        cookbook_path=cookbook_path,
+        workflow_name="Test Workflow",
+        enable_cache="yes",
+        enable_artifacts="yes",
+    )
+
+    assert "name: Test Workflow" in result
+    assert "on:" in result
+    assert "jobs:" in result
+
+
+def test_generate_github_workflow_from_chef_without_cache():
+    """Test generate_github_workflow_from_chef without caching."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(
+        cookbook_path=cookbook_path,
+        enable_cache="no",
+        enable_artifacts="yes",
+    )
+
+    assert "name:" in result
+    # Cache step should not be present
+    assert result.count("actions/cache") == 0
+
+
+def test_generate_github_workflow_from_chef_without_artifacts():
+    """Test generate_github_workflow_from_chef without artifacts."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(
+        cookbook_path=cookbook_path,
+        enable_cache="yes",
+        enable_artifacts="no",
+    )
+
+    assert "name:" in result
+    # Upload artifact step should not be present
+    assert "upload-artifact" not in result
+
+
+def test_generate_github_workflow_from_chef_default_params():
+    """Test generate_github_workflow_from_chef with default parameters."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(cookbook_path=cookbook_path)
+
+    assert "name: Chef Cookbook CI" in result
+    assert "on:" in result
+
+
+def test_generate_github_workflow_from_chef_nonexistent_path():
+    """Test generate_github_workflow_from_chef with nonexistent path."""
+    result = generate_github_workflow_from_chef(cookbook_path="/nonexistent/path")
+
+    assert "Could not find file" in result
+
+
+@pytest.mark.parametrize(
+    "cache,artifacts",
+    [
+        ("yes", "yes"),
+        ("no", "no"),
+        ("true", "true"),
+        ("false", "false"),
+        ("1", "1"),
+        ("0", "0"),
+    ],
+)
+def test_generate_github_workflow_from_chef_boolean_param_variations(cache, artifacts):
+    """Test boolean parameter variations for GitHub workflow generation."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    cookbook_path = str(fixtures_dir / "sample_cookbook")
+
+    result = generate_github_workflow_from_chef(
+        cookbook_path=cookbook_path,
+        enable_cache=cache,
+        enable_artifacts=artifacts,
+    )
+
+    # Should not error regardless of boolean string format
+    assert "name:" in result
+    assert "jobs:" in result

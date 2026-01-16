@@ -2,10 +2,10 @@
 
 An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 
-[![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
+[![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](htmlcov/index.html)
+[![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](htmlcov/index.html)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
@@ -14,17 +14,17 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview - Chef to Ansible features
 
-SousChef is a complete enterprise-grade migration platform with **24 primary MCP tools** organised across **8 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with **27 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### About Tool Counts
 
-**Why 24 tools in the documentation but more in the server?**
+**Why 27 tools in the documentation but more in the server?**
 
-The MCP server provides **34 total tools** (32 public + 2 internal). This documentation focuses on the **24 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are low-level filesystem operations and helper utilities used internally by the main tools.
+The MCP server provides **37 total tools** (35 public + 2 internal). This documentation focuses on the **27 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are low-level filesystem operations and helper utilities used internally by the main tools.
 
-As a user, you'll primarily interact with the 24 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
+As a user, you'll primarily interact with the 27 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
-> 💡 **For developers:** See `souschef/server.py` for the complete list of all 34 registered tools.
+> 💡 **For developers:** See `souschef/server.py` for the complete list of all 37 registered tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -37,9 +37,16 @@ As a user, you'll primarily interact with the 24 documented tools. Your AI assis
 - **Local Models** (Ollama, llama.cpp, etc.)
 - **Custom Enterprise Models**
 
-**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 24 specialized tools. The model calls these tools to help with your migration.
+**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 27 specialized tools. The model calls these tools to help with your migration.
 
 > See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
+
+## Quick Links
+
+- **[Terraform Provider](terraform-provider/README.md)** - Manage migrations with infrastructure-as-code
+- **[User Guide](docs/user-guide/)** - Complete documentation
+- **[API Reference](docs/api-reference/)** - Detailed tool documentation
+- **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
 
 ## Installation
 
@@ -131,7 +138,67 @@ Modern deployment strategies and migration planning:
 - **generate_blue_green_deployment_playbook** - Create blue/green deployment playbooks
 - **generate_canary_deployment_strategy** - Generate canary deployment configurations
 
-### 10. Conversion Validation Framework
+### 10. CI/CD Pipeline Generation
+Generate Jenkins, GitLab CI, and GitHub Actions workflows from Chef cookbook CI patterns:
+
+- **generate_jenkinsfile_from_chef** - Generate Jenkinsfile (Declarative or Scripted) from Chef cookbook CI/CD patterns
+- **generate_gitlab_ci_from_chef** - Generate .gitlab-ci.yml from Chef cookbook testing tools
+- **generate_github_workflow_from_chef** - Generate GitHub Actions workflow from Chef cookbook CI/CD patterns
+
+Automatically detects and converts:
+- **Test Kitchen** configurations (.kitchen.yml) → Integration test stages
+- **ChefSpec** tests (spec/) → Unit test stages
+- **Cookstyle/Foodcritic** → Lint stages
+- Multiple test suites → Parallel execution strategies
+
+#### Example Usage
+
+```bash
+# Generate Jenkins Declarative pipeline
+souschef generate-jenkinsfile ./mycookbook
+
+# Generate Jenkins Scripted pipeline
+souschef generate-jenkinsfile ./mycookbook --pipeline-type scripted
+
+# Generate GitLab CI configuration
+souschef generate-gitlab-ci ./mycookbook
+
+# Generate GitHub Actions workflow
+souschef generate-github-workflow ./mycookbook
+
+# Customize with options
+souschef generate-gitlab-ci ./mycookbook --no-cache --no-artifacts
+souschef generate-github-workflow ./mycookbook --workflow-name "My CI" --no-cache
+```
+
+**MCP Tool Usage:**
+```python
+# From an AI assistant with SousChef MCP
+
+# Generate Jenkins pipeline
+generate_jenkinsfile_from_chef(
+    cookbook_path="/path/to/cookbook",
+    pipeline_type="declarative",  # or "scripted"
+    enable_parallel="yes"  # or "no"
+)
+
+# Generate GitLab CI
+generate_gitlab_ci_from_chef(
+    cookbook_path="/path/to/cookbook",
+    enable_cache="yes",  # or "no"
+    enable_artifacts="yes"  # or "no"
+)
+
+# Generate GitHub Actions workflow
+generate_github_workflow_from_chef(
+    cookbook_path="/path/to/cookbook",
+    workflow_name="Chef Cookbook CI",
+    enable_cache="yes",  # or "no"
+    enable_artifacts="yes"  # or "no"
+)
+```
+
+### 11. Conversion Validation Framework
 Comprehensive validation of Chef-to-Ansible conversions:
 
 - **validate_conversion** - Validate conversions across multiple dimensions
@@ -258,14 +325,84 @@ profile_cookbook_performance /path/to/large_cookbook
 profile_parsing_operation recipe /path/to/recipe.rb --detailed
 ```
 
-**Features:**
--  Execution time and peak memory tracking for all parsing operations
--  Detailed cProfile statistics with top function calls
--  Automatic performance recommendations based on thresholds
--  Before/after comparison for optimization validation
--  Integration with CLI and MCP for AI-assisted profiling
+### 10. Visual Migration Planning Interface
+Interactive web-based interface for Chef-to-Ansible migration planning and visualization:
 
-## Enterprise Features
+- **Cookbook Analysis Dashboard**: Interactive directory scanning with metadata parsing and complexity assessment
+- **Migration Planning Wizard**: Step-by-step migration planning with effort estimation and risk analysis
+- **Dependency Mapping**: Visual dependency graphs showing cookbook relationships and migration ordering
+- **Validation Reports**: Conversion validation results with syntax checking and best practice compliance
+- **Progress Tracking**: Real-time migration progress with completion metrics and bottleneck identification
+
+**Launch the UI:**
+```bash
+# Using Poetry (development)
+poetry run souschef ui
+
+# Using pip (installed)
+souschef ui
+
+# Custom port
+souschef ui --port 8080
+```
+
+**Run in Docker:**
+```bash
+# Build the image
+docker build -t souschef-ui .
+
+# Run the container
+docker run -p 8501:8501 souschef-ui
+
+# Or use docker-compose
+docker-compose up
+```
+
+**Docker Compose (recommended for development):**
+```yaml
+version: '3.8'
+services:
+  souschef-ui:
+    build: .
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+```
+
+**Features:**
+- Clean, professional design matching documentation standards
+- Real-time cookbook analysis with progress indicators
+- **Interactive dependency visualization** with Plotly graphs and NetworkX analysis
+- **Static graph visualization** with matplotlib for reports and documentation
+- **Real-time progress tracking** for all analysis operations
+- Migration planning wizards with effort estimation
+- Validation reporting dashboard with conversion quality metrics
+- Cross-platform compatibility (Linux, macOS, Windows)
+
+### Advanced UI Features
+
+#### Interactive Dependency Visualization
+The UI includes sophisticated dependency graph visualization powered by NetworkX and Plotly:
+
+- **Graph Analysis**: Automatic detection of cookbook dependencies, circular references, and migration ordering
+- **Interactive Exploration**: Zoom, pan, and hover over nodes to explore complex dependency relationships
+- **Color Coding**: Visual distinction between cookbooks, dependencies, community cookbooks, and circular dependencies
+- **Static Export**: Matplotlib-based static graphs for reports and documentation
+- **Large Graph Support**: Optimized layouts for complex cookbook ecosystems
+
+#### Real-Time Progress Tracking
+All analysis operations include comprehensive progress feedback:
+
+- **Progress Bars**: Visual progress indicators for long-running operations
+- **Status Updates**: Real-time status messages during analysis phases
+- **Operation Tracking**: Separate progress tracking for dependency analysis, validation, and migration planning
+- **Error Handling**: Graceful error display with recovery suggestions
+
+#### Enhanced User Experience
+- **Responsive Design**: Clean, professional interface that works across different screen sizes
+- **Export Options**: Download analysis results, graphs, and migration plans
+- **Session Persistence**: Maintain analysis state across page refreshes
+- **Quick Actions**: One-click access to common migration tasks
 
 ### Migration Assessment & Reporting
 - **Complexity Analysis**: Automated assessment of migration effort and risk factors
@@ -362,6 +499,7 @@ souschef-cli inspec-convert controls.rb --format testinfra
 - `inspec-parse` - Parse InSpec profiles and controls
 - `inspec-convert` - Convert InSpec to Testinfra/Ansible tests
 - `inspec-generate` - Generate InSpec validation from recipes
+- `ui` - Launch the Visual Migration Planning Interface
 - `ls` / `cat` - File system operations
 
 ### Development Setup
@@ -493,11 +631,23 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -  Documentation website with MkDocs + Material theme (charcoal + teal colour scheme, 16 pages)
 -  Comprehensive documentation content (Getting Started, Tool Reference, Migration Guide, API docs, Examples)
 -  Integration with additional test frameworks (ServerSpec, Goss) - InSpec conversion now supports 4 output formats
+-  Jenkins/GitLab CI pipeline generation from Chef cookbook CI patterns (Test Kitchen, ChefSpec, Cookstyle)
+-  Visual migration planning interface with Streamlit-based web UI for interactive cookbook analysis and migration planning
+-  **Interactive dependency mapping and visualization** with Plotly graphs and NetworkX analysis
+-  **Real-time progress tracking** for all analysis operations with Streamlit progress bars
+-  **Static graph visualization** with matplotlib for reports and documentation
 
 ### Planned 📅
-- 📅 Visual migration planning and dependency mapping interface
+- 📅 Enhanced graph layout algorithms for large dependency networks (force-directed, hierarchical)
+- 📅 Export functionality for graphs (PNG, SVG, PDF formats)
+- 📅 UI configuration options and themes
+- 📅 Performance caching for expensive analysis operations
+- 📅 Mobile-responsive design improvements
+- 📅 Accessibility enhancements (ARIA labels, keyboard navigation)
+- 📅 Integration testing for UI components
+- 📅 Advanced filtering and search in dependency graphs
+- 📅 Migration templates and presets
 - 📅 Terraform provider for infrastructure state management
-- 📅 Jenkins/GitLab CI pipeline generation
 
 ## 🙋‍♀️ Support & Community
 
