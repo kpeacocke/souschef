@@ -335,10 +335,75 @@ func (r *batchMigrationResource) ImportState(ctx context.Context, req resource.I
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cookbook_path"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("output_path"), parts[1])...)
+	cookbookPath := parts[0]
+	outputPath := parts[1]
+	recipeNamesStr := parts[2]
 
-	recipeNames := strings.Split(parts[2], ",")
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("recipe_names"), recipeNames)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+	// Validate that the cookbook directory exists
+	if _, err := os.Stat(cookbookPath); os.IsNotExist(err) {
+		resp.Diagnostics.AddError(
+			"Cookbook not found",
+			fmt.Sprintf("Cookbook path does not exist: %s", cookbookPath),
+		)
+		return
+	}
+
+	// Parse recipe names
+	recipeNames := strings.Split(recipeNamesStr, ",")
+	if len(recipeNames) == 0 {
+		resp.Diagnostics.AddError(
+			"Invalid import ID",
+			"At least one recipe name must be specified",
+		)
+		return
+	}
+
+	// Read all playbooks and validate they exist
+	playbooks := make(map[string]string)
+	for _, recipeName := range recipeNames {
+		playbookPath := filepath.Join(outputPath, recipeName+".yml")
+		if _, err := os.Stat(playbookPath); os.IsNotExist(err) {
+			resp.Diagnostics.AddError(
+				"Playbook not found",
+				fmt.Sprintf("Playbook does not exist: %s", playbookPath),
+			)
+			return
+		}
+
+		content, err := os.ReadFile(playbookPath)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				errorReadingBatchPlaybook,
+				fmt.Sprintf("Could not read playbook %s: %s", recipeName, err),
+			)
+			return
+		}
+
+		playbooks[recipeName] = string(content)
+	}
+
+	// Extract cookbook name from path
+	cookbookName := filepath.Base(cookbookPath)
+
+	// Convert recipe names to types
+	recipeNamesTypes := make([]types.String, len(recipeNames))
+	for i, name := range recipeNames {
+		recipeNamesTypes[i] = types.StringValue(name)
+	}
+
+	// Convert playbooks map to types.Map
+	playbooksMap, mapDiags := types.MapValueFrom(ctx, types.StringType, playbooks)
+	resp.Diagnostics.Append(mapDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Set state
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cookbook_path"), cookbookPath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("output_path"), outputPath)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("recipe_names"), recipeNamesTypes)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cookbook_name"), cookbookName)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("playbook_count"), int64(len(playbooks)))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("playbooks"), playbooksMap)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf("%s-batch", cookbookName))...)
 }

@@ -32,7 +32,13 @@ func TestAccBatchMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.default"),
 				),
 			},
-			// TODO: ImportState testing - requires custom import ID parser implementation
+			// ImportState testing
+			{
+				ResourceName:      testBatchMigrationResourceName,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("%s|%s|default", testBatchCookbookPath, testBatchOutputPath),
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

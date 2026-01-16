@@ -37,12 +37,13 @@ func TestAccMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttr(testMigrationResourceName, "cookbook_path", testCookbookPathMigration),
 				),
 			},
-			// TODO: ImportState testing - requires custom import ID parser implementation
-			// {
-			// 	ResourceName:      testMigrationResourceName,
-			// 	ImportState:       true,
-			// 	ImportStateVerify: true,
-			// },
+			// ImportState testing
+			{
+				ResourceName:      testMigrationResourceName,
+				ImportState:       true,
+				ImportStateId:     fmt.Sprintf("%s|%s|default", testCookbookPathMigration, testAnsibleOutputPath),
+				ImportStateVerify: true,
+			},
 		},
 	})
 }

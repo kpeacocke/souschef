@@ -1077,6 +1077,44 @@ def convert_inspec(profile_path: str, output_path: str, output_format: str) -> N
         sys.exit(1)
 
 
+@cli.command()
+@click.option("--port", default=8501, help="Port to run the Streamlit app on")
+def ui(port: int) -> None:
+    """
+    Launch the SousChef Visual Migration Planning Interface.
+
+    Opens a web-based interface for interactive Chef to Ansible migration planning,
+    cookbook analysis, and visualization.
+    """
+    try:
+        import subprocess
+        import sys
+
+        # Launch Streamlit app
+        cmd = [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            "souschef/ui/app.py",
+            "--server.port",
+            str(port),
+        ]
+        click.echo(f"Starting SousChef UI on http://localhost:{port}")
+        click.echo("Press Ctrl+C to stop the server")
+
+        subprocess.run(cmd, check=True)
+
+    except subprocess.CalledProcessError as e:
+        click.echo(f"Error starting UI: {e}", err=True)
+        sys.exit(1)
+    except ImportError:
+        click.echo(
+            "Streamlit is not installed. Install with: pip install streamlit", err=True
+        )
+        sys.exit(1)
+
+
 def main() -> NoReturn:
     """Run the CLI."""
     cli()

@@ -5,6 +5,125 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.1](https://github.com/kpeacocke/souschef/compare/v2.7.0...v2.7.1) (2026-01-16)
+
+
+### Bug Fixes
+
+* disable PyPI attestations to resolve publishing failures ([fb5b085](https://github.com/kpeacocke/souschef/commit/fb5b0857f040f929aa8482667965907cec8acb91))
+
+## [2.7.0](https://github.com/kpeacocke/souschef/compare/v2.6.1...v2.7.0) (2026-01-16)
+
+
+### Features
+
+* configure devcontainer to mount docker.sock from host ([30277f9](https://github.com/kpeacocke/souschef/commit/30277f90be4b0d26d068861faa2a8104e25e7189))
+
+## [2.6.1](https://github.com/kpeacocke/souschef/compare/v2.6.0...v2.6.1) (2026-01-16)
+
+
+### Bug Fixes
+
+* add VERSION constant to constants.py for health check ([cdd29d3](https://github.com/kpeacocke/souschef/commit/cdd29d31c1996428684123bac78a984279e80da4))
+* release-please workflow trigger fixes ([9f5f860](https://github.com/kpeacocke/souschef/commit/9f5f8603e155411bc48d74f3ecba0313e63e8bbf))
+
+## [2.6.0](https://github.com/kpeacocke/souschef/compare/v2.5.8...v2.6.0) (2026-01-16)
+
+
+### Features
+
+* Add containerization support for SousChef UI ([2779a73](https://github.com/kpeacocke/souschef/commit/2779a73ab8bc7b8dfe4ab6aba87178691c94d3bf))
+* Add containerization support for SousChef UI ([#169](https://github.com/kpeacocke/souschef/issues/169)) ([290aadb](https://github.com/kpeacocke/souschef/commit/290aadb22e43ca0435a5951af56983204a094e3d))
+
+
+### Bug Fixes
+
+* Add build dependencies to Dockerfile ([9c2e732](https://github.com/kpeacocke/souschef/commit/9c2e732ed4c4c5027eb5b42f103a668544069f1f))
+* Add build dependencies to Dockerfile ([98c06bb](https://github.com/kpeacocke/souschef/commit/98c06bb34cfd21b6a3b4884c7423f894f6ccf0cc))
+* Merge consecutive RUN instructions in Dockerfile ([b87ffa6](https://github.com/kpeacocke/souschef/commit/b87ffa62d800aebe21e05f98fefd81c0d950d5bf))
+
+## [2.5.8](https://github.com/kpeacocke/souschef/compare/v2.5.7...v2.5.8) (2026-01-15)
+
+
+### Bug Fixes
+
+* correct YAML syntax in post-release workflow ([fcfa23d](https://github.com/kpeacocke/souschef/commit/fcfa23d0a0dd9abc4a82d9017c0606d878877d78))
+* post-release workflow should only trigger after releases, not on every push to main ([9bd1d92](https://github.com/kpeacocke/souschef/commit/9bd1d9230f7229c53a00210e152df8ed7cc43ff8))
+* post-release workflow timing ([4c3a77c](https://github.com/kpeacocke/souschef/commit/4c3a77cfc5c58487a0fc38fea627de714bacedf9))
+
+## [2.5.7](https://github.com/kpeacocke/souschef/compare/v2.5.6...v2.5.7) (2026-01-15)
+
+
+### Bug Fixes
+
+* improve post-release workflow and README badge ([#166](https://github.com/kpeacocke/souschef/issues/166)) ([2114dd0](https://github.com/kpeacocke/souschef/commit/2114dd05650ff6f1ddafe9a1198360752a644e4d))
+* improve post-release workflow and README badge ([#166](https://github.com/kpeacocke/souschef/issues/166)) ([2114dd0](https://github.com/kpeacocke/souschef/commit/2114dd05650ff6f1ddafe9a1198360752a644e4d))
+
+## [2.5.6](https://github.com/kpeacocke/souschef/compare/v2.5.5...v2.5.6) (2026-01-15)
+
+
+### Bug Fixes
+
+* update pyproject.toml with additional metadata and classifiers ([fa2dbe3](https://github.com/kpeacocke/souschef/commit/fa2dbe34403b5ce647475780fb7148d46a35a3ff))
+
+## [2.5.5](https://github.com/kpeacocke/souschef/compare/v2.5.4...v2.5.5) (2026-01-15)
+
+
+### Bug Fixes
+
+* add Python setup to validate job and id-token permission for PyPI attestations ([59ee988](https://github.com/kpeacocke/souschef/commit/59ee98885a8351b16830b939005a7824bae232c0))
+
+## [2.5.4](https://github.com/kpeacocke/souschef/compare/v2.5.3...v2.5.4) (2026-01-15)
+
+
+### Bug Fixes
+
+* add missing permissions for releases in workflow configuration ([a6c2686](https://github.com/kpeacocke/souschef/commit/a6c2686cd95e88f290621ba66bd6d47a459d456f))
+* remove unnecessary permissions for releases in workflow configuration ([a265f01](https://github.com/kpeacocke/souschef/commit/a265f016294cb9992c40443fde9f15f0b22117ba))
+* update pyproject.toml version parsing to open in binary mode ([ee983b4](https://github.com/kpeacocke/souschef/commit/ee983b4c1467adb87a7c12cc72519054fba3337e))
+* use correct GitHub Actions permissions for release-please ([ef33f43](https://github.com/kpeacocke/souschef/commit/ef33f43055eb20dd8b5c0645d52183c51b22ca5b))
+
+## [2.5.2](https://github.com/kpeacocke/souschef/compare/v2.5.1...v2.5.2) (2026-01-15)
+
+
+### Bug Fixes
+
+* import souschef in test_cli.py ([#160](https://github.com/kpeacocke/souschef/issues/160)) ([901fb0e](https://github.com/kpeacocke/souschef/commit/901fb0e9e9f35518263c935951f44bf72202dc53))
+
+## [2.5.1](https://github.com/kpeacocke/souschef/compare/v2.5.0...v2.5.1) (2026-01-15)
+
+
+### Bug Fixes
+
+* add missing souschef import in test_cli.py ([#158](https://github.com/kpeacocke/souschef/issues/158)) ([c15e9a2](https://github.com/kpeacocke/souschef/commit/c15e9a2f823db5ed060f3aeb8a6824cc529ce047))
+
+## [2.5.0](https://github.com/kpeacocke/souschef/compare/v2.4.0...v2.5.0) (2026-01-15)
+
+
+### Features
+
+* UI & Container ([#155](https://github.com/kpeacocke/souschef/issues/155)) ([e266dd1](https://github.com/kpeacocke/souschef/commit/e266dd152d31b17233ffeed05cfa48d91b858c9b))
+
+## [2.4.0](https://github.com/kpeacocke/souschef/compare/v2.3.1...v2.4.0) (2026-01-13)
+
+
+### Features
+
+* add coverage.xml path fixes and update coverage configuration ([4f225f6](https://github.com/kpeacocke/souschef/commit/4f225f6fbbb18f3638c0518e07c2d1ffff0621f8))
+* add ServerSpec and Goss test framework converters ([#124](https://github.com/kpeacocke/souschef/issues/124)) ([3cedb08](https://github.com/kpeacocke/souschef/commit/3cedb089f2cb980b7279ee7839d208cb7a7b6a3a))
+* enhance linting rules and update SonarCloud issue configurations ([52b499e](https://github.com/kpeacocke/souschef/commit/52b499ea0efd0f1c8a2c234d69a69813608c70ce))
+* polish and ci generation and enhancements ([#133](https://github.com/kpeacocke/souschef/issues/133)) ([6e99528](https://github.com/kpeacocke/souschef/commit/6e99528ee840ba882a0756498a81004f9489a64c))
+* streamline SonarCloud coverage generation and remove redundant steps ([22a0311](https://github.com/kpeacocke/souschef/commit/22a03111d0e72e106591b43091a4e68e884a8e16))
+* terraform! ([#143](https://github.com/kpeacocke/souschef/issues/143)) ([9fc59fe](https://github.com/kpeacocke/souschef/commit/9fc59fe94450135219d618f5899dfa298230f939))
+* workflow fixes ([#134](https://github.com/kpeacocke/souschef/issues/134)) ([ad72489](https://github.com/kpeacocke/souschef/commit/ad72489e952ebb7f714f8eb1c0110545459db487))
+* workflow fixes ([#134](https://github.com/kpeacocke/souschef/issues/134)) ([#135](https://github.com/kpeacocke/souschef/issues/135)) ([565502f](https://github.com/kpeacocke/souschef/commit/565502f9963c1b0a157e395ce4b99d0ef0ed7e45))
+
+
+### Bug Fixes
+
+* improve SonarCloud configuration and workflow ([#137](https://github.com/kpeacocke/souschef/issues/137)) ([6b97a87](https://github.com/kpeacocke/souschef/commit/6b97a8761c11de5e815dbe18a6a341e4aaf0bf8b))
+* workflows ([#139](https://github.com/kpeacocke/souschef/issues/139)) ([4a0ee77](https://github.com/kpeacocke/souschef/commit/4a0ee77c0d88afb35de3110d88e5a98968b6c992))
+
 ## [2.3.0](https://github.com/kpeacocke/souschef/compare/v2.2.0...v2.3.0) (2026-01-11)
 
 

@@ -22,6 +22,9 @@ from souschef.assessment import (
     generate_migration_report as _generate_migration_report,
 )
 from souschef.assessment import (
+    parse_chef_migration_assessment as _parse_chef_migration_assessment,
+)
+from souschef.assessment import (
     validate_conversion as _validate_conversion,
 )
 
@@ -240,6 +243,9 @@ from souschef.parsers.metadata import (  # noqa: F401
 from souschef.parsers.metadata import (
     list_cookbook_structure as _list_cookbook_structure,
 )
+from souschef.parsers.metadata import (
+    parse_cookbook_metadata as _parse_cookbook_metadata,
+)
 from souschef.parsers.metadata import read_cookbook_metadata as _read_cookbook_metadata
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
@@ -357,6 +363,21 @@ def read_cookbook_metadata(path: str) -> str:
 
     """
     return _read_cookbook_metadata(path)
+
+
+@mcp.tool()
+def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
+    """
+    Parse Chef cookbook metadata.rb file and return as dictionary.
+
+    Args:
+        path: Path to the metadata.rb file.
+
+    Returns:
+        Dictionary containing extracted metadata fields.
+
+    """
+    return _parse_cookbook_metadata(path)
 
 
 @mcp.tool()
@@ -1141,6 +1162,183 @@ def _parse_chef_environment_content(content: str) -> dict:
     return env_data
 
 
+def _convert_ruby_literal(value: str) -> Any:
+    """
+    Convert Ruby literal values to equivalent Python types.
+
+    This function handles the conversion of Ruby's basic literal values
+    to their Python equivalents during Chef environment parsing.
+
+    Args:
+        value: String representation of a Ruby literal value.
+
+    Returns:
+        The converted Python value:
+        - "true" -> True (bool)
+        - "false" -> False (bool)
+        - "nil" -> None
+        - Integer strings -> int (e.g., "42" -> 42)
+        - Float strings -> float (e.g., "3.14" -> 3.14, "1e10" -> 10000000000.0)
+        - Unrecognized values -> original string unchanged
+
+    Examples:
+        >>> _convert_ruby_literal("true")
+        True
+        >>> _convert_ruby_literal("42")
+        42
+        >>> _convert_ruby_literal("3.14")
+        3.14
+        >>> _convert_ruby_literal("nil")
+        None
+        >>> _convert_ruby_literal("some_string")
+        'some_string'
+
+    """
+    # Handle boolean and nil values
+    literal_map = {
+        "true": True,
+        "false": False,
+        "nil": None,
+    }
+
+    if value in literal_map:
+        return literal_map[value]
+
+    # Handle numeric values
+    try:
+        # Try integer first
+        if "." not in value and "e" not in value.lower():
+            return int(value)
+        else:
+            return float(value)
+    except ValueError:
+        pass
+
+    # Return as string if no conversion applies
+    return value
+
+
+def _parse_quoted_key(content: str, i: int) -> tuple[str, int]:
+    """Parse a quoted key and return (key, new_index)."""
+    if content[i] not in "'\"":
+        raise ValueError("Expected quote at start of key")
+
+    quote = content[i]
+    i += 1
+    key_start = i
+    while i < len(content) and content[i] != quote:
+        i += 1
+    key = content[key_start:i]
+    i += 1  # skip closing quote
+    return key, i
+
+
+def _parse_nested_hash(content: str, i: int) -> tuple[dict, int]:
+    """Parse a nested hash and return (parsed_dict, new_index)."""
+    if content[i] != "{":
+        raise ValueError("Expected opening brace for nested hash")
+
+    brace_count = 1
+    start = i
+    i += 1
+    while i < len(content) and brace_count > 0:
+        if content[i] == "{":
+            brace_count += 1
+        elif content[i] == "}":
+            brace_count -= 1
+        i += 1
+
+    nested_content = content[start + 1 : i - 1]  # exclude braces
+    return parse_ruby_hash(nested_content), i
+
+
+def _parse_simple_value(content: str, i: int) -> tuple[str, int]:
+    """Parse a simple value and return (value, new_index)."""
+    value_start = i
+    while i < len(content) and content[i] not in ",}":
+        i += 1
+    value = content[value_start:i].strip()
+    # Remove quotes if present
+    if (value.startswith("'") and value.endswith("'")) or (
+        value.startswith('"') and value.endswith('"')
+    ):
+        value = value[1:-1]
+    else:
+        # Convert Ruby literals to Python types
+        value = _convert_ruby_literal(value)
+    return value, i
+
+
+def _skip_to_next_item(content: str, i: int) -> int:
+    """Skip to the next item, handling delimiters."""
+    while i < len(content) and content[i] not in ",}":
+        i += 1
+    if i < len(content) and (content[i] == "," or content[i] == "}"):
+        i += 1
+    return i
+
+
+def parse_ruby_hash(content: str) -> dict:
+    """Parse Ruby hash syntax recursively."""
+    result = {}
+
+    # Simple recursive parser for Ruby hash syntax
+    # This handles nested braces by counting them
+    i = 0
+    while i < len(content):
+        # Skip whitespace
+        i = _skip_whitespace(content, i)
+        if i >= len(content):
+            break
+
+        # Parse key-value pair
+        key, value, i = _parse_key_value_pair(content, i)
+        if key is not None:
+            result[key] = value
+
+        # Skip to next item
+        i = _skip_to_next_item(content, i)
+
+    return result
+
+
+def _skip_whitespace(content: str, i: int) -> int:
+    """Skip whitespace characters and return new index."""
+    while i < len(content) and content[i].isspace():
+        i += 1
+    return i
+
+
+def _parse_key_value_pair(content: str, i: int) -> tuple[str | None, Any, int]:
+    """Parse a single key => value pair and return (key, value, new_index)."""
+    # Look for key => value patterns
+    if content[i] in "'\"":
+        # Parse quoted key
+        key, i = _parse_quoted_key(content, i)
+
+        # Skip whitespace and =>
+        i = _skip_whitespace_and_arrows(content, i)
+
+        value: Any
+        if i < len(content) and content[i] == "{":
+            # Nested hash
+            value, i = _parse_nested_hash(content, i)
+        else:
+            # Simple value
+            value, i = _parse_simple_value(content, i)
+
+        return key, value, i
+
+    return None, None, i
+
+
+def _skip_whitespace_and_arrows(content: str, i: int) -> int:
+    """Skip whitespace and => symbols."""
+    while i < len(content) and (content[i].isspace() or content[i] in "=>"):
+        i += 1
+    return i
+
+
 def _extract_attributes_block(content: str, block_type: str) -> dict:
     """Extract attribute blocks from Chef environment content."""
     # Find the block start
@@ -1152,37 +1350,7 @@ def _extract_attributes_block(content: str, block_type: str) -> dict:
 
     block_content = match.group(1).strip()
 
-    # Simple parsing of Ruby hash-like structure
-    # Ruby attribute hashes use => syntax, which we convert to Python dict
-    # This is intentionally simple - complex Chef DSL needs full Ruby parser
-    attributes = {}
-
-    # Parse simple key-value pairs like 'port' => '8080'
-    key_value_pattern = (
-        r"['\"]([^'\"]{0,100})['\"][\s:]*=>[\s:]*['\"]([^'\"]{0,200})['\"]"
-    )
-    for match in re.finditer(key_value_pattern, block_content):
-        attr_key = match.group(1)
-        attr_value = match.group(2)
-        attributes[attr_key] = attr_value
-
-    # Parse nested structures (basic support)
-    nested_pattern = (
-        r"['\"](([^'\"\n]{0,100}))['\"](\\s|:)*=>(\\s|:)*\\{([^}]{0,500})\\}"
-    )
-    for match in re.finditer(nested_pattern, block_content):
-        key = match.group(1)
-        nested_content = match.group(5)
-        nested_attrs = {}
-
-        for nested_match in re.finditer(key_value_pattern, nested_content):
-            nested_key = nested_match.group(1)
-            nested_value = nested_match.group(2)
-            nested_attrs[nested_key] = nested_value
-
-        if nested_attrs:
-            attributes[key] = nested_attrs
-
+    attributes = parse_ruby_hash(block_content)
     return attributes
 
 
@@ -1448,7 +1616,7 @@ def _find_environment_patterns_in_content(content: str, file_path: str) -> list:
     # Common Chef environment patterns
     environment_patterns = [
         (r"node\.chef_environment", "node.chef_environment"),
-        (r"node\[['\"]\environment['\"]\]", 'node["environment"]'),
+        (r"node\[['\"]environment['\"]\]", 'node["environment"]'),
         (r"environment\s+['\"]([^'\"\n]{0,100})['\"]", "environment declaration"),
         (
             r"if\s+node\.chef_environment\s*==\s*['\"]([^'\"\n]{0,100})['\"]",
@@ -1809,7 +1977,7 @@ def _build_conversion_details_section(results: list) -> str:
         if "error" in result:
             section += f"❌ {result['databag']}/{result['item']}: {result['error']}\n"
         else:
-            status = "🔒 Encrypted" if result["encrypted"] else "📄 Plain"
+            status = "🔒 Encrypted" if result.get("encrypted", False) else "📄 Plain"
             databag_item = f"{result['databag']}/{result['item']}"
             target = result["target_file"]
             section += f"✅ {databag_item} → {target} ({status})\n"
@@ -2618,6 +2786,29 @@ def generate_github_workflow_from_chef(
         return format_error_with_context(
             e, "generating GitHub Actions workflow", cookbook_path
         )
+
+
+@mcp.tool()
+def parse_chef_migration_assessment(
+    cookbook_paths: str,
+    migration_scope: str = "full",
+    target_platform: str = "ansible_awx",
+) -> dict[str, Any]:
+    """
+    Parse Chef cookbook migration assessment and return as dictionary.
+
+    Args:
+        cookbook_paths: Comma-separated paths to Chef cookbooks or cookbook directory
+        migration_scope: Scope of migration (full, recipes_only, infrastructure_only)
+        target_platform: Target platform (ansible_awx, ansible_core, ansible_tower)
+
+    Returns:
+        Dictionary containing assessment data with complexity, recommendations, etc.
+
+    """
+    return _parse_chef_migration_assessment(
+        cookbook_paths, migration_scope, target_platform
+    )
 
 
 # AWX/AAP deployment wrappers for backward compatibility
