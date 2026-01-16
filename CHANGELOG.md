@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.2](https://github.com/kpeacocke/souschef/compare/v2.7.1...v2.7.2) (2026-01-16)
+
+
+### Bug Fixes
+
+* add missing build dependencies for Docker container ([2a2532a](https://github.com/kpeacocke/souschef/commit/2a2532aa599a138031a8d7b64e90d4357c2ddaff))
+
 ## [2.7.1](https://github.com/kpeacocke/souschef/compare/v2.7.0...v2.7.1) (2026-01-16)
 
 
