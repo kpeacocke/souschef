@@ -26,12 +26,12 @@ except ImportError:
     anthropic = None  # type: ignore[assignment]
 
 try:
-    from ibm_watsonx_ai import APIClient  # type: ignore[import]
+    from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]
 except ImportError:
     APIClient = None
 
 try:
-    import requests  # type: ignore[import]
+    import requests  # type: ignore[import-untyped]
 except ImportError:
     requests = None
 

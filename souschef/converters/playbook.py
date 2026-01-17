@@ -34,16 +34,16 @@ from souschef.parsers.recipe import parse_recipe
 
 # Optional AI provider imports
 try:
-    import requests  # type: ignore[import-not-found,import-untyped]
+    import requests  # type: ignore[import-untyped]
 except ImportError:
-    requests = None  # type: ignore[assignment,misc]
+    requests = None
 
 try:
-    from ibm_watsonx_ai import (  # type: ignore[import-not-found,import-untyped]
-        APIClient,  # type: ignore[import-not-found,import-untyped]
+    from ibm_watsonx_ai import (  # type: ignore[import-not-found]
+        APIClient,
     )
 except ImportError:
-    APIClient = None  # type: ignore[assignment,misc]
+    APIClient = None
 
 # Maximum length for guard condition patterns in regex matching
 MAX_GUARD_LENGTH = 500
@@ -196,7 +196,7 @@ def _initialize_ai_client(
 
         return anthropic.Anthropic(api_key=api_key)
     elif ai_provider.lower() == "openai":
-        import openai  # type: ignore[import-not-found,import-untyped]
+        import openai
 
         return openai.OpenAI(api_key=api_key)
     elif ai_provider.lower() == "watson":
