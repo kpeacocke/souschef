@@ -277,10 +277,13 @@ def _sanitize_lightspeed_base_url(base_url: str) -> str:
 
     - Default to the standard Lightspeed endpoint if no URL is provided.
     - Only allow HTTPS scheme.
-    - Restrict host to the official Red Hat API domain.
+    - Restrict host to known Red Hat-owned Lightspeed domains.
     - Strip any user-supplied path, query, or fragment.
     """
     default_url = "https://api.redhat.com"
+    allowed_hosts = {
+        "api.redhat.com",
+    }
 
     if not base_url or not str(base_url).strip():
         return default_url
@@ -295,8 +298,8 @@ def _sanitize_lightspeed_base_url(base_url: str) -> str:
         raise ValueError("Base URL must use HTTPS.")
 
     hostname = (parsed.hostname or "").lower()
-    if hostname != "api.redhat.com":
-        raise ValueError("Base URL host must be api.redhat.com.")
+    if hostname not in allowed_hosts:
+        raise ValueError("Base URL host must be a supported Red Hat domain (e.g. api.redhat.com).")
 
     # Normalize to scheme + netloc only; drop path/query/fragment.
     cleaned = parsed._replace(path="", params="", query="", fragment="")
