@@ -14,7 +14,7 @@ services:
       # - ./souschef:/app/souschef:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "souschef/ui/health_check.py"]
+      test: ["CMD", "python", "/app/souschef/ui/health_check.py"]
       interval: 30s
       timeout: 10s
       retries: 3

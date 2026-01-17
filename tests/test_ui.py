@@ -680,6 +680,8 @@ Community Cookbooks:
         # Should find the longest chain
         assert len(critical_path) == 3  # cookbook1 -> cookbook2 -> cookbook3
         assert critical_path == ["cookbook1", "cookbook2", "cookbook3"]
+
+    def test_identify_bottlenecks(self):
         """Test identifying dependency bottlenecks."""
         from souschef.ui.app import _identify_bottlenecks
 

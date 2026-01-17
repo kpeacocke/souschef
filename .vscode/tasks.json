@@ -200,6 +200,17 @@
                 "panel": "shared"
             },
             "problemMatcher": []
+        },
+        {
+            "label": "Regenerate Go Test Results",
+            "type": "shell",
+            "command": "./terraform-provider/regenerate-tests.sh",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": []
         }
     ]
 }

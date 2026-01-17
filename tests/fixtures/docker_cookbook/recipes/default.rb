@@ -69,7 +69,7 @@ directory '/etc/docker' do
 end
 
 file '/etc/docker/daemon.json' do
-  content node['docker']['daemon'].to_json
+  content lazy { node['docker']['daemon'].to_json }
   owner 'root'
   group 'root'
   mode '0644'

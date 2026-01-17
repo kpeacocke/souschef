@@ -204,15 +204,25 @@ def _get_nodejs_npm_params(
     return params
 
 
+INCLUDE_RECIPE_MAPPINGS: dict[str, dict[str, Any]] = {
+    "nodejs": {"name": ["nodejs", "npm"], "state": "present", "update_cache": True},
+}
+
+
 def _get_include_recipe_params(
     resource_name: str, action: str, props: dict[str, Any]
 ) -> dict[str, Any]:
-    """Build parameters for include_recipe resources."""
-    # Handle specific recipes
-    if resource_name == "nodejs":
-        # include_recipe 'nodejs' should install nodejs and npm
-        return {"name": ["nodejs", "npm"], "state": "present", "update_cache": True}
-    # For other recipes, this is a placeholder - would need recipe mapping
+    """
+    Build parameters for include_recipe resources.
+
+    Recipe-specific behaviors are defined in INCLUDE_RECIPE_MAPPINGS to avoid
+    hardcoded logic for individual recipes.
+    """
+    mapped_params = INCLUDE_RECIPE_MAPPINGS.get(resource_name)
+    if mapped_params is not None:
+        # Return a copy to prevent callers from mutating the shared mapping.
+        return dict(mapped_params)
+    # Default behavior for recipes without a specific mapping.
     return {"name": resource_name, "state": "present"}
 
 
