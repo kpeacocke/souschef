@@ -14,6 +14,8 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  id-token: write  # Required for PyPI publishing
+  packages: write  # Required for package publishing
 
 jobs:
   release-please:
@@ -27,17 +29,7 @@ jobs:
         with:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
-          token: ${{ secrets.RELEASE_TOKEN }}
-
-      - name: Auto-merge release PR
-        if: ${{ steps.release.outputs.prs_created == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_JSON: ${{ steps.release.outputs.pr }}
-        run: |
-          PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
-          echo "Enabling auto-merge for release PR #$PR_NUMBER..."
-          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch --repo ${{ github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log release created
         if: ${{ steps.release.outputs.release_created }}
