@@ -6,10 +6,6 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from souschef.converters.cookbook_specific import (
-    build_cookbook_resource_params,
-    get_cookbook_package_config,
-)
 from souschef.core.constants import ACTION_TO_STATE, RESOURCE_MAPPINGS
 
 # Type alias for parameter builder functions
