@@ -297,15 +297,20 @@ def _extract_tar_securely(
     total_size = 0
     file_count = 0
 
-    with tarfile.open(str(archive_path), mode=mode) as tar_ref:  # type: ignore[call-overload]
-        # Pre-scan for security issues
-        for member in tar_ref.getmembers():
-            _validate_tar_file_security(member, file_count, total_size)
-            file_count += 1
-            total_size += member.size
+    try:
+        with tarfile.open(str(archive_path), mode=mode) as tar_ref:  # type: ignore[call-overload]
+            # Pre-scan for security issues
+            for member in tar_ref.getmembers():
+                _validate_tar_file_security(member, file_count, total_size)
+                file_count += 1
+                total_size += member.size
 
-        # Safe extraction with custom filter
-        tar_ref.extractall(extraction_dir, filter=_secure_tar_filter)
+            # Safe extraction with custom filter
+            tar_ref.extractall(extraction_dir, filter=_secure_tar_filter)
+    except tarfile.TarError as e:
+        raise ValueError(f"Invalid or corrupted TAR archive: {e}") from e
+    except Exception as e:
+        raise ValueError(f"Failed to process TAR archive: {e}") from e
 
 
 def _validate_tar_file_security(member, file_count: int, total_size: int) -> None:

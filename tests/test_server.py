@@ -15686,3 +15686,183 @@ def test_generate_github_workflow_from_chef_boolean_param_variations(cache, arti
     # Should not error regardless of boolean string format
     assert "name:" in result
     assert "jobs:" in result
+
+
+# Cookbook-specific conversion tests
+
+
+def test_get_cookbook_package_config_known_cookbook():
+    """Test get_cookbook_package_config with known cookbook."""
+    from souschef.converters.cookbook_specific import get_cookbook_package_config
+
+    result = get_cookbook_package_config("nodejs")
+    assert result is not None
+    assert result["module"] == "ansible.builtin.apt"
+    assert "nodejs" in result["params"]["name"]
+    assert "npm" in result["params"]["name"]
+
+
+def test_get_cookbook_package_config_unknown_cookbook():
+    """Test get_cookbook_package_config with unknown cookbook."""
+    from souschef.converters.cookbook_specific import get_cookbook_package_config
+
+    result = get_cookbook_package_config("unknown_cookbook")
+    assert result is None
+
+
+def test_get_cookbook_package_config_apache2():
+    """Test get_cookbook_package_config with apache2 cookbook."""
+    from souschef.converters.cookbook_specific import get_cookbook_package_config
+
+    result = get_cookbook_package_config("apache2")
+    assert result is not None
+    assert result["module"] == "ansible.builtin.apt"
+    assert result["params"]["name"] == "apache2"
+
+
+def test_get_cookbook_package_config_mysql():
+    """Test get_cookbook_package_config with mysql cookbook."""
+    from souschef.converters.cookbook_specific import get_cookbook_package_config
+
+    result = get_cookbook_package_config("mysql")
+    assert result is not None
+    assert result["module"] == "ansible.builtin.apt"
+    assert result["params"]["name"] == "mysql-server"
+
+
+def test_get_cookbook_package_config_docker():
+    """Test get_cookbook_package_config with docker cookbook."""
+    from souschef.converters.cookbook_specific import get_cookbook_package_config
+
+    result = get_cookbook_package_config("docker")
+    assert result is not None
+    assert result["module"] == "ansible.builtin.apt"
+    assert "docker-ce" in result["params"]["name"]
+    assert "docker-ce-cli" in result["params"]["name"]
+    assert "containerd.io" in result["params"]["name"]
+
+
+def test_get_cookbook_resource_config_known_resource():
+    """Test get_cookbook_resource_config with known resource type."""
+    from souschef.converters.cookbook_specific import get_cookbook_resource_config
+
+    result = get_cookbook_resource_config("nodejs_npm")
+    assert result is not None
+    assert result["description"] == "Node.js npm package installation"
+    assert result["params_builder"] == "_build_nodejs_npm_params"
+
+
+def test_get_cookbook_resource_config_unknown_resource():
+    """Test get_cookbook_resource_config with unknown resource type."""
+    from souschef.converters.cookbook_specific import get_cookbook_resource_config
+
+    result = get_cookbook_resource_config("unknown_resource")
+    assert result is None
+
+
+def test_build_cookbook_resource_params_nodejs_npm_install():
+    """Test build_cookbook_resource_params with nodejs_npm install action."""
+    from souschef.converters.cookbook_specific import build_cookbook_resource_params
+
+    result = build_cookbook_resource_params(
+        "nodejs_npm", "express", "install", {"version": "4.18.0"}
+    )
+    assert result is not None
+    assert result["name"] == "express"
+    assert result["global"] is True
+    assert result["version"] == "4.18.0"
+    assert result["state"] == "present"
+
+
+def test_build_cookbook_resource_params_nodejs_npm_remove():
+    """Test build_cookbook_resource_params with nodejs_npm remove action."""
+    from souschef.converters.cookbook_specific import build_cookbook_resource_params
+
+    result = build_cookbook_resource_params("nodejs_npm", "lodash", "remove", {})
+    assert result is not None
+    assert result["name"] == "lodash"
+    assert result["global"] is True
+    assert result["state"] == "absent"
+
+
+def test_build_cookbook_resource_params_nodejs_npm_unknown_action():
+    """Test build_cookbook_resource_params with nodejs_npm unknown action."""
+    from souschef.converters.cookbook_specific import build_cookbook_resource_params
+
+    result = build_cookbook_resource_params("nodejs_npm", "test", "unknown", {})
+    assert result is not None
+    assert result["name"] == "test"
+    assert result["state"] == "present"  # Default state
+
+
+def test_build_cookbook_resource_params_nodejs_npm_no_version():
+    """Test build_cookbook_resource_params with nodejs_npm without version."""
+    from souschef.converters.cookbook_specific import build_cookbook_resource_params
+
+    result = build_cookbook_resource_params("nodejs_npm", "mocha", "install", {})
+    assert result is not None
+    assert result["name"] == "mocha"
+    assert result["global"] is True
+    assert "version" not in result
+    assert result["state"] == "present"
+
+
+def test_build_cookbook_resource_params_unknown_resource_type():
+    """Test build_cookbook_resource_params with unknown resource type."""
+    from souschef.converters.cookbook_specific import build_cookbook_resource_params
+
+    result = build_cookbook_resource_params("unknown_resource", "test", "create", {})
+    assert result is None
+
+
+def test_build_nodejs_npm_params_install_with_version():
+    """Test _build_nodejs_npm_params install action with version."""
+    from souschef.converters.cookbook_specific import _build_nodejs_npm_params
+
+    result = _build_nodejs_npm_params("express", "install", {"version": "4.18.0"})
+    assert result["name"] == "express"
+    assert result["global"] is True
+    assert result["version"] == "4.18.0"
+    assert result["state"] == "present"
+
+
+def test_build_nodejs_npm_params_remove_action():
+    """Test _build_nodejs_npm_params remove action."""
+    from souschef.converters.cookbook_specific import _build_nodejs_npm_params
+
+    result = _build_nodejs_npm_params("lodash", "remove", {})
+    assert result["name"] == "lodash"
+    assert result["global"] is True
+    assert result["state"] == "absent"
+
+
+def test_build_nodejs_npm_params_unknown_action():
+    """Test _build_nodejs_npm_params with unknown action defaults to present."""
+    from souschef.converters.cookbook_specific import _build_nodejs_npm_params
+
+    result = _build_nodejs_npm_params("test", "unknown", {})
+    assert result["name"] == "test"
+    assert result["global"] is True
+    assert result["state"] == "present"
+
+
+def test_normalize_template_value_string():
+    """Test _normalize_template_value with string input."""
+    from souschef.converters.cookbook_specific import _normalize_template_value
+
+    result = _normalize_template_value("  test value  ")
+    assert result == "test value"
+
+
+def test_normalize_template_value_non_string():
+    """Test _normalize_template_value with non-string input."""
+    from souschef.converters.cookbook_specific import _normalize_template_value
+
+    result = _normalize_template_value(42)
+    assert result == 42
+
+    result = _normalize_template_value(None)
+    assert result is None
+
+    result = _normalize_template_value([1, 2, 3])
+    assert result == [1, 2, 3]
