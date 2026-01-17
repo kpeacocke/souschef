@@ -54,11 +54,24 @@ COOKBOOK_RESOURCE_MAPPINGS: dict[str, dict[str, Any]] = {
 }
 
 
+def _normalize_template_value(value: Any) -> Any:
+    """
+    Normalize a template value for use in generated parameters.
+
+    This local implementation avoids importing from souschef.converters.resource
+    to prevent an import cycle. It performs a minimal, safe normalization:
+    - For strings, trim surrounding whitespace.
+    - For all other types, return the value unchanged.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+
 def _build_nodejs_npm_params(
     resource_name: str, action: str, props: dict[str, Any]
 ) -> dict[str, Any]:
     """Build parameters for nodejs_npm resources."""
-    from souschef.converters.resource import _normalize_template_value
 
     params = {"name": resource_name, "global": True}
     if "version" in props:
