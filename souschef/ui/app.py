@@ -27,7 +27,7 @@ MIME_APPLICATION_JSON = "application/json"
 SECTION_CIRCULAR_DEPENDENCIES = "Circular Dependencies"
 NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
 NAV_AI_SETTINGS = "AI Settings"
-BUTTON_ANALYZE_DEPENDENCIES = "Analyze Dependencies"
+BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
 SECTION_COMMUNITY_COOKBOOKS = "Community Cookbooks"
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
 INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
@@ -205,7 +205,7 @@ def show_dashboard():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("Cookbooks Analyzed", "0", "Ready to analyze")
+        st.metric("Cookbooks Analysed", "0", "Ready to analyse")
         st.caption("Total cookbooks processed")
 
     with col2:
@@ -248,7 +248,7 @@ def show_dashboard():
         st.markdown("**Or choose your workflow:**")
 
         # Quick actions
-        if st.button("Analyze Cookbooks", type="primary", use_container_width=True):
+        if st.button("Analyse Cookbooks", type="primary", use_container_width=True):
             st.session_state.current_page = "Cookbook Analysis"
             st.rerun()
 
@@ -256,7 +256,7 @@ def show_dashboard():
             st.session_state.current_page = NAV_MIGRATION_PLANNING
             st.rerun()
 
-        if st.button(BUTTON_ANALYZE_DEPENDENCIES, use_container_width=True):
+        if st.button(BUTTON_ANALYSE_DEPENDENCIES, use_container_width=True):
             st.session_state.current_page = NAV_DEPENDENCY_MAPPING
             st.rerun()
 
@@ -273,7 +273,7 @@ def show_dashboard():
         **New to SousChef? Here's how to begin:**
 
         1. **Upload Cookbooks**: Use the uploader above or go to Cookbook Analysis
-        2. **Analyze Complexity**: Get detailed migration assessments
+        2. **Analyse Complexity**: Get detailed migration assessments
         3. **Plan Migration**: Generate timelines and resource requirements
         4. **Convert to Ansible**: Download converted playbooks
 
@@ -508,15 +508,15 @@ def _display_migration_action_buttons(cookbook_paths):
                     st.error(f"Error generating report: {e}")
 
     with col2:
-        if st.button("🔍 Analyze Dependencies", width="stretch"):
+        if st.button("🔍 Analyse Dependencies", width="stretch"):
             if len(cookbook_paths.split(",")) == 1:
                 # Single cookbook dependency analysis
                 cookbook_path = cookbook_paths.split(",")[0].strip()
-                with st.spinner(f"Analyzing dependencies for {cookbook_path}..."):
+                with st.spinner(f"Analysing dependencies for {cookbook_path}..."):
                     try:
-                        from souschef.assessment import analyze_cookbook_dependencies
+                        from souschef.assessment import analyse_cookbook_dependencies
 
-                        dep_analysis = analyze_cookbook_dependencies(cookbook_path)
+                        dep_analysis = analyse_cookbook_dependencies(cookbook_path)
                         st.session_state.dep_analysis = dep_analysis
                         st.success("Dependency analysis complete!")
                     except Exception as e:
@@ -582,7 +582,7 @@ def show_dependency_mapping():
     st.header(NAV_DEPENDENCY_MAPPING)
 
     # Import assessment functions
-    from souschef.assessment import analyze_cookbook_dependencies
+    from souschef.assessment import analyse_cookbook_dependencies
 
     st.markdown("""
     Visualise and analyse cookbook dependencies to understand migration order
@@ -633,7 +633,7 @@ def show_dependency_mapping():
         dependency_depth = st.selectbox(
             "Analysis Depth",
             ["direct", "transitive", "full"],
-            help="How deep to analyze dependencies",
+            help="How deep to analyse dependencies",
             format_func=lambda x: {
                 "direct": "Direct Dependencies Only",
                 "transitive": "Include Transitive Dependencies",
@@ -654,21 +654,21 @@ def show_dependency_mapping():
         )
 
     # Analysis button
-    if st.button(BUTTON_ANALYZE_DEPENDENCIES, type="primary", width="stretch"):
+    if st.button(BUTTON_ANALYSE_DEPENDENCIES, type="primary", width="stretch"):
         if not cookbook_path or not cookbook_path.strip():
             st.error("Please enter a cookbook directory path.")
             return
 
         # Create progress tracker
         progress_tracker = ProgressTracker(
-            total_steps=5, description="Analyzing cookbook dependencies..."
+            total_steps=5, description="Analysing cookbook dependencies..."
         )
 
         try:
             progress_tracker.update(1, "Scanning cookbook directory...")
 
-            # Analyze dependencies
-            analysis_result = analyze_cookbook_dependencies(
+            # Analyse dependencies
+            analysis_result = analyse_cookbook_dependencies(
                 cookbook_path.strip(), dependency_depth
             )
 
@@ -722,7 +722,7 @@ def _get_dependency_mapping_inputs():
         dependency_depth = st.selectbox(
             "Analysis Depth",
             ["direct", "transitive", "full"],
-            help="How deep to analyze dependencies",
+            help="How deep to analyse dependencies",
             format_func=lambda x: {
                 "direct": "Direct Dependencies Only",
                 "transitive": "Include Transitive Dependencies",
@@ -750,7 +750,7 @@ def _handle_dependency_analysis_execution(
 ):
     """Handle the dependency analysis execution when button is clicked."""
     # Analysis button
-    if st.button(BUTTON_ANALYZE_DEPENDENCIES, type="primary", width="stretch"):
+    if st.button(BUTTON_ANALYSE_DEPENDENCIES, type="primary", width="stretch"):
         if not cookbook_path or not cookbook_path.strip():
             st.error("Please enter a cookbook directory path.")
             return
@@ -763,18 +763,18 @@ def _handle_dependency_analysis_execution(
 def _perform_dependency_analysis(cookbook_path, dependency_depth, visualization_type):
     """Perform the actual dependency analysis."""
     # Import assessment functions
-    from souschef.assessment import analyze_cookbook_dependencies
+    from souschef.assessment import analyse_cookbook_dependencies
 
     # Create progress tracker
     progress_tracker = ProgressTracker(
-        total_steps=5, description="Analyzing cookbook dependencies..."
+        total_steps=5, description="Analysing cookbook dependencies..."
     )
 
     try:
         progress_tracker.update(1, "Scanning cookbook directory...")
 
-        # Analyze dependencies
-        analysis_result = analyze_cookbook_dependencies(cookbook_path, dependency_depth)
+        # Analyse dependencies
+        analysis_result = analyse_cookbook_dependencies(cookbook_path, dependency_depth)
 
         progress_tracker.update(2, "Parsing dependency relationships...")
         progress_tracker.update(3, "Detecting circular dependencies...")
@@ -1093,7 +1093,7 @@ def _create_plotly_node_trace(graph, pos):
         else:
             node_colors.append("lightgray")  # Leaf dependencies
 
-    node_trace: go.Scatter = go.Scatter(
+    node_trace = go.Scatter(
         x=node_x,
         y=node_y,
         mode="markers+text",
@@ -1711,8 +1711,55 @@ def _display_strategic_recommendations(impact_analysis):
 
 def _handle_graph_caching():
     """Handle graph caching controls and cleanup."""
-    # Add cache management controls if needed
-    pass
+    st.subheader("💾 Graph Cache Management")
+
+    col1, col2, col3 = st.columns([1, 1, 2])
+
+    with col1:
+        # Toggle caching on/off
+        cache_enabled = st.checkbox(
+            "Enable Graph Caching",
+            value=st.session_state.get("graph_cache_enabled", True),
+            help="Cache graph visualizations to improve performance for repeated views",
+        )
+        st.session_state.graph_cache_enabled = cache_enabled
+
+    with col2:
+        # Clear cache button
+        if st.button("🗑️ Clear Cache", help="Clear all cached graph data"):
+            # Find and remove all graph cache keys
+            cache_keys = [key for key in st.session_state if key.startswith("graph_")]
+            for key in cache_keys:
+                del st.session_state[key]
+            st.success(f"✅ Cleared {len(cache_keys)} cached graphs")
+            st.rerun()
+
+    with col3:
+        # Cache statistics
+        cache_keys = [key for key in st.session_state if key.startswith("graph_")]
+        cache_count = len(cache_keys)
+
+        if cache_count > 0:
+            # Estimate memory usage (rough approximation)
+            estimated_memory = cache_count * 50  # Rough estimate: 50KB per cached graph
+            st.metric(
+                "Cached Graphs",
+                f"{cache_count} items",
+                f"~{estimated_memory}KB estimated",
+            )
+        else:
+            st.info("📭 No graphs currently cached")
+
+    # Cache status indicator
+    if cache_enabled:
+        st.success(
+            "✅ Graph caching is enabled - visualizations will be "
+            "cached for faster loading"
+        )
+    else:
+        st.warning(
+            "⚠️ Graph caching is disabled - each visualization will be recalculated"
+        )
 
 
 def _display_dependency_graph_visualization(
@@ -2118,6 +2165,9 @@ def _display_graph_visualization_section(analysis_result, viz_type):
             "random": "Random Layout",
         }.get(x, str(x)),
     )
+
+    # Graph cache management
+    _handle_graph_caching()
 
     # Graph Filtering Options
     st.subheader("🔍 Graph Filtering & Analysis")

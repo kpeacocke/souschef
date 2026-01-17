@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from souschef.server import (
-    analyze_chef_environment_usage,
+    analyse_chef_environment_usage,
     convert_chef_environment_to_inventory_group,
     generate_awx_job_template_from_cookbook,
     generate_awx_project_from_cookbooks,
@@ -484,7 +484,7 @@ default_attributes({})
         metadata = cookbook_path / "metadata.rb"
         metadata.write_text("name 'mycookbook'\nversion '1.0.0'\n")
 
-        result = analyze_chef_environment_usage(str(cookbook_path), str(env_path))
+        result = analyse_chef_environment_usage(str(cookbook_path), str(env_path))
 
         assert isinstance(result, str)
         # Should analyze successfully
@@ -510,7 +510,7 @@ description 'Bad environment
         metadata = cookbook_path / "metadata.rb"
         metadata.write_text("name 'test'\nversion '1.0.0'\n")
 
-        result = analyze_chef_environment_usage(str(cookbook_path), str(env_path))
+        result = analyse_chef_environment_usage(str(cookbook_path), str(env_path))
 
         assert isinstance(result, str)
         # Should handle error gracefully
@@ -919,7 +919,7 @@ cookbook 'postgresql', '>= 3.0.0'
         metadata = cookbook_path / "metadata.rb"
         metadata.write_text("name 'test'\nversion '1.0.0'\n")
 
-        result = analyze_chef_environment_usage(str(cookbook_path), str(env_path))
+        result = analyse_chef_environment_usage(str(cookbook_path), str(env_path))
 
         assert isinstance(result, str)
         assert len(result) > 0

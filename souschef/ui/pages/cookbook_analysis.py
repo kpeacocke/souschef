@@ -499,7 +499,13 @@ def show_cookbook_analysis_page():
 
 def _setup_cookbook_analysis_ui():
     """Set up the cookbook analysis page header."""
-    pass
+    st.title("SousChef - Cookbook Analysis")
+    st.markdown("""
+    Analyse your Chef cookbooks and get detailed migration assessments for
+    converting to Ansible playbooks.
+
+    Upload a cookbook archive or specify a directory path to begin analysis.
+    """)
 
 
 def _get_cookbook_path_input():
@@ -594,12 +600,12 @@ def _collect_cookbook_data(cookbooks):
     """Collect data for all cookbooks."""
     cookbook_data = []
     for cookbook in cookbooks:
-        cookbook_info = _analyze_cookbook_metadata(cookbook)
+        cookbook_info = _analyse_cookbook_metadata(cookbook)
         cookbook_data.append(cookbook_info)
     return cookbook_data
 
 
-def _analyze_cookbook_metadata(cookbook):
+def _analyse_cookbook_metadata(cookbook):
     """Analyse metadata for a single cookbook."""
     metadata_file = cookbook / METADATA_FILENAME
     if metadata_file.exists():
@@ -858,7 +864,7 @@ def _perform_cookbook_analysis(
 
         cookbook_dir = _find_cookbook_directory(cookbook_path, cookbook_name)
         if cookbook_dir:
-            analysis_result = _analyze_single_cookbook(cookbook_name, cookbook_dir)
+            analysis_result = _analyse_single_cookbook(cookbook_name, cookbook_dir)
             results.append(analysis_result)
 
     return results
@@ -877,7 +883,7 @@ def _find_cookbook_directory(cookbook_path, cookbook_name):
     return None
 
 
-def _analyze_single_cookbook(cookbook_name, cookbook_dir):
+def _analyse_single_cookbook(cookbook_name, cookbook_dir):
     """Analyse a single cookbook."""
     try:
         assessment = parse_chef_migration_assessment(str(cookbook_dir))
@@ -1039,11 +1045,11 @@ def _display_single_cookbook_details(result):
 
 
 def _convert_and_download_playbooks(results):
-    """Convert analyzed cookbooks to Ansible playbooks and provide download."""
+    """Convert analysed cookbooks to Ansible playbooks and provide download."""
     successful_results = [r for r in results if r["status"] == ANALYSIS_STATUS_ANALYSED]
 
     if not successful_results:
-        st.warning("No successfully analyzed cookbooks to convert.")
+        st.warning("No successfully analysed cookbooks to convert.")
         return
 
     with st.spinner("Converting cookbooks to Ansible playbooks..."):

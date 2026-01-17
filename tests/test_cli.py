@@ -178,7 +178,7 @@ def test_cookbook_command(runner):
     result = runner.invoke(cli, ["cookbook", str(FIXTURES_DIR)])
 
     assert result.exit_code == 0
-    assert "Analyzing cookbook" in result.output
+    assert "Analysing cookbook" in result.output
     assert "Metadata" in result.output or "Structure" in result.output
 
 
@@ -187,7 +187,7 @@ def test_cookbook_command_with_dry_run(runner):
     result = runner.invoke(cli, ["cookbook", str(FIXTURES_DIR), "--dry-run"])
 
     assert result.exit_code == 0
-    assert "Analyzing cookbook" in result.output
+    assert "Analysing cookbook" in result.output
 
 
 def test_cookbook_command_with_output(runner, tmp_path):
@@ -507,7 +507,7 @@ def test_cookbook_command_with_resources_and_templates(runner, tmp_path):
     result = runner.invoke(cli, ["cookbook", str(cookbook)])
 
     assert result.exit_code == 0
-    assert "Analyzing cookbook" in result.output
+    assert "Analysing cookbook" in result.output
 
 
 def test_output_result_with_list_data():
@@ -571,7 +571,7 @@ def test_cookbook_command_with_json_decode_error(runner, tmp_path, monkeypatch):
 
     # Should handle the error gracefully
     assert result.exit_code == 0
-    assert "Analyzing cookbook" in result.output
+    assert "Analysing cookbook" in result.output
 
 
 def test_cookbook_command_template_parse_returns_plain_text(
@@ -600,7 +600,7 @@ def test_cookbook_command_template_parse_returns_plain_text(
 
     # Should handle plain text output gracefully
     assert result.exit_code == 0
-    assert "Analyzing cookbook" in result.output
+    assert "Analysing cookbook" in result.output
 
 
 def test_output_result_text_format_with_non_dict_json(runner):
@@ -1902,7 +1902,7 @@ def test_assess_cookbook_command_analysis_error(runner, monkeypatch):
     def mock_analyze(*args, **kwargs):
         raise RuntimeError("Mock analysis error")
 
-    monkeypatch.setattr(souschef.cli, "_analyze_cookbook_for_assessment", mock_analyze)
+    monkeypatch.setattr(souschef.cli, "_analyse_cookbook_for_assessment", mock_analyze)
 
     result = runner.invoke(
         cli,

@@ -63,7 +63,7 @@ def _process_cookbook_assessment(
     valid_paths = _parse_cookbook_paths(cookbook_paths)
 
     # Analyze all cookbooks (handles empty list gracefully)
-    cookbook_assessments, overall_metrics = _analyze_cookbook_metrics(valid_paths)
+    cookbook_assessments, overall_metrics = _analyse_cookbook_metrics(valid_paths)
 
     # Generate recommendations and reports
     recommendations = _generate_migration_recommendations_from_assessment(
@@ -111,7 +111,7 @@ def parse_chef_migration_assessment(
         valid_paths = _parse_cookbook_paths(cookbook_paths)
 
         # Analyze all cookbooks (handles empty list gracefully)
-        cookbook_assessments, overall_metrics = _analyze_cookbook_metrics(valid_paths)
+        cookbook_assessments, overall_metrics = _analyse_cookbook_metrics(valid_paths)
 
         # Generate recommendations and reports
         recommendations = _generate_migration_recommendations_from_assessment(
@@ -294,11 +294,11 @@ def generate_migration_plan(
         return format_error_with_context(e, "generating migration plan", cookbook_paths)
 
 
-def analyze_cookbook_dependencies(
+def analyse_cookbook_dependencies(
     cookbook_path: str, dependency_depth: str = "direct"
 ) -> str:
     """
-    Analyze cookbook dependencies and identify migration order requirements.
+    Analyse cookbook dependencies and identify migration order requirements.
 
     Args:
         cookbook_path: Path to Chef cookbook or cookbooks directory
@@ -325,7 +325,7 @@ def analyze_cookbook_dependencies(
             )
 
         # Analyze dependencies
-        dependency_analysis = _analyze_cookbook_dependencies_detailed(cookbook_path_obj)
+        dependency_analysis = _analyse_cookbook_dependencies_detailed(cookbook_path_obj)
 
         # Determine migration order
         migration_order = _determine_migration_order(dependency_analysis)
@@ -356,7 +356,7 @@ def analyze_cookbook_dependencies(
 {_format_community_cookbooks(dependency_analysis)}
 
 ## Migration Impact Analysis:
-{_analyze_dependency_migration_impact(dependency_analysis)}
+{_analyse_dependency_migration_impact(dependency_analysis)}
 """
     except Exception as e:
         return format_error_with_context(
@@ -539,11 +539,11 @@ def _parse_cookbook_paths(cookbook_paths: str) -> list[Any]:
     return valid_paths
 
 
-def _analyze_cookbook_metrics(
+def _analyse_cookbook_metrics(
     valid_paths: list[Any],
 ) -> tuple[list[Any], dict[str, int]]:
     """
-    Analyze metrics for all cookbooks.
+    Analyse metrics for all cookbooks.
 
     Args:
         valid_paths: List of valid cookbook paths
@@ -656,8 +656,8 @@ def _count_cookbook_artifacts(cookbook_path) -> dict[str, int]:
     }
 
 
-def _analyze_recipe_complexity(cookbook_path) -> dict[str, int]:
-    """Analyze recipe files for resource counts, Ruby blocks, and custom resources."""
+def _analyse_recipe_complexity(cookbook_path) -> dict[str, int]:
+    """Analyse recipe files for resource counts, Ruby blocks, and custom resources."""
     recipes_dir = _safe_join(cookbook_path, "recipes")
     resource_count = 0
     custom_resources = 0
@@ -741,7 +741,7 @@ def _assess_single_cookbook(cookbook_path: Path) -> dict:
 
     # Collect metrics
     artifact_counts = _count_cookbook_artifacts(cookbook)
-    recipe_complexity = _analyze_recipe_complexity(cookbook)
+    recipe_complexity = _analyse_recipe_complexity(cookbook)
     metrics = {**artifact_counts, **recipe_complexity}
 
     # Calculate complexity and effort
@@ -1025,7 +1025,7 @@ def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
 • **Training:** 2-3 days Ansible/AWX training for team"""
 
 
-def _analyze_cookbook_dependencies_detailed(cookbook_path) -> dict:
+def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
     """Analyze cookbook dependencies in detail."""
     analysis = {
         "cookbook_name": cookbook_path.name,
@@ -1364,8 +1364,8 @@ def _format_community_cookbooks(analysis: dict) -> str:
     )
 
 
-def _analyze_dependency_migration_impact(analysis: dict) -> str:
-    """Analyze migration impact of dependencies."""
+def _analyse_dependency_migration_impact(analysis: dict) -> str:
+    """Analyse migration impact of dependencies."""
     impacts = []
 
     if analysis["community_cookbooks"]:

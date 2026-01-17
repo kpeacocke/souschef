@@ -46,17 +46,27 @@ jobs:
           exit 0
         fi
 
-        # Rebase develop onto main to avoid merge commits
-        echo "Rebasing develop onto main..."
-        if git checkout develop && git pull origin develop && git rebase origin/main; then
-          echo "✓ Rebase successful"
-          git push origin develop --force-with-lease
-          echo "✓ Develop branch updated successfully"
-        else
-          echo "✗ Rebase failed, falling back to merge"
-          git rebase --abort || true
+        # Merge main into develop to preserve history (safer for shared branches)
+        echo "Merging main into develop..."
+        if git checkout develop && git pull origin develop; then
           MESSAGE="chore: sync main to develop\n\nAutomatic sync to keep develop up to date with main.\n\nLatest commit: ${LATEST_COMMIT}\nTriggered by: ${{ github.event_name }}"
-          git merge origin/main --no-ff -m "$MESSAGE"
-          git push origin develop
-          echo "✓ Develop branch updated with merge commit"
+          if git merge origin/main --no-ff -m "$MESSAGE"; then
+            git push origin develop
+            echo "✓ Develop branch updated with merge commit"
+          else
+            echo "✗ Merge failed, attempting rebase as last resort"
+            git merge --abort || true
+            if git rebase origin/main; then
+              echo "✓ Rebase successful as fallback"
+              git push origin develop --force-with-lease
+              echo "✓ Develop branch updated successfully"
+            else
+              echo "✗ Both merge and rebase failed"
+              git rebase --abort || true
+              exit 1
+            fi
+          fi
+        else
+          echo "✗ Failed to checkout/pull develop branch"
+          exit 1
         fi
