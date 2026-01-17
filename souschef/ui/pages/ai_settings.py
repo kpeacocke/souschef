@@ -274,8 +274,9 @@ def load_ai_settings():
         if config_file.exists():
             with config_file.open() as f:
                 return json.load(f)
-    except Exception:
-        pass
+    except Exception as e:
+        # Failed to load config from file; fall back to session state/defaults
+        st.warning(f"Unable to load saved AI settings: {e}")
 
     # Fallback to session state or return empty dict
     return st.session_state.get("ai_config", {})
