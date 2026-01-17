@@ -299,7 +299,7 @@ def _sanitize_lightspeed_base_url(base_url: str) -> str:
 
     hostname = (parsed.hostname or "").lower()
     if hostname not in allowed_hosts:
-        raise ValueError("Base URL host must be a supported Red Hat domain (e.g. api.redhat.com).")
+        raise ValueError("Base URL host must be a supported Red Hat domain.")
 
     # Normalize to scheme + netloc only; drop path/query/fragment.
     cleaned = parsed._replace(path="", params="", query="", fragment="")
