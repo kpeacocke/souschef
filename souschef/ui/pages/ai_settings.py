@@ -6,6 +6,7 @@ Configure and validate AI provider settings for the SousChef MCP server.
 
 import json
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 import streamlit as st
 
@@ -270,6 +271,38 @@ def validate_ai_configuration(provider, api_key, model, base_url="", project_id=
             st.error(f"Validation error: {str(e)}")
 
 
+def _sanitize_lightspeed_base_url(base_url: str) -> str:
+    """
+    Sanitize and validate the Red Hat Lightspeed base URL to prevent SSRF.
+
+    - Default to the standard Lightspeed endpoint if no URL is provided.
+    - Only allow HTTPS scheme.
+    - Restrict host to Red Hat-owned domains.
+    - Strip any user-supplied path, query, or fragment.
+    """
+    default_url = "https://api.redhat.com"
+
+    if not base_url or not str(base_url).strip():
+        return default_url
+
+    parsed = urlparse(base_url)
+
+    # If scheme is missing, assume https
+    if not parsed.scheme:
+        parsed = parsed._replace(scheme="https")
+
+    if parsed.scheme.lower() != "https":
+        raise ValueError("Base URL must use HTTPS.")
+
+    hostname = (parsed.hostname or "").lower()
+    if not hostname.endswith("redhat.com"):
+        raise ValueError("Base URL host must be a Red Hat domain (e.g. api.redhat.com).")
+
+    # Normalize to scheme + netloc only; drop path/query/fragment.
+    cleaned = parsed._replace(path="", params="", query="", fragment="")
+    return urlunparse(cleaned)
+
+
 def validate_anthropic_config(api_key, model):
     """Validate Anthropic API configuration."""
     if anthropic is None:
@@ -347,6 +380,9 @@ def validate_lightspeed_config(api_key, model, base_url=""):
         return False, "Requests library not installed. Run: pip install requests"
 
     try:
+        # Sanitize and validate the base URL to avoid SSRF.
+        safe_base_url = _sanitize_lightspeed_base_url(base_url)
+
         # Red Hat Lightspeed typically uses a REST API
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -357,7 +393,7 @@ def validate_lightspeed_config(api_key, model, base_url=""):
         payload = {"model": model, "prompt": "Hello", "max_tokens": 5}
 
         response = requests.post(
-            f"{base_url or 'https://api.redhat.com'}/v1/completions",
+            f"{safe_base_url}/v1/completions",
             headers=headers,
             json=payload,
             timeout=10,
@@ -368,6 +404,9 @@ def validate_lightspeed_config(api_key, model, base_url=""):
         else:
             return False, f"API returned status {response.status_code}: {response.text}"
 
+    except ValueError as e:
+        # Invalid base URL provided; treat as configuration error rather than making a request.
+        return False, f"Invalid base URL: {e}"
     except Exception as e:
         return False, f"Connection failed: {e}"
 
