@@ -12,7 +12,12 @@ import streamlit as st
 # AI Provider Constants
 ANTHROPIC_PROVIDER = "Anthropic (Claude)"
 OPENAI_PROVIDER = "OpenAI (GPT)"
+WATSON_PROVIDER = "IBM Watsonx"
+LIGHTSPEED_PROVIDER = "Red Hat Lightspeed"
 LOCAL_PROVIDER = "Local Model"
+
+# UI Constants
+API_KEY_LABEL = "API Key"
 
 # Import AI libraries (optional dependencies)
 try:
@@ -21,9 +26,157 @@ except ImportError:
     anthropic = None  # type: ignore[assignment]
 
 try:
-    import openai  # type: ignore[import-not-found]
+    from ibm_watsonx_ai import APIClient  # type: ignore[import]
 except ImportError:
-    openai = None
+    APIClient = None
+
+try:
+    import requests  # type: ignore[import]
+except ImportError:
+    requests = None
+
+try:
+    import openai
+except ImportError:
+    openai = None  # type: ignore[assignment]
+
+
+def _get_model_options(provider):
+    """Get model options for the selected provider."""
+    if provider == ANTHROPIC_PROVIDER:
+        return [
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022",
+            "claude-3-opus-20240229",
+        ]
+    elif provider == OPENAI_PROVIDER:
+        return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
+    elif provider == WATSON_PROVIDER:
+        return [
+            "meta-llama/llama-3-70b-instruct",
+            "meta-llama/llama-3-8b-instruct",
+            "ibm/granite-13b-instruct-v2",
+            "ibm/granite-13b-chat-v2",
+        ]
+    elif provider == LIGHTSPEED_PROVIDER:
+        return ["codellama/CodeLlama-34b-Instruct-hf"]
+    else:
+        return ["local-model"]
+
+
+def _render_api_configuration(provider):
+    """Render API configuration UI and return config values."""
+    if provider == LOCAL_PROVIDER:
+        st.info("Local model configuration will be added in a future update.")
+        return "", "", ""
+    elif provider == WATSON_PROVIDER:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            api_key = st.text_input(
+                API_KEY_LABEL,
+                type="password",
+                help="Enter your IBM Watsonx API key",
+                key="api_key_input",
+                placeholder="your-watsonx-api-key",
+            )
+        with col2:
+            project_id = st.text_input(
+                "Project ID",
+                type="password",
+                help="Enter your IBM Watsonx Project ID",
+                key="project_id_input",
+                placeholder="your-project-id",
+            )
+        with col3:
+            base_url = st.text_input(
+                "Base URL",
+                help="IBM Watsonx API base URL",
+                key="base_url_input",
+                placeholder="https://us-south.ml.cloud.ibm.com",
+            )
+        return api_key, base_url, project_id
+    elif provider == LIGHTSPEED_PROVIDER:
+        col1, col2 = st.columns(2)
+        with col1:
+            api_key = st.text_input(
+                API_KEY_LABEL,
+                type="password",
+                help="Enter your Red Hat Lightspeed API key",
+                key="api_key_input",
+                placeholder="your-lightspeed-api-key",
+            )
+        with col2:
+            base_url = st.text_input(
+                "Base URL",
+                help="Red Hat Lightspeed API base URL",
+                key="base_url_input",
+                placeholder="https://api.redhat.com",
+            )
+        return api_key, base_url, ""
+    else:
+        col1, col2 = st.columns(2)
+        with col1:
+            api_key = st.text_input(
+                API_KEY_LABEL,
+                type="password",
+                help=f"Enter your {provider.split(' ')[0]} API key",
+                key="api_key_input",
+                placeholder=f"sk-... (for {provider.split(' ')[0]})",
+            )
+        with col2:
+            if provider == OPENAI_PROVIDER:
+                base_url = st.text_input(
+                    "Base URL (Optional)",
+                    help="Custom OpenAI API base URL",
+                    key="base_url_input",
+                    placeholder="https://api.openai.com/v1",
+                )
+            else:
+                base_url = ""
+        return api_key, base_url, ""
+
+
+def _render_advanced_settings():
+    """Render advanced settings UI and return values."""
+    with st.expander("Advanced Settings"):
+        col1, col2 = st.columns(2)
+        with col1:
+            temperature = st.slider(
+                "Temperature",
+                min_value=0.0,
+                max_value=2.0,
+                value=0.7,
+                step=0.1,
+                help="Controls randomness in AI responses "
+                "(0.0 = deterministic, 2.0 = very random)",
+                key="temperature_slider",
+            )
+        with col2:
+            max_tokens = st.number_input(
+                "Max Tokens",
+                min_value=100,
+                max_value=100000,
+                value=4000,
+                help="Maximum number of tokens to generate",
+                key="max_tokens_input",
+            )
+    return temperature, max_tokens
+
+
+def _render_validation_section(
+    provider, api_key, model, base_url, project_id, temperature, max_tokens
+):
+    """Render validation and save buttons."""
+    st.subheader("Configuration Validation")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("Validate Configuration", type="primary", width="stretch"):
+            validate_ai_configuration(provider, api_key, model, base_url, project_id)
+    with col2:
+        if st.button("Save Settings", width="stretch"):
+            save_ai_settings(
+                provider, api_key, model, base_url, temperature, max_tokens, project_id
+            )
 
 
 def show_ai_settings_page():
@@ -42,23 +195,19 @@ def show_ai_settings_page():
     with col1:
         ai_provider = st.selectbox(
             "AI Provider",
-            [ANTHROPIC_PROVIDER, OPENAI_PROVIDER, LOCAL_PROVIDER],
+            [
+                ANTHROPIC_PROVIDER,
+                OPENAI_PROVIDER,
+                WATSON_PROVIDER,
+                LIGHTSPEED_PROVIDER,
+                LOCAL_PROVIDER,
+            ],
             help="Select your preferred AI provider",
             key="ai_provider_select",
         )
 
     with col2:
-        if ai_provider == ANTHROPIC_PROVIDER:
-            model_options = [
-                "claude-3-5-sonnet-20241022",
-                "claude-3-5-haiku-20241022",
-                "claude-3-opus-20240229",
-            ]
-        elif ai_provider == OPENAI_PROVIDER:
-            model_options = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
-        else:
-            model_options = ["local-model"]
-
+        model_options = _get_model_options(ai_provider)
         selected_model = st.selectbox(
             "Model",
             model_options,
@@ -68,83 +217,34 @@ def show_ai_settings_page():
 
     # API Configuration
     st.subheader("API Configuration")
-
-    if ai_provider == LOCAL_PROVIDER:
-        st.info("Local model configuration will be added in a future update.")
-        api_key = ""
-        base_url = ""
-    else:
-        col1, col2 = st.columns(2)
-
-        with col1:
-            api_key = st.text_input(
-                "API Key",
-                type="password",
-                help=f"Enter your {ai_provider.split(' ')[0]} API key",
-                key="api_key_input",
-                placeholder=f"sk-... (for {ai_provider.split(' ')[0]})",
-            )
-
-        with col2:
-            if ai_provider == OPENAI_PROVIDER:
-                base_url = st.text_input(
-                    "Base URL (Optional)",
-                    help="Custom OpenAI API base URL",
-                    key="base_url_input",
-                    placeholder="https://api.openai.com/v1",
-                )
-            else:
-                base_url = ""
+    api_key, base_url, project_id = _render_api_configuration(ai_provider)
 
     # Advanced Settings
-    with st.expander("Advanced Settings"):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            temperature = st.slider(
-                "Temperature",
-                min_value=0.0,
-                max_value=2.0,
-                value=0.7,
-                step=0.1,
-                help="Controls randomness in AI responses "
-                "(0.0 = deterministic, 2.0 = very random)",
-                key="temperature_slider",
-            )
-
-        with col2:
-            max_tokens = st.number_input(
-                "Max Tokens",
-                min_value=100,
-                max_value=100000,
-                value=4000,
-                help="Maximum number of tokens to generate",
-                key="max_tokens_input",
-            )
+    temperature, max_tokens = _render_advanced_settings()
 
     # Validation Section
-    st.subheader("Configuration Validation")
-
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        if st.button("Validate Configuration", type="primary", width="stretch"):
-            validate_ai_configuration(ai_provider, api_key, selected_model, base_url)
-
-    with col2:
-        if st.button("Save Settings", width="stretch"):
-            save_ai_settings(
-                ai_provider, api_key, selected_model, base_url, temperature, max_tokens
-            )
+    _render_validation_section(
+        ai_provider,
+        api_key,
+        selected_model,
+        base_url,
+        project_id,
+        temperature,
+        max_tokens,
+    )
 
     # Current Settings Display
     display_current_settings()
 
 
-def validate_ai_configuration(provider, api_key, model, base_url=""):
+def validate_ai_configuration(provider, api_key, model, base_url="", project_id=""):
     """Validate the AI configuration by making a test API call."""
     if not api_key and provider != "Local Model":
         st.error("API key is required for validation.")
+        return
+
+    if provider == WATSON_PROVIDER and not project_id:
+        st.error("Project ID is required for IBM Watsonx validation.")
         return
 
     with st.spinner("Validating AI configuration..."):
@@ -153,6 +253,10 @@ def validate_ai_configuration(provider, api_key, model, base_url=""):
                 success, message = validate_anthropic_config(api_key, model)
             elif provider == OPENAI_PROVIDER:
                 success, message = validate_openai_config(api_key, model, base_url)
+            elif provider == WATSON_PROVIDER:
+                success, message = validate_watson_config(api_key, project_id, base_url)
+            elif provider == LIGHTSPEED_PROVIDER:
+                success, message = validate_lightspeed_config(api_key, model, base_url)
             else:
                 st.info("Local model validation not implemented yet.")
                 return
@@ -208,7 +312,69 @@ def validate_openai_config(api_key, model, base_url=""):
         return False, f"Connection failed: {e}"
 
 
-def save_ai_settings(provider, api_key, model, base_url, temperature, max_tokens):
+def validate_watson_config(api_key, project_id, base_url=""):
+    """Validate IBM Watsonx API configuration."""
+    if APIClient is None:
+        return False, (
+            "IBM Watsonx AI library not installed. Run: pip install ibm-watsonx-ai"
+        )
+
+    try:
+        # Initialize Watsonx client
+        client = APIClient(
+            api_key=api_key,
+            project_id=project_id,
+            url=base_url or "https://us-south.ml.cloud.ibm.com",
+        )
+
+        # Test connection by listing available models
+        models = client.foundation_models.get_model_specs()
+        if models:
+            return True, (
+                f"Successfully connected to IBM Watsonx. "
+                f"Found {len(models)} available models."
+            )
+        else:
+            return False, "Connected to IBM Watsonx but no models available."
+
+    except Exception as e:
+        return False, f"Connection failed: {e}"
+
+
+def validate_lightspeed_config(api_key, model, base_url=""):
+    """Validate Red Hat Lightspeed API configuration."""
+    if requests is None:
+        return False, "Requests library not installed. Run: pip install requests"
+
+    try:
+        # Red Hat Lightspeed typically uses a REST API
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        # Test with a simple completion request
+        payload = {"model": model, "prompt": "Hello", "max_tokens": 5}
+
+        response = requests.post(
+            f"{base_url or 'https://api.redhat.com'}/v1/completions",
+            headers=headers,
+            json=payload,
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            return True, f"Successfully connected to Red Hat Lightspeed {model}"
+        else:
+            return False, f"API returned status {response.status_code}: {response.text}"
+
+    except Exception as e:
+        return False, f"Connection failed: {e}"
+
+
+def save_ai_settings(
+    provider, api_key, model, base_url, temperature, max_tokens, project_id=""
+):
     """Save AI settings to configuration file."""
     try:
         config_dir = Path.home() / ".souschef"
@@ -220,6 +386,7 @@ def save_ai_settings(provider, api_key, model, base_url, temperature, max_tokens
             "model": model,
             "api_key": api_key if api_key else None,
             "base_url": base_url if base_url else None,
+            "project_id": project_id if project_id else None,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "last_updated": str(st.session_state.get("timestamp", "Unknown")),

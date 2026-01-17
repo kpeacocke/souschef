@@ -18,6 +18,7 @@ from souschef.converters.resource import (
 )
 from souschef.core.constants import (
     ANSIBLE_SERVICE_MODULE,
+    ATTRIBUTE_PREFIX,
     ERROR_PREFIX,
     JINJA2_VAR_REPLACEMENT,
     NODE_PREFIX,
@@ -25,9 +26,24 @@ from souschef.core.constants import (
     REGEX_RESOURCE_BRACKET,
     REGEX_RUBY_INTERPOLATION,
     REGEX_WHITESPACE_QUOTE,
+    VALUE_PREFIX,
 )
 from souschef.core.path_utils import _normalize_path, _safe_join
+from souschef.parsers.attributes import parse_attributes
 from souschef.parsers.recipe import parse_recipe
+
+# Optional AI provider imports
+try:
+    import requests  # type: ignore[import-not-found,import-untyped]
+except ImportError:
+    requests = None  # type: ignore[assignment,misc]
+
+try:
+    from ibm_watsonx_ai import (  # type: ignore[import-not-found,import-untyped]
+        APIClient,  # type: ignore[import-not-found,import-untyped]
+    )
+except ImportError:
+    APIClient = None  # type: ignore[assignment,misc]
 
 # Maximum length for guard condition patterns in regex matching
 MAX_GUARD_LENGTH = 500
@@ -61,13 +77,320 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
 
         # Generate playbook structure
         playbook: str = _generate_playbook_structure(
-            recipe_content, raw_content, recipe_file.name
+            recipe_content, raw_content, recipe_file
         )
 
         return playbook
 
     except Exception as e:
         return f"Error generating playbook: {e}"
+
+
+def generate_playbook_from_recipe_with_ai(
+    recipe_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.7,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Generate an AI-enhanced Ansible playbook from a Chef recipe.
+
+    Uses AI to intelligently convert Chef recipes to Ansible playbooks,
+    considering context, best practices, and optimization opportunities.
+
+    Args:
+        recipe_path: Path to the Chef recipe (.rb) file.
+        ai_provider: AI provider to use ('anthropic', 'openai', 'watson', 'lightspeed').
+        api_key: API key for the AI provider.
+        model: AI model to use.
+        temperature: Creativity/randomness parameter (0.0-2.0).
+        max_tokens: Maximum tokens to generate.
+        project_id: Project ID for IBM Watsonx (required for watson provider).
+        base_url: Custom base URL for the AI provider.
+
+    Returns:
+        AI-generated Ansible playbook in YAML format.
+
+    """
+    try:
+        # Parse the recipe file
+        recipe_file = _normalize_path(recipe_path)
+        if not recipe_file.exists():
+            return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
+
+        raw_content = recipe_file.read_text()
+
+        # Get basic recipe parsing for context
+        parsed_content = parse_recipe(recipe_path)
+        if parsed_content.startswith(ERROR_PREFIX):
+            return parsed_content
+
+        # Use AI to generate the playbook
+        ai_playbook = _generate_playbook_with_ai(
+            raw_content,
+            parsed_content,
+            recipe_file.name,
+            ai_provider,
+            api_key,
+            model,
+            temperature,
+            max_tokens,
+            project_id,
+            base_url,
+        )
+
+        return ai_playbook
+
+    except Exception as e:
+        return f"Error generating AI-enhanced playbook: {e}"
+
+
+def _generate_playbook_with_ai(
+    raw_content: str,
+    parsed_content: str,
+    recipe_name: str,
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """Generate Ansible playbook using AI for intelligent conversion."""
+    try:
+        # Initialize AI client based on provider
+        client = _initialize_ai_client(ai_provider, api_key, project_id, base_url)
+        if isinstance(client, str):  # Error message returned
+            return client
+
+        # Create the AI prompt
+        prompt = _create_ai_conversion_prompt(raw_content, parsed_content, recipe_name)
+
+        # Call the AI API and get response
+        ai_response = _call_ai_api(
+            client, ai_provider, prompt, model, temperature, max_tokens
+        )
+
+        # Clean and validate the AI response
+        cleaned_playbook = _clean_ai_playbook_response(ai_response)
+
+        return cleaned_playbook
+
+    except ImportError as e:
+        return f"{ERROR_PREFIX} AI library not available: {e}"
+    except Exception as e:
+        return f"{ERROR_PREFIX} AI conversion failed: {e}"
+
+
+def _initialize_ai_client(
+    ai_provider: str, api_key: str, project_id: str = "", base_url: str = ""
+) -> Any:
+    """Initialize AI client based on provider."""
+    if ai_provider.lower() == "anthropic":
+        import anthropic
+
+        return anthropic.Anthropic(api_key=api_key)
+    elif ai_provider.lower() == "openai":
+        import openai  # type: ignore[import-not-found,import-untyped]
+
+        return openai.OpenAI(api_key=api_key)
+    elif ai_provider.lower() == "watson":
+        if APIClient is None:
+            return f"{ERROR_PREFIX} ibm_watsonx_ai library not available"
+
+        return APIClient(
+            api_key=api_key,
+            project_id=project_id,
+            url=base_url or "https://us-south.ml.cloud.ibm.com",
+        )
+    elif ai_provider.lower() == "lightspeed":
+        if requests is None:
+            return f"{ERROR_PREFIX} requests library not available"
+
+        return {
+            "api_key": api_key,
+            "base_url": base_url or "https://api.redhat.com",
+        }
+    else:
+        return f"{ERROR_PREFIX} Unsupported AI provider: {ai_provider}"
+
+
+def _call_ai_api(
+    client: Any,
+    ai_provider: str,
+    prompt: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+) -> str:
+    """Call the appropriate AI API based on provider."""
+    if ai_provider.lower() == "anthropic":
+        response = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return str(response.content[0].text)
+    elif ai_provider.lower() == "watson":
+        response = client.generate_text(
+            model_id=model,
+            input=prompt,
+            parameters={
+                "max_new_tokens": max_tokens,
+                "temperature": temperature,
+                "min_new_tokens": 1,
+            },
+        )
+        return str(response["results"][0]["generated_text"])
+    elif ai_provider.lower() == "lightspeed":
+        if requests is None:
+            return f"{ERROR_PREFIX} requests library not available"
+
+        headers = {
+            "Authorization": f"Bearer {client['api_key']}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        response = requests.post(
+            f"{client['base_url']}/v1/completions",
+            headers=headers,
+            json=payload,
+            timeout=60,
+        )
+        if response.status_code == 200:
+            return str(response.json()["choices"][0]["text"])
+        else:
+            return (
+                f"{ERROR_PREFIX} Red Hat Lightspeed API error: "
+                f"{response.status_code} - {response.text}"
+            )
+    else:  # OpenAI
+        response = client.chat.completions.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return str(response.choices[0].message.content)
+
+
+def _create_ai_conversion_prompt(
+    raw_content: str, parsed_content: str, recipe_name: str
+) -> str:
+    """Create a comprehensive prompt for AI conversion."""
+    return f"""You are an expert at converting Chef recipes to Ansible playbooks.
+Your task is to convert the following Chef recipe into a high-quality,
+production-ready Ansible playbook.
+
+CHEF RECIPE CONTENT:
+{raw_content}
+
+PARSED RECIPE ANALYSIS:
+{parsed_content}
+
+RECIPE NAME: {recipe_name}
+
+CONVERSION REQUIREMENTS:
+
+1. **Understand the Intent**: Analyze what this Chef recipe is trying to
+   accomplish. Look at the resources, their properties, and the overall
+   workflow.
+
+2. **Best Practices**: Generate Ansible code that follows Ansible best
+   practices:
+   - Use appropriate modules (ansible.builtin.* when possible)
+   - Include proper error handling and idempotency
+   - Use meaningful variable names
+   - Include comments explaining complex logic
+   - Handle edge cases and failure scenarios
+
+3. **Resource Mapping**: Convert Chef resources to appropriate Ansible
+   modules:
+   - package → ansible.builtin.package or specific package managers
+   - service → ansible.builtin.service
+   - file/directory → ansible.builtin.file
+   - template → ansible.builtin.template
+   - execute → ansible.builtin.command/shell
+   - user/group → ansible.builtin.user/group
+   - mount → ansible.builtin.mount
+
+4. **Variables and Facts**: Convert Chef node attributes to Ansible
+   variables/facts appropriately.
+
+5. **Conditionals**: Convert Chef guards (only_if/not_if) to Ansible when
+   conditions.
+
+6. **Notifications**: Convert Chef notifications to Ansible handlers where
+   appropriate.
+
+7. **Idempotency**: Ensure the playbook is idempotent and can be run
+   multiple times safely.
+
+8. **Error Handling**: Include proper error handling and rollback
+   considerations.
+
+OUTPUT FORMAT:
+Return ONLY a valid YAML Ansible playbook. Do not include any explanation,
+markdown formatting, or code blocks. The output should be pure YAML that can
+be directly used as an Ansible playbook.
+
+The playbook should include:
+- A proper name
+- Appropriate hosts (default to 'all')
+- Variables section if needed
+- Tasks section with all converted resources
+- Handlers section if notifications are used
+- Any necessary pre_tasks or post_tasks
+
+Example structure:
+---
+- name: Convert of {recipe_name}
+  hosts: all
+  become: true
+  vars:
+    # Variables here
+  tasks:
+    # Tasks here
+  handlers:
+    # Handlers here
+
+Focus on creating a functional, well-structured Ansible playbook that achieves
+the same outcome as the Chef recipe."""
+
+
+def _clean_ai_playbook_response(ai_response: str) -> str:
+    """Clean and validate the AI-generated playbook response."""
+    if not ai_response or not ai_response.strip():
+        return f"{ERROR_PREFIX} AI returned empty response"
+
+    # Remove markdown code blocks if present
+    cleaned = re.sub(r"```\w*\n?", "", ai_response)
+    cleaned = cleaned.strip()
+
+    # Basic validation - check if it looks like YAML
+    if not cleaned.startswith("---") and not cleaned.startswith("- name:"):
+        return f"{ERROR_PREFIX} AI response does not appear to be valid YAML playbook"
+
+    # Try to parse as YAML to validate structure
+    try:
+        import yaml
+
+        yaml.safe_load(cleaned)
+    except Exception as e:
+        return f"{ERROR_PREFIX} AI generated invalid YAML: {e}"
+
+    return cleaned
 
 
 def convert_chef_search_to_inventory(search_query: str) -> str:
@@ -796,9 +1119,23 @@ def _build_playbook_header(recipe_name: str) -> list[str]:
     ]
 
 
-def _add_playbook_variables(playbook_lines: list[str], raw_content: str) -> None:
+def _add_playbook_variables(
+    playbook_lines: list[str], raw_content: str, recipe_file: Path
+) -> None:
     """Extract and add variables section to playbook."""
     variables = _extract_recipe_variables(raw_content)
+
+    # Try to parse attributes file
+    attributes_path = recipe_file.parent.parent / "attributes" / "default.rb"
+    if attributes_path.exists():
+        attributes_content = parse_attributes(str(attributes_path))
+        if not attributes_content.startswith(
+            "Error:"
+        ) and not attributes_content.startswith("Warning:"):
+            # Parse the resolved attributes
+            attr_vars = _extract_attribute_variables(attributes_content)
+            variables.update(attr_vars)
+
     for var_name, var_value in variables.items():
         playbook_lines.append(f"    {var_name}: {var_value}")
 
@@ -812,7 +1149,7 @@ def _convert_and_collect_resources(
     parsed_content: str, raw_content: str
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Convert Chef resources to Ansible tasks and collect handlers."""
-    resources = _extract_resources_from_parsed_content(parsed_content)
+    resources = _extract_resources_from_parsed_content(parsed_content, raw_content)
     tasks = []
     handlers = []
 
@@ -829,10 +1166,8 @@ def _format_item_lines(item_yaml: str) -> list[str]:
     """Format a single task/handler's YAML lines with proper indentation."""
     formatted = []
     for i, line in enumerate(item_yaml.split("\n")):
-        if i == 0:  # First line gets 4-space indent
+        if i == 0 or line.strip():  # First line gets 4-space indent
             formatted.append(f"    {line}")
-        elif line.strip():  # Non-empty property lines get 6-space indent
-            formatted.append(f"      {line}")
         else:  # Empty lines preserved as-is
             formatted.append(line)
     return formatted
@@ -855,11 +1190,11 @@ def _add_formatted_items(
 
 
 def _generate_playbook_structure(
-    parsed_content: str, raw_content: str, recipe_name: str
+    parsed_content: str, raw_content: str, recipe_file: Path
 ) -> str:
     """Generate complete playbook structure from parsed recipe content."""
-    playbook_lines = _build_playbook_header(recipe_name)
-    _add_playbook_variables(playbook_lines, raw_content)
+    playbook_lines = _build_playbook_header(recipe_file.name)
+    _add_playbook_variables(playbook_lines, raw_content, recipe_file)
 
     # Convert resources to tasks and handlers
     tasks, handlers = _convert_and_collect_resources(parsed_content, raw_content)
@@ -944,6 +1279,301 @@ def _extract_mode_variables(raw_content: str) -> dict[str, str]:
     return {}
 
 
+def _convert_ruby_value_to_yaml(ruby_value: str) -> str:  # noqa: C901
+    """Convert Ruby value syntax to YAML-compatible format."""
+    ruby_value = ruby_value.strip()
+
+    # Handle Ruby hash syntax { key => value, ... }
+    if ruby_value.startswith("{") and ruby_value.endswith("}"):
+        return _convert_ruby_hash_to_yaml(ruby_value)
+
+    # Handle arrays [item1, item2, ...]
+    if ruby_value.startswith("[") and ruby_value.endswith("]"):
+        return _convert_ruby_array_to_yaml(ruby_value)
+
+    # Handle primitive values (strings, numbers, booleans, nil)
+    return _convert_primitive_value(ruby_value)
+
+
+def _is_attribute_separator(line: str) -> bool:
+    """Check if a line indicates the start of a new attribute or metadata."""
+    stripped = line.strip()
+    return (
+        stripped.startswith(ATTRIBUTE_PREFIX)
+        or stripped.startswith("Precedence: ")
+        or stripped.startswith("=")
+        or stripped.startswith("Total attributes:")
+        or stripped.startswith("⚠️")
+    )
+
+
+def _collect_value_lines(lines: list[str], start_index: int) -> tuple[list[str], int]:
+    """Collect all lines belonging to a value until the next attribute separator."""
+    value_lines = []
+    i = start_index
+
+    while i < len(lines):
+        next_line = lines[i]
+        if _is_attribute_separator(next_line):
+            break
+        value_lines.append(lines[i])
+        i += 1
+
+    return value_lines, i
+
+
+def _extract_attribute_variables(attributes_content: str) -> dict[str, str]:
+    """Extract Ansible variables from parsed Chef attributes."""
+    variables = {}
+    lines = attributes_content.split("\n")
+    i = 0
+
+    while i < len(lines):
+        line = lines[i].strip()
+        if line.startswith(ATTRIBUTE_PREFIX):
+            current_attr = line.split(ATTRIBUTE_PREFIX)[1]
+            i += 1  # Move to next line to look for Value:
+
+            # Find and collect value lines
+            value_lines, i = _find_and_collect_value_lines(lines, i)
+
+            # Process the collected value lines
+            if current_attr and value_lines:
+                full_value = "\n".join(value_lines).strip()
+                ansible_var = _convert_chef_attr_path_to_ansible_var(current_attr)
+                yaml_value = _convert_ruby_value_to_yaml(full_value)
+                variables[ansible_var] = yaml_value
+        else:
+            i += 1
+
+    return variables
+
+
+def _find_and_collect_value_lines(
+    lines: list[str], start_index: int
+) -> tuple[list[str], int]:
+    """
+    Find the Value: line and collect all value lines until next attribute separator.
+
+    Find the Value: line and collect all value lines until next attribute separator.
+    """
+    value_lines: list[str] = []
+    i = start_index
+
+    # Look for the Value: line
+    while i < len(lines):
+        next_line = lines[i]
+        if next_line.strip().startswith(VALUE_PREFIX):
+            # Found value start, collect all value lines
+            value_start = next_line.split(VALUE_PREFIX, 1)[1]
+            collected_lines, i = _collect_value_lines(lines, i + 1)
+            value_lines = [value_start] + collected_lines
+            break
+        elif _is_attribute_separator(next_line):
+            # Hit another attribute before finding value
+            break
+        i += 1
+    else:
+        # No more lines
+        i += 1
+
+    return value_lines, i
+
+
+def _convert_ruby_hash_to_yaml(ruby_hash: str) -> str:
+    """Convert Ruby hash syntax { key => value, ... } to YAML flow style."""
+    try:
+        # Remove outer braces
+        hash_content = ruby_hash[1:-1].strip()
+        if not hash_content:
+            return "{}"
+
+        # Split by commas, respecting nested structures
+        yaml_pairs = _split_by_commas_with_nesting(hash_content)
+
+        # Convert each pair from Ruby syntax to YAML
+        flow_pairs = []
+        for pair in yaml_pairs:
+            if "=>" in pair:
+                key_part, value_part = pair.split("=>", 1)
+                key = key_part.strip()
+                value = value_part.strip()
+
+                # Remove quotes from key if present
+                key = key.strip("'\"")
+
+                # Convert value recursively if it's complex
+                value = _convert_ruby_value_to_yaml(value)
+                flow_pairs.append(f"{key}: {value}")
+            else:
+                # Malformed pair, keep as comment
+                flow_pairs.append(f"# TODO: Fix malformed pair: {pair}")
+
+        return "{" + ", ".join(flow_pairs) + "}" if flow_pairs else "{}"
+
+    except Exception:
+        # If conversion fails, return as-is with a comment
+        return f"# TODO: Convert Ruby hash: {ruby_hash}"
+
+
+def _convert_ruby_array_to_yaml(ruby_array: str) -> str:
+    """Convert Ruby array syntax [item1, item2, ...] to YAML flow style."""
+    try:
+        # Remove outer brackets
+        array_content = ruby_array[1:-1].strip()
+        if not array_content:
+            return "[]"
+
+        # Split by commas, respecting nested structures
+        items = _split_by_commas_with_nesting(array_content)
+
+        # Convert items recursively if they're complex
+        flow_items = [_convert_ruby_value_to_yaml(item) for item in items]
+
+        return "[" + ", ".join(flow_items) + "]" if flow_items else "[]"
+
+    except Exception:
+        return ruby_array  # Return as-is if parsing fails
+
+
+def _split_by_commas_with_nesting(content: str) -> list[str]:
+    """Split content by commas while respecting nested braces and brackets."""
+    parts = []
+    current_part = ""
+    in_quotes = False
+    quote_char = None
+    brace_depth = 0
+    bracket_depth = 0
+
+    for char in content:
+        if _is_quote_char(char) and brace_depth == 0 and bracket_depth == 0:
+            in_quotes, quote_char = _handle_quote_transition(
+                char, in_quotes, quote_char
+            )
+        elif not in_quotes:
+            brace_depth, bracket_depth = _update_nesting_depths(
+                char, brace_depth, bracket_depth
+            )
+            if _should_split_at_comma(char, in_quotes, brace_depth, bracket_depth):
+                parts.append(current_part.strip())
+                current_part = ""
+                continue
+
+        current_part += char
+
+    # Add the last part
+    if current_part.strip():
+        parts.append(current_part.strip())
+
+    return parts
+
+
+def _is_quote_char(char: str) -> bool:
+    """Check if character is a quote."""
+    return char in ['"', "'"]
+
+
+def _handle_quote_transition(
+    char: str, in_quotes: bool, quote_char: str | None
+) -> tuple[bool, str | None]:
+    """Handle quote character transitions."""
+    if not in_quotes:
+        return True, char
+    elif char == quote_char:
+        return False, None
+    return in_quotes, quote_char
+
+
+def _update_nesting_depths(
+    char: str, brace_depth: int, bracket_depth: int
+) -> tuple[int, int]:
+    """Update brace and bracket nesting depths."""
+    if char == "{":
+        brace_depth += 1
+    elif char == "}":
+        brace_depth -= 1
+    elif char == "[":
+        bracket_depth += 1
+    elif char == "]":
+        bracket_depth -= 1
+    return brace_depth, bracket_depth
+
+
+def _should_split_at_comma(
+    char: str, in_quotes: bool, brace_depth: int, bracket_depth: int
+) -> bool:
+    """Determine if we should split at this comma."""
+    return char == "," and not in_quotes and brace_depth == 0 and bracket_depth == 0
+
+
+def _convert_primitive_value(ruby_value: str) -> str:
+    """Convert primitive Ruby values (strings, numbers, booleans, nil)."""
+    # Handle quoted strings
+    if (
+        ruby_value.startswith('"')
+        and ruby_value.endswith('"')
+        or ruby_value.startswith("'")
+        and ruby_value.endswith("'")
+    ):
+        return ruby_value  # Already properly quoted
+
+    # Handle numbers
+    try:
+        int(ruby_value)
+        return ruby_value
+    except ValueError:
+        pass
+
+    try:
+        float(ruby_value)
+        return ruby_value
+    except ValueError:
+        pass
+
+    # Handle booleans
+    if ruby_value.lower() in ["true", "false"]:
+        return ruby_value.lower()
+
+    # Handle nil
+    if ruby_value.lower() == "nil":
+        return "null"
+
+    # For strings that aren't quoted, quote them
+    return f'"{ruby_value}"'
+
+
+def _convert_chef_attr_path_to_ansible_var(attr_path: str) -> str:
+    """Convert Chef attribute path to Ansible variable name."""
+    # Replace dots with underscores, handle special cases
+    parts = attr_path.split(".")
+    if len(parts) >= 2:
+        # For cookbook-specific attrs like '301.version' -> 'threeohone_version'
+        cookbook_name = parts[0]
+        attr_name = "_".join(parts[1:])
+
+        # Convert numbers to words for readability
+        number_words = {
+            "301": "threeohone",
+            "1": "one",
+            "2": "two",
+            "3": "three",
+            "4": "four",
+            "5": "five",
+            "6": "six",
+            "7": "seven",
+            "8": "eight",
+            "9": "nine",
+            "0": "zero",
+        }
+
+        # Replace digits with words
+        readable_cookbook = "".join(number_words.get(c, c) for c in cookbook_name)
+        return f"{readable_cookbook}_{attr_name}"
+
+    # Fallback: just replace dots with underscores
+    return attr_path.replace(".", "_")
+
+
 def _extract_recipe_variables(raw_content: str) -> dict[str, str]:
     """Extract variables from Chef recipe content."""
     variables = {}
@@ -961,8 +1591,24 @@ def _extract_recipe_variables(raw_content: str) -> dict[str, str]:
 
 
 def _parse_resource_block(block: str) -> dict[str, str] | None:
-    """Parse a single resource block into a dictionary."""
-    if not block.strip() or not block.startswith("Resource"):
+    """Parse a single resource (or include_recipe) block into a dictionary."""
+    trimmed = block.strip()
+    if not trimmed:
+        return None
+
+    # Handle include_recipe blocks emitted by parse_recipe
+    if trimmed.startswith("Include Recipe"):
+        recipe_match = re.search(r"Recipe:\s*([^\n]+)", block)
+        if not recipe_match:
+            return None
+        return {
+            "type": "include_recipe",
+            "name": recipe_match.group(1).strip(),
+            "action": "include",
+            "properties": "",
+        }
+
+    if not trimmed.startswith("Resource"):
         return None
 
     resource: dict[str, str] = {}
@@ -992,15 +1638,62 @@ def _parse_resource_block(block: str) -> dict[str, str] | None:
     return resource
 
 
-def _extract_resources_from_parsed_content(parsed_content: str) -> list[dict[str, str]]:
+def _extract_resources_from_parsed_content(
+    parsed_content: str, raw_content: str
+) -> list[dict[str, str]]:
     """Extract resource information from parsed recipe content."""
-    resource_blocks = re.split(r"\n(?=Resource \d+:)", parsed_content)
+    resource_blocks = re.split(
+        r"\n(?=(Resource \d+:|Include Recipe \d+:))", parsed_content
+    )
     resources = []
     for block in resource_blocks:
         resource = _parse_resource_block(block)
         if resource:
+            # Find position in raw_content to preserve order
+            position = _find_resource_position_in_raw(resource, raw_content)
+            resource["_position"] = position  # type: ignore
             resources.append(resource)
+
+    # Sort by position to preserve original order
+    resources.sort(key=lambda r: r.get("_position", 999999))
+
+    # Remove position key
+    for r in resources:
+        r.pop("_position", None)
+
     return resources
+
+
+def _find_resource_position_in_raw(resource: dict[str, str], raw_content: str) -> int:
+    """Find the position of a resource in raw content."""
+    if resource["type"] == "include_recipe":
+        pattern = rf'include_recipe\s+[\'"]({re.escape(resource["name"])})[\'"]'
+    elif resource["type"] == "nodejs_npm":
+        pattern = rf'nodejs_npm\s+[\'"]({re.escape(resource["name"])})[\'"]'
+    else:
+        # Generic pattern
+        pattern = rf'{resource["type"]}\s+[\'"]({re.escape(resource["name"])})[\'"]'
+
+    match = re.search(pattern, raw_content)
+    return match.start() if match else 999999
+
+
+def _extract_nodejs_npm_version(raw_content: str, package_name: str) -> str | None:
+    """Extract version for nodejs_npm resources from raw recipe content."""
+    pattern = (
+        rf"nodejs_npm\s+[\"']{re.escape(package_name)}[\"']\s+do"
+        rf"(?P<body>.{{0,400}}?)^end"
+    )
+    match = re.search(pattern, raw_content, re.DOTALL | re.MULTILINE)
+    if not match:
+        return None
+
+    body = match.group("body")
+    version_match = re.search(r"version\s+([^\n#]+)", body)
+    if not version_match:
+        return None
+
+    return version_match.group(1).strip()
 
 
 # Notification handling
@@ -1101,6 +1794,12 @@ def _convert_resource_to_task_dict(
     resource: dict[str, str], raw_content: str
 ) -> dict[str, Any]:
     """Convert a Chef resource to an Ansible task dictionary with handlers."""
+    # Enrich nodejs_npm resources with version info when it could not be parsed
+    if resource["type"] == "nodejs_npm" and not resource.get("properties"):
+        extracted_version = _extract_nodejs_npm_version(raw_content, resource["name"])
+        if extracted_version is not None:
+            resource["properties"] = str({"version": extracted_version})
+
     # Convert basic resource to task
     task = _convert_chef_resource_to_ansible(
         resource["type"], resource["name"], resource["action"], resource["properties"]

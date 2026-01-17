@@ -1,12 +1,14 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import io
+import json
 import shutil
 import sys
 import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import pandas as pd  # type: ignore[import-untyped]
 import streamlit as st
@@ -15,9 +17,30 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from souschef.assessment import parse_chef_migration_assessment
-from souschef.converters.playbook import generate_playbook_from_recipe
+from souschef.converters.playbook import (
+    generate_playbook_from_recipe,
+    generate_playbook_from_recipe_with_ai,
+)
 from souschef.core.constants import METADATA_FILENAME
 from souschef.parsers.metadata import parse_cookbook_metadata
+
+# AI Settings
+ANTHROPIC_PROVIDER = "Anthropic (Claude)"
+OPENAI_PROVIDER = "OpenAI (GPT)"
+LOCAL_PROVIDER = "Local Model"
+
+
+def load_ai_settings():
+    """Load AI settings from configuration file."""
+    try:
+        config_file = Path.home() / ".souschef" / "ai_config.json"
+        if config_file.exists():
+            with config_file.open() as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
 
 # Constants for repeated strings
 METADATA_STATUS_YES = "Yes"
@@ -347,7 +370,7 @@ def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
     normalized = filename.replace("\\", "/").strip("/")
 
     # Split into components and filter out dangerous ones
-    parts = []
+    parts: list[str] = []
     for part in normalized.split("/"):
         if part == "" or part == ".":
             continue
@@ -640,7 +663,7 @@ def _extract_cookbook_info(metadata, cookbook, metadata_status):
     }
 
 
-def _normalize_description(description):
+def _normalize_description(description: Any) -> str:
     """
     Normalize description to string format.
 
@@ -987,6 +1010,24 @@ def _display_download_option(results):
         type="primary",
         help="Convert analysed cookbooks to Ansible playbooks and download as ZIP",
     ):
+        # Check AI configuration status
+        ai_config = load_ai_settings()
+        ai_available = (
+            ai_config.get("provider")
+            and ai_config.get("provider") != LOCAL_PROVIDER
+            and ai_config.get("api_key")
+        )
+
+        if ai_available:
+            provider = ai_config.get("provider", "Unknown")
+            model = ai_config.get("model", "Unknown")
+            st.info(f"🤖 Using AI-enhanced conversion with {provider} ({model})")
+        else:
+            st.info(
+                "⚙️ Using deterministic conversion. Configure AI settings "
+                "for enhanced results."
+            )
+
         _convert_and_download_playbooks(results)
 
 
@@ -1070,12 +1111,33 @@ def _convert_single_cookbook(result):
         return None
 
     try:
-        # Generate Ansible playbook
-        playbook_content = generate_playbook_from_recipe(str(recipe_file))
+        # Check if AI-enhanced conversion is available and enabled
+        ai_config = load_ai_settings()
+        use_ai = (
+            ai_config.get("provider")
+            and ai_config.get("provider") != LOCAL_PROVIDER
+            and ai_config.get("api_key")
+        )
+
+        if use_ai:
+            # Use AI-enhanced conversion
+            playbook_content = generate_playbook_from_recipe_with_ai(
+                str(recipe_file),
+                ai_provider=ai_config.get("provider", "").split(" ")[0].lower(),
+                api_key=ai_config.get("api_key", ""),
+                model=ai_config.get("model", "claude-3-5-sonnet-20241022"),
+                temperature=ai_config.get("temperature", 0.7),
+                max_tokens=ai_config.get("max_tokens", 4000),
+                project_id=ai_config.get("project_id", ""),
+                base_url=ai_config.get("base_url", ""),
+            )
+        else:
+            # Use deterministic conversion
+            playbook_content = generate_playbook_from_recipe(str(recipe_file))
 
         st.write(
-            f"Debug: Generated content for {result['name']}: "
-            f"{playbook_content[:100]}..."
+            f"Debug: Generated content for {result['name']} "
+            f"(AI: {use_ai}): {playbook_content[:100]}..."
         )
 
         if not playbook_content.startswith("Error"):
@@ -1083,6 +1145,7 @@ def _convert_single_cookbook(result):
                 "cookbook_name": result["name"],
                 "playbook_content": playbook_content,
                 "recipe_file": recipe_file.name,
+                "conversion_method": "AI-enhanced" if use_ai else "Deterministic",
             }
         else:
             st.warning(f"Failed to convert {result['name']}: {playbook_content}")
@@ -1134,8 +1197,14 @@ def _handle_playbook_download(playbooks):
     # Show preview of generated playbooks
     with st.expander("Preview Generated Playbooks"):
         for playbook in playbooks:
+            conversion_badge = (
+                "🤖 AI-Enhanced"
+                if playbook.get("conversion_method") == "AI-enhanced"
+                else "⚙️ Deterministic"
+            )
             st.subheader(
-                f"{playbook['cookbook_name']} (from {playbook['recipe_file']})"
+                f"{playbook['cookbook_name']} ({conversion_badge}) - "
+                f"from {playbook['recipe_file']}"
             )
             st.code(
                 playbook["playbook_content"][:1000] + "..."
@@ -1165,9 +1234,11 @@ This archive contains {len(playbooks)} Ansible playbooks converted from Chef coo
 """
 
         for playbook in playbooks:
+            conversion_method = playbook.get("conversion_method", "Deterministic")
             readme_content += (
                 f"- {playbook['cookbook_name']}.yml "
-                f"(converted from {playbook['recipe_file']})\n"
+                f"(converted from {playbook['recipe_file']}, "
+                f"method: {conversion_method})\n"
             )
 
         readme_content += """

@@ -2,9 +2,14 @@
 
 import ast
 import json
+import re
 from collections.abc import Callable
 from typing import Any
 
+from souschef.converters.cookbook_specific import (
+    build_cookbook_resource_params,
+    get_cookbook_package_config,
+)
 from souschef.core.constants import ACTION_TO_STATE, RESOURCE_MAPPINGS
 
 # Type alias for parameter builder functions
@@ -39,6 +44,51 @@ def _parse_properties(properties_str: str) -> dict[str, Any]:
             return {}
         except Exception:
             return {}
+
+
+def _normalize_template_value(value: Any) -> Any:
+    """Normalize Ruby-style attribute references into Jinja templates."""
+    if isinstance(value, str):
+        # Convert Chef node attributes to Ansible variables dynamically
+        def _replace_node_attr(match):
+            cookbook = match.group(1)
+            attr = match.group(2)
+
+            # Convert cookbook name to readable format
+            def char_to_word(c: str) -> str:
+                number_words = {
+                    "1": "one",
+                    "2": "two",
+                    "3": "three",
+                    "4": "four",
+                    "5": "five",
+                    "6": "six",
+                    "7": "seven",
+                    "8": "eight",
+                    "9": "nine",
+                    "0": "zero",
+                }
+                return number_words.get(c, c)
+
+            # Replace non-alphanumeric characters with underscores
+            readable_cookbook = "".join(
+                char_to_word(c) if c.isdigit() else (c if c.isalnum() else "_")
+                for c in cookbook
+            )
+
+            # Ensure we don't have multiple consecutive underscores
+            readable_cookbook = re.sub(r"_+", "_", readable_cookbook)
+            # Remove leading/trailing underscores
+            readable_cookbook = readable_cookbook.strip("_")
+
+            return f"{{{{ {readable_cookbook}_{attr} }}}}"
+
+        value = re.sub(r"node\['(\w+)'\]\['(\w+)'\]", _replace_node_attr, value)
+
+        # Wrap in Jinja if it's a node reference
+        if "node[" in value:
+            return f"{{{{ {value} }}}}"
+    return value
 
 
 def convert_resource_to_task(
@@ -188,40 +238,18 @@ def _get_remote_file_params(
     return params
 
 
-def _get_nodejs_npm_params(
-    resource_name: str, action: str, props: dict[str, Any]
-) -> dict[str, Any]:
-    """Build parameters for nodejs_npm resources."""
-    params = {"name": resource_name, "global": True}
-    if "version" in props:
-        params["version"] = props["version"]
-    if action == "install":
-        params["state"] = "present"
-    elif action == "remove":
-        params["state"] = "absent"
-    else:
-        params["state"] = "present"
-    return params
-
-
-INCLUDE_RECIPE_MAPPINGS: dict[str, dict[str, Any]] = {
-    "nodejs": {"name": ["nodejs", "npm"], "state": "present", "update_cache": True},
-}
-
-
 def _get_include_recipe_params(
     resource_name: str, action: str, props: dict[str, Any]
 ) -> dict[str, Any]:
     """
     Build parameters for include_recipe resources.
 
-    Recipe-specific behaviors are defined in INCLUDE_RECIPE_MAPPINGS to avoid
-    hardcoded logic for individual recipes.
+    Uses cookbook-specific configurations when available.
     """
-    mapped_params = INCLUDE_RECIPE_MAPPINGS.get(resource_name)
-    if mapped_params is not None:
+    cookbook_config = get_cookbook_package_config(resource_name)
+    if cookbook_config:
         # Return a copy to prevent callers from mutating the shared mapping.
-        return dict(mapped_params)
+        return dict(cookbook_config["params"])
     # Default behavior for recipes without a specific mapping.
     return {"name": resource_name, "state": "present"}
 
@@ -247,7 +275,6 @@ RESOURCE_PARAM_BUILDERS: dict[str, ParamBuilder | str] = {
     "user": _get_user_group_params,
     "group": _get_user_group_params,
     "remote_file": _get_remote_file_params,
-    "nodejs_npm": _get_nodejs_npm_params,
     "include_recipe": _get_include_recipe_params,
 }
 
@@ -269,7 +296,23 @@ def _convert_chef_resource_to_ansible(
 
     """
     # Get Ansible module name
-    ansible_module = RESOURCE_MAPPINGS.get(resource_type, f"# Unknown: {resource_type}")
+    ansible_module = RESOURCE_MAPPINGS.get(resource_type)
+
+    # Check for cookbook-specific include_recipe configurations
+    if resource_type == "include_recipe":
+        cookbook_config = get_cookbook_package_config(resource_name)
+        if cookbook_config:
+            ansible_module = cookbook_config["module"]
+
+    # Handle unknown resource types
+    if ansible_module is None:
+        # Return a task with just a comment for unknown resources
+        return {
+            "name": f"Create {resource_type} {resource_name}",
+            "# Unknown": f"{resource_type}:",
+            "resource_name": resource_name,
+            "state": "present",
+        }
 
     # Start building the task
     task: dict[str, Any] = {
@@ -281,6 +324,12 @@ def _convert_chef_resource_to_ansible(
 
     # Build module parameters using appropriate builder
     module_params = _build_module_params(resource_type, resource_name, action, props)
+
+    # Override with cookbook-specific params for include_recipe
+    if resource_type == "include_recipe":
+        cookbook_config = get_cookbook_package_config(resource_name)
+        if cookbook_config:
+            module_params = cookbook_config["params"].copy()
 
     # Add special task-level flags for execute/bash resources
     if resource_type in ["execute", "bash"]:
@@ -306,6 +355,13 @@ def _build_module_params(
         Dictionary of Ansible module parameters.
 
     """
+    # First check for cookbook-specific resource types
+    cookbook_params = build_cookbook_resource_params(
+        resource_type, resource_name, action, props
+    )
+    if cookbook_params is not None:
+        return cookbook_params
+
     # Look up the parameter builder for this resource type
     builder = RESOURCE_PARAM_BUILDERS.get(resource_type)
 
@@ -337,6 +393,8 @@ def _format_dict_value(key: str, value: dict[str, Any]) -> list[str]:
     """Format a dictionary value for YAML output."""
     lines = [f"  {key}:"]
     for param_key, param_value in value.items():
+        # Indent nested params by four spaces so downstream formatting nests
+        # module parameters under the module key.
         lines.append(f"    {param_key}: {_format_yaml_value(param_value)}")
     return lines
 
@@ -356,6 +414,10 @@ def _format_ansible_task(task: dict[str, Any]) -> str:
 
     for key, value in task.items():
         if key == "name":
+            continue
+        if key == "# Unknown":
+            # Handle unknown resources with a comment
+            result.append(f"  # {value}")
             continue
         if isinstance(value, dict):
             result.extend(_format_dict_value(key, value))
