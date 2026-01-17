@@ -1,8 +1,0 @@
-# runtime/cgo
-gcc: error: unrecognized command-line option '-m64'
-# github.com/hashicorp/terraform-plugin-framework/internal/proto5server
-/home/vscode/go/pkg/mod/github.com/hashicorp/terraform-plugin-framework@v1.14.0/internal/proto5server/serve.go:14:34: cannot use &Server{} (value of type *Server) as tfprotov5.ProviderServer value in variable declaration: *Server does not implement tfprotov5.ProviderServer (missing method GetResourceIdentitySchemas)
-# github.com/hashicorp/terraform-plugin-framework/internal/proto6server
-/home/vscode/go/pkg/mod/github.com/hashicorp/terraform-plugin-framework@v1.14.0/internal/proto6server/serve.go:14:34: cannot use &Server{} (value of type *Server) as tfprotov6.ProviderServer value in variable declaration: *Server does not implement tfprotov6.ProviderServer (missing method GetResourceIdentitySchemas)
-FAIL	github.com/kpeacocke/terraform-provider-souschef/internal/provider [build failed]
-FAIL

@@ -85,6 +85,132 @@
                 "focus": false
             },
             "problemMatcher": []
+        },
+        {
+            "label": "Run Go Tests (terraform-provider)",
+            "type": "shell",
+            "command": "cd",
+            "args": [
+                "terraform-provider",
+                "&&",
+                "[",
+                "-f",
+                ".env.test",
+                "]",
+                "||",
+                "cp",
+                ".env.test.example",
+                ".env.test",
+                "&&",
+                "go",
+                "test",
+                "-v",
+                "./..."
+            ],
+            "options": {
+                "env": {
+                    "TF_ACC": "1"
+                }
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Go Tests with Coverage (terraform-provider)",
+            "type": "shell",
+            "command": "cd",
+            "args": [
+                "terraform-provider",
+                "&&",
+                "[",
+                "-f",
+                ".env.test",
+                "]",
+                "||",
+                "cp",
+                ".env.test.example",
+                ".env.test",
+                "&&",
+                "go",
+                "test",
+                "-v",
+                "-cover",
+                "-coverprofile=coverage.out",
+                "./...",
+                "&&",
+                "go",
+                "tool",
+                "cover",
+                "-html=coverage.out",
+                "-o",
+                "coverage.html"
+            ],
+            "options": {
+                "env": {
+                    "TF_ACC": "1"
+                }
+            },
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Go Mod Tidy (terraform-provider)",
+            "type": "shell",
+            "command": "cd",
+            "args": [
+                "terraform-provider",
+                "&&",
+                "go",
+                "mod",
+                "tidy"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Setup Go Test Environment",
+            "type": "shell",
+            "command": "cd",
+            "args": [
+                "terraform-provider",
+                "&&",
+                "[",
+                "-f",
+                ".env.test",
+                "]",
+                "||",
+                "cp",
+                ".env.test.example",
+                ".env.test"
+            ],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Regenerate Go Test Results",
+            "type": "shell",
+            "command": "./terraform-provider/regenerate-tests.sh",
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": []
         }
     ]
 }

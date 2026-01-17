@@ -159,7 +159,7 @@ class TestEdgeCases:
         recipe_file.write_text("# Only comments\n# No resources here\n")
 
         result = parse_recipe(str(recipe_file))
-        assert "Warning: No Chef resources found" in result
+        assert "Warning: No Chef resources or include_recipe calls found" in result
 
     def test_attributes_with_no_attributes(self, tmp_path):
         """Test parsing an attributes file with no attributes."""
@@ -970,13 +970,13 @@ end
 
 
 class TestAnalyzeSearchPatternsEdgeCases:
-    """Test analyze_chef_search_patterns error handling."""
+    """Test analyse_chef_search_patterns error handling."""
 
     def test_analyze_search_patterns_with_error(self):
-        """Test analyze_chef_search_patterns exception handling."""
+        """Test analyse_chef_search_patterns exception handling."""
         from unittest.mock import MagicMock
 
-        from souschef.server import analyze_chef_search_patterns
+        from souschef.server import analyse_chef_search_patterns
 
         with patch("souschef.converters.playbook._normalize_path") as mock_path:
             mock_file = MagicMock()
@@ -989,7 +989,7 @@ class TestAnalyzeSearchPatternsEdgeCases:
             ) as mock_extract:
                 mock_extract.side_effect = ValueError("Parse error")
 
-                result = analyze_chef_search_patterns("some_recipe.rb")
+                result = analyse_chef_search_patterns("some_recipe.rb")
                 assert "Error analyzing Chef search patterns" in result
 
 

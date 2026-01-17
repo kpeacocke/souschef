@@ -9,12 +9,12 @@ services:
       - "8501:8501"
     environment:
       - PYTHONPATH=/app
-    volumes:
+    # volumes:
       # Mount local directory for development (optional)
-      - ./souschef:/app/souschef:ro
+      # - ./souschef:/app/souschef:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/healthz"]
+      test: ["CMD", "python", "/app/souschef/ui/health_check.py"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -52,8 +52,8 @@ def generate_github_workflow_from_chef_ci(
     if not cookbook_dir.exists():
         raise FileNotFoundError(f"Cookbook directory not found: {cookbook_path}")
 
-    # Analyze Chef CI patterns
-    patterns = _analyze_chef_ci_patterns(cookbook_dir)
+    # Analyse Chef CI patterns
+    patterns = _analyse_chef_ci_patterns(cookbook_dir)
 
     # Build workflow structure
     workflow = _build_workflow_structure(
@@ -63,16 +63,16 @@ def generate_github_workflow_from_chef_ci(
     return yaml.dump(workflow, default_flow_style=False, sort_keys=False)
 
 
-def _analyze_chef_ci_patterns(cookbook_dir: Path) -> dict[str, Any]:
+def _analyse_chef_ci_patterns(cookbook_dir: Path) -> dict[str, Any]:
     """
-    Analyze Chef cookbook for CI/CD patterns and testing configurations.
+    Analyse Chef cookbook for CI/CD patterns and testing configurations.
 
     This function examines a Chef cookbook directory to detect various
     testing and linting tools, as well as Test Kitchen configurations
     including suites and platforms.
 
     Args:
-        cookbook_dir: Path to the Chef cookbook directory to analyze.
+        cookbook_dir: Path to the Chef cookbook directory to analyse.
 
     Returns:
         Dictionary containing detected patterns with the following keys:

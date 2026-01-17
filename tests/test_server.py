@@ -15,9 +15,9 @@ from souschef.server import (
     ValidationEngine,
     ValidationLevel,
     ValidationResult,
-    _analyze_environments_structure,
-    _analyze_structure_recommendations,
-    _analyze_usage_pattern_recommendations,
+    _analyse_environments_structure,
+    _analyse_structure_recommendations,
+    _analyse_usage_pattern_recommendations,
     _build_conversion_details_section,
     _build_conversion_summary,
     _build_files_section,
@@ -75,7 +75,7 @@ from souschef.server import (
     _safe_join,
     _strip_ruby_comments,
     _validate_databags_directory,
-    analyze_chef_databag_usage,
+    analyse_chef_databag_usage,
     convert_chef_databag_to_vars,
     convert_chef_environment_to_inventory_group,
     convert_habitat_to_dockerfile,
@@ -193,9 +193,9 @@ def test_generate_migration_plan_success():
         assert "Team Requirements" in result
 
 
-def test_analyze_cookbook_dependencies_success():
-    """Test analyze_cookbook_dependencies with valid cookbook."""
-    from souschef.server import analyze_cookbook_dependencies
+def test_analyse_cookbook_dependencies_success():
+    """Test analyse_cookbook_dependencies with valid cookbook."""
+    from souschef.server import analyse_cookbook_dependencies
 
     # Create a temporary cookbook structure
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -212,7 +212,7 @@ depends 'apt', '~> 7.0'
 depends 'build-essential'
 """)
 
-        result = analyze_cookbook_dependencies(str(cookbook_path))
+        result = analyse_cookbook_dependencies(str(cookbook_path))
 
         assert "Cookbook Dependency Analysis" in result
         assert "Dependency Overview" in result
@@ -479,16 +479,16 @@ def test_generate_migration_report_detailed_format():
         assert "Risk Assessment" in result or "Recommendations" in result
 
 
-def test_analyze_cookbook_dependencies_not_found():
-    """Test analyze_cookbook_dependencies when cookbook doesn't exist."""
-    from souschef.server import analyze_cookbook_dependencies
+def test_analyse_cookbook_dependencies_not_found():
+    """Test analyse_cookbook_dependencies when cookbook doesn't exist."""
+    from souschef.server import analyse_cookbook_dependencies
 
     mock_cookbook_path = MagicMock(spec=Path)
     mock_cookbook_path.exists.return_value = False
 
     with patch("souschef.assessment._normalize_path") as mock_path_class:
         mock_path_class.return_value = mock_cookbook_path
-        result = analyze_cookbook_dependencies("/nonexistent/path")
+        result = analyse_cookbook_dependencies("/nonexistent/path")
 
         assert "Error: Cookbook path not found" in result
 
@@ -577,9 +577,9 @@ def test_generate_canary_deployment_strategy_invalid_steps():
     assert "Suggestion: Use comma-separated percentages" in result
 
 
-def test_analyze_chef_application_patterns_success():
-    """Test analyze_chef_application_patterns with valid cookbook."""
-    from souschef.server import analyze_chef_application_patterns
+def test_analyse_chef_application_patterns_success():
+    """Test analyse_chef_application_patterns with valid cookbook."""
+    from souschef.server import analyse_chef_application_patterns
 
     # Create a temporary cookbook structure
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -595,7 +595,7 @@ canary_percentage = node["app"]["canary_percent"] || 10
 package "nginx"
 """)
 
-        result = analyze_chef_application_patterns(str(cookbook_path))
+        result = analyse_chef_application_patterns(str(cookbook_path))
         assert "Chef Application Patterns Analysis" in result
         assert "Cookbook: webapp" in result
         assert "Detected Patterns" in result
@@ -897,7 +897,7 @@ def test_parse_recipe_empty():
 
         result = parse_recipe("/cookbook/recipes/empty.rb")
 
-        assert "Warning: No Chef resources found" in result
+        assert "Warning: No Chef resources or include_recipe calls found" in result
 
 
 def test_parse_recipe_not_found():
@@ -1554,9 +1554,9 @@ def test_generate_ansible_vault_from_databags_invalid_directory():
     assert "Data bags directory not found" in result
 
 
-def test_analyze_chef_databag_usage_nonexistent_cookbook():
+def test_analyse_chef_databag_usage_nonexistent_cookbook():
     """Test analyze_chef_databag_usage with nonexistent cookbook."""
-    result = analyze_chef_databag_usage("/nonexistent/cookbook")
+    result = analyse_chef_databag_usage("/nonexistent/cookbook")
     assert "Cookbook path not found" in result
 
 
@@ -1723,30 +1723,30 @@ search(:node, "chef_environment:development")
     assert len(result) >= 3  # Should find multiple patterns
 
 
-def test_analyze_environments_structure_with_parse_error():
-    """Test _analyze_environments_structure with environment file parse error."""
+def test_analyse_environments_structure_with_parse_error():
+    """Test _analyse_environments_structure with environment file parse error."""
     mock_env_path = MagicMock(spec=Path)
     mock_env_file = MagicMock(spec=Path)
     mock_env_file.stem = "test_env"
     mock_env_path.glob.return_value = [mock_env_file]
     mock_env_file.open.side_effect = Exception("Parse error")
 
-    result = _analyze_environments_structure(mock_env_path)
+    result = _analyse_environments_structure(mock_env_path)
     assert result["total_environments"] == 1
     assert "test_env" in result["environments"]
     assert "error" in result["environments"]["test_env"]
     assert result["environments"]["test_env"]["error"] == "Parse error"
 
 
-def test_analyze_usage_pattern_recommendations_empty():
-    """Test _analyze_usage_pattern_recommendations with empty patterns."""
-    result = _analyze_usage_pattern_recommendations([])
+def test_analyse_usage_pattern_recommendations_empty():
+    """Test _analyse_usage_pattern_recommendations with empty patterns."""
+    result = _analyse_usage_pattern_recommendations([])
     assert result == []
 
 
-def test_analyze_structure_recommendations_empty():
-    """Test _analyze_structure_recommendations with empty structure."""
-    result = _analyze_structure_recommendations({})
+def test_analyse_structure_recommendations_empty():
+    """Test _analyse_structure_recommendations with empty structure."""
+    result = _analyse_structure_recommendations({})
     assert result == []
 
 
@@ -3112,7 +3112,7 @@ def test_generate_ansible_vault_from_databags_success():
         assert "Ansible Vault" in result or "Error:" not in result
 
 
-def test_analyze_chef_databag_usage_success():
+def test_analyse_chef_databag_usage_success():
     """Test analyze_chef_databag_usage with cookbook and data bags."""
     # Create a temporary cookbook with databag usage
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -3128,7 +3128,7 @@ password = secrets["password"]
 """
         (recipes_dir / "default.rb").write_text(recipe_content)
 
-        result = analyze_chef_databag_usage(str(cookbook_path), "secrets")
+        result = analyse_chef_databag_usage(str(cookbook_path), "secrets")
         assert "Chef Data Bag Usage Analysis" in result or "Data Bag" in result
 
 
@@ -3170,9 +3170,9 @@ def test_generate_inventory_from_chef_environments_success():
         assert "Inventory" in result or "inventory" in result
 
 
-def test_analyze_chef_environment_usage_success():
-    """Test analyze_chef_environment_usage with cookbook path."""
-    from souschef.server import analyze_chef_environment_usage
+def test_analyse_chef_environment_usage_success():
+    """Test analyse_chef_environment_usage with cookbook path."""
+    from souschef.server import analyse_chef_environment_usage
 
     # Create a temporary cookbook with environment usage
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -3189,7 +3189,7 @@ end
 """
         (recipes_dir / "default.rb").write_text(recipe_content)
 
-        result = analyze_chef_environment_usage(str(cookbook_path))
+        result = analyse_chef_environment_usage(str(cookbook_path))
         assert "Environment" in result or "chef_environment" in result
 
 
@@ -3216,9 +3216,9 @@ def test_generate_dynamic_inventory_script_success():
     assert "inventory" in result or "script" in result
 
 
-def test_analyze_chef_search_patterns_success():
-    """Test analyze_chef_search_patterns with cookbook containing searches."""
-    from souschef.server import analyze_chef_search_patterns
+def test_analyse_chef_search_patterns_success():
+    """Test analyse_chef_search_patterns with cookbook containing searches."""
+    from souschef.server import analyse_chef_search_patterns
 
     # Create a temporary cookbook with search patterns
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -3234,7 +3234,7 @@ db_host = search(:node, "role:database").first["ipaddress"]
 """
         (recipes_dir / "default.rb").write_text(recipe_content)
 
-        result = analyze_chef_search_patterns(str(cookbook_path))
+        result = analyse_chef_search_patterns(str(cookbook_path))
         assert "search" in result or "pattern" in result
 
 
@@ -3339,7 +3339,7 @@ class TestMCPToolsComprehensive:
     def test_search_inventory_tools_error_handling(self):
         """Test search and inventory tools handle errors gracefully."""
         from souschef.server import (
-            analyze_chef_search_patterns,
+            analyse_chef_search_patterns,
             convert_chef_search_to_inventory,
             generate_dynamic_inventory_script,
         )
@@ -3351,9 +3351,9 @@ class TestMCPToolsComprehensive:
         result = generate_dynamic_inventory_script("invalid json")
         assert isinstance(result, str)  # Should not crash
 
-        assert "Error" in analyze_chef_search_patterns(
+        assert "Error" in analyse_chef_search_patterns(
             "/nonexistent/cookbook"
-        ) or isinstance(analyze_chef_search_patterns("/nonexistent/cookbook"), str)
+        ) or isinstance(analyse_chef_search_patterns("/nonexistent/cookbook"), str)
 
     def test_databag_tools_error_handling(self):
         """Test data bag conversion tools handle errors gracefully."""
@@ -3369,13 +3369,13 @@ class TestMCPToolsComprehensive:
         result2 = generate_ansible_vault_from_databags("/nonexistent/databags")
         assert isinstance(result2, str)  # Should not crash
 
-        result3 = analyze_chef_databag_usage("/nonexistent/cookbook")
+        result3 = analyse_chef_databag_usage("/nonexistent/cookbook")
         assert isinstance(result3, str)  # Should not crash
 
     def test_environment_tools_error_handling(self):
         """Test environment conversion tools handle errors gracefully."""
         from souschef.server import (
-            analyze_chef_environment_usage,
+            analyse_chef_environment_usage,
             convert_chef_environment_to_inventory_group,
             generate_inventory_from_chef_environments,
         )
@@ -3389,7 +3389,7 @@ class TestMCPToolsComprehensive:
         result2 = generate_inventory_from_chef_environments("/nonexistent/environments")
         assert isinstance(result2, str)  # Should not crash
 
-        result3 = analyze_chef_environment_usage("/nonexistent/cookbook")
+        result3 = analyse_chef_environment_usage("/nonexistent/cookbook")
         assert isinstance(result3, str)  # Should not crash
 
     def test_awx_tools_error_handling(self):
@@ -3425,7 +3425,7 @@ class TestMCPToolsComprehensive:
     def test_deployment_pattern_tools_error_handling(self):
         """Test deployment pattern tools handle errors gracefully."""
         from souschef.server import (
-            analyze_chef_application_patterns,
+            analyse_chef_application_patterns,
             convert_chef_deployment_to_ansible_strategy,
             generate_blue_green_deployment_playbook,
             generate_canary_deployment_strategy,
@@ -3441,13 +3441,13 @@ class TestMCPToolsComprehensive:
         result3 = generate_canary_deployment_strategy("test_app", 10, "10,25,50,100")
         assert isinstance(result3, str)  # Should not crash
 
-        result4 = analyze_chef_application_patterns("/nonexistent/cookbook")
+        result4 = analyse_chef_application_patterns("/nonexistent/cookbook")
         assert isinstance(result4, str)  # Should not crash
 
     def test_migration_assessment_tools_error_handling(self):
         """Test migration assessment tools handle errors gracefully."""
         from souschef.server import (
-            analyze_cookbook_dependencies,
+            analyse_cookbook_dependencies,
             assess_chef_migration_complexity,
             generate_migration_plan,
             generate_migration_report,
@@ -3460,7 +3460,7 @@ class TestMCPToolsComprehensive:
         result2 = generate_migration_plan('{"cookbooks": []}')
         assert isinstance(result2, str)  # Should not crash
 
-        result3 = analyze_cookbook_dependencies("/nonexistent/cookbook")
+        result3 = analyse_cookbook_dependencies("/nonexistent/cookbook")
         assert isinstance(result3, str)  # Should not crash
 
         result4 = generate_migration_report("{}", "executive", "yes")
@@ -7064,9 +7064,9 @@ class TestCriticalMCPToolCoverage:
                 # Only check for Python script if it's a potentially valid query
                 assert "#!/usr/bin/env python" in result or "import" in result
 
-    def test_analyze_chef_search_patterns_comprehensive(self):
-        """Test analyze_chef_search_patterns with various Chef files."""
-        from souschef.server import analyze_chef_search_patterns
+    def test_analyse_chef_search_patterns_comprehensive(self):
+        """Test analyse_chef_search_patterns with various Chef files."""
+        from souschef.server import analyse_chef_search_patterns
 
         # Create files with different search patterns
         chef_files_with_searches = [
@@ -7221,7 +7221,7 @@ bad_search4 = search(:node, "invalid syntax here ][")
                 temp_path = f.name
 
             try:
-                result = analyze_chef_search_patterns(temp_path)
+                result = analyse_chef_search_patterns(temp_path)
                 assert isinstance(result, str)
 
                 # Validate output based on file content
@@ -7258,7 +7258,7 @@ web_servers = search(:node, "role:web AND chef_environment:production")
 db_servers = search(:node, "role:database")
 """)
 
-            result = analyze_chef_search_patterns(temp_dir)
+            result = analyse_chef_search_patterns(temp_dir)
             assert isinstance(result, str)
             assert len(result) > 100  # Should analyze multiple files
 
@@ -8305,7 +8305,7 @@ class TestFinalCoveragePush:
     def test_all_mcp_tools_exhaustively(self):
         """Test every MCP tool with extensive scenarios."""
         from souschef.server import (
-            analyze_chef_search_patterns,
+            analyse_chef_search_patterns,
             convert_inspec_to_test,
             generate_inspec_from_recipe,
             generate_playbook_from_recipe,
@@ -8882,7 +8882,7 @@ depends:
                     str(base_path / "inspec/controls/nginx.rb"),
                     "testinfra",
                 ),
-                (analyze_chef_search_patterns, str(base_path)),
+                (analyse_chef_search_patterns, str(base_path)),
             ]
 
             for tool_args in tools_to_test:
@@ -11643,9 +11643,9 @@ class TestHandlerAndNotifications:
 class TestDataBagAnalysis:
     """Test data bag analysis and formatting functions."""
 
-    def test_analyze_databag_structure_with_path_object(self, tmp_path):
+    def test_analyse_databag_structure_with_path_object(self, tmp_path):
         """Test analyzing data bag structure with Path object."""
-        from souschef.server import _analyze_databag_structure
+        from souschef.server import _analyse_databag_structure
 
         # Create test data bag structure
         databags_dir = tmp_path / "data_bags"
@@ -11656,15 +11656,15 @@ class TestDataBagAnalysis:
         admin_item = users_bag / "admin.json"
         admin_item.write_text('{"id": "admin", "password": "secret"}')
 
-        result = _analyze_databag_structure(databags_dir)
+        result = _analyse_databag_structure(databags_dir)
 
         assert result["total_databags"] == 1
         assert result["total_items"] == 1
         assert "users" in result["databags"]
 
-    def test_analyze_databag_structure_with_encrypted_item(self, tmp_path):
+    def test_analyse_databag_structure_with_encrypted_item(self, tmp_path):
         """Test detecting encrypted data bag items."""
-        from souschef.server import _analyze_databag_structure
+        from souschef.server import _analyse_databag_structure
 
         databags_dir = tmp_path / "data_bags"
         secrets_bag = databags_dir / "secrets"
@@ -11676,16 +11676,16 @@ class TestDataBagAnalysis:
             '{"id": "password", "encrypted_data": {"cipher": "aes-256-cbc"}}'
         )
 
-        result = _analyze_databag_structure(databags_dir)
+        result = _analyse_databag_structure(databags_dir)
 
         assert result["total_databags"] == 1
         assert result["total_items"] == 1
 
-    def test_analyze_databag_structure_with_file_error(self, tmp_path):
+    def test_analyse_databag_structure_with_file_error(self, tmp_path):
         """Test handling file read errors gracefully."""
         from unittest.mock import patch
 
-        from souschef.server import _analyze_databag_structure
+        from souschef.server import _analyse_databag_structure
 
         databags_dir = tmp_path / "data_bags"
         test_bag = databags_dir / "test"
@@ -11697,7 +11697,7 @@ class TestDataBagAnalysis:
 
         # Mock open to raise an exception
         with patch("builtins.open", side_effect=PermissionError("Access denied")):
-            result = _analyze_databag_structure(databags_dir)
+            result = _analyse_databag_structure(databags_dir)
             # Should handle error and include error in result
             assert "test" in result["databags"]
 
@@ -11773,7 +11773,7 @@ class TestDataBagAnalysis:
         assert any(p["type"] == "data_bag_item()" for p in patterns)
         assert any(p["type"] == "encrypted_data_bag_item()" for p in patterns)
 
-    def test_analyze_chef_databag_usage_tool(self, tmp_path):
+    def test_analyse_chef_databag_usage_tool(self, tmp_path):
         """Test the MCP tool for analyzing data bag usage."""
         # Create cookbook with data bag usage
         cookbook_path = tmp_path / "cookbook"
@@ -11792,12 +11792,12 @@ class TestDataBagAnalysis:
         users_bag.mkdir(parents=True)
         (users_bag / "admin.json").write_text('{"id": "admin"}')
 
-        result = analyze_chef_databag_usage(str(cookbook_path), str(databags_dir))
+        result = analyse_chef_databag_usage(str(cookbook_path), str(databags_dir))
 
         assert "Data Bag Usage Analysis" in result
         assert "data_bag" in result.lower()
 
-    def test_analyze_chef_databag_usage_no_databags_path(self, tmp_path):
+    def test_analyse_chef_databag_usage_no_databags_path(self, tmp_path):
         """Test data bag analysis without databags path."""
         cookbook_path = tmp_path / "cookbook"
         recipes_dir = cookbook_path / "recipes"
@@ -11806,13 +11806,13 @@ class TestDataBagAnalysis:
         recipe_file = recipes_dir / "default.rb"
         recipe_file.write_text('users = data_bag("users")')
 
-        result = analyze_chef_databag_usage(str(cookbook_path))
+        result = analyse_chef_databag_usage(str(cookbook_path))
 
         assert "Data Bag Usage Analysis" in result
 
-    def test_analyze_chef_databag_usage_invalid_path(self):
+    def test_analyse_chef_databag_usage_invalid_path(self):
         """Test data bag analysis with invalid cookbook path."""
-        result = analyze_chef_databag_usage("/nonexistent/path")
+        result = analyse_chef_databag_usage("/nonexistent/path")
 
         assert "Error" in result
 
@@ -12205,13 +12205,13 @@ class TestCookbookAnalysis:
         assert "Dependencies: 1" in result
         assert "Templates: 1" in result
 
-    def test_analyze_cookbooks_directory_empty(self):
+    def test_analyse_cookbooks_directory_empty(self):
         """Test analyzing empty cookbooks directory."""
-        from souschef.server import _analyze_cookbooks_directory
+        from souschef.server import _analyse_cookbooks_directory
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cookbooks_path = Path(tmpdir)
-            result = _analyze_cookbooks_directory(cookbooks_path)
+            result = _analyse_cookbooks_directory(cookbooks_path)
 
             assert result["total_cookbooks"] == 0
             assert result["total_recipes"] == 0
@@ -12400,15 +12400,15 @@ class TestMCPToolEdgeCases:
         # Should handle invalid JSON gracefully
         assert "nginx" in result or "error" in result.lower()
 
-    def test_analyze_chef_databag_usage_invalid_cookbook(self):
+    def test_analyse_chef_databag_usage_invalid_cookbook(self):
         """Test data bag analysis with invalid cookbook path."""
-        result = analyze_chef_databag_usage(
+        result = analyse_chef_databag_usage(
             cookbook_path="/nonexistent/path/to/cookbook"
         )
 
         assert "Error" in result or "not found" in result
 
-    def test_analyze_chef_databag_usage_with_databags_path(self):
+    def test_analyse_chef_databag_usage_with_databags_path(self):
         """Test data bag analysis with databags path."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cookbook_path = Path(tmpdir) / "cookbook"
@@ -12423,7 +12423,7 @@ class TestMCPToolEdgeCases:
             databags_path = Path(tmpdir) / "databags"
             databags_path.mkdir()
 
-            result = analyze_chef_databag_usage(str(cookbook_path), str(databags_path))
+            result = analyse_chef_databag_usage(str(cookbook_path), str(databags_path))
 
             assert "Data Bag Usage" in result
 
@@ -12502,9 +12502,9 @@ class TestDeploymentRecommendations:
             )
             assert "migration" in result.lower() or "plan" in result.lower()
 
-    def test_analyze_cookbook_dependencies(self):
+    def test_analyse_cookbook_dependencies(self):
         """Test analyzing cookbook dependencies."""
-        from souschef.server import analyze_cookbook_dependencies
+        from souschef.server import analyse_cookbook_dependencies
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cookbook_path = Path(tmpdir)
@@ -12516,7 +12516,7 @@ class TestDeploymentRecommendations:
             depends 'mysql', '>= 8.0'
             """)
 
-            result = analyze_cookbook_dependencies(str(cookbook_path))
+            result = analyse_cookbook_dependencies(str(cookbook_path))
             assert "dependencies" in result.lower() or "apache" in result.lower()
 
     def test_generate_migration_report(self):
@@ -12539,7 +12539,7 @@ class TestEnvironmentUsageAnalysis:
 
     def test_environment_usage_analysis(self):
         """Test analyzing Chef environment usage."""
-        from souschef.server import analyze_chef_environment_usage
+        from souschef.server import analyse_chef_environment_usage
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cookbook_path = Path(tmpdir)
@@ -12553,7 +12553,7 @@ class TestEnvironmentUsageAnalysis:
             end
             """)
 
-            result = analyze_chef_environment_usage(str(cookbook_path))
+            result = analyse_chef_environment_usage(str(cookbook_path))
             assert "environment" in result.lower()
 
 
@@ -12858,13 +12858,13 @@ class TestAdditionalEdgeCases:
         result = convert_chef_environment_to_inventory_group("", "empty_env")
         assert "empty_env" in result.lower() or "environment" in result.lower()
 
-    def test_analyze_cookbook_dependencies_with_missing_metadata(self):
+    def test_analyse_cookbook_dependencies_with_missing_metadata(self):
         """Test analyzing cookbook dependencies with missing metadata."""
-        from souschef.server import analyze_cookbook_dependencies
+        from souschef.server import analyse_cookbook_dependencies
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Empty directory with no metadata
-            result = analyze_cookbook_dependencies(str(tmpdir))
+            result = analyse_cookbook_dependencies(str(tmpdir))
             assert "dependencies" in result.lower() or "cookbook" in result.lower()
 
     def test_generate_migration_report_with_minimal_input(self):
@@ -13084,16 +13084,16 @@ class TestErrorHandlingPaths:
             result = convert_chef_search_to_inventory(search_query="invalid::query")
             assert "error" in result.lower()
 
-    def test_analyze_chef_search_patterns_with_exception(self):
+    def test_analyse_chef_search_patterns_with_exception(self):
         """Test error handling when search pattern analysis fails."""
-        from souschef.server import analyze_chef_search_patterns
+        from souschef.server import analyse_chef_search_patterns
 
         # Pass invalid path to trigger exception
         with patch(
             "souschef.server._extract_search_patterns_from_cookbook"
         ) as mock_extract:
             mock_extract.side_effect = Exception("Extract error")
-            result = analyze_chef_search_patterns(
+            result = analyse_chef_search_patterns(
                 recipe_or_cookbook_path="/invalid/path"
             )
             assert "error" in result.lower()

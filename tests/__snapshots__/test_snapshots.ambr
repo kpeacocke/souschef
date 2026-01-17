@@ -264,6 +264,12 @@
     Name: /etc/app/config.yml
     Action: create
     Properties: {'source': 'config.yml.erb'}
+  
+  Include Recipe 2:
+    Recipe: nginx::default
+  
+  Include Recipe 3:
+    Recipe: postgresql::server
   '''
 # ---
 # name: test_parse_recipe_with_multiple_actions_snapshot

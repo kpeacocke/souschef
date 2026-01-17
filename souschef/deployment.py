@@ -51,7 +51,7 @@ def generate_awx_job_template_from_cookbook(
             )
 
         cookbook = validate_cookbook_structure(cookbook_path)
-        cookbook_analysis = _analyze_cookbook_for_awx(cookbook, cookbook_name)
+        cookbook_analysis = _analyse_cookbook_for_awx(cookbook, cookbook_name)
         job_template = _generate_awx_job_template(
             cookbook_analysis, cookbook_name, target_environment, include_survey
         )
@@ -184,7 +184,7 @@ def generate_awx_project_from_cookbooks(
         )
 
         # Analyze all cookbooks
-        cookbooks_analysis = _analyze_cookbooks_directory(cookbooks_path)
+        cookbooks_analysis = _analyse_cookbooks_directory(cookbooks_path)
 
         # Generate project structure
         project_config = _generate_awx_project_config(project_name, scm_type, scm_url)
@@ -329,7 +329,7 @@ def convert_chef_deployment_to_ansible_strategy(
             )
 
         # Analyze Chef deployment pattern
-        pattern_analysis = _analyze_chef_deployment_pattern(cookbook)
+        pattern_analysis = _analyse_chef_deployment_pattern(cookbook)
 
         # Determine best strategy if auto-detect
         if deployment_pattern == "auto":
@@ -626,11 +626,11 @@ def generate_canary_deployment_strategy(
         )
 
 
-def analyze_chef_application_patterns(
+def analyse_chef_application_patterns(
     cookbook_path: str, application_type: str = "web_application"
 ) -> str:
     """
-    Analyze cookbook deployment patterns and recommend Ansible strategies.
+    Analyse cookbook deployment patterns and recommend Ansible strategies.
 
     Detects blue/green, canary, rolling, or custom deployment approaches.
     Application type helps tune recommendations for web/database/service workloads.
@@ -647,7 +647,7 @@ def analyze_chef_application_patterns(
             )
 
         # Analyze cookbook for application patterns
-        analysis = _analyze_application_cookbook(cookbook, application_type)
+        analysis = _analyse_application_cookbook(cookbook, application_type)
 
         return f"""# Chef Application Patterns Analysis
 # Cookbook: {cookbook.name}
@@ -685,9 +685,9 @@ def analyze_chef_application_patterns(
 # AWX Helper Functions
 
 
-def _analyze_recipes(cookbook_path: Path) -> list[dict[str, Any]]:
+def _analyse_recipes(cookbook_path: Path) -> list[dict[str, Any]]:
     """
-    Analyze recipes directory for AWX job steps.
+    Analyse recipes directory for AWX job steps.
 
     Args:
         cookbook_path: Path to cookbook root
@@ -710,11 +710,11 @@ def _analyze_recipes(cookbook_path: Path) -> list[dict[str, Any]]:
     return recipes
 
 
-def _analyze_attributes_for_survey(
+def _analyse_attributes_for_survey(
     cookbook_path: Path,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """
-    Analyze attributes directory for survey field generation.
+    Analyse attributes directory for survey field generation.
 
     Args:
         cookbook_path: Path to cookbook root
@@ -748,7 +748,7 @@ def _analyze_attributes_for_survey(
     return attributes, survey_fields
 
 
-def _analyze_metadata_dependencies(cookbook_path: Path) -> list[str]:
+def _analyse_metadata_dependencies(cookbook_path: Path) -> list[str]:
     """
     Extract cookbook dependencies from metadata.
 
@@ -795,9 +795,9 @@ def _collect_static_files(cookbook_path: Path) -> tuple[list[str], list[str]]:
     return templates, files
 
 
-def _analyze_cookbook_for_awx(cookbook_path: Path, cookbook_name: str) -> dict:
+def _analyse_cookbook_for_awx(cookbook_path: Path, cookbook_name: str) -> dict:
     """
-    Analyze Chef cookbook structure for AWX job template generation.
+    Analyse Chef cookbook structure for AWX job template generation.
 
     Orchestrates multiple analysis helpers to build comprehensive cookbook metadata.
 
@@ -810,9 +810,9 @@ def _analyze_cookbook_for_awx(cookbook_path: Path, cookbook_name: str) -> dict:
 
     """
     # Analyze each dimension independently
-    recipes = _analyze_recipes(cookbook_path)
-    attributes, survey_fields = _analyze_attributes_for_survey(cookbook_path)
-    dependencies = _analyze_metadata_dependencies(cookbook_path)
+    recipes = _analyse_recipes(cookbook_path)
+    attributes, survey_fields = _analyse_attributes_for_survey(cookbook_path)
+    dependencies = _analyse_metadata_dependencies(cookbook_path)
     templates, files = _collect_static_files(cookbook_path)
 
     # Assemble complete analysis
@@ -1155,8 +1155,8 @@ def _generate_survey_fields_from_attributes(attributes: dict) -> list:
     return survey_fields
 
 
-def _analyze_cookbooks_directory(cookbooks_path: Path) -> dict:
-    """Analyze entire cookbooks directory structure."""
+def _analyse_cookbooks_directory(cookbooks_path: Path) -> dict:
+    """Analyse entire cookbooks directory structure."""
     analysis: dict[str, Any] = {
         "total_cookbooks": 0,
         "cookbooks": {},
@@ -1172,7 +1172,7 @@ def _analyze_cookbooks_directory(cookbooks_path: Path) -> dict:
         cookbook_name = cookbook_dir.name
         analysis["total_cookbooks"] += 1
 
-        cookbook_analysis = _analyze_cookbook_for_awx(cookbook_dir, cookbook_name)
+        cookbook_analysis = _analyse_cookbook_for_awx(cookbook_dir, cookbook_name)
         analysis["cookbooks"][cookbook_name] = cookbook_analysis
 
         # Aggregate stats
@@ -1186,8 +1186,8 @@ def _analyze_cookbooks_directory(cookbooks_path: Path) -> dict:
 # Deployment Strategy Helper Functions
 
 
-def _analyze_chef_deployment_pattern(cookbook_path: Path) -> dict:
-    """Analyze Chef cookbook for deployment patterns."""
+def _analyse_chef_deployment_pattern(cookbook_path: Path) -> dict:
+    """Analyse Chef cookbook for deployment patterns."""
     analysis: dict[str, Any] = {
         "deployment_steps": [],
         "health_checks": [],
@@ -1505,8 +1505,8 @@ def _assess_complexity_from_resource_count(resource_count: int) -> tuple[str, st
     return "medium", "2-3 weeks", "medium"
 
 
-def _analyze_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
-    """Analyze Chef cookbook for application deployment patterns."""
+def _analyse_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
+    """Analyse Chef cookbook for application deployment patterns."""
     analysis: dict[str, Any] = {
         "application_type": app_type,
         "deployment_patterns": [],
@@ -1650,7 +1650,7 @@ def _format_deployment_patterns(analysis: dict) -> str:
 
 def _format_chef_resources_analysis(analysis: dict) -> str:
     """Format Chef resources analysis."""
-    # Check for new format first (from _analyze_application_cookbook)
+    # Check for new format first (from _analyse_application_cookbook)
     resources = analysis.get("resources", [])
     if resources:
         # Count resource types

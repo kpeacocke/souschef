@@ -75,5 +75,34 @@
                 "copilot/claude-sonnet-4.5"
             ]
         }
-    }
+    },
+    // Go: Test discovery and execution settings
+    "go.testFlags": ["-v"],
+    "go.testTimeout": "300s",
+    "go.testEnvVars": {
+        "TF_ACC": "1"
+    },
+    "go.testEnvFile": "${workspaceFolder}/terraform-provider/.env.test",
+    "go.useLanguageServer": true,
+    "go.formatTool": "gofmt",
+    "go.lintTool": "golint",
+    "go.vetOnSave": "package",
+    "go.testOnSave": false,
+    "go.coverOnSave": false,
+    "go.gocodeAutoBuild": false,
+    "[go]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    },
+    "go.toolsManagement.checkForUpdates": "local",
+    "go.useGoProxyToCheckForToolUpdates": false,
+    // Go test explorer settings
+    "go.testExplorer.enable": true,
+    "go.testExplorer.showOutput": true,
+    "go.testExplorer.packageDisplayMode": "hierarchical",
+    "go.testExplorer.showDynamicSubtests": true,
+    "go.testExplorer.showTestCoverage": true,
+    "python-envs.pythonProjects": []
 }

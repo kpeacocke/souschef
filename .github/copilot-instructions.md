@@ -262,6 +262,7 @@ def test_handles_any_input(random_input):
 -  Bare `except:` clauses
 -  Missing docstrings
 -  Hardcoded file paths
+-  **Using emojis in UI elements** - The user strongly dislikes emojis in navigation buttons, tooltips, and interface elements. Use plain text instead.
 
 ## Documentation Maintenance
 - **README updates**: When adding new tools, features, or changing functionality, update README.md to reflect the changes

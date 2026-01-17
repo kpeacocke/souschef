@@ -1,0 +1,125 @@
+"""Cookbook-specific resource conversions for common infrastructure cookbooks."""
+
+from typing import Any
+
+APT_MODULE = "ansible.builtin.apt"
+
+# Cookbook-specific include_recipe mappings
+# Maps cookbook names to their primary package installation parameters
+COOKBOOK_PACKAGE_MAPPINGS: dict[str, dict[str, Any]] = {
+    "nodejs": {
+        "module": APT_MODULE,
+        "params": {"name": ["nodejs", "npm"], "state": "present", "update_cache": True},
+    },
+    "apache2": {
+        "module": APT_MODULE,
+        "params": {"name": "apache2", "state": "present", "update_cache": True},
+    },
+    "mysql": {
+        "module": APT_MODULE,
+        "params": {"name": "mysql-server", "state": "present", "update_cache": True},
+    },
+    "docker": {
+        "module": APT_MODULE,
+        "params": {
+            "name": ["docker-ce", "docker-ce-cli", "containerd.io"],
+            "state": "present",
+            "update_cache": True,
+        },
+    },
+}
+
+
+def get_cookbook_package_config(cookbook_name: str) -> dict[str, Any] | None:
+    """
+    Get package installation configuration for a specific cookbook.
+
+    Args:
+        cookbook_name: Name of the cookbook (e.g., 'nodejs', 'apache2').
+
+    Returns:
+        Dictionary with 'module' and 'params' keys, or None if not found.
+
+    """
+    return COOKBOOK_PACKAGE_MAPPINGS.get(cookbook_name)
+
+
+# Cookbook-specific resource type mappings
+# Maps resource types that are specific to certain cookbooks
+COOKBOOK_RESOURCE_MAPPINGS: dict[str, dict[str, Any]] = {
+    "nodejs_npm": {
+        "description": "Node.js npm package installation",
+        "params_builder": "_build_nodejs_npm_params",
+    },
+}
+
+
+def _normalize_template_value(value: Any) -> Any:
+    """
+    Normalize a template value for use in generated parameters.
+
+    This local implementation avoids importing from souschef.converters.resource
+    to prevent an import cycle. It performs a minimal, safe normalization:
+    - For strings, trim surrounding whitespace.
+    - For all other types, return the value unchanged.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+
+def _build_nodejs_npm_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build parameters for nodejs_npm resources."""
+    params = {"name": resource_name, "global": True}
+    if "version" in props:
+        params["version"] = _normalize_template_value(props["version"])
+    if action == "install":
+        params["state"] = "present"
+    elif action == "remove":
+        params["state"] = "absent"
+    else:
+        params["state"] = "present"
+    return params
+
+
+def get_cookbook_resource_config(resource_type: str) -> dict[str, Any] | None:
+    """
+    Get configuration for cookbook-specific resource types.
+
+    Args:
+        resource_type: The resource type (e.g., 'nodejs_npm').
+
+    Returns:
+        Dictionary with resource configuration, or None if not found.
+
+    """
+    return COOKBOOK_RESOURCE_MAPPINGS.get(resource_type)
+
+
+def build_cookbook_resource_params(
+    resource_type: str, resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any] | None:
+    """
+    Build parameters for cookbook-specific resource types.
+
+    Args:
+        resource_type: The resource type.
+        resource_name: The resource name.
+        action: The Chef action.
+        props: Parsed properties dictionary.
+
+    Returns:
+        Dictionary of Ansible module parameters, or None if not supported.
+
+    """
+    config = get_cookbook_resource_config(resource_type)
+    if not config:
+        return None
+
+    builder_name = config.get("params_builder")
+    if builder_name == "_build_nodejs_npm_params":
+        return _build_nodejs_npm_params(resource_name, action, props)
+
+    return None

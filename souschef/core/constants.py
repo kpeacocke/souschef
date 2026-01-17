@@ -6,6 +6,8 @@ __all__ = [
     "METADATA_FILENAME",
     "ERROR_PREFIX",
     "NODE_PREFIX",
+    "ATTRIBUTE_PREFIX",
+    "VALUE_PREFIX",
     "CHEF_RECIPE_PREFIX",
     "CHEF_ROLE_PREFIX",
     "REGEX_WHITESPACE_QUOTE",
@@ -52,6 +54,8 @@ METADATA_FILENAME = "metadata.rb"
 # Common prefixes
 ERROR_PREFIX = "Error:"
 NODE_PREFIX = "node["
+ATTRIBUTE_PREFIX = "Attribute: "
+VALUE_PREFIX = "Value: "
 CHEF_RECIPE_PREFIX = "recipe["
 CHEF_ROLE_PREFIX = "role["
 
@@ -130,6 +134,11 @@ RESOURCE_MAPPINGS = {
     "mount": "ansible.builtin.mount",
     "git": "ansible.builtin.git",
     "remote_file": "ansible.builtin.get_url",
+    "nodejs_npm": "community.general.npm",
+    # Map include_recipe to a generic package install so well-known recipes
+    # (like nodejs) can be materialised into concrete tasks instead of
+    # producing stubbed import_role calls.
+    "include_recipe": "ansible.builtin.package",
 }
 
 # Chef action to Ansible state mappings

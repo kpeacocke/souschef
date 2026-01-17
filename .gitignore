@@ -65,6 +65,7 @@ ENV/
 # Dev Container
 .devcontainer/*
 !.devcontainer/devcontainer.json
+!.devcontainer/post-create.sh
 
 # macOS
 .DS_Store

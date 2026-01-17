@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 # Import assessment functions with aliases to avoid name conflicts
 from souschef.assessment import (
-    analyze_cookbook_dependencies as _analyze_cookbook_dependencies,
+    analyse_cookbook_dependencies as _analyse_cookbook_dependencies,
 )
 from souschef.assessment import (
     assess_chef_migration_complexity as _assess_chef_migration_complexity,
@@ -79,7 +79,7 @@ from souschef.converters.playbook import (  # noqa: F401
 
 # Import playbook converter functions
 from souschef.converters.playbook import (
-    analyze_chef_search_patterns as _analyze_chef_search_patterns,
+    analyse_chef_search_patterns as _analyse_chef_search_patterns,
 )
 from souschef.converters.playbook import (
     convert_chef_search_to_inventory as _convert_chef_search_to_inventory,
@@ -139,8 +139,8 @@ from souschef.core.validation import (  # noqa: F401
 # Note: MCP tool wrappers exist for some of these, but tests import directly
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.deployment import (  # noqa: F401
-    _analyze_cookbook_for_awx,
-    _analyze_cookbooks_directory,
+    _analyse_cookbook_for_awx,
+    _analyse_cookbooks_directory,
     _detect_deployment_patterns_in_recipe,
     _extract_cookbook_attributes,
     _extract_cookbook_dependencies,
@@ -151,7 +151,7 @@ from souschef.deployment import (  # noqa: F401
     _generate_survey_fields_from_attributes,
     _parse_chef_runlist,
     _recommend_ansible_strategies,
-    analyze_chef_application_patterns,
+    analyse_chef_application_patterns,
     convert_chef_deployment_to_ansible_strategy,
     generate_awx_inventory_source_from_chef,
     generate_awx_job_template_from_cookbook,
@@ -163,9 +163,6 @@ from souschef.deployment import (  # noqa: F401
 
 # Re-exports for backward compatibility (used by tests)
 # These are imported and re-exported intentionally
-from souschef.deployment import (
-    analyze_chef_application_patterns as _analyze_chef_application_patterns,
-)
 from souschef.deployment import (
     convert_chef_deployment_to_ansible_strategy as _convert_chef_deployment_to_ansible_strategy,
 )
@@ -903,9 +900,9 @@ def generate_ansible_vault_from_databags(
 
 
 @mcp.tool()
-def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> str:
+def analyse_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> str:
     """
-    Analyze Chef cookbook for data bag usage and provide migration recommendations.
+    Analyse Chef cookbook for data bag usage and provide migration recommendations.
 
     Args:
         cookbook_path: Path to Chef cookbook
@@ -928,7 +925,7 @@ def analyze_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
         if databags_path:
             databags = _normalize_path(databags_path)
             if databags.exists():
-                databag_structure = _analyze_databag_structure(databags)
+                databag_structure = _analyse_databag_structure(databags)
 
         # Generate recommendations
         recommendations = _generate_databag_migration_recommendations(
@@ -1064,11 +1061,11 @@ def generate_inventory_from_chef_environments(
 
 
 @mcp.tool()
-def analyze_chef_environment_usage(
+def analyse_chef_environment_usage(
     cookbook_path: str, environments_path: str = ""
 ) -> str:
     """
-    Analyze Chef cookbook for environment usage.
+    Analyse Chef cookbook for environment usage.
 
     Provides migration recommendations.
 
@@ -1093,7 +1090,7 @@ def analyze_chef_environment_usage(
         if environments_path:
             environments = _normalize_path(environments_path)
             if environments.exists():
-                environment_structure = _analyze_environments_structure(environments)
+                environment_structure = _analyse_environments_structure(environments)
 
         # Generate recommendations
         recommendations = _generate_environment_migration_recommendations(
@@ -1646,8 +1643,8 @@ def _find_environment_patterns_in_content(content: str, file_path: str) -> list:
     return patterns
 
 
-def _analyze_environments_structure(environments_path) -> dict:
-    """Analyze the structure of Chef environments directory."""
+def _analyse_environments_structure(environments_path) -> dict:
+    """Analyse the structure of Chef environments directory."""
     structure: dict[str, Any] = {"total_environments": 0, "environments": {}}
 
     for env_file in environments_path.glob("*.rb"):
@@ -1679,8 +1676,8 @@ def _analyze_environments_structure(environments_path) -> dict:
     return structure
 
 
-def _analyze_usage_pattern_recommendations(usage_patterns: list) -> list[str]:
-    """Analyze usage patterns and generate recommendations."""
+def _analyse_usage_pattern_recommendations(usage_patterns: list) -> list[str]:
+    """Analyse usage patterns and generate recommendations."""
     if not usage_patterns:
         return []
 
@@ -1711,8 +1708,8 @@ def _analyze_usage_pattern_recommendations(usage_patterns: list) -> list[str]:
     return recommendations
 
 
-def _analyze_structure_recommendations(env_structure: dict) -> list[str]:
-    """Analyze environment structure and generate recommendations."""
+def _analyse_structure_recommendations(env_structure: dict) -> list[str]:
+    """Analyse environment structure and generate recommendations."""
     if not env_structure:
         return []
 
@@ -1760,8 +1757,8 @@ def _generate_environment_migration_recommendations(
 ) -> str:
     """Generate migration recommendations based on environment usage analysis."""
     recommendations = []
-    recommendations.extend(_analyze_usage_pattern_recommendations(usage_patterns))
-    recommendations.extend(_analyze_structure_recommendations(env_structure))
+    recommendations.extend(_analyse_usage_pattern_recommendations(usage_patterns))
+    recommendations.extend(_analyse_structure_recommendations(env_structure))
     recommendations.extend(_get_general_migration_recommendations())
 
     return "\n".join(recommendations)
@@ -2090,8 +2087,8 @@ def _find_databag_patterns_in_content(content: str, file_path: str) -> list:
     return patterns
 
 
-def _analyze_databag_structure(databags_path) -> dict:
-    """Analyze the structure of Chef data bags directory."""
+def _analyse_databag_structure(databags_path) -> dict:
+    """Analyse the structure of Chef data bags directory."""
     structure: dict[str, Any] = {
         "total_databags": 0,
         "total_items": 0,
@@ -2135,9 +2132,9 @@ def _analyze_databag_structure(databags_path) -> dict:
     return structure
 
 
-def _analyze_usage_patterns(usage_patterns: list) -> list[str]:
+def _analyse_usage_patterns(usage_patterns: list) -> list[str]:
     """
-    Analyze databag usage patterns and generate recommendations.
+    Analyse databag usage patterns and generate recommendations.
 
     Args:
         usage_patterns: List of usage pattern dicts
@@ -2178,9 +2175,9 @@ def _analyze_usage_patterns(usage_patterns: list) -> list[str]:
     return recommendations
 
 
-def _analyze_databag_structure_recommendations(databag_structure: dict) -> list[str]:
+def _analyse_databag_structure_recommendations(databag_structure: dict) -> list[str]:
     """
-    Analyze databag structure and generate recommendations.
+    Analyse databag structure and generate recommendations.
 
     Args:
         databag_structure: Dict with structure analysis
@@ -2245,11 +2242,11 @@ def _generate_databag_migration_recommendations(
     recommendations = []
 
     # Analyze usage patterns
-    recommendations.extend(_analyze_usage_patterns(usage_patterns))
+    recommendations.extend(_analyse_usage_patterns(usage_patterns))
 
     # Analyze structure
     recommendations.extend(
-        _analyze_databag_structure_recommendations(databag_structure)
+        _analyse_databag_structure_recommendations(databag_structure)
     )
 
     # Add variable scope best practices
@@ -2329,7 +2326,7 @@ mcp.tool()(_generate_awx_inventory_source_from_chef)
 mcp.tool()(_convert_chef_deployment_to_ansible_strategy)
 mcp.tool()(_generate_blue_green_deployment_playbook)
 mcp.tool()(_generate_canary_deployment_strategy)
-mcp.tool()(_analyze_chef_application_patterns)
+mcp.tool()(analyse_chef_application_patterns)
 
 
 # ============================================================================
@@ -2389,9 +2386,9 @@ def generate_migration_plan(
 
 
 @mcp.tool()
-def analyze_cookbook_dependencies(cookbook_paths: str) -> str:
+def analyse_cookbook_dependencies(cookbook_paths: str) -> str:
     """
-    Analyze dependencies between Chef cookbooks.
+    Analyse dependencies between Chef cookbooks.
 
     Maps cookbook dependencies, identifies circular dependencies, and
     recommends migration order.
@@ -2403,7 +2400,7 @@ def analyze_cookbook_dependencies(cookbook_paths: str) -> str:
         Dependency analysis report in markdown format.
 
     """
-    return _analyze_cookbook_dependencies(cookbook_paths)
+    return _analyse_cookbook_dependencies(cookbook_paths)
 
 
 @mcp.tool()
@@ -2559,9 +2556,10 @@ def generate_dynamic_inventory_script(search_queries: str) -> str:
     return _generate_dynamic_inventory_script(search_queries)
 
 
-def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
+@mcp.tool()
+def analyse_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
     """
-    Analyze Chef search patterns in recipe or cookbook.
+    Analyse Chef search patterns in recipe or cookbook.
 
     Args:
         recipe_or_cookbook_path: Path to recipe or cookbook.
@@ -2570,7 +2568,7 @@ def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         Analysis of search patterns found.
 
     """
-    return _analyze_chef_search_patterns(recipe_or_cookbook_path)
+    return _analyse_chef_search_patterns(recipe_or_cookbook_path)
 
 
 @mcp.tool()

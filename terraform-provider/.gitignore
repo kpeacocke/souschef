@@ -7,6 +7,7 @@ terraform-provider-souschef
 
 # Output of go coverage tool
 *.out
+coverage.html
 
 # Terraform files
 *.tfstate
@@ -14,6 +15,10 @@ terraform-provider-souschef
 *.tfvars
 .terraform/
 .terraform.lock.hcl
+
+# Test output files
+test-*.txt
+test-results*.txt
 
 # Crash log files
 crash.log

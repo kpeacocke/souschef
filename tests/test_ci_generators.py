@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 from souschef.ci.github_actions import (
-    _analyze_chef_ci_patterns as github_analyze_patterns,
+    _analyse_chef_ci_patterns as github_analyze_patterns,
 )
 from souschef.ci.github_actions import (
     _build_integration_test_job,
@@ -16,7 +16,7 @@ from souschef.ci.github_actions import (
     generate_github_workflow_from_chef_ci,
 )
 from souschef.ci.gitlab_ci import (
-    _analyze_chef_ci_patterns as gitlab_analyze_patterns,
+    _analyse_chef_ci_patterns as gitlab_analyze_patterns,
 )
 from souschef.ci.gitlab_ci import (
     _build_lint_jobs,
@@ -24,7 +24,7 @@ from souschef.ci.gitlab_ci import (
     generate_gitlab_ci_from_chef_ci,
 )
 from souschef.ci.jenkins_pipeline import (
-    _analyze_chef_ci_patterns as jenkins_analyze_patterns,
+    _analyse_chef_ci_patterns as jenkins_analyze_patterns,
 )
 from souschef.ci.jenkins_pipeline import (
     _create_stage,

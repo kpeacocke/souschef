@@ -13,6 +13,7 @@
         "snyk-security.snyk-vulnerability-scanner",
         "SonarSource.sonarlint-vscode",
         "Progress.chef",
-        "redhat.ansible"
+        "redhat.ansible",
+        "golang.Go"
     ]
 }

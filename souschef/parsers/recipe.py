@@ -38,11 +38,15 @@ def parse_recipe(path: str) -> str:
         content = file_path.read_text(encoding="utf-8")
 
         resources = _extract_resources(content)
+        include_recipes = _extract_include_recipes(content)
 
-        if not resources:
-            return f"Warning: No Chef resources found in {path}"
+        # Combine resources and include_recipes
+        all_items = resources + include_recipes
 
-        return _format_resources(resources)
+        if not all_items:
+            return f"Warning: No Chef resources or include_recipe calls found in {path}"
+
+        return _format_resources(all_items)
 
     except ValueError as e:
         return f"Error: {e}"
@@ -112,6 +116,36 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
         resources.append(resource)
 
     return resources
+
+
+def _extract_include_recipes(content: str) -> list[dict[str, str]]:
+    """
+    Extract include_recipe calls from recipe content.
+
+    Args:
+        content: Raw content of recipe file.
+
+    Returns:
+        List of dictionaries containing include_recipe information.
+
+    """
+    include_recipes = []
+    # Strip comments first
+    clean_content = _strip_ruby_comments(content)
+
+    # Match include_recipe calls: include_recipe 'recipe_name'
+    pattern = r"include_recipe\s+['\"]([^'\"]+)['\"]"
+
+    for match in re.finditer(pattern, clean_content):
+        recipe_name = match.group(1)
+        include_recipes.append(
+            {
+                "type": "include_recipe",
+                "name": recipe_name,
+            }
+        )
+
+    return include_recipes
 
 
 def _extract_conditionals(content: str) -> list[dict[str, Any]]:
@@ -189,12 +223,16 @@ def _format_resources(resources: list[dict[str, Any]]) -> str:
     for i, resource in enumerate(resources, 1):
         if i > 1:
             result.append("")
-        result.append(f"Resource {i}:")
-        result.append(f"  Type: {resource['type']}")
-        result.append(f"  Name: {resource['name']}")
-        if "action" in resource:
-            result.append(f"  Action: {resource['action']}")
-        if "properties" in resource:
-            result.append(f"  Properties: {resource['properties']}")
+        if resource["type"] == "include_recipe":
+            result.append(f"Include Recipe {i}:")
+            result.append(f"  Recipe: {resource['name']}")
+        else:
+            result.append(f"Resource {i}:")
+            result.append(f"  Type: {resource['type']}")
+            result.append(f"  Name: {resource['name']}")
+            if "action" in resource:
+                result.append(f"  Action: {resource['action']}")
+            if "properties" in resource:
+                result.append(f"  Properties: {resource['properties']}")
 
     return "\n".join(result)
