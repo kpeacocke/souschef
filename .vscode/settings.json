@@ -103,5 +103,6 @@
     "go.testExplorer.showOutput": true,
     "go.testExplorer.packageDisplayMode": "hierarchical",
     "go.testExplorer.showDynamicSubtests": true,
-    "go.testExplorer.showTestCoverage": true
+    "go.testExplorer.showTestCoverage": true,
+    "python-envs.pythonProjects": []
 }
