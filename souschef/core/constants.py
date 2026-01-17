@@ -130,6 +130,8 @@ RESOURCE_MAPPINGS = {
     "mount": "ansible.builtin.mount",
     "git": "ansible.builtin.git",
     "remote_file": "ansible.builtin.get_url",
+    "nodejs_npm": "community.general.npm",
+    "include_recipe": "ansible.builtin.import_role",  # Chef include_recipe -> role
 }
 
 # Chef action to Ansible state mappings

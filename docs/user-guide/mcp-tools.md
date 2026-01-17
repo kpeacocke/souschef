@@ -1,19 +1,19 @@
 # MCP Tools Reference
 
-SousChef provides **24 specialised MCP tools** for comprehensive Chef-to-Ansible migration. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **32 specialised MCP tools** for comprehensive Chef-to-Ansible migration. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
 
 !!! info "About the Tool Count"
-    **Why 24 tools here but the server shows more?**
+    **Why 32 tools here but the server shows more?**
 
-    The MCP server actually provides **34 total tools** (32 public + 2 internal). This guide documents the **24 primary tools** you'll use for migrations. The remaining 10 are:
+    The MCP server actually provides **37 total tools** (35 public + 2 internal). This guide documents the **32 primary tools** you'll use for migrations. The remaining 5 are:
 
     - **Internal filesystem operations** - Low-level file reading and directory listing used by other tools
     - **Helper utilities** - Supporting functions that other tools call
 
-    Your AI assistant may use these additional tools automatically behind the scenes (e.g., when a tool needs to read a file, it calls the internal file reading tool). You don't need to invoke them directly - just use the 24 documented tools and let your AI assistant handle the rest.
+    Your AI assistant may use these additional tools automatically behind the scenes (e.g., when a tool needs to read a file, it calls the internal file reading tool). You don't need to invoke them directly - just use the 32 documented tools and let your AI assistant handle the rest.
 
 ## Quick Reference by Capability Area
 
@@ -27,6 +27,8 @@ SousChef provides **24 specialised MCP tools** for comprehensive Chef-to-Ansible
 | [Migration Assessment](#migration-assessment) | 5 tools | Assess complexity and plan migrations |
 | [Habitat](#habitat) | 1 tool | Parse Habitat plans |
 | [Performance](#performance) | 2 tools | Profile and optimise parsing operations |
+| [CI/CD Pipeline Generation](#ci-cd-pipeline-generation) | 3 tools | Generate Jenkins, GitLab CI, and GitHub Actions |
+| [AWX/AAP Integration](#awx-aap-integration) | 3 tools | Generate AWX job templates, workflows, and inventory |
 
 ---
 
@@ -907,7 +909,234 @@ Profile a single parsing operation in detail.
 
 ---
 
-## Best Practices
+## CI/CD Pipeline Generation
+
+### generate_jenkinsfile_from_chef
+
+Generate Jenkins pipeline from Chef cookbook CI patterns.
+
+**What it does**: Analyses Chef cookbooks for testing tools and patterns (Test Kitchen, ChefSpec, Cookstyle) and generates a complete Jenkinsfile (Declarative or Scripted syntax) with appropriate pipeline stages, parallel execution, and artifact management.
+
+**Why you need this**: Chef cookbooks often have established CI/CD patterns that need to be preserved in Ansible. This tool automatically detects Chef testing tools and converts them to equivalent Jenkins pipeline stages, maintaining your existing quality gates and testing workflows.
+
+**What you get**:
+- Complete Jenkinsfile with all detected testing stages
+- Parallel execution for independent test suites
+- Artifact collection and reporting
+- Support for both Declarative and Scripted pipeline syntax
+- Customisable options for caching and artifact handling
+
+**Real-world example**: Your Chef cookbook uses Test Kitchen with multiple platforms, ChefSpec for unit tests, and Cookstyle for linting. This tool generates a Jenkinsfile with parallel stages for each platform, unit test execution, and linting checks.
+
+**Parameters:**
+- `cookbook_path` (string, required): Path to the Chef cookbook directory
+- `pipeline_type` (string, optional, default: "declarative"): Pipeline syntax ('declarative' or 'scripted')
+- `enable_parallel` (boolean, optional, default: true): Enable parallel execution of independent stages
+
+**Returns:**
+- Complete Jenkinsfile content
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a Jenkins Declarative pipeline from the examples/database cookbook
+    with parallel execution enabled
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli generate-jenkinsfile examples/database --pipeline-type declarative
+    ```
+
+---
+
+### generate_gitlab_ci_from_chef
+
+Generate GitLab CI configuration from Chef cookbook testing patterns.
+
+**What it does**: Scans Chef cookbooks for CI patterns and generates a complete `.gitlab-ci.yml` file with appropriate stages, jobs, and caching strategies. Converts Chef testing workflows to GitLab CI/CD pipelines.
+
+**Why you need this**: GitLab CI has different syntax and concepts than Chef's testing approach. This tool bridges that gap by understanding Chef cookbook testing patterns and generating equivalent GitLab CI configurations with proper stage sequencing, artifact passing, and caching.
+
+**What you get**:
+- Complete `.gitlab-ci.yml` with all detected testing jobs
+- Proper stage dependencies and artifact handling
+- Caching configuration for faster builds
+- Support for multiple testing frameworks
+- Customisable options for different environments
+
+**Real-world example**: Your Chef cookbook has Test Kitchen configurations for Ubuntu and CentOS, plus ChefSpec tests. This tool creates a GitLab CI pipeline with separate jobs for each platform, shared caching, and proper artifact collection.
+
+**Parameters:**
+- `cookbook_path` (string, required): Path to the Chef cookbook directory
+- `enable_cache` (boolean, optional, default: true): Enable caching for faster builds
+- `enable_artifacts` (boolean, optional, default: true): Enable artifact collection and passing
+
+**Returns:**
+- Complete GitLab CI configuration
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate GitLab CI configuration from examples/database cookbook
+    with caching and artifacts enabled
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli generate-gitlab-ci examples/database --enable-cache --enable-artifacts
+    ```
+
+---
+
+### generate_github_workflow_from_chef
+
+Generate GitHub Actions workflow from Chef cookbook CI patterns.
+
+**What it does**: Analyses Chef cookbook testing setups and generates GitHub Actions workflow files (`.github/workflows/ci.yml`) with equivalent testing stages, matrix builds, and artifact management.
+
+**Why you need this**: GitHub Actions uses different concepts than Chef testing. This tool understands Chef cookbook CI patterns and creates GitHub Actions workflows with proper job matrices, artifact uploads, and status checks.
+
+**What you get**:
+- Complete GitHub Actions workflow file
+- Matrix builds for multiple platforms/environments
+- Artifact collection and upload
+- Status checks and required reviews
+- Support for all detected Chef testing tools
+- Customisable workflow naming and triggers
+
+**Real-world example**: Your Chef cookbook tests on multiple platforms with Test Kitchen. This tool generates a GitHub Actions workflow with a matrix strategy testing on Ubuntu, CentOS, and Windows, plus proper artifact collection for test results.
+
+**Parameters:**
+- `cookbook_path` (string, required): Path to the Chef cookbook directory
+- `workflow_name` (string, optional, default: "Chef Cookbook CI"): Name for the workflow file
+- `enable_cache` (boolean, optional, default: true): Enable caching for faster builds
+- `enable_artifacts` (boolean, optional, default: true): Enable artifact collection
+
+**Returns:**
+- Complete GitHub Actions workflow configuration
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate GitHub Actions workflow from examples/database cookbook
+    named "Database CI" with caching enabled
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli generate-github-workflow examples/database --workflow-name "Database CI" --enable-cache
+    ```
+
+---
+
+## AWX/AAP Integration
+
+### generate_awx_job_template_from_cookbook
+
+Generate AWX/AAP job template from Chef cookbook.
+
+**What it does**: Analyses a Chef cookbook and generates an AWX/AAP job template configuration that can be imported into your AWX/AAP instance. Converts cookbook metadata, dependencies, and execution patterns into AWX job template parameters.
+
+**Why you need this**: AWX/AAP job templates define how Ansible playbooks are executed. This tool bridges Chef cookbooks to AWX by creating job templates that encapsulate the cookbook's execution requirements, variables, and dependencies.
+
+**What you get**:
+- Complete AWX job template JSON/YAML
+- Proper inventory and credential associations
+- Variable definitions from cookbook attributes
+- Execution options and limits
+- Survey specifications for runtime parameters
+
+**Real-world example**: Your Chef cookbook requires specific credentials and has configurable attributes. This tool generates an AWX job template with the correct credential requirements, survey questions for attribute overrides, and proper execution settings.
+
+**Parameters:**
+- `cookbook_path` (string, required): Path to the Chef cookbook directory
+- `cookbook_name` (string, required): Name of the cookbook for the job template
+
+**Returns:**
+- AWX job template configuration
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate an AWX job template from examples/database cookbook
+    named "database-deployment"
+    ```
+
+---
+
+### generate_awx_workflow_from_chef_runlist
+
+Generate AWX workflow from Chef run-list.
+
+**What it does**: Converts Chef run-lists (sequences of recipes to execute) into AWX workflow templates with proper job ordering, dependencies, and execution flow. Handles complex run-list patterns including conditional execution.
+
+**Why you need this**: Chef run-lists define execution order and dependencies. AWX workflows provide similar orchestration capabilities. This tool translates Chef execution patterns into AWX workflow nodes, edges, and conditions.
+
+**What you get**:
+- Complete AWX workflow template
+- Job nodes for each cookbook/recipe
+- Dependency relationships and execution order
+- Conditional execution based on run-list logic
+- Error handling and rollback options
+
+**Real-world example**: Your Chef run-list executes base recipes first, then application recipes. This tool creates an AWX workflow with sequential job execution, proper failure handling, and success notifications.
+
+**Parameters:**
+- `runlist` (string, required): Chef run-list specification
+- `workflow_name` (string, required): Name for the AWX workflow
+
+**Returns:**
+- AWX workflow template configuration
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate an AWX workflow from Chef run-list "recipe[base],recipe[app::deploy]"
+    named "application-deployment"
+    ```
+
+---
+
+### generate_awx_inventory_source_from_chef
+
+Generate AWX dynamic inventory source from Chef server.
+
+**What it does**: Creates AWX inventory source configurations that connect to Chef servers for dynamic inventory population. Generates scripts or configurations that query Chef server APIs to populate AWX inventories with current node information.
+
+**Why you need this**: Chef servers maintain authoritative node inventories. AWX needs access to this data for orchestration. This tool creates the bridge between Chef server node data and AWX inventory management.
+
+**What you get**:
+- AWX inventory source configuration
+- Dynamic inventory scripts (Python)
+- Chef server API integration
+- Node filtering and grouping options
+- Credential management for Chef server access
+
+**Real-world example**: Your Chef server has nodes tagged by environment and role. This tool generates an AWX inventory source that creates groups like `[production]`, `[webservers]`, `[databases]` automatically populated from Chef node data.
+
+**Parameters:**
+- `chef_server_url` (string, required): URL of the Chef server
+- `environment` (string, required): Chef environment to filter nodes
+- `inventory_name` (string, required): Name for the AWX inventory
+
+**Returns:**
+- AWX inventory source configuration and scripts
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate AWX inventory source from Chef server at https://chef.example.com
+    for production environment, named "prod-inventory"
+    ```
+
+---
 
 ### Tool Selection
 

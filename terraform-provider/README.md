@@ -48,6 +48,67 @@ provider "souschef" {
 }
 ```
 
+## Testing
+
+### Unit Tests
+
+Run the Go unit tests:
+
+```bash
+# Run all tests
+go test -v ./...
+
+# Run tests with coverage
+go test -v -cover ./...
+
+# Run specific test
+go test -v -run TestAccAssessmentDataSource ./internal/provider
+```
+
+### Acceptance Tests
+
+The provider includes acceptance tests that require a full Terraform environment:
+
+```bash
+# Set environment variable to enable acceptance tests
+export TF_ACC=1
+
+# Run acceptance tests
+go test -v ./internal/provider
+
+# Run with coverage
+go test -v -cover -coverprofile=coverage.out ./internal/provider
+go tool cover -html=coverage.out -o coverage.html
+```
+
+### VS Code Integration
+
+The Go tests are integrated with VS Code's test explorer. Make sure you have:
+
+1. The Go extension installed (`golang.Go`)
+2. The test environment is automatically set up when running tests
+
+### Test Environment Setup
+
+The test environment file is automatically created when you run Go tests in VS Code:
+
+```bash
+# VS Code tasks automatically handle this:
+# - "Run Go Tests (terraform-provider)"
+# - "Run Go Tests with Coverage (terraform-provider)"
+```
+
+If you need to customize the test environment, edit `terraform-provider/.env.test` after it has been created:
+
+```bash
+# Copy the example environment file (if needed manually)
+cp .env.test.example .env.test
+
+# Edit as needed for your environment
+# TF_ACC=1
+# SOUSCHEF_API_URL=http://localhost:3000
+```
+
 ## Resources
 
 ### `souschef_migration`

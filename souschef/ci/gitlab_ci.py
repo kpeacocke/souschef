@@ -27,8 +27,8 @@ def generate_gitlab_ci_from_chef_ci(
         GitLab CI YAML content.
 
     """
-    # Analyze Chef CI patterns
-    ci_patterns = _analyze_chef_ci_patterns(cookbook_path)
+    # Analyse Chef CI patterns
+    ci_patterns = _analyse_chef_ci_patterns(cookbook_path)
 
     # Generate CI configuration
     return _generate_gitlab_ci_yaml(
@@ -36,9 +36,9 @@ def generate_gitlab_ci_from_chef_ci(
     )
 
 
-def _analyze_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
+def _analyse_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
     """
-    Analyze Chef cookbook for CI/CD patterns.
+    Analyse Chef cookbook for CI/CD patterns.
 
     Args:
         cookbook_path: Path to Chef cookbook.

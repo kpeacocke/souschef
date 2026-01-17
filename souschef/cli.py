@@ -281,16 +281,16 @@ def _display_template_summary(template_file: Path) -> None:
 @click.option("--dry-run", is_flag=True, help="Show what would be done")
 def cookbook(cookbook_path: str, output: str | None, dry_run: bool) -> None:
     """
-    Analyze an entire Chef cookbook.
+    Analyse an entire Chef cookbook.
 
     COOKBOOK_PATH: Path to the cookbook root directory
 
-    This command analyzes the cookbook structure, metadata, recipes,
+    This command analyses the cookbook structure, metadata, recipes,
     attributes, templates, and custom resources.
     """
     cookbook_dir = Path(cookbook_path)
 
-    click.echo(f"Analyzing cookbook: {cookbook_dir.name}")
+    click.echo(f"Analysing cookbook: {cookbook_dir.name}")
     click.echo("=" * 50)
 
     # Parse metadata
@@ -418,7 +418,7 @@ def generate_jenkinsfile(
 
     COOKBOOK_PATH: Path to the Chef cookbook root directory
 
-    This command analyzes the cookbook for CI patterns (Test Kitchen,
+    This command analyses the cookbook for CI patterns (Test Kitchen,
     lint tools, test suites) and generates an appropriate Jenkinsfile
     with stages for linting, testing, and convergence.
 
@@ -495,7 +495,7 @@ def generate_gitlab_ci(
 
     COOKBOOK_PATH: Path to the Chef cookbook root directory
 
-    This command analyzes the cookbook for CI patterns (Test Kitchen,
+    This command analyses the cookbook for CI patterns (Test Kitchen,
     lint tools, test suites) and generates an appropriate GitLab CI
     configuration with jobs for linting, testing, and convergence.
 
@@ -575,7 +575,7 @@ def generate_github_workflow(
 
     COOKBOOK_PATH: Path to the Chef cookbook root directory
 
-    This command analyzes the cookbook for CI patterns (Test Kitchen,
+    This command analyses the cookbook for CI patterns (Test Kitchen,
     lint tools, test suites) and generates an appropriate GitHub Actions
     workflow with jobs for linting, testing, and convergence.
 
@@ -687,7 +687,7 @@ def profile(cookbook_path: str, output: str | None) -> None:
 
     COOKBOOK_PATH: Path to the Chef cookbook to profile
 
-    This command analyzes the performance of parsing all cookbook components
+    This command analyses the performance of parsing all cookbook components
     (recipes, attributes, resources, templates) and provides recommendations
     for optimization.
     """
@@ -850,7 +850,7 @@ def assess_cookbook(cookbook_path: str, output_format: str) -> None:
     """
     Assess a Chef cookbook for migration complexity.
 
-    Analyzes the cookbook and provides complexity level, recipe/resource counts,
+    Analyses the cookbook and provides complexity level, recipe/resource counts,
     estimated migration effort, and recommendations. Used by Terraform provider.
 
     Example:
@@ -870,8 +870,8 @@ def assess_cookbook(cookbook_path: str, output_format: str) -> None:
             click.echo(f"Error: {cookbook_path} is not a directory", err=True)
             sys.exit(1)
 
-        # Analyze cookbook
-        analysis = _analyze_cookbook_for_assessment(cookbook_dir)
+        # Analyse cookbook
+        analysis = _analyse_cookbook_for_assessment(cookbook_dir)
 
         if output_format == "json":
             click.echo(json.dumps(analysis))
@@ -883,8 +883,8 @@ def assess_cookbook(cookbook_path: str, output_format: str) -> None:
         sys.exit(1)
 
 
-def _analyze_cookbook_for_assessment(cookbook_dir: Path) -> dict:
-    """Analyze cookbook and return assessment data."""
+def _analyse_cookbook_for_assessment(cookbook_dir: Path) -> dict:
+    """Analyse cookbook and return assessment data."""
     recipe_count = 0
     resource_count = 0
     recipes_dir = cookbook_dir / "recipes"

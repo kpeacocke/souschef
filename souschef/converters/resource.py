@@ -188,6 +188,44 @@ def _get_remote_file_params(
     return params
 
 
+def _get_nodejs_npm_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build parameters for nodejs_npm resources."""
+    params = {"name": resource_name, "global": True}
+    if "version" in props:
+        params["version"] = props["version"]
+    if action == "install":
+        params["state"] = "present"
+    elif action == "remove":
+        params["state"] = "absent"
+    else:
+        params["state"] = "present"
+    return params
+
+
+INCLUDE_RECIPE_MAPPINGS: dict[str, dict[str, Any]] = {
+    "nodejs": {"name": ["nodejs", "npm"], "state": "present", "update_cache": True},
+}
+
+
+def _get_include_recipe_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Build parameters for include_recipe resources.
+
+    Recipe-specific behaviors are defined in INCLUDE_RECIPE_MAPPINGS to avoid
+    hardcoded logic for individual recipes.
+    """
+    mapped_params = INCLUDE_RECIPE_MAPPINGS.get(resource_name)
+    if mapped_params is not None:
+        # Return a copy to prevent callers from mutating the shared mapping.
+        return dict(mapped_params)
+    # Default behavior for recipes without a specific mapping.
+    return {"name": resource_name, "state": "present"}
+
+
 def _get_default_params(resource_name: str, action: str) -> dict[str, Any]:
     """Build default parameters for unknown resource types."""
     params = {"name": resource_name}
@@ -209,6 +247,8 @@ RESOURCE_PARAM_BUILDERS: dict[str, ParamBuilder | str] = {
     "user": _get_user_group_params,
     "group": _get_user_group_params,
     "remote_file": _get_remote_file_params,
+    "nodejs_npm": _get_nodejs_npm_params,
+    "include_recipe": _get_include_recipe_params,
 }
 
 

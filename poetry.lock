@@ -2895,6 +2895,34 @@ scipy = ">=1.5,<2"
 docs = ["mkdocs-material", "mkdocstrings-python", "pymdown-extensions"]
 
 [[package]]
+name = "openai"
+version = "2.15.0"
+description = "The official Python library for the openai API"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "openai-2.15.0-py3-none-any.whl", hash = "sha256:6ae23b932cd7230f7244e52954daa6602716d6b9bf235401a107af731baea6c3"},
+    {file = "openai-2.15.0.tar.gz", hash = "sha256:42eb8cbb407d84770633f31bf727d4ffb4138711c670565a41663d9439174fba"},
+]
+
+[package.dependencies]
+anyio = ">=3.5.0,<5"
+distro = ">=1.7.0,<2"
+httpx = ">=0.23.0,<1"
+jiter = ">=0.10.0,<1"
+pydantic = ">=1.9.0,<3"
+sniffio = "*"
+tqdm = ">4"
+typing-extensions = ">=4.11,<5"
+
+[package.extras]
+aiohttp = ["aiohttp", "httpx-aiohttp (>=0.1.9)"]
+datalib = ["numpy (>=1)", "pandas (>=1.2.3)", "pandas-stubs (>=1.1.0.11)"]
+realtime = ["websockets (>=13,<16)"]
+voice-helpers = ["numpy (>=2.0.2)", "sounddevice (>=0.5.1)"]
+
+[[package]]
 name = "packageurl-python"
 version = "0.17.6"
 description = "A purl aka. Package URL parser and builder"
@@ -5099,4 +5127,4 @@ ui = ["pandas"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.14,<4.0"
-content-hash = "67a6074421c54ab5bad91fa3a9fff2ab3df5477a98fa6c4df9458ccbbd855462"
+content-hash = "617a64a10b8d81ed3e056b334b45b3caa23cd10091c613c835c530c846ec8f31"

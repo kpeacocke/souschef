@@ -28,8 +28,8 @@ def generate_jenkinsfile_from_chef_ci(
         Jenkinsfile content (Groovy DSL).
 
     """
-    # Analyze Chef CI patterns
-    ci_patterns = _analyze_chef_ci_patterns(cookbook_path)
+    # Analyse Chef CI patterns
+    ci_patterns = _analyse_chef_ci_patterns(cookbook_path)
 
     if pipeline_type == "declarative":
         return _generate_declarative_pipeline(
@@ -39,9 +39,9 @@ def generate_jenkinsfile_from_chef_ci(
         return _generate_scripted_pipeline(pipeline_name, enable_parallel)
 
 
-def _analyze_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
+def _analyse_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
     """
-    Analyze Chef cookbook for CI/CD patterns.
+    Analyse Chef cookbook for CI/CD patterns.
 
     Detects:
     - Test Kitchen configuration (.kitchen.yml)

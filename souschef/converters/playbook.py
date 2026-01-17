@@ -121,9 +121,9 @@ def generate_dynamic_inventory_script(search_queries: str) -> str:
         return f"Error generating dynamic inventory script: {e}"
 
 
-def analyze_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
+def analyse_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
     """
-    Analyze recipes/cookbooks to extract search patterns for inventory planning.
+    Analyse recipes/cookbooks to extract search patterns for inventory planning.
 
     Args:
         recipe_or_cookbook_path: Path to Chef recipe file or cookbook directory.

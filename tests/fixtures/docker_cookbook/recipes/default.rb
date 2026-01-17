@@ -29,7 +29,7 @@ if platform_family?('debian')
   end
 
   execute 'add-docker-gpg-key' do
-    command "curl -fsSL #{node['docker']['repo_url']}/#{node['platform']}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
+    command "curl -fsSL --proto =https #{node['docker']['repo_url']}/#{node['platform']}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
     not_if { ::File.exist?('/etc/apt/keyrings/docker.gpg') }
   end
 
