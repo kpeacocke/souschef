@@ -2,10 +2,8 @@ name: Release Please
 
 # Run after push to main (CI and SonarCloud must pass due to branch protection)
 on:
-  workflow_run:
-    workflows: ["CI", "Main Branch Validation"]
-    types:
-      - completed
+  push:
+    branches: [main]
   workflow_dispatch: # Allow manual trigger
 
 concurrency:
