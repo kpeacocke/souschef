@@ -40,8 +40,8 @@ __all__ = [
     "ACTION_TO_STATE",
 ]
 
-# Version information
-VERSION = "2.5.2"
+# Version
+VERSION = "2.6.0"
 
 # Ansible module names
 ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"

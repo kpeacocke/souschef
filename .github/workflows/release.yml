@@ -37,6 +37,11 @@ jobs:
         fetch-depth: 0
         ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
     - name: Determine release tag
       id: get-tag
       env:
@@ -79,7 +84,7 @@ jobs:
       run: |
         TAG_VERSION="${TAG#v}"
         # Use Python to parse TOML since it's more reliable than sed
-        PYPROJECT_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml'))['tool']['poetry']['version'])")
+        PYPROJECT_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['tool']['poetry']['version'])")
         if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
           echo "Error: Tag version ($TAG_VERSION) != pyproject.toml version ($PYPROJECT_VERSION)"
           exit 1
@@ -153,7 +158,7 @@ jobs:
       uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # v1.13.0
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
-        attestations: true
+        attestations: false
 
   attach-to-release:
     runs-on: ubuntu-latest
