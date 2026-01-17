@@ -612,8 +612,15 @@ def _get_safe_cookbook_directory(cookbook_path):
     try:
         candidate.relative_to(base_dir)
     except ValueError:
-        st.error("The specified path is outside the allowed cookbook directory root.")
-        return None
+        # Allow temporary directories (used by archive extraction)
+        temp_dir = Path(tempfile.gettempdir())
+        try:
+            candidate.relative_to(temp_dir)
+        except ValueError:
+            st.error(
+                "The specified path is outside the allowed cookbook directory root."
+            )
+            return None
 
     return candidate
 
