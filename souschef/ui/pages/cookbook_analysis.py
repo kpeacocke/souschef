@@ -38,7 +38,7 @@ def load_ai_settings():
             with config_file.open() as f:
                 return json.load(f)
     except Exception:
-        pass
+        pass  # Ignore errors when loading config file; return empty dict as fallback
     return {}
 
 
@@ -1261,7 +1261,6 @@ Run these playbooks with Ansible:
 
 def _create_analysis_report(results):
     """Create a JSON report of the analysis results."""
-
     report = {
         "analysis_summary": {
             "total_cookbooks": len(results),

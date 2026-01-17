@@ -72,7 +72,6 @@ def _build_nodejs_npm_params(
     resource_name: str, action: str, props: dict[str, Any]
 ) -> dict[str, Any]:
     """Build parameters for nodejs_npm resources."""
-
     params = {"name": resource_name, "global": True}
     if "version" in props:
         params["version"] = _normalize_template_value(props["version"])
