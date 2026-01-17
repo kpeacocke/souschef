@@ -1261,7 +1261,6 @@ Run these playbooks with Ansible:
 
 def _create_analysis_report(results):
     """Create a JSON report of the analysis results."""
-    import json
 
     report = {
         "analysis_summary": {
