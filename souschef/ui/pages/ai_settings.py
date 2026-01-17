@@ -275,6 +275,8 @@ def load_ai_settings():
             with config_file.open() as f:
                 return json.load(f)
     except Exception:
+        # Silently ignore config file errors and fall back to session state
+        # This prevents app crashes from corrupted/missing config files
         pass
 
     # Fallback to session state or return empty dict
