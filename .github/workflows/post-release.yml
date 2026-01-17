@@ -40,6 +40,9 @@ jobs:
         LATEST_COMMIT=$(git log -1 --pretty=format:"%h - %s" origin/main)
         echo "Latest commit: $LATEST_COMMIT"
 
+        # Define commit message
+        MESSAGE="chore: sync main to develop\n\nLatest: ${LATEST_COMMIT}"
+
         # Check if develop is already up to date with main
         if git merge-base --is-ancestor origin/main develop; then
           echo "✓ Develop is already up to date with main"
