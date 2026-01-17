@@ -564,8 +564,6 @@ def _get_safe_cookbook_directory(cookbook_path):
         candidate.relative_to(base_dir)
     except ValueError:
         # Allow temporary directories (used by archive extraction)
-        import tempfile
-
         temp_dir = Path(tempfile.gettempdir())
         try:
             candidate.relative_to(temp_dir)
