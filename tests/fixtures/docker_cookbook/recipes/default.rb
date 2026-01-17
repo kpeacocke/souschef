@@ -29,7 +29,7 @@ if platform_family?('debian')
   end
 
   execute 'add-docker-gpg-key' do
-    command "curl -fsSL #{node['docker']['repo_url']}/#{node['platform']}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
+    command "curl -fsSL --proto =https #{node['docker']['repo_url']}/#{node['platform']}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
     not_if { ::File.exist?('/etc/apt/keyrings/docker.gpg') }
   end
 
@@ -69,7 +69,7 @@ directory '/etc/docker' do
 end
 
 file '/etc/docker/daemon.json' do
-  content lazy { node['docker']['daemon'].to_json }
+  content node['docker']['daemon'].to_json
   owner 'root'
   group 'root'
   mode '0644'

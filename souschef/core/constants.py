@@ -1,6 +1,7 @@
 """Constants used throughout SousChef."""
 
 __all__ = [
+    "VERSION",
     "ANSIBLE_SERVICE_MODULE",
     "METADATA_FILENAME",
     "ERROR_PREFIX",
@@ -38,6 +39,9 @@ __all__ = [
     "RESOURCE_MAPPINGS",
     "ACTION_TO_STATE",
 ]
+
+# Version information
+VERSION = "2.5.2"
 
 # Ansible module names
 ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"
@@ -126,6 +130,8 @@ RESOURCE_MAPPINGS = {
     "mount": "ansible.builtin.mount",
     "git": "ansible.builtin.git",
     "remote_file": "ansible.builtin.get_url",
+    "nodejs_npm": "community.general.npm",
+    "include_recipe": "ansible.builtin.apt",  # For nodejs recipe
 }
 
 # Chef action to Ansible state mappings

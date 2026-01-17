@@ -159,7 +159,7 @@ class TestEdgeCases:
         recipe_file.write_text("# Only comments\n# No resources here\n")
 
         result = parse_recipe(str(recipe_file))
-        assert "Warning: No Chef resources found" in result
+        assert "Warning: No Chef resources or include_recipe calls found" in result
 
     def test_attributes_with_no_attributes(self, tmp_path):
         """Test parsing an attributes file with no attributes."""

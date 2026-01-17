@@ -188,6 +188,34 @@ def _get_remote_file_params(
     return params
 
 
+def _get_nodejs_npm_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build parameters for nodejs_npm resources."""
+    params = {"name": resource_name, "global": True}
+    if "version" in props:
+        params["version"] = props["version"]
+    if action == "install":
+        params["state"] = "present"
+    elif action == "remove":
+        params["state"] = "absent"
+    else:
+        params["state"] = "present"
+    return params
+
+
+def _get_include_recipe_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build parameters for include_recipe resources."""
+    # Handle specific recipes
+    if resource_name == "nodejs":
+        # include_recipe 'nodejs' should install nodejs and npm
+        return {"name": ["nodejs", "npm"], "state": "present", "update_cache": True}
+    # For other recipes, this is a placeholder - would need recipe mapping
+    return {"name": resource_name, "state": "present"}
+
+
 def _get_default_params(resource_name: str, action: str) -> dict[str, Any]:
     """Build default parameters for unknown resource types."""
     params = {"name": resource_name}
@@ -209,6 +237,8 @@ RESOURCE_PARAM_BUILDERS: dict[str, ParamBuilder | str] = {
     "user": _get_user_group_params,
     "group": _get_user_group_params,
     "remote_file": _get_remote_file_params,
+    "nodejs_npm": _get_nodejs_npm_params,
+    "include_recipe": _get_include_recipe_params,
 }
 
 

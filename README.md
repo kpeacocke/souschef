@@ -14,17 +14,17 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview - Chef to Ansible features
 
-SousChef is a complete enterprise-grade migration platform with **27 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with **32 primary MCP tools** organised across **10 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### About Tool Counts
 
-**Why 27 tools in the documentation but more in the server?**
+**Why 32 tools in the documentation but more in the server?**
 
-The MCP server provides **37 total tools** (35 public + 2 internal). This documentation focuses on the **27 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are low-level filesystem operations and helper utilities used internally by the main tools.
+The MCP server provides **37 total tools** (35 public + 2 internal). This documentation focuses on the **32 primary user-facing tools** that cover the main migration capabilities. The remaining 3 tools are low-level filesystem operations and helper utilities used internally by the main tools.
 
 As a user, you'll primarily interact with the 27 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
-> 💡 **For developers:** See `souschef/server.py` for the complete list of all 37 registered tools.
+> **For developers:** See `souschef/server.py` for the complete list of all 37 registered tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -592,7 +592,7 @@ Each MCP tool includes comprehensive documentation:
 - **[Testing Strategy Guide](docs/testing-strategy.md)** - Validation and testing approaches
 - **[Best Practices](docs/best-practices.md)** - Recommended patterns and approaches
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - Development setup and workflow
@@ -600,13 +600,13 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - Pull request process
 - Issue reporting guidelines
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Roadmap
 
-### Completed ✅
+### Completed
 -  Complete Chef cookbook parsing (recipes, attributes, metadata, templates)
 -  InSpec profile parsing and conversion to Testinfra/Ansible tests
 -  Chef resource to Ansible task conversion with module mapping
@@ -637,7 +637,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -  **Real-time progress tracking** for all analysis operations with Streamlit progress bars
 -  **Static graph visualization** with matplotlib for reports and documentation
 
-### Planned 📅
+### Planned
 - 📅 Enhanced graph layout algorithms for large dependency networks (force-directed, hierarchical)
 - 📅 Export functionality for graphs (PNG, SVG, PDF formats)
 - 📅 UI configuration options and themes
@@ -649,7 +649,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📅 Migration templates and presets
 - 📅 Terraform provider for infrastructure state management
 
-## 🙋‍♀️ Support & Community
+## Support & Community
 
 - **Issues**: [GitHub Issues](https://github.com/kpeacocke/souschef/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/kpeacocke/souschef/discussions)
@@ -657,7 +657,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**SousChef** - *Transforming infrastructure automation, one recipe at a time.* ✨
+**SousChef** - *Transforming infrastructure automation, one recipe at a time.*
   desc 'Ensure package nginx is properly configured'
   impact 1.0
 
@@ -1374,4 +1374,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**SousChef** - *Ansible automation, one recipe at a time.* ✨
+**SousChef** - *Ansible automation, one recipe at a time.*

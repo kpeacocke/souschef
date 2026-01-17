@@ -897,7 +897,7 @@ def test_parse_recipe_empty():
 
         result = parse_recipe("/cookbook/recipes/empty.rb")
 
-        assert "Warning: No Chef resources found" in result
+        assert "Warning: No Chef resources or include_recipe calls found" in result
 
 
 def test_parse_recipe_not_found():

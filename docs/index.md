@@ -9,18 +9,18 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview
 
-SousChef is a complete enterprise-grade migration platform with **24 primary MCP tools** organised across **8 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with **32 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, SousChef provides everything needed for a successful infrastructure automation migration.
 
 !!! info "About Tool Counts"
-    **Why 24 tools in the documentation but more in the server?**
+    **Why 32 tools in the documentation but more in the server?**
 
-    The MCP server actually provides **34 total tools** (32 public + 2 internal). This documentation focuses on the **24 primary user-facing tools** that cover the main migration capabilities. The remaining 10 tools are:
+    The MCP server actually provides **37 total tools** (35 public + 2 internal). This documentation focuses on the **32 primary user-facing tools** that cover the main migration capabilities. The remaining 5 are:
 
     - **Low-level filesystem operations** (`_read_file_internal`, `_list_directory_internal`) - Used internally by other tools
     - **Helper utilities** - Supporting functions for the main tools
     - **Deprecated tools** - Maintained for backward compatibility
 
-    As a user, you'll primarily interact with the 24 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
+    As a user, you'll primarily interact with the 32 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -57,6 +57,11 @@ Comprehensive validation framework and InSpec integration for ensuring migration
 Modernise Habitat applications to containerised deployments with Docker and Compose.
 
 [Learn more about Habitat conversion →](user-guide/mcp-tools.md#habitat){ .md-button }
+
+### :material-web: Visual Migration Planning Interface
+Interactive web-based interface for Chef-to-Ansible migration planning and visualisation.
+
+[Learn more about the UI →](user-guide/ui.md){ .md-button }
 
 ## Quick Start
 
@@ -95,6 +100,28 @@ Get started with SousChef in minutes:
     # Start using immediately
     souschef-cli cookbook /path/to/cookbook
     ```
+
+=== "Web UI"
+
+    **Launch the Visual Interface:**
+    ```bash
+    # Using Poetry (development)
+    poetry run souschef ui
+
+    # Using pip (installed)
+    souschef ui
+
+    # Custom port
+    souschef ui --port 8080
+    ```
+
+    **Features:**
+    - Interactive cookbook analysis with archive upload
+    - Real-time dependency visualisation
+    - Migration planning wizards
+    - Progress tracking and validation reports
+
+    [Learn more about the UI →](user-guide/ui.md){ .md-button }
 
 [Get started →](getting-started/installation.md){ .md-button .md-button--primary }
 

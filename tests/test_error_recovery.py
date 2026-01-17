@@ -69,7 +69,10 @@ def test_parse_recipe_empty_file():
 
         assert isinstance(result, str)
         # Empty file should return minimal output
-        assert "No Chef resources found" in result or "Analysis" in result
+        assert (
+            "No Chef resources or include_recipe calls found" in result
+            or "Analysis" in result
+        )
 
 
 def test_parse_recipe_only_comments():
@@ -86,7 +89,10 @@ def test_parse_recipe_only_comments():
         result = parse_recipe(f.name)
 
         assert isinstance(result, str)
-        assert "No Chef resources found" in result or len(result) > 0
+        assert (
+            "No Chef resources or include_recipe calls found" in result
+            or len(result) > 0
+        )
 
 
 def test_parse_recipe_with_very_long_lines():
