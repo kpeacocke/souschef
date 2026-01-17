@@ -90,7 +90,7 @@ testpaths = [
 [tool.coverage.run]
 source = ["souschef"]
 relative_files = true
-omit = ["tests/*", "examples/*"]
+omit = ["tests/*", "examples/*", "souschef/ui/*"]
 
 [tool.coverage.report]
 exclude_lines = [

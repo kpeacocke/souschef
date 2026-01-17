@@ -214,13 +214,11 @@ version '1.0.0'
 def _extract_zip_securely(archive_path: Path, extraction_dir: Path) -> None:
     """Extract ZIP archive with security checks."""
     total_size = 0
-    file_count = 0
 
     with zipfile.ZipFile(archive_path, "r") as zip_ref:
         # Pre-scan for security issues
-        for info in zip_ref.filelist:
+        for file_count, info in enumerate(zip_ref.filelist, start=1):
             _validate_zip_file_security(info, file_count, total_size)
-            file_count += 1
             total_size += info.file_size
 
         # Safe extraction with manual path handling
@@ -275,37 +273,52 @@ def _validate_zip_file_security(info, file_count: int, total_size: int) -> None:
         raise ValueError(f"Symlinks not allowed: {info.filename}")
 
 
-def _secure_tar_filter(member, path=None):
-    """Filter function for tarfile extraction to control resource consumption."""
-    # Check size (additional to pre-validation)
-    if member.size > MAX_FILE_SIZE:
-        raise ValueError(f"File too large: {member.name} ({member.size} bytes)")
-    # Check path traversal (additional)
-    if _has_path_traversal(member.name):
-        raise ValueError(f"Path traversal detected: {member.name}")
-    # Only allow regular files and directories
-    if not member.isfile() and not member.isdir():
-        raise ValueError(f"Unsupported file type: {member.name}")
-    return member
-
-
 def _extract_tar_securely(
     archive_path: Path, extraction_dir: Path, gzipped: bool
 ) -> None:
     """Extract TAR archive with security checks."""
     mode = "r:gz" if gzipped else "r"
+
+    try:
+        with tarfile.open(str(archive_path), mode=mode) as tar_ref:  # type: ignore[call-overload]
+            members = tar_ref.getmembers()
+            _pre_scan_tar_members(members)
+            _extract_tar_members(tar_ref, members, extraction_dir)
+    except tarfile.TarError as e:
+        raise ValueError(f"Invalid or corrupted TAR archive: {e}") from e
+    except Exception as e:
+        raise ValueError(f"Failed to process TAR archive: {e}") from e
+
+
+def _pre_scan_tar_members(members):
+    """Pre-scan TAR members for security issues and accumulate totals."""
     total_size = 0
-    file_count = 0
+    for file_count, member in enumerate(members, start=1):
+        total_size += member.size
+        _validate_tar_file_security(member, file_count, total_size)
 
-    with tarfile.open(str(archive_path), mode=mode) as tar_ref:  # type: ignore[call-overload]
-        # Pre-scan for security issues
-        for member in tar_ref.getmembers():
-            _validate_tar_file_security(member, file_count, total_size)
-            file_count += 1
-            total_size += member.size
 
-        # Safe extraction with custom filter
-        tar_ref.extractall(extraction_dir, filter=_secure_tar_filter)
+def _extract_tar_members(tar_ref, members, extraction_dir):
+    """Extract validated TAR members to the extraction directory."""
+    for member in members:
+        safe_path = _get_safe_extraction_path(member.name, extraction_dir)
+        if member.isdir():
+            safe_path.mkdir(parents=True, exist_ok=True)
+        else:
+            safe_path.parent.mkdir(parents=True, exist_ok=True)
+            _extract_file_content(tar_ref, member, safe_path)
+
+
+def _extract_file_content(tar_ref, member, safe_path):
+    """Extract the content of a single TAR member to a file."""
+    source = tar_ref.extractfile(member)
+    if source:
+        with source, safe_path.open("wb") as target:
+            while True:
+                chunk = source.read(8192)
+                if not chunk:
+                    break
+                target.write(chunk)
 
 
 def _validate_tar_file_security(member, file_count: int, total_size: int) -> None:
@@ -566,23 +579,36 @@ def _get_safe_cookbook_directory(cookbook_path):
     """
     Resolve the user-provided cookbook path to a safe directory.
 
-    The path is resolved against a base directory and normalized to
-    prevent directory traversal outside the allowed root.
+    The path is validated and normalized to prevent directory traversal
+    outside the allowed root before any path operations.
     """
     try:
         base_dir = Path.cwd().resolve()
         # Convert to string and strip whitespace
         path_str = str(cookbook_path).strip()
+
+        # Validate input - reject paths with obvious traversal attempts
+        if ".." in path_str or path_str.startswith("/") or ":\\" in path_str:
+            st.error(
+                "Invalid path: contains directory traversal or absolute path components"
+            )
+            return None
+
+        # Only create Path object after basic validation
         user_path = Path(path_str)
+
+        # For relative paths, resolve against base directory
         if not user_path.is_absolute():
             candidate = (base_dir / user_path).resolve()
         else:
-            candidate = user_path.resolve()
+            # Reject absolute paths entirely for security
+            st.error("Absolute paths are not allowed for security reasons")
+            return None
     except Exception as exc:
         st.error(f"Invalid path: {exc}")
         return None
 
-    # Ensure path is within allowed base directory or temp directory.
+    # Ensure path is within allowed base directory
     try:
         candidate.relative_to(base_dir)
     except ValueError:
