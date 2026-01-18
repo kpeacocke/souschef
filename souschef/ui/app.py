@@ -6,17 +6,33 @@ assessment, and visualization.
 """
 
 import contextlib
+import logging
 import sys
 from pathlib import Path
 
 import streamlit as st
 
+# Configure logging to stdout for Docker visibility
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stdout,
+    force=True,  # Override any existing configuration
+)
+
+logger = logging.getLogger(__name__)
+logger.info("Starting SousChef UI application")
+
 # Add the parent directory to the path so we can import souschef modules
-sys.path.insert(0, str(Path(__file__).parent.parent))
+app_path = Path(__file__).parent.parent
+if str(app_path) not in sys.path:
+    sys.path.insert(0, str(app_path))
 
 # Import page modules
-from souschef.ui.pages.ai_settings import show_ai_settings_page
-from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
+from souschef.ui.pages.ai_settings import show_ai_settings_page  # noqa: E402
+from souschef.ui.pages.cookbook_analysis import (  # noqa: E402
+    show_cookbook_analysis_page,
+)
 
 # Constants for repeated strings
 NAV_MIGRATION_PLANNING = "Migration Planning"
@@ -31,6 +47,8 @@ BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
 SECTION_COMMUNITY_COOKBOOKS = "Community Cookbooks"
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
 INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
+SCOPE_BEST_PRACTICES = "Best Practices"
+ERROR_MSG_ENTER_PATH = "Please enter a path to validate."
 
 
 def health_check():
@@ -106,7 +124,7 @@ def _setup_sidebar_navigation():
     if st.sidebar.button(
         "Dashboard",
         help="View migration overview and quick actions",
-        use_container_width=True,
+        width="stretch",
     ):
         st.session_state.current_page = "Dashboard"
         st.rerun()
@@ -115,7 +133,7 @@ def _setup_sidebar_navigation():
     if st.sidebar.button(
         NAV_COOKBOOK_ANALYSIS,
         help="Analyse Chef cookbooks and assess migration complexity",
-        use_container_width=True,
+        width="stretch",
     ):
         st.session_state.current_page = NAV_COOKBOOK_ANALYSIS
         st.rerun()
@@ -124,7 +142,7 @@ def _setup_sidebar_navigation():
     if st.sidebar.button(
         NAV_DEPENDENCY_MAPPING,
         help="Visualise cookbook dependencies and migration order",
-        use_container_width=True,
+        width="stretch",
     ):
         st.session_state.current_page = NAV_DEPENDENCY_MAPPING
         st.rerun()
@@ -133,7 +151,7 @@ def _setup_sidebar_navigation():
     if st.sidebar.button(
         NAV_MIGRATION_PLANNING,
         help="Plan your Chef to Ansible migration with detailed timelines",
-        use_container_width=True,
+        width="stretch",
     ):
         st.session_state.current_page = NAV_MIGRATION_PLANNING
         st.rerun()
@@ -142,7 +160,7 @@ def _setup_sidebar_navigation():
     if st.sidebar.button(
         NAV_VALIDATION_REPORTS,
         help="Validate conversions and generate quality assurance reports",
-        use_container_width=True,
+        width="stretch",
     ):
         st.session_state.current_page = NAV_VALIDATION_REPORTS
         st.rerun()
@@ -151,7 +169,7 @@ def _setup_sidebar_navigation():
     if st.sidebar.button(
         NAV_AI_SETTINGS,
         help="Configure AI provider settings for intelligent conversions",
-        use_container_width=True,
+        width="stretch",
     ):
         st.session_state.current_page = NAV_AI_SETTINGS
         st.rerun()
@@ -198,27 +216,78 @@ def main():
         show_validation_reports()
 
 
-def show_dashboard():
-    """Show the main dashboard with migration overview."""
-    st.header("Migration Dashboard")
+def _calculate_dashboard_metrics():
+    """Calculate and return dashboard metrics."""
+    cookbooks_analysed = 0
+    complexity_counts = {"High": 0, "Medium": 0, "Low": 0}
+    successful_analyses = 0
 
+    if "analysis_results" in st.session_state and st.session_state.analysis_results:
+        results = st.session_state.analysis_results
+        cookbooks_analysed = len(results)
+        successful_analyses = len([r for r in results if r.get("status") == "Analysed"])
+
+        for r in results:
+            comp = r.get("complexity", "Unknown")
+            if comp in complexity_counts:
+                complexity_counts[comp] += 1
+
+    # Determine overall complexity
+    overall_complexity = "Unknown"
+    if cookbooks_analysed > 0:
+        if complexity_counts["High"] > 0:
+            overall_complexity = "High"
+        elif complexity_counts["Medium"] > 0:
+            overall_complexity = "Medium"
+        elif complexity_counts["Low"] > 0:
+            overall_complexity = "Low"
+
+    conversion_rate = 0
+    if cookbooks_analysed > 0:
+        conversion_rate = int((successful_analyses / cookbooks_analysed) * 100)
+
+    return cookbooks_analysed, overall_complexity, conversion_rate, successful_analyses
+
+
+def _display_dashboard_metrics(
+    cookbooks_analysed, overall_complexity, conversion_rate, successful_analyses
+):
+    """Display the dashboard metrics."""
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("Cookbooks Analysed", "0", "Ready to analyse")
+        st.metric(
+            "Cookbooks Analysed",
+            str(cookbooks_analysed),
+            f"{cookbooks_analysed} processed"
+            if cookbooks_analysed > 0
+            else "Ready to analyse",
+        )
         st.caption("Total cookbooks processed")
 
     with col2:
-        st.metric("Migration Complexity", "Unknown", "Assessment needed")
+        st.metric(
+            "Migration Complexity",
+            overall_complexity,
+            "Based on analysis"
+            if overall_complexity != "Unknown"
+            else "Assessment needed",
+        )
         st.caption("Overall migration effort")
 
     with col3:
-        st.metric("Conversion Rate", "0%", "Start migration")
-        st.caption("Successful conversions")
+        st.metric(
+            "Success Rate",
+            f"{conversion_rate}%",
+            f"{successful_analyses} successful"
+            if cookbooks_analysed > 0
+            else "Start migration",
+        )
+        st.caption("Successful analyses")
 
-    st.divider()
 
-    # Quick upload section
+def _display_quick_upload_section():
+    """Display the quick upload section."""
     st.subheader("Quick Start")
 
     col1, col2 = st.columns([2, 1])
@@ -248,19 +317,21 @@ def show_dashboard():
         st.markdown("**Or choose your workflow:**")
 
         # Quick actions
-        if st.button("Analyse Cookbooks", type="primary", use_container_width=True):
+        if st.button("Analyse Cookbooks", type="primary", width="stretch"):
             st.session_state.current_page = "Cookbook Analysis"
             st.rerun()
 
-        if st.button("Generate Migration Plan", use_container_width=True):
+        if st.button("Generate Migration Plan", width="stretch"):
             st.session_state.current_page = NAV_MIGRATION_PLANNING
             st.rerun()
 
-        if st.button(BUTTON_ANALYSE_DEPENDENCIES, use_container_width=True):
+        if st.button(BUTTON_ANALYSE_DEPENDENCIES, width="stretch"):
             st.session_state.current_page = NAV_DEPENDENCY_MAPPING
             st.rerun()
 
-    # Recent activity
+
+def _display_recent_activity():
+    """Display the recent activity section."""
     st.subheader("Recent Activity")
     st.info(
         "No recent migration activity. Start by uploading cookbooks "
@@ -295,6 +366,29 @@ def show_dashboard():
         """)
 
 
+def show_dashboard():
+    """Show the main dashboard with migration overview."""
+    st.header("Migration Dashboard")
+
+    # Metrics calculation
+    cookbooks_analysed, overall_complexity, conversion_rate, successful_analyses = (
+        _calculate_dashboard_metrics()
+    )
+
+    # Display metrics
+    _display_dashboard_metrics(
+        cookbooks_analysed, overall_complexity, conversion_rate, successful_analyses
+    )
+
+    st.divider()
+
+    # Quick upload section
+    _display_quick_upload_section()
+
+    # Recent activity
+    _display_recent_activity()
+
+
 def show_migration_planning():
     """Show migration planning interface."""
     st.header(NAV_MIGRATION_PLANNING)
@@ -311,13 +405,27 @@ def show_migration_planning():
     # Step 1: Cookbook Selection
     st.subheader("Step 1: Cookbook Selection")
 
+    # Check for previously analyzed cookbooks
+    uploaded_plan_context = None
+    if (
+        "analysis_cookbook_path" in st.session_state
+        and st.session_state.analysis_cookbook_path
+    ):
+        uploaded_plan_context = st.session_state.analysis_cookbook_path
+        st.info(f"Using analyzed cookbooks from: {uploaded_plan_context}")
+
     col1, col2 = st.columns([3, 1])
 
     with col1:
+        # Default to analyzed path if available
+        default_paths = uploaded_plan_context if uploaded_plan_context else ""
+
         cookbook_paths = st.text_area(
             "Cookbook Paths",
+            value=default_paths,
             placeholder="/path/to/cookbooks/nginx,/path/to/cookbooks/apache2,/path/to/cookbooks/mysql",
-            help="Enter comma-separated paths to your Chef cookbooks",
+            help="Enter comma-separated paths to your Chef cookbooks. If you uploaded "
+            "an archive in the Analysis tab, that path is pre-filled.",
             height=100,
         )
 
@@ -2327,37 +2435,119 @@ def display_dependency_analysis_results():
     )
 
 
-def show_validation_reports():
-    """Show validation reports and conversion validation."""
-    st.header(NAV_VALIDATION_REPORTS)
+def _collect_files_to_validate(input_path: str) -> list[Path]:
+    """Collect valid YAML files from input path."""
+    validated_path = _normalize_and_validate_input_path(input_path)
+    if validated_path is None:
+        # Error already reported by _normalize_and_validate_input_path
+        return []
 
-    # Import validation functions
-    from souschef.core.validation import ValidationEngine
+    path_obj = validated_path
+    files_to_validate = []
 
-    st.markdown("""
-    Validate Chef to Ansible conversions and generate comprehensive
-    validation reports for migration quality assurance.
-    """)
+    if not path_obj.exists():
+        st.error(f"Path does not exist: {path_obj}")
+        return []
 
-    # Validation options
+    if path_obj.is_file():
+        if path_obj.suffix in [".yml", ".yaml"] and path_obj.name not in [
+            ".kitchen.yml",
+            "kitchen.yml",
+            "docker-compose.yml",
+        ]:
+            files_to_validate.append(path_obj)
+    elif path_obj.is_dir():
+        # Filter out obvious non-playbook files
+        excluded_files = {".kitchen.yml", "kitchen.yml", "docker-compose.yml"}
+
+        yml_files = list(path_obj.glob("**/*.yml"))
+        yaml_files = list(path_obj.glob("**/*.yaml"))
+
+        raw_files = yml_files + yaml_files
+        files_to_validate.extend([f for f in raw_files if f.name not in excluded_files])
+
+    return files_to_validate
+
+
+def _run_validation_engine(files_to_validate):
+    """Run validation engine on a list of files."""
+    from souschef.core.validation import (
+        ValidationCategory,
+        ValidationEngine,
+        ValidationLevel,
+        ValidationResult,
+    )
+
+    engine = ValidationEngine()
+    all_results = []
+
+    for file_path in files_to_validate:
+        try:
+            content = file_path.read_text()
+            # We assume 'recipe' (Playbook) conversion type for .yml files found
+            file_results = engine.validate_conversion("recipe", content)
+
+            # If no issues found, explicitly add a success record
+            if not file_results:
+                file_results = [
+                    ValidationResult(
+                        ValidationLevel.INFO,
+                        ValidationCategory.SYNTAX,
+                        "File passed all validation checks",
+                        location=file_path.name,
+                    )
+                ]
+
+            # Annotate results with location if missing
+            for res in file_results:
+                if not res.location:
+                    res.location = file_path.name
+
+            all_results.extend(file_results)
+        except Exception as file_err:
+            st.warning(f"Could not read/validate {file_path.name}: {file_err}")
+
+    return all_results
+
+
+def _get_default_validation_path():
+    """Determine the default path for validation from session state."""
+    default_path = ""
+    if "converted_playbooks_path" in st.session_state:
+        default_path = st.session_state.converted_playbooks_path
+        st.info(f"Pre-filled path from conversion: {default_path}")
+    elif (
+        "analysis_cookbook_path" in st.session_state
+        and st.session_state.analysis_cookbook_path
+    ):
+        default_path = st.session_state.analysis_cookbook_path
+        st.info(f"Pre-filled path from analysis: {default_path}")
+        st.caption(
+            "Note: This tool validates Ansible playbooks (.yml). If you're using a raw "
+            "Chef cookbook path, please ensure you've performed the conversion first."
+        )
+    return default_path
+
+
+def _render_validation_options_ui():
+    """Render validation scope and format options."""
     col1, col2 = st.columns(2)
 
     with col1:
-        validation_type = st.selectbox(
-            "Validation Type",
-            ["syntax", "logic", "security", "performance", "full"],
-            help="Type of validation to perform",
-            format_func=lambda x: {
-                "syntax": "Syntax Validation",
-                "logic": "Logic & Structure Validation",
-                "security": "Security Best Practices",
-                "performance": "Performance Analysis",
-                "full": "Complete Validation Suite",
-            }.get(x, str(x)),
+        sub_scope = st.selectbox(
+            "Validation Scope",
+            [
+                "Full Suite",
+                "Syntax Only",
+                "Logic/Semantic",
+                "Security",
+                SCOPE_BEST_PRACTICES,
+            ],
+            help="Filter which validation checks to run",
         )
 
     with col2:
-        output_format = st.selectbox(
+        sub_format = st.selectbox(
             "Output Format",
             ["text", "json", "html"],
             help="Format for validation reports",
@@ -2367,8 +2557,11 @@ def show_validation_reports():
                 "html": "HTML Report",
             }.get(x, str(x)),
         )
+    return sub_scope, sub_format
 
-    # File/Directory input
+
+def _render_validation_input_ui(default_path):
+    """Render input source selection UI."""
     st.subheader("Input Source")
 
     input_type = st.radio(
@@ -2381,17 +2574,24 @@ def show_validation_reports():
     if input_type == "Directory":
         input_path = st.text_input(
             "Directory Path",
+            value=default_path,
             placeholder="/path/to/ansible/playbooks",
             help="Path to directory containing Ansible playbooks to validate",
         )
     else:
         input_path = st.text_input(
             "File Path",
+            value=default_path
+            if default_path and default_path.endswith((".yml", ".yaml"))
+            else "",
             placeholder="/path/to/playbook.yml",
             help="Path to single Ansible playbook file to validate",
         )
+    return input_path
 
-    # Validation options
+
+def _render_validation_settings_ui():
+    """Render strict mode and other validation settings."""
     st.subheader("Validation Options")
 
     col1, col2, col3 = st.columns(3)
@@ -2403,7 +2603,7 @@ def show_validation_reports():
 
     with col2:
         include_best_practices = st.checkbox(
-            "Include Best Practices",
+            f"Include {SCOPE_BEST_PRACTICES}",
             value=True,
             help="Check for Ansible best practices",
         )
@@ -2415,66 +2615,158 @@ def show_validation_reports():
             help="Provide improvement suggestions",
         )
 
+    return strict_mode, include_best_practices, generate_recommendations
+
+
+def _normalize_and_validate_input_path(input_path: str) -> Path | None:
+    """
+    Normalize and validate a user-provided filesystem path.
+
+    Returns a resolved Path object if valid, otherwise reports an error
+    via Streamlit and returns None.
+    """
+    if not input_path:
+        st.error(ERROR_MSG_ENTER_PATH)
+        return None
+
+    raw = input_path.strip()
+    if not raw:
+        st.error(ERROR_MSG_ENTER_PATH)
+        return None
+
+    try:
+        # Expand user home and resolve to an absolute, normalized path
+        path_obj = Path(raw).expanduser().resolve()
+    except Exception:
+        st.error(f"Invalid path: {raw}")
+        return None
+
+    # Optional safety: constrain to the application root directory
+    try:
+        app_root = Path(app_path).resolve()
+        path_obj.relative_to(app_root)
+    except Exception:
+        st.error("Path must be within the SousChef project directory.")
+        return None
+
+    return path_obj
+
+
+def _handle_validation_execution(input_path, options):
+    """Execute the validation process with progress tracking."""
+    progress_tracker = ProgressTracker(
+        total_steps=6, description="Running validation..."
+    )
+
+    try:
+        progress_tracker.update(1, "Preparing validation environment...")
+
+        progress_tracker.update(2, "Scanning input files...")
+
+        files_to_validate = _collect_files_to_validate(input_path)
+
+        if not files_to_validate:
+            # Error is handled inside _collect_files_to_validate
+            # if path doesn't exist or is invalid
+            validated_path = _normalize_and_validate_input_path(input_path)
+            if validated_path is not None and validated_path.exists():
+                st.warning(f"No YAML files found in {validated_path}")
+            return
+
+        progress_tracker.update(3, f"Validating {len(files_to_validate)} files...")
+
+        all_results = _run_validation_engine(files_to_validate)
+
+        # Filter results based on scope
+        filtered_results = _filter_results_by_scope(all_results, options["scope"])
+
+        # Format the results as text
+        validation_result = "\n".join(
+            [
+                f"[{result.level.value.upper()}] {result.location}: {result.message}"
+                for result in filtered_results
+            ]
+        )
+
+        if not validation_result:
+            validation_result = "No issues found matching the selected scope."
+
+        progress_tracker.update(5, "Generating validation report...")
+
+        # Store results
+        st.session_state.validation_result = validation_result
+        st.session_state.validation_path = input_path.strip()
+        st.session_state.validation_type = options["scope"]
+        st.session_state.validation_options = options
+
+        progress_tracker.complete("Validation completed!")
+        st.success(f"Validation completed! Scanned {len(files_to_validate)} files.")
+        st.rerun()
+
+    except Exception as e:
+        progress_tracker.close()
+        st.error(f"Error during validation: {e}")
+
+
+def show_validation_reports():
+    """Show validation reports and conversion validation."""
+    st.header(NAV_VALIDATION_REPORTS)
+
+    st.markdown("""
+    Validate Chef to Ansible conversions and generate comprehensive
+    validation reports for migration quality assurance.
+    """)
+
+    # Check for previously analyzed path to pre-fill
+    default_path = _get_default_validation_path()
+
+    # UI Components
+    validation_scope, output_format = _render_validation_options_ui()
+    input_path = _render_validation_input_ui(default_path)
+    strict_mode, include_best_practices, generate_recommendations = (
+        _render_validation_settings_ui()
+    )
+
     # Validation button
     if st.button("Run Validation", type="primary", width="stretch"):
-        if not input_path.strip():
+        if not input_path or not input_path.strip():
             st.error("Please enter a path to validate.")
             return
 
-        # Create progress tracker
-        progress_tracker = ProgressTracker(
-            total_steps=6, description="Running validation..."
-        )
+        options = {
+            "strict": strict_mode,
+            "best_practices": include_best_practices,
+            "recommendations": generate_recommendations,
+            "scope": validation_scope,
+            "format": output_format,
+        }
 
-        try:
-            progress_tracker.update(1, "Preparing validation environment...")
-
-            # Prepare validation options
-            options = {
-                "strict": strict_mode,
-                "best_practices": include_best_practices,
-                "recommendations": generate_recommendations,
-                "format": output_format,
-            }
-
-            progress_tracker.update(2, "Scanning input files...")
-            progress_tracker.update(3, "Running syntax validation...")
-            progress_tracker.update(4, "Performing logic checks...")
-
-            # Run validation
-            engine = ValidationEngine()
-            validation_results = engine.validate_conversion(
-                validation_type, input_path.strip()
-            )
-
-            # Format the results as text
-            validation_result = "\n".join(
-                [
-                    f"{result.level.value.upper()}: {result.message}"
-                    for result in validation_results
-                ]
-            )
-
-            progress_tracker.update(5, "Generating validation report...")
-
-            # Store results
-            st.session_state.validation_result = validation_result
-            st.session_state.validation_path = input_path.strip()
-            st.session_state.validation_type = validation_type
-            st.session_state.validation_options = options
-
-            progress_tracker.complete("Validation completed!")
-            st.success("Validation completed successfully!")
-            st.rerun()
-
-        except Exception as e:
-            progress_tracker.close()
-            st.error(f"Error during validation: {e}")
-            return
+        _handle_validation_execution(input_path, options)
 
     # Display results if available
     if "validation_result" in st.session_state:
         display_validation_results()
+
+
+def _filter_results_by_scope(results, scope):
+    """Filter validation results based on selected scope."""
+    from souschef.core.validation import ValidationCategory
+
+    if scope == "Full Suite":
+        return results
+
+    scope_map = {
+        "Syntax Only": ValidationCategory.SYNTAX,
+        "Logic/Semantic": ValidationCategory.SEMANTIC,
+        "Security": ValidationCategory.SECURITY,
+        SCOPE_BEST_PRACTICES: ValidationCategory.BEST_PRACTICE,
+    }
+
+    target_category = scope_map.get(scope)
+    if not target_category:
+        return results
+
+    return [r for r in results if r.category == target_category]
 
 
 def _parse_validation_metrics(validation_result):
@@ -2487,15 +2779,28 @@ def _parse_validation_metrics(validation_result):
     total_checks = 0
 
     for line in lines:
-        if "ERROR:" in line.upper():
+        line_upper = line.upper()
+        # Match both old format "ERROR:" and new format "[ERROR]"
+        if "ERROR:" in line_upper or "[ERROR]" in line_upper:
             errors += 1
-        elif "WARNING:" in line.upper():
+        elif "WARNING:" in line_upper or "[WARNING]" in line_upper:
             warnings += 1
-        elif "PASSED:" in line.upper() or "✓" in line:
+        # Match explicit passed check or INFO level (which we use for success now)
+        elif (
+            "PASSED:" in line_upper
+            or "PASSED" in line_upper
+            or "✓" in line
+            or "[INFO]" in line_upper
+        ):
             passed += 1
         if "Total checks:" in line.lower():
             with contextlib.suppress(ValueError):
                 total_checks = int(line.split(":")[1].strip())
+
+    # If we found errors/warnings but no explicit "checks" count (legacy log parsing),
+    # infer total checks from line items
+    if total_checks == 0 and (errors > 0 or warnings > 0 or passed > 0):
+        total_checks = errors + warnings + passed
 
     return errors, warnings, passed, total_checks
 
@@ -2552,9 +2857,9 @@ def _display_validation_sections(validation_result):
             elif "Performance Validation" in section:
                 with st.expander("⚡ Performance Validation"):
                     st.markdown(section.replace("## Performance Validation", ""))
-            elif "Best Practices" in section:
-                with st.expander("📋 Best Practices"):
-                    st.markdown(section.replace("## Best Practices", ""))
+            elif SCOPE_BEST_PRACTICES in section:
+                with st.expander(f"📋 {SCOPE_BEST_PRACTICES}"):
+                    st.markdown(section.replace(f"## {SCOPE_BEST_PRACTICES}", ""))
             elif "Recommendations" in section:
                 with st.expander("💡 Recommendations"):
                     st.markdown(section.replace("## Recommendations", ""))

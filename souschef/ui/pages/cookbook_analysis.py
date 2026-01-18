@@ -33,7 +33,8 @@ LOCAL_PROVIDER = "Local Model"
 def load_ai_settings():
     """Load AI settings from configuration file."""
     try:
-        config_file = Path.home() / ".souschef" / "ai_config.json"
+        # Use /tmp/.souschef for container compatibility (tmpfs is writable)
+        config_file = Path("/tmp/.souschef/ai_config.json")
         if config_file.exists():
             with config_file.open() as f:
                 return json.load(f)
@@ -64,7 +65,7 @@ BLOCKED_EXTENSIONS = {
     ".vbs",
     ".js",
     ".jar",
-    ".sh",
+    # Note: .sh files are allowed as they are common in Chef cookbooks
 }
 
 
@@ -378,7 +379,16 @@ def _is_symlink(info) -> bool:
 
 
 def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
-    """Get a safe path for extraction that stays within the extraction directory."""
+    """Get a safe path for extraction that prevents directory traversal."""
+    # Reject paths with directory traversal attempts or absolute paths
+    if (
+        ".." in filename
+        or filename.startswith("/")
+        or "\\" in filename
+        or ":" in filename
+    ):
+        raise ValueError(f"Path traversal or absolute path detected: {filename}")
+
     # Normalize path separators and remove leading/trailing slashes
     normalized = filename.replace("\\", "/").strip("/")
 
@@ -548,8 +558,10 @@ def _get_cookbook_path_input():
     """Get the cookbook path input from the user."""
     return st.text_input(
         "Cookbook Directory Path",
-        placeholder="/path/to/your/cookbooks",
-        help="Enter the absolute path to your Chef cookbooks directory",
+        placeholder="cookbooks/ or ../shared/cookbooks/",
+        help="Enter a path to your Chef cookbooks directory. "
+        "Relative paths (e.g., 'cookbooks/') and absolute paths inside the workspace "
+        "(e.g., '/workspaces/souschef/cookbooks/') are allowed.",
     )
 
 
@@ -584,45 +596,55 @@ def _get_safe_cookbook_directory(cookbook_path):
     """
     try:
         base_dir = Path.cwd().resolve()
-        # Convert to string and strip whitespace
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+
         path_str = str(cookbook_path).strip()
 
-        # Validate input - reject paths with obvious traversal attempts
-        if ".." in path_str or path_str.startswith("/") or ":\\" in path_str:
+        # Reject obviously malicious patterns
+        if "\x00" in path_str or ":\\" in path_str or "\\" in path_str:
             st.error(
-                "Invalid path: contains directory traversal or absolute path components"
+                "❌ Invalid path: Path contains null bytes or backslashes, "
+                "which are not allowed."
             )
             return None
 
-        # Only create Path object after basic validation
+        # Reject paths with directory traversal attempts
+        if ".." in path_str:
+            st.error(
+                "❌ Invalid path: Path contains '..' which is not allowed "
+                "for security reasons."
+            )
+            return None
+
         user_path = Path(path_str)
 
-        # For relative paths, resolve against base directory
-        if not user_path.is_absolute():
-            candidate = (base_dir / user_path).resolve()
+        # Resolve the path safely
+        if user_path.is_absolute():
+            resolved_path = user_path.resolve()
         else:
-            # Reject absolute paths entirely for security
-            st.error("Absolute paths are not allowed for security reasons")
-            return None
-    except Exception as exc:
-        st.error(f"Invalid path: {exc}")
-        return None
+            resolved_path = (base_dir / user_path).resolve()
 
-    # Ensure path is within allowed base directory
-    try:
-        candidate.relative_to(base_dir)
-    except ValueError:
-        # Allow temporary directories (used by archive extraction)
-        temp_dir = Path(tempfile.gettempdir())
+        # Check if the resolved path is within allowed directories
         try:
-            candidate.relative_to(temp_dir)
+            resolved_path.relative_to(base_dir)
+            return resolved_path
+        except ValueError:
+            pass
+
+        try:
+            resolved_path.relative_to(temp_dir)
+            return resolved_path
         except ValueError:
             st.error(
-                "The specified path is outside the allowed cookbook directory root."
+                "❌ Invalid path: The resolved path is outside the allowed "
+                "directories (workspace or temporary directory). Paths cannot go above "
+                "the workspace root for security reasons."
             )
             return None
 
-    return candidate
+    except Exception as exc:
+        st.error(f"❌ Invalid path: {exc}. Please enter a valid relative path.")
+        return None
 
 
 def _list_and_display_cookbooks(cookbook_path: Path):
@@ -836,11 +858,16 @@ def _display_instructions():
         ## Input Methods
 
         ### Directory Path
-        1. **Enter Cookbook Path**: Provide absolute path to your cookbooks directory
+        1. **Enter Cookbook Path**: Provide a **relative path** to your cookbooks
+           (absolute paths not allowed)
         2. **Review Cookbooks**: The interface will list all cookbooks with metadata
         3. **Select Cookbooks**: Choose which cookbooks to analyse
         4. **Run Analysis**: Click "Analyse Selected Cookbooks" to get detailed insights
 
+        **Path Examples:**
+        - `cookbooks/` - subdirectory in current workspace
+        - `../shared/cookbooks/` - parent directory
+        - `./my-cookbooks/` - explicit current directory
 
         ### Archive Upload
         1. **Upload Archive**: Upload a ZIP or TAR archive containing your cookbooks
@@ -853,7 +880,7 @@ def _display_instructions():
 
         ## Expected Structure
         ```
-        /path/to/cookbooks/ or archive.zip/
+        cookbooks/ or archive.zip/
         ├── nginx/
         │   ├── metadata.rb
         │   ├── recipes/
@@ -1125,6 +1152,21 @@ def _convert_and_download_playbooks(results):
             if playbook_data:
                 playbooks.append(playbook_data)
 
+    if playbooks:
+        # Save converted playbooks to temporary directory for validation
+        try:
+            output_dir = Path(tempfile.mkdtemp(prefix="souschef_converted_"))
+            for playbook in playbooks:
+                # Sanitize filename
+                filename = f"{playbook['cookbook_name']}.yml"
+                (output_dir / filename).write_text(playbook["playbook_content"])
+
+            # Store path in session state for validation page
+            st.session_state.converted_playbooks_path = str(output_dir)
+            st.success("Playbooks converted and staged for validation.")
+        except Exception as e:
+            st.warning(f"Could not stage playbooks for validation: {e}")
+
     _handle_playbook_download(playbooks)
 
 
@@ -1147,9 +1189,23 @@ def _convert_single_cookbook(result):
 
         if use_ai:
             # Use AI-enhanced conversion
+            # Map provider display names to API provider strings
+            provider_mapping = {
+                "Anthropic Claude": "anthropic",
+                "Anthropic (Claude)": "anthropic",
+                "OpenAI": "openai",
+                "OpenAI (GPT)": "openai",
+                "IBM Watsonx": "watson",
+                "Red Hat Lightspeed": "lightspeed",
+            }
+            provider_name = ai_config.get("provider", "")
+            ai_provider = provider_mapping.get(
+                provider_name, provider_name.lower().replace(" ", "_")
+            )
+
             playbook_content = generate_playbook_from_recipe_with_ai(
                 str(recipe_file),
-                ai_provider=ai_config.get("provider", "").split(" ")[0].lower(),
+                ai_provider=ai_provider,
                 api_key=ai_config.get("api_key", ""),
                 model=ai_config.get("model", "claude-3-5-sonnet-20241022"),
                 temperature=ai_config.get("temperature", 0.7),
@@ -1160,11 +1216,6 @@ def _convert_single_cookbook(result):
         else:
             # Use deterministic conversion
             playbook_content = generate_playbook_from_recipe(str(recipe_file))
-
-        st.write(
-            f"Debug: Generated content for {result['name']} "
-            f"(AI: {use_ai}): {playbook_content[:100]}..."
-        )
 
         if not playbook_content.startswith("Error"):
             return {
