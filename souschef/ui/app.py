@@ -6,10 +6,22 @@ assessment, and visualization.
 """
 
 import contextlib
+import logging
 import sys
 from pathlib import Path
 
 import streamlit as st
+
+# Configure logging to stdout for Docker visibility
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stdout,
+    force=True,  # Override any existing configuration
+)
+
+logger = logging.getLogger(__name__)
+logger.info("Starting SousChef UI application")
 
 # Add the parent directory to the path so we can import souschef modules
 app_path = Path(__file__).parent.parent
@@ -36,6 +48,7 @@ SECTION_COMMUNITY_COOKBOOKS = "Community Cookbooks"
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
 INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
 SCOPE_BEST_PRACTICES = "Best Practices"
+ERROR_MSG_ENTER_PATH = "Please enter a path to validate."
 
 
 def health_check():
@@ -2613,12 +2626,12 @@ def _normalize_and_validate_input_path(input_path: str) -> Path | None:
     via Streamlit and returns None.
     """
     if not input_path:
-        st.error("Please enter a path to validate.")
+        st.error(ERROR_MSG_ENTER_PATH)
         return None
 
     raw = input_path.strip()
     if not raw:
-        st.error("Please enter a path to validate.")
+        st.error(ERROR_MSG_ENTER_PATH)
         return None
 
     try:

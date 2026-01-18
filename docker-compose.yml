@@ -13,7 +13,13 @@ services:
       - STREAMLIT_SERVER_PORT=9999
       - STREAMLIT_SERVER_HEADLESS=true
       - STREAMLIT_LOGGER_LEVEL=INFO
+      - STREAMLIT_SERVER_LOGGER_LEVEL=INFO
       - PYTHONUNBUFFERED=1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     # volumes:
       # Mount local directory for development (optional)
       # - ./souschef:/app/souschef:ro

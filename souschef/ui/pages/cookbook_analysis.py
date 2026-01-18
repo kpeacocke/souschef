@@ -379,7 +379,16 @@ def _is_symlink(info) -> bool:
 
 
 def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
-    """Get a safe path for extraction that stays within the extraction directory."""
+    """Get a safe path for extraction that prevents directory traversal."""
+    # Reject paths with directory traversal attempts or absolute paths
+    if (
+        ".." in filename
+        or filename.startswith("/")
+        or "\\" in filename
+        or ":" in filename
+    ):
+        raise ValueError(f"Path traversal or absolute path detected: {filename}")
+
     # Normalize path separators and remove leading/trailing slashes
     normalized = filename.replace("\\", "/").strip("/")
 
@@ -587,66 +596,55 @@ def _get_safe_cookbook_directory(cookbook_path):
     """
     try:
         base_dir = Path.cwd().resolve()
-        # Convert to string and strip whitespace
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+
         path_str = str(cookbook_path).strip()
 
-        # Check if path is in temp directory (allowed for uploads)
-        temp_dir = Path(tempfile.gettempdir()).resolve()
-        is_temp_path = path_str.startswith(str(temp_dir)) or path_str.startswith("/tmp")
-
-        # Check if path is within workspace (allowed for absolute paths)
-        is_workspace_path = path_str.startswith(str(base_dir))
-
-        # Validate input - reject obviously malicious patterns
-        # We allow absolute paths ONLY if they are in the temp directory or workspace
-        if (
-            (path_str.startswith("/") and not is_temp_path and not is_workspace_path)
-            or ":\\" in path_str
-            or "\\" in path_str
-        ):
+        # Reject obviously malicious patterns
+        if "\x00" in path_str or ":\\" in path_str or "\\" in path_str:
             st.error(
-                "❌ Invalid path: Absolute paths are only allowed if they are within "
-                "the workspace or temporary directory.\n"
-                "Please use relative paths like 'cookbooks/' or "
-                "'../shared/cookbooks/', "
-                "or absolute paths inside the workspace."
+                "❌ Invalid path: Path contains null bytes or backslashes, "
+                "which are not allowed."
             )
             return None
 
-        # Check for null bytes which are always malicious
-        if "\x00" in path_str:
+        # Reject paths with directory traversal attempts
+        if ".." in path_str:
             st.error(
-                "❌ Invalid path: Path contains null bytes, which are not allowed."
+                "❌ Invalid path: Path contains '..' which is not allowed "
+                "for security reasons."
             )
             return None
 
-        # Only create Path object after basic validation
         user_path = Path(path_str)
 
-        # Resolve path - relative paths against base_dir, absolute paths as-is
-        candidate = (base_dir / user_path).resolve()
+        # Resolve the path safely
+        if user_path.is_absolute():
+            resolved_path = user_path.resolve()
+        else:
+            resolved_path = (base_dir / user_path).resolve()
+
+        # Check if the resolved path is within allowed directories
+        try:
+            resolved_path.relative_to(base_dir)
+            return resolved_path
+        except ValueError:
+            pass
+
+        try:
+            resolved_path.relative_to(temp_dir)
+            return resolved_path
+        except ValueError:
+            st.error(
+                "❌ Invalid path: The resolved path is outside the allowed "
+                "directories (workspace or temporary directory). Paths cannot go above "
+                "the workspace root for security reasons."
+            )
+            return None
+
     except Exception as exc:
         st.error(f"❌ Invalid path: {exc}. Please enter a valid relative path.")
         return None
-
-    # Ensure path is within allowed base directory
-    try:
-        candidate.relative_to(base_dir)
-    except ValueError:
-        # Allow temporary directories (used by archive extraction)
-        temp_dir = Path(tempfile.gettempdir()).resolve()
-        temp_dir_str = str(temp_dir)
-        # Check against resolved temp dir and explicit /tmp for robustness
-        if str(candidate).startswith(temp_dir_str) or str(candidate).startswith("/tmp"):
-            pass  # Allow temp paths
-        else:
-            st.error(
-                "❌ Invalid path: The specified path is outside the allowed directory. "
-                "Paths cannot go above the workspace root for security reasons."
-            )
-            return None
-
-    return candidate
 
 
 def _list_and_display_cookbooks(cookbook_path: Path):

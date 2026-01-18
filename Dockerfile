@@ -11,7 +11,9 @@ ENV PYTHONUNBUFFERED=1 \
     STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
     STREAMLIT_SERVER_ENABLE_CORS=true \
     STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true \
-    STREAMLIT_SERVER_ENABLE_STATIC_SERVING=false
+    STREAMLIT_SERVER_ENABLE_STATIC_SERVING=false \
+    STREAMLIT_LOGGER_LEVEL=INFO \
+    STREAMLIT_SERVER_LOGGER_LEVEL=INFO
 
 # Install system dependencies and create non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -72,4 +74,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python souschef/ui/health_check.py
 
 # Default command
-CMD ["streamlit", "run", "souschef/ui/app.py", "--server.address", "0.0.0.0", "--server.port", "9999"]
+CMD ["streamlit", "run", "souschef/ui/app.py", "--server.address", "0.0.0.0", "--server.port", "9999", "--logger.level", "debug", "--server.headless", "true"]
