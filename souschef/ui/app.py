@@ -2424,7 +2424,12 @@ def display_dependency_analysis_results():
 
 def _collect_files_to_validate(input_path: str) -> list[Path]:
     """Collect valid YAML files from input path."""
-    path_obj = Path(input_path.strip())
+    validated_path = _normalize_and_validate_input_path(input_path)
+    if validated_path is None:
+        # Error already reported by _normalize_and_validate_input_path
+        return []
+
+    path_obj = validated_path
     files_to_validate = []
 
     if not path_obj.exists():
@@ -2600,6 +2605,40 @@ def _render_validation_settings_ui():
     return strict_mode, include_best_practices, generate_recommendations
 
 
+def _normalize_and_validate_input_path(input_path: str) -> Path | None:
+    """
+    Normalize and validate a user-provided filesystem path.
+
+    Returns a resolved Path object if valid, otherwise reports an error
+    via Streamlit and returns None.
+    """
+    if not input_path:
+        st.error("Please enter a path to validate.")
+        return None
+
+    raw = input_path.strip()
+    if not raw:
+        st.error("Please enter a path to validate.")
+        return None
+
+    try:
+        # Expand user home and resolve to an absolute, normalized path
+        path_obj = Path(raw).expanduser().resolve()
+    except Exception:
+        st.error(f"Invalid path: {raw}")
+        return None
+
+    # Optional safety: constrain to the application root directory
+    try:
+        app_root = Path(app_path).resolve()
+        path_obj.relative_to(app_root)
+    except Exception:
+        st.error("Path must be within the SousChef project directory.")
+        return None
+
+    return path_obj
+
+
 def _handle_validation_execution(input_path, options):
     """Execute the validation process with progress tracking."""
     progress_tracker = ProgressTracker(
@@ -2615,9 +2654,10 @@ def _handle_validation_execution(input_path, options):
 
         if not files_to_validate:
             # Error is handled inside _collect_files_to_validate
-            # if path doesn't exist
-            if Path(input_path.strip()).exists():
-                st.warning(f"No YAML files found in {input_path}")
+            # if path doesn't exist or is invalid
+            validated_path = _normalize_and_validate_input_path(input_path)
+            if validated_path is not None and validated_path.exists():
+                st.warning(f"No YAML files found in {validated_path}")
             return
 
         progress_tracker.update(3, f"Validating {len(files_to_validate)} files...")
