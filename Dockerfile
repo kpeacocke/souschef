@@ -1,24 +1,31 @@
 # Dockerfile for SousChef UI
-FROM python:3.14-slim AS base
+FROM python:3.14.1-slim AS base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    STREAMLIT_SERVER_HEADLESS=true \
+    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
+    STREAMLIT_SERVER_ENABLE_CORS=true \
+    STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true \
+    STREAMLIT_SERVER_ENABLE_STATIC_SERVING=false
 
 # Install system dependencies and create non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --shell /bin/bash app
+    && useradd --create-home --shell /bin/bash --uid 1001 app \
+    && mkdir -p /app \
+    && chown -R app:app /app
 
 # Set work directory
 WORKDIR /app
 
-# Install Python dependencies
-FROM base AS dependencies
+# Build stage for dependencies
+FROM base AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -30,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml poetry.lock ./
 
 # Install Poetry
-RUN pip install poetry==1.8.3
+RUN pip install --no-cache-dir poetry==1.8.3
 
 # Configure poetry
 RUN poetry config virtualenvs.create false
@@ -41,9 +48,9 @@ RUN poetry install --only=main --extras=ui --no-dev
 # Production stage
 FROM base AS production
 
-# Copy installed dependencies from dependencies stage
-COPY --from=dependencies /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
-COPY --from=dependencies /usr/local/bin /usr/local/bin
+# Copy installed dependencies from builder stage
+COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY souschef/ ./souschef/
@@ -58,11 +65,11 @@ RUN chown -R app:app /app
 USER app
 
 # Expose port
-EXPOSE 8501
+EXPOSE 9999
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python souschef/ui/health_check.py
 
 # Default command
-CMD ["streamlit", "run", "souschef/ui/app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+CMD ["streamlit", "run", "souschef/ui/app.py", "--server.address", "0.0.0.0", "--server.port", "9999"]

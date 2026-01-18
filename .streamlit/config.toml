@@ -1,10 +1,8 @@
-[deployment]
-showFooter = false
-
 [server]
-enableCORS = false
-enableXsrfProtection = false
+enableCORS = true
+enableXsrfProtection = true
 headless = true
+enableStaticServing = false
 
 [browser]
 gatherUsageStats = false

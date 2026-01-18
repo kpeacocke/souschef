@@ -348,6 +348,47 @@ def validate_openai_config(api_key, model, base_url=""):
         return False, f"Connection failed: {e}"
 
 
+def validate_lightspeed_config(api_key, model, base_url=""):
+    """Validate Red Hat Lightspeed API configuration."""
+    if requests is None:
+        return False, "Requests library not installed. Run: pip install requests"
+
+    try:
+        # Sanitize and validate base URL
+        sanitized_url = _sanitize_lightspeed_base_url(base_url)
+
+        # Make a simple test request to validate API key
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        # Test with a simple completion request
+        test_payload = {
+            "model": model,
+            "prompt": "Hello",
+            "max_tokens": 5,
+        }
+
+        response = requests.post(
+            f"{sanitized_url}/v1/completions",
+            headers=headers,
+            json=test_payload,
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            return True, f"Successfully connected to Red Hat Lightspeed {model}"
+        else:
+            return False, (
+                f"API request failed with status {response.status_code}: "
+                f"{response.text}"
+            )
+
+    except Exception as e:
+        return False, f"Connection failed: {e}"
+
+
 def validate_watson_config(api_key, project_id, base_url=""):
     """Validate IBM Watsonx API configuration."""
     if APIClient is None:
@@ -377,49 +418,13 @@ def validate_watson_config(api_key, project_id, base_url=""):
         return False, f"Connection failed: {e}"
 
 
-def validate_lightspeed_config(api_key, model, base_url=""):
-    """Validate Red Hat Lightspeed API configuration."""
-    if requests is None:
-        return False, "Requests library not installed. Run: pip install requests"
-
-    try:
-        # Sanitize and validate the base URL to avoid SSRF.
-        safe_base_url = _sanitize_lightspeed_base_url(base_url)
-
-        # Red Hat Lightspeed typically uses a REST API
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-
-        # Test with a simple completion request
-        payload = {"model": model, "prompt": "Hello", "max_tokens": 5}
-
-        response = requests.post(
-            f"{safe_base_url}/v1/completions",
-            headers=headers,
-            json=payload,
-            timeout=10,
-        )
-
-        if response.status_code == 200:
-            return True, f"Successfully connected to Red Hat Lightspeed {model}"
-        else:
-            return False, f"API returned status {response.status_code}: {response.text}"
-
-    except ValueError as e:
-        # Invalid base URL; treat as config error rather than making request.
-        return False, f"Invalid base URL: {e}"
-    except Exception as e:
-        return False, f"Connection failed: {e}"
-
-
 def save_ai_settings(
     provider, api_key, model, base_url, temperature, max_tokens, project_id=""
 ):
     """Save AI settings to configuration file."""
     try:
-        config_dir = Path.home() / ".souschef"
+        # Use /tmp/.souschef for container compatibility (tmpfs is writable)
+        config_dir = Path("/tmp/.souschef")
         config_dir.mkdir(exist_ok=True)
         config_file = config_dir / "ai_config.json"
 
@@ -479,7 +484,8 @@ def display_current_settings():
 def load_ai_settings():
     """Load AI settings from configuration file."""
     try:
-        config_file = Path.home() / ".souschef" / "ai_config.json"
+        # Use /tmp/.souschef for container compatibility (tmpfs is writable)
+        config_file = Path("/tmp/.souschef/ai_config.json")
         if config_file.exists():
             with config_file.open() as f:
                 return json.load(f)

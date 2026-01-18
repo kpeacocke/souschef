@@ -8,6 +8,9 @@ inventory scripts.
 
 import json
 import re
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -104,7 +107,9 @@ def generate_playbook_from_recipe_with_ai(
 
     Args:
         recipe_path: Path to the Chef recipe (.rb) file.
-        ai_provider: AI provider to use ('anthropic', 'openai', 'watson', 'lightspeed').
+        ai_provider: AI provider to use ('anthropic', 'openai', 'watson',
+            'lightspeed'). Note: 'github_copilot' is listed but not supported as
+            GitHub Copilot does not have a public REST API.
         api_key: API key for the AI provider.
         model: AI model to use.
         temperature: Creativity/randomness parameter (0.0-2.0).
@@ -179,6 +184,11 @@ def _generate_playbook_with_ai(
         # Clean and validate the AI response
         cleaned_playbook = _clean_ai_playbook_response(ai_response)
 
+        # Validate with ansible-lint and self-correct if possible
+        cleaned_playbook = _validate_and_fix_playbook(
+            cleaned_playbook, client, ai_provider, model, temperature, max_tokens
+        )
+
         return cleaned_playbook
 
     except ImportError as e:
@@ -216,6 +226,14 @@ def _initialize_ai_client(
             "api_key": api_key,
             "base_url": base_url or "https://api.redhat.com",
         }
+    elif ai_provider.lower() == "github_copilot":
+        return (
+            f"{ERROR_PREFIX} GitHub Copilot does not have a public REST API. "
+            "GitHub Copilot is only available through IDE integrations and "
+            "cannot be used "
+            "for programmatic API calls. Please use Anthropic Claude, OpenAI, or IBM "
+            "Watsonx instead."
+        )
     else:
         return f"{ERROR_PREFIX} Unsupported AI provider: {ai_provider}"
 
@@ -273,6 +291,35 @@ def _call_ai_api(
         else:
             return (
                 f"{ERROR_PREFIX} Red Hat Lightspeed API error: "
+                f"{response.status_code} - {response.text}"
+            )
+    elif ai_provider.lower() == "github_copilot":
+        if requests is None:
+            return f"{ERROR_PREFIX} requests library not available"
+
+        headers = {
+            "Authorization": f"Bearer {client['api_key']}",
+            "Content-Type": "application/json",
+            "User-Agent": "SousChef/1.0",
+        }
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        # GitHub Copilot uses OpenAI-compatible chat completions endpoint
+        response = requests.post(
+            f"{client['base_url']}/copilot/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60,
+        )
+        if response.status_code == 200:
+            return str(response.json()["choices"][0]["message"]["content"])
+        else:
+            return (
+                f"{ERROR_PREFIX} GitHub Copilot API error: "
                 f"{response.status_code} - {response.text}"
             )
     else:  # OpenAI
@@ -340,6 +387,15 @@ CONVERSION REQUIREMENTS:
 8. **Error Handling**: Include proper error handling and rollback
    considerations.
 
+9. **Task Ordering**: CRITICAL: Ensure tasks are ordered logically.
+   - Install packages BEFORE configuring them.
+   - create users/groups BEFORE using them in file permissions.
+   - Place configuration files BEFORE starting/restarting services.
+   - Ensure directories exist BEFORE creating files in them.
+
+10. **Handlers**: Verify that all notified handlers are actually defined
+    in the handlers section.
+
 OUTPUT FORMAT:
 Return ONLY a valid YAML Ansible playbook. Do not include any explanation,
 markdown formatting, or code blocks. The output should be pure YAML that can
@@ -391,6 +447,89 @@ def _clean_ai_playbook_response(ai_response: str) -> str:
         return f"{ERROR_PREFIX} AI generated invalid YAML: {e}"
 
     return cleaned
+
+
+def _validate_and_fix_playbook(
+    playbook_content: str,
+    client: Any,
+    ai_provider: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+) -> str:
+    """Validate playbook with ansible-lint and attempt AI self-correction."""
+    if playbook_content.startswith(ERROR_PREFIX):
+        return playbook_content
+
+    validation_error = _run_ansible_lint(playbook_content)
+    if not validation_error:
+        return playbook_content
+
+    # Limit simple loops to 1 retry for now to save tokens/time
+    fix_prompt = f"""The Ansible playbook you generated has validation errors.
+Please fix the errors below and return the corrected playbook.
+
+ERRORS:
+{validation_error}
+
+PLAYBOOK:
+{playbook_content}
+
+Ensure the logical ordering of tasks is correct (e.g., packages installed before
+config files, config files before services).
+Return ONLY the corrected YAML playbook.
+Do NOT include any introduction, cleanup text, explanations, or markdown code blocks.
+Just the YAML content.
+"""
+
+    try:
+        fixed_response = _call_ai_api(
+            client, ai_provider, fix_prompt, model, temperature, max_tokens
+        )
+        cleaned_response = _clean_ai_playbook_response(fixed_response)
+
+        # If the cleaner returns an error string, it means the fixed response
+        # was still invalid
+        if cleaned_response.startswith(ERROR_PREFIX):
+            # Fallback to the original (valid-but-lint-failing) playbook
+            # rather than returning an error string
+            return playbook_content
+
+        return cleaned_response
+    except Exception:
+        # If fix fails, return original with warning (or original error)
+        return playbook_content
+
+
+def _run_ansible_lint(playbook_content: str) -> str | None:
+    """Run ansible-lint on the playbook content."""
+    # Check if ansible-lint is available
+    if shutil.which("ansible-lint") is None:
+        return None
+
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as tmp:
+            tmp.write(playbook_content)
+            tmp_path = tmp.name
+
+        # Run ansible-lint
+        # We ignore return code because we want to capture output even on failure
+        result = subprocess.run(
+            ["ansible-lint", "--nocolor", "-p", tmp_path],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            return result.stdout + "\n" + result.stderr
+
+        return None
+    except Exception:
+        return None
+    finally:
+        if "tmp_path" in locals() and Path(tmp_path).exists():
+            Path(tmp_path).unlink()
 
 
 def convert_chef_search_to_inventory(search_query: str) -> str:
