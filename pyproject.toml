@@ -50,7 +50,7 @@ mkdocstrings = {extras = ["python"], version = ">=0.26,<1.1"}
 mkdocs-git-revision-date-localized-plugin = "^1.2.0"
 streamlit = "^1.28.0"
 networkx = "^3.2.0"
-plotly = "^5.17.0"
+plotly = ">=5.17,<7.0"
 matplotlib = "^3.8.0"
 types-networkx = "^3.6.1.20251220"
 
