@@ -132,3 +132,10 @@ no_implicit_optional = true
 module = "tests.*"
 disallow_untyped_defs = false
 check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "plotly.*",
+    "streamlit.*",
+]
+ignore_missing_imports = true

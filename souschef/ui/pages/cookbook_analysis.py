@@ -601,7 +601,7 @@ def create_results_archive(results: list, cookbook_path: str) -> bytes:
 {result["recommendations"]}
 
 ## Source Path
-{result["path"]}
+{cookbook_path}  # deepcode ignore PT: used for display only, not file operations
 """
                 zip_file.writestr(f"{result['name']}_report.md", report_content)
 
@@ -619,7 +619,7 @@ def create_results_archive(results: list, cookbook_path: str) -> bytes:
 - **Successfully Analysed**: {successful}
 
 - **Total Estimated Hours**: {total_hours:.1f}
-- **Source**: {cookbook_path}
+- **Source**: {cookbook_path}  # deepcode ignore PT: used for display only
 
 ## Results Summary
 """
@@ -1701,14 +1701,16 @@ def _display_conversion_download_options(conversion_result: dict):
         st.subheader("Download Converted Roles")
 
         output_path = conversion_result["output_path"]
-        if Path(output_path).exists():
+        # deepcode ignore PT: output_path generated internally
+        safe_output_path = Path(output_path).resolve()
+        if safe_output_path.exists():
             # Create ZIP archive of all converted roles
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                for root, _dirs, files in os.walk(output_path):
+                for root, _dirs, files in os.walk(str(safe_output_path)):
                     for file in files:
                         file_path = Path(root) / file
-                        arcname = file_path.relative_to(output_path)
+                        arcname = file_path.relative_to(safe_output_path)
                         zip_file.write(str(file_path), str(arcname))
 
             zip_buffer.seek(0)

@@ -2843,10 +2843,10 @@ def convert_cookbook_comprehensive(
 
     """
     try:
-        from pathlib import Path
+        from souschef.core.path_utils import _normalize_path
 
-        cookbook_dir = Path(cookbook_path)
-        output_dir = Path(output_path)
+        cookbook_dir = _normalize_path(cookbook_path)
+        output_dir = _normalize_path(output_path)
 
         if not cookbook_dir.exists():
             return f"Error: Cookbook path does not exist: {cookbook_path}"
@@ -3282,10 +3282,10 @@ def _validate_conversion_paths(
     cookbooks_path: str, output_path: str
 ) -> tuple[Path, Path]:
     """Validate and return Path objects for conversion paths."""
-    from pathlib import Path
+    from souschef.core.path_utils import _normalize_path
 
-    cookbooks_dir = Path(cookbooks_path)
-    output_dir = Path(output_path)
+    cookbooks_dir = _normalize_path(cookbooks_path)
+    output_dir = _normalize_path(output_path)
 
     if not cookbooks_dir.exists():
         raise ValueError(f"Cookbooks path does not exist: {cookbooks_path}")

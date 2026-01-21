@@ -2062,7 +2062,7 @@ def _display_graph_with_export_options(graph_data: Any, viz_type: str) -> None:
         with col3:
             # Export as PNG (requires kaleido)
             try:
-                import plotly.io as pio  # type: ignore[import-untyped]
+                import plotly.io as pio
 
                 png_data = pio.to_image(graph_data, format="png", scale=2)
                 st.download_button(
