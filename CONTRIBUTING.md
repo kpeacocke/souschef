@@ -4,6 +4,7 @@ Thank you for your interest in contributing to SousChef! This guide will help yo
 
 ## Table of Contents
 
+- [Understanding the Architecture](#understanding-the-architecture)
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
 - [Contributing Guidelines](#contributing-guidelines)
@@ -11,6 +12,29 @@ Thank you for your interest in contributing to SousChef! This guide will help yo
 - [Testing Requirements](#testing-requirements)
 - [Submitting Changes](#submitting-changes)
 - [Community](#community)
+
+## Understanding the Architecture
+
+**New to the codebase?** Start here!
+
+The [**ARCHITECTURE.md**](docs/ARCHITECTURE.md) guide explains:
+- **What goes where** - Each module's responsibility and what shouldn't go there
+- **Module structure** - Visual guide to the project layout
+- **Design patterns** - How components interact
+- **Decision tree** - Where to add your feature
+- **Common scenarios** - Troubleshooting and code locations
+
+**TL;DR**:
+- `parsers/` = Extract Chef data
+- `converters/` = Transform to Ansible
+- `assessment.py` = Migration planning
+- `deployment.py` = AWX/deployment logic
+- `core/` = Shared utilities
+- `server.py` = MCP tool registration
+- `cli.py` = Command-line interface
+- `ui/` = Web interface
+
+Read the full [ARCHITECTURE.md](docs/ARCHITECTURE.md) before adding new code!
 
 ## Getting Started
 

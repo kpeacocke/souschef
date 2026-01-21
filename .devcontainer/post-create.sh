@@ -36,6 +36,32 @@ sudo usermod -aG docker vscode
 echo "🔧 Setting docker socket permissions..."
 sudo chmod 666 /var/run/docker.sock
 
+# Create systemd service for persistent docker permissions
+echo "🔧 Creating persistent docker permissions service..."
+sudo tee /etc/systemd/system/docker-permissions.service > /dev/null << 'EOF'
+[Unit]
+Description=Fix Docker socket permissions for devcontainer
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'chmod 666 /var/run/docker.sock 2>/dev/null || true'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable docker-permissions.service
+
+# Also create a cron job as backup
+echo "🔧 Setting up cron job for docker permissions..."
+sudo tee /etc/cron.d/docker-permissions > /dev/null << 'EOF'
+*/5 * * * * root chmod 666 /var/run/docker.sock 2>/dev/null || true
+EOF
+
 # Configure Poetry
 echo "📦 Configuring Poetry..."
 poetry config virtualenvs.in-project true

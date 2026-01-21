@@ -21,6 +21,11 @@ from souschef.core.errors import (
     validate_cookbook_structure,
     validate_directory_exists,
 )
+from souschef.core.metrics import (
+    ComplexityLevel,
+    EffortMetrics,
+    categorize_complexity,
+)
 from souschef.core.path_utils import _safe_join
 
 # Maximum length for attribute values in Chef attribute parsing
@@ -1496,13 +1501,56 @@ def _detect_patterns_from_content(content: str) -> list[str]:
     return patterns
 
 
-def _assess_complexity_from_resource_count(resource_count: int) -> tuple[str, str, str]:
-    """Assess complexity, effort, and risk based on resource count."""
+def _assess_complexity_from_resource_count(
+    resource_count: int,
+) -> tuple[ComplexityLevel, str, str]:
+    """
+    Assess complexity, effort estimate, and risk based on resource count.
+
+    Uses centralized metrics for consistent complexity categorization.
+
+    Args:
+        resource_count: Number of resources in cookbook
+
+    Returns:
+        Tuple of (complexity_level, effort_estimate_weeks, risk_level)
+
+    """
+    # Map resource count to complexity score (0-100 scale)
+    # 50+ resources = high complexity (70-100)
+    # 20-50 resources = medium complexity (30-69)
+    # <20 resources = low complexity (0-29)
     if resource_count > 50:
-        return "high", "4-6 weeks", "high"
-    elif resource_count < 20:
-        return "low", "1-2 weeks", "low"
-    return "medium", "2-3 weeks", "medium"
+        complexity_score = 80
+    elif resource_count > 30:
+        complexity_score = 50
+    elif resource_count >= 20:
+        complexity_score = 40
+    else:
+        complexity_score = 15
+
+    # Use centralized categorization
+    complexity_level = categorize_complexity(complexity_score)
+
+    # Estimate effort based on resource count and complexity
+    # Base: 0.2 days per resource (2.5 hours)
+    base_days = resource_count * 0.2
+    complexity_multiplier = 1 + (complexity_score / 100)
+    estimated_days = round(base_days * complexity_multiplier, 1)
+
+    # Create metrics object for consistent week calculation
+    metrics = EffortMetrics(estimated_days=estimated_days)
+    effort_estimate = metrics.estimated_weeks_range
+
+    # Risk mapping based on complexity level
+    if complexity_level == ComplexityLevel.HIGH:
+        risk_level = "high"
+    elif complexity_level == ComplexityLevel.MEDIUM:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    return complexity_level, effort_estimate, risk_level
 
 
 def _analyse_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
@@ -1536,10 +1584,14 @@ def _analyse_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
                 # Silently skip malformed files
                 pass
 
-    # Assess complexity
+    # Assess complexity using centralized function
     resource_count = len(analysis["resources"])
-    complexity, effort, risk = _assess_complexity_from_resource_count(resource_count)
-    analysis["complexity"] = complexity
+    complexity_level, effort, risk = _assess_complexity_from_resource_count(
+        resource_count
+    )
+
+    # Convert complexity level enum to string for backward compatibility
+    analysis["complexity"] = complexity_level.value
     analysis["effort_estimate"] = effort
     analysis["risk_level"] = risk
 
