@@ -36,8 +36,7 @@ jobs:
         with:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
-          # Use PAT if available, fallback to GITHUB_TOKEN
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Log release created
         if: ${{ steps.release.outputs.release_created }}
