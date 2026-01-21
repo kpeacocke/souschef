@@ -11,6 +11,7 @@ from typing import NoReturn
 
 import click
 
+from souschef import __version__
 from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.profiling import (
     generate_cookbook_performance_report,
@@ -41,7 +42,7 @@ CI_JOB_INTEGRATION_TESTS = "  • Integration Tests (Test Kitchen)"
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="souschef")
+@click.version_option(version=__version__, prog_name="souschef")
 def cli() -> None:
     """
     SousChef - Chef to Ansible conversion toolkit.
@@ -1074,6 +1075,94 @@ def convert_inspec(profile_path: str, output_path: str, output_format: str) -> N
 
     except Exception as e:
         click.echo(f"Error converting InSpec profile: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("convert-cookbook")
+@click.option(
+    "--cookbook-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the Chef cookbook directory",
+)
+@click.option(
+    "--output-path",
+    required=True,
+    type=click.Path(),
+    help="Directory where the Ansible role will be created",
+)
+@click.option(
+    "--assessment-file",
+    type=click.Path(exists=True),
+    help="Path to JSON file with assessment results for optimization",
+)
+@click.option(
+    "--role-name",
+    help="Name for the Ansible role (defaults to cookbook name)",
+)
+@click.option(
+    "--skip-templates",
+    is_flag=True,
+    help="Skip conversion of ERB templates to Jinja2",
+)
+@click.option(
+    "--skip-attributes",
+    is_flag=True,
+    help="Skip conversion of attributes to Ansible variables",
+)
+@click.option(
+    "--skip-recipes",
+    is_flag=True,
+    help="Skip conversion of recipes to Ansible tasks",
+)
+def convert_cookbook(
+    cookbook_path: str,
+    output_path: str,
+    assessment_file: str | None = None,
+    role_name: str | None = None,
+    skip_templates: bool = False,
+    skip_attributes: bool = False,
+    skip_recipes: bool = False,
+) -> None:
+    r"""
+    Convert an entire Chef cookbook to a complete Ansible role.
+
+    Performs comprehensive conversion including recipes, templates, attributes,
+    and proper Ansible role structure. Can use assessment data for optimization.
+
+    Example:
+        souschef convert-cookbook --cookbook-path /chef/cookbooks/nginx \\
+                                 --output-path /ansible/roles \\
+                                 --assessment-file assessment.json
+
+    """
+    try:
+        # Load assessment data if provided
+        assessment_data = ""
+        if assessment_file:
+            assessment_path = Path(assessment_file)
+            if assessment_path.exists():
+                assessment_data = assessment_path.read_text()
+            else:
+                click.echo(f"Warning: Assessment file not found: {assessment_file}")
+
+        # Call server function
+        from souschef.server import convert_cookbook_comprehensive
+
+        result = convert_cookbook_comprehensive(
+            cookbook_path=cookbook_path,
+            output_path=output_path,
+            assessment_data=assessment_data,
+            include_templates=not skip_templates,
+            include_attributes=not skip_attributes,
+            include_recipes=not skip_recipes,
+            role_name=role_name or "",
+        )
+
+        click.echo(result)
+
+    except Exception as e:
+        click.echo(f"Error converting cookbook: {e}", err=True)
         sys.exit(1)
 
 

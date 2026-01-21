@@ -1,9 +1,8 @@
 """GitLab CI generation from Chef CI/CD patterns."""
 
-from pathlib import Path
 from typing import Any
 
-import yaml
+from souschef.ci.common import analyse_chef_ci_patterns
 
 
 def generate_gitlab_ci_from_chef_ci(
@@ -28,61 +27,12 @@ def generate_gitlab_ci_from_chef_ci(
 
     """
     # Analyse Chef CI patterns
-    ci_patterns = _analyse_chef_ci_patterns(cookbook_path)
+    ci_patterns = analyse_chef_ci_patterns(cookbook_path)
 
     # Generate CI configuration
     return _generate_gitlab_ci_yaml(
         project_name, ci_patterns, enable_cache, enable_artifacts
     )
-
-
-def _analyse_chef_ci_patterns(cookbook_path: str) -> dict[str, Any]:
-    """
-    Analyse Chef cookbook for CI/CD patterns.
-
-    Args:
-        cookbook_path: Path to Chef cookbook.
-
-    Returns:
-        Dictionary of detected CI patterns.
-
-    """
-    base_path = Path(cookbook_path)
-
-    patterns: dict[str, Any] = {
-        "has_kitchen": (base_path / ".kitchen.yml").exists(),
-        "has_chefspec": (base_path / "spec").exists(),
-        "has_inspec": (base_path / "test" / "integration").exists(),
-        "has_berksfile": (base_path / "Berksfile").exists(),
-        "lint_tools": [],
-        "test_suites": [],
-    }
-
-    # Detect linting tools
-    lint_tools: list[str] = patterns["lint_tools"]
-    if (base_path / ".foodcritic").exists():
-        lint_tools.append("foodcritic")
-    if (base_path / ".cookstyle.yml").exists():
-        lint_tools.append("cookstyle")
-
-    # Parse kitchen.yml for test suites
-    kitchen_file = base_path / ".kitchen.yml"
-    if kitchen_file.exists():
-        try:
-            test_suites: list[str] = patterns["test_suites"]
-            with kitchen_file.open() as f:
-                kitchen_config = yaml.safe_load(f)
-                if kitchen_config and "suites" in kitchen_config:
-                    test_suites.extend(
-                        suite["name"] for suite in kitchen_config["suites"]
-                    )
-        except (yaml.YAMLError, OSError, KeyError, TypeError, AttributeError):
-            # Gracefully handle malformed .kitchen.yml - continue with empty
-            # test suites. Catches: YAML syntax errors, file I/O errors,
-            # missing config keys, type mismatches
-            pass
-
-    return patterns
 
 
 def _build_lint_jobs(ci_patterns: dict[str, Any], enable_artifacts: bool) -> list[str]:

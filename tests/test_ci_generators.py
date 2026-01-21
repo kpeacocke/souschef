@@ -6,9 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from souschef.ci.github_actions import (
-    _analyse_chef_ci_patterns as github_analyze_patterns,
-)
+from souschef.ci.common import analyse_chef_ci_patterns
 from souschef.ci.github_actions import (
     _build_integration_test_job,
     _build_lint_job,
@@ -16,15 +14,9 @@ from souschef.ci.github_actions import (
     generate_github_workflow_from_chef_ci,
 )
 from souschef.ci.gitlab_ci import (
-    _analyse_chef_ci_patterns as gitlab_analyze_patterns,
-)
-from souschef.ci.gitlab_ci import (
     _build_lint_jobs,
     _build_test_jobs,
     generate_gitlab_ci_from_chef_ci,
-)
-from souschef.ci.jenkins_pipeline import (
-    _analyse_chef_ci_patterns as jenkins_analyze_patterns,
 )
 from souschef.ci.jenkins_pipeline import (
     _create_stage,
@@ -75,7 +67,7 @@ def test_generate_jenkinsfile_scripted():
 
 def test_jenkins_analyze_patterns_with_kitchen():
     """Test Chef CI pattern detection with Test Kitchen."""
-    patterns = jenkins_analyze_patterns(str(SAMPLE_COOKBOOK))
+    patterns = analyse_chef_ci_patterns(str(SAMPLE_COOKBOOK))
 
     assert patterns["has_kitchen"] is True
     assert patterns["has_chefspec"] is True
@@ -87,7 +79,7 @@ def test_jenkins_analyze_patterns_with_kitchen():
 
 def test_jenkins_analyze_patterns_with_lint_tools():
     """Test detection of linting tools."""
-    patterns = jenkins_analyze_patterns(str(SAMPLE_COOKBOOK))
+    patterns = analyse_chef_ci_patterns(str(SAMPLE_COOKBOOK))
 
     assert "lint_tools" in patterns
     assert "cookstyle" in patterns["lint_tools"]
@@ -96,7 +88,7 @@ def test_jenkins_analyze_patterns_with_lint_tools():
 def test_jenkins_analyze_patterns_no_files():
     """Test pattern analysis with no CI files."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        patterns = jenkins_analyze_patterns(tmpdir)
+        patterns = analyse_chef_ci_patterns(tmpdir)
 
         assert patterns["has_kitchen"] is False
         assert patterns["has_chefspec"] is False
@@ -272,20 +264,10 @@ def test_generate_gitlab_ci_no_artifacts():
     assert "deploy:production" in result
 
 
-def test_gitlab_analyze_patterns():
-    """Test GitLab CI pattern analysis."""
-    patterns = gitlab_analyze_patterns(str(SAMPLE_COOKBOOK))
-
-    assert patterns["has_kitchen"] is True
-    assert patterns["has_chefspec"] is True
-    assert "cookstyle" in patterns["lint_tools"]
-    assert len(patterns["test_suites"]) == 2
-
-
 def test_gitlab_analyze_patterns_empty_dir():
     """Test pattern analysis with empty directory."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        patterns = gitlab_analyze_patterns(tmpdir)
+        patterns = analyse_chef_ci_patterns(tmpdir)
 
         assert patterns["has_kitchen"] is False
         assert patterns["has_chefspec"] is False
@@ -406,7 +388,7 @@ def test_gitlab_ci_before_script():
 
 def test_jenkins_parse_kitchen_with_suites():
     """Test parsing kitchen.yml with test suites."""
-    patterns = jenkins_analyze_patterns(str(SAMPLE_COOKBOOK))
+    patterns = analyse_chef_ci_patterns(str(SAMPLE_COOKBOOK))
 
     assert "default" in patterns["test_suites"]
     assert "database" in patterns["test_suites"]
@@ -419,7 +401,7 @@ def test_jenkins_parse_kitchen_yaml_error():
         kitchen_file = tmppath / ".kitchen.yml"
         kitchen_file.write_text("invalid: yaml: content: [[[")
 
-        patterns = jenkins_analyze_patterns(tmpdir)
+        patterns = analyse_chef_ci_patterns(tmpdir)
 
         # Should not crash, just return empty test_suites
         assert patterns["test_suites"] == []
@@ -432,7 +414,7 @@ def test_gitlab_parse_kitchen_yaml_error():
         kitchen_file = tmppath / ".kitchen.yml"
         kitchen_file.write_text("invalid yaml")
 
-        patterns = gitlab_analyze_patterns(tmpdir)
+        patterns = analyse_chef_ci_patterns(tmpdir)
 
         assert patterns["test_suites"] == []
 
@@ -617,7 +599,7 @@ def test_jenkins_with_foodcritic():
         tmppath = Path(tmpdir)
         (tmppath / ".foodcritic").touch()
 
-        patterns = jenkins_analyze_patterns(tmpdir)
+        patterns = analyse_chef_ci_patterns(tmpdir)
 
         assert "foodcritic" in patterns["lint_tools"]
 
@@ -628,7 +610,7 @@ def test_gitlab_with_foodcritic():
         tmppath = Path(tmpdir)
         (tmppath / ".foodcritic").touch()
 
-        patterns = gitlab_analyze_patterns(tmpdir)
+        patterns = analyse_chef_ci_patterns(tmpdir)
 
         assert "foodcritic" in patterns["lint_tools"]
 
@@ -640,7 +622,7 @@ def test_jenkins_kitchen_without_suites_key():
         kitchen_file = tmppath / ".kitchen.yml"
         kitchen_file.write_text("driver:\n  name: docker\n")
 
-        patterns = jenkins_analyze_patterns(tmpdir)
+        patterns = analyse_chef_ci_patterns(tmpdir)
 
         assert patterns["has_kitchen"] is True
         assert patterns["test_suites"] == []
@@ -653,7 +635,7 @@ def test_gitlab_kitchen_without_suites_key():
         kitchen_file = tmppath / ".kitchen.yml"
         kitchen_file.write_text("driver:\n  name: docker\n")
 
-        patterns = gitlab_analyze_patterns(tmpdir)
+        patterns = analyse_chef_ci_patterns(tmpdir)
 
         assert patterns["has_kitchen"] is True
         assert patterns["test_suites"] == []
@@ -681,7 +663,7 @@ def test_gitlab_kitchen_yaml_read_exception():
         kitchen_file.write_text("{{{{invalid yaml]]]")
 
         # Should not crash, just return empty test_suites
-        patterns = gitlab_analyze_patterns(tmpdir)
+        patterns = analyse_chef_ci_patterns(tmpdir)
 
         assert patterns["has_kitchen"] is True
         assert patterns["test_suites"] == []
@@ -785,9 +767,9 @@ def test_generate_github_workflow_without_artifacts():
     assert len(artifact_steps) == 0
 
 
-def test_github_analyze_patterns():
+def test_analyse_chef_ci_patterns():
     """Test pattern analysis for GitHub Actions."""
-    patterns = github_analyze_patterns(SAMPLE_COOKBOOK)
+    patterns = analyse_chef_ci_patterns(SAMPLE_COOKBOOK)
 
     assert patterns["has_kitchen"] is True
     assert patterns["has_chefspec"] is True
@@ -798,7 +780,7 @@ def test_github_analyze_patterns():
 def test_github_analyze_patterns_empty_dir():
     """Test pattern analysis with empty directory."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        patterns = github_analyze_patterns(Path(tmpdir))
+        patterns = analyse_chef_ci_patterns(Path(tmpdir))
 
         assert patterns["has_kitchen"] is False
         assert patterns["has_chefspec"] is False
@@ -877,7 +859,7 @@ def test_github_workflow_triggers():
 
 def test_github_pattern_detection_with_multiple_suites():
     """Test pattern detection with multiple Kitchen suites."""
-    patterns = github_analyze_patterns(SAMPLE_COOKBOOK)
+    patterns = analyse_chef_ci_patterns(SAMPLE_COOKBOOK)
 
     # Sample cookbook should have suites
     assert patterns["has_kitchen"] is True

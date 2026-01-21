@@ -5,7 +5,9 @@ Configure and validate AI provider settings for the SousChef MCP server.
 """
 
 import json
+import os
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 import streamlit as st
@@ -171,10 +173,15 @@ def _render_validation_section(
     st.subheader("Configuration Validation")
     col1, col2 = st.columns([1, 1])
     with col1:
-        if st.button("Validate Configuration", type="primary", width="stretch"):
+        if st.button(
+            "Validate Configuration",
+            type="primary",
+            width="stretch",
+            key="validate_ai_config",
+        ):
             validate_ai_configuration(provider, api_key, model, base_url, project_id)
     with col2:
-        if st.button("Save Settings", width="stretch"):
+        if st.button("Save Settings", width="stretch", key="save_ai_settings"):
             save_ai_settings(
                 provider, api_key, model, base_url, temperature, max_tokens, project_id
             )
@@ -182,6 +189,17 @@ def _render_validation_section(
 
 def show_ai_settings_page():
     """Show the AI settings configuration page."""
+    # Add back to dashboard button
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button(
+            "← Back to Dashboard",
+            help="Return to main dashboard",
+            key="back_to_dashboard_from_ai",
+        ):
+            st.session_state.current_page = "Dashboard"
+            st.rerun()
+
     st.markdown("""
     Configure your AI provider settings for the SousChef MCP server.
     These settings determine which AI model will be used for Chef to Ansible
@@ -481,17 +499,65 @@ def display_current_settings():
         st.info("No AI configuration found. Please configure your settings above.")
 
 
-def load_ai_settings():
+def load_ai_settings() -> dict[str, Any]:
+    """Load AI settings from file, session state, or environment variables."""
+    file_config = _load_ai_settings_from_file()
+    if file_config:
+        return file_config
+
+    session_config = st.session_state.get("ai_config", {})
+    if isinstance(session_config, dict) and session_config:
+        return session_config
+
+    env_config = _load_ai_settings_from_env()
+    if env_config:
+        return env_config
+
+    return {}
+
+
+def _load_ai_settings_from_env() -> dict[str, str | float | int]:
+    """Load AI settings from environment variables."""
+    from contextlib import suppress
+
+    env_config: dict[str, str | float | int] = {}
+    env_mappings = {
+        "SOUSCHEF_AI_PROVIDER": "provider",
+        "SOUSCHEF_AI_MODEL": "model",
+        "SOUSCHEF_AI_API_KEY": "api_key",
+        "SOUSCHEF_AI_BASE_URL": "base_url",
+        "SOUSCHEF_AI_PROJECT_ID": "project_id",
+    }
+
+    # Handle string values
+    for env_var, config_key in env_mappings.items():
+        env_value = os.environ.get(env_var)
+        if env_value:
+            env_config[config_key] = env_value
+
+    # Handle numeric values with error suppression
+    temp_value = os.environ.get("SOUSCHEF_AI_TEMPERATURE")
+    if temp_value:
+        with suppress(ValueError):
+            env_config["temperature"] = float(temp_value)
+
+    tokens_value = os.environ.get("SOUSCHEF_AI_MAX_TOKENS")
+    if tokens_value:
+        with suppress(ValueError):
+            env_config["max_tokens"] = int(tokens_value)
+
+    return env_config
+
+
+def _load_ai_settings_from_file() -> dict[str, Any]:
     """Load AI settings from configuration file."""
     try:
-        # Use /tmp/.souschef for container compatibility (tmpfs is writable)
         config_file = Path("/tmp/.souschef/ai_config.json")
         if config_file.exists():
             with config_file.open() as f:
-                return json.load(f)
+                result = json.load(f)
+                return result if isinstance(result, dict) else {}
     except Exception as e:
-        # Failed to load config from file; fall back to session state/defaults
         st.warning(f"Unable to load saved AI settings: {e}")
 
-    # Fallback to session state or return empty dict
-    return st.session_state.get("ai_config", {})
+    return {}

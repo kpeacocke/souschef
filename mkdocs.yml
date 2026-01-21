@@ -109,7 +109,9 @@ nav:
       - Parsers: api-reference/parsers.md
       - Converters: api-reference/converters.md
       - Core Utilities: api-reference/core.md
-  - Contributing: contributing.md
+  - Contributing:
+      - Contributing Guide: contributing.md
+      - Architecture Guide: ARCHITECTURE.md
 
 extra:
   social:
