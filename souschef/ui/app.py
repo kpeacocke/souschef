@@ -1261,9 +1261,11 @@ def _create_plotly_figure_layout(num_nodes: int, layout_algorithm: str) -> "go.L
     import plotly.graph_objects as go
 
     layout: go.Layout = go.Layout(
-        title=f"Cookbook Dependency Graph ({num_nodes} nodes, "
-        f"{layout_algorithm} layout)",
-        titlefont_size=16,
+        title={
+            "text": f"Cookbook Dependency Graph ({num_nodes} nodes, "
+            f"{layout_algorithm} layout)",
+            "font": {"size": 16},
+        },
         showlegend=True,
         hovermode="closest",
         margin={"b": 20, "l": 5, "r": 5, "t": 40},
