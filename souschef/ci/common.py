@@ -5,6 +5,8 @@ from typing import Any
 
 import yaml
 
+from souschef.core.path_utils import _normalize_path
+
 
 def analyse_chef_ci_patterns(cookbook_path: str | Path) -> dict[str, Any]:
     """
@@ -37,7 +39,11 @@ def analyse_chef_ci_patterns(cookbook_path: str | Path) -> dict[str, Any]:
         raising an exception.
 
     """
-    base_path = Path(cookbook_path)
+    # Normalize path to prevent path traversal attacks
+    if isinstance(cookbook_path, str):
+        base_path = _normalize_path(cookbook_path)
+    else:
+        base_path = cookbook_path.resolve()
 
     patterns: dict[str, Any] = {
         "has_kitchen": (base_path / ".kitchen.yml").exists(),

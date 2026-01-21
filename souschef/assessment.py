@@ -804,8 +804,9 @@ def _analyze_attributes(cookbook_path: Path) -> int:
             try:
                 content = attr_file.read_text(encoding="utf-8", errors="ignore")
                 # Count attribute assignments and complex expressions
+                # Use simpler regex patterns to avoid ReDoS vulnerabilities
                 assignments = len(
-                    re.findall(r"^\s*\w+\s*\[?\w*\]?\s*=", content, re.MULTILINE)
+                    re.findall(r"^\s*\w+\s*(?:\[\w*\])?\s*=", content, re.MULTILINE)
                 )
                 complex_expressions = len(
                     re.findall(r"(?:node|default|override)\[", content)
