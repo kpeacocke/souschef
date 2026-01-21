@@ -1700,13 +1700,22 @@ def _display_conversion_download_options(conversion_result: dict):
     if "output_path" in conversion_result:
         st.subheader("Download Converted Roles")
 
+        # Validate output_path before use
         output_path = conversion_result["output_path"]
-        # deepcode ignore PT: output_path generated internally
-        safe_output_path = Path(output_path).resolve()
+        try:
+            from souschef.core.path_utils import _normalize_path
+
+            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+            safe_output_path = _normalize_path(str(output_path))
+        except ValueError:
+            st.error("Invalid output path")
+            return
+
         if safe_output_path.exists():
             # Create ZIP archive of all converted roles
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
                 for root, _dirs, files in os.walk(str(safe_output_path)):
                     for file in files:
                         file_path = Path(root) / file
