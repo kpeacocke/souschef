@@ -880,8 +880,8 @@ Community Cookbooks:
         traces = _create_plotly_edge_traces(graph, pos)
 
         assert len(traces) == 2  # Regular edges and circular edges
-        assert traces[0].line.color == "#888"  # Regular edge color
-        assert traces[1].line.color == "red"  # Circular edge color
+        assert traces[0].line.color == "#888"  # type: ignore[attr-defined]  # Regular edge color
+        assert traces[1].line.color == "red"  # type: ignore[attr-defined]  # Circular edge color
 
     def test_create_plotly_node_trace(self):
         """Test creating Plotly node trace."""

@@ -11,6 +11,8 @@ from typing import Any
 
 import yaml
 
+from souschef.ci.common import analyse_chef_ci_patterns
+
 # GitHub Actions constants
 ACTION_CHECKOUT = "actions/checkout@v4"
 ACTION_SETUP_RUBY = "ruby/setup-ruby@v1"
@@ -53,7 +55,7 @@ def generate_github_workflow_from_chef_ci(
         raise FileNotFoundError(f"Cookbook directory not found: {cookbook_path}")
 
     # Analyse Chef CI patterns
-    patterns = _analyse_chef_ci_patterns(cookbook_dir)
+    patterns = analyse_chef_ci_patterns(cookbook_dir)
 
     # Build workflow structure
     workflow = _build_workflow_structure(
@@ -61,97 +63,6 @@ def generate_github_workflow_from_chef_ci(
     )
 
     return yaml.dump(workflow, default_flow_style=False, sort_keys=False)
-
-
-def _analyse_chef_ci_patterns(cookbook_dir: Path) -> dict[str, Any]:
-    """
-    Analyse Chef cookbook for CI/CD patterns and testing configurations.
-
-    This function examines a Chef cookbook directory to detect various
-    testing and linting tools, as well as Test Kitchen configurations
-    including suites and platforms.
-
-    Args:
-        cookbook_dir: Path to the Chef cookbook directory to analyse.
-
-    Returns:
-        Dictionary containing detected patterns with the following keys:
-            - has_kitchen (bool): Whether Test Kitchen is configured
-              (.kitchen.yml exists)
-            - has_chefspec (bool): Whether ChefSpec tests are present
-              (spec/**/*_spec.rb files)
-            - has_cookstyle (bool): Whether Cookstyle is configured
-              (.cookstyle.yml exists)
-            - has_foodcritic (bool): Whether Foodcritic (legacy) is
-              configured (.foodcritic exists)
-            - kitchen_suites (list[str]): Names of Test Kitchen suites
-              found in .kitchen.yml
-            - kitchen_platforms (list[str]): Names of Test Kitchen
-              platforms found in .kitchen.yml
-
-    Note:
-        If .kitchen.yml is malformed or cannot be parsed, the function
-        continues with empty suite and platform lists rather than
-        raising an exception.
-
-    Example:
-        >>> patterns = _analyze_chef_ci_patterns(Path("/path/to/cookbook"))
-        >>> patterns["has_kitchen"]
-        True
-        >>> patterns["kitchen_suites"]
-        ['default', 'integration']
-
-    """
-    patterns: dict[str, Any] = {
-        "has_kitchen": False,
-        "has_chefspec": False,
-        "has_cookstyle": False,
-        "has_foodcritic": False,
-        "kitchen_suites": [],
-        "kitchen_platforms": [],
-    }
-
-    # Check for Test Kitchen
-    kitchen_yml = cookbook_dir / ".kitchen.yml"
-    if kitchen_yml.exists():
-        patterns["has_kitchen"] = True
-        try:
-            with kitchen_yml.open() as f:
-                kitchen_config = yaml.safe_load(f)
-                if kitchen_config:
-                    # Extract suites
-                    suites = kitchen_config.get("suites", [])
-                    if suites:
-                        patterns["kitchen_suites"] = [
-                            s.get("name", "default") for s in suites
-                        ]
-                    # Extract platforms
-                    platforms = kitchen_config.get("platforms", [])
-                    if platforms:
-                        patterns["kitchen_platforms"] = [
-                            p.get("name", "unknown") for p in platforms
-                        ]
-        except (yaml.YAMLError, OSError, KeyError, TypeError, AttributeError):
-            # Gracefully handle malformed .kitchen.yml - continue with empty config
-            # Catches: YAML syntax errors, file I/O errors, missing config keys,
-            # type mismatches in config structure, and missing dict attributes
-            pass
-
-    # Check for ChefSpec
-    spec_dir = cookbook_dir / "spec"
-    if spec_dir.exists() and any(spec_dir.glob("**/*_spec.rb")):
-        patterns["has_chefspec"] = True
-
-    # Check for Cookstyle
-    cookstyle_yml = cookbook_dir / ".cookstyle.yml"
-    if cookstyle_yml.exists():
-        patterns["has_cookstyle"] = True
-
-    # Check for Foodcritic (legacy)
-    if (cookbook_dir / ".foodcritic").exists():
-        patterns["has_foodcritic"] = True
-
-    return patterns
 
 
 def _build_workflow_structure(

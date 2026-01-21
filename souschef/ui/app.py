@@ -1,72 +1,66 @@
-"""
-Visual Migration Planning Interface for SousChef.
-
-A Streamlit-based web interface for Chef to Ansible migration planning,
-assessment, and visualization.
-"""
-
-import contextlib
-import logging
+# Add the parent directory to the path so we can import souschef modules
 import sys
 from pathlib import Path
 
-import streamlit as st
-
-# Configure logging to stdout for Docker visibility
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    stream=sys.stdout,
-    force=True,  # Override any existing configuration
-)
-
-logger = logging.getLogger(__name__)
-logger.info("Starting SousChef UI application")
-
-# Add the parent directory to the path so we can import souschef modules
 app_path = Path(__file__).parent.parent
 if str(app_path) not in sys.path:
     sys.path.insert(0, str(app_path))
 
-# Import page modules
-from souschef.ui.pages.ai_settings import show_ai_settings_page  # noqa: E402
-from souschef.ui.pages.cookbook_analysis import (  # noqa: E402
-    show_cookbook_analysis_page,
+import contextlib
+import os
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Concatenate,
+    ParamSpec,
+    TypeVar,
 )
 
-# Constants for repeated strings
+import streamlit as st
+
+if TYPE_CHECKING:
+    import networkx as nx
+    import plotly.graph_objects as go
+    from matplotlib.figure import Figure
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+from souschef.ui.pages.ai_settings import show_ai_settings_page
+from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
+
+# Constants
+SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
+SECTION_COMMUNITY_COOKBOOKS = "Community Cookbooks"
+SECTION_CIRCULAR_DEPENDENCIES = "Circular Dependencies"
+SECTION_MIGRATION_IMPACT_ANALYSIS = "Migration Impact Analysis"
 NAV_MIGRATION_PLANNING = "Migration Planning"
 NAV_DEPENDENCY_MAPPING = "Dependency Mapping"
 NAV_VALIDATION_REPORTS = "Validation Reports"
+NAV_AI_SETTINGS = "AI Settings"
+NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
+BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
+INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
 MIME_TEXT_MARKDOWN = "text/markdown"
 MIME_APPLICATION_JSON = "application/json"
-SECTION_CIRCULAR_DEPENDENCIES = "Circular Dependencies"
-NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
-NAV_AI_SETTINGS = "AI Settings"
-BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
-SECTION_COMMUNITY_COOKBOOKS = "Community Cookbooks"
-SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
-INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
+ERROR_MSG_ENTER_PATH = "Please enter a path."
 SCOPE_BEST_PRACTICES = "Best Practices"
-ERROR_MSG_ENTER_PATH = "Please enter a path to validate."
-
-
-def health_check():
-    """Return simple health check endpoint for Docker."""
-    return {"status": "healthy", "service": "souschef-ui"}
 
 
 class ProgressTracker:
     """Track progress for long-running operations."""
 
-    def __init__(self, total_steps=100, description="Processing..."):
-        self.total_steps = total_steps
-        self.current_step = 0
-        self.description = description
+    def __init__(
+        self, total_steps: int = 100, description: str = "Processing..."
+    ) -> None:
+        self.total_steps: int = total_steps
+        self.current_step: int = 0
+        self.description: str = description
         self.progress_bar = st.progress(0)
         self.status_text = st.empty()
 
-    def update(self, step=None, description=None):
+    def update(self, step: int | None = None, description: str | None = None) -> None:
         """Update progress."""
         if step is not None:
             self.current_step = min(step, self.total_steps)
@@ -82,7 +76,7 @@ class ProgressTracker:
             f"{self.description} ({self.current_step}/{self.total_steps})"
         )
 
-    def complete(self, message="Completed!"):
+    def complete(self, message: str = "Completed!") -> None:
         """Mark progress as complete."""
         self.progress_bar.progress(1.0)
         self.status_text.text(message)
@@ -90,24 +84,26 @@ class ProgressTracker:
 
         time.sleep(0.5)  # Brief pause to show completion
 
-    def close(self):
+    def close(self) -> None:
         """Clean up progress indicators."""
         self.progress_bar.empty()
         self.status_text.empty()
 
 
 def with_progress_tracking(
-    operation_func, description="Processing...", total_steps=100
-):
+    operation_func: Callable[Concatenate[ProgressTracker, P], R],
+    description: str = "Processing...",
+    total_steps: int = 100,
+) -> Callable[P, R]:
     """Add progress tracking to operations."""
 
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         tracker = ProgressTracker(total_steps, description)
         try:
-            result = operation_func(tracker, *args, **kwargs)
+            result: R = operation_func(tracker, *args, **kwargs)
             tracker.complete()
             return result
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             tracker.close()
             raise e
         finally:
@@ -116,111 +112,104 @@ def with_progress_tracking(
     return wrapper
 
 
-def _setup_sidebar_navigation():
-    """Set up the sidebar navigation with buttons."""
-    st.sidebar.title("Navigation")
-
-    # Dashboard button
-    if st.sidebar.button(
-        "Dashboard",
-        help="View migration overview and quick actions",
-        width="stretch",
-    ):
-        st.session_state.current_page = "Dashboard"
-        st.rerun()
-
-    # Cookbook Analysis button
-    if st.sidebar.button(
-        NAV_COOKBOOK_ANALYSIS,
-        help="Analyse Chef cookbooks and assess migration complexity",
-        width="stretch",
-    ):
-        st.session_state.current_page = NAV_COOKBOOK_ANALYSIS
-        st.rerun()
-
-    # Dependency Mapping button
-    if st.sidebar.button(
-        NAV_DEPENDENCY_MAPPING,
-        help="Visualise cookbook dependencies and migration order",
-        width="stretch",
-    ):
-        st.session_state.current_page = NAV_DEPENDENCY_MAPPING
-        st.rerun()
-
-    # Migration Planning button
-    if st.sidebar.button(
-        NAV_MIGRATION_PLANNING,
-        help="Plan your Chef to Ansible migration with detailed timelines",
-        width="stretch",
-    ):
-        st.session_state.current_page = NAV_MIGRATION_PLANNING
-        st.rerun()
-
-    # Validation Reports button
-    if st.sidebar.button(
-        NAV_VALIDATION_REPORTS,
-        help="Validate conversions and generate quality assurance reports",
-        width="stretch",
-    ):
-        st.session_state.current_page = NAV_VALIDATION_REPORTS
-        st.rerun()
-
-    # AI Settings button
-    if st.sidebar.button(
-        NAV_AI_SETTINGS,
-        help="Configure AI provider settings for intelligent conversions",
-        width="stretch",
-    ):
-        st.session_state.current_page = NAV_AI_SETTINGS
-        st.rerun()
-
-
-def main():
+def main() -> None:
     """Run the main Streamlit application."""
     st.set_page_config(
         page_title="SousChef - Chef to Ansible Migration",
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="collapsed",
     )
 
-    # Hide Streamlit's default header elements and sidebar navigation
-    st.markdown(
-        """
-    <style>
-    #MainMenu {visibility: hidden;}
-    .stDeployButton {display:none;}
-    [data-testid="stSidebarNavLink"] {display: none;}
-    </style>
-    """,
-        unsafe_allow_html=True,
-    )
+    st.title("SousChef - Visual Migration Planning")
+    st.markdown("*AI-powered Chef to Ansible migration planning interface*")
 
-    # Set up sidebar navigation
-    _setup_sidebar_navigation()
-
-    # Get current page from session state, default to Dashboard
+    # Main content area - default to dashboard
     page = st.session_state.get("current_page", "Dashboard")
 
-    # Main content area
-    if page == "Dashboard":
-        show_dashboard()
-    elif page == NAV_COOKBOOK_ANALYSIS:
-        show_cookbook_analysis_page()
-    elif page == NAV_AI_SETTINGS:
-        show_ai_settings_page()
-    elif page == NAV_MIGRATION_PLANNING:
-        show_migration_planning()
-    elif page == NAV_DEPENDENCY_MAPPING:
-        show_dependency_mapping()
-    elif page == NAV_VALIDATION_REPORTS:
-        show_validation_reports()
+    # Navigation section
+    st.subheader("Navigation")
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        if st.button(
+            "Cookbook Analysis",
+            type="primary" if page == NAV_COOKBOOK_ANALYSIS else "secondary",
+            width="stretch",
+            key="nav_cookbook_analysis",
+        ):
+            st.session_state.current_page = NAV_COOKBOOK_ANALYSIS
+            st.rerun()
+
+    with col2:
+        if st.button(
+            "Migration Planning",
+            type="primary" if page == NAV_MIGRATION_PLANNING else "secondary",
+            width="stretch",
+            key="nav_migration_planning",
+        ):
+            st.session_state.current_page = NAV_MIGRATION_PLANNING
+            st.rerun()
+
+    with col3:
+        if st.button(
+            "Dependency Mapping",
+            type="primary" if page == NAV_DEPENDENCY_MAPPING else "secondary",
+            width="stretch",
+            key="nav_dependency_mapping",
+        ):
+            st.session_state.current_page = NAV_DEPENDENCY_MAPPING
+            st.rerun()
+
+    with col4:
+        if st.button(
+            "Validation Reports",
+            type="primary" if page == NAV_VALIDATION_REPORTS else "secondary",
+            width="stretch",
+            key="nav_validation_reports",
+        ):
+            st.session_state.current_page = NAV_VALIDATION_REPORTS
+            st.rerun()
+
+    with col5:
+        if st.button(
+            "AI Settings",
+            type="primary" if page == NAV_AI_SETTINGS else "secondary",
+            width="stretch",
+            key="nav_ai_settings",
+        ):
+            st.session_state.current_page = NAV_AI_SETTINGS
+            st.rerun()
+
+    st.divider()
+
+    # Page routing
+    _route_to_page(page)
 
 
-def _calculate_dashboard_metrics():
+def _route_to_page(page: str) -> None:
+    """Route to the appropriate page based on the current page state."""
+    page_routes = {
+        "Dashboard": show_dashboard,
+        NAV_COOKBOOK_ANALYSIS: show_cookbook_analysis_page,
+        NAV_MIGRATION_PLANNING: show_migration_planning,
+        NAV_DEPENDENCY_MAPPING: show_dependency_mapping,
+        NAV_VALIDATION_REPORTS: show_validation_reports,
+        NAV_AI_SETTINGS: show_ai_settings_page,
+    }
+
+    route_func = page_routes.get(page)
+    if route_func:
+        route_func()
+    else:
+        show_dashboard()  # Default fallback
+
+
+def _calculate_dashboard_metrics() -> tuple[int, str, int, int]:
     """Calculate and return dashboard metrics."""
-    cookbooks_analysed = 0
     complexity_counts = {"High": 0, "Medium": 0, "Low": 0}
     successful_analyses = 0
+    cookbooks_analysed = 0
 
     if "analysis_results" in st.session_state and st.session_state.analysis_results:
         results = st.session_state.analysis_results
@@ -246,12 +235,20 @@ def _calculate_dashboard_metrics():
     if cookbooks_analysed > 0:
         conversion_rate = int((successful_analyses / cookbooks_analysed) * 100)
 
-    return cookbooks_analysed, overall_complexity, conversion_rate, successful_analyses
+    return (
+        cookbooks_analysed,
+        overall_complexity,
+        conversion_rate,
+        successful_analyses,
+    )
 
 
 def _display_dashboard_metrics(
-    cookbooks_analysed, overall_complexity, conversion_rate, successful_analyses
-):
+    cookbooks_analysed: int,
+    overall_complexity: str,
+    conversion_rate: int,
+    successful_analyses: int,
+) -> None:
     """Display the dashboard metrics."""
     col1, col2, col3 = st.columns(3)
 
@@ -286,9 +283,9 @@ def _display_dashboard_metrics(
         st.caption("Successful analyses")
 
 
-def _display_quick_upload_section():
+def _display_quick_upload_section() -> None:
     """Display the quick upload section."""
-    st.subheader("Quick Start")
+    st.subheader("Quick Start - Upload Cookbooks")
 
     col1, col2 = st.columns([2, 1])
 
@@ -309,33 +306,23 @@ def _display_quick_upload_section():
 
             st.success(f"File {uploaded_file.name} uploaded successfully!")
             st.info(
-                "Navigate to Cookbook Analysis to process this file, "
+                "Navigate to Cookbook Analysis above to process this file, "
                 "or upload another file to replace it."
             )
 
     with col2:
-        st.markdown("**Or choose your workflow:**")
-
-        # Quick actions
-        if st.button("Analyse Cookbooks", type="primary", width="stretch"):
-            st.session_state.current_page = "Cookbook Analysis"
-            st.rerun()
-
-        if st.button("Generate Migration Plan", width="stretch"):
-            st.session_state.current_page = NAV_MIGRATION_PLANNING
-            st.rerun()
-
-        if st.button(BUTTON_ANALYSE_DEPENDENCIES, width="stretch"):
-            st.session_state.current_page = NAV_DEPENDENCY_MAPPING
-            st.rerun()
+        st.markdown("**Upload Options:**")
+        st.markdown("- ZIP archives (.zip)")
+        st.markdown("- TAR archives (.tar, .tar.gz, .tgz)")
+        st.markdown("- Process uploaded files using the navigation buttons above")
 
 
-def _display_recent_activity():
+def _display_recent_activity() -> None:
     """Display the recent activity section."""
     st.subheader("Recent Activity")
     st.info(
         "No recent migration activity. Start by uploading cookbooks "
-        "above or using the Cookbook Analysis page!"
+        f"above or using the {NAV_COOKBOOK_ANALYSIS} page!"
     )
 
     # Getting started guide
@@ -343,7 +330,7 @@ def _display_recent_activity():
         st.markdown("""
         **New to SousChef? Here's how to begin:**
 
-        1. **Upload Cookbooks**: Use the uploader above or go to Cookbook Analysis
+        1. **Upload Cookbooks**: Use the uploader above or go to {NAV_COOKBOOK_ANALYSIS}
         2. **Analyse Complexity**: Get detailed migration assessments
         3. **Plan Migration**: Generate timelines and resource requirements
         4. **Convert to Ansible**: Download converted playbooks
@@ -351,7 +338,7 @@ def _display_recent_activity():
         **Supported Formats:**
         - ZIP archives (.zip)
         - TAR archives (.tar, .tar.gz, .tgz)
-        - Directory paths (in Cookbook Analysis)
+        - Directory paths (in {NAV_COOKBOOK_ANALYSIS})
 
         **Expected Structure:**
         ```
@@ -366,7 +353,7 @@ def _display_recent_activity():
         """)
 
 
-def show_dashboard():
+def show_dashboard() -> None:
     """Show the main dashboard with migration overview."""
     st.header("Migration Dashboard")
 
@@ -389,7 +376,7 @@ def show_dashboard():
     _display_recent_activity()
 
 
-def show_migration_planning():
+def show_migration_planning() -> None:
     """Show migration planning interface."""
     st.header(NAV_MIGRATION_PLANNING)
 
@@ -510,7 +497,12 @@ def show_migration_planning():
     # Step 3: Generate Plan
     st.subheader("Step 3: Generate Migration Plan")
 
-    if st.button("Generate Migration Plan", type="primary", width="stretch"):
+    if st.button(
+        "Generate Migration Plan",
+        type="primary",
+        width="stretch",
+        key="migration_plan_generate",
+    ):
         if not cookbook_paths.strip():
             st.error("Please enter cookbook paths to generate a migration plan.")
             return
@@ -554,7 +546,9 @@ def show_migration_planning():
         display_migration_plan_results()
 
 
-def _display_migration_summary_metrics(cookbook_paths, strategy, timeline):
+def _display_migration_summary_metrics(
+    cookbook_paths: str, strategy: str, timeline: int
+) -> None:
     """Display migration overview summary metrics."""
     st.subheader("Migration Overview")
 
@@ -574,7 +568,7 @@ def _display_migration_summary_metrics(cookbook_paths, strategy, timeline):
         st.metric("Status", "Plan Generated")
 
 
-def _display_migration_plan_details(plan_result):
+def _display_migration_plan_details(plan_result: str) -> None:
     """Display the detailed migration plan sections."""
     st.subheader("Migration Plan Details")
 
@@ -595,14 +589,18 @@ def _display_migration_plan_details(plan_result):
             st.markdown(section)
 
 
-def _display_migration_action_buttons(cookbook_paths):
+def _display_migration_action_buttons(cookbook_paths: str) -> None:
     """Display action buttons for next steps."""
     st.subheader("Next Steps")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📊 Generate Detailed Report", width="stretch"):
+        if st.button(
+            "Generate Detailed Report",
+            width="stretch",
+            key="migration_detailed_report",
+        ):
             with st.spinner("Generating detailed migration report..."):
                 try:
                     from souschef.assessment import generate_migration_report
@@ -616,7 +614,11 @@ def _display_migration_action_buttons(cookbook_paths):
                     st.error(f"Error generating report: {e}")
 
     with col2:
-        if st.button("🔍 Analyse Dependencies", width="stretch"):
+        if st.button(
+            "Analyse Dependencies",
+            width="stretch",
+            key="migration_analyse_dependencies",
+        ):
             if len(cookbook_paths.split(",")) == 1:
                 # Single cookbook dependency analysis
                 cookbook_path = cookbook_paths.split(",")[0].strip()
@@ -636,7 +638,7 @@ def _display_migration_action_buttons(cookbook_paths):
                 )
 
     with col3:
-        if st.button("📥 Export Plan", width="stretch"):
+        if st.button("Export Plan", width="stretch", key="migration_export_plan"):
             # Create downloadable plan
             plan_content = f"""# Chef to Ansible Migration Plan
 Generated: {st.session_state.get("timestamp", "Unknown")}
@@ -659,20 +661,20 @@ Generated: {st.session_state.get("timestamp", "Unknown")}
             )
 
 
-def _display_additional_reports():
+def _display_additional_reports() -> None:
     """Display detailed report and dependency analysis if available."""
     # Display detailed report if generated
     if "detailed_report" in st.session_state:
-        with st.expander("📊 Detailed Migration Report"):
+        with st.expander("Detailed Migration Report"):
             st.markdown(st.session_state.detailed_report)
 
     # Display dependency analysis if generated
     if "dep_analysis" in st.session_state:
-        with st.expander("🔍 Dependency Analysis"):
+        with st.expander("Dependency Analysis"):
             st.markdown(st.session_state.dep_analysis)
 
 
-def display_migration_plan_results():
+def display_migration_plan_results() -> None:
     """Display the generated migration plan results."""
     plan_result = st.session_state.migration_plan
     cookbook_paths = st.session_state.cookbook_paths
@@ -685,7 +687,7 @@ def display_migration_plan_results():
     _display_additional_reports()
 
 
-def show_dependency_mapping():
+def show_dependency_mapping() -> None:
     """Show dependency mapping visualization."""
     st.header(NAV_DEPENDENCY_MAPPING)
 
@@ -762,7 +764,12 @@ def show_dependency_mapping():
         )
 
     # Analysis button
-    if st.button(BUTTON_ANALYSE_DEPENDENCIES, type="primary", width="stretch"):
+    if st.button(
+        BUTTON_ANALYSE_DEPENDENCIES,
+        type="primary",
+        width="stretch",
+        key="dep_analyse_dependencies",
+    ):
         if not cookbook_path or not cookbook_path.strip():
             st.error("Please enter a cookbook directory path.")
             return
@@ -804,7 +811,7 @@ def show_dependency_mapping():
         display_dependency_analysis_results()
 
 
-def _setup_dependency_mapping_ui():
+def _setup_dependency_mapping_ui() -> None:
     """Set up the dependency mapping UI header and description."""
     st.header(NAV_DEPENDENCY_MAPPING)
 
@@ -814,7 +821,7 @@ def _setup_dependency_mapping_ui():
     """)
 
 
-def _get_dependency_mapping_inputs():
+def _get_dependency_mapping_inputs() -> tuple[str, str, str]:
     """Collect user inputs for dependency analysis."""
     # Cookbook path input
     cookbook_path = st.text_input(
@@ -854,11 +861,13 @@ def _get_dependency_mapping_inputs():
 
 
 def _handle_dependency_analysis_execution(
-    cookbook_path, dependency_depth, visualization_type
-):
+    cookbook_path: str, dependency_depth: str, visualization_type: str
+) -> None:
     """Handle the dependency analysis execution when button is clicked."""
     # Analysis button
-    if st.button(BUTTON_ANALYSE_DEPENDENCIES, type="primary", width="stretch"):
+    if st.button(
+        BUTTON_ANALYSE_DEPENDENCIES, type="primary", width="stretch", key="dep_analyze"
+    ):
         if not cookbook_path or not cookbook_path.strip():
             st.error("Please enter a cookbook directory path.")
             return
@@ -868,7 +877,9 @@ def _handle_dependency_analysis_execution(
         )
 
 
-def _perform_dependency_analysis(cookbook_path, dependency_depth, visualization_type):
+def _perform_dependency_analysis(
+    cookbook_path: str, dependency_depth: str, visualization_type: str
+) -> None:
     """Perform the actual dependency analysis."""
     # Import assessment functions
     from souschef.assessment import analyse_cookbook_dependencies
@@ -903,16 +914,16 @@ def _perform_dependency_analysis(cookbook_path, dependency_depth, visualization_
         st.error(f"Error analyzing dependencies: {e}")
 
 
-def _display_dependency_analysis_results_if_available():
+def _display_dependency_analysis_results_if_available() -> None:
     """Display dependency analysis results if they exist in session state."""
     # Display results if available
     if "dep_analysis_result" in st.session_state:
         display_dependency_analysis_results()
 
 
-def _extract_dependency_relationships(lines):
+def _extract_dependency_relationships(lines: Iterable[str]) -> dict[str, list[str]]:
     """Extract dependency relationships from analysis lines."""
-    dependencies = {}
+    dependencies: dict[str, list[str]] = {}
     current_section = None
 
     for line in lines:
@@ -935,11 +946,13 @@ def _extract_dependency_relationships(lines):
     return dependencies
 
 
-def _extract_circular_and_community_deps(lines):
+def _extract_circular_and_community_deps(
+    lines: Iterable[str],
+) -> tuple[list[tuple[str, str]], list[str]]:
     """Extract circular dependencies and community cookbooks."""
     circular_deps: list[tuple[str, str]] = []
     community_cookbooks: list[str] = []
-    current_section = None
+    current_section: str | None = None
 
     for line in lines:
         current_section = _update_current_section(line, current_section)
@@ -951,7 +964,7 @@ def _extract_circular_and_community_deps(lines):
     return circular_deps, community_cookbooks
 
 
-def _update_current_section(line, current_section):
+def _update_current_section(line: str, current_section: str | None) -> str | None:
     """Update the current section based on the line content."""
     line = line.strip()
     if "Circular Dependencies:" in line:
@@ -961,12 +974,17 @@ def _update_current_section(line, current_section):
     return current_section
 
 
-def _is_list_item(line):
+def _is_list_item(line: str) -> bool:
     """Check if the line is a list item."""
     return line.strip().startswith("- ")
 
 
-def _process_list_item(line, current_section, circular_deps, community_cookbooks):
+def _process_list_item(
+    line: str,
+    current_section: str | None,
+    circular_deps: list[tuple[str, str]],
+    community_cookbooks: list[str],
+) -> None:
     """Process a list item based on the current section."""
     if current_section == "circular":
         _process_circular_dependency_item(line, circular_deps)
@@ -974,7 +992,9 @@ def _process_list_item(line, current_section, circular_deps, community_cookbooks
         _process_community_cookbook_item(line, community_cookbooks)
 
 
-def _process_circular_dependency_item(line, circular_deps):
+def _process_circular_dependency_item(
+    line: str, circular_deps: list[tuple[str, str]]
+) -> None:
     """Process a circular dependency list item."""
     dep_text = line[2:].strip()
     if "->" in dep_text:
@@ -983,14 +1003,16 @@ def _process_circular_dependency_item(line, circular_deps):
             circular_deps.append((parts[0].strip(), parts[1].strip()))
 
 
-def _process_community_cookbook_item(line, community_cookbooks):
+def _process_community_cookbook_item(line: str, community_cookbooks: list[str]) -> None:
     """Process a community cookbook list item."""
     cookbook = line[2:].strip()
     if cookbook:
         community_cookbooks.append(cookbook)
 
 
-def _parse_dependency_analysis(analysis_result):
+def _parse_dependency_analysis(
+    analysis_result: str,
+) -> tuple[dict[str, list[str]], list[tuple[str, str]], list[str]]:
     """Parse dependency analysis result into structured data."""
     lines = analysis_result.split("\n")
 
@@ -1000,7 +1022,11 @@ def _parse_dependency_analysis(analysis_result):
     return dependencies, circular_deps, community_cookbooks
 
 
-def _create_networkx_graph(dependencies, circular_deps, community_cookbooks):
+def _create_networkx_graph(
+    dependencies: Mapping[str, Sequence[str]],
+    circular_deps: Sequence[tuple[str, str]],
+    community_cookbooks: Sequence[str],
+) -> "nx.DiGraph":
     """Create NetworkX graph from dependency data."""
     import networkx as nx
 
@@ -1025,7 +1051,9 @@ def _create_networkx_graph(dependencies, circular_deps, community_cookbooks):
     return graph
 
 
-def _calculate_graph_positions(graph, layout_algorithm):
+def _calculate_graph_positions(
+    graph: "nx.DiGraph", layout_algorithm: str
+) -> tuple[dict[Any, tuple[float, float]], str]:
     """
     Calculate positions for graph nodes using the specified layout algorithm.
 
@@ -1048,7 +1076,7 @@ def _calculate_graph_positions(graph, layout_algorithm):
     return pos, layout_algorithm
 
 
-def _choose_auto_layout_algorithm(num_nodes):
+def _choose_auto_layout_algorithm(num_nodes: int) -> str:
     """Choose the best layout algorithm based on graph size."""
     if num_nodes <= 10:
         return "circular"
@@ -1058,7 +1086,9 @@ def _choose_auto_layout_algorithm(num_nodes):
         return "kamada_kawai"
 
 
-def _calculate_positions_with_algorithm(graph, layout_algorithm):
+def _calculate_positions_with_algorithm(
+    graph: "nx.DiGraph", layout_algorithm: str
+) -> Any:
     """Calculate node positions using the specified algorithm."""
     import networkx as nx
 
@@ -1087,7 +1117,9 @@ def _calculate_positions_with_algorithm(graph, layout_algorithm):
         return nx.spring_layout(graph, k=2, iterations=50, seed=42)
 
 
-def _calculate_shell_layout_positions(graph):
+def _calculate_shell_layout_positions(
+    graph: "nx.DiGraph",
+) -> Any:
     """Calculate shell layout positions for hierarchical organization."""
     import networkx as nx
 
@@ -1114,9 +1146,11 @@ def _calculate_shell_layout_positions(graph):
         return nx.spring_layout(graph, k=2, iterations=50, seed=42)
 
 
-def _create_plotly_edge_traces(graph, pos):
+def _create_plotly_edge_traces(
+    graph: "nx.DiGraph", pos: Mapping[Any, tuple[float, float]]
+) -> list["go.Scatter"]:
     """Create edge traces for Plotly graph."""
-    import plotly.graph_objects as go  # type: ignore[import-untyped]
+    import plotly.graph_objects as go
 
     edge_traces = []
 
@@ -1167,7 +1201,9 @@ def _create_plotly_edge_traces(graph, pos):
     return edge_traces
 
 
-def _create_plotly_node_trace(graph, pos):
+def _create_plotly_node_trace(
+    graph: "nx.DiGraph", pos: Mapping[Any, tuple[float, float]]
+) -> "go.Scatter":
     """Create node trace for Plotly graph."""
     import plotly.graph_objects as go
 
@@ -1220,7 +1256,7 @@ def _create_plotly_node_trace(graph, pos):
     return node_trace
 
 
-def _create_plotly_figure_layout(num_nodes, layout_algorithm):
+def _create_plotly_figure_layout(num_nodes: int, layout_algorithm: str) -> "go.Layout":
     """Create Plotly figure layout."""
     import plotly.graph_objects as go
 
@@ -1247,7 +1283,12 @@ def _create_plotly_figure_layout(num_nodes, layout_algorithm):
     return layout
 
 
-def _create_interactive_plotly_graph(graph, pos, num_nodes, layout_algorithm):
+def _create_interactive_plotly_graph(
+    graph: "nx.DiGraph",
+    pos: Mapping[Any, tuple[float, float]],
+    num_nodes: int,
+    layout_algorithm: str,
+) -> "go.Figure":
     """Create interactive Plotly graph visualization."""
     import plotly.graph_objects as go
 
@@ -1261,7 +1302,12 @@ def _create_interactive_plotly_graph(graph, pos, num_nodes, layout_algorithm):
     return fig
 
 
-def _create_static_matplotlib_graph(graph, pos, num_nodes, layout_algorithm):
+def _create_static_matplotlib_graph(
+    graph: "nx.DiGraph",
+    pos: Mapping[Any, tuple[float, float]],
+    num_nodes: int,
+    layout_algorithm: str,
+) -> "Figure":
     """Create static matplotlib graph visualization."""
     import matplotlib.pyplot as plt
 
@@ -1353,8 +1399,11 @@ def _create_static_matplotlib_graph(graph, pos, num_nodes, layout_algorithm):
 
 
 def create_dependency_graph(
-    analysis_result, viz_type, layout_algorithm="auto", filters=None
-):
+    analysis_result: str,
+    viz_type: str,
+    layout_algorithm: str = "auto",
+    filters: Mapping[str, Any] | None = None,
+) -> "go.Figure | Figure | None":
     """
     Create a dependency graph visualization with optional filtering.
 
@@ -1401,7 +1450,9 @@ def create_dependency_graph(
         return None
 
 
-def _apply_graph_filters(graph, filters):
+def _apply_graph_filters(
+    graph: "nx.DiGraph", filters: Mapping[str, Any]
+) -> "nx.DiGraph":
     """Apply filters to the NetworkX graph."""
     filtered_graph = graph.copy()
 
@@ -1413,7 +1464,9 @@ def _apply_graph_filters(graph, filters):
     return filtered_graph
 
 
-def _filter_circular_dependencies_only(graph, filters):
+def _filter_circular_dependencies_only(
+    graph: "nx.DiGraph", filters: Mapping[str, Any]
+) -> "nx.DiGraph":
     """Filter graph to show only nodes involved in circular dependencies."""
     if not filters.get("circular_only", False):
         return graph
@@ -1431,7 +1484,9 @@ def _filter_circular_dependencies_only(graph, filters):
     return graph
 
 
-def _filter_community_cookbooks_only(graph, filters):
+def _filter_community_cookbooks_only(
+    graph: "nx.DiGraph", filters: Mapping[str, Any]
+) -> "nx.DiGraph":
     """Filter graph to show only community cookbooks and their dependencies."""
     if not filters.get("community_only", False):
         return graph
@@ -1451,7 +1506,9 @@ def _filter_community_cookbooks_only(graph, filters):
     return graph
 
 
-def _filter_minimum_connections(graph, filters):
+def _filter_minimum_connections(
+    graph: "nx.DiGraph", filters: Mapping[str, Any]
+) -> "nx.DiGraph":
     """Filter graph to show only nodes with minimum connection count."""
     min_connections = filters.get("min_connections", 0)
     if min_connections <= 0:
@@ -1467,7 +1524,9 @@ def _filter_minimum_connections(graph, filters):
     return graph
 
 
-def _parse_dependency_metrics_from_result(analysis_result):
+def _parse_dependency_metrics_from_result(
+    analysis_result: str,
+) -> tuple[int, int, int, int]:
     """Parse dependency analysis result to extract key metrics."""
     lines = analysis_result.split("\n")
 
@@ -1495,8 +1554,8 @@ def _parse_dependency_metrics_from_result(analysis_result):
 
 
 def _display_dependency_summary_metrics(
-    direct_deps, transitive_deps, circular_deps, community_cookbooks
-):
+    direct_deps: int, transitive_deps: int, circular_deps: int, community_cookbooks: int
+) -> None:
     """Display dependency analysis summary metrics."""
     col1, col2, col3, col4 = st.columns(4)
 
@@ -1510,17 +1569,19 @@ def _display_dependency_summary_metrics(
         st.metric(
             SECTION_CIRCULAR_DEPENDENCIES,
             circular_deps,
-            delta="⚠️ Check" if circular_deps > 0 else "✅ OK",
+            delta="Check" if circular_deps > 0 else "OK",
         )
 
     with col4:
         st.metric(SECTION_COMMUNITY_COOKBOOKS, community_cookbooks)
 
 
-def _calculate_migration_impact(dependencies, circular_deps, community_cookbooks):
+def _calculate_migration_impact(
+    dependencies: Mapping[str, Sequence[str]],
+    circular_deps: Sequence[tuple[str, str]],
+    community_cookbooks: Sequence[str],
+) -> dict[str, Any]:
     """Calculate migration impact analysis based on dependency structure."""
-    from typing import Any
-
     impact: dict[str, Any] = {
         "risk_score": 0.0,
         "timeline_impact_weeks": 0,
@@ -1577,7 +1638,7 @@ def _calculate_migration_impact(dependencies, circular_deps, community_cookbooks
     return impact
 
 
-def _calculate_max_dependency_chain(dependencies):
+def _calculate_max_dependency_chain(dependencies: Mapping[str, Sequence[str]]) -> int:
     """Calculate the maximum dependency chain length."""
     max_length = 0
 
@@ -1608,7 +1669,7 @@ def _calculate_max_dependency_chain(dependencies):
     return max_length
 
 
-def _find_critical_path(dependencies):
+def _find_critical_path(dependencies: Mapping[str, Sequence[str]]) -> list[str]:
     """Find the critical path (longest dependency chain)."""
     longest_chain: list[str] = []
 
@@ -1641,7 +1702,9 @@ def _find_critical_path(dependencies):
     return longest_chain
 
 
-def _identify_bottlenecks(dependencies: dict[str, list[str]]):
+def _identify_bottlenecks(
+    dependencies: Mapping[str, Sequence[str]],
+) -> list[dict[str, Any]]:
     """Identify bottleneck cookbooks (highly depended upon)."""
     # Count how many times each cookbook is depended upon
     dependency_counts: dict[str, int] = {}
@@ -1674,7 +1737,11 @@ def _identify_bottlenecks(dependencies: dict[str, list[str]]):
     return sorted(bottlenecks, key=lambda x: x["dependent_count"], reverse=True)
 
 
-def _generate_impact_recommendations(impact, circular_deps, community_cookbooks):
+def _generate_impact_recommendations(
+    impact: Mapping[str, Any],
+    circular_deps: Sequence[tuple[str, str]],
+    community_cookbooks: Sequence[str],
+) -> list[dict[str, Any]]:
     """Generate recommendations based on impact analysis."""
     recommendations = []
 
@@ -1743,8 +1810,11 @@ def _generate_impact_recommendations(impact, circular_deps, community_cookbooks)
 
 
 def _display_detailed_impact_analysis(
-    impact_analysis, dependencies, circular_deps, community_cookbooks
-):
+    impact_analysis: Mapping[str, Any],
+    dependencies: Mapping[str, Sequence[str]],
+    circular_deps: Sequence[tuple[str, str]],
+    community_cookbooks: Sequence[str],
+) -> None:
     """Display detailed impact analysis breakdown."""
     _display_risk_assessment_breakdown(dependencies, circular_deps, community_cookbooks)
     _display_critical_path_analysis(impact_analysis)
@@ -1753,8 +1823,10 @@ def _display_detailed_impact_analysis(
 
 
 def _display_risk_assessment_breakdown(
-    dependencies, circular_deps, community_cookbooks
-):
+    dependencies: Mapping[str, Sequence[str]],
+    circular_deps: Sequence[tuple[str, str]],
+    community_cookbooks: Sequence[str],
+) -> None:
     """Display risk assessment breakdown."""
     st.markdown("### Risk Assessment Breakdown")
 
@@ -1771,7 +1843,7 @@ def _display_risk_assessment_breakdown(
             st.write(f"• **{factor}**: {score:.1f} points")
 
 
-def _display_critical_path_analysis(impact_analysis):
+def _display_critical_path_analysis(impact_analysis: Mapping[str, Any]) -> None:
     """Display critical path analysis."""
     st.markdown("### Critical Path Analysis")
     if impact_analysis["critical_path"]:
@@ -1781,45 +1853,45 @@ def _display_critical_path_analysis(impact_analysis):
         st.write("No dependency chains identified.")
 
 
-def _display_migration_bottlenecks(impact_analysis):
+def _display_migration_bottlenecks(impact_analysis: Mapping[str, Any]) -> None:
     """Display migration bottlenecks."""
     st.markdown("### Migration Bottlenecks")
     if impact_analysis["bottlenecks"]:
         for bottleneck in impact_analysis["bottlenecks"]:
             risk_level = bottleneck["risk_level"]
             if risk_level == "High":
-                risk_icon = "🔴"
+                risk_icon = "HIGH"
             elif risk_level == "Medium":
-                risk_icon = "🟡"
+                risk_icon = "MEDIUM"
             else:
-                risk_icon = "🟢"
+                risk_icon = "LOW"
             st.write(
                 f"• {risk_icon} **{bottleneck['cookbook']}**: "
                 f"{bottleneck['dependent_count']} dependents "
                 f"({risk_level} risk)"
             )
     else:
-        st.write("✅ No significant bottlenecks identified.")
+        st.write("No significant bottlenecks identified.")
 
 
-def _display_strategic_recommendations(impact_analysis):
+def _display_strategic_recommendations(impact_analysis: Mapping[str, Any]) -> None:
     """Display strategic recommendations."""
     st.markdown("### Strategic Recommendations")
     for rec in impact_analysis["recommendations"]:
         priority = rec["priority"]
         if priority == "Critical":
-            priority_icon = "🔴"
+            priority_icon = "CRITICAL"
         elif priority == "High":
-            priority_icon = "🟡"
+            priority_icon = "HIGH"
         else:
-            priority_icon = "🟢"
+            priority_icon = "MEDIUM"
         st.write(f"• {priority_icon} **{priority}**: {rec['action']}")
         st.write(f"  *Impact*: {rec['impact']}")
 
 
-def _handle_graph_caching():
+def _handle_graph_caching() -> None:
     """Handle graph caching controls and cleanup."""
-    st.subheader("💾 Graph Cache Management")
+    st.subheader("Graph Cache Management")
 
     col1, col2, col3 = st.columns([1, 1, 2])
 
@@ -1834,12 +1906,14 @@ def _handle_graph_caching():
 
     with col2:
         # Clear cache button
-        if st.button("🗑️ Clear Cache", help="Clear all cached graph data"):
+        if st.button(
+            "Clear Cache", help="Clear all cached graph data", key="clear_cache"
+        ):
             # Find and remove all graph cache keys
             cache_keys = [key for key in st.session_state if key.startswith("graph_")]
             for key in cache_keys:
                 del st.session_state[key]
-            st.success(f"✅ Cleared {len(cache_keys)} cached graphs")
+            st.success(f"Cleared {len(cache_keys)} cached graphs")
             st.rerun()
 
     with col3:
@@ -1861,23 +1935,23 @@ def _handle_graph_caching():
     # Cache status indicator
     if cache_enabled:
         st.success(
-            "✅ Graph caching is enabled - visualizations will be "
+            "Graph caching is enabled - visualizations will be "
             "cached for faster loading"
         )
     else:
         st.warning(
-            "⚠️ Graph caching is disabled - each visualization will be recalculated"
+            "Graph caching is disabled - each visualization will be recalculated"
         )
 
 
 def _display_dependency_graph_visualization(
-    analysis_result,
-    viz_type,
-    selected_layout,
-    show_circular_only,
-    show_community_only,
-    min_connections,
-):
+    analysis_result: str,
+    viz_type: str,
+    selected_layout: str,
+    show_circular_only: bool,
+    show_community_only: bool,
+    min_connections: int,
+) -> None:
     """Display the dependency graph visualization section with filtering."""
     try:
         # Parse dependencies for filtering
@@ -1917,7 +1991,12 @@ def _display_dependency_graph_visualization(
         _handle_graph_visualization_error(e, analysis_result)
 
 
-def _get_cached_graph_data(analysis_result, viz_type, selected_layout, filters):
+def _get_cached_graph_data(
+    analysis_result: str,
+    viz_type: str,
+    selected_layout: str,
+    filters: Mapping[str, Any],
+) -> Any | None:
     """Get cached graph data if available."""
     cache_key = (
         f"graph_{hash(analysis_result)}_{viz_type}_{selected_layout}_{str(filters)}"
@@ -1927,13 +2006,19 @@ def _get_cached_graph_data(analysis_result, viz_type, selected_layout, filters):
         "graph_cache_enabled", True
     ):
         graph_data = st.session_state[cache_key]
-        st.info("📋 Using cached graph data")
+        st.info("Using cached graph data")
         return graph_data
 
     return None
 
 
-def _cache_graph_data(analysis_result, viz_type, selected_layout, filters, graph_data):
+def _cache_graph_data(
+    analysis_result: str,
+    viz_type: str,
+    selected_layout: str,
+    filters: Mapping[str, Any],
+    graph_data: Any,
+) -> None:
     """Cache graph data if caching is enabled."""
     if graph_data is not None and st.session_state.get("graph_cache_enabled", True):
         cache_key = (
@@ -1942,7 +2027,7 @@ def _cache_graph_data(analysis_result, viz_type, selected_layout, filters, graph
         st.session_state[cache_key] = graph_data
 
 
-def _display_graph_with_export_options(graph_data, viz_type):
+def _display_graph_with_export_options(graph_data: Any, viz_type: str) -> None:
     """Display graph and provide export options."""
     if viz_type == "interactive":
         # Interactive Plotly graph
@@ -1956,7 +2041,7 @@ def _display_graph_with_export_options(graph_data, viz_type):
             # Export as HTML
             html_content = graph_data.to_html(full_html=False, include_plotlyjs="cdn")
             st.download_button(
-                label="🌐 HTML",
+                label="HTML",
                 data=html_content,
                 file_name="dependency_graph.html",
                 mime="text/html",
@@ -1967,7 +2052,7 @@ def _display_graph_with_export_options(graph_data, viz_type):
             # Export as JSON
             json_data = graph_data.to_json()
             st.download_button(
-                label="📊 JSON",
+                label="JSON",
                 data=json_data,
                 file_name="dependency_graph.json",
                 mime=MIME_APPLICATION_JSON,
@@ -1977,11 +2062,11 @@ def _display_graph_with_export_options(graph_data, viz_type):
         with col3:
             # Export as PNG (requires kaleido)
             try:
-                import plotly.io as pio  # type: ignore[import-untyped]
+                import plotly.io as pio
 
                 png_data = pio.to_image(graph_data, format="png", scale=2)
                 st.download_button(
-                    label="🖼️ PNG (High-res)",
+                    label="PNG (High-res)",
                     data=png_data,
                     file_name="dependency_graph.png",
                     mime="image/png",
@@ -1997,7 +2082,7 @@ def _display_graph_with_export_options(graph_data, viz_type):
 
                 pdf_data = pio.to_image(graph_data, format="pdf")
                 st.download_button(
-                    label="📄 PDF",
+                    label="PDF",
                     data=pdf_data,
                     file_name="dependency_graph.pdf",
                     mime="application/pdf",
@@ -2022,7 +2107,7 @@ def _display_graph_with_export_options(graph_data, viz_type):
             graph_data.savefig(buf, format="png", dpi=300, bbox_inches="tight")
             buf.seek(0)
             st.download_button(
-                label="🖼️ PNG (High-res)",
+                label="PNG (High-res)",
                 data=buf.getvalue(),
                 file_name="dependency_graph.png",
                 mime="image/png",
@@ -2035,7 +2120,7 @@ def _display_graph_with_export_options(graph_data, viz_type):
             graph_data.savefig(buf_svg, format="svg", bbox_inches="tight")
             buf_svg.seek(0)
             st.download_button(
-                label="📈 SVG",
+                label="SVG",
                 data=buf_svg.getvalue(),
                 file_name="dependency_graph.svg",
                 mime="image/svg+xml",
@@ -2048,7 +2133,7 @@ def _display_graph_with_export_options(graph_data, viz_type):
             graph_data.savefig(buf_pdf, format="pdf", bbox_inches="tight")
             buf_pdf.seek(0)
             st.download_button(
-                label="📄 PDF",
+                label="PDF",
                 data=buf_pdf.getvalue(),
                 file_name="dependency_graph.pdf",
                 mime="application/pdf",
@@ -2061,7 +2146,7 @@ def _display_graph_with_export_options(graph_data, viz_type):
             graph_data.savefig(buf_eps, format="eps", bbox_inches="tight")
             buf_eps.seek(0)
             st.download_button(
-                label="🔧 EPS",
+                label="EPS",
                 data=buf_eps.getvalue(),
                 file_name="dependency_graph.eps",
                 mime="application/postscript",
@@ -2069,9 +2154,9 @@ def _display_graph_with_export_options(graph_data, viz_type):
             )
 
 
-def _handle_graph_visualization_error(error, analysis_result):
+def _handle_graph_visualization_error(error: Exception, analysis_result: str) -> None:
     """Handle graph visualization errors with fallback display."""
-    st.error("❌ **Graph Visualization Error**")
+    st.error("**Graph Visualization Error**")
     with st.expander("Error Details"):
         st.code(str(error), language="text")
         st.markdown("""
@@ -2087,7 +2172,7 @@ def _handle_graph_visualization_error(error, analysis_result):
         """)
 
     # Fallback: show text summary
-    st.info("📄 Showing text-based dependency summary instead:")
+    st.info("Showing text-based dependency summary instead:")
     st.text_area(
         "Dependency Analysis Text",
         analysis_result,
@@ -2096,7 +2181,7 @@ def _handle_graph_visualization_error(error, analysis_result):
     )
 
 
-def _display_dependency_analysis_sections(analysis_result):
+def _display_dependency_analysis_sections(analysis_result: str) -> None:
     """Display dependency analysis results in expandable sections."""
     # Split analysis into sections
     sections = analysis_result.split("\n## ")
@@ -2108,35 +2193,38 @@ def _display_dependency_analysis_sections(analysis_result):
 
             # Add expanders for different sections
             if "Migration Order Recommendations" in section:
-                with st.expander("📋 Migration Order Recommendations"):
+                with st.expander("Migration Order Recommendations"):
                     st.markdown(
                         section.replace("## Migration Order Recommendations", "")
                     )
             elif "Dependency Graph" in section:
-                with st.expander("🔗 Dependency Graph"):
+                with st.expander("Dependency Graph"):
                     st.markdown(section.replace("## Dependency Graph", ""))
-                with st.expander(f"⚠️ {SECTION_CIRCULAR_DEPENDENCIES}"):
+                with st.expander(f"{SECTION_CIRCULAR_DEPENDENCIES}"):
                     st.markdown(
                         section.replace(f"## {SECTION_CIRCULAR_DEPENDENCIES}", "")
                     )
-                with st.expander(f"🌐 {SECTION_COMMUNITY_COOKBOOKS}"):
+                with st.expander(f"{SECTION_COMMUNITY_COOKBOOKS}"):
                     st.markdown(
                         section.replace(f"## {SECTION_COMMUNITY_COOKBOOKS}", "")
                     )
-            elif "Migration Impact Analysis" in section:
-                with st.expander("📊 Migration Impact Analysis"):
-                    st.markdown(section.replace("## Migration Impact Analysis", ""))
+            elif SECTION_MIGRATION_IMPACT_ANALYSIS in section:
+                with st.expander(SECTION_MIGRATION_IMPACT_ANALYSIS):
+                    header_text = f"## {SECTION_MIGRATION_IMPACT_ANALYSIS}"
+                    st.markdown(section.replace(header_text, ""))
             else:
                 st.markdown(section)
 
 
-def _display_migration_recommendations(circular_deps, community_cookbooks, direct_deps):
+def _display_migration_recommendations(
+    circular_deps: int, community_cookbooks: int, direct_deps: int
+) -> None:
     """Display migration recommendations based on analysis results."""
     st.subheader("Migration Recommendations")
 
     if circular_deps > 0:
         st.error(
-            "⚠️ **Critical Issue**: Circular dependencies detected. "
+            "**Critical Issue**: Circular dependencies detected. "
             "Resolve before migration."
         )
         st.markdown("""
@@ -2149,7 +2237,7 @@ def _display_migration_recommendations(circular_deps, community_cookbooks, direc
 
     if community_cookbooks > 0:
         st.success(
-            f"✅ **Good News**: {community_cookbooks} community cookbooks identified."
+            f"**Good News**: {community_cookbooks} community cookbooks identified."
         )
         st.markdown("""
         **Recommendations:**
@@ -2159,7 +2247,7 @@ def _display_migration_recommendations(circular_deps, community_cookbooks, direc
         """)
 
     if direct_deps > 10:
-        st.warning("⚠️ **Complex Dependencies**: High dependency count detected.")
+        st.warning("**Complex Dependencies**: High dependency count detected.")
         st.markdown("""
         **Consider:**
         - Breaking down monolithic cookbooks
@@ -2168,15 +2256,26 @@ def _display_migration_recommendations(circular_deps, community_cookbooks, direc
         """)
 
 
+def health_check() -> dict[str, str]:
+    """Return health check information for the SousChef UI service."""
+    from souschef.core.constants import VERSION
+
+    return {
+        "status": "healthy",
+        "service": "souschef-ui",
+        "version": VERSION,
+    }
+
+
 def _display_dependency_export_options(
-    analysis_result,
-    cookbook_path,
-    depth,
-    direct_deps,
-    transitive_deps,
-    circular_deps,
-    community_cookbooks,
-):
+    analysis_result: str,
+    cookbook_path: str,
+    depth: str,
+    direct_deps: int,
+    transitive_deps: int,
+    circular_deps: int,
+    community_cookbooks: int,
+) -> None:
     """Display export options for dependency analysis."""
     st.subheader("Export Analysis")
 
@@ -2184,7 +2283,7 @@ def _display_dependency_export_options(
 
     with col1:
         st.download_button(
-            label="📥 Download Full Analysis",
+            label="Download Full Analysis",
             data=analysis_result,
             file_name="dependency_analysis.md",
             mime=MIME_TEXT_MARKDOWN,
@@ -2208,7 +2307,7 @@ def _display_dependency_export_options(
         import json
 
         st.download_button(
-            label="📊 Download JSON Summary",
+            label="Download JSON Summary",
             data=json.dumps(analysis_json, indent=2),
             file_name="dependency_analysis.json",
             mime=MIME_APPLICATION_JSON,
@@ -2216,7 +2315,9 @@ def _display_dependency_export_options(
         )
 
 
-def _display_dependency_analysis_summary(analysis_result, cookbook_path, depth):
+def _display_dependency_analysis_summary(
+    analysis_result: str, cookbook_path: str, depth: str
+) -> None:
     """Display dependency analysis summary section."""
     # Summary metrics
     st.subheader("Dependency Analysis Summary")
@@ -2236,12 +2337,12 @@ def _display_dependency_analysis_summary(analysis_result, cookbook_path, depth):
     st.info(analysis_msg)
 
 
-def _display_graph_visualization_section(analysis_result, viz_type):
+def _display_graph_visualization_section(analysis_result: str, viz_type: str) -> None:
     """Display graph visualization section."""
     if viz_type not in ["graph", "interactive"]:
         return
 
-    st.subheader("📊 Dependency Graph Visualization")
+    st.subheader("Dependency Graph Visualization")
 
     # Parse dependencies for filtering and analysis
     _ = _parse_dependency_analysis(analysis_result)
@@ -2278,7 +2379,7 @@ def _display_graph_visualization_section(analysis_result, viz_type):
     _handle_graph_caching()
 
     # Graph Filtering Options
-    st.subheader("🔍 Graph Filtering & Analysis")
+    st.subheader("Graph Filtering & Analysis")
 
     col1, col2, col3 = st.columns(3)
 
@@ -2315,7 +2416,7 @@ def _display_graph_visualization_section(analysis_result, viz_type):
     )
 
 
-def _display_impact_analysis_section(analysis_result):
+def _display_impact_analysis_section(analysis_result: str) -> None:
     """Display migration impact analysis section."""
     # Parse dependencies for impact analysis
     dependencies, circular_deps, community_cookbooks = _parse_dependency_analysis(
@@ -2323,7 +2424,7 @@ def _display_impact_analysis_section(analysis_result):
     )
 
     # Impact Analysis Section
-    st.subheader("📊 Migration Impact Analysis")
+    st.subheader("Migration Impact Analysis")
 
     if not dependencies:
         st.info("No dependencies found for impact analysis.")
@@ -2336,11 +2437,11 @@ def _display_impact_analysis_section(analysis_result):
     # Calculate risk score delta
     risk_score = impact_analysis["risk_score"]
     if risk_score > 7:
-        risk_delta = "🔴 High"
+        risk_delta = "High"
     elif risk_score > 4:
-        risk_delta = "🟡 Medium"
+        risk_delta = "Medium"
     else:
-        risk_delta = "🟢 Low"
+        risk_delta = "Low"
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -2353,7 +2454,7 @@ def _display_impact_analysis_section(analysis_result):
 
     with col2:
         timeline_weeks = impact_analysis["timeline_impact_weeks"]
-        timeline_delta = "↗️" if timeline_weeks > 0 else "→"
+        timeline_delta = "Increase" if timeline_weeks > 0 else "Unchanged"
         st.metric(
             "Estimated Timeline Impact",
             f"{timeline_weeks} weeks",
@@ -2362,7 +2463,7 @@ def _display_impact_analysis_section(analysis_result):
 
     with col3:
         complexity_level = impact_analysis["complexity_level"]
-        complexity_delta = "⚠️ High" if complexity_level == "High" else "✅ Low"
+        complexity_delta = "High" if complexity_level == "High" else "Low"
         st.metric(
             "Dependency Complexity",
             complexity_level,
@@ -2371,7 +2472,7 @@ def _display_impact_analysis_section(analysis_result):
 
     with col4:
         parallel_streams = impact_analysis["parallel_streams"]
-        parallel_delta = "🔀 Multiple" if parallel_streams > 1 else "➡️ Single"
+        parallel_delta = "Multiple" if parallel_streams > 1 else "Single"
         st.metric(
             "Parallel Migration Streams",
             parallel_streams,
@@ -2379,15 +2480,18 @@ def _display_impact_analysis_section(analysis_result):
         )
 
     # Detailed impact breakdown
-    with st.expander("📈 Detailed Impact Analysis"):
+    with st.expander("Detailed Impact Analysis"):
         _display_detailed_impact_analysis(
             impact_analysis, dependencies, circular_deps, community_cookbooks
         )
 
 
 def _display_analysis_details_section(
-    analysis_result, circular_deps, community_cookbooks, direct_deps
-):
+    analysis_result: str,
+    circular_deps: list[tuple[str, str]],
+    community_cookbooks: list[str],
+    direct_deps: int,
+) -> None:
     """Display analysis details section."""
     # Display analysis results
     st.subheader("Dependency Analysis Details")
@@ -2395,10 +2499,12 @@ def _display_analysis_details_section(
     _display_dependency_analysis_sections(analysis_result)
 
     # Migration recommendations
-    _display_migration_recommendations(circular_deps, community_cookbooks, direct_deps)
+    _display_migration_recommendations(
+        len(circular_deps), len(community_cookbooks), direct_deps
+    )
 
 
-def display_dependency_analysis_results():
+def display_dependency_analysis_results() -> None:
     """Display dependency analysis results."""
     analysis_result = st.session_state.dep_analysis_result
     cookbook_path = st.session_state.dep_cookbook_path
@@ -2430,8 +2536,8 @@ def display_dependency_analysis_results():
         depth,
         direct_deps,
         len(dependencies) if dependencies else 0,  # transitive_deps approximation
-        circular_deps,
-        community_cookbooks,
+        len(circular_deps),
+        len(community_cookbooks),
     )
 
 
@@ -2469,7 +2575,7 @@ def _collect_files_to_validate(input_path: str) -> list[Path]:
     return files_to_validate
 
 
-def _run_validation_engine(files_to_validate):
+def _run_validation_engine(files_to_validate: Sequence[Path]) -> list[Any]:
     """Run validation engine on a list of files."""
     from souschef.core.validation import (
         ValidationCategory,
@@ -2510,7 +2616,7 @@ def _run_validation_engine(files_to_validate):
     return all_results
 
 
-def _get_default_validation_path():
+def _get_default_validation_path() -> str:
     """Determine the default path for validation from session state."""
     default_path = ""
     if "converted_playbooks_path" in st.session_state:
@@ -2529,7 +2635,7 @@ def _get_default_validation_path():
     return default_path
 
 
-def _render_validation_options_ui():
+def _render_validation_options_ui() -> tuple[str, str]:
     """Render validation scope and format options."""
     col1, col2 = st.columns(2)
 
@@ -2560,7 +2666,7 @@ def _render_validation_options_ui():
     return sub_scope, sub_format
 
 
-def _render_validation_input_ui(default_path):
+def _render_validation_input_ui(default_path: str) -> str:
     """Render input source selection UI."""
     st.subheader("Input Source")
 
@@ -2590,7 +2696,7 @@ def _render_validation_input_ui(default_path):
     return input_path
 
 
-def _render_validation_settings_ui():
+def _render_validation_settings_ui() -> tuple[bool, bool, bool]:
     """Render strict mode and other validation settings."""
     st.subheader("Validation Options")
 
@@ -2652,7 +2758,7 @@ def _normalize_and_validate_input_path(input_path: str) -> Path | None:
     return path_obj
 
 
-def _handle_validation_execution(input_path, options):
+def _handle_validation_execution(input_path: str, options: Mapping[str, Any]) -> None:
     """Execute the validation process with progress tracking."""
     progress_tracker = ProgressTracker(
         total_steps=6, description="Running validation..."
@@ -2708,7 +2814,7 @@ def _handle_validation_execution(input_path, options):
         st.error(f"Error during validation: {e}")
 
 
-def show_validation_reports():
+def show_validation_reports() -> None:
     """Show validation reports and conversion validation."""
     st.header(NAV_VALIDATION_REPORTS)
 
@@ -2728,7 +2834,9 @@ def show_validation_reports():
     )
 
     # Validation button
-    if st.button("Run Validation", type="primary", width="stretch"):
+    if st.button(
+        "Run Validation", type="primary", width="stretch", key="run_validation"
+    ):
         if not input_path or not input_path.strip():
             st.error("Please enter a path to validate.")
             return
@@ -2748,7 +2856,7 @@ def show_validation_reports():
         display_validation_results()
 
 
-def _filter_results_by_scope(results, scope):
+def _filter_results_by_scope(results: list[Any], scope: str) -> list[Any]:
     """Filter validation results based on selected scope."""
     from souschef.core.validation import ValidationCategory
 
@@ -2769,7 +2877,7 @@ def _filter_results_by_scope(results, scope):
     return [r for r in results if r.category == target_category]
 
 
-def _parse_validation_metrics(validation_result):
+def _parse_validation_metrics(validation_result: str) -> tuple[int, int, int, int]:
     """Parse validation result to extract key metrics."""
     lines = validation_result.split("\n")
 
@@ -2805,7 +2913,9 @@ def _parse_validation_metrics(validation_result):
     return errors, warnings, passed, total_checks
 
 
-def _display_validation_summary_metrics(errors, warnings, passed, total_checks):
+def _display_validation_summary_metrics(
+    errors: int, warnings: int, passed: int, total_checks: int
+) -> None:
     """Display validation summary metrics."""
     col1, col2, col3, col4 = st.columns(4)
 
@@ -2813,28 +2923,28 @@ def _display_validation_summary_metrics(errors, warnings, passed, total_checks):
         st.metric("Total Checks", total_checks)
 
     with col2:
-        st.metric("Passed", passed, delta="✅" if passed > 0 else "")
+        st.metric("Passed", passed, delta="Pass" if passed > 0 else "")
 
     with col3:
-        st.metric("Warnings", warnings, delta="⚠️" if warnings > 0 else "")
+        st.metric("Warnings", warnings, delta="Warning" if warnings > 0 else "")
 
     with col4:
-        st.metric("Errors", errors, delta="❌" if errors > 0 else "")
+        st.metric("Errors", errors, delta="Error" if errors > 0 else "")
 
 
-def _display_validation_status(errors, warnings):
+def _display_validation_status(errors: int, warnings: int) -> None:
     """Display overall validation status."""
     if errors > 0:
-        st.error("❌ **Validation Failed**: Critical issues found that need attention.")
+        st.error("**Validation Failed**: Critical issues found that need attention.")
     elif warnings > 0:
         st.warning(
-            "⚠️ **Validation Passed with Warnings**: Review warnings before proceeding."
+            "**Validation Passed with Warnings**: Review warnings before proceeding."
         )
     else:
-        st.success("✅ **Validation Passed**: All checks successful!")
+        st.success("**Validation Passed**: All checks successful!")
 
 
-def _display_validation_sections(validation_result):
+def _display_validation_sections(validation_result: str) -> None:
     """Display validation results in expandable sections."""
     # Split results into sections
     sections = validation_result.split("\n## ")
@@ -2846,28 +2956,28 @@ def _display_validation_sections(validation_result):
 
             # Add expanders for different sections
             if "Syntax Validation" in section:
-                with st.expander("🔍 Syntax Validation"):
+                with st.expander("Syntax Validation"):
                     st.markdown(section.replace("## Syntax Validation", ""))
             elif "Logic Validation" in section:
-                with st.expander("🧠 Logic Validation"):
+                with st.expander("Logic Validation"):
                     st.markdown(section.replace("## Logic Validation", ""))
             elif "Security Validation" in section:
-                with st.expander("🔒 Security Validation"):
+                with st.expander("Security Validation"):
                     st.markdown(section.replace("## Security Validation", ""))
             elif "Performance Validation" in section:
-                with st.expander("⚡ Performance Validation"):
+                with st.expander("Performance Validation"):
                     st.markdown(section.replace("## Performance Validation", ""))
             elif SCOPE_BEST_PRACTICES in section:
-                with st.expander(f"📋 {SCOPE_BEST_PRACTICES}"):
+                with st.expander(f"{SCOPE_BEST_PRACTICES}"):
                     st.markdown(section.replace(f"## {SCOPE_BEST_PRACTICES}", ""))
             elif "Recommendations" in section:
-                with st.expander("💡 Recommendations"):
+                with st.expander("Recommendations"):
                     st.markdown(section.replace("## Recommendations", ""))
             else:
                 st.markdown(section)
 
 
-def _display_validation_action_items(errors, warnings):
+def _display_validation_action_items(errors: int, warnings: int) -> None:
     """Display action items based on validation results."""
     if errors > 0 or warnings > 0:
         st.subheader("Action Items")
@@ -2892,15 +3002,15 @@ def _display_validation_action_items(errors, warnings):
 
 
 def _display_validation_export_options(
-    validation_result,
-    input_path,
-    validation_type,
-    options,
-    errors,
-    warnings,
-    passed,
-    total_checks,
-):
+    validation_result: str,
+    input_path: str,
+    validation_type: str,
+    options: Mapping[str, Any],
+    errors: int,
+    warnings: int,
+    passed: int,
+    total_checks: int,
+) -> None:
     """Display export options for validation results."""
     st.subheader("Export Report")
 
@@ -2908,7 +3018,7 @@ def _display_validation_export_options(
 
     with col1:
         st.download_button(
-            label="📥 Download Full Report",
+            label="Download Full Report",
             data=validation_result,
             file_name="validation_report.md",
             mime=MIME_TEXT_MARKDOWN,
@@ -2940,7 +3050,7 @@ def _display_validation_export_options(
         import json
 
         st.download_button(
-            label="📊 Download JSON Summary",
+            label="Download JSON Summary",
             data=json.dumps(report_json, indent=2),
             file_name="validation_report.json",
             mime=MIME_APPLICATION_JSON,
@@ -2948,7 +3058,7 @@ def _display_validation_export_options(
         )
 
 
-def display_validation_results():
+def display_validation_results() -> None:
     """Display validation results."""
     validation_result = st.session_state.validation_result
     input_path = st.session_state.validation_path
@@ -2993,6 +3103,12 @@ def display_validation_results():
         total_checks,
     )
 
+
+# UI code only when running under Streamlit
+if not os.environ.get("STREAMLIT_SERVER_PORT") and not os.environ.get(
+    "STREAMLIT_SERVER_HEADLESS"
+):
+    main()
 
 if __name__ == "__main__":
     main()

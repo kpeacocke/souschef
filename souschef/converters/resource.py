@@ -30,20 +30,14 @@ def _parse_properties(properties_str: str) -> dict[str, Any]:
     if not properties_str:
         return {}
     try:
-        # Try ast.literal_eval first for safety
+        # Use ast.literal_eval for safe parsing of Python literals
         result = ast.literal_eval(properties_str)
         if isinstance(result, dict):
             return result
         return {}
     except (ValueError, SyntaxError):
-        # Fallback to eval if needed, but this is less safe
-        try:
-            result = eval(properties_str)  # noqa: S307
-            if isinstance(result, dict):
-                return result
-            return {}
-        except Exception:
-            return {}
+        # If parsing fails, return empty dict rather than using unsafe eval
+        return {}
 
 
 def _normalize_template_value(value: Any) -> Any:
@@ -245,13 +239,17 @@ def _get_include_recipe_params(
     Build parameters for include_recipe resources.
 
     Uses cookbook-specific configurations when available.
+    Falls back to include_role for unknown cookbooks.
     """
     cookbook_config = get_cookbook_package_config(resource_name)
     if cookbook_config:
         # Return a copy to prevent callers from mutating the shared mapping.
         return dict(cookbook_config["params"])
-    # Default behavior for recipes without a specific mapping.
-    return {"name": resource_name, "state": "present"}
+
+    # For unknown cookbooks, use include_role with the cookbook name
+    # Extract cookbook name from "cookbook::recipe" format
+    cookbook_name = resource_name.split("::")[0]
+    return {"name": cookbook_name}
 
 
 def _get_default_params(resource_name: str, action: str) -> dict[str, Any]:
@@ -303,6 +301,9 @@ def _convert_chef_resource_to_ansible(
         cookbook_config = get_cookbook_package_config(resource_name)
         if cookbook_config:
             ansible_module = cookbook_config["module"]
+        else:
+            # For include_recipe without specific mapping, use include_role
+            ansible_module = "ansible.builtin.include_role"
 
     # Handle unknown resource types
     if ansible_module is None:

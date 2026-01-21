@@ -282,6 +282,9 @@ ERROR_FILE_NOT_FOUND = "Error: File not found at {path}"
 ERROR_IS_DIRECTORY = "Error: {path} is a directory, not a file"
 ERROR_PERMISSION_DENIED = "Error: Permission denied for {path}"
 
+# File constants
+METADATA_RB = "metadata.rb"
+
 # Validation Framework Classes
 
 
@@ -2807,6 +2810,674 @@ def parse_chef_migration_assessment(
     return _parse_chef_migration_assessment(
         cookbook_paths, migration_scope, target_platform
     )
+
+
+@mcp.tool()
+def convert_cookbook_comprehensive(
+    cookbook_path: str,
+    output_path: str,
+    assessment_data: str = "",
+    include_templates: bool = True,
+    include_attributes: bool = True,
+    include_recipes: bool = True,
+    role_name: str = "",
+) -> str:
+    """
+    Convert an entire Chef cookbook to a complete Ansible role.
+
+    This function performs comprehensive conversion of a Chef cookbook to an Ansible role,
+    including recipes, templates, attributes, and proper role structure. It can use
+    assessment data to optimize the conversion process.
+
+    Args:
+        cookbook_path: Path to the Chef cookbook directory
+        output_path: Directory where the Ansible role will be created
+        assessment_data: Optional JSON string with assessment results for optimization
+        include_templates: Whether to convert ERB templates to Jinja2 (default: True)
+        include_attributes: Whether to convert attributes to Ansible variables (default: True)
+        include_recipes: Whether to convert recipes to Ansible tasks (default: True)
+        role_name: Name for the Ansible role (defaults to cookbook name)
+
+    Returns:
+        Summary of the conversion process and created files
+
+    """
+    try:
+        from souschef.core.path_utils import _normalize_path
+
+        cookbook_dir = _normalize_path(cookbook_path)
+        output_dir = _normalize_path(output_path)
+
+        if not cookbook_dir.exists():
+            return f"Error: Cookbook path does not exist: {cookbook_path}"
+
+        # Parse assessment data if provided
+        assessment = {}
+        if assessment_data:
+            try:
+                assessment = json.loads(assessment_data)
+            except json.JSONDecodeError:
+                return f"Error: Invalid assessment data JSON: {assessment_data}"
+
+        # Get cookbook metadata and setup
+        cookbook_name, role_name = _setup_conversion_metadata(cookbook_dir, role_name)
+
+        # Create role directory structure
+        role_dir = _create_role_structure(output_dir, role_name)
+
+        # Initialize conversion summary
+        conversion_summary = {
+            "cookbook_name": cookbook_name,
+            "role_name": role_name,
+            "converted_files": [],
+            "errors": [],
+            "warnings": [],
+        }
+
+        # Convert components
+        if include_recipes:
+            _convert_recipes(cookbook_dir, role_dir, conversion_summary)
+
+        if include_templates:
+            _convert_templates(cookbook_dir, role_dir, conversion_summary)
+
+        if include_attributes:
+            _convert_attributes(cookbook_dir, role_dir, conversion_summary)
+
+        # Create main task file and metadata
+        _create_main_task_file(
+            cookbook_dir, role_dir, conversion_summary, include_recipes
+        )
+        _create_role_metadata(
+            role_dir, role_name, cookbook_name, assessment, conversion_summary
+        )
+
+        # Generate and return summary report
+        return _generate_conversion_report(conversion_summary, role_dir)
+
+    except Exception as e:
+        return format_error_with_context(
+            e, "converting cookbook comprehensively", cookbook_path
+        )
+
+
+def _setup_conversion_metadata(cookbook_dir: Path, role_name: str) -> tuple[str, str]:
+    """Get cookbook metadata and determine role name."""
+    metadata_file = cookbook_dir / METADATA_RB
+    cookbook_name = cookbook_dir.name
+    if metadata_file.exists():
+        metadata = _parse_cookbook_metadata(str(metadata_file))
+        name_from_metadata = metadata.get("name")
+        if name_from_metadata is not None:
+            cookbook_name = str(name_from_metadata)
+
+    if not role_name:
+        role_name = cookbook_name
+
+    return cookbook_name, role_name
+
+
+def _create_role_structure(output_dir: Path, role_name: str) -> Path:
+    """Create the standard Ansible role directory structure."""
+    role_dir = output_dir / role_name
+    role_tasks_dir = role_dir / "tasks"
+    role_templates_dir = role_dir / "templates"
+    role_vars_dir = role_dir / "vars"
+    role_defaults_dir = role_dir / "defaults"
+
+    for directory in [
+        role_tasks_dir,
+        role_templates_dir,
+        role_vars_dir,
+        role_defaults_dir,
+    ]:
+        directory.mkdir(parents=True, exist_ok=True)
+
+    return role_dir
+
+
+def _convert_recipes(
+    cookbook_dir: Path, role_dir: Path, conversion_summary: dict
+) -> None:
+    """Convert Chef recipes to Ansible tasks."""
+    recipes_dir = cookbook_dir / "recipes"
+    role_tasks_dir = role_dir / "tasks"
+
+    if not recipes_dir.exists():
+        conversion_summary["warnings"].append(
+            f"No recipes directory found in {cookbook_dir.name}. "
+            "Cookbook cannot be converted to Ansible tasks."
+        )
+        return
+
+    from souschef.converters.playbook import generate_playbook_from_recipe
+
+    recipe_files = list(recipes_dir.glob("*.rb"))
+    if not recipe_files:
+        conversion_summary["warnings"].append(
+            f"No recipe files (*.rb) found in {cookbook_dir.name}/recipes/. "
+            "Cookbook has no recipes to convert."
+        )
+        return
+
+    for recipe_file in recipe_files:
+        try:
+            recipe_name = recipe_file.stem
+
+            # Parse recipe to validate it can be processed
+            parse_result = _parse_recipe(str(recipe_file))
+            if parse_result.startswith("Error:"):
+                conversion_summary["errors"].append(
+                    f"Failed to parse recipe {recipe_name}: {parse_result}"
+                )
+                continue
+
+            # Convert to Ansible tasks
+            playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
+
+            # Write as task file
+            task_file = role_tasks_dir / f"{recipe_name}.yml"
+            task_file.write_text(playbook_yaml)
+
+            conversion_summary["converted_files"].append(
+                {
+                    "type": "task",
+                    "source": f"recipes/{recipe_name}.rb",
+                    "target": f"{role_dir.name}/tasks/{recipe_name}.yml",
+                }
+            )
+
+        except Exception as e:
+            conversion_summary["errors"].append(
+                f"Error converting recipe {recipe_file.name}: {str(e)}"
+            )
+
+
+def _convert_templates(
+    cookbook_dir: Path, role_dir: Path, conversion_summary: dict
+) -> None:
+    """Convert ERB templates to Jinja2 templates."""
+    templates_dir = cookbook_dir / "templates"
+    role_templates_dir = role_dir / "templates"
+
+    if not templates_dir.exists():
+        return
+
+    for template_file in templates_dir.rglob("*.erb"):
+        try:
+            # Convert ERB to Jinja2
+            conversion_result = _parse_template(str(template_file))
+            if conversion_result.startswith("Error:"):
+                conversion_summary["errors"].append(
+                    f"Failed to convert template {template_file.name}: {conversion_result}"
+                )
+                continue
+
+            # Parse the JSON result
+            try:
+                template_data = json.loads(conversion_result)
+                jinja2_content = template_data.get("jinja2_template", "")
+
+                # Determine relative path for role templates
+                rel_path = template_file.relative_to(templates_dir)
+                target_file = role_templates_dir / rel_path.with_suffix(
+                    ""
+                )  # Remove .erb extension
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                target_file.write_text(jinja2_content)
+
+                conversion_summary["converted_files"].append(
+                    {
+                        "type": "template",
+                        "source": f"templates/{rel_path}",
+                        "target": f"{role_dir.name}/templates/{rel_path.with_suffix('')}",
+                    }
+                )
+
+            except json.JSONDecodeError:
+                conversion_summary["errors"].append(
+                    f"Invalid JSON result for template {template_file.name}"
+                )
+
+        except Exception as e:
+            conversion_summary["errors"].append(
+                f"Error converting template {template_file.name}: {str(e)}"
+            )
+
+
+def _convert_attributes(
+    cookbook_dir: Path, role_dir: Path, conversion_summary: dict
+) -> None:
+    """Convert Chef attributes to Ansible variables."""
+    import yaml
+
+    attributes_dir = cookbook_dir / "attributes"
+    role_defaults_dir = role_dir / "defaults"
+
+    if not attributes_dir.exists():
+        return
+
+    for attr_file in attributes_dir.glob("*.rb"):
+        try:
+            # Read the file content
+            content = attr_file.read_text()
+
+            # Extract attributes using internal function
+            from souschef.parsers.attributes import (
+                _extract_attributes,
+                _resolve_attribute_precedence,
+            )
+
+            raw_attributes = _extract_attributes(content)
+
+            if not raw_attributes:
+                conversion_summary["warnings"].append(
+                    f"No attributes found in {attr_file.name}"
+                )
+                continue
+
+            # Resolve precedence to get final values
+            resolved_attributes = _resolve_attribute_precedence(raw_attributes)
+
+            # Convert to Ansible variable format (flatten nested keys)
+            ansible_vars = {}
+            for attr_path, attr_info in resolved_attributes.items():
+                # Convert Chef attribute paths to Ansible variable names
+                # e.g., "nginx.port" becomes "nginx_port"
+                ansible_key = attr_path.replace(".", "_")
+                ansible_vars[ansible_key] = attr_info["value"]
+
+            # Write as defaults
+            defaults_file = role_defaults_dir / f"{attr_file.stem}.yml"
+            defaults_yaml = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
+            defaults_file.write_text(defaults_yaml)
+
+            conversion_summary["converted_files"].append(
+                {
+                    "type": "defaults",
+                    "source": f"attributes/{attr_file.name}",
+                    "target": f"{role_dir.name}/defaults/{attr_file.stem}.yml",
+                }
+            )
+
+        except Exception as e:
+            conversion_summary["errors"].append(
+                f"Error converting attributes {attr_file.name}: {str(e)}"
+            )
+
+
+def _create_main_task_file(
+    cookbook_dir: Path, role_dir: Path, conversion_summary: dict, include_recipes: bool
+) -> None:
+    """Create main.yml task file from default recipe if it exists."""
+    if not include_recipes:
+        return
+
+    default_task_file = role_dir / "tasks" / "main.yml"
+    if default_task_file.exists():
+        return  # Already exists
+
+    default_recipe = cookbook_dir / "recipes" / "default.rb"
+    if not default_recipe.exists():
+        return
+
+    try:
+        from souschef.converters.playbook import generate_playbook_from_recipe
+
+        playbook_yaml = generate_playbook_from_recipe(str(default_recipe))
+        default_task_file.write_text(playbook_yaml)
+        conversion_summary["converted_files"].append(
+            {
+                "type": "task",
+                "source": "recipes/default.rb",
+                "target": f"{role_dir.name}/tasks/main.yml",
+            }
+        )
+    except Exception as e:
+        conversion_summary["warnings"].append(
+            f"Could not create main.yml from default recipe: {str(e)}"
+        )
+
+
+def _create_role_metadata(
+    role_dir: Path,
+    role_name: str,
+    cookbook_name: str,
+    assessment: dict,
+    conversion_summary: dict,
+) -> None:
+    """Create Ansible role metadata file."""
+    import yaml
+
+    meta_dir = role_dir / "meta"
+    meta_dir.mkdir(exist_ok=True)
+    meta_file = meta_dir / "main.yml"
+
+    meta_content: dict[str, Any] = {
+        "galaxy_info": {
+            "role_name": role_name,
+            "author": "SousChef Migration",
+            "description": f"Converted from Chef cookbook {cookbook_name}",
+            "license": "MIT",
+            "min_ansible_version": "2.9",
+            "platforms": ["ubuntu", "centos", "redhat"],
+            "galaxy_tags": ["chef", "migration", "converted"],
+        },
+        "dependencies": [],
+    }
+
+    # Add dependencies from assessment data if available
+    if assessment and "dependencies" in assessment:
+        deps = assessment["dependencies"]
+        if isinstance(deps, list):
+            meta_content["dependencies"] = [{"role": dep} for dep in deps]
+
+    meta_yaml = yaml.dump(meta_content, default_flow_style=False, indent=2)
+    meta_file.write_text(meta_yaml)
+
+    conversion_summary["converted_files"].append(
+        {
+            "type": "meta",
+            "source": METADATA_RB,
+            "target": f"{role_name}/meta/main.yml",
+        }
+    )
+
+
+def _generate_conversion_report(conversion_summary: dict, role_dir: Path) -> str:
+    """Generate a comprehensive conversion report."""
+    summary_lines = [
+        f"# Cookbook Conversion Summary: {conversion_summary['cookbook_name']} → {conversion_summary['role_name']}",
+        "",
+        "## Files Converted:",
+    ]
+
+    for file_info in conversion_summary["converted_files"]:
+        summary_lines.append(
+            f"- {file_info['type'].title()}: {file_info['source']} → {file_info['target']}"
+        )
+
+    if conversion_summary["errors"]:
+        summary_lines.append("")
+        summary_lines.append("## Errors:")
+        for error in conversion_summary["errors"]:
+            summary_lines.append(f"- ❌ {error}")
+
+    if conversion_summary["warnings"]:
+        summary_lines.append("")
+        summary_lines.append("## Warnings:")
+        for warning in conversion_summary["warnings"]:
+            summary_lines.append(f"- ⚠️ {warning}")
+
+    summary_lines.append("")
+    summary_lines.append(f"## Role Location: {role_dir}")
+    summary_lines.append("")
+    summary_lines.append("## Next Steps:")
+    summary_lines.append("1. Review converted files for accuracy")
+    summary_lines.append("2. Test the role with ansible-playbook --check")
+    summary_lines.append("3. Update variable references and dependencies")
+    summary_lines.append("4. Run integration tests")
+
+    return "\n".join(summary_lines)
+
+
+@mcp.tool()
+def convert_all_cookbooks_comprehensive(
+    cookbooks_path: str,
+    output_path: str,
+    assessment_data: str = "",
+    include_templates: bool = True,
+    include_attributes: bool = True,
+    include_recipes: bool = True,
+) -> str:
+    """
+    Convert all Chef cookbooks in a directory to complete Ansible roles.
+
+    This function performs comprehensive conversion of all Chef cookbooks found in the
+    specified directory to Ansible roles, including recipes, templates, attributes,
+    and proper role structure. It can use assessment data to optimize the conversion process.
+
+    Args:
+        cookbooks_path: Path to the directory containing Chef cookbooks
+        output_path: Directory where the Ansible roles will be created
+        assessment_data: Optional JSON string with assessment results for optimization
+        include_templates: Whether to convert ERB templates to Jinja2 (default: True)
+        include_attributes: Whether to convert attributes to Ansible variables (default: True)
+        include_recipes: Whether to convert recipes to Ansible tasks (default: True)
+
+    Returns:
+        Summary of the conversion process and created files for all cookbooks
+
+    """
+    try:
+        cookbooks_dir, output_dir = _validate_conversion_paths(
+            cookbooks_path, output_path
+        )
+        assessment = _parse_assessment_data(assessment_data)
+        cookbook_dirs = _find_cookbook_directories(cookbooks_dir)
+
+        if not cookbook_dirs:
+            return f"Error: No Chef cookbooks found in {cookbooks_path}. Cookbooks must contain a {METADATA_RB} file."
+
+        overall_summary = _initialize_conversion_summary(len(cookbook_dirs))
+        _convert_all_cookbooks(
+            cookbook_dirs,
+            output_dir,
+            assessment,
+            include_templates,
+            include_attributes,
+            include_recipes,
+            overall_summary,
+        )
+
+        return _generate_batch_conversion_report(overall_summary, output_dir)
+
+    except Exception as e:
+        return format_error_with_context(
+            e, "converting all cookbooks comprehensively", cookbooks_path
+        )
+
+
+def _validate_conversion_paths(
+    cookbooks_path: str, output_path: str
+) -> tuple[Path, Path]:
+    """Validate and return Path objects for conversion paths."""
+    from souschef.core.path_utils import _normalize_path
+
+    cookbooks_dir = _normalize_path(cookbooks_path)
+    output_dir = _normalize_path(output_path)
+
+    if not cookbooks_dir.exists():
+        raise ValueError(f"Cookbooks path does not exist: {cookbooks_path}")
+
+    return cookbooks_dir, output_dir
+
+
+def _parse_assessment_data(assessment_data: str) -> dict[Any, Any]:
+    """Parse assessment data JSON if provided."""
+    if not assessment_data:
+        return {}
+
+    try:
+        parsed = json.loads(assessment_data)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid assessment data JSON: {assessment_data}") from e
+
+
+def _find_cookbook_directories(cookbooks_dir: Path) -> list[Path]:
+    """Find all cookbook directories containing metadata.rb files."""
+    return [
+        item
+        for item in cookbooks_dir.iterdir()
+        if item.is_dir() and (item / METADATA_RB).exists()
+    ]
+
+
+def _initialize_conversion_summary(total_cookbooks: int) -> dict:
+    """Initialize the overall conversion summary structure."""
+    return {
+        "total_cookbooks": total_cookbooks,
+        "converted_cookbooks": [],
+        "failed_cookbooks": [],
+        "total_converted_files": 0,
+        "total_errors": 0,
+        "total_warnings": 0,
+    }
+
+
+def _convert_all_cookbooks(
+    cookbook_dirs: list[Path],
+    output_dir: Path,
+    assessment: dict,
+    include_templates: bool,
+    include_attributes: bool,
+    include_recipes: bool,
+    overall_summary: dict,
+) -> None:
+    """Convert all cookbooks and update the overall summary."""
+    for cookbook_dir in cookbook_dirs:
+        try:
+            _convert_single_cookbook_comprehensive(
+                cookbook_dir,
+                output_dir,
+                assessment,
+                include_templates,
+                include_attributes,
+                include_recipes,
+                overall_summary,
+            )
+        except Exception as e:
+            overall_summary["failed_cookbooks"].append(
+                {
+                    "cookbook_name": cookbook_dir.name,
+                    "error": str(e),
+                }
+            )
+
+
+def _convert_single_cookbook_comprehensive(
+    cookbook_dir: Path,
+    output_dir: Path,
+    assessment: dict,
+    include_templates: bool,
+    include_attributes: bool,
+    include_recipes: bool,
+    overall_summary: dict,
+) -> None:
+    """Convert a single cookbook comprehensively."""
+    cookbook_name = cookbook_dir.name
+
+    # Get role name from metadata or directory name
+    role_name = _get_role_name(cookbook_dir, cookbook_name)
+
+    # Create role directory structure
+    role_dir = _create_role_structure(output_dir, role_name)
+
+    # Initialize conversion summary for this cookbook
+    conversion_summary = {
+        "cookbook_name": cookbook_name,
+        "role_name": role_name,
+        "converted_files": [],
+        "errors": [],
+        "warnings": [],
+    }
+
+    # Convert components
+    if include_recipes:
+        _convert_recipes(cookbook_dir, role_dir, conversion_summary)
+
+    if include_templates:
+        _convert_templates(cookbook_dir, role_dir, conversion_summary)
+
+    if include_attributes:
+        _convert_attributes(cookbook_dir, role_dir, conversion_summary)
+
+    # Create main task file and metadata
+    _create_main_task_file(cookbook_dir, role_dir, conversion_summary, include_recipes)
+    _create_role_metadata(
+        role_dir, role_name, cookbook_name, assessment, conversion_summary
+    )
+
+    # Add to overall summary
+    overall_summary["converted_cookbooks"].append(
+        {
+            "cookbook_name": cookbook_name,
+            "role_name": role_name,
+            "role_path": str(role_dir),
+            "converted_files": len(conversion_summary["converted_files"]),
+            "errors": len(conversion_summary["errors"]),
+            "warnings": len(conversion_summary["warnings"]),
+        }
+    )
+
+    overall_summary["total_converted_files"] += len(
+        conversion_summary["converted_files"]
+    )
+    overall_summary["total_errors"] += len(conversion_summary["errors"])
+    overall_summary["total_warnings"] += len(conversion_summary["warnings"])
+
+
+def _get_role_name(cookbook_dir: Path, default_name: str) -> str:
+    """Get the role name from metadata or return default."""
+    metadata_file = cookbook_dir / METADATA_RB
+    if metadata_file.exists():
+        metadata = _parse_cookbook_metadata(str(metadata_file))
+        name = metadata.get("name")
+        # Ensure we return a string, handling potential list values
+        if name is None:
+            return default_name
+        if isinstance(name, list):
+            return name[0] if name else default_name
+        return str(name)
+    return default_name
+
+
+def _generate_batch_conversion_report(overall_summary: dict, output_dir: Path) -> str:
+    """Generate a comprehensive batch conversion report."""
+    summary_lines = [
+        "# Batch Cookbook Conversion Summary",
+        "",
+        "## Overview:",
+        f"- Total cookbooks found: {overall_summary['total_cookbooks']}",
+        f"- Successfully converted: {len(overall_summary['converted_cookbooks'])}",
+        f"- Failed conversions: {len(overall_summary['failed_cookbooks'])}",
+        f"- Total files converted: {overall_summary['total_converted_files']}",
+        f"- Total errors: {overall_summary['total_errors']}",
+        f"- Total warnings: {overall_summary['total_warnings']}",
+        "",
+    ]
+
+    if overall_summary["converted_cookbooks"]:
+        summary_lines.append("## Successfully Converted Cookbooks:")
+        for cookbook in overall_summary["converted_cookbooks"]:
+            summary_lines.append(
+                f"- **{cookbook['cookbook_name']}** → `{cookbook['role_name']}`"
+            )
+            summary_lines.append(f"  - Files converted: {cookbook['converted_files']}")
+            summary_lines.append(f"  - Errors: {cookbook['errors']}")
+            summary_lines.append(f"  - Warnings: {cookbook['warnings']}")
+            summary_lines.append(f"  - Location: {cookbook['role_path']}")
+            summary_lines.append("")
+
+    if overall_summary["failed_cookbooks"]:
+        summary_lines.append("## Failed Conversions:")
+        for failed in overall_summary["failed_cookbooks"]:
+            summary_lines.append(
+                f"- ❌ **{failed['cookbook_name']}**: {failed['error']}"
+            )
+        summary_lines.append("")
+
+    summary_lines.append(f"## Output Directory: {output_dir}")
+    summary_lines.append("")
+    summary_lines.append("## Next Steps:")
+    summary_lines.append("1. Review converted roles for accuracy")
+    summary_lines.append("2. Test roles with ansible-playbook --check")
+    summary_lines.append("3. Update variable references and cross-role dependencies")
+    summary_lines.append("4. Run integration tests across all converted roles")
+    summary_lines.append("5. Consider using Ansible Galaxy for role distribution")
+
+    return "\n".join(summary_lines)
 
 
 # AWX/AAP deployment wrappers for backward compatibility

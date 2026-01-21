@@ -586,3 +586,56 @@ class ValidationEngine:
             elif result.level == ValidationLevel.INFO:
                 summary["info"] += 1
         return summary
+
+
+def _format_validation_results_summary(
+    conversion_type: str, summary: dict[str, int]
+) -> str:
+    """
+    Format validation results as a summary.
+
+    Args:
+        conversion_type: Type of conversion.
+        summary: Summary of validation results.
+
+    Returns:
+        Formatted summary output.
+
+    """
+    total_issues = summary["errors"] + summary["warnings"] + summary["info"]
+
+    if total_issues == 0:
+        return f"""# Validation Summary for {conversion_type} Conversion
+
+✅ **All validation checks passed!** No issues found.
+
+Errors: 0
+Warnings: 0
+Info: 0
+"""
+
+    # Determine status icon based on error/warning counts
+    if summary["errors"] > 0:
+        status_icon = "❌"
+    elif summary["warnings"] > 0:
+        status_icon = "⚠️"
+    else:
+        status_icon = "ℹ️"
+
+    # Determine status message based on error/warning counts
+    if summary["errors"] > 0:
+        status = "Failed"
+    elif summary["warnings"] > 0:
+        status = "Warning"
+    else:
+        status = "Passed with info"
+
+    return f"""# Validation Summary for {conversion_type} Conversion
+
+{status_icon} **Validation Results:**
+• Errors: {summary["errors"]}
+• Warnings: {summary["warnings"]}
+• Info: {summary["info"]}
+
+**Status:** {status}
+"""

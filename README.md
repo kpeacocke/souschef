@@ -352,11 +352,54 @@ souschef ui --port 8080
 docker build -t souschef-ui .
 
 # Run the container
-docker run -p 8501:8501 souschef-ui
+docker run -p 9999:9999 souschef-ui
 
 # Or use docker-compose
 docker-compose up
 ```
+
+**Docker Environment Configuration:**
+
+SousChef supports AI configuration via environment variables in Docker containers. Create a `.env` file in your project root:
+
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit with your AI provider settings
+nano .env
+```
+
+**Example .env file:**
+```dotenv
+# AI Configuration
+SOUSCHEF_AI_PROVIDER=Anthropic (Claude)
+SOUSCHEF_AI_MODEL=claude-3-5-sonnet-20241022
+SOUSCHEF_AI_API_KEY=your-api-key-here
+SOUSCHEF_AI_BASE_URL=
+SOUSCHEF_AI_PROJECT_ID=
+SOUSCHEF_AI_TEMPERATURE=0.7
+SOUSCHEF_AI_MAX_TOKENS=4000
+
+# Streamlit Configuration (optional)
+STREAMLIT_SERVER_PORT=9999
+STREAMLIT_SERVER_HEADLESS=true
+```
+
+**Supported AI Providers:**
+- `Anthropic (Claude)` - Anthropic Claude models
+- `OpenAI (GPT)` - OpenAI GPT models
+- `IBM Watsonx` - IBM Watsonx AI models
+- `Red Hat Lightspeed` - Red Hat Lightspeed models
+
+**Environment Variables:**
+- `SOUSCHEF_AI_PROVIDER` - AI provider name (required)
+- `SOUSCHEF_AI_MODEL` - Model name (required)
+- `SOUSCHEF_AI_API_KEY` - API key for authentication (required)
+- `SOUSCHEF_AI_BASE_URL` - Custom API base URL (optional)
+- `SOUSCHEF_AI_PROJECT_ID` - Project ID for Watsonx (optional)
+- `SOUSCHEF_AI_TEMPERATURE` - Model temperature 0.0-2.0 (optional, default: 0.7)
+- `SOUSCHEF_AI_MAX_TOKENS` - Maximum tokens to generate (optional, default: 4000)
 
 **Docker Compose (recommended for development):**
 ```yaml
@@ -365,7 +408,14 @@ services:
   souschef-ui:
     build: .
     ports:
-      - "8501:8501"
+      - "9999:9999"
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_PORT=9999
+      - STREAMLIT_SERVER_HEADLESS=true
     restart: unless-stopped
 ```
 
@@ -636,6 +686,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 -  **Interactive dependency mapping and visualization** with Plotly graphs and NetworkX analysis
 -  **Real-time progress tracking** for all analysis operations with Streamlit progress bars
 -  **Static graph visualization** with matplotlib for reports and documentation
+-  **Automated ERB to Jinja2 template conversion** - Converts Chef ERB templates to Ansible Jinja2 templates during cookbook conversion
+   -  Converts ERB syntax to Jinja2: `<%= var %>` → `{{ var }}`, `<% if %>` → `{% if %}`
+   -  Extracts template variables for validation and documentation
+   -  Includes converted templates in downloadable playbook archives
+   -  UI displays converted templates with variable lists and preview
 
 ### Planned
 - 📅 Enhanced graph layout algorithms for large dependency networks (force-directed, hierarchical)
@@ -1361,12 +1416,28 @@ The project includes several VS Code tasks:
 
 ## Contributing
 
-Contributions are welcome! Please ensure:
-1. All tests pass
-2. Code coverage maintained at 90%+
-3. Code passes ruff linting
-4. All functions have type hints and docstrings
-5. Follow the development standards in `.github/copilot-instructions.md`
+Thank you for your interest in contributing to SousChef!
+
+**Before you start**, please read the [**Architecture Guide**](docs/ARCHITECTURE.md) to understand where different code belongs and why. This is essential for understanding how to structure your contributions.
+
+For complete contributing guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md), which includes:
+- Development setup instructions
+- Code standards and quality tools
+- Testing requirements and patterns
+- Commit conventions and PR process
+- Release procedures
+
+**Quick Checklist for Contributions:**
+1. Read [**docs/ARCHITECTURE.md**](docs/ARCHITECTURE.md) to understand module structure
+2. Ensure all tests pass: `poetry run pytest`
+3. Code passes linting: `poetry run ruff check .`
+4. Code is formatted: `poetry run ruff format .`
+5. Type hints are complete: `poetry run mypy souschef`
+6. Coverage maintained at 90%+
+7. All functions have docstrings
+8. Follow [conventional commits](CONTRIBUTING.md#commit-message-format)
+
+Questions? Check [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module responsibilities or [CONTRIBUTING.md](CONTRIBUTING.md) for the full developer guide.
 
 ## License
 

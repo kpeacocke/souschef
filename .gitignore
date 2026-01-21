@@ -85,5 +85,21 @@ Thumbs.db
 codeql-results/
 *.sarif
 
+# GitHub Security Scanning Exports
+code_scanning_alerts*.json
+
 # MkDocs
 site/
+
+# Log files
+*.log
+
+# Environment files (but keep examples)
+.env
+!.env.example
+
+# Test artifacts
+tests/fixtures/*.tar.gz
+tests/fixtures/*.zip
+tests/fixtures/*.tar.bz2
+tests/fixtures/*.tar.xz

@@ -12,11 +12,31 @@ from typing import Any
 
 from souschef.core import METADATA_FILENAME, _normalize_path, _safe_join
 from souschef.core.errors import format_error_with_context
+from souschef.core.metrics import (
+    ComplexityLevel,
+    EffortMetrics,
+    categorize_complexity,
+    estimate_effort_for_complexity,
+)
 from souschef.core.validation import (
     ValidationEngine,
     ValidationLevel,
     ValidationResult,
+    _format_validation_results_summary,
 )
+
+# Optional AI provider imports
+try:
+    import requests  # type: ignore[import-untyped]
+except ImportError:
+    requests = None
+
+try:
+    from ibm_watsonx_ai import (  # type: ignore[import-not-found]
+        APIClient,
+    )
+except ImportError:
+    APIClient = None
 
 
 def assess_chef_migration_complexity(
@@ -127,8 +147,9 @@ def parse_chef_migration_assessment(
             "recommendations": recommendations,
             "roadmap": roadmap,
             "complexity": _get_overall_complexity_level(overall_metrics),
-            "estimated_hours": overall_metrics.get("estimated_effort_days", 0)
-            * 8,  # Convert days to hours
+            "estimated_hours": EffortMetrics(
+                overall_metrics.get("estimated_effort_days", 0)
+            ).estimated_hours,
         }
 
     except Exception as e:
@@ -632,60 +653,363 @@ def _format_assessment_report(
 """
 
 
-def _count_cookbook_artifacts(cookbook_path) -> dict[str, int]:
-    """Count basic cookbook artifacts (recipes, templates, files)."""
-    recipes_dir = _safe_join(cookbook_path, "recipes")
+def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
+    """Count comprehensive cookbook artifacts including all Chef components."""
+    # deepcode ignore PT: path normalized via _normalize_path in caller
+    cookbook_path = (
+        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
+    )
+
+    # Basic directory counts
+    recipes_dir = cookbook_path / "recipes"
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    templates_count = (
-        len(list(_safe_join(cookbook_path, "templates").glob("*")))
-        if _safe_join(cookbook_path, "templates").exists()
-        else 0
+    templates_dir = cookbook_path / "templates"
+    template_count = (
+        len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
     )
 
-    files_count = (
-        len(list(_safe_join(cookbook_path, "files").glob("*")))
-        if _safe_join(cookbook_path, "files").exists()
-        else 0
+    files_dir = cookbook_path / "files"
+    file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
+
+    # Additional Chef components
+    attributes_dir = cookbook_path / "attributes"
+    attributes_count = (
+        len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
     )
+
+    libraries_dir = cookbook_path / "libraries"
+    libraries_count = (
+        len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
+    )
+
+    definitions_dir = cookbook_path / "definitions"
+    definitions_count = (
+        len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
+    )
+
+    resources_dir = cookbook_path / "resources"
+    resources_count = (
+        len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
+    )
+
+    providers_dir = cookbook_path / "providers"
+    providers_count = (
+        len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
+    )
+
+    # Configuration files
+    has_berksfile = (cookbook_path / "Berksfile").exists()
+    has_chefignore = (cookbook_path / "chefignore").exists()
+    has_thorfile = (cookbook_path / "Thorfile").exists()
+    has_kitchen_yml = (cookbook_path / ".kitchen.yml").exists() or (
+        cookbook_path / "kitchen.yml"
+    ).exists()
+    has_test_dir = (cookbook_path / "test").exists() or (
+        cookbook_path / "spec"
+    ).exists()
 
     return {
         "recipe_count": recipe_count,
-        "templates": templates_count,
-        "files": files_count,
+        "template_count": template_count,
+        "file_count": file_count,
+        "attributes_count": attributes_count,
+        "libraries_count": libraries_count,
+        "definitions_count": definitions_count,
+        "resources_count": resources_count,
+        "providers_count": providers_count,
+        "has_berksfile": int(has_berksfile),
+        "has_chefignore": int(has_chefignore),
+        "has_thorfile": int(has_thorfile),
+        "has_kitchen_yml": int(has_kitchen_yml),
+        "has_test_dir": int(has_test_dir),
     }
 
 
-def _analyse_recipe_complexity(cookbook_path) -> dict[str, int]:
-    """Analyse recipe files for resource counts, Ruby blocks, and custom resources."""
-    recipes_dir = _safe_join(cookbook_path, "recipes")
+def _analyse_recipe_complexity(cookbook_path: Path) -> dict[str, int]:
+    """Analyse recipe files and other cookbook components for resource counts, Ruby blocks, and custom resources."""
+    # deepcode ignore PT: path normalized via _normalize_path in caller
+    cookbook_path = (
+        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
+    )
+
     resource_count = 0
     custom_resources = 0
     ruby_blocks = 0
+    erb_templates = 0
+    attribute_complexity = 0
+    library_complexity = 0
+    definition_count = 0
 
-    if recipes_dir.exists():
-        for recipe_file in recipes_dir.glob("*.rb"):
-            with recipe_file.open("r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-                # Count Chef resources
-                resources = len(
-                    re.findall(r'\w{1,100}\s+[\'"]([^\'"]{0,200})[\'"]\s+do', content)
-                )
-                ruby_blocks += len(
-                    re.findall(r"ruby_block|execute|bash", content, re.IGNORECASE)
-                )
-                custom_resources += len(
-                    re.findall(
-                        r"custom_resource|provides|use_inline_resources", content
-                    )
-                )
-                resource_count += resources
+    # Analyze different cookbook components
+    resource_count, ruby_blocks, custom_resources = _analyze_recipes(cookbook_path)
+    attribute_complexity = _analyze_attributes(cookbook_path)
+    erb_templates = _analyze_templates(cookbook_path)
+    library_complexity = _analyze_libraries(cookbook_path)
+    definition_count = _count_definitions(cookbook_path)
 
     return {
         "resource_count": resource_count,
         "custom_resources": custom_resources,
         "ruby_blocks": ruby_blocks,
+        "erb_templates": erb_templates,
+        "attribute_complexity": attribute_complexity,
+        "library_complexity": library_complexity,
+        "definition_count": definition_count,
     }
+
+
+def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
+    """Analyze recipe files for resources, ruby blocks, and custom resources."""
+    resource_count = 0
+    ruby_blocks = 0
+    custom_resources = 0
+
+    recipes_dir = cookbook_path / "recipes"
+    if recipes_dir.exists():
+        for recipe_file in recipes_dir.glob("*.rb"):
+            try:
+                content = recipe_file.read_text(encoding="utf-8", errors="ignore")
+                # Count Chef resources
+                resources = len(
+                    re.findall(r'\w{1,100}\s+[\'"]([^\'"]{0,200})[\'"]\s+do', content)
+                )
+                ruby_blocks += len(
+                    re.findall(
+                        r"ruby_block|execute|bash|script", content, re.IGNORECASE
+                    )
+                )
+                custom_resources += len(
+                    re.findall(
+                        r"custom_resource|provides|use_inline_resources|lwrp_resource",
+                        content,
+                    )
+                )
+                resource_count += resources
+            except Exception:
+                continue
+
+    return resource_count, ruby_blocks, custom_resources
+
+
+def _analyze_attributes(cookbook_path: Path) -> int:
+    """Analyze attribute files for complexity."""
+    attribute_complexity = 0
+
+    attributes_dir = (
+        cookbook_path / "attributes"
+    )  # deepcode ignore PT: path normalized via _normalize_path
+    if attributes_dir.exists():
+        for attr_file in attributes_dir.glob("*.rb"):
+            try:
+                content = attr_file.read_text(encoding="utf-8", errors="ignore")
+                # Count attribute assignments and complex expressions
+                assignments = len(
+                    re.findall(r"^\s*\w+\s*\[?\w*\]?\s*=", content, re.MULTILINE)
+                )
+                complex_expressions = len(
+                    re.findall(r"(?:node|default|override)\[", content)
+                )
+                attribute_complexity += assignments + complex_expressions
+            except Exception:
+                continue
+
+    return attribute_complexity
+
+
+def _analyze_templates(cookbook_path: Path) -> int:
+    """Analyze template files for ERB complexity."""
+    erb_templates = 0
+
+    templates_dir = (
+        cookbook_path / "templates"
+    )  # deepcode ignore PT: path normalized via _normalize_path
+    if templates_dir.exists():
+        for template_file in templates_dir.glob("**/*.erb"):
+            try:
+                content = template_file.read_text(encoding="utf-8", errors="ignore")
+                # Count ERB expressions and complex logic
+                erb_expressions = len(re.findall(r"<%.*?%>", content))
+                erb_templates += erb_expressions
+            except Exception:
+                continue
+
+    return erb_templates
+
+
+def _analyze_libraries(cookbook_path: Path) -> int:
+    """Analyze library files for complexity."""
+    library_complexity = 0
+
+    libraries_dir = (
+        cookbook_path / "libraries"
+    )  # deepcode ignore PT: path normalized via _normalize_path
+    if libraries_dir.exists():
+        for lib_file in libraries_dir.glob("*.rb"):
+            try:
+                content = lib_file.read_text(encoding="utf-8", errors="ignore")
+                # Count class definitions, methods, and complex Ruby constructs
+                classes = len(re.findall(r"class\s+\w+", content))
+                methods = len(re.findall(r"def\s+\w+", content))
+                library_complexity += classes * 2 + methods
+            except Exception:
+                continue
+
+    return library_complexity
+
+
+def _count_definitions(cookbook_path: Path) -> int:
+    """Count definition files."""
+    definitions_dir = (
+        cookbook_path / "definitions"
+    )  # deepcode ignore PT: path normalized via _normalize_path
+    if definitions_dir.exists():
+        return len(list(definitions_dir.glob("*.rb")))
+    return 0
+
+
+def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
+    """Parse Berksfile for dependency information."""
+    # deepcode ignore PT: path normalized via _normalize_path in caller
+    cookbook_path = (
+        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
+    )
+    berksfile = cookbook_path / "Berksfile"
+
+    if not berksfile.exists():
+        return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
+
+    try:
+        content = berksfile.read_text(encoding="utf-8", errors="ignore")
+
+        # Parse cookbook dependencies
+        cookbook_deps = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
+        external_deps = re.findall(
+            r'cookbook\s+[\'"]([^\'"]+)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]', content
+        )
+
+        # Count complex dependency specifications (with version constraints, git sources, etc.)
+        complex_deps = len(re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]\s*,', content))
+        git_sources = len(re.findall(r"git:", content))
+        path_sources = len(re.findall(r"path:", content))
+
+        return {
+            "dependencies": cookbook_deps,
+            "external_cookbooks": [dep[0] for dep in external_deps],
+            "complexity": complex_deps + git_sources * 2 + path_sources * 2,
+            "has_git_sources": git_sources > 0,
+            "has_path_sources": path_sources > 0,
+        }
+    except Exception:
+        return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
+
+
+def _parse_chefignore(cookbook_path) -> dict[str, Any]:
+    """Parse chefignore file for ignore patterns."""
+    cookbook_path = Path(cookbook_path)
+    chefignore = cookbook_path / "chefignore"
+
+    if not chefignore.exists():
+        return {"patterns": [], "complexity": 0}
+
+    try:
+        content = chefignore.read_text(encoding="utf-8", errors="ignore")
+        lines = [
+            line.strip()
+            for line in content.split("\n")
+            if line.strip() and not line.startswith("#")
+        ]
+
+        # Count complex patterns (wildcards, directories, etc.)
+        wildcard_patterns = len([p for p in lines if "*" in p or "?" in p])
+        directory_patterns = len([p for p in lines if p.endswith("/") or "/" in p])
+
+        return {
+            "patterns": lines,
+            "pattern_count": len(lines),
+            "complexity": wildcard_patterns + directory_patterns,
+            "has_wildcards": wildcard_patterns > 0,
+        }
+    except Exception:
+        return {"patterns": [], "complexity": 0}
+
+
+def _parse_thorfile(cookbook_path) -> dict[str, Any]:
+    """Parse Thorfile for Thor tasks."""
+    cookbook_path = Path(cookbook_path)
+    thorfile = cookbook_path / "Thorfile"
+
+    if not thorfile.exists():
+        return {"tasks": [], "complexity": 0}
+
+    try:
+        content = thorfile.read_text(encoding="utf-8", errors="ignore")
+
+        # Count Thor tasks and methods
+        tasks = len(re.findall(r'desc\s+[\'"]([^\'"]+)[\'"]', content))
+        methods = len(re.findall(r"def\s+\w+", content))
+
+        return {
+            "tasks": tasks,
+            "methods": methods,
+            "complexity": tasks + methods,
+            "has_tasks": tasks > 0,
+        }
+    except Exception:
+        return {"tasks": [], "complexity": 0}
+
+
+def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
+    """Parse metadata.rb for cookbook information."""
+    cookbook_path = Path(cookbook_path)
+    metadata_file = cookbook_path / "metadata.rb"
+
+    if not metadata_file.exists():
+        return {
+            "name": "",
+            "version": "",
+            "dependencies": [],
+            "supports": [],
+            "complexity": 0,
+        }
+
+    try:
+        content = metadata_file.read_text(encoding="utf-8", errors="ignore")
+
+        # Extract basic metadata
+        name_match = re.search(r'name\s+[\'"]([^\'"]+)[\'"]', content)
+        version_match = re.search(r'version\s+[\'"]([^\'"]+)[\'"]', content)
+
+        # Parse dependencies
+        depends_matches = re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
+
+        # Parse supported platforms
+        supports_matches = re.findall(r'supports\s+[\'"]([^\'"]+)[\'"]', content)
+
+        # Count complex metadata (recipes, attributes, etc.)
+        recipes = len(re.findall(r'recipe\s+[\'"]([^\'"]+)[\'"]', content))
+        attributes = len(re.findall(r'attribute\s+[\'"]([^\'"]+)[\'"]', content))
+
+        return {
+            "name": name_match.group(1) if name_match else "",
+            "version": version_match.group(1) if version_match else "",
+            "dependencies": depends_matches,
+            "supports": supports_matches,
+            "recipes": recipes,
+            "attributes": attributes,
+            "complexity": len(depends_matches)
+            + len(supports_matches)
+            + recipes
+            + attributes,
+        }
+    except Exception:
+        return {
+            "name": "",
+            "version": "",
+            "dependencies": [],
+            "supports": [],
+            "complexity": 0,
+        }
 
 
 def _calculate_complexity_score(metrics: dict[str, int]) -> int:
@@ -698,8 +1022,8 @@ def _calculate_complexity_score(metrics: dict[str, int]) -> int:
         "resource_density": min(resource_count / max(recipe_count, 1) * 5, 25),
         "custom_resources": metrics["custom_resources"] * 10,
         "ruby_blocks": metrics["ruby_blocks"] * 5,
-        "templates": min(metrics["templates"] * 2, 15),
-        "files": min(metrics["files"] * 1, 10),
+        "templates": min(metrics["template_count"] * 2, 15),
+        "files": min(metrics["file_count"] * 1, 10),
     }
 
     return int(sum(complexity_factors.values()))
@@ -744,13 +1068,15 @@ def _assess_single_cookbook(cookbook_path: Path) -> dict:
     recipe_complexity = _analyse_recipe_complexity(cookbook)
     metrics = {**artifact_counts, **recipe_complexity}
 
-    # Calculate complexity and effort
+    # Calculate complexity score using existing function
     complexity_score = _calculate_complexity_score(metrics)
-    # More realistic effort: 0.5-2 hours per recipe with AI assistance
-    # Base: 1 hour per recipe = 0.125 days (8-hour day)
-    base_effort = metrics["recipe_count"] * 0.125  # 0.125 days per recipe
-    complexity_multiplier = 1 + (complexity_score / 100)
-    estimated_effort = round(base_effort * complexity_multiplier, 1)
+
+    # Use centralized EffortMetrics for consistent calculations
+    effort_metrics = estimate_effort_for_complexity(
+        complexity_score=complexity_score,
+        resource_count=metrics["recipe_count"],
+    )
+    estimated_effort = effort_metrics.estimated_days
 
     # Build assessment
     return {
@@ -772,7 +1098,7 @@ def _format_overall_metrics(metrics: dict) -> str:
 • Total Resources: {metrics["total_resources"]}
 • Average Complexity: {metrics.get("avg_complexity", 0):.1f}/100
 • Estimated Total Effort: {metrics["estimated_effort_days"]:.1f} person-days
-• Estimated Duration: {max(1, int(metrics["estimated_effort_days"] / 2))}-{max(2, int(metrics["estimated_effort_days"]))} weeks (with 2-4 parallel engineers)"""
+• Estimated Duration: {EffortMetrics(metrics["estimated_effort_days"]).estimated_weeks_range}"""
 
 
 def _format_cookbook_assessments(assessments: list) -> str:
@@ -859,7 +1185,9 @@ def _generate_migration_recommendations_from_assessment(
 
     # Complexity-based recommendations
     avg_complexity = metrics.get("avg_complexity", 0)
-    if avg_complexity > 60:
+    complexity_level = categorize_complexity(avg_complexity)
+
+    if complexity_level == ComplexityLevel.HIGH:
         recommendations.append(
             "• Consider phased migration approach due to high complexity"
         )
@@ -867,9 +1195,12 @@ def _generate_migration_recommendations_from_assessment(
             "• Allocate additional time for custom resource conversion"
         )
         recommendations.append("• Plan for comprehensive testing and validation")
-    else:
+    elif complexity_level == ComplexityLevel.LOW:
         recommendations.append("• Standard migration timeline should be sufficient")
         recommendations.append("• Consider big-bang approach for faster delivery")
+    else:
+        recommendations.append("• Balanced approach recommended for medium complexity")
+        recommendations.append("• Plan iterative validation checkpoints")
 
     # Effort-based recommendations
     total_effort = metrics["estimated_effort_days"]
@@ -899,6 +1230,7 @@ def _create_migration_roadmap(assessments: list) -> str:
     # Sort cookbooks by complexity (low to high for easier wins first)
     sorted_cookbooks = sorted(assessments, key=lambda x: x["complexity_score"])
 
+    # Use complexity thresholds from metrics module for consistency
     phases = {
         "Phase 1 - Foundation (Weeks 1-2)": [
             "Set up Ansible/AWX environment",
@@ -917,17 +1249,19 @@ def _create_migration_roadmap(assessments: list) -> str:
         ],
     }
 
-    # Distribute cookbooks across phases
+    # Distribute cookbooks across phases using centralized complexity thresholds
     for cookbook in sorted_cookbooks:
-        if cookbook["complexity_score"] < 30:
+        complexity_level = categorize_complexity(cookbook["complexity_score"])
+
+        if complexity_level == ComplexityLevel.LOW:
             phases["Phase 2 - Low Complexity Migration (Weeks 3-5)"].append(
                 f"Migrate {cookbook['cookbook_name']} ({cookbook['estimated_effort_days']} days)"
             )
-        elif cookbook["complexity_score"] < 70:
+        elif complexity_level == ComplexityLevel.MEDIUM:
             phases["Phase 3 - Medium Complexity Migration (Weeks 6-9)"].append(
                 f"Migrate {cookbook['cookbook_name']} ({cookbook['estimated_effort_days']} days)"
             )
-        else:
+        else:  # HIGH
             phases["Phase 4 - High Complexity Migration (Weeks 10-12)"].append(
                 f"Migrate {cookbook['cookbook_name']} ({cookbook['estimated_effort_days']} days)"
             )
@@ -1556,26 +1890,869 @@ def _format_validation_results_text(
     return "\n".join(output_lines)
 
 
-def _format_validation_results_summary(
-    conversion_type: str, summary: dict[str, int]
-) -> str:
+def assess_single_cookbook_with_ai(
+    cookbook_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 2000,
+    project_id: str = "",
+    base_url: str = "",
+) -> dict[str, Any]:
     """
-    Format validation results as summary.
+    Assess a single Chef cookbook using AI analysis.
 
     Args:
-        conversion_type: Type of conversion.
-        summary: Summary of validation results.
+        cookbook_path: Path to the Chef cookbook directory
+        ai_provider: AI provider (anthropic, openai, watson)
+        api_key: API key for the AI provider
+        model: AI model to use
+        temperature: AI temperature setting
+        max_tokens: Maximum tokens for AI response
+        project_id: Project ID for IBM Watsonx (required for watson provider)
+        base_url: Custom base URL for the AI provider
 
     Returns:
-        Formatted summary output.
+        Dictionary containing assessment data with complexity, recommendations, etc.
 
     """
-    return f"""# Validation Summary
+    try:
+        cookbook_path_obj = _normalize_path(cookbook_path)
+        if not cookbook_path_obj.exists():
+            return {"error": f"Cookbook path not found: {cookbook_path}"}
 
-✓ Conversion Type: {conversion_type}
-• Errors: {summary["errors"]}
-• Warnings: {summary["warnings"]}
-• Info: {summary["info"]}
+        # Check if AI is available
+        ai_available = _is_ai_available(ai_provider, api_key)
+        if not ai_available:
+            # Fall back to rule-based analysis
+            return parse_chef_migration_assessment(cookbook_path)
 
-{"✅ No critical issues found!" if summary["errors"] == 0 else "❌ Critical issues found - review errors"}
+        # Get AI-enhanced assessment
+        assessment = _assess_single_cookbook_with_ai(
+            cookbook_path_obj,
+            ai_provider,
+            api_key,
+            model,
+            temperature,
+            max_tokens,
+            project_id,
+            base_url,
+        )
+
+        # Convert to the format expected by the UI
+        complexity_level = "Low"
+        if assessment["complexity_score"] > 70:
+            complexity_level = "High"
+        elif assessment["complexity_score"] > 30:
+            complexity_level = "Medium"
+
+        return {
+            "complexity": complexity_level,
+            "estimated_hours": EffortMetrics(
+                assessment["estimated_effort_days"]
+            ).estimated_hours,
+            "recommendations": assessment.get(
+                "ai_insights", "AI-enhanced analysis completed"
+            ),
+        }
+
+    except Exception as e:
+        return {
+            "error": format_error_with_context(
+                e, "assessing single cookbook with AI", cookbook_path
+            )
+        }
+
+
+def assess_chef_migration_complexity_with_ai(
+    cookbook_paths: str,
+    migration_scope: str = "full",
+    target_platform: str = "ansible_awx",
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 2000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Assess the complexity of migrating Chef cookbooks to Ansible using AI analysis.
+
+    This function uses AI to provide more intelligent analysis of cookbook complexity,
+    migration challenges, and recommendations. Falls back to rule-based analysis
+    if AI is not available.
+
+    Args:
+        cookbook_paths: Comma-separated paths to Chef cookbooks or cookbook directory
+        migration_scope: Scope of migration (full, recipes_only, infrastructure_only)
+        target_platform: Target platform (ansible_awx, ansible_core, ansible_tower)
+        ai_provider: AI provider (anthropic, openai, watson)
+        api_key: API key for the AI provider
+        model: AI model to use
+        temperature: AI temperature setting
+        max_tokens: Maximum tokens for AI response
+        project_id: Project ID for IBM Watsonx (required for watson provider)
+        base_url: Custom base URL for the AI provider
+
+    Returns:
+        Comprehensive migration complexity assessment with AI-enhanced recommendations
+
+    """
+    try:
+        # Validate and parse inputs
+        error_msg = _validate_assessment_inputs(
+            cookbook_paths, migration_scope, target_platform
+        )
+        if error_msg:
+            return error_msg
+
+        # Check if AI is available
+        ai_available = _is_ai_available(ai_provider, api_key)
+        if not ai_available:
+            # Fall back to rule-based analysis
+            return assess_chef_migration_complexity(
+                cookbook_paths, migration_scope, target_platform
+            )
+
+        # Process cookbook analysis with AI
+        return _process_cookbook_assessment_with_ai(
+            cookbook_paths,
+            migration_scope,
+            target_platform,
+            ai_provider,
+            api_key,
+            model,
+            temperature,
+            max_tokens,
+            project_id,
+            base_url,
+        )
+
+    except Exception as e:
+        return format_error_with_context(
+            e, "assessing Chef migration complexity with AI", cookbook_paths
+        )
+
+
+def _is_ai_available(ai_provider: str, api_key: str) -> bool:
+    """Check if AI analysis is available."""
+    if not api_key:
+        return False
+
+    if ai_provider == "anthropic" or ai_provider == "openai":
+        return requests is not None
+    elif ai_provider == "watson":
+        return APIClient is not None
+    else:
+        return False
+
+
+def _process_cookbook_assessment_with_ai(
+    cookbook_paths: str,
+    migration_scope: str,
+    target_platform: str,
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """Process the cookbook assessment workflow with AI analysis."""
+    # Parse cookbook paths (may be empty if none exist)
+    valid_paths = _parse_cookbook_paths(cookbook_paths)
+
+    # Analyze all cookbooks with AI enhancement
+    cookbook_assessments, overall_metrics = _analyse_cookbook_metrics_with_ai(
+        valid_paths,
+        ai_provider,
+        api_key,
+        model,
+        temperature,
+        max_tokens,
+        project_id,
+        base_url,
+    )
+
+    # Generate AI-enhanced recommendations and reports
+    recommendations = _generate_ai_migration_recommendations(
+        cookbook_assessments,
+        overall_metrics,
+        target_platform,
+        ai_provider,
+        api_key,
+        model,
+        temperature,
+        max_tokens,
+        project_id,
+        base_url,
+    )
+    roadmap = _create_ai_migration_roadmap(
+        cookbook_assessments,
+        ai_provider,
+        api_key,
+        model,
+        temperature,
+        max_tokens,
+        project_id,
+        base_url,
+    )
+
+    # Format final assessment report
+    return _format_ai_assessment_report(
+        migration_scope,
+        target_platform,
+        overall_metrics,
+        cookbook_assessments,
+        recommendations,
+        roadmap,
+    )
+
+
+def _analyse_cookbook_metrics_with_ai(
+    valid_paths: list[Any],
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str = "",
+    base_url: str = "",
+) -> tuple[list[Any], dict[str, int]]:
+    """
+    Analyse metrics for all cookbooks with AI enhancement.
+
+    Args:
+        valid_paths: List of valid cookbook paths
+        ai_provider: AI provider name
+        api_key: API key
+        model: AI model
+        temperature: AI temperature
+        max_tokens: Max tokens
+        project_id: Project ID for IBM Watsonx (required for watson provider)
+        base_url: Custom base URL for the AI provider
+
+    Returns:
+        Tuple of (cookbook_assessments, overall_metrics)
+
+    """
+    cookbook_assessments = []
+    overall_metrics = {
+        "total_cookbooks": 0,
+        "total_recipes": 0,
+        "total_resources": 0,
+        "complexity_score": 0,
+        "estimated_effort_days": 0,
+    }
+
+    for cookbook_path in valid_paths:
+        # deepcode ignore PT: path normalized via _normalize_path
+        assessment = _assess_single_cookbook_with_ai(
+            cookbook_path,
+            ai_provider,
+            api_key,
+            model,
+            temperature,
+            max_tokens,
+            project_id,
+            base_url,
+        )
+        cookbook_assessments.append(assessment)
+
+        # Aggregate metrics
+        overall_metrics["total_cookbooks"] += 1
+        overall_metrics["total_recipes"] += assessment["metrics"]["recipe_count"]
+        overall_metrics["total_resources"] += assessment["metrics"]["resource_count"]
+        overall_metrics["complexity_score"] += assessment["complexity_score"]
+        overall_metrics["estimated_effort_days"] += assessment["estimated_effort_days"]
+
+    # Calculate averages
+    if cookbook_assessments:
+        overall_metrics["avg_complexity"] = int(
+            overall_metrics["complexity_score"] / len(cookbook_assessments)
+        )
+
+    return cookbook_assessments, overall_metrics
+
+
+def _assess_single_cookbook_with_ai(
+    cookbook_path: Path,
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str = "",
+    base_url: str = "",
+) -> dict:
+    """Assess complexity of a single cookbook using AI analysis."""
+    # cookbook_path is already normalized to a Path object
+    cookbook = cookbook_path
+
+    # Collect basic metrics (same as rule-based)
+    artifact_counts = _count_cookbook_artifacts(cookbook)
+    recipe_complexity = _analyse_recipe_complexity(cookbook)
+    metrics = {**artifact_counts, **recipe_complexity}
+
+    # Get AI analysis for this cookbook
+    ai_analysis = _get_ai_cookbook_analysis(
+        cookbook,
+        metrics,
+        ai_provider,
+        api_key,
+        model,
+        temperature,
+        max_tokens,
+        project_id,
+        base_url,
+    )
+
+    # Use AI-provided complexity score if available, otherwise fall back to rule-based
+    if ai_analysis and "complexity_score" in ai_analysis:
+        complexity_score = ai_analysis["complexity_score"]
+    else:
+        complexity_score = _calculate_complexity_score(metrics)
+
+    # Use AI-provided effort estimate if available, otherwise fall back to rule-based
+    if ai_analysis and "estimated_effort_days" in ai_analysis:
+        estimated_effort = ai_analysis["estimated_effort_days"]
+    else:
+        base_effort = metrics["recipe_count"] * 0.125  # 0.125 days per recipe
+        complexity_multiplier = 1 + (complexity_score / 100)
+        estimated_effort = round(base_effort * complexity_multiplier, 1)
+
+    # Build assessment with AI insights
+    assessment = {
+        "cookbook_name": cookbook.name,
+        "cookbook_path": str(cookbook),
+        "metrics": metrics,
+        "complexity_score": complexity_score,
+        "estimated_effort_days": estimated_effort,
+        "challenges": ai_analysis.get("challenges", [])
+        if ai_analysis
+        else _identify_migration_challenges(metrics, complexity_score),
+        "migration_priority": ai_analysis.get(
+            "migration_priority", _determine_migration_priority(complexity_score)
+        )
+        if ai_analysis
+        else _determine_migration_priority(complexity_score),
+        "ai_insights": ai_analysis.get("insights", "") if ai_analysis else "",
+        "dependencies": [],
+    }
+
+    return assessment
+
+
+def _get_ai_cookbook_analysis(
+    cookbook_path: Path,
+    metrics: dict,
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str = "",
+    base_url: str = "",
+) -> dict | None:
+    """Get AI analysis for a single cookbook."""
+    try:
+        # Read key files for AI analysis
+        recipe_content = _get_recipe_content_sample(cookbook_path)
+        metadata_content = _get_metadata_content(cookbook_path)
+
+        # Prepare prompt for AI
+        prompt = f"""Analyze this Chef cookbook for migration to Ansible. Provide a detailed assessment including:
+
+1. Complexity score (0-100, where 100 is most complex)
+2. Estimated effort in days (realistic estimate for an experienced engineer)
+3. Key migration challenges and risks
+4. Migration priority (low/medium/high)
+5. Specific insights about this cookbook's conversion difficulty
+
+Cookbook: {cookbook_path.name}
+Basic metrics: {json.dumps(metrics, indent=2)}
+
+Metadata:
+{metadata_content}
+
+Sample recipe content:
+{recipe_content}
+
+Provide your analysis in JSON format with keys: complexity_score, estimated_effort_days, challenges (array), migration_priority, insights."""
+
+        # Call AI API
+        ai_response = _call_ai_api(
+            prompt,
+            ai_provider,
+            api_key,
+            model,
+            temperature,
+            max_tokens,
+            project_id,
+            base_url,
+        )
+
+        if ai_response:
+            # Parse JSON response
+            try:
+                parsed = json.loads(ai_response.strip())
+                return dict(parsed)  # Cast to dict to satisfy type checker
+            except json.JSONDecodeError:
+                # Try to extract JSON from response
+                json_match = re.search(r"\{.*\}", ai_response, re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group())
+                    return dict(parsed)  # Cast to dict to satisfy type checker
+                else:
+                    return None
+        return None
+
+    except Exception:
+        # If AI analysis fails, return None to fall back to rule-based
+        return None
+
+
+def _get_recipe_content_sample(cookbook_path: Path) -> str:
+    """Get a sample of ALL recipe content for AI analysis."""
+    recipes_dir = _safe_join(cookbook_path, "recipes")
+    if not recipes_dir.exists():
+        return "No recipes directory found"
+
+    recipe_files = list(recipes_dir.glob("*.rb"))
+    if not recipe_files:
+        return "No recipe files found"
+
+    # Read ALL recipe files, with reasonable size limits
+    all_recipes_content = []
+    total_chars = 0
+    max_total_chars = 8000  # Increased limit to cover multiple recipes
+
+    for recipe_file in recipe_files:
+        try:
+            content = recipe_file.read_text(encoding="utf-8", errors="ignore")
+            recipe_header = f"\n=== {recipe_file.name} ===\n"
+
+            # Add this recipe if we have room
+            if total_chars + len(recipe_header) + len(content) < max_total_chars:
+                all_recipes_content.append(recipe_header + content)
+                total_chars += len(recipe_header) + len(content)
+            else:
+                # Add truncated version
+                remaining = max_total_chars - total_chars - len(recipe_header)
+                if remaining > 100:
+                    all_recipes_content.append(
+                        recipe_header + content[:remaining] + "..."
+                    )
+                break
+        except Exception:
+            continue
+
+    if not all_recipes_content:
+        return "Could not read recipe content"
+
+    return "\n".join(all_recipes_content)
+
+
+def _get_metadata_content(cookbook_path: Path) -> str:
+    """Get metadata content for AI analysis."""
+    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
+    if not metadata_file.exists():
+        return "No metadata.rb found"
+
+    try:
+        return metadata_file.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return "Could not read metadata"
+
+
+def _call_ai_api(
+    prompt: str,
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str | None = None,
+    base_url: str | None = None,
+) -> str | None:
+    """Call the AI API for analysis."""
+    try:
+        if ai_provider == "anthropic":
+            return _call_anthropic_api(prompt, api_key, model, temperature, max_tokens)
+        elif ai_provider == "openai":
+            return _call_openai_api(prompt, api_key, model, temperature, max_tokens)
+        elif ai_provider == "watson":
+            return _call_watson_api(
+                prompt, api_key, model, temperature, max_tokens, project_id, base_url
+            )
+        else:
+            return None
+    except Exception:
+        return None
+
+
+def _call_anthropic_api(
+    prompt: str, api_key: str, model: str, temperature: float, max_tokens: int
+) -> str | None:
+    """Call Anthropic Claude API."""
+    if not requests:
+        return None
+
+    try:
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "system": "You are an expert in Chef to Ansible migration analysis. Provide accurate, detailed assessments.",
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=30,
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            return str(result["content"][0]["text"])
+        return None
+    except Exception:
+        return None
+
+
+def _call_openai_api(
+    prompt: str, api_key: str, model: str, temperature: float, max_tokens: int
+) -> str | None:
+    """Call OpenAI API."""
+    if not requests:
+        return None
+
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are an expert in Chef to Ansible migration analysis. Provide accurate, detailed assessments.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            timeout=30,
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            return str(result["choices"][0]["message"]["content"])
+        return None
+    except Exception:
+        return None
+
+
+def _call_watson_api(
+    prompt: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str | None = None,
+    base_url: str | None = None,
+) -> str | None:
+    """Call IBM Watsonx API."""
+    if not APIClient:
+        return None
+
+    try:
+        # Initialize Watsonx API client
+        client = (
+            APIClient(api_key=api_key, url=base_url)
+            if base_url
+            else APIClient(api_key=api_key)
+        )
+
+        # Prepare request parameters
+        request_params = {
+            "prompt": prompt,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "model_id": model,
+            "project_id": project_id,
+        }
+
+        # Call Watsonx API for text generation
+        response = (
+            client.deployments.text_generation_stream(**request_params)
+            if hasattr(client, "deployments")
+            else None
+        )
+
+        if response:
+            # Collect streamed response
+            generated_text = ""
+            for chunk in response:
+                if hasattr(chunk, "results") and chunk.results:
+                    generated_text += str(chunk.results[0].generated_text)
+            return generated_text if generated_text else None
+
+        return None
+    except Exception:
+        return None
+
+
+def _generate_ai_migration_recommendations(
+    assessments: list,
+    metrics: dict,
+    target_platform: str,
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str | None = None,
+    base_url: str | None = None,
+) -> str:
+    """Generate AI-enhanced migration recommendations."""
+    try:
+        # Prepare assessment summary for AI
+        assessment_summary = {
+            "total_cookbooks": metrics["total_cookbooks"],
+            "avg_complexity": metrics.get("avg_complexity", 0),
+            "total_effort_days": metrics["estimated_effort_days"],
+            "target_platform": target_platform,
+            "cookbook_highlights": [
+                {
+                    "name": a["cookbook_name"],
+                    "complexity": a["complexity_score"],
+                    "effort": a["estimated_effort_days"],
+                    "insights": a.get("ai_insights", ""),
+                }
+                for a in assessments[:5]  # Top 5 cookbooks
+            ],
+        }
+
+        prompt = f"""Based on this Chef to Ansible migration assessment, provide specific, actionable recommendations:
+
+Assessment Summary: {json.dumps(assessment_summary, indent=2)}
+
+Provide recommendations covering:
+1. Migration strategy (phased vs big-bang vs parallel)
+2. Team composition and skills needed
+3. Timeline considerations
+4. Risk mitigation approaches
+5. Platform-specific advice for {target_platform}
+6. Priority ordering for cookbook migration
+
+Format as a bulleted list of specific recommendations."""
+
+        ai_response = _call_ai_api(
+            prompt,
+            ai_provider,
+            api_key,
+            model,
+            temperature,
+            max_tokens,
+            project_id,
+            base_url,
+        )
+
+        if ai_response:
+            return ai_response
+        else:
+            # Fall back to rule-based recommendations
+            return _generate_migration_recommendations_from_assessment(
+                assessments, metrics, target_platform
+            )
+
+    except Exception:
+        # Fall back to rule-based recommendations
+        return _generate_migration_recommendations_from_assessment(
+            assessments, metrics, target_platform
+        )
+
+
+def _create_ai_migration_roadmap(
+    assessments: list,
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str | None = None,
+    base_url: str | None = None,
+) -> str:
+    """Create AI-enhanced migration roadmap."""
+    try:
+        # Prepare cookbook complexity data for AI
+        cookbook_data = [
+            {
+                "name": a["cookbook_name"],
+                "complexity": a["complexity_score"],
+                "effort": a["estimated_effort_days"],
+                "priority": a["migration_priority"],
+                "insights": a.get("ai_insights", ""),
+            }
+            for a in assessments
+        ]
+
+        prompt = f"""Create a detailed migration roadmap for these Chef cookbooks. Consider complexity, dependencies, and migration priorities.
+
+Cookbook Data: {json.dumps(cookbook_data, indent=2)}
+
+Provide a phased migration plan with:
+1. Phase breakdown (Foundation, Core Migration, Advanced, Finalization)
+2. Week-by-week milestones
+3. Success criteria for each phase
+4. Risk mitigation strategies
+5. Team resource allocation recommendations
+
+Format as structured markdown with clear phases and timelines."""
+
+        ai_response = _call_ai_api(
+            prompt,
+            ai_provider,
+            api_key,
+            model,
+            temperature,
+            max_tokens,
+            project_id,
+            base_url,
+        )
+
+        if ai_response:
+            return ai_response
+        else:
+            # Fall back to rule-based roadmap
+            return _create_migration_roadmap(assessments)
+
+    except Exception:
+        # Fall back to rule-based roadmap
+        return _create_migration_roadmap(assessments)
+
+
+def _format_ai_assessment_report(
+    migration_scope: str,
+    target_platform: str,
+    overall_metrics: dict[str, int],
+    cookbook_assessments: list[dict],
+    recommendations: str,
+    roadmap: str,
+) -> str:
+    """
+    Format the AI-enhanced assessment report.
+
+    Args:
+        migration_scope: Scope of migration
+        target_platform: Target platform
+        overall_metrics: Overall metrics dictionary
+        cookbook_assessments: List of cookbook assessments
+        recommendations: AI-generated recommendations
+        roadmap: AI-generated roadmap
+
+    Returns:
+        Formatted AI-enhanced report string
+
+    """
+    ai_indicator = "\n🤖 **AI-Enhanced Analysis**: This report includes AI-powered insights for more accurate complexity assessment and migration planning.\n"
+
+    return f"""# Chef to Ansible Migration Assessment (AI-Enhanced)
+# Scope: {migration_scope}
+# Target Platform: {target_platform}
+{ai_indicator}
+
+## Overall Migration Metrics:
+{_format_overall_metrics(overall_metrics)}
+
+## Cookbook Assessments:
+{_format_ai_cookbook_assessments(cookbook_assessments)}
+
+## Migration Complexity Analysis:
+{_format_ai_complexity_analysis(cookbook_assessments)}
+
+## AI-Generated Migration Recommendations:
+{recommendations}
+
+## AI-Generated Migration Roadmap:
+{roadmap}
+
+## Risk Assessment:
+{_assess_migration_risks(cookbook_assessments, target_platform)}
+
+## Resource Requirements:
+{_estimate_resource_requirements(overall_metrics, target_platform)}
 """
+
+
+def _format_ai_cookbook_assessments(assessments: list) -> str:
+    """Format individual cookbook assessments with AI insights."""
+    if not assessments:
+        return "No cookbooks assessed."
+
+    def _get_priority_icon(priority: str) -> str:
+        """Get priority icon based on migration priority level."""
+        if priority == "high":
+            return "🔴"
+        elif priority == "medium":
+            return "🟡"
+        else:
+            return "🟢"
+
+    formatted = []
+    for assessment in assessments:
+        priority_icon = _get_priority_icon(assessment["migration_priority"])
+        ai_insights = assessment.get("ai_insights", "")
+        insights_section = (
+            f"\n   🤖 **AI Insights**: {ai_insights}" if ai_insights else ""
+        )
+
+        formatted.append(f"""### {assessment["cookbook_name"]} {priority_icon}
+• Complexity Score: {assessment["complexity_score"]:.1f}/100
+• Estimated Effort: {assessment["estimated_effort_days"]} days
+• Recipes: {assessment["metrics"]["recipe_count"]}
+• Resources: {assessment["metrics"]["resource_count"]}
+• Custom Resources: {assessment["metrics"]["custom_resources"]}
+• Challenges: {len(assessment["challenges"])}{insights_section}""")
+
+    return "\n\n".join(formatted)
+
+
+def _format_ai_complexity_analysis(assessments: list) -> str:
+    """Format AI-enhanced complexity analysis."""
+    if not assessments:
+        return "No complexity analysis available."
+
+    high_complexity = [a for a in assessments if a["complexity_score"] > 70]
+    medium_complexity = [a for a in assessments if 30 <= a["complexity_score"] <= 70]
+    low_complexity = [a for a in assessments if a["complexity_score"] < 30]
+
+    # Check for AI insights
+    ai_insights_count = sum(1 for a in assessments if a.get("ai_insights"))
+
+    analysis = f"""• High Complexity (>70): {len(high_complexity)} cookbooks
+• Medium Complexity (30-70): {len(medium_complexity)} cookbooks
+• Low Complexity (<30): {len(low_complexity)} cookbooks
+• AI-Enhanced Assessments: {ai_insights_count}/{len(assessments)} cookbooks
+
+**Top Migration Challenges:**
+{_identify_top_challenges(assessments)}
+
+**AI Analysis Summary:**
+• {ai_insights_count} cookbooks received AI-powered complexity analysis
+• Enhanced accuracy for effort estimation and risk identification
+• Context-aware migration recommendations"""
+
+    return analysis

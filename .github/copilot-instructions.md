@@ -61,6 +61,14 @@ souschef/
    # Patch: "souschef.converters.playbook._normalize_path"
    ```
 
+6. **Respecting the Architecture**: Always follow the established module structure. Refer to [**ARCHITECTURE.md**](../docs/ARCHITECTURE.md) for:
+   - Where code belongs (use the decision tree)
+   - Module responsibilities and boundaries
+   - Design patterns and architectural principles
+   - When to create new modules vs. reusing existing ones
+
+   **Before suggesting changes, ask**: "Does this belong in this module? Should it be refactored to another module instead?"
+
 ## Development Standards
 
 ### Code Quality
@@ -71,6 +79,10 @@ souschef/
 - **Formatting**: Code must be formatted with `ruff format`
 - **Type checking**: Code must pass `mypy` type checking with no errors
 - **Import cleanup**: ALWAYS respect `# noqa: F401` markers - these indicate intentional re-exports for backward compatibility with tests. Never remove imports marked with `# noqa: F401` even if they appear unused in the file itself
+- **Australian English**: Use Australian English spelling in all documentation, comments, and docstrings:
+  - Use: colour, centre, organise, recognise, optimise, customise, behaviour, honour, etc.
+  - Not: color, center, organize, recognize, optimize, customize, behavior, honor, etc.
+  - This includes docstrings, comments, and documentation files
 
 ### Development Tools
 SousChef uses a modern Python toolchain:
@@ -168,10 +180,12 @@ Before suggesting code, ensure:
 7.  Integration tests added/updated in `test_integration.py`
 8.  Property-based tests added if applicable in `test_property_based.py`
 9.  Test fixtures updated if new parsing features added
-10.  Type hints are complete
-11.  Docstrings are present and clear
-12.  Error cases are handled
-13.  Cross-platform compatible
+10. Type hints are complete
+11. Docstrings are present and clear
+12. Error cases are handled
+13. Cross-platform compatible
+14. **Architecture respected**: Code follows module structure from [ARCHITECTURE.md](../docs/ARCHITECTURE.md) - if uncertain about placement, use the decision tree
+15. **Australian English used**: All documentation, comments, and docstrings use Australian English spelling (colour, organise, recognise, etc.)
 
 ## Preferred Patterns
 

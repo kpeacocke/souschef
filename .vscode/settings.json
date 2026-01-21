@@ -104,5 +104,6 @@
     "go.testExplorer.packageDisplayMode": "hierarchical",
     "go.testExplorer.showDynamicSubtests": true,
     "go.testExplorer.showTestCoverage": true,
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+    "snyk.advanced.autoSelectOrganization": true
 }

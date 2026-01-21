@@ -98,6 +98,7 @@ def generate_playbook_from_recipe_with_ai(
     max_tokens: int = 4000,
     project_id: str = "",
     base_url: str = "",
+    project_recommendations: dict | None = None,
 ) -> str:
     """
     Generate an AI-enhanced Ansible playbook from a Chef recipe.
@@ -116,6 +117,8 @@ def generate_playbook_from_recipe_with_ai(
         max_tokens: Maximum tokens to generate.
         project_id: Project ID for IBM Watsonx (required for watson provider).
         base_url: Custom base URL for the AI provider.
+        project_recommendations: Dictionary containing project-level analysis
+            and recommendations from cookbook assessment.
 
     Returns:
         AI-generated Ansible playbook in YAML format.
@@ -146,6 +149,7 @@ def generate_playbook_from_recipe_with_ai(
             max_tokens,
             project_id,
             base_url,
+            project_recommendations,
         )
 
         return ai_playbook
@@ -165,6 +169,7 @@ def _generate_playbook_with_ai(
     max_tokens: int,
     project_id: str = "",
     base_url: str = "",
+    project_recommendations: dict | None = None,
 ) -> str:
     """Generate Ansible playbook using AI for intelligent conversion."""
     try:
@@ -174,7 +179,9 @@ def _generate_playbook_with_ai(
             return client
 
         # Create the AI prompt
-        prompt = _create_ai_conversion_prompt(raw_content, parsed_content, recipe_name)
+        prompt = _create_ai_conversion_prompt(
+            raw_content, parsed_content, recipe_name, project_recommendations
+        )
 
         # Call the AI API and get response
         ai_response = _call_ai_api(
@@ -333,96 +340,257 @@ def _call_ai_api(
 
 
 def _create_ai_conversion_prompt(
-    raw_content: str, parsed_content: str, recipe_name: str
+    raw_content: str,
+    parsed_content: str,
+    recipe_name: str,
+    project_recommendations: dict | None = None,
 ) -> str:
     """Create a comprehensive prompt for AI conversion."""
-    return f"""You are an expert at converting Chef recipes to Ansible playbooks.
-Your task is to convert the following Chef recipe into a high-quality,
-production-ready Ansible playbook.
+    prompt_parts = _build_base_prompt_parts(raw_content, parsed_content, recipe_name)
 
-CHEF RECIPE CONTENT:
-{raw_content}
+    # Add project context if available
+    if project_recommendations:
+        prompt_parts.extend(
+            _build_project_context_parts(project_recommendations, recipe_name)
+        )
 
-PARSED RECIPE ANALYSIS:
-{parsed_content}
+    prompt_parts.extend(_build_conversion_requirements_parts())
 
-RECIPE NAME: {recipe_name}
+    # Add project-specific guidance if available
+    if project_recommendations:
+        prompt_parts.extend(_build_project_guidance_parts(project_recommendations))
 
-CONVERSION REQUIREMENTS:
+    prompt_parts.extend(_build_output_format_parts())
 
-1. **Understand the Intent**: Analyze what this Chef recipe is trying to
-   accomplish. Look at the resources, their properties, and the overall
-   workflow.
+    return "\n".join(prompt_parts)
 
-2. **Best Practices**: Generate Ansible code that follows Ansible best
-   practices:
-   - Use appropriate modules (ansible.builtin.* when possible)
-   - Include proper error handling and idempotency
-   - Use meaningful variable names
-   - Include comments explaining complex logic
-   - Handle edge cases and failure scenarios
 
-3. **Resource Mapping**: Convert Chef resources to appropriate Ansible
-   modules:
-   - package → ansible.builtin.package or specific package managers
-   - service → ansible.builtin.service
-   - file/directory → ansible.builtin.file
-   - template → ansible.builtin.template
-   - execute → ansible.builtin.command/shell
-   - user/group → ansible.builtin.user/group
-   - mount → ansible.builtin.mount
+def _build_base_prompt_parts(
+    raw_content: str, parsed_content: str, recipe_name: str
+) -> list[str]:
+    """Build the base prompt parts."""
+    return [
+        "You are an expert at converting Chef recipes to Ansible playbooks.",
+        "Your task is to convert the following Chef recipe into a high-quality,",
+        "production-ready Ansible playbook.",
+        "",
+        "CHEF RECIPE CONTENT:",
+        raw_content,
+        "",
+        "PARSED RECIPE ANALYSIS:",
+        parsed_content,
+        "",
+        f"RECIPE NAME: {recipe_name}",
+    ]
 
-4. **Variables and Facts**: Convert Chef node attributes to Ansible
-   variables/facts appropriately.
 
-5. **Conditionals**: Convert Chef guards (only_if/not_if) to Ansible when
-   conditions.
+def _build_project_context_parts(
+    project_recommendations: dict, recipe_name: str
+) -> list[str]:
+    """Build project context parts."""
+    # Extract values to shorten f-strings
+    complexity = project_recommendations.get("project_complexity", "Unknown")
+    strategy = project_recommendations.get("migration_strategy", "Unknown")
+    effort_days = project_recommendations.get("project_effort_days", 0)
+    density = project_recommendations.get("dependency_density", 0)
 
-6. **Notifications**: Convert Chef notifications to Ansible handlers where
-   appropriate.
+    parts = [
+        "",
+        "PROJECT CONTEXT:",
+        f"Project Complexity: {complexity}",
+        f"Migration Strategy: {strategy}",
+        f"Total Project Effort: {effort_days:.1f} days",
+        f"Dependency Density: {density:.2f}",
+    ]
 
-7. **Idempotency**: Ensure the playbook is idempotent and can be run
-   multiple times safely.
+    # Add migration recommendations
+    recommendations = project_recommendations.get("recommendations", [])
+    if recommendations:
+        parts.extend(
+            [
+                "",
+                "PROJECT MIGRATION RECOMMENDATIONS:",
+            ]
+        )
+        for rec in recommendations[:5]:  # Limit to first 5 recommendations
+            parts.append(f"- {rec}")
 
-8. **Error Handling**: Include proper error handling and rollback
-   considerations.
+    # Add dependency information
+    migration_order = project_recommendations.get("migration_order", [])
+    if migration_order:
+        recipe_position = _find_recipe_position_in_migration_order(
+            migration_order, recipe_name
+        )
+        if recipe_position:
+            dependencies = ", ".join(recipe_position.get("dependencies", [])) or "None"
+            parts.extend(
+                [
+                    "",
+                    "MIGRATION CONTEXT FOR THIS RECIPE:",
+                    f"Phase: {recipe_position.get('phase', 'Unknown')}",
+                    f"Complexity: {recipe_position.get('complexity', 'Unknown')}",
+                    f"Dependencies: {dependencies}",
+                    f"Migration Reason: {recipe_position.get('reason', 'Unknown')}",
+                ]
+            )
 
-9. **Task Ordering**: CRITICAL: Ensure tasks are ordered logically.
-   - Install packages BEFORE configuring them.
-   - create users/groups BEFORE using them in file permissions.
-   - Place configuration files BEFORE starting/restarting services.
-   - Ensure directories exist BEFORE creating files in them.
+    return parts
 
-10. **Handlers**: Verify that all notified handlers are actually defined
-    in the handlers section.
 
-OUTPUT FORMAT:
-Return ONLY a valid YAML Ansible playbook. Do not include any explanation,
-markdown formatting, or code blocks. The output should be pure YAML that can
-be directly used as an Ansible playbook.
+def _find_recipe_position_in_migration_order(
+    migration_order: list[dict[str, Any]], recipe_name: str
+) -> dict[str, Any] | None:
+    """Find this recipe's position in migration order."""
+    for item in migration_order:
+        cookbook_name = recipe_name.replace(".rb", "").replace("recipes/", "")
+        if item.get("cookbook") == cookbook_name:
+            return item
+    return None
 
-The playbook should include:
-- A proper name
-- Appropriate hosts (default to 'all')
-- Variables section if needed
-- Tasks section with all converted resources
-- Handlers section if notifications are used
-- Any necessary pre_tasks or post_tasks
 
-Example structure:
----
-- name: Convert of {recipe_name}
-  hosts: all
-  become: true
-  vars:
-    # Variables here
-  tasks:
-    # Tasks here
-  handlers:
-    # Handlers here
+def _build_conversion_requirements_parts() -> list[str]:
+    """Build conversion requirements parts."""
+    return [
+        "",
+        "CONVERSION REQUIREMENTS:",
+        "",
+        "1. **Understand the Intent**: Analyze what this Chef recipe is trying to",
+        "   accomplish. Look at the resources, their properties, and the overall",
+        "   workflow.",
+        "",
+        "2. **Best Practices**: Generate Ansible code that follows Ansible best",
+        "   practices:",
+        "   - Use appropriate modules (ansible.builtin.* when possible)",
+        "   - Include proper error handling and idempotency",
+        "   - Use meaningful variable names",
+        "   - Include comments explaining complex logic",
+        "   - Handle edge cases and failure scenarios",
+        "",
+        "3. **Resource Mapping**: Convert Chef resources to appropriate Ansible",
+        "   modules:",
+        "   - package → ansible.builtin.package or specific package managers",
+        "   - service → ansible.builtin.service",
+        "   - file/directory → ansible.builtin.file",
+        "   - template → ansible.builtin.template (CHANGE .erb to .j2 extension)",
+        "   - execute → ansible.builtin.command/shell",
+        "   - user/group → ansible.builtin.user/group",
+        "   - mount → ansible.builtin.mount",
+        "   - include_recipe → ansible.builtin.include_role (for unknown cookbooks)",
+        "   - include_recipe → specific role imports (for known cookbooks)",
+        "",
+        "4. **Template Conversions**: CRITICAL for template resources:",
+        "   - Change file extension from .erb to .j2 in the 'src' parameter",
+        "   - Example: 'config.erb' becomes 'config.j2'",
+        "   - Add note: Templates need manual ERB→Jinja2 conversion",
+        "   - ERB syntax: <%= variable %> → Jinja2: {{ variable }}",
+        "   - ERB blocks: <% code %> → Jinja2: {% code %}",
+        "",
+        "5. **Chef Data Bags to Ansible Vault**: Convert data bag lookups:",
+        "   - Chef::EncryptedDataBagItem.load('bag', 'item') →",
+        "   - Ansible: Use group_vars/ or host_vars/ with ansible-vault",
+        "   - Store sensitive data in encrypted YAML files, not inline lookups",
+        "   - Example: Define ssh_key in group_vars/all/vault.yml (encrypted)",
+        "",
+        "6. **Variables and Facts**: Convert Chef node attributes to Ansible",
+        "   variables/facts appropriately:",
+        "   - node['attribute'] → {{ ansible_facts.attribute }} or vars",
+        "   - node['platform'] → {{ ansible_distribution }}",
+        "   - node['platform_version'] → {{ ansible_distribution_version }}",
+        "",
+        "7. **Conditionals**: Convert Chef guards (only_if/not_if) to Ansible when",
+        "   conditions.",
+        "",
+        "8. **Notifications**: Convert Chef notifications to Ansible handlers",
+        "   where appropriate.",
+        "",
+        "9. **Idempotency**: Ensure the playbook is idempotent and can be run",
+        "   multiple times safely.",
+        "",
+        "10. **Error Handling**: Include proper error handling and rollback",
+        "   considerations.",
+        "",
+        "11. **Task Ordering**: CRITICAL: Ensure tasks are ordered logically.",
+        "   - Install packages BEFORE configuring them.",
+        "   - create users/groups BEFORE using them in file permissions.",
+        "   - Place configuration files BEFORE starting/restarting services.",
+        "   - Ensure directories exist BEFORE creating files in them.",
+        "",
+        "12. **Handlers**: Verify that all notified handlers are actually defined",
+        "    in the handlers section.",
+    ]
 
-Focus on creating a functional, well-structured Ansible playbook that achieves
-the same outcome as the Chef recipe."""
+
+def _build_project_guidance_parts(project_recommendations: dict) -> list[str]:
+    """Build project-specific guidance parts."""
+    strategy = project_recommendations.get("migration_strategy", "").lower()
+    parts = []
+
+    if "parallel" in strategy:
+        parallel_tracks = project_recommendations.get("parallel_tracks", 2)
+        parts.extend(
+            [
+                "",
+                "11. **Parallel Migration Context**: This recipe is part of a",
+                f"    parallel migration with {parallel_tracks} tracks.",
+                "    Ensure this playbook can run independently without",
+                "    dependencies on other cookbooks in the project.",
+            ]
+        )
+    elif "phased" in strategy:
+        parts.extend(
+            [
+                "",
+                "11. **Phased Migration Context**: This recipe is part of a phased",
+                "    migration approach. Consider dependencies and ensure proper",
+                "    ordering within the broader project migration plan.",
+            ]
+        )
+
+    return parts
+
+
+def _build_output_format_parts() -> list[str]:
+    """Build output format parts."""
+    return [
+        "",
+        "OUTPUT FORMAT:",
+        "Return ONLY a valid YAML Ansible playbook. Do not include any",
+        "   explanation, markdown formatting, or code blocks. The output should",
+        "   be pure YAML that can be directly used as an Ansible playbook.",
+        "",
+        "CRITICAL YAML SYNTAX RULES:",
+        "- Use block mapping style (one key per line) NOT flow mapping style",
+        "- NEVER use { } for mappings with conditionals or complex expressions",
+        "- Correct: Use multi-line format:",
+        "    - name: Include role conditionally",
+        "      ansible.builtin.import_role:",
+        "        name: my_role",
+        "      when: condition_here",
+        "- WRONG: { role: my_role, when: condition }  # This is INVALID",
+        "",
+        "The playbook should include:",
+        "- A proper name",
+        "- Appropriate hosts (default to 'all')",
+        "- Variables section if needed",
+        "- Tasks section with all converted resources",
+        "- Handlers section if notifications are used",
+        "- Any necessary pre_tasks or post_tasks",
+        "",
+        "Example structure:",
+        "---",
+        "- name: Convert of <recipe_name>",
+        "  hosts: all",
+        "  become: true",
+        "  vars:",
+        "    # Variables here",
+        "  tasks:",
+        "    # Tasks here",
+        "  handlers:",
+        "    # Handlers here",
+        "",
+        "Focus on creating a functional, well-structured Ansible playbook that",
+        "achieves the same outcome as the Chef recipe.",
+    ]
 
 
 def _clean_ai_playbook_response(ai_response: str) -> str:
@@ -507,6 +675,7 @@ def _run_ansible_lint(playbook_content: str) -> str | None:
     if shutil.which("ansible-lint") is None:
         return None
 
+    tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as tmp:
             tmp.write(playbook_content)
@@ -528,7 +697,7 @@ def _run_ansible_lint(playbook_content: str) -> str | None:
     except Exception:
         return None
     finally:
-        if "tmp_path" in locals() and Path(tmp_path).exists():
+        if tmp_path is not None and Path(tmp_path).exists():
             Path(tmp_path).unlink()
 
 
