@@ -2976,11 +2976,11 @@ def _setup_conversion_metadata(cookbook_dir: Path, role_name: str) -> tuple[str,
 
 def _create_role_structure(output_dir: Path, role_name: str) -> Path:
     """Create the standard Ansible role directory structure."""
-    role_dir = output_dir / role_name
-    role_tasks_dir = role_dir / "tasks"
-    role_templates_dir = role_dir / "templates"
-    role_vars_dir = role_dir / "vars"
-    role_defaults_dir = role_dir / "defaults"
+    role_dir = _safe_join(output_dir, role_name)
+    role_tasks_dir = _safe_join(role_dir, "tasks")
+    role_templates_dir = _safe_join(role_dir, "templates")
+    role_vars_dir = _safe_join(role_dir, "vars")
+    role_defaults_dir = _safe_join(role_dir, "defaults")
 
     for directory in [
         role_tasks_dir,
@@ -2997,8 +2997,8 @@ def _convert_recipes(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert Chef recipes to Ansible tasks."""
-    recipes_dir = cookbook_dir / "recipes"
-    role_tasks_dir = role_dir / "tasks"
+    recipes_dir = _safe_join(cookbook_dir, "recipes")
+    role_tasks_dir = _safe_join(role_dir, "tasks")
 
     if not recipes_dir.exists():
         conversion_summary["warnings"].append(
@@ -3061,8 +3061,8 @@ def _convert_templates(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert ERB templates to Jinja2 templates."""
-    templates_dir = cookbook_dir / "templates"
-    role_templates_dir = role_dir / "templates"
+    templates_dir = _safe_join(cookbook_dir, "templates")
+    role_templates_dir = _safe_join(role_dir, "templates")
 
     if not templates_dir.exists():
         return
@@ -3116,8 +3116,8 @@ def _convert_attributes(
     """Convert Chef attributes to Ansible variables."""
     import yaml
 
-    attributes_dir = cookbook_dir / "attributes"
-    role_defaults_dir = role_dir / "defaults"
+    attributes_dir = _safe_join(cookbook_dir, "attributes")
+    role_defaults_dir = _safe_join(role_dir, "defaults")
 
     if not attributes_dir.exists():
         return
