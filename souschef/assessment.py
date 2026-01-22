@@ -39,6 +39,10 @@ except ImportError:
     APIClient = None
 
 
+# Optimised patterns to avoid catastrophic backtracking in resource parsing
+RESOURCE_BLOCK_PATTERN = re.compile(r"\w{1,100}\s+['\"]([^'\"\r\n]{0,200})['\"]\s+do")
+
+
 def assess_chef_migration_complexity(
     cookbook_paths: str,
     migration_scope: str = "full",
@@ -779,9 +783,7 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
             try:
                 content = recipe_file.read_text(encoding="utf-8", errors="ignore")
                 # Count Chef resources
-                resources = len(
-                    re.findall(r'\w{1,100}\s+[\'"]([^\'"]{0,200})[\'"]\s+do', content)
-                )
+                resources = len(RESOURCE_BLOCK_PATTERN.findall(content))
                 ruby_blocks += len(
                     re.findall(
                         r"ruby_block|execute|bash|script", content, re.IGNORECASE

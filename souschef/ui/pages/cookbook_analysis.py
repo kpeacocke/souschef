@@ -44,6 +44,43 @@ IBM_WATSONX = "IBM Watsonx"
 RED_HAT_LIGHTSPEED = "Red Hat Lightspeed"
 
 
+def _sanitize_filename(filename: str) -> str:
+    """
+    Sanitise filename to prevent path injection attacks.
+
+    Args:
+        filename: The filename to sanitise.
+
+    Returns:
+        Sanitised filename safe for file operations.
+
+    """
+    import re
+
+    # Remove any path separators and parent directory references
+    sanitised = filename.replace("..", "_").replace("/", "_").replace("\\", "_")
+    # Remove any null bytes or control characters
+    sanitised = re.sub(r"[\x00-\x1f\x7f]", "_", sanitised)
+    # Remove leading/trailing whitespace and dots
+    sanitised = sanitised.strip(". ")
+    # Limit length to prevent issues
+    sanitised = sanitised[:255]
+    return sanitised if sanitised else "unnamed"
+
+
+def _get_secure_ai_config_path() -> Path:
+    """Return a private, non-world-writable path for AI config storage."""
+    config_dir = Path(tempfile.gettempdir()) / ".souschef"
+    config_dir.mkdir(mode=0o700, exist_ok=True)
+    with contextlib.suppress(OSError):
+        config_dir.chmod(0o700)
+
+    if config_dir.is_symlink():
+        raise ValueError("AI config directory cannot be a symlink")
+
+    return config_dir / "ai_config.json"
+
+
 def load_ai_settings() -> dict[str, str | float | int]:
     """Load AI settings from environment variables or configuration file."""
     # First try to load from environment variables
@@ -94,14 +131,13 @@ def _load_ai_settings_from_env() -> dict[str, str | float | int]:
 def _load_ai_settings_from_file() -> dict[str, str | float | int]:
     """Load AI settings from configuration file."""
     try:
-        # Use /tmp/.souschef for container compatibility (tmpfs is writable)
-        config_file = Path("/tmp/.souschef/ai_config.json")
+        config_file = _get_secure_ai_config_path()
         if config_file.exists():
             with config_file.open() as f:
                 file_config = json.load(f)
                 return dict(file_config) if isinstance(file_config, dict) else {}
-    except Exception:
-        pass  # Ignore errors when loading config file; return empty dict as fallback
+    except (ValueError, OSError):
+        return {}
     return {}
 
 
@@ -440,8 +476,14 @@ def _extract_tar_securely(
     """Extract TAR archive with security checks."""
     mode = "r:gz" if gzipped else "r"
 
+    if not archive_path.is_file():
+        raise ValueError(f"Archive path is not a file: {archive_path}")
+
+    if not tarfile.is_tarfile(str(archive_path)):
+        raise ValueError(f"Invalid or corrupted TAR archive: {archive_path.name}")
+
     try:
-        with tarfile.open(str(archive_path), mode=mode) as tar_ref:  # type: ignore[call-overload]
+        with tarfile.open(str(archive_path), mode=mode) as tar_ref:
             members = tar_ref.getmembers()
             _pre_scan_tar_members(members)
             _extract_tar_members(tar_ref, members, extraction_dir)
@@ -3070,7 +3112,9 @@ def _convert_and_download_playbooks(results):
             for _i, playbook in enumerate(playbooks):
                 # Sanitize filename - include recipe name to avoid conflicts
                 recipe_name = playbook["recipe_file"].replace(".rb", "")
-                filename = f"{playbook['cookbook_name']}_{recipe_name}.yml"
+                cookbook_name = _sanitize_filename(playbook["cookbook_name"])
+                recipe_name = _sanitize_filename(recipe_name)
+                filename = f"{cookbook_name}_{recipe_name}.yml"
                 (output_dir / filename).write_text(playbook["playbook_content"])
 
             # Store path in session state for validation page
@@ -3373,17 +3417,18 @@ def _create_playbook_archive(playbooks, templates=None):
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         # Organize playbooks by cookbook in subdirectories
         for playbook in playbooks:
-            # Create cookbook directory structure
-            cookbook_name = playbook["cookbook_name"]
-            recipe_name = playbook["recipe_file"].replace(".rb", "")
+            # Create cookbook directory structure with sanitised names
+            cookbook_name = _sanitize_filename(playbook["cookbook_name"])
+            recipe_name = _sanitize_filename(playbook["recipe_file"].replace(".rb", ""))
             playbook_filename = f"{cookbook_name}/{recipe_name}.yml"
             zip_file.writestr(playbook_filename, playbook["playbook_content"])
 
         # Add converted templates
         for template in templates:
-            cookbook_name = template["cookbook_name"]
-            template_filename = f"{cookbook_name}/templates/{template['template_file']}"
-            zip_file.writestr(template_filename, template["template_content"])
+            cookbook_name = _sanitize_filename(template["cookbook_name"])
+            template_filename = _sanitize_filename(template["template_file"])
+            archive_path = f"{cookbook_name}/templates/{template_filename}"
+            zip_file.writestr(archive_path, template["template_content"])
 
         # Count unique cookbooks
         unique_cookbooks = len({p["cookbook_name"] for p in playbooks})
@@ -3415,24 +3460,28 @@ This archive contains {len(playbooks)} Ansible playbooks and {template_count} ""
 
         for cookbook_name, cookbook_playbooks in sorted(by_cookbook.items()):
             cookbook_templates = by_cookbook_templates.get(cookbook_name, [])
+            # Sanitise cookbook name for display in README
+            safe_cookbook_name = _sanitize_filename(cookbook_name)
             readme_content += (
-                f"\n### {cookbook_name}/ "
+                f"\n### {safe_cookbook_name}/ "
                 f"({len(cookbook_playbooks)} recipes, "
                 f"{len(cookbook_templates)} templates)\n"
             )
             for playbook in cookbook_playbooks:
                 conversion_method = playbook.get("conversion_method", "Deterministic")
                 recipe_name = playbook["recipe_file"].replace(".rb", "")
+                safe_recipe_name = _sanitize_filename(recipe_name)
                 readme_content += (
-                    f"  - {recipe_name}.yml "
+                    f"  - {safe_recipe_name}.yml "
                     f"(from {playbook['recipe_file']}, "
                     f"{conversion_method})\n"
                 )
             if cookbook_templates:
                 readme_content += "  - templates/\n"
                 for template in cookbook_templates:
+                    safe_template_name = _sanitize_filename(template["template_file"])
                     readme_content += (
-                        f"    - {template['template_file']} "
+                        f"    - {safe_template_name} "
                         f"(from {template['original_file']})\n"
                     )
 
