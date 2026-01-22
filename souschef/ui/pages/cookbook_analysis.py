@@ -33,6 +33,7 @@ from souschef.core.metrics import (
     get_timeline_weeks,
     validate_metrics_consistency,
 )
+from souschef.core.path_utils import _normalize_path
 from souschef.parsers.metadata import parse_cookbook_metadata
 
 # AI Settings
@@ -1135,7 +1136,7 @@ def _show_cookbook_validation_warnings(cookbook_data: list):
     # Check for cookbooks without recipes
     cookbooks_without_recipes = []
     for cookbook in cookbook_data:
-        cookbook_dir = Path(cookbook["Path"])
+        cookbook_dir = _normalize_path(cookbook["Path"])
         recipes_dir = cookbook_dir / "recipes"
         if not recipes_dir.exists() or not list(recipes_dir.glob("*.rb")):
             cookbooks_without_recipes.append(cookbook["Name"])
@@ -1252,8 +1253,8 @@ def _analyze_with_ai(
 
     # Count total recipes across all cookbooks
     total_recipes = sum(
-        len(list((Path(cb["Path"]) / "recipes").glob("*.rb")))
-        if (Path(cb["Path"]) / "recipes").exists()
+        len(list((_normalize_path(cb["Path"]) / "recipes").glob("*.rb")))
+        if (_normalize_path(cb["Path"]) / "recipes").exists()
         else 0
         for cb in cookbook_data
     )
@@ -1263,7 +1264,7 @@ def _analyze_with_ai(
     results = []
     for i, cb_data in enumerate(cookbook_data):
         # Count recipes in this cookbook
-        recipes_dir = Path(cb_data["Path"]) / "recipes"
+        recipes_dir = _normalize_path(cb_data["Path"]) / "recipes"
         recipe_count = (
             len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
         )
@@ -1752,8 +1753,6 @@ def _display_conversion_download_options(conversion_result: dict):
         # Validate output_path before use
         output_path = conversion_result["output_path"]
         try:
-            from souschef.core.path_utils import _normalize_path
-
             # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
             safe_output_path = _normalize_path(str(output_path))
         except ValueError:
