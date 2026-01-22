@@ -920,7 +920,7 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
 
 def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     """Parse chefignore file for ignore patterns."""
-    cookbook_path = Path(cookbook_path)
+    cookbook_path = _normalize_path(cookbook_path)
     chefignore = cookbook_path / "chefignore"
 
     if not chefignore.exists():
@@ -950,7 +950,7 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
 
 def _parse_thorfile(cookbook_path) -> dict[str, Any]:
     """Parse Thorfile for Thor tasks."""
-    cookbook_path = Path(cookbook_path)
+    cookbook_path = _normalize_path(cookbook_path)
     thorfile = cookbook_path / "Thorfile"
 
     if not thorfile.exists():
@@ -975,7 +975,7 @@ def _parse_thorfile(cookbook_path) -> dict[str, Any]:
 
 def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
     """Parse metadata.rb for cookbook information."""
-    cookbook_path = Path(cookbook_path)
+    cookbook_path = _normalize_path(cookbook_path)
     metadata_file = cookbook_path / "metadata.rb"
 
     if not metadata_file.exists():
