@@ -300,6 +300,10 @@ def parse_template(path: str) -> str:
         JSON string with extracted variables and Jinja2-converted template.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating template path", path)
     return _parse_template(path)
 
 
@@ -315,6 +319,10 @@ def parse_custom_resource(path: str) -> str:
         JSON string with extracted properties, actions, and metadata.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating resource path", path)
     return _parse_custom_resource(path)
 
 
@@ -330,6 +338,10 @@ def list_directory(path: str) -> list[str] | str:
         A list of filenames in the directory, or an error message.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating directory path", path)
     result: list[str] | str = _list_directory(path)
     return result
 
@@ -346,6 +358,10 @@ def read_file(path: str) -> str:
         The contents of the file, or an error message.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating file path", path)
     result: str = _read_file(path)
     return result
 
@@ -362,6 +378,10 @@ def read_cookbook_metadata(path: str) -> str:
         Formatted string with extracted metadata.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating metadata path", path)
     return _read_cookbook_metadata(path)
 
 
@@ -377,6 +397,10 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
         Dictionary containing extracted metadata fields.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return {"error": str(e)}
     return _parse_cookbook_metadata(path)
 
 
@@ -392,6 +416,10 @@ def parse_recipe(path: str) -> str:
         Formatted string with extracted Chef resources and their properties.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating recipe path", path)
     return _parse_recipe(path)
 
 
@@ -421,6 +449,10 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
         Formatted string with extracted attributes.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating attributes path", path)
     return _parse_attributes(path, resolve_precedence)
 
 
@@ -436,6 +468,10 @@ def list_cookbook_structure(path: str) -> str:
         Formatted string showing the cookbook structure.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating cookbook path", path)
     return _list_cookbook_structure(path)
 
 
@@ -575,6 +611,10 @@ def parse_inspec_profile(path: str) -> str:
         JSON string with parsed controls, or error message.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating InSpec path", path)
     return _parse_inspec(path)
 
 
@@ -591,6 +631,10 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         Converted test code or error message.
 
     """
+    try:
+        inspec_path = str(_normalize_path(inspec_path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating InSpec path", inspec_path)
     return _convert_inspec_test(inspec_path, output_format)
 
 
@@ -646,6 +690,9 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:
 
     """
     try:
+        # Validate and normalize path
+        recipe_path = str(_normalize_path(recipe_path))
+
         # First parse the recipe
         recipe_result: str = parse_recipe(recipe_path)
 
@@ -915,6 +962,9 @@ def analyse_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
         Analysis of data bag usage and migration recommendations
 
     """
+    cookbook_path = str(_normalize_path(cookbook_path))
+    if databags_path:
+        databags_path = str(_normalize_path(databags_path))
     try:
         cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
@@ -2474,6 +2524,7 @@ def parse_habitat_plan(plan_path: str) -> str:
         JSON string with parsed plan metadata
 
     """
+    plan_path = str(_normalize_path(plan_path))
     return _parse_habitat_plan(plan_path)
 
 
@@ -2571,6 +2622,7 @@ def analyse_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         Analysis of search patterns found.
 
     """
+    recipe_or_cookbook_path = str(_normalize_path(recipe_or_cookbook_path))
     return _analyse_chef_search_patterns(recipe_or_cookbook_path)
 
 
@@ -2593,6 +2645,7 @@ def profile_cookbook_performance(cookbook_path: str) -> str:
     from souschef.profiling import generate_cookbook_performance_report
 
     try:
+        cookbook_path = str(_normalize_path(cookbook_path))
         report = generate_cookbook_performance_report(cookbook_path)
         return str(report)
     except Exception as e:
@@ -2638,6 +2691,7 @@ def profile_parsing_operation(
     func = operation_map[operation]
 
     try:
+        file_path = str(_normalize_path(file_path))
         if detailed:
             _, profile_result = detailed_profile_function(func, file_path)
             result = str(profile_result)
@@ -2681,6 +2735,7 @@ def generate_jenkinsfile_from_chef(
     from souschef.ci.jenkins_pipeline import generate_jenkinsfile_from_chef_ci
 
     try:
+        cookbook_path = str(_normalize_path(cookbook_path))
         # Convert string to boolean
         enable_parallel_bool = enable_parallel.lower() in ("yes", "true", "1")
 
@@ -2723,6 +2778,7 @@ def generate_gitlab_ci_from_chef(
     from souschef.ci.gitlab_ci import generate_gitlab_ci_from_chef_ci
 
     try:
+        cookbook_path = str(_normalize_path(cookbook_path))
         enable_cache_bool = enable_cache.lower() in ("yes", "true", "1")
         enable_artifacts_bool = enable_artifacts.lower() in ("yes", "true", "1")
         result = generate_gitlab_ci_from_chef_ci(
@@ -2768,6 +2824,7 @@ def generate_github_workflow_from_chef(
     from souschef.ci.github_actions import generate_github_workflow_from_chef_ci
 
     try:
+        cookbook_path = str(_normalize_path(cookbook_path))
         enable_cache_bool = enable_cache.lower() in ("yes", "true", "1")
         enable_artifacts_bool = enable_artifacts.lower() in ("yes", "true", "1")
         result = generate_github_workflow_from_chef_ci(
