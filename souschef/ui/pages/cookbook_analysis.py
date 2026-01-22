@@ -494,7 +494,8 @@ def _extract_tar_securely(
         raise ValueError(f"Invalid or corrupted TAR archive: {archive_path.name}")
 
     try:
-        with tarfile.open(  # type: ignore[call-overload]  # NOSONAR
+        # NOSONAR python:S930 - filter param valid in Python 3.12+
+        with tarfile.open(  # type: ignore[call-overload]
             str(archive_path), mode=mode, filter="data"
         ) as tar_ref:
             members = tar_ref.getmembers()
@@ -1770,55 +1771,104 @@ def _display_conversion_report(result_text: str):
         st.code(result_text, language="markdown")
 
 
+def _validate_output_path(output_path: str) -> Path | None:
+    """
+    Validate and normalize output path.
+
+    Args:
+        output_path: Path string to validate.
+
+    Returns:
+        Normalized Path object or None if invalid.
+
+    """
+    try:
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+        safe_output_path = _normalize_path(str(output_path))
+        return safe_output_path if safe_output_path.exists() else None
+    except ValueError:
+        return None
+
+
+def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
+    """
+    Collect all files from converted roles directory.
+
+    Args:
+        safe_output_path: Validated base path.
+
+    Returns:
+        List of (file_path, archive_name) tuples.
+
+    """
+    files_to_archive = []
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+    # codeql[py/path-injection]: safe_output_path normalized
+    for root, _dirs, files in os.walk(str(safe_output_path)):
+        root_path = _normalize_path(root)
+        if not root_path.is_relative_to(safe_output_path):
+            continue
+
+        for file in files:
+            safe_name = _sanitize_filename(file)
+            file_path = root_path / safe_name
+            # codeql[py/path-injection]: containment enforced before writing
+            if file_path.is_relative_to(safe_output_path):
+                arcname = file_path.relative_to(safe_output_path)
+                files_to_archive.append((file_path, arcname))
+
+    return files_to_archive
+
+
+def _create_roles_zip_archive(safe_output_path: Path) -> bytes:
+    """
+    Create ZIP archive of converted roles.
+
+    Args:
+        safe_output_path: Validated path containing roles.
+
+    Returns:
+        ZIP archive as bytes.
+
+    """
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        files_to_archive = _collect_role_files(safe_output_path)
+        for file_path, arcname in files_to_archive:
+            zip_file.write(str(file_path), str(arcname))
+
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
+
+
 def _display_conversion_download_options(conversion_result: dict):
     """Display download options for converted roles."""
-    if "output_path" in conversion_result:
-        st.subheader("Download Converted Roles")
+    if "output_path" not in conversion_result:
+        return
 
-        # Validate output_path before use
-        output_path = conversion_result["output_path"]
-        try:
-            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-            safe_output_path = _normalize_path(str(output_path))
-        except ValueError:
-            st.error("Invalid output path")
-            return
+    st.subheader("Download Converted Roles")
+    output_path = conversion_result["output_path"]
 
-        if safe_output_path.exists():
-            # Create ZIP archive of all converted roles
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-                # codeql[py/path-injection]: safe_output_path normalized
-                # codeql[py/path-injection]: containment enforced before writing
-                for root, _dirs, files in os.walk(str(safe_output_path)):
-                    root_path = _normalize_path(root)
-                    if not root_path.is_relative_to(safe_output_path):
-                        continue
+    safe_output_path = _validate_output_path(output_path)
+    if safe_output_path is None:
+        st.error("Invalid output path")
+        return
 
-                    for file in files:
-                        safe_name = _sanitize_filename(file)
-                        file_path = root_path / safe_name
-                        if not file_path.is_relative_to(safe_output_path):
-                            continue
+    if safe_output_path.exists():
+        archive_data = _create_roles_zip_archive(safe_output_path)
 
-                        arcname = file_path.relative_to(safe_output_path)
-                        zip_file.write(str(file_path), str(arcname))
+        st.download_button(
+            label="📦 Download All Ansible Roles",
+            data=archive_data,
+            file_name="ansible_roles_holistic.zip",
+            mime="application/zip",
+            help="Download ZIP archive containing all converted Ansible roles",
+            key="download_holistic_roles",
+        )
 
-            zip_buffer.seek(0)
-
-            st.download_button(
-                label="📦 Download All Ansible Roles",
-                data=zip_buffer.getvalue(),
-                file_name="ansible_roles_holistic.zip",
-                mime="application/zip",
-                help="Download ZIP archive containing all converted Ansible roles",
-                key="download_holistic_roles",
-            )
-
-            st.info(f"📂 Roles saved to: {output_path}")
-        else:
-            st.warning("Output directory not found for download")
+        st.info(f"📂 Roles saved to: {output_path}")
+    else:
+        st.warning("Output directory not found for download")
 
 
 def _handle_dashboard_upload():

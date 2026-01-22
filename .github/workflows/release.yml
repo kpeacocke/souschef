@@ -138,8 +138,18 @@ jobs:
     permissions:
       contents: read
       id-token: write  # For trusted publishing
+      deployments: write  # For deployment status updates
 
     steps:
+    - name: Start deployment
+      uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+      id: deployment
+      with:
+        step: start
+        token: ${{ secrets.GITHUB_TOKEN }}
+        env: pypi
+        ref: ${{ needs.validate.outputs.tag }}
+
     - name: Download package artifacts
       uses: actions/download-artifact@v7
       with:
@@ -151,6 +161,27 @@ jobs:
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
         attestations: false
+
+    - name: Update deployment status (success)
+      uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+      if: success()
+      with:
+        step: finish
+        token: ${{ secrets.GITHUB_TOKEN }}
+        status: ${{ job.status }}
+        env: ${{ steps.deployment.outputs.env }}
+        deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+        env_url: https://pypi.org/project/souschef/${{ needs.validate.outputs.version }}/
+
+    - name: Update deployment status (failure)
+      uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+      if: failure()
+      with:
+        step: finish
+        token: ${{ secrets.GITHUB_TOKEN }}
+        status: ${{ job.status }}
+        env: ${{ steps.deployment.outputs.env }}
+        deployment_id: ${{ steps.deployment.outputs.deployment_id }}
 
   create-release:
     runs-on: ubuntu-latest
