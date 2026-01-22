@@ -828,9 +828,13 @@ def _analyze_attributes(cookbook_path: Path) -> int:
                 # codeql[py/path-injection]: attr_file from normalized cookbook_path
                 content = attr_file.read_text(encoding="utf-8", errors="ignore")
                 # Count attribute assignments and complex expressions
-                # Use simpler regex patterns to avoid ReDoS vulnerabilities
+                # Use limited quantifiers to prevent ReDoS vulnerabilities
                 assignments = len(
-                    re.findall(r"^\s*\w+\s*(?:\[\w*\])?\s*=", content, re.MULTILINE)
+                    re.findall(
+                        r"^[ \t]{0,20}\w+[ \t]{0,10}(?:\[\w*\])?[ \t]{0,10}=",
+                        content,
+                        re.MULTILINE,
+                    )
                 )
                 complex_expressions = len(
                     re.findall(r"(?:node|default|override)\[", content)

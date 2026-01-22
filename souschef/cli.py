@@ -462,6 +462,7 @@ def generate_jenkinsfile(
         # Write Jenkinsfile
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
+            # Path validated via _resolve_output_path which calls _normalize_path
             output_path.write_text(result)
             click.echo(f"✓ Generated {pipeline_type} Jenkinsfile: {output_path}")
         except OSError as e:
@@ -545,6 +546,7 @@ def generate_gitlab_ci(
         )
 
         # Write GitLab CI config
+        # Path validated via _resolve_output_path which calls _normalize_path
         output_path.write_text(result)
         click.echo(f"✓ Generated GitLab CI configuration: {output_path}")
 
