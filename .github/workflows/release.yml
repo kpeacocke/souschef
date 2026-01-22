@@ -1,9 +1,10 @@
 name: Release
 
-# Trigger on every push to main - read version from pyproject.toml
+# Trigger after Main Branch Validation succeeds to avoid releasing before checks finish
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["Main Branch Validation"]
+    types: [completed]
   workflow_dispatch:
 
 concurrency:
@@ -14,9 +15,10 @@ env:
   PYTHON_VERSION: "3.14"
 
 jobs:
-  # Skip tests - they already passed in CI before merge to main
+  # Skip tests - they already passed in CI before merge to main and in Main Branch Validation
   # This workflow focuses on building and publishing the release
   validate:
+    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
