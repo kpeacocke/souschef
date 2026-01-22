@@ -1,18 +1,13 @@
 ---
 name: Sync Main to Develop
 
-# This workflow runs after releases to keep develop in sync with main
-# Ensures develop always has the latest released changes
-
 on:
   release:
     types: [published]
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 permissions:
   contents: write
-  pull-requests: write
-  issues: write  # For notifications if needed
 
 jobs:
   sync-develop:
@@ -20,83 +15,33 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - name: Checkout main branch
-      uses: actions/checkout@v6
-      with:
-        fetch-depth: 0  # Need full history for merging
-        ref: main
+      - name: Checkout main with push token
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ secrets.RELEASE_TOKEN }}
 
-    - name: Configure Git identity
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Configure Git identity
+        run: |
+          git config user.name "automation-bot"
+          git config user.email "automation-bot@users.noreply.github.com"
 
-    - name: Merge main into develop
-      run: |
-        # Checkout develop
-        git checkout develop
-        git pull origin develop
+      - name: Merge main into develop and push
+        run: |
+          set -e
+          git fetch origin develop main
+          git checkout develop
+          git reset --hard origin/develop
 
-        # Get the latest commit info
-        LATEST_COMMIT=$(git log -1 --pretty=format:"%h - %s" origin/main)
-        echo "Latest commit: $LATEST_COMMIT"
+          LATEST_COMMIT=$(git log -1 --pretty=format:"%h - %s" origin/main)
+          MESSAGE="chore: sync main to develop - Latest: ${LATEST_COMMIT} - Triggered by: ${{ github.event_name }}"
 
-        # Define commit message
-        MESSAGE="chore: sync main to develop\n\nLatest: ${LATEST_COMMIT}"
+          git merge --no-ff origin/main -m "$MESSAGE"
 
-        # Check if develop is already up to date with main
-        if git merge-base --is-ancestor origin/main develop; then
-          echo "✓ Develop is already up to date with main"
-          exit 0
-        fi
+          # Ensure remote uses PAT for push
+          git remote set-url origin https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}
 
-        # Reset develop to match origin/develop in case of local changes
-        git reset --hard origin/develop
+          git push origin develop
 
-        # Define commit message
-        MESSAGE="chore: sync main to develop - Latest: ${LATEST_COMMIT} - Triggered by: ${{ github.event_name }}"
-
-        # Merge main into develop
-        echo "Merging main into develop..."
-        if git merge origin/main --no-ff -m "$MESSAGE"; then
-          echo "✓ Merge successful"
-
-          # Try to push directly first (most common case)
-          if git push origin develop; then
-            echo "✓ Develop branch updated successfully via direct push"
-          else
-            echo "✗ Direct push failed, this may be due to branch protection rules"
-            echo "Creating pull request instead..."
-
-            # Ensure gh CLI is available
-            if ! command -v gh &> /dev/null; then
-              echo "Installing GitHub CLI..."
-              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-              sudo apt update
-              sudo apt install gh
-            fi
-
-            # Authenticate gh CLI
-            echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-            # Create a temporary branch for the PR
-            TEMP_BRANCH="auto-sync/main-to-develop-$(date +%Y%m%d-%H%M%S)"
-            git checkout -b "$TEMP_BRANCH"
-            git push origin "$TEMP_BRANCH"
-
-            # Create pull request
-            if gh pr create --title "$MESSAGE" --body "Automated sync of main branch to develop after release." --base develop --head "$TEMP_BRANCH" --label "automated-sync"; then
-              echo "✓ Pull request created successfully"
-            else
-              echo "✗ Failed to create pull request"
-              echo "Manual intervention required: create PR from $TEMP_BRANCH to develop"
-              exit 1
-            fi
-          fi
-        else
-          echo "✗ Merge conflict detected"
-          echo "Please resolve conflicts manually"
-          git merge --abort
-          exit 1
-        fi
+          echo "✓ Develop branch updated successfully via direct push"
