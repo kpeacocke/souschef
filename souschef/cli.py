@@ -13,6 +13,7 @@ import click
 
 from souschef import __version__
 from souschef.converters.playbook import generate_playbook_from_recipe
+from souschef.core.path_utils import _normalize_path
 from souschef.profiling import (
     generate_cookbook_performance_report,
     profile_function,
@@ -39,6 +40,18 @@ from souschef.server import (
 CI_JOB_LINT = "  • Lint (cookstyle/foodcritic)"
 CI_JOB_UNIT_TESTS = "  • Unit Tests (ChefSpec)"
 CI_JOB_INTEGRATION_TESTS = "  • Integration Tests (Test Kitchen)"
+
+
+def _resolve_output_path(output: str | None, default_path: Path) -> Path:
+    """Normalise and validate output paths for generated files."""
+    try:
+        resolved_path = _normalize_path(output) if output else default_path.resolve()
+    except ValueError as exc:  # noqa: TRY003
+        click.echo(f"Invalid output path: {exc}", err=True)
+        raise click.Abort() from exc
+
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    return resolved_path
 
 
 @click.group()
@@ -434,14 +447,17 @@ def generate_jenkinsfile(
 
     """
     try:
+        safe_cookbook_path = str(_normalize_path(cookbook_path))
         result = generate_jenkinsfile_from_chef(
-            cookbook_path=cookbook_path,
+            cookbook_path=safe_cookbook_path,
             pipeline_type=pipeline_type,
             enable_parallel="yes" if parallel else "no",
         )
 
         # Determine output path
-        output_path = Path(output) if output else Path.cwd() / "Jenkinsfile"
+        output_path = _resolve_output_path(
+            output, default_path=Path.cwd() / "Jenkinsfile"
+        )
 
         # Write Jenkinsfile
         output_path.write_text(result)
@@ -511,14 +527,17 @@ def generate_gitlab_ci(
 
     """
     try:
+        safe_cookbook_path = str(_normalize_path(cookbook_path))
         result = generate_gitlab_ci_from_chef(
-            cookbook_path=cookbook_path,
+            cookbook_path=safe_cookbook_path,
             enable_cache="yes" if cache else "no",
             enable_artifacts="yes" if artifacts else "no",
         )
 
         # Determine output path
-        output_path = Path(output) if output else Path.cwd() / ".gitlab-ci.yml"
+        output_path = _resolve_output_path(
+            output, default_path=Path.cwd() / ".gitlab-ci.yml"
+        )
 
         # Write GitLab CI config
         output_path.write_text(result)
@@ -591,8 +610,9 @@ def generate_github_workflow(
 
     """
     try:
+        safe_cookbook_path = str(_normalize_path(cookbook_path))
         result = generate_github_workflow_from_chef(
-            cookbook_path=cookbook_path,
+            cookbook_path=safe_cookbook_path,
             workflow_name=workflow_name,
             enable_cache="yes" if cache else "no",
             enable_artifacts="yes" if artifacts else "no",
@@ -600,11 +620,11 @@ def generate_github_workflow(
 
         # Determine output path
         if output:
-            output_path = Path(output)
+            output_path = _resolve_output_path(output, Path.cwd() / "ci.yml")
         else:
             workflows_dir = Path.cwd() / ".github" / "workflows"
             workflows_dir.mkdir(parents=True, exist_ok=True)
-            output_path = workflows_dir / "ci.yml"
+            output_path = _resolve_output_path(None, workflows_dir / "ci.yml")
 
         # Write workflow file
         output_path.write_text(result)
