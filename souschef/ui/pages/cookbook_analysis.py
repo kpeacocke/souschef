@@ -1770,8 +1770,16 @@ def _display_conversion_download_options(conversion_result: dict):
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                 # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
                 for root, _dirs, files in os.walk(str(safe_output_path)):
+                    root_path = _normalize_path(root)
+                    if not root_path.is_relative_to(safe_output_path):
+                        continue
+
                     for file in files:
-                        file_path = _normalize_path(root) / file
+                        safe_name = _sanitize_filename(file)
+                        file_path = root_path / safe_name
+                        if not file_path.is_relative_to(safe_output_path):
+                            continue
+
                         arcname = file_path.relative_to(safe_output_path)
                         zip_file.write(str(file_path), str(arcname))
 
