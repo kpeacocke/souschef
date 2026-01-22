@@ -671,7 +671,7 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    # codeql[py/path-injection]: cookbook_path normalized before _count_cookbook_artifacts call
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     templates_dir = (
         cookbook_path / "templates"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
@@ -679,12 +679,12 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
         len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
     )
 
-    # codeql[py/path-injection]: cookbook_path normalized by caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     files_dir = cookbook_path / "files"
     file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
 
     # Additional Chef components
-    # codeql[py/path-injection]: cookbook_path normalized by caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     attributes_dir = cookbook_path / "attributes"
     attributes_count = (
         len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
@@ -696,19 +696,19 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
         len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
     )
 
-    # codeql[py/path-injection]: cookbook_path normalized by caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     definitions_dir = cookbook_path / "definitions"
     definitions_count = (
         len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
     )
 
-    # codeql[py/path-injection]: cookbook_path normalized by caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     resources_dir = cookbook_path / "resources"
     resources_count = (
         len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
     )
 
-    # codeql[py/path-injection]: cookbook_path normalized by caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     providers_dir = cookbook_path / "providers"
     providers_count = (
         len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
@@ -825,7 +825,7 @@ def _analyze_attributes(cookbook_path: Path) -> int:
     if attributes_dir.exists():
         for attr_file in attributes_dir.glob("*.rb"):
             try:
-                # codeql[py/path-injection]: attr_file from normalized cookbook_path
+                # codeql[py/path-injection]: attr_file from glob() on normalized dir
                 content = attr_file.read_text(encoding="utf-8", errors="ignore")
                 # Count attribute assignments and complex expressions
                 # Use limited quantifiers to prevent ReDoS vulnerabilities
@@ -857,7 +857,7 @@ def _analyze_templates(cookbook_path: Path) -> int:
     if templates_dir.exists():
         for template_file in templates_dir.glob("**/*.erb"):
             try:
-                # codeql[py/path-injection]: template_file from normalized cookbook_path
+                # codeql[py/path-injection]: template_file from glob() on normalized dir
                 content = template_file.read_text(encoding="utf-8", errors="ignore")
                 # Count ERB expressions and complex logic
                 erb_expressions = len(re.findall(r"<%.*?%>", content))
@@ -879,7 +879,7 @@ def _analyze_libraries(cookbook_path: Path) -> int:
     if libraries_dir.exists():
         for lib_file in libraries_dir.glob("*.rb"):
             try:
-                # codeql[py/path-injection]: lib_file from normalized cookbook_path
+                # codeql[py/path-injection]: lib_file from glob() on normalized dir
                 content = lib_file.read_text(encoding="utf-8", errors="ignore")
                 # Count class definitions, methods, and complex Ruby constructs
                 classes = len(re.findall(r"class\s+\w+", content))

@@ -521,6 +521,7 @@ def _extract_tar_members(tar_ref, members, extraction_dir):
     for member in members:
         # codeql[py/path-injection]: safe_path from _get_safe_extraction_path
         safe_path = _get_safe_extraction_path(member.name, extraction_dir)
+        # snyk[python/tarslip]: safe_path contains extraction_dir
         if member.isdir():
             # codeql[py/path-injection]: safe_path validated against traversal
             safe_path.mkdir(parents=True, exist_ok=True)
@@ -532,6 +533,7 @@ def _extract_tar_members(tar_ref, members, extraction_dir):
 
 def _extract_file_content(tar_ref, member, safe_path):
     """Extract the content of a single TAR member to a file."""
+    # snyk[python/tarslip]: safe_path validated via _get_safe_extraction_path
     source = tar_ref.extractfile(member)
     if source:
         with source, safe_path.open("wb") as target:

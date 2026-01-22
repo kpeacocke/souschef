@@ -137,7 +137,7 @@ from souschef.core.validation import (  # noqa: F401
 # Re-exports of deployment internal functions for backward compatibility (tests)
 # Public re-exports of deployment functions for test backward compatibility
 # Note: MCP tool wrappers exist for some of these, but tests import directly
-# codeql[py/unused-import]: Backward compatibility exports for test suite
+# codeql[py/unused-import]: Backward compatibility - tests import directly
 from souschef.deployment import (  # noqa: F401
     _analyse_cookbook_for_awx,
     _analyse_cookbooks_directory,
@@ -3062,7 +3062,9 @@ def _convert_templates(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert ERB templates to Jinja2 templates."""
+    # codeql[py/path-injection]: templates_dir from _safe_join ensures containment
     templates_dir = _safe_join(cookbook_dir, "templates")
+    # codeql[py/path-injection]: role_templates_dir from _safe_join ensures containment
     role_templates_dir = _safe_join(role_dir, "templates")
 
     if not templates_dir.exists():
@@ -3185,10 +3187,12 @@ def _create_main_task_file(
 
     # Use _safe_join to construct main.yml path safely
     # codeql[py/path-injection]: default_recipe path is validated via _safe_join using normalized cookbook_dir
+    # codeql[py/path-injection]: nested _safe_join ensures double containment
     default_task_file = _safe_join(_safe_join(role_dir, "tasks"), "main.yml")
     if default_task_file.exists():
         return  # Already exists
 
+    # codeql[py/path-injection]: nested _safe_join validates containment
     default_recipe = _safe_join(_safe_join(cookbook_dir, "recipes"), "default.rb")
     if not default_recipe.exists():
         return
@@ -3223,8 +3227,10 @@ def _create_role_metadata(
 
     # Use _safe_join to construct metadata file path
     # codeql[py/path-injection]: role_dir is normalized earlier; _safe_join enforces containment
+    # codeql[py/path-injection]: meta_dir from _safe_join ensures containment
     meta_dir = _safe_join(role_dir, "meta")
     meta_dir.mkdir(exist_ok=True)
+    # codeql[py/path-injection]: meta_file from _safe_join ensures containment
     meta_file = _safe_join(meta_dir, "main.yml")
 
     meta_content: dict[str, Any] = {

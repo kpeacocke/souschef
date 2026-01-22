@@ -34,6 +34,7 @@ def _normalize_path(path_str: str | Path) -> Path:
     if ".." in path_str:
         raise ValueError(f"Path contains directory traversal: {path_str!r}")
 
+    # codeql[py/path-injection]: path validated against traversal, null bytes
     try:
         # Resolve to absolute path, removing ., and resolving symlinks
         return Path(path_str).resolve()
@@ -56,6 +57,7 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
         ValueError: If result would escape base_path.
 
     """
+    # codeql[py/path-injection]: result validated to stay within base_path
     result = base_path.joinpath(*parts).resolve()
     try:
         result.relative_to(base_path)
