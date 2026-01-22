@@ -983,7 +983,12 @@ def main():
     # Chef server configuration
     chef_server_url = os.environ.get('CHEF_SERVER_URL', '{chef_server_url}')
     client_name = os.environ.get('CHEF_NODE_NAME', 'admin')
-    client_key = os.environ.get('CHEF_CLIENT_KEY', '/etc/chef/client.pem')
+    # Client key path should be customizable - use environment variable with
+    # home directory default instead of hardcoded /etc/chef/client.pem
+    client_key = os.environ.get(
+        'CHEF_CLIENT_KEY',
+        os.path.expanduser('~/.chef/client.pem')
+    )
 
     # Initialize Chef API
     try:

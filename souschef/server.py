@@ -3034,7 +3034,14 @@ def _convert_recipes(
 
             # Write as task file using _safe_join to prevent path injection
             task_file = _safe_join(role_tasks_dir, f"{recipe_name}.yml")
-            task_file.write_text(playbook_yaml)
+            try:
+                task_file.parent.mkdir(parents=True, exist_ok=True)
+                task_file.write_text(playbook_yaml)
+            except OSError as write_err:
+                conversion_summary["errors"].append(
+                    f"Failed to write task file {task_file.name}: {write_err}"
+                )
+                continue
 
             conversion_summary["converted_files"].append(
                 {

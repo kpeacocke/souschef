@@ -375,7 +375,12 @@ license 'All rights reserved'
 description 'Automatically extracted cookbook from archive'
 version '1.0.0'
 """
-    (synthetic_cookbook_dir / METADATA_FILENAME).write_text(metadata_content)
+    try:
+        metadata_file = synthetic_cookbook_dir / METADATA_FILENAME
+        metadata_file.parent.mkdir(parents=True, exist_ok=True)
+        metadata_file.write_text(metadata_content)
+    except OSError as e:
+        raise OSError(f"Failed to write metadata file: {e}") from e
 
     return extraction_dir
 

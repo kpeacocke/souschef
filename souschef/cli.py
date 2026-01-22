@@ -460,8 +460,13 @@ def generate_jenkinsfile(
         )
 
         # Write Jenkinsfile
-        output_path.write_text(result)
-        click.echo(f"✓ Generated {pipeline_type} Jenkinsfile: {output_path}")
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(result)
+            click.echo(f"✓ Generated {pipeline_type} Jenkinsfile: {output_path}")
+        except OSError as e:
+            click.echo(f"Error writing Jenkinsfile: {e}", err=True)
+            return
 
         # Show summary
         click.echo("\nGenerated Pipeline Stages:")
