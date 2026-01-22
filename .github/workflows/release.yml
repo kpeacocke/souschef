@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: write  # Need write to create tags
+      actions: read    # Needed to verify CodeQL run status
     outputs:
       tag: ${{ steps.get-tag.outputs.tag }}
       version: ${{ steps.get-tag.outputs.version }}
@@ -33,6 +34,23 @@ jobs:
       uses: actions/checkout@v6
       with:
         fetch-depth: 0
+
+    - name: Ensure CodeQL scan succeeded for this commit
+      if: github.event_name == 'workflow_run'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      run: |
+        echo "Checking CodeQL status for $HEAD_SHA"
+        api_url="https://api.github.com/repos/${REPO}/actions/workflows/codeql.yml/runs?head_sha=${HEAD_SHA}"
+        run_json=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$api_url")
+        conclusion=$(echo "$run_json" | jq -r '.workflow_runs[0].conclusion // "none"')
+        if [ "$conclusion" != "success" ]; then
+          echo "CodeQL workflow not successful for $HEAD_SHA (conclusion=$conclusion)"
+          exit 1
+        fi
+        echo "CodeQL succeeded for $HEAD_SHA"
 
     - name: Set up Python
       uses: actions/setup-python@v6
