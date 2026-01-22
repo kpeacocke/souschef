@@ -79,7 +79,12 @@ def _get_secure_ai_config_path() -> Path:
     if config_dir.is_symlink():
         raise ValueError("AI config directory cannot be a symlink")
 
-    return config_dir / "ai_config.json"
+    config_file = config_dir / "ai_config.json"
+    # Ensure config file has secure permissions if it exists
+    if config_file.exists():
+        with contextlib.suppress(OSError):
+            config_file.chmod(0o600)
+    return config_file
 
 
 def load_ai_settings() -> dict[str, str | float | int]:
@@ -748,7 +753,7 @@ def _show_analysis_input() -> None:
                     # Store temp_dir in session state to prevent premature cleanup
                     st.session_state.temp_dir = temp_dir
                 st.success("Archive extracted successfully to temporary location")
-            except Exception as e:
+            except (OSError, zipfile.BadZipFile, tarfile.TarError) as e:
                 st.error(f"Failed to extract archive: {e}")
                 return
 
@@ -1972,7 +1977,7 @@ def _find_cookbook_directory(cookbook_path, cookbook_name):
                     metadata = parse_cookbook_metadata(str(metadata_file))
                     if metadata.get("name") == cookbook_name:
                         return d
-                except Exception:
+                except (ValueError, OSError, KeyError):
                     # If metadata parsing fails, skip this directory
                     continue
     return None
@@ -2397,7 +2402,7 @@ def _build_dependency_graph(cookbook_path: str, selected_cookbooks: list[str]) -
                 # Parse the markdown response to extract dependencies
                 dependencies = _extract_dependencies_from_markdown(dep_analysis)
                 dependency_graph[cookbook_name] = dependencies
-            except Exception:
+            except (ValueError, OSError, RuntimeError):
                 # If dependency analysis fails, assume no dependencies
                 dependency_graph[cookbook_name] = []
 
