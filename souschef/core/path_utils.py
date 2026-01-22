@@ -3,7 +3,7 @@
 from pathlib import Path
 
 
-def _normalize_path(path_str: str) -> Path:
+def _normalize_path(path_str: str | Path) -> Path:
     """
     Normalize a file path for safe filesystem operations.
 
@@ -11,7 +11,7 @@ def _normalize_path(path_str: str) -> Path:
     to absolute paths, preventing path traversal attacks (CWE-23).
 
     Args:
-        path_str: Path string to normalize.
+        path_str: Path string or Path object to normalize.
 
     Returns:
         Resolved absolute Path object.
@@ -20,8 +20,11 @@ def _normalize_path(path_str: str) -> Path:
         ValueError: If the path contains null bytes, traversal attempts, or is invalid.
 
     """
-    if not isinstance(path_str, str):
-        raise ValueError(f"Path must be a string, got {type(path_str)}")
+    # Convert Path to string if needed
+    if isinstance(path_str, Path):
+        path_str = str(path_str)
+    elif not isinstance(path_str, str):
+        raise ValueError(f"Path must be a string or Path object, got {type(path_str)}")
 
     # Reject paths with null bytes
     if "\x00" in path_str:
