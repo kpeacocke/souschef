@@ -178,6 +178,15 @@ jobs:
       deployments: write  # For deployment status updates
 
     steps:
+    - name: Verify PyPI token configured
+      env:
+        PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        if [ -z "$PYPI_API_TOKEN" ]; then
+          echo "PYPI_API_TOKEN secret is not configured; aborting publish."
+          exit 1
+        fi
+
     - name: Start deployment
       uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
       id: deployment
@@ -232,6 +241,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6
       with:
+        ref: main
         fetch-depth: 0
         fetch-tags: true
 
@@ -241,7 +251,7 @@ jobs:
         TAG: ${{ needs.validate.outputs.tag }}
         VERSION: ${{ needs.validate.outputs.version }}
       run: |
-        # Create and push tag
+        # Create and push tag (tag main HEAD explicitly)
         git tag "$TAG"
         git push origin "$TAG"
 
