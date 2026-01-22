@@ -173,7 +173,7 @@ jobs:
         # Create and push tag
         git tag "$TAG"
         git push origin "$TAG"
-        
+
         # Create GitHub release with auto-generated notes
         gh release create "$TAG" \
           --title "Release $VERSION" \
