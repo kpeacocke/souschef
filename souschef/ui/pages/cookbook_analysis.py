@@ -1771,7 +1771,7 @@ def _display_conversion_download_options(conversion_result: dict):
                 # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
                 for root, _dirs, files in os.walk(str(safe_output_path)):
                     for file in files:
-                        file_path = Path(root) / file
+                        file_path = _normalize_path(root) / file
                         arcname = file_path.relative_to(safe_output_path)
                         zip_file.write(str(file_path), str(arcname))
 

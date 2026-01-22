@@ -660,9 +660,7 @@ def _format_assessment_report(
 def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
     """Count comprehensive cookbook artifacts including all Chef components."""
     # deepcode ignore PT: path normalized via _normalize_path in caller
-    cookbook_path = (
-        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
-    )
+    cookbook_path = _normalize_path(cookbook_path)
 
     # Basic directory counts
     # cookbook_path already normalized by caller
@@ -885,9 +883,7 @@ def _count_definitions(cookbook_path: Path) -> int:
 def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     """Parse Berksfile for dependency information."""
     # deepcode ignore PT: path normalized via _normalize_path in caller
-    cookbook_path = (
-        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
-    )
+    cookbook_path = _normalize_path(cookbook_path)
     berksfile = cookbook_path / "Berksfile"
 
     if not berksfile.exists():
