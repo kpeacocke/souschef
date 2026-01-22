@@ -494,7 +494,8 @@ def _extract_tar_securely(
         raise ValueError(f"Invalid or corrupted TAR archive: {archive_path.name}")
 
     try:
-        with tarfile.open(  # type: ignore[call-overload]  # NOSONAR
+        # NOSONAR python:S930 - filter param valid in Python 3.12+
+        with tarfile.open(  # type: ignore[call-overload]
             str(archive_path), mode=mode, filter="data"
         ) as tar_ref:
             members = tar_ref.getmembers()
@@ -517,8 +518,10 @@ def _pre_scan_tar_members(members):
 def _extract_tar_members(tar_ref, members, extraction_dir):
     """Extract validated TAR members to the extraction directory."""
     for member in members:
+        # codeql[py/path-injection]: safe_path validated via _get_safe_extraction_path
         safe_path = _get_safe_extraction_path(member.name, extraction_dir)
         if member.isdir():
+            # codeql[py/path-injection]: safe_path validated to prevent traversal
             safe_path.mkdir(parents=True, exist_ok=True)
         else:
             safe_path.parent.mkdir(parents=True, exist_ok=True)
@@ -845,10 +848,12 @@ def _get_archive_upload_input() -> Any:
 
 def _validate_and_list_cookbooks(cookbook_path: str) -> None:
     """Validate the cookbook path and list available cookbooks."""
+    # codeql[py/path-injection]: safe_dir validated via _get_safe_cookbook_directory
     safe_dir = _get_safe_cookbook_directory(cookbook_path)
     if safe_dir is None:
         return
 
+    # codeql[py/path-injection]: safe_dir validated to prevent traversal
     if safe_dir.exists() and safe_dir.is_dir():
         _list_and_display_cookbooks(safe_dir)
     else:
@@ -887,9 +892,15 @@ def _get_safe_cookbook_directory(cookbook_path):
         user_path = Path(path_str)
 
         # Resolve the path safely
+        # codeql[py/path-injection]: user_path validated against null bytes
+        # and backslashes
         if user_path.is_absolute():
+            # codeql[py/path-injection]: resolved_path validated via
+            # relative_to checks below
             resolved_path = user_path.resolve()
         else:
+            # codeql[py/path-injection]: resolved_path validated via
+            # relative_to checks below
             resolved_path = (base_dir / user_path).resolve()
 
         # Check if the resolved path is within allowed directories
@@ -1593,20 +1604,26 @@ def _parse_summary_line(line: str, structured: dict):
         try:
             count = int(line.split(":")[-1].strip())
             structured["summary"]["total_cookbooks"] = count
-        except ValueError:
-            pass
+        except ValueError as err:
+            structured.setdefault("parse_errors", []).append(
+                f"total_cookbooks_parse_failed: {err}"
+            )
     elif "Successfully converted:" in line:
         try:
             count = int(line.split(":")[-1].strip())
             structured["summary"]["cookbooks_converted"] = count
-        except ValueError:
-            pass
+        except ValueError as err:
+            structured.setdefault("parse_errors", []).append(
+                f"cookbooks_converted_parse_failed: {err}"
+            )
     elif "Total files converted:" in line:
         try:
             count = int(line.split(":")[-1].strip())
             structured["summary"]["total_converted_files"] = count
-        except ValueError:
-            pass
+        except ValueError as err:
+            structured.setdefault("parse_errors", []).append(
+                f"total_converted_files_parse_failed: {err}"
+            )
 
 
 def _parse_converted_cookbook(line: str, structured: dict):
@@ -1627,8 +1644,10 @@ def _parse_converted_cookbook(line: str, structured: dict):
                     "files_count": 0,
                 }
             )
-    except (IndexError, ValueError):
-        pass
+    except (IndexError, ValueError) as err:
+        structured.setdefault("parse_errors", []).append(
+            f"converted_cookbook_parse_failed: {err}"
+        )
 
 
 def _parse_failed_cookbook(line: str, structured: dict):
@@ -1645,8 +1664,10 @@ def _parse_failed_cookbook(line: str, structured: dict):
                     "error": error,
                 }
             )
-    except (IndexError, ValueError):
-        pass
+    except (IndexError, ValueError) as err:
+        structured.setdefault("parse_errors", []).append(
+            f"failed_cookbook_parse_failed: {err}"
+        )
 
 
 def _extract_warnings_from_text(result_text: str, structured: dict):
@@ -1750,53 +1771,104 @@ def _display_conversion_report(result_text: str):
         st.code(result_text, language="markdown")
 
 
+def _validate_output_path(output_path: str) -> Path | None:
+    """
+    Validate and normalize output path.
+
+    Args:
+        output_path: Path string to validate.
+
+    Returns:
+        Normalized Path object or None if invalid.
+
+    """
+    try:
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+        safe_output_path = _normalize_path(str(output_path))
+        return safe_output_path if safe_output_path.exists() else None
+    except ValueError:
+        return None
+
+
+def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
+    """
+    Collect all files from converted roles directory.
+
+    Args:
+        safe_output_path: Validated base path.
+
+    Returns:
+        List of (file_path, archive_name) tuples.
+
+    """
+    files_to_archive = []
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+    # codeql[py/path-injection]: safe_output_path normalized
+    for root, _dirs, files in os.walk(str(safe_output_path)):
+        root_path = _normalize_path(root)
+        if not root_path.is_relative_to(safe_output_path):
+            continue
+
+        for file in files:
+            safe_name = _sanitize_filename(file)
+            file_path = root_path / safe_name
+            # codeql[py/path-injection]: containment enforced before writing
+            if file_path.is_relative_to(safe_output_path):
+                arcname = file_path.relative_to(safe_output_path)
+                files_to_archive.append((file_path, arcname))
+
+    return files_to_archive
+
+
+def _create_roles_zip_archive(safe_output_path: Path) -> bytes:
+    """
+    Create ZIP archive of converted roles.
+
+    Args:
+        safe_output_path: Validated path containing roles.
+
+    Returns:
+        ZIP archive as bytes.
+
+    """
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        files_to_archive = _collect_role_files(safe_output_path)
+        for file_path, arcname in files_to_archive:
+            zip_file.write(str(file_path), str(arcname))
+
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
+
+
 def _display_conversion_download_options(conversion_result: dict):
     """Display download options for converted roles."""
-    if "output_path" in conversion_result:
-        st.subheader("Download Converted Roles")
+    if "output_path" not in conversion_result:
+        return
 
-        # Validate output_path before use
-        output_path = conversion_result["output_path"]
-        try:
-            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-            safe_output_path = _normalize_path(str(output_path))
-        except ValueError:
-            st.error("Invalid output path")
-            return
+    st.subheader("Download Converted Roles")
+    output_path = conversion_result["output_path"]
 
-        if safe_output_path.exists():
-            # Create ZIP archive of all converted roles
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-                for root, _dirs, files in os.walk(str(safe_output_path)):
-                    root_path = _normalize_path(root)
-                    if not root_path.is_relative_to(safe_output_path):
-                        continue
+    safe_output_path = _validate_output_path(output_path)
+    if safe_output_path is None:
+        st.error("Invalid output path")
+        return
 
-                    for file in files:
-                        safe_name = _sanitize_filename(file)
-                        file_path = root_path / safe_name
-                        if not file_path.is_relative_to(safe_output_path):
-                            continue
+    if safe_output_path.exists():
+        archive_data = _create_roles_zip_archive(safe_output_path)
 
-                        arcname = file_path.relative_to(safe_output_path)
-                        zip_file.write(str(file_path), str(arcname))
+        st.download_button(
+            label="📦 Download All Ansible Roles",
+            data=archive_data,
+            file_name="ansible_roles_holistic.zip",
+            mime="application/zip",
+            help="Download ZIP archive containing all converted Ansible roles",
+            key="download_holistic_roles",
+        )
 
-            zip_buffer.seek(0)
-
-            st.download_button(
-                label="📦 Download All Ansible Roles",
-                data=zip_buffer.getvalue(),
-                file_name="ansible_roles_holistic.zip",
-                mime="application/zip",
-                help="Download ZIP archive containing all converted Ansible roles",
-                key="download_holistic_roles",
-            )
-
-            st.info(f"📂 Roles saved to: {output_path}")
-        else:
-            st.warning("Output directory not found for download")
+        st.info(f"📂 Roles saved to: {output_path}")
+    else:
+        st.warning("Output directory not found for download")
 
 
 def _handle_dashboard_upload():
