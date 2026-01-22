@@ -483,7 +483,9 @@ def _extract_tar_securely(
         raise ValueError(f"Invalid or corrupted TAR archive: {archive_path.name}")
 
     try:
-        with tarfile.open(str(archive_path), mode=mode) as tar_ref:
+        with tarfile.open(  # type: ignore[call-overload]  # NOSONAR
+            str(archive_path), mode=mode, filter="data"
+        ) as tar_ref:
             members = tar_ref.getmembers()
             _pre_scan_tar_members(members)
             _extract_tar_members(tar_ref, members, extraction_dir)
