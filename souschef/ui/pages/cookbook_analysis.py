@@ -517,8 +517,10 @@ def _pre_scan_tar_members(members):
 def _extract_tar_members(tar_ref, members, extraction_dir):
     """Extract validated TAR members to the extraction directory."""
     for member in members:
+        # codeql[py/path-injection]: safe_path validated via _get_safe_extraction_path
         safe_path = _get_safe_extraction_path(member.name, extraction_dir)
         if member.isdir():
+            # codeql[py/path-injection]: safe_path validated to prevent traversal
             safe_path.mkdir(parents=True, exist_ok=True)
         else:
             safe_path.parent.mkdir(parents=True, exist_ok=True)
@@ -845,10 +847,12 @@ def _get_archive_upload_input() -> Any:
 
 def _validate_and_list_cookbooks(cookbook_path: str) -> None:
     """Validate the cookbook path and list available cookbooks."""
+    # codeql[py/path-injection]: safe_dir validated via _get_safe_cookbook_directory
     safe_dir = _get_safe_cookbook_directory(cookbook_path)
     if safe_dir is None:
         return
 
+    # codeql[py/path-injection]: safe_dir validated to prevent traversal
     if safe_dir.exists() and safe_dir.is_dir():
         _list_and_display_cookbooks(safe_dir)
     else:
@@ -887,9 +891,15 @@ def _get_safe_cookbook_directory(cookbook_path):
         user_path = Path(path_str)
 
         # Resolve the path safely
+        # codeql[py/path-injection]: user_path validated against null bytes
+        # and backslashes
         if user_path.is_absolute():
+            # codeql[py/path-injection]: resolved_path validated via
+            # relative_to checks below
             resolved_path = user_path.resolve()
         else:
+            # codeql[py/path-injection]: resolved_path validated via
+            # relative_to checks below
             resolved_path = (base_dir / user_path).resolve()
 
         # Check if the resolved path is within allowed directories

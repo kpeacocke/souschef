@@ -3084,12 +3084,15 @@ def _convert_templates(
                 jinja2_content = template_data.get("jinja2_template", "")
 
                 # Determine relative path for role templates using _safe_join
+                # codeql[py/path-injection]: template_file from normalized cookbook_dir
                 rel_path = template_file.relative_to(templates_dir)
                 # Use _safe_join to prevent path injection with relative paths
+                # codeql[py/path-injection]: target_file validated via _safe_join
                 target_file = _safe_join(
                     role_templates_dir, str(rel_path.with_suffix(""))
                 )
                 target_file.parent.mkdir(parents=True, exist_ok=True)
+                # codeql[py/path-injection]: target_file validated via _safe_join
                 target_file.write_text(jinja2_content)
 
                 conversion_summary["converted_files"].append(
