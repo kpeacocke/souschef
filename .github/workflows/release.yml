@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false  # Don't cancel releases
 
 env:
-  PYTHON_VERSION: "3.14"
+  PYTHON_VERSION: "3.12"
 
 jobs:
   # Skip tests - they already passed in CI before merge to main and in Main Branch Validation
@@ -34,6 +34,7 @@ jobs:
       uses: actions/checkout@v6
       with:
         fetch-depth: 0
+        fetch-tags: true
 
     - name: Ensure CodeQL scan succeeded for this commit
       if: github.event_name == 'workflow_run'
@@ -67,13 +68,13 @@ jobs:
         echo "Version from pyproject.toml: $VERSION"
         echo "Release tag: $TAG"
 
-    - name: Check if tag already exists
+    - name: Check if tag already exists (remote)
       id: check-version
       env:
         TAG: ${{ steps.get-tag.outputs.tag }}
       run: |
-        if git rev-parse "$TAG" >/dev/null 2>&1; then
-          echo "Tag $TAG already exists - skipping release"
+        if git ls-remote --tags origin "$TAG" | grep -q "refs/tags/${TAG}$"; then
+          echo "Tag $TAG already exists on remote - skipping release"
           echo "should_release=false" >> $GITHUB_OUTPUT
         else
           echo "Tag $TAG does not exist - will create release"
@@ -200,6 +201,7 @@ jobs:
       uses: actions/checkout@v6
       with:
         fetch-depth: 0
+        fetch-tags: true
 
     - name: Create git tag and GitHub release
       env:
