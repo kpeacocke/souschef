@@ -300,7 +300,10 @@ def parse_template(path: str) -> str:
         JSON string with extracted variables and Jinja2-converted template.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating template path", path)
     return _parse_template(path)
 
 
@@ -316,7 +319,10 @@ def parse_custom_resource(path: str) -> str:
         JSON string with extracted properties, actions, and metadata.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating resource path", path)
     return _parse_custom_resource(path)
 
 
@@ -332,7 +338,10 @@ def list_directory(path: str) -> list[str] | str:
         A list of filenames in the directory, or an error message.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating directory path", path)
     result: list[str] | str = _list_directory(path)
     return result
 
@@ -349,7 +358,10 @@ def read_file(path: str) -> str:
         The contents of the file, or an error message.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating file path", path)
     result: str = _read_file(path)
     return result
 
@@ -366,7 +378,10 @@ def read_cookbook_metadata(path: str) -> str:
         Formatted string with extracted metadata.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating metadata path", path)
     return _read_cookbook_metadata(path)
 
 
@@ -382,7 +397,10 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
         Dictionary containing extracted metadata fields.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return {"error": str(e)}
     return _parse_cookbook_metadata(path)
 
 
@@ -398,7 +416,10 @@ def parse_recipe(path: str) -> str:
         Formatted string with extracted Chef resources and their properties.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating recipe path", path)
     return _parse_recipe(path)
 
 
@@ -428,7 +449,10 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
         Formatted string with extracted attributes.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating attributes path", path)
     return _parse_attributes(path, resolve_precedence)
 
 
@@ -444,7 +468,10 @@ def list_cookbook_structure(path: str) -> str:
         Formatted string showing the cookbook structure.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating cookbook path", path)
     return _list_cookbook_structure(path)
 
 
@@ -584,7 +611,10 @@ def parse_inspec_profile(path: str) -> str:
         JSON string with parsed controls, or error message.
 
     """
-    path = str(_normalize_path(path))
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating InSpec path", path)
     return _parse_inspec(path)
 
 
@@ -601,7 +631,10 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         Converted test code or error message.
 
     """
-    inspec_path = str(_normalize_path(inspec_path))
+    try:
+        inspec_path = str(_normalize_path(inspec_path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating InSpec path", inspec_path)
     return _convert_inspec_test(inspec_path, output_format)
 
 
