@@ -3032,10 +3032,8 @@ def _convert_recipes(
             # Convert to Ansible tasks
             playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
 
-            # Write as task file (paths normalized at function entry)
-            task_file = (
-                role_tasks_dir / f"{recipe_name}.yml"
-            )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+            # Write as task file using _safe_join to prevent path injection
+            task_file = _safe_join(role_tasks_dir, f"{recipe_name}.yml")
             task_file.write_text(playbook_yaml)
 
             conversion_summary["converted_files"].append(
@@ -3077,13 +3075,12 @@ def _convert_templates(
                 template_data = json.loads(conversion_result)
                 jinja2_content = template_data.get("jinja2_template", "")
 
-                # Determine relative path for role templates (paths normalized at function entry)
-                rel_path = template_file.relative_to(
-                    templates_dir
-                )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-                target_file = (
-                    role_templates_dir / rel_path.with_suffix("")
-                )  # Remove .erb extension  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+                # Determine relative path for role templates using _safe_join
+                rel_path = template_file.relative_to(templates_dir)
+                # Use _safe_join to prevent path injection with relative paths
+                target_file = _safe_join(
+                    role_templates_dir, str(rel_path.with_suffix(""))
+                )
                 target_file.parent.mkdir(parents=True, exist_ok=True)
                 target_file.write_text(jinja2_content)
 
@@ -3148,10 +3145,8 @@ def _convert_attributes(
                 ansible_key = attr_path.replace(".", "_")
                 ansible_vars[ansible_key] = attr_info["value"]
 
-            # Write as defaults (paths normalized at function entry)
-            defaults_file = (
-                role_defaults_dir / f"{attr_file.stem}.yml"
-            )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+            # Write as defaults using _safe_join to prevent path injection
+            defaults_file = _safe_join(role_defaults_dir, f"{attr_file.stem}.yml")
             defaults_yaml = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
             defaults_file.write_text(defaults_yaml)
 
@@ -3176,11 +3171,12 @@ def _create_main_task_file(
     if not include_recipes:
         return
 
-    default_task_file = role_dir / "tasks" / "main.yml"
+    # Use _safe_join to construct main.yml path safely
+    default_task_file = _safe_join(_safe_join(role_dir, "tasks"), "main.yml")
     if default_task_file.exists():
         return  # Already exists
 
-    default_recipe = cookbook_dir / "recipes" / "default.rb"
+    default_recipe = _safe_join(_safe_join(cookbook_dir, "recipes"), "default.rb")
     if not default_recipe.exists():
         return
 
@@ -3212,12 +3208,10 @@ def _create_role_metadata(
     """Create Ansible role metadata file."""
     import yaml
 
-    # role_dir created from normalized paths
-    meta_dir = role_dir / "meta"
+    # Use _safe_join to construct metadata file path
+    meta_dir = _safe_join(role_dir, "meta")
     meta_dir.mkdir(exist_ok=True)
-    meta_file = (
-        meta_dir / "main.yml"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+    meta_file = _safe_join(meta_dir, "main.yml")
 
     meta_content: dict[str, Any] = {
         "galaxy_info": {
