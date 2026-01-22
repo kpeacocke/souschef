@@ -691,7 +691,7 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:
     """
     try:
         # Validate and normalize path
-        recipe_path = _normalize_path(recipe_path)
+        recipe_path = str(_normalize_path(recipe_path))
 
         # First parse the recipe
         recipe_result: str = parse_recipe(recipe_path)
@@ -962,9 +962,9 @@ def analyse_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
         Analysis of data bag usage and migration recommendations
 
     """
-    cookbook_path = _normalize_path(cookbook_path)
+    cookbook_path = str(_normalize_path(cookbook_path))
     if databags_path:
-        databags_path = _normalize_path(databags_path)
+        databags_path = str(_normalize_path(databags_path))
     try:
         cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
@@ -2524,7 +2524,7 @@ def parse_habitat_plan(plan_path: str) -> str:
         JSON string with parsed plan metadata
 
     """
-    plan_path = _normalize_path(plan_path)
+    plan_path = str(_normalize_path(plan_path))
     return _parse_habitat_plan(plan_path)
 
 
@@ -2622,7 +2622,7 @@ def analyse_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         Analysis of search patterns found.
 
     """
-    recipe_or_cookbook_path = _normalize_path(recipe_or_cookbook_path)
+    recipe_or_cookbook_path = str(_normalize_path(recipe_or_cookbook_path))
     return _analyse_chef_search_patterns(recipe_or_cookbook_path)
 
 
@@ -2645,7 +2645,7 @@ def profile_cookbook_performance(cookbook_path: str) -> str:
     from souschef.profiling import generate_cookbook_performance_report
 
     try:
-        cookbook_path = _normalize_path(cookbook_path)
+        cookbook_path = str(_normalize_path(cookbook_path))
         report = generate_cookbook_performance_report(cookbook_path)
         return str(report)
     except Exception as e:
@@ -2691,7 +2691,7 @@ def profile_parsing_operation(
     func = operation_map[operation]
 
     try:
-        file_path = _normalize_path(file_path)
+        file_path = str(_normalize_path(file_path))
         if detailed:
             _, profile_result = detailed_profile_function(func, file_path)
             result = str(profile_result)
@@ -2735,7 +2735,7 @@ def generate_jenkinsfile_from_chef(
     from souschef.ci.jenkins_pipeline import generate_jenkinsfile_from_chef_ci
 
     try:
-        cookbook_path = _normalize_path(cookbook_path)
+        cookbook_path = str(_normalize_path(cookbook_path))
         # Convert string to boolean
         enable_parallel_bool = enable_parallel.lower() in ("yes", "true", "1")
 
@@ -2778,7 +2778,7 @@ def generate_gitlab_ci_from_chef(
     from souschef.ci.gitlab_ci import generate_gitlab_ci_from_chef_ci
 
     try:
-        cookbook_path = _normalize_path(cookbook_path)
+        cookbook_path = str(_normalize_path(cookbook_path))
         enable_cache_bool = enable_cache.lower() in ("yes", "true", "1")
         enable_artifacts_bool = enable_artifacts.lower() in ("yes", "true", "1")
         result = generate_gitlab_ci_from_chef_ci(
@@ -2824,7 +2824,7 @@ def generate_github_workflow_from_chef(
     from souschef.ci.github_actions import generate_github_workflow_from_chef_ci
 
     try:
-        cookbook_path = _normalize_path(cookbook_path)
+        cookbook_path = str(_normalize_path(cookbook_path))
         enable_cache_bool = enable_cache.lower() in ("yes", "true", "1")
         enable_artifacts_bool = enable_artifacts.lower() in ("yes", "true", "1")
         result = generate_github_workflow_from_chef_ci(
