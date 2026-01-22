@@ -7,6 +7,7 @@ inventory scripts.
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -677,9 +678,16 @@ def _run_ansible_lint(playbook_content: str) -> str | None:
 
     tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as tmp:
-            tmp.write(playbook_content)
-            tmp_path = tmp.name
+        # Create temp file with secure permissions (0o600 = rw-------)
+        # Use os.open with secure flags instead of NamedTemporaryFile for better control
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".yml", text=True)
+        try:
+            # Write content to file descriptor (atomic operation)
+            with os.fdopen(tmp_fd, "w") as tmp:
+                tmp.write(playbook_content)
+        except Exception:
+            os.close(tmp_fd)
+            raise
 
         # Run ansible-lint
         # We ignore return code because we want to capture output even on failure
