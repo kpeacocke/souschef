@@ -37,9 +37,11 @@ try:
         analyse_chef_search_patterns,
     )
 
-    _server_available = True
+    # codeql[py/unused-variable]: Set for future feature gating
+    _server_available = True  # noqa: F841
 except ImportError:
-    _server_available = False
+    # codeql[py/unused-variable]: Set for future feature gating
+    _server_available = False  # noqa: F841
 
     # Define a placeholder function for when MCP is not available
     def analyse_chef_search_patterns(*args, **kwargs):

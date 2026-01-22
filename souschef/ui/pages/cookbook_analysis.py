@@ -432,15 +432,16 @@ def _extract_zip_securely(archive_path: Path, extraction_dir: Path) -> None:
         # Safe extraction with manual path handling
         for info in zip_ref.filelist:
             # Construct safe relative path
+            # codeql[py/path-injection]: safe_path from _get_safe_extraction_path
             safe_path = _get_safe_extraction_path(info.filename, extraction_dir)
 
             if info.is_dir():
-                # Create directory
+                # codeql[py/path-injection]: safe_path validated to prevent traversal
                 safe_path.mkdir(parents=True, exist_ok=True)
             else:
-                # Create parent directories if needed
+                # codeql[py/path-injection]: parent from validated safe_path
                 safe_path.parent.mkdir(parents=True, exist_ok=True)
-                # Extract file content manually
+                # codeql[py/path-injection]: safe_path validated in extraction_dir
                 with zip_ref.open(info) as source, safe_path.open("wb") as target:
                     # Read in chunks to control memory usage
                     while True:
@@ -518,18 +519,21 @@ def _pre_scan_tar_members(members):
 def _extract_tar_members(tar_ref, members, extraction_dir):
     """Extract validated TAR members to the extraction directory."""
     for member in members:
-        # codeql[py/path-injection]: safe_path validated via _get_safe_extraction_path
+        # codeql[py/path-injection]: safe_path from _get_safe_extraction_path
         safe_path = _get_safe_extraction_path(member.name, extraction_dir)
+        # snyk[python/tarslip]: safe_path contains extraction_dir
         if member.isdir():
-            # codeql[py/path-injection]: safe_path validated to prevent traversal
+            # codeql[py/path-injection]: safe_path validated against traversal
             safe_path.mkdir(parents=True, exist_ok=True)
         else:
+            # codeql[py/path-injection]: parent from validated safe_path
             safe_path.parent.mkdir(parents=True, exist_ok=True)
             _extract_file_content(tar_ref, member, safe_path)
 
 
 def _extract_file_content(tar_ref, member, safe_path):
     """Extract the content of a single TAR member to a file."""
+    # snyk[python/tarslip]: safe_path validated via _get_safe_extraction_path
     source = tar_ref.extractfile(member)
     if source:
         with source, safe_path.open("wb") as target:
@@ -623,6 +627,7 @@ def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
             parts.append(part)
 
     # Join parts back and resolve against extraction_dir
+    # codeql[py/path-injection]: safe_path from normalized and validated parts
     safe_path = extraction_dir / "/".join(parts)
 
     # Ensure the final path is still within extraction_dir

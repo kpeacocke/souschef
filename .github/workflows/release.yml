@@ -92,7 +92,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6
       with:
-        ref: ${{ needs.validate.outputs.tag }}
+        # Checkout the exact commit that triggered the workflow. The tag does
+        # not exist yet (created later in create-release), so using the tag
+        # here causes checkout failures.
+        ref: ${{ github.sha }}
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -194,6 +198,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
 
     - name: Create git tag and GitHub release
       env:
