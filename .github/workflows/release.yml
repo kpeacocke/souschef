@@ -1,16 +1,10 @@
 name: Release
 
-# Only trigger on release published (created by Release Please)
-# Don't trigger on tag push to avoid duplicate runs
+# Trigger on every push to main - read version from pyproject.toml
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag to publish (e.g., v2.0.0)'
-        required: true
-        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,75 +20,51 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write  # Need write to create tags
     outputs:
       tag: ${{ steps.get-tag.outputs.tag }}
+      version: ${{ steps.get-tag.outputs.version }}
+      should_release: ${{ steps.check-version.outputs.should_release }}
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Determine release tag
+    - name: Determine version from pyproject.toml
       id: get-tag
-      env:
-        INPUT_TAG: ${{ inputs.tag }}
-        RELEASE_TAG: ${{ github.event.release.tag_name }}
-        EVENT_NAME: ${{ github.event_name }}
       run: |
-        if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-          TAG="$INPUT_TAG"
-        else
-          TAG="$RELEASE_TAG"
-        fi
+        VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['tool']['poetry']['version'])")
+        TAG="v${VERSION}"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "tag=$TAG" >> $GITHUB_OUTPUT
-        echo "Using tag: $TAG"
+        echo "Version from pyproject.toml: $VERSION"
+        echo "Release tag: $TAG"
 
-    - name: Validate release is on main branch
+    - name: Check if tag already exists
+      id: check-version
       env:
         TAG: ${{ steps.get-tag.outputs.tag }}
       run: |
-        if ! git branch -r --contains "$TAG" 2>/dev/null | grep -q 'origin/main'; then
-          echo "Error: Release tag must be on main branch"
-          git branch -r --contains "$TAG" 2>/dev/null || echo "Tag not found"
-          exit 1
+        if git rev-parse "$TAG" >/dev/null 2>&1; then
+          echo "Tag $TAG already exists - skipping release"
+          echo "should_release=false" >> $GITHUB_OUTPUT
+        else
+          echo "Tag $TAG does not exist - will create release"
+          echo "should_release=true" >> $GITHUB_OUTPUT
         fi
-        echo "✓ Release tag is on main branch"
-
-    - name: Validate semver tag
-      env:
-        TAG: ${{ steps.get-tag.outputs.tag }}
-      run: |
-        if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-          echo "Error: Tag '$TAG' does not follow semver format (vX.Y.Z)"
-          exit 1
-        fi
-        echo "✓ Tag '$TAG' is valid semver"
-
-    - name: Verify tag version matches pyproject.toml
-      env:
-        TAG: ${{ steps.get-tag.outputs.tag }}
-      run: |
-        TAG_VERSION="${TAG#v}"
-        # Use Python to parse TOML since it's more reliable than sed
-        PYPROJECT_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['tool']['poetry']['version'])")
-        if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
-          echo "Error: Tag version ($TAG_VERSION) != pyproject.toml version ($PYPROJECT_VERSION)"
-          exit 1
-        fi
-        echo "✓ Version $TAG_VERSION matches pyproject.toml"
 
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate
+    if: needs.validate.outputs.should_release == 'true'
     permissions:
       contents: read
 
@@ -143,9 +113,11 @@ jobs:
   publish-pypi:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: build
+    needs: [validate, build]
+    if: needs.validate.outputs.should_release == 'true'
     permissions:
       contents: read
+      id-token: write  # For trusted publishing
 
     steps:
     - name: Download package artifacts
@@ -160,14 +132,34 @@ jobs:
         password: ${{ secrets.PYPI_API_TOKEN }}
         attestations: false
 
-  attach-to-release:
+  create-release:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [validate, build]
+    if: needs.validate.outputs.should_release == 'true'
     permissions:
       contents: write
 
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Create git tag and GitHub release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ needs.validate.outputs.tag }}
+        VERSION: ${{ needs.validate.outputs.version }}
+      run: |
+        # Create and push tag
+        git tag "$TAG"
+        git push origin "$TAG"
+        
+        # Create GitHub release with auto-generated notes
+        gh release create "$TAG" \
+          --title "Release $VERSION" \
+          --generate-notes \
+          --latest
+
     - name: Download package artifacts
       uses: actions/download-artifact@v7
       with:
@@ -178,7 +170,6 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG: ${{ needs.validate.outputs.tag }}
-        REPO: ${{ github.repository }}
       run: |
         echo "Attaching packages to release $TAG..."
-        gh release upload "$TAG" dist/* --repo "$REPO"
+        gh release upload "$TAG" dist/*
