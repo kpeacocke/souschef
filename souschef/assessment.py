@@ -664,6 +664,7 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
 
     # Basic directory counts
     # cookbook_path already normalized by caller
+    # codeql[py/path-injection]: cookbook_path is normalised and only local globbing is performed
     recipes_dir = (
         cookbook_path / "recipes"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
@@ -872,6 +873,7 @@ def _analyze_libraries(cookbook_path: Path) -> int:
 def _count_definitions(cookbook_path: Path) -> int:
     """Count definition files."""
     # cookbook_path already normalized by caller
+    # codeql[py/path-injection]: cookbook_path is normalised before globbing definitions
     definitions_dir = (
         cookbook_path / "definitions"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected

@@ -1593,20 +1593,26 @@ def _parse_summary_line(line: str, structured: dict):
         try:
             count = int(line.split(":")[-1].strip())
             structured["summary"]["total_cookbooks"] = count
-        except ValueError:
-            pass
+        except ValueError as err:
+            structured.setdefault("parse_errors", []).append(
+                f"total_cookbooks_parse_failed: {err}"
+            )
     elif "Successfully converted:" in line:
         try:
             count = int(line.split(":")[-1].strip())
             structured["summary"]["cookbooks_converted"] = count
-        except ValueError:
-            pass
+        except ValueError as err:
+            structured.setdefault("parse_errors", []).append(
+                f"cookbooks_converted_parse_failed: {err}"
+            )
     elif "Total files converted:" in line:
         try:
             count = int(line.split(":")[-1].strip())
             structured["summary"]["total_converted_files"] = count
-        except ValueError:
-            pass
+        except ValueError as err:
+            structured.setdefault("parse_errors", []).append(
+                f"total_converted_files_parse_failed: {err}"
+            )
 
 
 def _parse_converted_cookbook(line: str, structured: dict):
@@ -1627,8 +1633,10 @@ def _parse_converted_cookbook(line: str, structured: dict):
                     "files_count": 0,
                 }
             )
-    except (IndexError, ValueError):
-        pass
+    except (IndexError, ValueError) as err:
+        structured.setdefault("parse_errors", []).append(
+            f"converted_cookbook_parse_failed: {err}"
+        )
 
 
 def _parse_failed_cookbook(line: str, structured: dict):
@@ -1645,8 +1653,10 @@ def _parse_failed_cookbook(line: str, structured: dict):
                     "error": error,
                 }
             )
-    except (IndexError, ValueError):
-        pass
+    except (IndexError, ValueError) as err:
+        structured.setdefault("parse_errors", []).append(
+            f"failed_cookbook_parse_failed: {err}"
+        )
 
 
 def _extract_warnings_from_text(result_text: str, structured: dict):
@@ -1769,6 +1779,8 @@ def _display_conversion_download_options(conversion_result: dict):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                 # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+                # codeql[py/path-injection]: safe_output_path normalized
+                # codeql[py/path-injection]: containment enforced before writing
                 for root, _dirs, files in os.walk(str(safe_output_path)):
                     root_path = _normalize_path(root)
                     if not root_path.is_relative_to(safe_output_path):
