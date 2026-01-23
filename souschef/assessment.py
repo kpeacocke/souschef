@@ -6,6 +6,7 @@ generating migration plans, analyzing dependencies, and validating conversions.
 """
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -658,81 +659,73 @@ def _format_assessment_report(
 
 def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
     """Count comprehensive cookbook artifacts including all Chef components."""
-    # deepcode ignore PT: path normalized via _normalize_path in caller
-    cookbook_path = _normalize_path(cookbook_path)
+    # Perform inline, CodeQL-recognised path normalisation and containment checks.
+    base = os.path.realpath(str(cookbook_path))
+
+    def _safe_subdir(name: str) -> Path:
+        """
+        Create a safe subdirectory path under the cookbook base.
+
+        Uses os.path.realpath and os.path.commonpath inline so CodeQL can
+        recognise the guard. Raises RuntimeError if containment fails.
+        """
+        sub = os.path.realpath(os.path.join(base, name))  # noqa: PTH111, PTH118
+        if os.path.commonpath([base, sub]) != base:
+            raise RuntimeError("Unsafe path traversal outside cookbook base")
+        return Path(sub)
 
     # Basic directory counts
-    # cookbook_path already normalized by caller
-    # codeql[py/path-injection]: cookbook_path is normalised and only local globbing is performed
-    recipes_dir = _safe_join(
-        cookbook_path, "recipes"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    recipes_dir = _safe_subdir("recipes")
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    templates_dir = _safe_join(cookbook_path, "templates")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    templates_dir = _safe_subdir("templates")
     template_count = (
         len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
     )
 
-    files_dir = _safe_join(cookbook_path, "files")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    files_dir = _safe_subdir("files")
     file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
 
     # Additional Chef components
-    # cookbook_path normalized via _normalize_path in caller
-    attributes_dir = _safe_join(cookbook_path, "attributes")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    attributes_dir = _safe_subdir("attributes")
     attributes_count = (
         len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
     )
 
-    # cookbook_path normalized by caller
-    libraries_dir = _safe_join(cookbook_path, "libraries")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    libraries_dir = _safe_subdir("libraries")
     libraries_count = (
         len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
     )
 
-    # cookbook_path normalized via _normalize_path in caller
-    definitions_dir = _safe_join(cookbook_path, "definitions")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    definitions_dir = _safe_subdir("definitions")
     definitions_count = (
         len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
     )
 
-    # cookbook_path normalized via _normalize_path in caller
-    resources_dir = _safe_join(cookbook_path, "resources")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    resources_dir = _safe_subdir("resources")
     resources_count = (
         len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
     )
 
-    # cookbook_path normalized via _normalize_path in caller
-    providers_dir = _safe_join(cookbook_path, "providers")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    providers_dir = _safe_subdir("providers")
     providers_count = (
         len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
     )
 
     # Configuration files
-    # cookbook_path normalized by caller via _normalize_path
-    berksfile = _safe_join(cookbook_path, "Berksfile")
+    berksfile = _safe_subdir("Berksfile")
     has_berksfile = berksfile.exists()
-    # cookbook_path normalized by caller via _normalize_path
-    chefignore = _safe_join(cookbook_path, "chefignore")
+    chefignore = _safe_subdir("chefignore")
     has_chefignore = chefignore.exists()
-    thorfile = _safe_join(cookbook_path, "Thorfile")
+    thorfile = _safe_subdir("Thorfile")
     has_thorfile = thorfile.exists()
-    kitchen_yml = _safe_join(cookbook_path, ".kitchen.yml")
+    kitchen_yml = _safe_subdir(".kitchen.yml")
     kitchen_yml_exists = kitchen_yml.exists()
-    kitchen_yaml = _safe_join(cookbook_path, "kitchen.yml")
+    kitchen_yaml = _safe_subdir("kitchen.yml")
     kitchen_yaml_exists = kitchen_yaml.exists()
     has_kitchen_yml = kitchen_yml_exists or kitchen_yaml_exists
-    # cookbook_path normalized by caller via _normalize_path
-    test_dir = _safe_join(cookbook_path, "test")
-    spec_dir = _safe_join(cookbook_path, "spec")
+    test_dir = _safe_subdir("test")
+    spec_dir = _safe_subdir("spec")
     has_test_dir = test_dir.exists() or spec_dir.exists()
 
     return {
