@@ -1635,8 +1635,17 @@ def _flatten_environment_vars(env_data: dict) -> dict:
     return vars_dict
 
 
-def _extract_environment_usage_from_cookbook(cookbook_path) -> list:
-    """Extract environment usage patterns from Chef cookbook files."""
+def _extract_environment_usage_from_cookbook(cookbook_path: Path) -> list:
+    """
+    Extract environment usage patterns from Chef cookbook files.
+
+    Args:
+        cookbook_path: Path to cookbook directory.
+
+    Returns:
+        List of environment usage patterns found.
+
+    """
     patterns = []
 
     # Search for environment usage in Ruby files

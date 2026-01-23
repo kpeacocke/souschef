@@ -1393,8 +1393,17 @@ def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
 • **Training:** 2-3 days Ansible/AWX training for team"""
 
 
-def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
-    """Analyze cookbook dependencies in detail."""
+def _analyse_cookbook_dependencies_detailed(cookbook_path: Path) -> dict:
+    """
+    Analyze cookbook dependencies in detail.
+
+    Args:
+        cookbook_path: Normalized path to cookbook directory.
+
+    Returns:
+        Dictionary with dependency analysis data.
+
+    """
     analysis = {
         "cookbook_name": cookbook_path.name,
         "direct_dependencies": [],
