@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from souschef.assessment import _analyse_cookbook_dependencies_detailed
 from souschef.server import (
     ValidationCategory,
     ValidationEngine,
@@ -11392,6 +11393,11 @@ class TestErrorHandling:
         # Test with absolute path that tries to escape
         with pytest.raises(ValueError, match="Path traversal attempt"):
             _safe_join(base, "/etc/passwd")
+
+    def test_analyse_dependencies_rejects_traversal_input(self):
+        """Ensure cookbook dependency analysis rejects traversal attempts."""
+        with pytest.raises(ValueError, match="directory traversal"):
+            _analyse_cookbook_dependencies_detailed("../escape")
 
     def test_convert_chef_condition_file_exist_negated(self):
         """Test negated File.exist? condition."""

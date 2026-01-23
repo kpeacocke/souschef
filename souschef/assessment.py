@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from souschef.core import METADATA_FILENAME, _normalize_path
+from souschef.core import METADATA_FILENAME, _normalize_path, _safe_join
 from souschef.core.errors import format_error_with_context
 from souschef.core.metrics import (
     ComplexityLevel,
@@ -1463,40 +1463,42 @@ def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
 • **Training:** 2-3 days Ansible/AWX training for team"""
 
 
-def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
+def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
     """Analyze cookbook dependencies in detail."""
+    base = _normalize_path(cookbook_path)
+    direct_dependencies: list[str] = []
+    transitive_dependencies: list[str] = []
+    external_dependencies: list[str] = []
+    community_cookbooks: list[str] = []
+    circular_dependencies: list[str] = []
+
     analysis = {
-        "cookbook_name": cookbook_path.name,
-        "direct_dependencies": [],
-        "transitive_dependencies": [],
-        "external_dependencies": [],
-        "community_cookbooks": [],
-        "circular_dependencies": [],
+        "cookbook_name": base.name,
+        "direct_dependencies": direct_dependencies,
+        "transitive_dependencies": transitive_dependencies,
+        "external_dependencies": external_dependencies,
+        "community_cookbooks": community_cookbooks,
+        "circular_dependencies": circular_dependencies,
     }
 
-    # Read metadata.rb for dependencies
-    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
-    metadata_file_str = os.path.realpath(os.path.join(base, METADATA_FILENAME))  # noqa: PTH111, PTH118
-    if os.path.commonpath([base, metadata_file_str]) != base:
-        raise RuntimeError("Path traversal")
-    if os.path.exists(metadata_file_str):  # noqa: PTH110
-        with Path(metadata_file_str).open(encoding="utf-8", errors="ignore") as f:
+    # Read metadata.rb for dependencies using safe join to prevent traversal
+    metadata_path = _safe_join(base, METADATA_FILENAME)
+    if metadata_path.exists():  # noqa: PTH110
+        with metadata_path.open(encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
         # Parse dependencies
         depends_matches = re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
-        analysis["direct_dependencies"] = depends_matches
+        direct_dependencies.extend(depends_matches)
 
-    # Read Berksfile for additional dependencies
-    berksfile_str = os.path.realpath(os.path.join(base, "Berksfile"))  # noqa: PTH111, PTH118
-    if os.path.commonpath([base, berksfile_str]) != base:
-        raise RuntimeError("Path traversal")
-    if os.path.exists(berksfile_str):  # noqa: PTH110
-        with Path(berksfile_str).open(encoding="utf-8", errors="ignore") as f:
+    # Read Berksfile for additional dependencies using safe join
+    berksfile_path = _safe_join(base, "Berksfile")
+    if berksfile_path.exists():  # noqa: PTH110
+        with berksfile_path.open(encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
         cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
-        analysis["external_dependencies"].extend(cookbook_matches)
+        external_dependencies.extend(cookbook_matches)
 
     # Identify community cookbooks (common ones)
     community_cookbook_patterns = [
@@ -1515,10 +1517,10 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
         "users",
     ]
 
-    all_deps = analysis["direct_dependencies"] + analysis["external_dependencies"]
+    all_deps = direct_dependencies + external_dependencies
     for dep in all_deps:
         if any(pattern in dep.lower() for pattern in community_cookbook_patterns):
-            analysis["community_cookbooks"].append(dep)
+            community_cookbooks.append(dep)
 
     return analysis
 
