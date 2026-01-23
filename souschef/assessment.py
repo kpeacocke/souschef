@@ -658,81 +658,62 @@ def _format_assessment_report(
 
 def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
     """Count comprehensive cookbook artifacts including all Chef components."""
-    # deepcode ignore PT: path normalized via _normalize_path in caller
-    cookbook_path = _normalize_path(cookbook_path)
+    # codeql[py/path-injection]: Input validated by _normalize_path below
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
 
     # Basic directory counts
-    # cookbook_path already normalized by caller
-    # codeql[py/path-injection]: cookbook_path is normalised and only local globbing is performed
-    recipes_dir = _safe_join(
-        cookbook_path, "recipes"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    recipes_dir = _safe_join(validated_path, "recipes")
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    templates_dir = _safe_join(cookbook_path, "templates")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    templates_dir = _safe_join(validated_path, "templates")
     template_count = (
         len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
     )
 
-    files_dir = _safe_join(cookbook_path, "files")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    files_dir = _safe_join(validated_path, "files")
     file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
 
     # Additional Chef components
-    # cookbook_path normalized via _normalize_path in caller
-    attributes_dir = _safe_join(cookbook_path, "attributes")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    attributes_dir = _safe_join(validated_path, "attributes")
     attributes_count = (
         len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
     )
 
-    # cookbook_path normalized by caller
-    libraries_dir = _safe_join(cookbook_path, "libraries")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    libraries_dir = _safe_join(validated_path, "libraries")
     libraries_count = (
         len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
     )
 
-    # cookbook_path normalized via _normalize_path in caller
-    definitions_dir = _safe_join(cookbook_path, "definitions")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    definitions_dir = _safe_join(validated_path, "definitions")
     definitions_count = (
         len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
     )
 
-    # cookbook_path normalized via _normalize_path in caller
-    resources_dir = _safe_join(cookbook_path, "resources")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    resources_dir = _safe_join(validated_path, "resources")
     resources_count = (
         len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
     )
 
-    # cookbook_path normalized via _normalize_path in caller
-    providers_dir = _safe_join(cookbook_path, "providers")
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    providers_dir = _safe_join(validated_path, "providers")
     providers_count = (
         len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
     )
 
     # Configuration files
-    # cookbook_path normalized by caller via _normalize_path
-    berksfile = _safe_join(cookbook_path, "Berksfile")
+    berksfile = _safe_join(validated_path, "Berksfile")
     has_berksfile = berksfile.exists()
-    # cookbook_path normalized by caller via _normalize_path
-    chefignore = _safe_join(cookbook_path, "chefignore")
+    chefignore = _safe_join(validated_path, "chefignore")
     has_chefignore = chefignore.exists()
-    thorfile = _safe_join(cookbook_path, "Thorfile")
+    thorfile = _safe_join(validated_path, "Thorfile")
     has_thorfile = thorfile.exists()
-    kitchen_yml = _safe_join(cookbook_path, ".kitchen.yml")
+    kitchen_yml = _safe_join(validated_path, ".kitchen.yml")
     kitchen_yml_exists = kitchen_yml.exists()
-    kitchen_yaml = _safe_join(cookbook_path, "kitchen.yml")
+    kitchen_yaml = _safe_join(validated_path, "kitchen.yml")
     kitchen_yaml_exists = kitchen_yaml.exists()
     has_kitchen_yml = kitchen_yml_exists or kitchen_yaml_exists
-    # cookbook_path normalized by caller via _normalize_path
-    test_dir = _safe_join(cookbook_path, "test")
-    spec_dir = _safe_join(cookbook_path, "spec")
+    test_dir = _safe_join(validated_path, "test")
+    spec_dir = _safe_join(validated_path, "spec")
     has_test_dir = test_dir.exists() or spec_dir.exists()
 
     return {
@@ -754,11 +735,6 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
 
 def _analyse_recipe_complexity(cookbook_path: Path) -> dict[str, int]:
     """Analyse recipe files and other cookbook components for resource counts, Ruby blocks, and custom resources."""
-    # deepcode ignore PT: path normalized via _normalize_path in caller
-    cookbook_path = (
-        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
-    )
-
     resource_count = 0
     custom_resources = 0
     ruby_blocks = 0
@@ -787,16 +763,14 @@ def _analyse_recipe_complexity(cookbook_path: Path) -> dict[str, int]:
 
 def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
     """Analyze recipe files for resources, ruby blocks, and custom resources."""
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
     resource_count = 0
     ruby_blocks = 0
     custom_resources = 0
 
-    # codeql[py/path-injection]: cookbook_path already normalized by caller
-    recipes_dir = _safe_join(
-        cookbook_path, "recipes"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+    recipes_dir = _safe_join(validated_path, "recipes")
     if recipes_dir.exists():
-        # codeql[py/path-injection]: Path validated by _safe_join containment checks
         for recipe_file in recipes_dir.glob("*.rb"):
             try:
                 content = recipe_file.read_text(encoding="utf-8", errors="ignore")
@@ -822,12 +796,11 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
 
 def _analyze_attributes(cookbook_path: Path) -> int:
     """Analyze attribute files for complexity."""
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
     attribute_complexity = 0
 
-    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    attributes_dir = _safe_join(
-        cookbook_path, "attributes"
-    )  # deepcode ignore PT: path normalized via _normalize_path
+    attributes_dir = _safe_join(validated_path, "attributes")
     if attributes_dir.exists():
         # codeql[py/path-injection]: Path validated by _safe_join containment checks
         for attr_file in attributes_dir.glob("*.rb"):
@@ -855,12 +828,11 @@ def _analyze_attributes(cookbook_path: Path) -> int:
 
 def _analyze_templates(cookbook_path: Path) -> int:
     """Analyze template files for ERB complexity."""
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
     erb_templates = 0
 
-    # codeql[py/path-injection]: cookbook_path already normalized by caller
-    templates_dir = _safe_join(
-        cookbook_path, "templates"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+    templates_dir = _safe_join(validated_path, "templates")
     if templates_dir.exists():
         # codeql[py/path-injection]: Path validated by _safe_join containment checks
         for template_file in templates_dir.glob("**/*.erb"):
@@ -878,17 +850,14 @@ def _analyze_templates(cookbook_path: Path) -> int:
 
 def _analyze_libraries(cookbook_path: Path) -> int:
     """Analyze library files for complexity."""
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
     library_complexity = 0
 
-    # codeql[py/path-injection]: cookbook_path already normalized by caller
-    libraries_dir = _safe_join(
-        cookbook_path, "libraries"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+    libraries_dir = _safe_join(validated_path, "libraries")
     if libraries_dir.exists():
-        # codeql[py/path-injection]: Path validated by _safe_join containment checks
         for lib_file in libraries_dir.glob("*.rb"):
             try:
-                # codeql[py/path-injection]: lib_file from glob() on normalized dir
                 content = lib_file.read_text(encoding="utf-8", errors="ignore")
                 # Count class definitions, methods, and complex Ruby constructs
                 classes = len(re.findall(r"class\s+\w+", content))
@@ -902,22 +871,19 @@ def _analyze_libraries(cookbook_path: Path) -> int:
 
 def _count_definitions(cookbook_path: Path) -> int:
     """Count definition files."""
-    # codeql[py/path-injection]: cookbook_path already normalized by caller
-    definitions_dir = _safe_join(
-        cookbook_path, "definitions"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
+    definitions_dir = _safe_join(validated_path, "definitions")
     if definitions_dir.exists():
-        # codeql[py/path-injection]: Path validated by _safe_join containment checks
         return len(list(definitions_dir.glob("*.rb")))
     return 0
 
 
 def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     """Parse Berksfile for dependency information."""
-    # path validated via _normalize_path
-    cookbook_path = _normalize_path(cookbook_path)
-    # berksfile constructed with literal "Berksfile" from normalized cookbook_path
-    berksfile = _safe_join(cookbook_path, "Berksfile")
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
+    berksfile = _safe_join(validated_path, "Berksfile")
 
     if not berksfile.exists():
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
@@ -1404,10 +1370,13 @@ def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
 • **Training:** 2-3 days Ansible/AWX training for team"""
 
 
-def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
+def _analyse_cookbook_dependencies_detailed(cookbook_path: Path) -> dict:
     """Analyze cookbook dependencies in detail."""
-    analysis = {
-        "cookbook_name": cookbook_path.name,
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
+
+    analysis: dict[str, Any] = {
+        "cookbook_name": validated_path.name,
         "direct_dependencies": [],
         "transitive_dependencies": [],
         "external_dependencies": [],
@@ -1416,9 +1385,8 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
     }
 
     # Read metadata.rb for dependencies
-    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
+    metadata_file = _safe_join(validated_path, METADATA_FILENAME)
     if metadata_file.exists():
-        # codeql[py/path-injection]: metadata_file validated by _safe_join using os.path.normpath + startswith
         with metadata_file.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
@@ -1427,9 +1395,8 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
         analysis["direct_dependencies"] = depends_matches
 
     # Read Berksfile for additional dependencies
-    berksfile = _safe_join(cookbook_path, "Berksfile")
+    berksfile = _safe_join(validated_path, "Berksfile")
     if berksfile.exists():
-        # codeql[py/path-injection]: berksfile validated by _safe_join using os.path.normpath + startswith
         with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
@@ -2363,7 +2330,9 @@ Provide your analysis in JSON format with keys: complexity_score, estimated_effo
 
 def _get_recipe_content_sample(cookbook_path: Path) -> str:
     """Get a sample of ALL recipe content for AI analysis."""
-    recipes_dir = _safe_join(cookbook_path, "recipes")
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
+    recipes_dir = _safe_join(validated_path, "recipes")
     if not recipes_dir.exists():
         return "No recipes directory found"
 
@@ -2405,7 +2374,9 @@ def _get_recipe_content_sample(cookbook_path: Path) -> str:
 
 def _get_metadata_content(cookbook_path: Path) -> str:
     """Get metadata content for AI analysis."""
-    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
+    # Validate path locally to prevent CodeQL taint analysis false positives
+    validated_path = _normalize_path(cookbook_path)
+    metadata_file = _safe_join(validated_path, METADATA_FILENAME)
     if not metadata_file.exists():
         return "No metadata.rb found"
 
