@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from souschef.core import METADATA_FILENAME, _normalize_path
+from souschef.core import METADATA_FILENAME, _normalize_path, _safe_join
 from souschef.core.errors import format_error_with_context
 from souschef.core.metrics import (
     ComplexityLevel,
@@ -1465,8 +1465,11 @@ def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
 
 def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
     """Analyze cookbook dependencies in detail."""
+    # Ensure we have a normalized base Path for all filesystem operations
+    base = _normalize_path(cookbook_path)  # type: ignore[arg-type]
+
     analysis = {
-        "cookbook_name": cookbook_path.name,
+        "cookbook_name": base.name,
         "direct_dependencies": [],
         "transitive_dependencies": [],
         "external_dependencies": [],
@@ -1475,12 +1478,9 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
     }
 
     # Read metadata.rb for dependencies
-    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
-    metadata_file_str = os.path.realpath(os.path.join(base, METADATA_FILENAME))  # noqa: PTH111, PTH118
-    if os.path.commonpath([base, metadata_file_str]) != base:
-        raise RuntimeError("Path traversal")
-    if os.path.exists(metadata_file_str):  # noqa: PTH110
-        with Path(metadata_file_str).open(encoding="utf-8", errors="ignore") as f:
+    metadata_path = _safe_join(base, METADATA_FILENAME)
+    if metadata_path.exists():  # noqa: PTH110
+        with metadata_path.open(encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
         # Parse dependencies
@@ -1488,11 +1488,9 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
         analysis["direct_dependencies"] = depends_matches
 
     # Read Berksfile for additional dependencies
-    berksfile_str = os.path.realpath(os.path.join(base, "Berksfile"))  # noqa: PTH111, PTH118
-    if os.path.commonpath([base, berksfile_str]) != base:
-        raise RuntimeError("Path traversal")
-    if os.path.exists(berksfile_str):  # noqa: PTH110
-        with Path(berksfile_str).open(encoding="utf-8", errors="ignore") as f:
+    berksfile_path = _safe_join(base, "Berksfile")
+    if berksfile_path.exists():  # noqa: PTH110
+        with berksfile_path.open(encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
         cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
