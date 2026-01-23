@@ -1,0 +1,9 @@
+extensions:
+  - addsTo:
+      pack: codeql/python-all
+      extensible: neutralModel
+    data:
+      # Mark _normalize_path as a sanitizer for path-injection
+      - ["souschef.core.path_utils", "_normalize_path", "Argument[0]", "ReturnValue", "taint", "manual"]
+      # Mark _safe_join as a sanitizer for path-injection  
+      - ["souschef.core.path_utils", "_safe_join", "Argument[0,1]", "ReturnValue", "taint", "manual"]

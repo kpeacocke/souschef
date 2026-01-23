@@ -58,6 +58,8 @@ jobs:
           languages: python
           # Use default queries plus security-extended for more comprehensive scanning
           queries: +security-extended,security-and-quality
+          # Include custom path sanitizer definitions
+          config-file: ./.github/codeql-config.yml
 
       - name: Set up Python
         uses: actions/setup-python@v6
