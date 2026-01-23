@@ -2744,7 +2744,7 @@ def _normalize_and_validate_input_path(input_path: str) -> Path | None:
 
     try:
         # Expand user home and resolve to an absolute, normalized path
-        # codeql[py/path-injection]: path validated via relative_to checks
+        # lgtm [py/path-injection]: path validated via relative_to checks
         path_obj = Path(raw).expanduser().resolve()
     except Exception:
         st.error(f"Invalid path: {raw}")
