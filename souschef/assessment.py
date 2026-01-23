@@ -657,75 +657,114 @@ def _format_assessment_report(
 """
 
 
-def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
+def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C901
     """Count comprehensive cookbook artifacts including all Chef components."""
-    # Perform inline, CodeQL-recognised path normalisation and containment checks.
-    base = os.path.realpath(str(cookbook_path))
+    # Inline guard directly adjacent to each sink for CodeQL recognition
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
 
-    def _safe_subdir(name: str) -> Path:
-        """
-        Create a safe subdirectory path under the cookbook base.
-
-        Uses os.path.realpath and os.path.commonpath inline so CodeQL can
-        recognise the guard. Raises RuntimeError if containment fails.
-        """
-        sub = os.path.realpath(os.path.join(base, name))  # noqa: PTH111, PTH118
-        if os.path.commonpath([base, sub]) != base:
-            raise RuntimeError("Unsafe path traversal outside cookbook base")
-        return Path(sub)
-
-    # Basic directory counts
-    recipes_dir = _safe_subdir("recipes")
+    # Basic directory counts - inline guards at each sink
+    recipes_dir_str = os.path.realpath(os.path.join(base, "recipes"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, recipes_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    recipes_dir = Path(recipes_dir_str)
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    templates_dir = _safe_subdir("templates")
+    templates_dir_str = os.path.realpath(os.path.join(base, "templates"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, templates_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    templates_dir = Path(templates_dir_str)
     template_count = (
         len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
     )
 
-    files_dir = _safe_subdir("files")
+    files_dir_str = os.path.realpath(os.path.join(base, "files"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, files_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    files_dir = Path(files_dir_str)
     file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
 
-    # Additional Chef components
-    attributes_dir = _safe_subdir("attributes")
+    # Additional Chef components - inline guards at each sink
+    attributes_dir_str = os.path.realpath(os.path.join(base, "attributes"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, attributes_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    attributes_dir = Path(attributes_dir_str)
     attributes_count = (
         len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
     )
 
-    libraries_dir = _safe_subdir("libraries")
+    libraries_dir_str = os.path.realpath(os.path.join(base, "libraries"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, libraries_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    libraries_dir = Path(libraries_dir_str)
     libraries_count = (
         len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
     )
 
-    definitions_dir = _safe_subdir("definitions")
+    definitions_dir_str = os.path.realpath(os.path.join(base, "definitions"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, definitions_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    definitions_dir = Path(definitions_dir_str)
     definitions_count = (
         len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
     )
 
-    resources_dir = _safe_subdir("resources")
+    resources_dir_str = os.path.realpath(os.path.join(base, "resources"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, resources_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    resources_dir = Path(resources_dir_str)
     resources_count = (
         len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
     )
 
-    providers_dir = _safe_subdir("providers")
+    providers_dir_str = os.path.realpath(os.path.join(base, "providers"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, providers_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    providers_dir = Path(providers_dir_str)
     providers_count = (
         len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
     )
 
-    # Configuration files
-    berksfile = _safe_subdir("Berksfile")
+    # Configuration files - inline guards
+    berksfile_str = os.path.realpath(os.path.join(base, "Berksfile"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, berksfile_str]) != base:
+        raise RuntimeError("Path traversal")
+    berksfile = Path(berksfile_str)
     has_berksfile = berksfile.exists()
-    chefignore = _safe_subdir("chefignore")
+
+    chefignore_str = os.path.realpath(os.path.join(base, "chefignore"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, chefignore_str]) != base:
+        raise RuntimeError("Path traversal")
+    chefignore = Path(chefignore_str)
     has_chefignore = chefignore.exists()
-    thorfile = _safe_subdir("Thorfile")
+
+    thorfile_str = os.path.realpath(os.path.join(base, "Thorfile"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, thorfile_str]) != base:
+        raise RuntimeError("Path traversal")
+    thorfile = Path(thorfile_str)
     has_thorfile = thorfile.exists()
-    kitchen_yml = _safe_subdir(".kitchen.yml")
+
+    kitchen_yml_str = os.path.realpath(os.path.join(base, ".kitchen.yml"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, kitchen_yml_str]) != base:
+        raise RuntimeError("Path traversal")
+    kitchen_yml = Path(kitchen_yml_str)
     kitchen_yml_exists = kitchen_yml.exists()
-    kitchen_yaml = _safe_subdir("kitchen.yml")
+
+    kitchen_yaml_str = os.path.realpath(os.path.join(base, "kitchen.yml"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, kitchen_yaml_str]) != base:
+        raise RuntimeError("Path traversal")
+    kitchen_yaml = Path(kitchen_yaml_str)
     kitchen_yaml_exists = kitchen_yaml.exists()
     has_kitchen_yml = kitchen_yml_exists or kitchen_yaml_exists
-    test_dir = _safe_subdir("test")
-    spec_dir = _safe_subdir("spec")
+
+    test_dir_str = os.path.realpath(os.path.join(base, "test"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, test_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    test_dir = Path(test_dir_str)
+
+    spec_dir_str = os.path.realpath(os.path.join(base, "spec"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, spec_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    spec_dir = Path(spec_dir_str)
     has_test_dir = test_dir.exists() or spec_dir.exists()
 
     return {
