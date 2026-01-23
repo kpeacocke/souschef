@@ -67,8 +67,8 @@ This archive contains {len(converted_templates)} templates from 1 cookbook.
 zip_buffer.seek(0)
 with zipfile.ZipFile(zip_buffer, "r") as zip_file:
     file_list = zip_file.namelist()
-    # Verify templates are in archive (unused but validates correctness)
-    templates_in_archive = [f for f in file_list if "/templates/" in f]  # noqa: F841
+    # Verify templates are in archive (validates correctness)
+    assert any("/templates/" in f for f in file_list)  # lgtm [py/unused-local-variable]
 
     # Save test archive
     Path("test_archive.zip").write_bytes(zip_buffer.getvalue())
