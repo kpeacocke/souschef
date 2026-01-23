@@ -671,62 +671,62 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    templates_dir = (
+    templates_dir = (  # codeql [py/path-injection]
         cookbook_path / "templates"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     template_count = (
         len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
     )
 
-    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    files_dir = cookbook_path / "files"
+    files_dir = cookbook_path / "files"  # codeql [py/path-injection]
     file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
 
     # Additional Chef components
     # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    attributes_dir = cookbook_path / "attributes"
+    attributes_dir = cookbook_path / "attributes"  # codeql [py/path-injection]
     attributes_count = (
         len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
     )
 
     # codeql[py/path-injection]: cookbook_path normalized by caller
-    libraries_dir = cookbook_path / "libraries"
+    libraries_dir = cookbook_path / "libraries"  # codeql [py/path-injection]
     libraries_count = (
         len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
     )
 
     # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    definitions_dir = cookbook_path / "definitions"
+    definitions_dir = cookbook_path / "definitions"  # codeql [py/path-injection]
     definitions_count = (
         len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
     )
 
     # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    resources_dir = cookbook_path / "resources"
+    resources_dir = cookbook_path / "resources"  # codeql [py/path-injection]
     resources_count = (
         len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
     )
 
     # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    providers_dir = cookbook_path / "providers"
+    providers_dir = cookbook_path / "providers"  # codeql [py/path-injection]
     providers_count = (
         len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
     )
 
     # Configuration files
     # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    has_berksfile = (cookbook_path / "Berksfile").exists()
+    has_berksfile = (cookbook_path / "Berksfile").exists()  # codeql [py/path-injection]
     # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    has_chefignore = (cookbook_path / "chefignore").exists()
-    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    has_thorfile = (cookbook_path / "Thorfile").exists()
-    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    has_kitchen_yml = (cookbook_path / ".kitchen.yml").exists() or (
+    has_chefignore = (
+        cookbook_path / "chefignore"
+    ).exists()  # codeql [py/path-injection]
+    has_thorfile = (cookbook_path / "Thorfile").exists()  # codeql [py/path-injection]
+    has_kitchen_yml = (
+        cookbook_path / ".kitchen.yml"
+    ).exists() or (  # codeql [py/path-injection]
         cookbook_path / "kitchen.yml"
     ).exists()
     # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    has_test_dir = (cookbook_path / "test").exists() or (
+    has_test_dir = (cookbook_path / "test").exists() or (  # codeql [py/path-injection]
         cookbook_path / "spec"
     ).exists()
 
@@ -907,7 +907,7 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     # codeql[py/path-injection]: path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
     # codeql[py/path-injection]: berksfile constructed with literal "Berksfile" from normalized cookbook_path
-    berksfile = cookbook_path / "Berksfile"
+    berksfile = cookbook_path / "Berksfile"  # codeql [py/path-injection]
 
     if not berksfile.exists():
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
@@ -942,7 +942,7 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     # codeql[py/path-injection]: path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
     # codeql[py/path-injection]: chefignore constructed with literal "chefignore" from normalized cookbook_path
-    chefignore = cookbook_path / "chefignore"
+    chefignore = cookbook_path / "chefignore"  # codeql [py/path-injection]
 
     if not chefignore.exists():
         return {"patterns": [], "complexity": 0}
