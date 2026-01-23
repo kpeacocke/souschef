@@ -2644,33 +2644,38 @@ def test_parse_inspec_profile_directory():
     """Test parsing an InSpec profile from a directory."""
     inspec_content = """
 control 'dir-test' do
-  describe package('nginx') do
-    it { should be_installed }
-  end
+    describe package('nginx') do
+        it { should be_installed }
+    end
 end
 """
 
     with patch("souschef.parsers.inspec._normalize_path") as mock_path:
-        mock_instance = MagicMock()
+        # Create a proper Path mock that works with _safe_join's os.path operations
+        mock_instance = MagicMock(spec=Path)
         mock_path.return_value = mock_instance
         mock_instance.exists.return_value = True
         mock_instance.is_dir.return_value = True
         mock_instance.is_file.return_value = False
+        mock_instance.__str__.return_value = "/path/to/profile"
 
         # Mock controls directory
-        controls_dir = MagicMock()
-        mock_instance.__truediv__ = lambda self, other: controls_dir
+        controls_dir = MagicMock(spec=Path)
         controls_dir.exists.return_value = True
 
         # Mock control file
-        control_file = MagicMock()
+        control_file = MagicMock(spec=Path)
         control_file.read_text.return_value = inspec_content
         control_file.relative_to.return_value = Path("controls/test.rb")
-        controls_dir.glob.return_value = [control_file]
 
-        result = parse_inspec_profile("/path/to/profile")
+        # Patch _safe_join to return our mocked controls_dir
+        with patch("souschef.parsers.inspec._safe_join") as mock_safe_join:
+            mock_safe_join.return_value = controls_dir
+            controls_dir.glob.return_value = [control_file]
 
-        assert "dir-test" in result or "controls_count" in result
+            result = parse_inspec_profile("/path/to/profile")
+
+            assert "dir-test" in result or "controls_count" in result
 
 
 def test_parse_inspec_profile_not_found():
@@ -11396,11 +11401,9 @@ class TestErrorHandling:
     def test_safe_join_with_absolute_path_escape(self):
         """Test that absolute paths that escape base are blocked."""
         base = Path("/workspaces/souschef")
-        with (
-            patch.object(Path, "resolve", return_value=Path("/etc/passwd")),
-            pytest.raises(ValueError, match="Path traversal attempt"),
-        ):
-            _safe_join(base, "recipes", "default.rb")
+        # Test with absolute path that tries to escape
+        with pytest.raises(ValueError, match="Path traversal attempt"):
+            _safe_join(base, "/etc/passwd")
 
     def test_convert_chef_condition_file_exist_negated(self):
         """Test negated File.exist? condition."""
