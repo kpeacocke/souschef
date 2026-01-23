@@ -732,11 +732,13 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
         cookbook_path / "chefignore"  # codeql [py/path-injection]
     ).exists()  # codeql [py/path-injection]
     has_thorfile = (cookbook_path / "Thorfile").exists()  # codeql [py/path-injection]
-    has_kitchen_yml = (
-        cookbook_path / ".kitchen.yml"  # codeql [py/path-injection]
-    ).exists() or (  # codeql [py/path-injection]
-        cookbook_path / "kitchen.yml"  # codeql [py/path-injection]
-    ).exists()
+    kitchen_yml_exists = (
+        cookbook_path / ".kitchen.yml"
+    ).exists()  # codeql [py/path-injection]
+    kitchen_yaml_exists = (
+        cookbook_path / "kitchen.yml"
+    ).exists()  # codeql [py/path-injection]
+    has_kitchen_yml = kitchen_yml_exists or kitchen_yaml_exists
     # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
     has_test_dir = (cookbook_path / "test").exists() or (  # codeql [py/path-injection]
         cookbook_path / "spec"
