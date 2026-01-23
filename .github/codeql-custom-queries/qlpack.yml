@@ -1,3 +1,0 @@
-name: souschef/path-sanitizers
-version: 1.0.0
-libraryPathDependencies: codeql/python-all
