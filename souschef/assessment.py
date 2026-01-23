@@ -342,7 +342,7 @@ def analyse_cookbook_dependencies(
                 f"Suggestion: Use one of {', '.join(valid_depths)}"
             )
 
-        # lgtm [py/path-injection]: cookbook_path normalized via _normalize_path
+        # codeql[py/path-injection]: cookbook_path normalized via _normalize_path
         cookbook_path_obj = _normalize_path(cookbook_path)
         if not cookbook_path_obj.exists():
             return (
@@ -665,13 +665,13 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
 
     # Basic directory counts
     # cookbook_path already normalized by caller
-    # lgtm [py/path-injection]: cookbook_path is normalised and only local globbing is performed
+    # codeql[py/path-injection]: cookbook_path is normalised and only local globbing is performed
     recipes_dir = (
         cookbook_path / "recipes"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    # lgtm [py/path-injection]: cookbook_path normalized via _normalize_path in caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     templates_dir = (
         cookbook_path / "templates"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
@@ -679,53 +679,53 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
         len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
     )
 
-    # lgtm [py/path-injection]: cookbook_path normalized via _normalize_path in caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     files_dir = cookbook_path / "files"
     file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
 
     # Additional Chef components
-    # lgtm [py/path-injection]: cookbook_path normalized via _normalize_path in caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     attributes_dir = cookbook_path / "attributes"
     attributes_count = (
         len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
     )
 
-    # lgtm [py/path-injection]: cookbook_path normalized by caller
+    # codeql[py/path-injection]: cookbook_path normalized by caller
     libraries_dir = cookbook_path / "libraries"
     libraries_count = (
         len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
     )
 
-    # lgtm [py/path-injection]: cookbook_path normalized via _normalize_path in caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     definitions_dir = cookbook_path / "definitions"
     definitions_count = (
         len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
     )
 
-    # lgtm [py/path-injection]: cookbook_path normalized via _normalize_path in caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     resources_dir = cookbook_path / "resources"
     resources_count = (
         len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
     )
 
-    # lgtm [py/path-injection]: cookbook_path normalized via _normalize_path in caller
+    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
     providers_dir = cookbook_path / "providers"
     providers_count = (
         len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
     )
 
     # Configuration files
-    # lgtm [py/path-injection]: cookbook_path normalized by caller via _normalize_path
+    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
     has_berksfile = (cookbook_path / "Berksfile").exists()
-    # lgtm [py/path-injection]: cookbook_path normalized by caller via _normalize_path
+    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
     has_chefignore = (cookbook_path / "chefignore").exists()
-    # lgtm [py/path-injection]: cookbook_path normalized by caller via _normalize_path
+    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
     has_thorfile = (cookbook_path / "Thorfile").exists()
-    # lgtm [py/path-injection]: cookbook_path normalized by caller via _normalize_path
+    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
     has_kitchen_yml = (cookbook_path / ".kitchen.yml").exists() or (
         cookbook_path / "kitchen.yml"
     ).exists()
-    # lgtm [py/path-injection]: cookbook_path normalized by caller via _normalize_path
+    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
     has_test_dir = (cookbook_path / "test").exists() or (
         cookbook_path / "spec"
     ).exists()
@@ -786,7 +786,7 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
     ruby_blocks = 0
     custom_resources = 0
 
-    # lgtm [py/path-injection]: cookbook_path already normalized by caller
+    # codeql[py/path-injection]: cookbook_path already normalized by caller
     recipes_dir = (
         cookbook_path / "recipes"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
@@ -818,14 +818,14 @@ def _analyze_attributes(cookbook_path: Path) -> int:
     """Analyze attribute files for complexity."""
     attribute_complexity = 0
 
-    # lgtm [py/path-injection]: cookbook_path normalized by caller via _normalize_path
+    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
     attributes_dir = (
         cookbook_path / "attributes"
     )  # deepcode ignore PT: path normalized via _normalize_path
     if attributes_dir.exists():
         for attr_file in attributes_dir.glob("*.rb"):
             try:
-                # lgtm [py/path-injection]: attr_file from glob() on normalized dir
+                # codeql[py/path-injection]: attr_file from glob() on normalized dir
                 content = attr_file.read_text(encoding="utf-8", errors="ignore")
                 # Count attribute assignments and complex expressions
                 # Use limited quantifiers to prevent ReDoS vulnerabilities
@@ -850,14 +850,14 @@ def _analyze_templates(cookbook_path: Path) -> int:
     """Analyze template files for ERB complexity."""
     erb_templates = 0
 
-    # lgtm [py/path-injection]: cookbook_path already normalized by caller
+    # codeql[py/path-injection]: cookbook_path already normalized by caller
     templates_dir = (
         cookbook_path / "templates"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     if templates_dir.exists():
         for template_file in templates_dir.glob("**/*.erb"):
             try:
-                # lgtm [py/path-injection]: template_file from glob() on normalized dir
+                # codeql[py/path-injection]: template_file from glob() on normalized dir
                 content = template_file.read_text(encoding="utf-8", errors="ignore")
                 # Count ERB expressions and complex logic
                 erb_expressions = len(re.findall(r"<%.*?%>", content))
@@ -872,14 +872,14 @@ def _analyze_libraries(cookbook_path: Path) -> int:
     """Analyze library files for complexity."""
     library_complexity = 0
 
-    # lgtm [py/path-injection]: cookbook_path already normalized by caller
+    # codeql[py/path-injection]: cookbook_path already normalized by caller
     libraries_dir = (
         cookbook_path / "libraries"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     if libraries_dir.exists():
         for lib_file in libraries_dir.glob("*.rb"):
             try:
-                # lgtm [py/path-injection]: lib_file from glob() on normalized dir
+                # codeql[py/path-injection]: lib_file from glob() on normalized dir
                 content = lib_file.read_text(encoding="utf-8", errors="ignore")
                 # Count class definitions, methods, and complex Ruby constructs
                 classes = len(re.findall(r"class\s+\w+", content))
@@ -893,7 +893,7 @@ def _analyze_libraries(cookbook_path: Path) -> int:
 
 def _count_definitions(cookbook_path: Path) -> int:
     """Count definition files."""
-    # lgtm [py/path-injection]: cookbook_path already normalized by caller
+    # codeql[py/path-injection]: cookbook_path already normalized by caller
     definitions_dir = (
         cookbook_path / "definitions"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
@@ -904,9 +904,9 @@ def _count_definitions(cookbook_path: Path) -> int:
 
 def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     """Parse Berksfile for dependency information."""
-    # lgtm [py/path-injection]: path validated via _normalize_path
+    # codeql[py/path-injection]: path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
-    # lgtm [py/path-injection]: berksfile constructed with literal "Berksfile" from normalized cookbook_path
+    # codeql[py/path-injection]: berksfile constructed with literal "Berksfile" from normalized cookbook_path
     berksfile = cookbook_path / "Berksfile"
 
     if not berksfile.exists():
@@ -939,9 +939,9 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
 
 def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     """Parse chefignore file for ignore patterns."""
-    # lgtm [py/path-injection]: path validated via _normalize_path
+    # codeql[py/path-injection]: path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
-    # lgtm [py/path-injection]: chefignore constructed with literal "chefignore" from normalized cookbook_path
+    # codeql[py/path-injection]: chefignore constructed with literal "chefignore" from normalized cookbook_path
     chefignore = cookbook_path / "chefignore"
 
     if not chefignore.exists():
@@ -1406,10 +1406,10 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
     }
 
     # Read metadata.rb for dependencies
-    # lgtm [py/path-injection]: metadata_file constructed via _safe_join with normalized path
+    # codeql[py/path-injection]: metadata_file constructed via _safe_join with normalized path
     metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
     if metadata_file.exists():
-        # lgtm [py/path-injection]: metadata_file from _safe_join validation ensures containment
+        # codeql[py/path-injection]: metadata_file from _safe_join validation ensures containment
         with metadata_file.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
@@ -1419,10 +1419,10 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
         analysis["direct_dependencies"] = depends_matches
 
     # Read Berksfile for additional dependencies
-    # lgtm [py/path-injection]: berksfile constructed via _safe_join with normalized path
+    # codeql[py/path-injection]: berksfile constructed via _safe_join with normalized path
     berksfile = _safe_join(cookbook_path, "Berksfile")
     if berksfile.exists():
-        # lgtm [py/path-injection]: berksfile from _safe_join validation ensures containment
+        # codeql[py/path-injection]: berksfile from _safe_join validation ensures containment
         with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
 

@@ -3033,7 +3033,7 @@ def _convert_recipes(
             playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
 
             # Write as task file using _safe_join to prevent path injection
-            # lgtm [py/path-injection]: recipe_file derives from normalized cookbook_dir and _safe_join enforces containment
+            # codeql[py/path-injection]: recipe_file derives from normalized cookbook_dir and _safe_join enforces containment
             task_file = _safe_join(role_tasks_dir, f"{recipe_name}.yml")
             try:
                 task_file.parent.mkdir(parents=True, exist_ok=True)
@@ -3062,9 +3062,9 @@ def _convert_templates(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert ERB templates to Jinja2 templates."""
-    # lgtm [py/path-injection]: templates_dir from _safe_join ensures containment
+    # codeql[py/path-injection]: templates_dir from _safe_join ensures containment
     templates_dir = _safe_join(cookbook_dir, "templates")
-    # lgtm [py/path-injection]: role_templates_dir from _safe_join ensures containment
+    # codeql[py/path-injection]: role_templates_dir from _safe_join ensures containment
     role_templates_dir = _safe_join(role_dir, "templates")
 
     if not templates_dir.exists():
@@ -3086,15 +3086,15 @@ def _convert_templates(
                 jinja2_content = template_data.get("jinja2_template", "")
 
                 # Determine relative path for role templates using _safe_join
-                # lgtm [py/path-injection]: template_file from normalized cookbook_dir
+                # codeql[py/path-injection]: template_file from normalized cookbook_dir
                 rel_path = template_file.relative_to(templates_dir)
                 # Use _safe_join to prevent path injection with relative paths
-                # lgtm [py/path-injection]: target_file validated via _safe_join
+                # codeql[py/path-injection]: target_file validated via _safe_join
                 target_file = _safe_join(
                     role_templates_dir, str(rel_path.with_suffix(""))
                 )
                 target_file.parent.mkdir(parents=True, exist_ok=True)
-                # lgtm [py/path-injection]: target_file validated via _safe_join
+                # codeql[py/path-injection]: target_file validated via _safe_join
                 target_file.write_text(jinja2_content)
 
                 conversion_summary["converted_files"].append(
@@ -3159,7 +3159,7 @@ def _convert_attributes(
                 ansible_vars[ansible_key] = attr_info["value"]
 
             # Write as defaults using _safe_join to prevent path injection
-            # lgtm [py/path-injection]: attr_file paths come from normalized cookbook_dir and _safe_join enforces containment
+            # codeql[py/path-injection]: attr_file paths come from normalized cookbook_dir and _safe_join enforces containment
             defaults_file = _safe_join(role_defaults_dir, f"{attr_file.stem}.yml")
             defaults_yaml = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
             defaults_file.write_text(defaults_yaml)
@@ -3186,13 +3186,13 @@ def _create_main_task_file(
         return
 
     # Use _safe_join to construct main.yml path safely
-    # lgtm [py/path-injection]: default_recipe path is validated via _safe_join using normalized cookbook_dir
-    # lgtm [py/path-injection]: nested _safe_join ensures double containment
+    # codeql[py/path-injection]: default_recipe path is validated via _safe_join using normalized cookbook_dir
+    # codeql[py/path-injection]: nested _safe_join ensures double containment
     default_task_file = _safe_join(_safe_join(role_dir, "tasks"), "main.yml")
     if default_task_file.exists():
         return  # Already exists
 
-    # lgtm [py/path-injection]: nested _safe_join validates containment
+    # codeql[py/path-injection]: nested _safe_join validates containment
     default_recipe = _safe_join(_safe_join(cookbook_dir, "recipes"), "default.rb")
     if not default_recipe.exists():
         return
@@ -3226,11 +3226,11 @@ def _create_role_metadata(
     import yaml
 
     # Use _safe_join to construct metadata file path
-    # lgtm [py/path-injection]: role_dir is normalized earlier; _safe_join enforces containment
-    # lgtm [py/path-injection]: meta_dir from _safe_join ensures containment
+    # codeql[py/path-injection]: role_dir is normalized earlier; _safe_join enforces containment
+    # codeql[py/path-injection]: meta_dir from _safe_join ensures containment
     meta_dir = _safe_join(role_dir, "meta")
     meta_dir.mkdir(exist_ok=True)
-    # lgtm [py/path-injection]: meta_file from _safe_join ensures containment
+    # codeql[py/path-injection]: meta_file from _safe_join ensures containment
     meta_file = _safe_join(meta_dir, "main.yml")
 
     meta_content: dict[str, Any] = {
@@ -3364,7 +3364,7 @@ def _validate_conversion_paths(
     """Validate and return Path objects for conversion paths."""
     from souschef.core.path_utils import _normalize_path
 
-    # lgtm [py/path-injection]: both paths are normalized and validated before use
+    # codeql[py/path-injection]: both paths are normalized and validated before use
     cookbooks_dir = _normalize_path(cookbooks_path)
     output_dir = _normalize_path(output_path)
 

@@ -432,16 +432,16 @@ def _extract_zip_securely(archive_path: Path, extraction_dir: Path) -> None:
         # Safe extraction with manual path handling
         for info in zip_ref.filelist:
             # Construct safe relative path
-            # lgtm [py/path-injection]: safe_path from _get_safe_extraction_path
+            # codeql[py/path-injection]: safe_path from _get_safe_extraction_path
             safe_path = _get_safe_extraction_path(info.filename, extraction_dir)
 
             if info.is_dir():
-                # lgtm [py/path-injection]: safe_path validated to prevent traversal
+                # codeql[py/path-injection]: safe_path validated to prevent traversal
                 safe_path.mkdir(parents=True, exist_ok=True)
             else:
-                # lgtm [py/path-injection]: parent from validated safe_path
+                # codeql[py/path-injection]: parent from validated safe_path
                 safe_path.parent.mkdir(parents=True, exist_ok=True)
-                # lgtm [py/path-injection]: safe_path validated in extraction_dir
+                # codeql[py/path-injection]: safe_path validated in extraction_dir
                 with zip_ref.open(info) as source, safe_path.open("wb") as target:
                     # Read in chunks to control memory usage
                     while True:
@@ -519,14 +519,14 @@ def _pre_scan_tar_members(members):
 def _extract_tar_members(tar_ref, members, extraction_dir):
     """Extract validated TAR members to the extraction directory."""
     for member in members:
-        # lgtm [py/path-injection]: safe_path from _get_safe_extraction_path
+        # codeql[py/path-injection]: safe_path from _get_safe_extraction_path
         safe_path = _get_safe_extraction_path(member.name, extraction_dir)
         # snyk[python/tarslip]: safe_path contains extraction_dir
         if member.isdir():
-            # lgtm [py/path-injection]: safe_path validated against traversal
+            # codeql[py/path-injection]: safe_path validated against traversal
             safe_path.mkdir(parents=True, exist_ok=True)
         else:
-            # lgtm [py/path-injection]: parent from validated safe_path
+            # codeql[py/path-injection]: parent from validated safe_path
             safe_path.parent.mkdir(parents=True, exist_ok=True)
             _extract_file_content(tar_ref, member, safe_path)
 
@@ -627,7 +627,7 @@ def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
             parts.append(part)
 
     # Join parts back and resolve against extraction_dir
-    # lgtm [py/path-injection]: safe_path from normalized and validated parts
+    # codeql[py/path-injection]: safe_path from normalized and validated parts
     safe_path = extraction_dir / "/".join(parts)
 
     # Ensure the final path is still within extraction_dir
@@ -853,12 +853,12 @@ def _get_archive_upload_input() -> Any:
 
 def _validate_and_list_cookbooks(cookbook_path: str) -> None:
     """Validate the cookbook path and list available cookbooks."""
-    # lgtm [py/path-injection]: safe_dir validated via _get_safe_cookbook_directory
+    # codeql[py/path-injection]: safe_dir validated via _get_safe_cookbook_directory
     safe_dir = _get_safe_cookbook_directory(cookbook_path)
     if safe_dir is None:
         return
 
-    # lgtm [py/path-injection]: safe_dir validated to prevent traversal
+    # codeql[py/path-injection]: safe_dir validated to prevent traversal
     if safe_dir.exists() and safe_dir.is_dir():
         _list_and_display_cookbooks(safe_dir)
     else:
@@ -897,14 +897,14 @@ def _get_safe_cookbook_directory(cookbook_path):
         user_path = Path(path_str)
 
         # Resolve the path safely
-        # lgtm [py/path-injection]: user_path validated against null bytes
+        # codeql[py/path-injection]: user_path validated against null bytes
         # and backslashes
         if user_path.is_absolute():
-            # lgtm [py/path-injection]: resolved_path validated via
+            # codeql[py/path-injection]: resolved_path validated via
             # relative_to checks below
             resolved_path = user_path.resolve()
         else:
-            # lgtm [py/path-injection]: resolved_path validated via
+            # codeql[py/path-injection]: resolved_path validated via
             # relative_to checks below
             resolved_path = (base_dir / user_path).resolve()
 
@@ -1808,7 +1808,7 @@ def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
     """
     files_to_archive = []
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-    # lgtm [py/path-injection]: safe_output_path normalized
+    # codeql[py/path-injection]: safe_output_path normalized
     for root, _dirs, files in os.walk(str(safe_output_path)):
         root_path = _normalize_path(root)
         if not root_path.is_relative_to(safe_output_path):
@@ -1817,7 +1817,7 @@ def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
         for file in files:
             safe_name = _sanitize_filename(file)
             file_path = root_path / safe_name
-            # lgtm [py/path-injection]: containment enforced before writing
+            # codeql[py/path-injection]: containment enforced before writing
             if file_path.is_relative_to(safe_output_path):
                 arcname = file_path.relative_to(safe_output_path)
                 files_to_archive.append((file_path, arcname))
