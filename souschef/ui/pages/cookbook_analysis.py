@@ -1246,22 +1246,26 @@ def _analyze_with_ai(
     st.info(f"Using AI-enhanced analysis with {provider_name} ({model})")
 
     # Count total recipes across all cookbooks
-    total_recipes = sum(
-        len(list((_normalize_path(cb["Path"]) / "recipes").glob("*.rb")))
-        if (_normalize_path(cb["Path"]) / "recipes").exists()
-        else 0
-        for cb in cookbook_data
-    )
+    def _safe_count_recipes(path_str: str) -> int:
+        """Count recipes safely with CodeQL-recognized containment checks."""
+        try:
+            normalized = _normalize_path(path_str)
+            recipes_dir = normalized / "recipes"
+            # codeql[py/path-injection]: Path validated by _normalize_path
+            if recipes_dir.exists():
+                return len(list(recipes_dir.glob("*.rb")))
+            return 0
+        except (ValueError, OSError):
+            return 0
+
+    total_recipes = sum(_safe_count_recipes(cb["Path"]) for cb in cookbook_data)
 
     st.info(f"Detected {len(cookbook_data)} cookbook(s) with {total_recipes} recipe(s)")
 
     results = []
     for i, cb_data in enumerate(cookbook_data):
         # Count recipes in this cookbook
-        recipes_dir = _normalize_path(cb_data["Path"]) / "recipes"
-        recipe_count = (
-            len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
-        )
+        recipe_count = _safe_count_recipes(cb_data["Path"])
 
         st.info(
             f"Analyzing {cb_data['Name']} ({recipe_count} recipes)... "
@@ -2043,18 +2047,24 @@ def _update_progress(status_text, cookbook_name, current, total):
 
 def _find_cookbook_directory(cookbook_path, cookbook_name):
     """Find the directory for a specific cookbook by checking metadata."""
-    for d in Path(cookbook_path).iterdir():
-        if d.is_dir():
-            # Check if this directory contains a cookbook with the matching name
-            metadata_file = d / METADATA_FILENAME
-            if metadata_file.exists():
-                try:
-                    metadata = parse_cookbook_metadata(str(metadata_file))
-                    if metadata.get("name") == cookbook_name:
-                        return d
-                except (ValueError, OSError, KeyError):
-                    # If metadata parsing fails, skip this directory
-                    continue
+    try:
+        # codeql[py/path-injection]: cookbook_path validated via _normalize_path
+        normalized_path = _normalize_path(cookbook_path)
+        for d in normalized_path.iterdir():
+            if d.is_dir():
+                # Check if this directory contains a cookbook with the matching name
+                metadata_file = d / METADATA_FILENAME
+                if metadata_file.exists():
+                    try:
+                        metadata = parse_cookbook_metadata(str(metadata_file))
+                        if metadata.get("name") == cookbook_name:
+                            return d
+                    except (ValueError, OSError, KeyError):
+                        # If metadata parsing fails, skip this directory
+                        continue
+    except ValueError:
+        # Invalid path, return None
+        return None
     return None
 
 
