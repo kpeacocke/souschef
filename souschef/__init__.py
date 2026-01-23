@@ -37,10 +37,10 @@ try:
         analyse_chef_search_patterns,
     )
 
-    # codeql[py/unused-variable]: Set for future feature gating
+    # lgtm [py/unused-local-variable]: Set for future feature gating
     _server_available = True  # noqa: F841
 except ImportError:
-    # codeql[py/unused-variable]: Set for future feature gating
+    # lgtm [py/unused-local-variable]: Set for future feature gating
     _server_available = False  # noqa: F841
 
     # Define a placeholder function for when MCP is not available

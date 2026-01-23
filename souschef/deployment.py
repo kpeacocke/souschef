@@ -10,6 +10,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from souschef.core.constants import (
     CHEF_RECIPE_PREFIX,
@@ -258,10 +259,11 @@ def generate_awx_inventory_source_from_chef(
                 "(e.g., https://chef.example.com)"
             )
 
-        if not chef_server_url.startswith("https://"):
+        parsed_url = urlparse(chef_server_url)
+        if parsed_url.scheme != "https" or not parsed_url.netloc:
             return (
                 f"Error: Invalid Chef server URL: {chef_server_url}\n\n"
-                "Suggestion: URL must use HTTPS protocol for security "
+                "Suggestion: URL must use HTTPS protocol with a valid host "
                 "(e.g., https://chef.example.com)"
             )
 
