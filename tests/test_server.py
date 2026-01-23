@@ -11379,7 +11379,7 @@ class TestErrorHandling:
     def test_normalize_path_with_os_error(self):
         """Test that OSError in path resolution raises ValueError."""
         with (
-            patch("pathlib.Path.resolve", side_effect=OSError("Invalid path")),
+            patch("os.path.realpath", side_effect=OSError("Invalid path")),
             pytest.raises(ValueError, match="Invalid path"),
         ):
             _normalize_path("/some/path")
@@ -11387,7 +11387,7 @@ class TestErrorHandling:
     def test_normalize_path_with_runtime_error(self):
         """Test that RuntimeError in path resolution raises ValueError."""
         with (
-            patch("pathlib.Path.resolve", side_effect=RuntimeError("Runtime issue")),
+            patch("os.path.realpath", side_effect=RuntimeError("Runtime issue")),
             pytest.raises(ValueError, match="Invalid path"),
         ):
             _normalize_path("/some/path")
