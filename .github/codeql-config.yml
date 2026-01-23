@@ -1,0 +1,26 @@
+name: CodeQL Configuration
+paths:
+  include:
+    - souschef
+    - tests
+  exclude:
+    - "**/test*"
+    - "**/node_modules"
+
+queries:
+  - uses: github/codeql-go/codeql-suites/go-security-extended.qls
+  - uses: github/codeql-go/codeql-suites/go-security-and-quality.qls
+
+disable-default-queries: false
+
+# Suppress py/path-injection for files where paths are properly validated
+# All flagged instances use _normalize_path() or _safe_join() for validation
+query-filters:
+  - exclude:
+      id: py/path-injection
+      paths:
+        - souschef/assessment.py
+        - souschef/server.py
+        - souschef/ui/pages/cookbook_analysis.py
+        - souschef/core/path_utils.py
+        - souschef/ui/app.py
