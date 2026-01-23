@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from souschef.core import METADATA_FILENAME, _normalize_path, _safe_join
+from souschef.core import METADATA_FILENAME, _normalize_path
 from souschef.core.errors import format_error_with_context
 from souschef.core.metrics import (
     ComplexityLevel,
@@ -667,21 +667,27 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
     if os.path.commonpath([base, recipes_dir_str]) != base:
         raise RuntimeError("Path traversal")
     recipes_dir = Path(recipes_dir_str)
-    recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
+    recipe_count = (
+        len(list(recipes_dir.glob("*.rb"))) if os.path.exists(recipes_dir_str) else 0  # noqa: PTH110
+    )
 
     templates_dir_str = os.path.realpath(os.path.join(base, "templates"))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, templates_dir_str]) != base:
         raise RuntimeError("Path traversal")
     templates_dir = Path(templates_dir_str)
     template_count = (
-        len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
+        len(list(templates_dir.glob("**/*.erb")))
+        if os.path.exists(templates_dir_str)  # noqa: PTH110
+        else 0
     )
 
     files_dir_str = os.path.realpath(os.path.join(base, "files"))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, files_dir_str]) != base:
         raise RuntimeError("Path traversal")
     files_dir = Path(files_dir_str)
-    file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
+    file_count = (
+        len(list(files_dir.glob("**/*"))) if os.path.exists(files_dir_str) else 0  # noqa: PTH110
+    )
 
     # Additional Chef components - inline guards at each sink
     attributes_dir_str = os.path.realpath(os.path.join(base, "attributes"))  # noqa: PTH111, PTH118
@@ -689,7 +695,9 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
         raise RuntimeError("Path traversal")
     attributes_dir = Path(attributes_dir_str)
     attributes_count = (
-        len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
+        len(list(attributes_dir.glob("*.rb")))
+        if os.path.exists(attributes_dir_str)  # noqa: PTH110
+        else 0
     )
 
     libraries_dir_str = os.path.realpath(os.path.join(base, "libraries"))  # noqa: PTH111, PTH118
@@ -697,7 +705,9 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
         raise RuntimeError("Path traversal")
     libraries_dir = Path(libraries_dir_str)
     libraries_count = (
-        len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
+        len(list(libraries_dir.glob("*.rb")))
+        if os.path.exists(libraries_dir_str)  # noqa: PTH110
+        else 0
     )
 
     definitions_dir_str = os.path.realpath(os.path.join(base, "definitions"))  # noqa: PTH111, PTH118
@@ -705,7 +715,9 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
         raise RuntimeError("Path traversal")
     definitions_dir = Path(definitions_dir_str)
     definitions_count = (
-        len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
+        len(list(definitions_dir.glob("*.rb")))
+        if os.path.exists(definitions_dir_str)  # noqa: PTH110
+        else 0
     )
 
     resources_dir_str = os.path.realpath(os.path.join(base, "resources"))  # noqa: PTH111, PTH118
@@ -713,7 +725,9 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
         raise RuntimeError("Path traversal")
     resources_dir = Path(resources_dir_str)
     resources_count = (
-        len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
+        len(list(resources_dir.glob("*.rb")))
+        if os.path.exists(resources_dir_str)  # noqa: PTH110
+        else 0
     )
 
     providers_dir_str = os.path.realpath(os.path.join(base, "providers"))  # noqa: PTH111, PTH118
@@ -721,51 +735,45 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
         raise RuntimeError("Path traversal")
     providers_dir = Path(providers_dir_str)
     providers_count = (
-        len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
+        len(list(providers_dir.glob("*.rb")))
+        if os.path.exists(providers_dir_str)  # noqa: PTH110
+        else 0
     )
 
     # Configuration files - inline guards
     berksfile_str = os.path.realpath(os.path.join(base, "Berksfile"))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, berksfile_str]) != base:
         raise RuntimeError("Path traversal")
-    berksfile = Path(berksfile_str)
-    has_berksfile = berksfile.exists()
+    has_berksfile = os.path.exists(berksfile_str)  # noqa: PTH110
 
     chefignore_str = os.path.realpath(os.path.join(base, "chefignore"))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, chefignore_str]) != base:
         raise RuntimeError("Path traversal")
-    chefignore = Path(chefignore_str)
-    has_chefignore = chefignore.exists()
+    has_chefignore = os.path.exists(chefignore_str)  # noqa: PTH110
 
     thorfile_str = os.path.realpath(os.path.join(base, "Thorfile"))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, thorfile_str]) != base:
         raise RuntimeError("Path traversal")
-    thorfile = Path(thorfile_str)
-    has_thorfile = thorfile.exists()
+    has_thorfile = os.path.exists(thorfile_str)  # noqa: PTH110
 
     kitchen_yml_str = os.path.realpath(os.path.join(base, ".kitchen.yml"))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, kitchen_yml_str]) != base:
         raise RuntimeError("Path traversal")
-    kitchen_yml = Path(kitchen_yml_str)
-    kitchen_yml_exists = kitchen_yml.exists()
+    kitchen_yml_exists = os.path.exists(kitchen_yml_str)  # noqa: PTH110
 
     kitchen_yaml_str = os.path.realpath(os.path.join(base, "kitchen.yml"))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, kitchen_yaml_str]) != base:
         raise RuntimeError("Path traversal")
-    kitchen_yaml = Path(kitchen_yaml_str)
-    kitchen_yaml_exists = kitchen_yaml.exists()
+    kitchen_yaml_exists = os.path.exists(kitchen_yaml_str)  # noqa: PTH110
     has_kitchen_yml = kitchen_yml_exists or kitchen_yaml_exists
 
     test_dir_str = os.path.realpath(os.path.join(base, "test"))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, test_dir_str]) != base:
         raise RuntimeError("Path traversal")
-    test_dir = Path(test_dir_str)
-
     spec_dir_str = os.path.realpath(os.path.join(base, "spec"))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, spec_dir_str]) != base:
         raise RuntimeError("Path traversal")
-    spec_dir = Path(spec_dir_str)
-    has_test_dir = test_dir.exists() or spec_dir.exists()
+    has_test_dir = os.path.exists(test_dir_str) or os.path.exists(spec_dir_str)  # noqa: PTH110
 
     return {
         "recipe_count": recipe_count,
@@ -823,12 +831,13 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
     ruby_blocks = 0
     custom_resources = 0
 
-    # codeql[py/path-injection]: cookbook_path already normalized by caller
-    recipes_dir = _safe_join(
-        cookbook_path, "recipes"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-    if recipes_dir.exists():
-        # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    recipes_dir_str = os.path.realpath(os.path.join(base, "recipes"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, recipes_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    recipes_dir = Path(recipes_dir_str)
+    if os.path.exists(recipes_dir_str):  # noqa: PTH110
         for recipe_file in recipes_dir.glob("*.rb"):
             try:
                 content = recipe_file.read_text(encoding="utf-8", errors="ignore")
@@ -856,12 +865,13 @@ def _analyze_attributes(cookbook_path: Path) -> int:
     """Analyze attribute files for complexity."""
     attribute_complexity = 0
 
-    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    attributes_dir = _safe_join(
-        cookbook_path, "attributes"
-    )  # deepcode ignore PT: path normalized via _normalize_path
-    if attributes_dir.exists():
-        # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    attributes_dir_str = os.path.realpath(os.path.join(base, "attributes"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, attributes_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    attributes_dir = Path(attributes_dir_str)
+    if os.path.exists(attributes_dir_str):  # noqa: PTH110
         for attr_file in attributes_dir.glob("*.rb"):
             try:
                 # codeql[py/path-injection]: attr_file from glob() on normalized dir
@@ -889,12 +899,13 @@ def _analyze_templates(cookbook_path: Path) -> int:
     """Analyze template files for ERB complexity."""
     erb_templates = 0
 
-    # codeql[py/path-injection]: cookbook_path already normalized by caller
-    templates_dir = _safe_join(
-        cookbook_path, "templates"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-    if templates_dir.exists():
-        # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    templates_dir_str = os.path.realpath(os.path.join(base, "templates"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, templates_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    templates_dir = Path(templates_dir_str)
+    if os.path.exists(templates_dir_str):  # noqa: PTH110
         for template_file in templates_dir.glob("**/*.erb"):
             try:
                 # codeql[py/path-injection]: template_file from glob() on normalized dir
@@ -912,12 +923,13 @@ def _analyze_libraries(cookbook_path: Path) -> int:
     """Analyze library files for complexity."""
     library_complexity = 0
 
-    # codeql[py/path-injection]: cookbook_path already normalized by caller
-    libraries_dir = _safe_join(
-        cookbook_path, "libraries"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-    if libraries_dir.exists():
-        # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    libraries_dir_str = os.path.realpath(os.path.join(base, "libraries"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, libraries_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    libraries_dir = Path(libraries_dir_str)
+    if os.path.exists(libraries_dir_str):  # noqa: PTH110
         for lib_file in libraries_dir.glob("*.rb"):
             try:
                 # codeql[py/path-injection]: lib_file from glob() on normalized dir
@@ -934,12 +946,13 @@ def _analyze_libraries(cookbook_path: Path) -> int:
 
 def _count_definitions(cookbook_path: Path) -> int:
     """Count definition files."""
-    # codeql[py/path-injection]: cookbook_path already normalized by caller
-    definitions_dir = _safe_join(
-        cookbook_path, "definitions"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-    if definitions_dir.exists():
-        # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    definitions_dir_str = os.path.realpath(os.path.join(base, "definitions"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, definitions_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    definitions_dir = Path(definitions_dir_str)
+    if os.path.exists(definitions_dir_str):  # noqa: PTH110
         return len(list(definitions_dir.glob("*.rb")))
     return 0
 
@@ -948,14 +961,17 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     """Parse Berksfile for dependency information."""
     # path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
-    # berksfile constructed with literal "Berksfile" from normalized cookbook_path
-    berksfile = _safe_join(cookbook_path, "Berksfile")
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    berksfile_str = os.path.realpath(os.path.join(base, "Berksfile"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, berksfile_str]) != base:
+        raise RuntimeError("Path traversal")
 
-    if not berksfile.exists():
+    if not os.path.exists(berksfile_str):  # noqa: PTH110
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
 
     try:
-        content = berksfile.read_text(encoding="utf-8", errors="ignore")
+        content = Path(berksfile_str).read_text(encoding="utf-8", errors="ignore")
 
         # Parse cookbook dependencies
         cookbook_deps = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
@@ -983,14 +999,17 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     """Parse chefignore file for ignore patterns."""
     # path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
-    # chefignore constructed with literal "chefignore" from normalized cookbook_path
-    chefignore = _safe_join(cookbook_path, "chefignore")
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    chefignore_str = os.path.realpath(os.path.join(base, "chefignore"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, chefignore_str]) != base:
+        raise RuntimeError("Path traversal")
 
-    if not chefignore.exists():
+    if not os.path.exists(chefignore_str):  # noqa: PTH110
         return {"patterns": [], "complexity": 0}
 
     try:
-        content = chefignore.read_text(encoding="utf-8", errors="ignore")
+        content = Path(chefignore_str).read_text(encoding="utf-8", errors="ignore")
         lines = [
             line.strip()
             for line in content.split("\n")
@@ -1014,13 +1033,17 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
 def _parse_thorfile(cookbook_path) -> dict[str, Any]:
     """Parse Thorfile for Thor tasks."""
     cookbook_path = _normalize_path(cookbook_path)
-    thorfile = _safe_join(cookbook_path, "Thorfile")
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    thorfile_str = os.path.realpath(os.path.join(base, "Thorfile"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, thorfile_str]) != base:
+        raise RuntimeError("Path traversal")
 
-    if not thorfile.exists():
+    if not os.path.exists(thorfile_str):  # noqa: PTH110
         return {"tasks": [], "complexity": 0}
 
     try:
-        content = thorfile.read_text(encoding="utf-8", errors="ignore")
+        content = Path(thorfile_str).read_text(encoding="utf-8", errors="ignore")
 
         # Count Thor tasks and methods
         tasks = len(re.findall(r'desc\s+[\'"]([^\'"]+)[\'"]', content))
@@ -1039,9 +1062,13 @@ def _parse_thorfile(cookbook_path) -> dict[str, Any]:
 def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
     """Parse metadata.rb for cookbook information."""
     cookbook_path = _normalize_path(cookbook_path)
-    metadata_file = _safe_join(cookbook_path, "metadata.rb")
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    metadata_file_str = os.path.realpath(os.path.join(base, "metadata.rb"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, metadata_file_str]) != base:
+        raise RuntimeError("Path traversal")
 
-    if not metadata_file.exists():
+    if not os.path.exists(metadata_file_str):  # noqa: PTH110
         return {
             "name": "",
             "version": "",
@@ -1051,7 +1078,7 @@ def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
         }
 
     try:
-        content = metadata_file.read_text(encoding="utf-8", errors="ignore")
+        content = Path(metadata_file_str).read_text(encoding="utf-8", errors="ignore")
 
         # Extract basic metadata
         name_match = re.search(r'name\s+[\'"]([^\'"]+)[\'"]', content)
@@ -1448,10 +1475,12 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
     }
 
     # Read metadata.rb for dependencies
-    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
-    if metadata_file.exists():
-        # codeql[py/path-injection]: metadata_file validated by _safe_join using os.path.normpath + startswith
-        with metadata_file.open("r", encoding="utf-8", errors="ignore") as f:
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    metadata_file_str = os.path.realpath(os.path.join(base, METADATA_FILENAME))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, metadata_file_str]) != base:
+        raise RuntimeError("Path traversal")
+    if os.path.exists(metadata_file_str):  # noqa: PTH110
+        with Path(metadata_file_str).open(encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
         # Parse dependencies
@@ -1459,10 +1488,11 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
         analysis["direct_dependencies"] = depends_matches
 
     # Read Berksfile for additional dependencies
-    berksfile = _safe_join(cookbook_path, "Berksfile")
-    if berksfile.exists():
-        # codeql[py/path-injection]: berksfile validated by _safe_join using os.path.normpath + startswith
-        with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
+    berksfile_str = os.path.realpath(os.path.join(base, "Berksfile"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, berksfile_str]) != base:
+        raise RuntimeError("Path traversal")
+    if os.path.exists(berksfile_str):  # noqa: PTH110
+        with Path(berksfile_str).open(encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
         cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
@@ -2395,11 +2425,15 @@ Provide your analysis in JSON format with keys: complexity_score, estimated_effo
 
 def _get_recipe_content_sample(cookbook_path: Path) -> str:
     """Get a sample of ALL recipe content for AI analysis."""
-    recipes_dir = _safe_join(cookbook_path, "recipes")
-    if not recipes_dir.exists():
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    recipes_dir_str = os.path.realpath(os.path.join(base, "recipes"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, recipes_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    if not os.path.exists(recipes_dir_str):  # noqa: PTH110
         return "No recipes directory found"
 
-    # codeql[py/path-injection]: Path validated by _safe_join containment checks
+    recipes_dir = Path(recipes_dir_str)
     recipe_files = list(recipes_dir.glob("*.rb"))
     if not recipe_files:
         return "No recipe files found"
@@ -2437,12 +2471,16 @@ def _get_recipe_content_sample(cookbook_path: Path) -> str:
 
 def _get_metadata_content(cookbook_path: Path) -> str:
     """Get metadata content for AI analysis."""
-    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
-    if not metadata_file.exists():
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    metadata_file_str = os.path.realpath(os.path.join(base, METADATA_FILENAME))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, metadata_file_str]) != base:
+        raise RuntimeError("Path traversal")
+    if not os.path.exists(metadata_file_str):  # noqa: PTH110
         return "No metadata.rb found"
 
     try:
-        return metadata_file.read_text(encoding="utf-8", errors="ignore")
+        return Path(metadata_file_str).read_text(encoding="utf-8", errors="ignore")
     except Exception:
         return "Could not read metadata"
 
