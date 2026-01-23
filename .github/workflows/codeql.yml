@@ -60,7 +60,6 @@ jobs:
           queries: +security-extended,security-and-quality
           # Include custom path sanitizer definitions
           packs: souschef/path-sanitizers
-          config-file: ./.github/codeql-config.yml
 
       - name: Set up Python
         uses: actions/setup-python@v6
