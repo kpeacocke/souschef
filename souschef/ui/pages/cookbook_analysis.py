@@ -628,7 +628,7 @@ def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
 
     # Join parts back and resolve against extraction_dir
     # codeql[py/path-injection]: safe_path from normalized and validated parts
-    safe_path = extraction_dir / "/".join(parts)
+    safe_path = extraction_dir / "/".join(parts)  # codeql [py/path-injection]
 
     # Ensure the final path is still within extraction_dir
     try:
