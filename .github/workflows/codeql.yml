@@ -58,8 +58,8 @@ jobs:
           languages: python
           # Use default queries plus security-extended for more comprehensive scanning
           queries: +security-extended,security-and-quality
-          # Include custom path sanitizer definitions
-          packs: souschef/path-sanitizers
+          # Include custom path sanitizer definitions from local pack
+          packs: ./.github/codeql-custom-queries
 
       - name: Set up Python
         uses: actions/setup-python@v6
