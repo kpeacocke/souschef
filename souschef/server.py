@@ -2977,11 +2977,15 @@ def _setup_conversion_metadata(cookbook_dir: Path, role_name: str) -> tuple[str,
 
 def _create_role_structure(output_dir: Path, role_name: str) -> Path:
     """Create the standard Ansible role directory structure."""
-    role_dir = _safe_join(output_dir, role_name)
-    role_tasks_dir = _safe_join(role_dir, "tasks")
-    role_templates_dir = _safe_join(role_dir, "templates")
-    role_vars_dir = _safe_join(role_dir, "vars")
-    role_defaults_dir = _safe_join(role_dir, "defaults")
+    base = os.path.realpath(str(output_dir))
+    role_dir_str = os.path.realpath(os.path.join(base, role_name))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, role_dir_str]) != base:
+        raise RuntimeError("Unsafe role path outside output directory")
+    role_dir = Path(role_dir_str)
+    role_tasks_dir = role_dir / "tasks"
+    role_templates_dir = role_dir / "templates"
+    role_vars_dir = role_dir / "vars"
+    role_defaults_dir = role_dir / "defaults"
 
     for directory in [
         role_tasks_dir,
@@ -2998,8 +3002,13 @@ def _convert_recipes(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert Chef recipes to Ansible tasks."""
-    recipes_dir = _safe_join(cookbook_dir, "recipes")
-    role_tasks_dir = _safe_join(role_dir, "tasks")
+    cookbook_base = os.path.realpath(str(cookbook_dir))
+    recipes_dir_str = os.path.realpath(os.path.join(cookbook_base, "recipes"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([cookbook_base, recipes_dir_str]) != cookbook_base:
+        raise RuntimeError("Unsafe recipes path outside cookbook directory")
+    recipes_dir = Path(recipes_dir_str)
+    role_base = os.path.realpath(str(role_dir))
+    # Use role_base directly when building task targets; containment validated inline per file
 
     if not recipes_dir.exists():
         conversion_summary["warnings"].append(
@@ -3033,9 +3042,13 @@ def _convert_recipes(
             # Convert to Ansible tasks
             playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
 
-            # Write as task file using _safe_join to prevent path injection
-            # codeql[py/path-injection]: recipe_file derives from normalized cookbook_dir and _safe_join enforces containment
-            task_file = _safe_join(role_tasks_dir, f"{recipe_name}.yml")
+            # Write as task file with inline containment guard
+            task_str = os.path.realpath(
+                os.path.join(role_base, "tasks", f"{recipe_name}.yml")  # noqa: PTH118
+            )  # noqa: PTH111
+            if os.path.commonpath([role_base, task_str]) != role_base:
+                raise RuntimeError("Unsafe task file path outside role directory")
+            task_file = Path(task_str)
             try:
                 task_file.parent.mkdir(parents=True, exist_ok=True)
                 task_file.write_text(playbook_yaml)
@@ -3063,10 +3076,16 @@ def _convert_templates(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert ERB templates to Jinja2 templates."""
-    # codeql[py/path-injection]: templates_dir from _safe_join ensures containment
-    templates_dir = _safe_join(cookbook_dir, "templates")
-    # codeql[py/path-injection]: role_templates_dir from _safe_join ensures containment
-    role_templates_dir = _safe_join(role_dir, "templates")
+    cookbook_base = os.path.realpath(str(cookbook_dir))
+    templates_dir_str = os.path.realpath(os.path.join(cookbook_base, "templates"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([cookbook_base, templates_dir_str]) != cookbook_base:
+        raise RuntimeError("Unsafe templates path outside cookbook directory")
+    templates_dir = Path(templates_dir_str)
+    role_base = os.path.realpath(str(role_dir))
+    role_templates_dir_str = os.path.realpath(os.path.join(role_base, "templates"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([role_base, role_templates_dir_str]) != role_base:
+        raise RuntimeError("Unsafe role templates path outside role directory")
+    # Use role_base when building targets; no direct use of role_templates_dir
 
     if not templates_dir.exists():
         return
@@ -3089,13 +3108,18 @@ def _convert_templates(
                 # Determine relative path for role templates using _safe_join
                 # codeql[py/path-injection]: template_file from normalized cookbook_dir
                 rel_path = template_file.relative_to(templates_dir)
-                # Use _safe_join to prevent path injection with relative paths
-                # codeql[py/path-injection]: target_file validated via _safe_join
-                target_file = _safe_join(
-                    role_templates_dir, str(rel_path.with_suffix(""))
-                )
+                # Build target file path with inline containment guard
+                target_str = os.path.realpath(
+                    os.path.join(  # noqa: PTH118
+                        role_base, "templates", str(rel_path.with_suffix(""))
+                    )
+                )  # noqa: PTH111
+                if os.path.commonpath([role_base, target_str]) != role_base:
+                    raise RuntimeError(
+                        "Unsafe template target path outside role directory"
+                    )
+                target_file = Path(target_str)
                 target_file.parent.mkdir(parents=True, exist_ok=True)
-                # codeql[py/path-injection]: target_file validated via _safe_join
                 target_file.write_text(jinja2_content)
 
                 conversion_summary["converted_files"].append(
