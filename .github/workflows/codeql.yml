@@ -59,6 +59,7 @@ jobs:
           # Use default queries plus security-extended for more comprehensive scanning
           queries: +security-extended,security-and-quality
           # Include custom path sanitizer definitions
+          packs: souschef/path-sanitizers
           config-file: ./.github/codeql-config.yml
 
       - name: Set up Python

@@ -11,7 +11,3 @@ queries:
   - uses: security-and-quality
 
 disable-default-queries: false
-
-# Include custom models for path sanitizers
-packs:
-  - .github/codeql

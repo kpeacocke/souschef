@@ -37,11 +37,8 @@ def _normalize_path(path_str: str | Path) -> Path:
 
     # codeql[py/path-injection]: path validated against traversal, null bytes
     try:
-        # Use os.path.abspath which CodeQL recognizes as a sanitizer
-        # First convert to Path to validate, then to string for os.path.abspath
-        temp_path = Path(path_str).resolve()
-        abs_path_str = os.path.abspath(str(temp_path))  # noqa: PTH100 (CodeQL requires this)
-        return Path(abs_path_str)
+        # Resolve to absolute path, removing ., and resolving symlinks
+        return Path(path_str).resolve()
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
 
