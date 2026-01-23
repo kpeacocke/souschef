@@ -330,7 +330,8 @@ def analyse_cookbook_dependencies(
         dependency_depth: Analysis depth (direct, transitive, full)
 
     Returns:
-        Dependency analysis with migration order recommendations
+        Dependency analysis with migration order recommendations.
+
 
     """
     try:
@@ -1464,8 +1465,13 @@ def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
 
 
 def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
-    """Analyze cookbook dependencies in detail."""
-    base = _normalize_path(cookbook_path)
+    """
+    Analyse cookbook dependencies in detail.
+
+    The input path is expected to have been normalised and resolved under the
+    trusted cookbooks root by analyse_cookbook_dependencies before invocation.
+    """
+    base = Path(cookbook_path).expanduser()
     direct_dependencies: list[str] = []
     transitive_dependencies: list[str] = []
     external_dependencies: list[str] = []
