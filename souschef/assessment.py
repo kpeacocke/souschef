@@ -671,78 +671,63 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    templates_dir = (  # codeql [py/path-injection]
-        cookbook_path / "templates"
-    )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
+    templates_dir = cookbook_path / "templates"
     template_count = (
         len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
     )
 
-    files_dir = cookbook_path / "files"  # codeql [py/path-injection]
-    file_count = (
-        len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
-    )  # codeql [py/path-injection]
+    files_dir = cookbook_path / "files"
+    file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
 
     # Additional Chef components
-    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    attributes_dir = cookbook_path / "attributes"  # codeql [py/path-injection]
+    # cookbook_path normalized via _normalize_path in caller
+    attributes_dir = cookbook_path / "attributes"
     attributes_count = (
-        len(list(attributes_dir.glob("*.rb")))
-        if attributes_dir.exists()
-        else 0  # codeql [py/path-injection]
+        len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
     )
 
-    # codeql[py/path-injection]: cookbook_path normalized by caller
-    libraries_dir = cookbook_path / "libraries"  # codeql [py/path-injection]
+    # cookbook_path normalized by caller
+    libraries_dir = cookbook_path / "libraries"
     libraries_count = (
-        len(list(libraries_dir.glob("*.rb")))
-        if libraries_dir.exists()
-        else 0  # codeql [py/path-injection]
+        len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
     )
 
-    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    definitions_dir = cookbook_path / "definitions"  # codeql [py/path-injection]
+    # cookbook_path normalized via _normalize_path in caller
+    definitions_dir = cookbook_path / "definitions"
     definitions_count = (
-        len(list(definitions_dir.glob("*.rb")))
-        if definitions_dir.exists()
-        else 0  # codeql [py/path-injection]
+        len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
     )
 
-    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    resources_dir = cookbook_path / "resources"  # codeql [py/path-injection]
+    # cookbook_path normalized via _normalize_path in caller
+    resources_dir = cookbook_path / "resources"
     resources_count = (
-        len(list(resources_dir.glob("*.rb")))
-        if resources_dir.exists()
-        else 0  # codeql [py/path-injection]
+        len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
     )
 
-    # codeql[py/path-injection]: cookbook_path normalized via _normalize_path in caller
-    providers_dir = cookbook_path / "providers"  # codeql [py/path-injection]
+    # cookbook_path normalized via _normalize_path in caller
+    providers_dir = cookbook_path / "providers"
     providers_count = (
-        len(list(providers_dir.glob("*.rb")))
-        if providers_dir.exists()
-        else 0  # codeql [py/path-injection]
+        len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
     )
 
     # Configuration files
-    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    has_berksfile = (cookbook_path / "Berksfile").exists()  # codeql [py/path-injection]
-    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    has_chefignore = (
-        cookbook_path / "chefignore"  # codeql [py/path-injection]
-    ).exists()  # codeql [py/path-injection]
-    has_thorfile = (cookbook_path / "Thorfile").exists()  # codeql [py/path-injection]
-    kitchen_yml_exists = (
-        cookbook_path / ".kitchen.yml"
-    ).exists()  # codeql [py/path-injection]
-    kitchen_yaml_exists = (
-        cookbook_path / "kitchen.yml"
-    ).exists()  # codeql [py/path-injection]
+    # cookbook_path normalized by caller via _normalize_path
+    berksfile = cookbook_path / "Berksfile"
+    has_berksfile = berksfile.exists()
+    # cookbook_path normalized by caller via _normalize_path
+    chefignore = cookbook_path / "chefignore"
+    has_chefignore = chefignore.exists()
+    thorfile = cookbook_path / "Thorfile"
+    has_thorfile = thorfile.exists()
+    kitchen_yml = cookbook_path / ".kitchen.yml"
+    kitchen_yml_exists = kitchen_yml.exists()
+    kitchen_yaml = cookbook_path / "kitchen.yml"
+    kitchen_yaml_exists = kitchen_yaml.exists()
     has_kitchen_yml = kitchen_yml_exists or kitchen_yaml_exists
-    # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    has_test_dir = (cookbook_path / "test").exists() or (  # codeql [py/path-injection]
-        cookbook_path / "spec"
-    ).exists()
+    # cookbook_path normalized by caller via _normalize_path
+    test_dir = cookbook_path / "test"
+    spec_dir = cookbook_path / "spec"
+    has_test_dir = test_dir.exists() or spec_dir.exists()
 
     return {
         "recipe_count": recipe_count,
@@ -918,10 +903,10 @@ def _count_definitions(cookbook_path: Path) -> int:
 
 def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     """Parse Berksfile for dependency information."""
-    # codeql[py/path-injection]: path validated via _normalize_path
+    # path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
-    # codeql[py/path-injection]: berksfile constructed with literal "Berksfile" from normalized cookbook_path
-    berksfile = cookbook_path / "Berksfile"  # codeql [py/path-injection]
+    # berksfile constructed with literal "Berksfile" from normalized cookbook_path
+    berksfile = cookbook_path / "Berksfile"
 
     if not berksfile.exists():
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
@@ -953,10 +938,10 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
 
 def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     """Parse chefignore file for ignore patterns."""
-    # codeql[py/path-injection]: path validated via _normalize_path
+    # path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
-    # codeql[py/path-injection]: chefignore constructed with literal "chefignore" from normalized cookbook_path
-    chefignore = cookbook_path / "chefignore"  # codeql [py/path-injection]
+    # chefignore constructed with literal "chefignore" from normalized cookbook_path
+    chefignore = cookbook_path / "chefignore"
 
     if not chefignore.exists():
         return {"patterns": [], "complexity": 0}
@@ -1420,10 +1405,10 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
     }
 
     # Read metadata.rb for dependencies
-    # codeql[py/path-injection]: metadata_file constructed via _safe_join with normalized path
+    # metadata_file constructed via _safe_join with normalized path
     metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
     if metadata_file.exists():
-        # codeql[py/path-injection]: metadata_file from _safe_join validation ensures containment
+        # metadata_file from _safe_join validation ensures containment
         with metadata_file.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
@@ -1433,10 +1418,10 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
         analysis["direct_dependencies"] = depends_matches
 
     # Read Berksfile for additional dependencies
-    # codeql[py/path-injection]: berksfile constructed via _safe_join with normalized path
+    # berksfile constructed via _safe_join with normalized path
     berksfile = _safe_join(cookbook_path, "Berksfile")
     if berksfile.exists():
-        # codeql[py/path-injection]: berksfile from _safe_join validation ensures containment
+        # berksfile from _safe_join validation ensures containment
         with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
 
