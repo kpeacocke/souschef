@@ -33,7 +33,7 @@ from souschef.core.metrics import (
     get_timeline_weeks,
     validate_metrics_consistency,
 )
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import _normalize_path, _safe_join
 from souschef.parsers.metadata import parse_cookbook_metadata
 
 # AI Settings
@@ -611,31 +611,9 @@ def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
     ):
         raise ValueError(f"Path traversal or absolute path detected: {filename}")
 
-    # Normalize path separators and remove leading/trailing slashes
+    # Normalise separators and join using a containment-checked join
     normalized = filename.replace("\\", "/").strip("/")
-
-    # Split into components and filter out dangerous ones
-    parts: list[str] = []
-    for part in normalized.split("/"):
-        if part == "" or part == ".":
-            continue
-        elif part == "..":
-            # Remove parent directory if we have one
-            if parts:
-                parts.pop()
-        else:
-            parts.append(part)
-
-    # Join parts back and resolve against extraction_dir
-    # safe_path from normalized and validated parts
-    joined_parts = "/".join(parts)
-    safe_path = extraction_dir / joined_parts
-
-    # Ensure the final path is still within extraction_dir
-    try:
-        safe_path.resolve().relative_to(extraction_dir.resolve())
-    except ValueError:
-        raise ValueError(f"Path traversal detected: {filename}") from None
+    safe_path = _safe_join(extraction_dir.resolve(), normalized)
 
     return safe_path
 
@@ -897,35 +875,29 @@ def _get_safe_cookbook_directory(cookbook_path):
 
         user_path = Path(path_str)
 
-        # Resolve the path safely
-        # codeql[py/path-injection]: user_path validated against null bytes
-        # and backslashes
         if user_path.is_absolute():
-            # codeql[py/path-injection]: resolved_path validated via
-            # relative_to checks below
-            resolved_path = user_path.resolve()
+            resolved_candidate = user_path
         else:
-            # codeql[py/path-injection]: resolved_path validated via
-            # relative_to checks below
-            resolved_path = (base_dir / user_path).resolve()
+            resolved_candidate = base_dir / user_path
 
-        # Check if the resolved path is within allowed directories
-        try:
-            resolved_path.relative_to(base_dir)
-            return resolved_path
-        except ValueError:
-            pass
+        resolved_norm = os.path.normpath(str(resolved_candidate.resolve()))
+        base_norm = os.path.normpath(str(base_dir))
+        temp_norm = os.path.normpath(str(temp_dir))
+        base_prefix = f"{base_norm}{os.sep}"
+        temp_prefix = f"{temp_norm}{os.sep}"
 
-        try:
-            resolved_path.relative_to(temp_dir)
-            return resolved_path
-        except ValueError:
-            st.error(
-                "Invalid path: The resolved path is outside the allowed "
-                "directories (workspace or temporary directory). Paths cannot go above "
-                "the workspace root for security reasons."
-            )
-            return None
+        if resolved_norm == base_norm or resolved_norm.startswith(base_prefix):
+            return Path(resolved_norm)
+
+        if resolved_norm == temp_norm or resolved_norm.startswith(temp_prefix):
+            return Path(resolved_norm)
+
+        st.error(
+            "Invalid path: The resolved path is outside the allowed "
+            "directories (workspace or temporary directory). Paths cannot go above "
+            "the workspace root for security reasons."
+        )
+        return None
 
     except Exception as exc:
         st.error(f"Invalid path: {exc}. Please enter a valid relative path.")
@@ -1791,7 +1763,17 @@ def _validate_output_path(output_path: str) -> Path | None:
     try:
         # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
         safe_output_path = _normalize_path(str(output_path))
-        return safe_output_path if safe_output_path.exists() else None
+        base_dir = Path.cwd().resolve()
+
+        base_norm = os.path.normpath(str(base_dir))
+        base_prefix = f"{base_norm}{os.sep}"
+        candidate_norm = os.path.normpath(str(safe_output_path))
+
+        if candidate_norm == base_norm or candidate_norm.startswith(base_prefix):
+            candidate_path = Path(candidate_norm)
+            return candidate_path if candidate_path.exists() else None
+
+        return None
     except ValueError:
         return None
 
@@ -1810,18 +1792,25 @@ def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
     files_to_archive = []
     # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     # codeql[py/path-injection]: safe_output_path normalized
-    for root, _dirs, files in os.walk(str(safe_output_path)):
-        root_path = _normalize_path(root)
-        if not root_path.is_relative_to(safe_output_path):
+    base_norm = os.path.normpath(str(safe_output_path.resolve()))
+    base_prefix = f"{base_norm}{os.sep}"
+    base_path = Path(base_norm)
+
+    for root, _dirs, files in os.walk(base_norm):
+        root_norm = os.path.normpath(root)
+        if root_norm != base_norm and not root_norm.startswith(base_prefix):
             continue
 
         for file in files:
             safe_name = _sanitize_filename(file)
-            file_path = root_path / safe_name
-            # codeql[py/path-injection]: containment enforced before writing
-            if file_path.is_relative_to(safe_output_path):
-                arcname = file_path.relative_to(safe_output_path)
-                files_to_archive.append((file_path, arcname))
+            file_path_str = os.path.normpath(os.path.join(root_norm, safe_name))  # noqa: PTH118
+
+            if file_path_str != base_norm and not file_path_str.startswith(base_prefix):
+                continue
+
+            file_path = Path(file_path_str)
+            arcname = file_path.relative_to(base_path)
+            files_to_archive.append((file_path, arcname))
 
     return files_to_archive
 

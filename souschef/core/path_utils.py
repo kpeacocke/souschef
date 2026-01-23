@@ -58,15 +58,17 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
         ValueError: If result would escape base_path.
 
     """
-    # Normalize base path for comparison
-    base_str = os.path.normpath(str(base_path))
+    # Normalise and absolutise the base path to avoid prefix tricks like /tmp/baseX
+    base_resolved = Path(base_path).resolve()
+    base_str = os.path.normpath(str(base_resolved))
+    base_prefix = f"{base_str}{os.sep}"
 
-    # Join and normalize result path
+    # Join and normalise the candidate path using a CodeQL-recognised pattern
     joined_str = os.path.join(base_str, *parts)  # noqa: PTH118 (used for CodeQL recognition)
     result_str = os.path.normpath(joined_str)
 
-    # codeql[py/path-injection]: Validate result using pattern CodeQL recognizes
-    if not result_str.startswith(base_str):
+    # codeql[py/path-injection]: Validate result stays under base_path
+    if result_str != base_str and not result_str.startswith(base_prefix):
         msg = f"Path traversal attempt: {parts} escapes {base_path}"
         raise ValueError(msg)
 

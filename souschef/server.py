@@ -2,6 +2,7 @@
 
 import ast
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -3365,8 +3366,21 @@ def _validate_conversion_paths(
     from souschef.core.path_utils import _normalize_path
 
     # codeql[py/path-injection]: both paths are normalized and validated before use
-    cookbooks_dir = _normalize_path(cookbooks_path)
-    output_dir = _normalize_path(output_path)
+    base_dir = Path.cwd().resolve()
+    base_norm = os.path.normpath(str(base_dir))
+    base_prefix = f"{base_norm}{os.sep}"
+
+    def _ensure_within_base(path_value: str) -> Path:
+        candidate = _normalize_path(path_value)
+        candidate_norm = os.path.normpath(str(candidate))
+        if candidate_norm != base_norm and not candidate_norm.startswith(base_prefix):
+            raise ValueError(
+                f"Path must be within the workspace: {candidate_norm} not under {base_norm}"
+            )
+        return Path(candidate_norm)
+
+    cookbooks_dir = _ensure_within_base(cookbooks_path)
+    output_dir = _ensure_within_base(output_path)
 
     if not cookbooks_dir.exists():
         raise ValueError(f"Cookbooks path does not exist: {cookbooks_path}")

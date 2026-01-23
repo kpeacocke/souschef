@@ -2751,14 +2751,16 @@ def _normalize_and_validate_input_path(input_path: str) -> Path | None:
         return None
 
     # Optional safety: constrain to the application root directory
-    try:
-        app_root = Path(app_path).resolve()
-        path_obj.relative_to(app_root)
-    except Exception:
+    app_root = Path(app_path).resolve()
+    base_norm = os.path.normpath(str(app_root))
+    base_prefix = f"{base_norm}{os.sep}"
+    candidate_norm = os.path.normpath(str(path_obj))
+
+    if candidate_norm != base_norm and not candidate_norm.startswith(base_prefix):
         st.error("Path must be within the SousChef project directory.")
         return None
 
-    return path_obj
+    return Path(candidate_norm)
 
 
 def _handle_validation_execution(input_path: str, options: Mapping[str, Any]) -> None:

@@ -666,67 +666,67 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
     # Basic directory counts
     # cookbook_path already normalized by caller
     # codeql[py/path-injection]: cookbook_path is normalised and only local globbing is performed
-    recipes_dir = (
-        cookbook_path / "recipes"
+    recipes_dir = _safe_join(
+        cookbook_path, "recipes"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
 
-    templates_dir = cookbook_path / "templates"
+    templates_dir = _safe_join(cookbook_path, "templates")
     template_count = (
         len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
     )
 
-    files_dir = cookbook_path / "files"
+    files_dir = _safe_join(cookbook_path, "files")
     file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
 
     # Additional Chef components
     # cookbook_path normalized via _normalize_path in caller
-    attributes_dir = cookbook_path / "attributes"
+    attributes_dir = _safe_join(cookbook_path, "attributes")
     attributes_count = (
         len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
     )
 
     # cookbook_path normalized by caller
-    libraries_dir = cookbook_path / "libraries"
+    libraries_dir = _safe_join(cookbook_path, "libraries")
     libraries_count = (
         len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
     )
 
     # cookbook_path normalized via _normalize_path in caller
-    definitions_dir = cookbook_path / "definitions"
+    definitions_dir = _safe_join(cookbook_path, "definitions")
     definitions_count = (
         len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
     )
 
     # cookbook_path normalized via _normalize_path in caller
-    resources_dir = cookbook_path / "resources"
+    resources_dir = _safe_join(cookbook_path, "resources")
     resources_count = (
         len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
     )
 
     # cookbook_path normalized via _normalize_path in caller
-    providers_dir = cookbook_path / "providers"
+    providers_dir = _safe_join(cookbook_path, "providers")
     providers_count = (
         len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
     )
 
     # Configuration files
     # cookbook_path normalized by caller via _normalize_path
-    berksfile = cookbook_path / "Berksfile"
+    berksfile = _safe_join(cookbook_path, "Berksfile")
     has_berksfile = berksfile.exists()
     # cookbook_path normalized by caller via _normalize_path
-    chefignore = cookbook_path / "chefignore"
+    chefignore = _safe_join(cookbook_path, "chefignore")
     has_chefignore = chefignore.exists()
-    thorfile = cookbook_path / "Thorfile"
+    thorfile = _safe_join(cookbook_path, "Thorfile")
     has_thorfile = thorfile.exists()
-    kitchen_yml = cookbook_path / ".kitchen.yml"
+    kitchen_yml = _safe_join(cookbook_path, ".kitchen.yml")
     kitchen_yml_exists = kitchen_yml.exists()
-    kitchen_yaml = cookbook_path / "kitchen.yml"
+    kitchen_yaml = _safe_join(cookbook_path, "kitchen.yml")
     kitchen_yaml_exists = kitchen_yaml.exists()
     has_kitchen_yml = kitchen_yml_exists or kitchen_yaml_exists
     # cookbook_path normalized by caller via _normalize_path
-    test_dir = cookbook_path / "test"
-    spec_dir = cookbook_path / "spec"
+    test_dir = _safe_join(cookbook_path, "test")
+    spec_dir = _safe_join(cookbook_path, "spec")
     has_test_dir = test_dir.exists() or spec_dir.exists()
 
     return {
@@ -786,8 +786,8 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
     custom_resources = 0
 
     # codeql[py/path-injection]: cookbook_path already normalized by caller
-    recipes_dir = (
-        cookbook_path / "recipes"
+    recipes_dir = _safe_join(
+        cookbook_path, "recipes"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     if recipes_dir.exists():
         for recipe_file in recipes_dir.glob("*.rb"):
@@ -818,8 +818,8 @@ def _analyze_attributes(cookbook_path: Path) -> int:
     attribute_complexity = 0
 
     # codeql[py/path-injection]: cookbook_path normalized by caller via _normalize_path
-    attributes_dir = (
-        cookbook_path / "attributes"
+    attributes_dir = _safe_join(
+        cookbook_path, "attributes"
     )  # deepcode ignore PT: path normalized via _normalize_path
     if attributes_dir.exists():
         for attr_file in attributes_dir.glob("*.rb"):
@@ -850,8 +850,8 @@ def _analyze_templates(cookbook_path: Path) -> int:
     erb_templates = 0
 
     # codeql[py/path-injection]: cookbook_path already normalized by caller
-    templates_dir = (
-        cookbook_path / "templates"
+    templates_dir = _safe_join(
+        cookbook_path, "templates"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     if templates_dir.exists():
         for template_file in templates_dir.glob("**/*.erb"):
@@ -872,8 +872,8 @@ def _analyze_libraries(cookbook_path: Path) -> int:
     library_complexity = 0
 
     # codeql[py/path-injection]: cookbook_path already normalized by caller
-    libraries_dir = (
-        cookbook_path / "libraries"
+    libraries_dir = _safe_join(
+        cookbook_path, "libraries"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     if libraries_dir.exists():
         for lib_file in libraries_dir.glob("*.rb"):
@@ -893,8 +893,8 @@ def _analyze_libraries(cookbook_path: Path) -> int:
 def _count_definitions(cookbook_path: Path) -> int:
     """Count definition files."""
     # codeql[py/path-injection]: cookbook_path already normalized by caller
-    definitions_dir = (
-        cookbook_path / "definitions"
+    definitions_dir = _safe_join(
+        cookbook_path, "definitions"
     )  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
     if definitions_dir.exists():
         return len(list(definitions_dir.glob("*.rb")))
@@ -906,7 +906,7 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     # path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
     # berksfile constructed with literal "Berksfile" from normalized cookbook_path
-    berksfile = cookbook_path / "Berksfile"
+    berksfile = _safe_join(cookbook_path, "Berksfile")
 
     if not berksfile.exists():
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
@@ -941,7 +941,7 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     # path validated via _normalize_path
     cookbook_path = _normalize_path(cookbook_path)
     # chefignore constructed with literal "chefignore" from normalized cookbook_path
-    chefignore = cookbook_path / "chefignore"
+    chefignore = _safe_join(cookbook_path, "chefignore")
 
     if not chefignore.exists():
         return {"patterns": [], "complexity": 0}
@@ -971,7 +971,7 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
 def _parse_thorfile(cookbook_path) -> dict[str, Any]:
     """Parse Thorfile for Thor tasks."""
     cookbook_path = _normalize_path(cookbook_path)
-    thorfile = cookbook_path / "Thorfile"
+    thorfile = _safe_join(cookbook_path, "Thorfile")
 
     if not thorfile.exists():
         return {"tasks": [], "complexity": 0}
@@ -996,7 +996,7 @@ def _parse_thorfile(cookbook_path) -> dict[str, Any]:
 def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
     """Parse metadata.rb for cookbook information."""
     cookbook_path = _normalize_path(cookbook_path)
-    metadata_file = cookbook_path / "metadata.rb"
+    metadata_file = _safe_join(cookbook_path, "metadata.rb")
 
     if not metadata_file.exists():
         return {
