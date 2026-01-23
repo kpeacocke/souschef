@@ -7,6 +7,3 @@ queries:
   - uses: security-and-quality
 
 disable-default-queries: false
-
-model-packs:
-  - .github/codeql/extensions
