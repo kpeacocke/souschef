@@ -1405,28 +1405,39 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
     }
 
     # Read metadata.rb for dependencies
-    # metadata_file constructed via _safe_join with normalized path
     metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
-    if metadata_file.exists():
-        # metadata_file from _safe_join validation ensures containment
-        with metadata_file.open("r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
+    # Verify metadata_file is within cookbook_path (containment check for CodeQL)
+    try:
+        metadata_file.relative_to(cookbook_path)
+    except ValueError:
+        # Path escaped cookbook_path, skip it
+        pass
+    else:
+        if metadata_file.exists():
+            # codeql[py/path-injection]: metadata_file validated via relative_to check above
+            with metadata_file.open("r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
 
-        # Parse dependencies
-
-        depends_matches = re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
-        analysis["direct_dependencies"] = depends_matches
+            # Parse dependencies
+            depends_matches = re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
+            analysis["direct_dependencies"] = depends_matches
 
     # Read Berksfile for additional dependencies
-    # berksfile constructed via _safe_join with normalized path
     berksfile = _safe_join(cookbook_path, "Berksfile")
-    if berksfile.exists():
-        # berksfile from _safe_join validation ensures containment
-        with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
+    # Verify berksfile is within cookbook_path (containment check for CodeQL)
+    try:
+        berksfile.relative_to(cookbook_path)
+    except ValueError:
+        # Path escaped cookbook_path, skip it
+        pass
+    else:
+        if berksfile.exists():
+            # codeql[py/path-injection]: berksfile validated via relative_to check above
+            with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
 
-        cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
-        analysis["external_dependencies"].extend(cookbook_matches)
+            cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
+            analysis["external_dependencies"].extend(cookbook_matches)
 
     # Identify community cookbooks (common ones)
     community_cookbook_patterns = [
