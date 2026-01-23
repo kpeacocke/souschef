@@ -658,6 +658,7 @@ def _format_assessment_report(
 
 def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
     """Count comprehensive cookbook artifacts including all Chef components."""
+    # codeql[py/path-injection]: Input validated by _normalize_path below
     # Validate path locally to prevent CodeQL taint analysis false positives
     validated_path = _normalize_path(cookbook_path)
 
