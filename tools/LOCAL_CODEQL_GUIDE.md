@@ -88,7 +88,7 @@ git push origin main
 The local validator checks these files for CodeQL path-injection suppressions:
 
 - `souschef/assessment.py` (49 suppressions)
-- `souschef/server.py` (14 suppressions)  
+- `souschef/server.py` (14 suppressions)
 - `souschef/ui/pages/cookbook_analysis.py` (16 suppressions)
 - `souschef/core/path_utils.py` (2 suppressions)
 - `souschef/ui/app.py` (1 suppression)
@@ -141,7 +141,7 @@ extract_path = archive_dir / member_path  # codeql [py/path-injection]
 
 ## Troubleshooting
 
-**Q: Validator says "missing suppressions" but I see them in the code**  
+**Q: Validator says "missing suppressions" but I see them in the code**
 A: Make sure the suppression is on the **same line** as the path operation:
 ```python
 # ❌ Wrong - suppression on wrong line
@@ -152,18 +152,18 @@ path = cookbook_path / "recipes"  # codeql [py/path-injection]
 path = cookbook_path / "recipes"  # codeql [py/path-injection]
 ```
 
-**Q: GitHub CodeQL still complains even though local validator passes**  
+**Q: GitHub CodeQL still complains even though local validator passes**
 A: Possible causes:
 1. Suppression format differs (must be exactly `# codeql [py/path-injection]`)
 2. Code wasn't actually pushed (check `git status`)
 3. CodeQL found a different issue than path-injection
 
-**Q: How do I test my suppressions against real CodeQL?**  
+**Q: How do I test my suppressions against real CodeQL?**
 A: Push to GitHub and check Actions tab. CodeQL runs automatically and reports any issues.
 
 ## Next Steps
 
-- [Run the local validator](tools/README.md)
+- [Run the local validator](README.md)
 - [Review CodeQL documentation](https://codeql.github.com/)
-- [Check SousChef security guidelines](SECURITY.md)
-- [See architecture guide](docs/ARCHITECTURE.md)
+- [Check SousChef security guidelines](../SECURITY.md)
+- [See architecture guide](../docs/ARCHITECTURE.md)

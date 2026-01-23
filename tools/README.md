@@ -2,13 +2,17 @@
 
 This directory contains development and validation tools for the SousChef project.
 
+Companion docs:
+- [LOCAL_CODEQL_GUIDE.md](LOCAL_CODEQL_GUIDE.md) — full guide to running CodeQL locally
+- [CODEQL_QUICK_REFERENCE.md](CODEQL_QUICK_REFERENCE.md) — quick reference card
+
 ## check_codeql_suppressions.py
 
 A local validation tool that verifies CodeQL path-injection security suppressions are in place before pushing code to GitHub.
 
 ### What It Does
 
-CodeQL is GitHub's code analysis tool that detects potential security vulnerabilities, including "path-injection" attacks where user input could be used unsafely in file path operations. 
+CodeQL is GitHub's code analysis tool that detects potential security vulnerabilities, including "path-injection" attacks where user input could be used unsafely in file path operations.
 
 This tool validates that:
 - All path operations that could be flagged by CodeQL have proper inline suppressions
@@ -88,10 +92,10 @@ git push origin main
 
 ### Common Issues
 
-**Issue:** "Missing suppressions" reported  
+**Issue:** "Missing suppressions" reported
 **Solution:** Check that the suppression comment is on the exact line with the path operation, not on a separate comment line.
 
-**Issue:** CodeQL still complains on GitHub  
+**Issue:** CodeQL still complains on GitHub
 **Solution:** Ensure the suppression format is exactly `# codeql [py/path-injection]` with the space. Also verify the path operation is actually safe (normalized before use).
 
 ### Troubleshooting

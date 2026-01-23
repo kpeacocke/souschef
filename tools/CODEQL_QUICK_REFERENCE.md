@@ -48,8 +48,8 @@ extracted = safe_archive_dir / member  # codeql [py/path-injection]
 ## More Information
 
 - **Detailed Guide:** [LOCAL_CODEQL_GUIDE.md](LOCAL_CODEQL_GUIDE.md)
-- **Tool Documentation:** [tools/README.md](tools/README.md)
-- **Security Policy:** [SECURITY.md](SECURITY.md)
+- **Tool Documentation:** [README.md](README.md)
+- **Security Policy:** [../SECURITY.md](../SECURITY.md)
 
 ---
 
