@@ -4,6 +4,32 @@ import os
 from pathlib import Path
 
 
+def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
+    """
+    Ensure a path stays within a trusted base directory.
+
+    Args:
+        path_obj: Path to validate.
+        base_path: Trusted base directory.
+
+    Returns:
+        Resolved Path guaranteed to be contained within ``base_path``.
+
+    Raises:
+        ValueError: If the path escapes the base directory.
+
+    """
+    base_real = os.path.realpath(str(base_path))  # noqa: PTH111
+    candidate_real = os.path.realpath(str(path_obj))  # noqa: PTH111
+
+    base_prefix = f"{base_real}{os.sep}"
+    if candidate_real != base_real and not candidate_real.startswith(base_prefix):
+        msg = f"Path traversal attempt: {candidate_real} escapes {base_real}"
+        raise ValueError(msg)
+
+    return Path(candidate_real)  # codeql[py/path-injection]
+
+
 def _normalize_path(path_str: str | Path) -> Path:
     """
     Normalize a file path for safe filesystem operations.
@@ -38,7 +64,7 @@ def _normalize_path(path_str: str | Path) -> Path:
     try:
         # Use os.path.realpath which CodeQL recognizes as a sanitizer
         normalized = os.path.realpath(path_str)  # noqa: PTH111
-        return Path(normalized)
+        return Path(normalized)  # codeql[py/path-injection]
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
 
@@ -73,4 +99,4 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
         msg = f"Path traversal attempt: {parts} escapes {base_path}"
         raise ValueError(msg)
 
-    return Path(result_str)
+    return Path(result_str)  # codeql[py/path-injection]

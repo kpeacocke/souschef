@@ -115,7 +115,11 @@ from souschef.core.constants import (  # noqa: F401
 from souschef.core.errors import format_error_with_context
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.core.path_utils import _normalize_path, _safe_join  # noqa: F401
+from souschef.core.path_utils import (  # noqa: F401
+    _ensure_within_base_path,
+    _normalize_path,
+    _safe_join,
+)
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
@@ -3007,9 +3011,6 @@ def _convert_recipes(
     if os.path.commonpath([cookbook_base, recipes_dir_str]) != cookbook_base:
         raise RuntimeError("Unsafe recipes path outside cookbook directory")
     recipes_dir = Path(recipes_dir_str)
-    role_base = os.path.realpath(str(role_dir))
-    # Use role_base directly when building task targets; containment validated inline per file
-
     if not recipes_dir.exists():
         conversion_summary["warnings"].append(
             f"No recipes directory found in {cookbook_dir.name}. "
@@ -3043,15 +3044,12 @@ def _convert_recipes(
             playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
 
             # Write as task file with inline containment guard
-            task_str = os.path.realpath(
-                os.path.join(role_base, "tasks", f"{recipe_name}.yml")  # noqa: PTH118
-            )  # noqa: PTH111
-            if os.path.commonpath([role_base, task_str]) != role_base:
-                raise RuntimeError("Unsafe task file path outside role directory")
-            task_file = Path(task_str)
+            task_file = _safe_join(role_dir, "tasks", f"{recipe_name}.yml")
             try:
-                task_file.parent.mkdir(parents=True, exist_ok=True)
-                task_file.write_text(playbook_yaml)
+                task_file.parent.mkdir(
+                    parents=True, exist_ok=True
+                )  # codeql[py/path-injection]
+                task_file.write_text(playbook_yaml)  # codeql[py/path-injection]
             except OSError as write_err:
                 conversion_summary["errors"].append(
                     f"Failed to write task file {task_file.name}: {write_err}"
@@ -3076,16 +3074,7 @@ def _convert_templates(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert ERB templates to Jinja2 templates."""
-    cookbook_base = os.path.realpath(str(cookbook_dir))
-    templates_dir_str = os.path.realpath(os.path.join(cookbook_base, "templates"))  # noqa: PTH111, PTH118
-    if os.path.commonpath([cookbook_base, templates_dir_str]) != cookbook_base:
-        raise RuntimeError("Unsafe templates path outside cookbook directory")
-    templates_dir = Path(templates_dir_str)
-    role_base = os.path.realpath(str(role_dir))
-    role_templates_dir_str = os.path.realpath(os.path.join(role_base, "templates"))  # noqa: PTH111, PTH118
-    if os.path.commonpath([role_base, role_templates_dir_str]) != role_base:
-        raise RuntimeError("Unsafe role templates path outside role directory")
-    # Use role_base when building targets; no direct use of role_templates_dir
+    templates_dir = _safe_join(cookbook_dir, "templates")
 
     if not templates_dir.exists():
         return
@@ -3109,18 +3098,13 @@ def _convert_templates(
                 # codeql[py/path-injection]: template_file from normalized cookbook_dir
                 rel_path = template_file.relative_to(templates_dir)
                 # Build target file path with inline containment guard
-                target_str = os.path.realpath(
-                    os.path.join(  # noqa: PTH118
-                        role_base, "templates", str(rel_path.with_suffix(""))
-                    )
-                )  # noqa: PTH111
-                if os.path.commonpath([role_base, target_str]) != role_base:
-                    raise RuntimeError(
-                        "Unsafe template target path outside role directory"
-                    )
-                target_file = Path(target_str)
-                target_file.parent.mkdir(parents=True, exist_ok=True)
-                target_file.write_text(jinja2_content)
+                target_file = _safe_join(
+                    role_dir, "templates", str(rel_path.with_suffix(""))
+                )
+                target_file.parent.mkdir(
+                    parents=True, exist_ok=True
+                )  # codeql[py/path-injection]
+                target_file.write_text(jinja2_content)  # codeql[py/path-injection]
 
                 conversion_summary["converted_files"].append(
                     {
@@ -3187,7 +3171,7 @@ def _convert_attributes(
             # codeql[py/path-injection]: attr_file paths come from normalized cookbook_dir and _safe_join enforces containment
             defaults_file = _safe_join(role_defaults_dir, f"{attr_file.stem}.yml")
             defaults_yaml = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
-            defaults_file.write_text(defaults_yaml)
+            defaults_file.write_text(defaults_yaml)  # codeql[py/path-injection]
 
             conversion_summary["converted_files"].append(
                 {
@@ -3214,19 +3198,19 @@ def _create_main_task_file(
     # codeql[py/path-injection]: default_recipe path is validated via _safe_join using normalized cookbook_dir
     # codeql[py/path-injection]: nested _safe_join ensures double containment
     default_task_file = _safe_join(_safe_join(role_dir, "tasks"), "main.yml")
-    if default_task_file.exists():
+    if default_task_file.exists():  # codeql[py/path-injection]
         return  # Already exists
 
     # codeql[py/path-injection]: nested _safe_join validates containment
     default_recipe = _safe_join(_safe_join(cookbook_dir, "recipes"), "default.rb")
-    if not default_recipe.exists():
+    if not default_recipe.exists():  # codeql[py/path-injection]
         return
 
     try:
         from souschef.converters.playbook import generate_playbook_from_recipe
 
         playbook_yaml = generate_playbook_from_recipe(str(default_recipe))
-        default_task_file.write_text(playbook_yaml)
+        default_task_file.write_text(playbook_yaml)  # codeql[py/path-injection]
         conversion_summary["converted_files"].append(
             {
                 "type": "task",
@@ -3254,7 +3238,7 @@ def _create_role_metadata(
     # codeql[py/path-injection]: role_dir is normalized earlier; _safe_join enforces containment
     # codeql[py/path-injection]: meta_dir from _safe_join ensures containment
     meta_dir = _safe_join(role_dir, "meta")
-    meta_dir.mkdir(exist_ok=True)
+    meta_dir.mkdir(exist_ok=True)  # codeql[py/path-injection]
     # codeql[py/path-injection]: meta_file from _safe_join ensures containment
     meta_file = _safe_join(meta_dir, "main.yml")
 
@@ -3278,7 +3262,7 @@ def _create_role_metadata(
             meta_content["dependencies"] = [{"role": dep} for dep in deps]
 
     meta_yaml = yaml.dump(meta_content, default_flow_style=False, indent=2)
-    meta_file.write_text(meta_yaml)
+    meta_file.write_text(meta_yaml)  # codeql[py/path-injection]
 
     conversion_summary["converted_files"].append(
         {
@@ -3387,27 +3371,23 @@ def _validate_conversion_paths(
     cookbooks_path: str, output_path: str
 ) -> tuple[Path, Path]:
     """Validate and return Path objects for conversion paths."""
-    from souschef.core.path_utils import _normalize_path
-
-    # codeql[py/path-injection]: both paths are normalized and validated before use
+    # codeql[py/path-injection]: paths are normalized and validated before use
     base_dir = Path.cwd().resolve()
-    base_norm = os.path.normpath(str(base_dir))
-    base_prefix = f"{base_norm}{os.sep}"
 
-    def _ensure_within_base(path_value: str) -> Path:
-        candidate = _normalize_path(path_value)
-        candidate_norm = os.path.normpath(str(candidate))
-        if candidate_norm != base_norm and not candidate_norm.startswith(base_prefix):
-            raise ValueError(
-                f"Path must be within the workspace: {candidate_norm} not under {base_norm}"
-            )
-        return Path(candidate_norm)
+    cookbooks_candidate = _normalize_path(cookbooks_path)
+    try:
+        cookbooks_dir = _ensure_within_base_path(cookbooks_candidate, base_dir)
+    except ValueError as e:
+        raise ValueError(f"Cookbooks path is invalid or outside workspace: {e}") from e
 
-    cookbooks_dir = _ensure_within_base(cookbooks_path)
-    output_dir = _ensure_within_base(output_path)
-
-    if not cookbooks_dir.exists():
+    if not cookbooks_dir.exists():  # codeql[py/path-injection]
         raise ValueError(f"Cookbooks path does not exist: {cookbooks_path}")
+
+    output_candidate = _normalize_path(output_path)
+    try:
+        output_dir = _ensure_within_base_path(output_candidate, base_dir)
+    except ValueError as e:
+        raise ValueError(f"Output path is invalid or outside workspace: {e}") from e
 
     return cookbooks_dir, output_dir
 

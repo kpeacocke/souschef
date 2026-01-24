@@ -50,7 +50,11 @@ from souschef.core.errors import (
     validate_directory_exists,
     validate_file_exists,
 )
-from souschef.core.path_utils import _normalize_path, _safe_join
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _normalize_path,
+    _safe_join,
+)
 from souschef.core.ruby_utils import _normalize_ruby_value
 from souschef.core.validation import (
     ValidationCategory,
@@ -63,6 +67,7 @@ __all__ = [
     "_normalize_path",
     "_normalize_ruby_value",
     "_safe_join",
+    "_ensure_within_base_path",
     "ValidationCategory",
     "ValidationEngine",
     "ValidationLevel",

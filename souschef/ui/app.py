@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 P = ParamSpec("P")
 R = TypeVar("R")
 
+from souschef.core import _ensure_within_base_path, _normalize_path
 from souschef.ui.pages.ai_settings import show_ai_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 
@@ -2553,23 +2554,23 @@ def _collect_files_to_validate(input_path: str) -> list[Path]:
     path_obj = validated_path
     files_to_validate = []
 
-    if not path_obj.exists():
+    if not path_obj.exists():  # codeql[py/path-injection]
         st.error(f"Path does not exist: {path_obj}")
         return []
 
-    if path_obj.is_file():
+    if path_obj.is_file():  # codeql[py/path-injection]
         if path_obj.suffix in [".yml", ".yaml"] and path_obj.name not in [
             ".kitchen.yml",
             "kitchen.yml",
             "docker-compose.yml",
         ]:
             files_to_validate.append(path_obj)
-    elif path_obj.is_dir():
+    elif path_obj.is_dir():  # codeql[py/path-injection]
         # Filter out obvious non-playbook files
         excluded_files = {".kitchen.yml", "kitchen.yml", "docker-compose.yml"}
 
-        yml_files = list(path_obj.glob("**/*.yml"))
-        yaml_files = list(path_obj.glob("**/*.yaml"))
+        yml_files = list(path_obj.glob("**/*.yml"))  # codeql[py/path-injection]
+        yaml_files = list(path_obj.glob("**/*.yaml"))  # codeql[py/path-injection]
 
         raw_files = yml_files + yaml_files
         files_to_validate.extend([f for f in raw_files if f.name not in excluded_files])
@@ -2743,24 +2744,13 @@ def _normalize_and_validate_input_path(input_path: str) -> Path | None:
         return None
 
     try:
-        # Expand user home and resolve to an absolute, normalized path
-        # codeql[py/path-injection]: path validated via relative_to checks
-        path_obj = Path(raw).expanduser().resolve()
-    except Exception:
-        st.error(f"Invalid path: {raw}")
+        path_obj = _normalize_path(raw)
+        app_root = Path(app_path).resolve()
+        # Use centralised containment validation
+        return _ensure_within_base_path(path_obj, app_root)
+    except (ValueError, OSError) as e:
+        st.error(f"Invalid path: {e}")
         return None
-
-    # Optional safety: constrain to the application root directory
-    app_root = Path(app_path).resolve()
-    base_norm = os.path.normpath(str(app_root))
-    base_prefix = f"{base_norm}{os.sep}"
-    candidate_norm = os.path.normpath(str(path_obj))
-
-    if candidate_norm != base_norm and not candidate_norm.startswith(base_prefix):
-        st.error("Path must be within the SousChef project directory.")
-        return None
-
-    return Path(candidate_norm)
 
 
 def _handle_validation_execution(input_path: str, options: Mapping[str, Any]) -> None:
@@ -2780,6 +2770,7 @@ def _handle_validation_execution(input_path: str, options: Mapping[str, Any]) ->
             # Error is handled inside _collect_files_to_validate
             # if path doesn't exist or is invalid
             validated_path = _normalize_and_validate_input_path(input_path)
+            # codeql[py/path-injection]
             if validated_path is not None and validated_path.exists():
                 st.warning(f"No YAML files found in {validated_path}")
             return

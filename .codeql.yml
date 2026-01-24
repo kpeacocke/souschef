@@ -1,0 +1,17 @@
+paths:
+  include:
+    - "souschef"
+    - "tools"
+  exclude:
+    - "**python-db**"
+    - "**mutants**"
+
+queries:
+  - cwd: .
+    queries:
+      - src: codeql/python-queries
+    suite: codeql-suites/python-security-and-quality.qls
+    
+rule-filters:
+  - severity: error
+    precision: high

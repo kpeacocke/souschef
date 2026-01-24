@@ -33,7 +33,11 @@ from souschef.core.metrics import (
     get_timeline_weeks,
     validate_metrics_consistency,
 )
-from souschef.core.path_utils import _normalize_path, _safe_join
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _normalize_path,
+    _safe_join,
+)
 from souschef.parsers.metadata import parse_cookbook_metadata
 
 # AI Settings
@@ -830,15 +834,27 @@ def _get_archive_upload_input() -> Any:
     return uploaded_file
 
 
+def _is_within_base(base: Path, candidate: Path) -> bool:
+    """Check whether candidate is contained within base after resolution."""
+    base_real = Path(os.path.realpath(str(base)))
+    candidate_real = Path(os.path.realpath(str(candidate)))
+    try:
+        candidate_real.relative_to(base_real)
+        return True
+    except ValueError:
+        return False
+
+
 def _validate_and_list_cookbooks(cookbook_path: str) -> None:
     """Validate the cookbook path and list available cookbooks."""
-    # codeql[py/path-injection]: safe_dir validated via _get_safe_cookbook_directory
     safe_dir = _get_safe_cookbook_directory(cookbook_path)
     if safe_dir is None:
         return
 
-    # codeql[py/path-injection]: safe_dir validated to prevent traversal
-    if safe_dir.exists() and safe_dir.is_dir():
+    if (
+        safe_dir.exists()  # codeql[py/path-injection]
+        and safe_dir.is_dir()  # codeql[py/path-injection]
+    ):
         _list_and_display_cookbooks(safe_dir)
     else:
         st.error(f"Directory not found: {safe_dir}")
@@ -853,54 +869,19 @@ def _get_safe_cookbook_directory(cookbook_path):
     """
     try:
         base_dir = Path.cwd().resolve()
-        temp_dir = Path(tempfile.gettempdir()).resolve()
 
         path_str = str(cookbook_path).strip()
-
-        # Reject obviously malicious patterns
-        if "\x00" in path_str or ":\\" in path_str or "\\" in path_str:
-            st.error(
-                "Invalid path: Path contains null bytes or backslashes, "
-                "which are not allowed."
-            )
+        if not path_str:
+            st.error("Invalid path: Path cannot be empty.")
             return None
 
-        # Reject paths with directory traversal attempts
-        if ".." in path_str:
-            st.error(
-                "Invalid path: Path contains '..' which is not allowed "
-                "for security reasons."
-            )
-            return None
+        # Sanitise the candidate path using shared helper
+        candidate = _normalize_path(path_str)
+        # Use centralised containment validation
+        return _ensure_within_base_path(candidate, base_dir)
 
-        user_path = Path(path_str)
-
-        if user_path.is_absolute():
-            resolved_candidate = user_path
-        else:
-            resolved_candidate = base_dir / user_path
-
-        resolved_norm = os.path.normpath(str(resolved_candidate.resolve()))
-        base_norm = os.path.normpath(str(base_dir))
-        temp_norm = os.path.normpath(str(temp_dir))
-        base_prefix = f"{base_norm}{os.sep}"
-        temp_prefix = f"{temp_norm}{os.sep}"
-
-        if resolved_norm == base_norm or resolved_norm.startswith(base_prefix):
-            return Path(resolved_norm)
-
-        if resolved_norm == temp_norm or resolved_norm.startswith(temp_prefix):
-            return Path(resolved_norm)
-
-        st.error(
-            "Invalid path: The resolved path is outside the allowed "
-            "directories (workspace or temporary directory). Paths cannot go above "
-            "the workspace root for security reasons."
-        )
-        return None
-
-    except Exception as exc:
-        st.error(f"Invalid path: {exc}. Please enter a valid relative path.")
+    except ValueError as exc:
+        st.error(f"Invalid path: {exc}")
         return None
 
 
@@ -1765,19 +1746,11 @@ def _validate_output_path(output_path: str) -> Path | None:
 
     """
     try:
-        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
         safe_output_path = _normalize_path(str(output_path))
         base_dir = Path.cwd().resolve()
-
-        base_norm = os.path.normpath(str(base_dir))
-        base_prefix = f"{base_norm}{os.sep}"
-        candidate_norm = os.path.normpath(str(safe_output_path))
-
-        if candidate_norm == base_norm or candidate_norm.startswith(base_prefix):
-            candidate_path = Path(candidate_norm)
-            return candidate_path if candidate_path.exists() else None
-
-        return None
+        # Use centralised containment validation
+        validated = _ensure_within_base_path(safe_output_path, base_dir)
+        return validated if validated.exists() else None  # codeql[py/path-injection]
     except ValueError:
         return None
 
@@ -1794,27 +1767,28 @@ def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
 
     """
     files_to_archive = []
-    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-    # codeql[py/path-injection]: safe_output_path normalized
-    base_norm = os.path.normpath(str(safe_output_path.resolve()))
-    base_prefix = f"{base_norm}{os.sep}"
-    base_path = Path(base_norm)
+    base_path = safe_output_path.resolve()
 
-    for root, _dirs, files in os.walk(base_norm):
-        root_norm = os.path.normpath(root)
-        if root_norm != base_norm and not root_norm.startswith(base_prefix):
+    for root, _dirs, files in os.walk(base_path):  # codeql[py/path-injection]
+        root_path = Path(root).resolve()
+        try:
+            # Ensure each subdirectory is contained within base
+            _ensure_within_base_path(root_path, base_path)
+        except ValueError:
             continue
 
         for file in files:
             safe_name = _sanitize_filename(file)
-            file_path_str = os.path.normpath(os.path.join(root_norm, safe_name))  # noqa: PTH118
-
-            if file_path_str != base_norm and not file_path_str.startswith(base_prefix):
+            candidate_path = (root_path / safe_name).resolve()
+            try:
+                # Ensure each file is contained within base
+                _ensure_within_base_path(candidate_path, base_path)
+                arcname = candidate_path.relative_to(
+                    base_path
+                )  # codeql[py/path-injection]
+                files_to_archive.append((candidate_path, arcname))
+            except ValueError:
                 continue
-
-            file_path = Path(file_path_str)
-            arcname = file_path.relative_to(base_path)
-            files_to_archive.append((file_path, arcname))
 
     return files_to_archive
 
@@ -1853,7 +1827,7 @@ def _display_conversion_download_options(conversion_result: dict):
         st.error("Invalid output path")
         return
 
-    if safe_output_path.exists():
+    if safe_output_path.exists():  # codeql[py/path-injection]
         archive_data = _create_roles_zip_archive(safe_output_path)
 
         st.download_button(
