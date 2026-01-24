@@ -36,13 +36,7 @@ try:
     from souschef.server import (
         analyse_chef_search_patterns,
     )
-
-    # lgtm [py/unused-local-variable]: Set for future feature gating
-    _server_available = True  # noqa: F841  # codeql[py/unused-global-variable]
 except ImportError:
-    # lgtm [py/unused-local-variable]: Set for future feature gating
-    _server_available = False  # noqa: F841  # codeql[py/unused-global-variable]
-
     # Define a placeholder function for when MCP is not available
     def analyse_chef_search_patterns(*args, **kwargs):
         raise NotImplementedError("MCP server not available")

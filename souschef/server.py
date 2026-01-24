@@ -33,8 +33,8 @@ from souschef.assessment import (
 # Import private helper functions still used in server.py
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.habitat import (  # noqa: F401
-    _add_service_build,
-    _add_service_dependencies,
+    _add_service_build,  # lgtm[py/unused-import]
+    _add_service_dependencies,  # lgtm[py/unused-import]
     _add_service_environment,
     _add_service_ports,
     _add_service_volumes,
@@ -55,7 +55,7 @@ from souschef.converters.habitat import (
 # Re-exports of playbook internal functions for backward compatibility (tests)
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.playbook import (  # noqa: F401
-    _add_general_recommendations,
+    _add_general_recommendations,  # lgtm[py/unused-import]
     _convert_chef_block_to_ansible,
     _convert_chef_condition_to_ansible,
     _convert_guards_to_when_conditions,
@@ -91,7 +91,7 @@ from souschef.converters.playbook import (
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.converters.resource import (  # noqa: F401
-    _convert_chef_resource_to_ansible,
+    _convert_chef_resource_to_ansible,  # lgtm[py/unused-import]
     _format_ansible_task,
     _get_file_params,
     _get_service_params,
@@ -104,8 +104,8 @@ from souschef.converters.resource import (
 # These imports are intentionally exposed for external test access
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.constants import (  # noqa: F401
-    ACTION_TO_STATE,
-    ANSIBLE_SERVICE_MODULE,
+    ACTION_TO_STATE,  # lgtm[py/unused-import]
+    ANSIBLE_SERVICE_MODULE,  # lgtm[py/unused-import]
     ERROR_PREFIX,
     REGEX_RESOURCE_BRACKET,
     RESOURCE_MAPPINGS,
@@ -125,15 +125,15 @@ from souschef.core.path_utils import (  # noqa: F401
 # These imports are intentionally exposed for external test access
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.ruby_utils import (  # noqa: F401
-    _normalize_ruby_value,
+    _normalize_ruby_value,  # lgtm[py/unused-import]
 )
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.core.validation import (  # noqa: F401
-    ValidationCategory,
-    ValidationEngine,
+    ValidationCategory,  # lgtm[py/unused-import]
+    ValidationEngine,  # lgtm[py/unused-import]
     ValidationLevel,
     ValidationResult,
 )
@@ -144,8 +144,8 @@ from souschef.core.validation import (  # noqa: F401
 # Note: MCP tool wrappers exist for some of these, but tests import directly
 # codeql[py/unused-import]: Backward compatibility - tests import directly
 from souschef.deployment import (  # noqa: F401
-    _analyse_cookbook_for_awx,
-    _analyse_cookbooks_directory,
+    _analyse_cookbook_for_awx,  # lgtm[py/unused-import]
+    _analyse_cookbooks_directory,  # lgtm[py/unused-import]
     _detect_deployment_patterns_in_recipe,
     _extract_cookbook_attributes,
     _extract_cookbook_dependencies,
@@ -196,8 +196,8 @@ from souschef.filesystem import read_file as _read_file
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.attributes import (  # noqa: F401
-    _extract_attributes,
-    _format_attributes,
+    _extract_attributes,  # lgtm[py/unused-import]
+    _format_attributes,  # lgtm[py/unused-import]
     _format_resolved_attributes,
     _get_precedence_level,
     _resolve_attribute_precedence,
@@ -208,8 +208,8 @@ from souschef.parsers.attributes import parse_attributes as _parse_attributes
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.habitat import (  # noqa: F401
-    _extract_plan_array,
-    _extract_plan_exports,
+    _extract_plan_array,  # lgtm[py/unused-import]
+    _extract_plan_exports,  # lgtm[py/unused-import]
     _extract_plan_function,
     _extract_plan_var,
     _update_quote_state,
@@ -221,8 +221,8 @@ from souschef.parsers.habitat import parse_habitat_plan as _parse_habitat_plan
 # Re-export InSpec internal functions for backward compatibility (tests)
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.inspec import (  # noqa: F401
-    _convert_inspec_to_ansible_assert,
-    _convert_inspec_to_goss,
+    _convert_inspec_to_ansible_assert,  # lgtm[py/unused-import]
+    _convert_inspec_to_goss,  # lgtm[py/unused-import]
     _convert_inspec_to_serverspec,
     _convert_inspec_to_testinfra,
     _extract_inspec_describe_blocks,
@@ -238,8 +238,8 @@ from souschef.parsers.inspec import (
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.metadata import (  # noqa: F401
-    _extract_metadata,
-    _format_cookbook_structure,
+    _extract_metadata,  # lgtm[py/unused-import]
+    _format_cookbook_structure,  # lgtm[py/unused-import]
     _format_metadata,
 )
 from souschef.parsers.metadata import (
@@ -252,23 +252,23 @@ from souschef.parsers.metadata import read_cookbook_metadata as _read_cookbook_m
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.recipe import (  # noqa: F401
-    _extract_conditionals,
-    _extract_resources,
+    _extract_conditionals,  # lgtm[py/unused-import]
+    _extract_resources,  # lgtm[py/unused-import]
     _format_resources,
 )
 from souschef.parsers.recipe import parse_recipe as _parse_recipe
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.resource import (  # noqa: F401
-    _extract_resource_actions,
-    _extract_resource_properties,
+    _extract_resource_actions,  # lgtm[py/unused-import]
+    _extract_resource_properties,  # lgtm[py/unused-import]
 )
 from souschef.parsers.resource import parse_custom_resource as _parse_custom_resource
 
 # codeql[py/unused-import]: Backward compatibility exports for test suite
 from souschef.parsers.template import (  # noqa: F401
-    _convert_erb_to_jinja2,
-    _extract_code_block_variables,
+    _convert_erb_to_jinja2,  # lgtm[py/unused-import]
+    _extract_code_block_variables,  # lgtm[py/unused-import]
     _extract_heredoc_strings,
     _extract_node_attribute_path,
     _extract_output_variables,
@@ -3046,10 +3046,12 @@ def _convert_recipes(
             # Write as task file with inline containment guard
             task_file = _safe_join(role_dir, "tasks", f"{recipe_name}.yml")
             try:
-                task_file.parent.mkdir(
+                task_file.parent.mkdir(  # lgtm[py/path-injection]
                     parents=True, exist_ok=True
                 )  # codeql[py/path-injection]
-                task_file.write_text(playbook_yaml)  # codeql[py/path-injection]
+                task_file.write_text(
+                    playbook_yaml
+                )  # codeql[py/path-injection]  # lgtm[py/path-injection]
             except OSError as write_err:
                 conversion_summary["errors"].append(
                     f"Failed to write task file {task_file.name}: {write_err}"
@@ -3101,10 +3103,12 @@ def _convert_templates(
                 target_file = _safe_join(
                     role_dir, "templates", str(rel_path.with_suffix(""))
                 )
-                target_file.parent.mkdir(
+                target_file.parent.mkdir(  # lgtm[py/path-injection]
                     parents=True, exist_ok=True
                 )  # codeql[py/path-injection]
-                target_file.write_text(jinja2_content)  # codeql[py/path-injection]
+                target_file.write_text(
+                    jinja2_content
+                )  # codeql[py/path-injection]  # lgtm[py/path-injection]
 
                 conversion_summary["converted_files"].append(
                     {
@@ -3171,7 +3175,9 @@ def _convert_attributes(
             # codeql[py/path-injection]: attr_file paths come from normalized cookbook_dir and _safe_join enforces containment
             defaults_file = _safe_join(role_defaults_dir, f"{attr_file.stem}.yml")
             defaults_yaml = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
-            defaults_file.write_text(defaults_yaml)  # codeql[py/path-injection]
+            defaults_file.write_text(
+                defaults_yaml
+            )  # codeql[py/path-injection]  # lgtm[py/path-injection]
 
             conversion_summary["converted_files"].append(
                 {
@@ -3198,7 +3204,9 @@ def _create_main_task_file(
     # codeql[py/path-injection]: default_recipe path is validated via _safe_join using normalized cookbook_dir
     # codeql[py/path-injection]: nested _safe_join ensures double containment
     default_task_file = _safe_join(_safe_join(role_dir, "tasks"), "main.yml")
-    if default_task_file.exists():  # codeql[py/path-injection]
+    if (
+        default_task_file.exists()
+    ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
         return  # Already exists
 
     # codeql[py/path-injection]: nested _safe_join validates containment
@@ -3210,7 +3218,9 @@ def _create_main_task_file(
         from souschef.converters.playbook import generate_playbook_from_recipe
 
         playbook_yaml = generate_playbook_from_recipe(str(default_recipe))
-        default_task_file.write_text(playbook_yaml)  # codeql[py/path-injection]
+        default_task_file.write_text(
+            playbook_yaml
+        )  # codeql[py/path-injection]  # lgtm[py/path-injection]
         conversion_summary["converted_files"].append(
             {
                 "type": "task",
@@ -3238,7 +3248,9 @@ def _create_role_metadata(
     # codeql[py/path-injection]: role_dir is normalized earlier; _safe_join enforces containment
     # codeql[py/path-injection]: meta_dir from _safe_join ensures containment
     meta_dir = _safe_join(role_dir, "meta")
-    meta_dir.mkdir(exist_ok=True)  # codeql[py/path-injection]
+    meta_dir.mkdir(
+        exist_ok=True
+    )  # codeql[py/path-injection]  # lgtm[py/path-injection]
     # codeql[py/path-injection]: meta_file from _safe_join ensures containment
     meta_file = _safe_join(meta_dir, "main.yml")
 
@@ -3262,7 +3274,9 @@ def _create_role_metadata(
             meta_content["dependencies"] = [{"role": dep} for dep in deps]
 
     meta_yaml = yaml.dump(meta_content, default_flow_style=False, indent=2)
-    meta_file.write_text(meta_yaml)  # codeql[py/path-injection]
+    meta_file.write_text(
+        meta_yaml
+    )  # codeql[py/path-injection]  # lgtm[py/path-injection]
 
     conversion_summary["converted_files"].append(
         {
@@ -3380,7 +3394,9 @@ def _validate_conversion_paths(
     except ValueError as e:
         raise ValueError(f"Cookbooks path is invalid or outside workspace: {e}") from e
 
-    if not cookbooks_dir.exists():  # codeql[py/path-injection]
+    if (
+        not cookbooks_dir.exists()
+    ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
         raise ValueError(f"Cookbooks path does not exist: {cookbooks_path}")
 
     output_candidate = _normalize_path(output_path)

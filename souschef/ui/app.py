@@ -2554,23 +2554,27 @@ def _collect_files_to_validate(input_path: str) -> list[Path]:
     path_obj = validated_path
     files_to_validate = []
 
-    if not path_obj.exists():  # codeql[py/path-injection]
+    if not path_obj.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
         st.error(f"Path does not exist: {path_obj}")
         return []
 
-    if path_obj.is_file():  # codeql[py/path-injection]
+    if path_obj.is_file():  # codeql[py/path-injection]  # lgtm[py/path-injection]
         if path_obj.suffix in [".yml", ".yaml"] and path_obj.name not in [
             ".kitchen.yml",
             "kitchen.yml",
             "docker-compose.yml",
         ]:
             files_to_validate.append(path_obj)
-    elif path_obj.is_dir():  # codeql[py/path-injection]
+    elif path_obj.is_dir():  # codeql[py/path-injection]  # lgtm[py/path-injection]
         # Filter out obvious non-playbook files
         excluded_files = {".kitchen.yml", "kitchen.yml", "docker-compose.yml"}
 
-        yml_files = list(path_obj.glob("**/*.yml"))  # codeql[py/path-injection]
-        yaml_files = list(path_obj.glob("**/*.yaml"))  # codeql[py/path-injection]
+        yml_files = list(
+            path_obj.glob("**/*.yml")
+        )  # codeql[py/path-injection]  # lgtm[py/path-injection]
+        yaml_files = list(
+            path_obj.glob("**/*.yaml")
+        )  # codeql[py/path-injection]  # lgtm[py/path-injection]
 
         raw_files = yml_files + yaml_files
         files_to_validate.extend([f for f in raw_files if f.name not in excluded_files])
@@ -2771,7 +2775,9 @@ def _handle_validation_execution(input_path: str, options: Mapping[str, Any]) ->
             # if path doesn't exist or is invalid
             validated_path = _normalize_and_validate_input_path(input_path)
             # codeql[py/path-injection]
-            if validated_path is not None and validated_path.exists():
+            if (
+                validated_path is not None and validated_path.exists()
+            ):  # lgtm[py/path-injection]
                 st.warning(f"No YAML files found in {validated_path}")
             return
 

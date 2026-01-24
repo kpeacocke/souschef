@@ -369,7 +369,9 @@ def analyse_cookbook_dependencies(
 
         # codeql[py/path-injection]: cookbook_path normalized and contained within workspace
         cookbook_path_obj = _normalize_cookbook_root(cookbook_path)
-        if not cookbook_path_obj.exists():  # codeql[py/path-injection]
+        if (
+            not cookbook_path_obj.exists()
+        ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
             return (
                 f"Error: Cookbook path not found: {cookbook_path}\n\n"
                 "Suggestion: Check that the path exists and points to a cookbook directory"
@@ -688,79 +690,87 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
 
     recipes_dir = _safe_join(base, "recipes")
     recipe_count = (
-        len(list(recipes_dir.glob("*.rb")))
-        if recipes_dir.exists()  # codeql[py/path-injection]
+        len(list(recipes_dir.glob("*.rb")))  # lgtm[py/path-injection]
+        if recipes_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
         else 0
     )
 
     templates_dir = _safe_join(base, "templates")
     template_count = (
-        len(list(templates_dir.glob("**/*.erb")))
-        if templates_dir.exists()  # codeql[py/path-injection]
+        len(list(templates_dir.glob("**/*.erb")))  # lgtm[py/path-injection]
+        if templates_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
         else 0
     )
 
     files_dir = _safe_join(base, "files")
     file_count = (
-        len(list(files_dir.glob("**/*")))
-        if files_dir.exists()  # codeql[py/path-injection]
+        len(list(files_dir.glob("**/*")))  # lgtm[py/path-injection]
+        if files_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
         else 0
     )
 
     attributes_dir = _safe_join(base, "attributes")
     attributes_count = (
-        len(list(attributes_dir.glob("*.rb")))
-        if attributes_dir.exists()  # codeql[py/path-injection]
+        len(list(attributes_dir.glob("*.rb")))  # lgtm[py/path-injection]
+        if attributes_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
         else 0
     )
 
     libraries_dir = _safe_join(base, "libraries")
     libraries_count = (
-        len(list(libraries_dir.glob("*.rb")))
-        if libraries_dir.exists()  # codeql[py/path-injection]
+        len(list(libraries_dir.glob("*.rb")))  # lgtm[py/path-injection]
+        if libraries_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
         else 0
     )
 
     definitions_dir = _safe_join(base, "definitions")
     definitions_count = (
-        len(list(definitions_dir.glob("*.rb")))
-        if definitions_dir.exists()  # codeql[py/path-injection]
+        len(list(definitions_dir.glob("*.rb")))  # lgtm[py/path-injection]
+        if definitions_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
         else 0
     )
 
     resources_dir = _safe_join(base, "resources")
     resources_count = (
-        len(list(resources_dir.glob("*.rb")))
-        if resources_dir.exists()  # codeql[py/path-injection]
+        len(list(resources_dir.glob("*.rb")))  # lgtm[py/path-injection]
+        if resources_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
         else 0
     )
 
     providers_dir = _safe_join(base, "providers")
     providers_count = (
-        len(list(providers_dir.glob("*.rb")))
-        if providers_dir.exists()  # codeql[py/path-injection]
+        len(list(providers_dir.glob("*.rb")))  # lgtm[py/path-injection]
+        if providers_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
         else 0
     )
 
     berksfile = _safe_join(base, "Berksfile")
-    has_berksfile = berksfile.exists()  # codeql[py/path-injection]
+    has_berksfile = (
+        berksfile.exists()
+    )  # codeql[py/path-injection]  # lgtm[py/path-injection]
 
     chefignore = _safe_join(base, "chefignore")
-    has_chefignore = chefignore.exists()  # codeql[py/path-injection]
+    has_chefignore = (
+        chefignore.exists()
+    )  # codeql[py/path-injection]  # lgtm[py/path-injection]
 
     thorfile = _safe_join(base, "Thorfile")
-    has_thorfile = thorfile.exists()  # codeql[py/path-injection]
+    has_thorfile = (
+        thorfile.exists()
+    )  # codeql[py/path-injection]  # lgtm[py/path-injection]
 
     kitchen_yml = _safe_join(base, ".kitchen.yml")
     kitchen_yaml = _safe_join(base, "kitchen.yml")
     has_kitchen_yml = (
-        kitchen_yml.exists() or kitchen_yaml.exists()  # codeql[py/path-injection]
+        kitchen_yml.exists()
+        or kitchen_yaml.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
     )
 
     test_dir = _safe_join(base, "test")
     spec_dir = _safe_join(base, "spec")
     has_test_dir = (
-        test_dir.exists() or spec_dir.exists()  # codeql[py/path-injection]
+        test_dir.exists()
+        or spec_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
     )
 
     return {
@@ -821,8 +831,10 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
 
     base = _normalize_cookbook_root(cookbook_path)
     recipes_dir = _safe_join(base, "recipes")
-    if recipes_dir.exists():  # codeql[py/path-injection]
-        for recipe_file in recipes_dir.glob("*.rb"):  # codeql[py/path-injection]
+    if recipes_dir.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
+        for recipe_file in recipes_dir.glob(
+            "*.rb"
+        ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
             try:
                 content = recipe_file.read_text(encoding="utf-8", errors="ignore")
                 resources = len(RESOURCE_BLOCK_PATTERN.findall(content))
@@ -850,8 +862,10 @@ def _analyze_attributes(cookbook_path: Path) -> int:
 
     base = _normalize_cookbook_root(cookbook_path)
     attributes_dir = _safe_join(base, "attributes")
-    if attributes_dir.exists():  # codeql[py/path-injection]
-        for attr_file in attributes_dir.glob("*.rb"):  # codeql[py/path-injection]
+    if attributes_dir.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
+        for attr_file in attributes_dir.glob(
+            "*.rb"
+        ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
             try:
                 content = attr_file.read_text(encoding="utf-8", errors="ignore")
                 assignments = len(
@@ -877,8 +891,8 @@ def _analyze_templates(cookbook_path: Path) -> int:
 
     base = _normalize_cookbook_root(cookbook_path)
     templates_dir = _safe_join(base, "templates")
-    if templates_dir.exists():  # codeql[py/path-injection]
-        for template_file in templates_dir.glob(
+    if templates_dir.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
+        for template_file in templates_dir.glob(  # lgtm[py/path-injection]
             "**/*.erb"
         ):  # codeql[py/path-injection]
             try:
@@ -897,8 +911,10 @@ def _analyze_libraries(cookbook_path: Path) -> int:
 
     base = _normalize_cookbook_root(cookbook_path)
     libraries_dir = _safe_join(base, "libraries")
-    if libraries_dir.exists():  # codeql[py/path-injection]
-        for lib_file in libraries_dir.glob("*.rb"):  # codeql[py/path-injection]
+    if libraries_dir.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
+        for lib_file in libraries_dir.glob(
+            "*.rb"
+        ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
             try:
                 content = lib_file.read_text(encoding="utf-8", errors="ignore")
                 classes = len(re.findall(r"class\s+\w+", content))
@@ -914,8 +930,8 @@ def _count_definitions(cookbook_path: Path) -> int:
     """Count definition files."""
     base = _normalize_cookbook_root(cookbook_path)
     definitions_dir = _safe_join(base, "definitions")
-    if definitions_dir.exists():
-        return len(list(definitions_dir.glob("*.rb")))
+    if definitions_dir.exists():  # lgtm[py/path-injection]
+        return len(list(definitions_dir.glob("*.rb")))  # lgtm[py/path-injection]
     return 0
 
 
@@ -1410,9 +1426,9 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
     trusted cookbooks root by analyse_cookbook_dependencies before invocation.
     """
     base = _normalize_cookbook_root(cookbook_path)
-    if not base.exists():  # codeql[py/path-injection]
+    if not base.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
         raise ValueError(f"Cookbook path does not exist: {cookbook_path}")
-    if not base.is_dir():  # codeql[py/path-injection]
+    if not base.is_dir():  # codeql[py/path-injection]  # lgtm[py/path-injection]
         raise ValueError(f"Cookbook path is not a directory: {cookbook_path}")
 
     direct_dependencies: list[str] = []
@@ -1432,8 +1448,10 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
 
     # Read metadata.rb for dependencies using safe join to prevent traversal
     metadata_path = _safe_join(base, METADATA_FILENAME)
-    if metadata_path.exists():  # codeql[py/path-injection]
-        with metadata_path.open(encoding="utf-8", errors="ignore") as f:
+    if metadata_path.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
+        with metadata_path.open(
+            encoding="utf-8", errors="ignore"
+        ) as f:  # lgtm[py/path-injection]
             content = f.read()
 
         # Parse dependencies
@@ -1442,8 +1460,10 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
 
     # Read Berksfile for additional dependencies using safe join
     berksfile_path = _safe_join(base, "Berksfile")
-    if berksfile_path.exists():  # codeql[py/path-injection]
-        with berksfile_path.open(encoding="utf-8", errors="ignore") as f:
+    if berksfile_path.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
+        with berksfile_path.open(
+            encoding="utf-8", errors="ignore"
+        ) as f:  # lgtm[py/path-injection]
             content = f.read()
 
         cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)

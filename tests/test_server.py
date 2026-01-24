@@ -3100,8 +3100,10 @@ def test_generate_ansible_vault_from_databags_success():
             "id": "database",
             "password": {"encrypted_data": "***encrypted_password***"},
         }  # NOSONAR - Test data for encrypted databag conversion
-        secrets_file.write_text(json.dumps(secrets_data))
         # codeql[py/clear-text-storage-sensitive-data] - Test fixture only
+        secrets_file.write_text(
+            json.dumps(secrets_data)
+        )  # lgtm[py/clear-text-storage-sensitive-data]
 
         result = generate_ansible_vault_from_databags(str(databags_path))
         assert "Ansible Vault" in result or "Error:" not in result

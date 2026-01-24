@@ -1,0 +1,5 @@
+mutants/
+python-db/
+htmlcov/
+site/
+.codeql/
