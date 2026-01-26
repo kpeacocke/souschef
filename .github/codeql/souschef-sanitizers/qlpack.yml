@@ -1,0 +1,5 @@
+name: souschef/souschef-sanitizers
+version: 0.0.0
+libraryPathDependencies: codeql/python-all
+dependencies:
+  codeql/python-all: "*"
