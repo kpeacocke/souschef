@@ -15741,9 +15741,7 @@ def test_get_cookbook_package_config_docker():
     assert result["module"] == "ansible.builtin.apt"
     assert "docker-ce" in result["params"]["name"]
     assert "docker-ce-cli" in result["params"]["name"]
-    assert (  # codeql[py/incomplete-url-substring-sanitization]
-        "containerd.io" in result["params"]["name"]
-    )
+    assert "containerd.io" in result["params"]["name"]
 
 
 def test_get_cookbook_resource_config_known_resource():

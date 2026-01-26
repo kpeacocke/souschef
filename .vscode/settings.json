@@ -105,5 +105,6 @@
     "go.testExplorer.showDynamicSubtests": true,
     "go.testExplorer.showTestCoverage": true,
     "python-envs.pythonProjects": [],
-    "snyk.advanced.autoSelectOrganization": true
+    "snyk.advanced.autoSelectOrganization": true,
+    "codeQL.createQuery.qlPackLocation": "/Users/kpeacocke/code/souschef"
 }

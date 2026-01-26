@@ -66,6 +66,7 @@ ENV/
 .devcontainer/*
 !.devcontainer/devcontainer.json
 !.devcontainer/post-create.sh
+!.devcontainer/Dockerfile
 
 # macOS
 .DS_Store
@@ -81,7 +82,10 @@ Thumbs.db
 .github/instructions/snyk_rules.instructions.md
 
 # CodeQL Security Scanning
+.codeql/
 .codeql-db/
+codeql-db/
+python-db/
 codeql-results/
 *.sarif
 

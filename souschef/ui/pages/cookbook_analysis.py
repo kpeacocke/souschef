@@ -436,16 +436,14 @@ def _extract_zip_securely(archive_path: Path, extraction_dir: Path) -> None:
         # Safe extraction with manual path handling
         for info in zip_ref.filelist:
             # Construct safe relative path
-            # codeql[py/path-injection]: safe_path from _get_safe_extraction_path
+
             safe_path = _get_safe_extraction_path(info.filename, extraction_dir)
 
             if info.is_dir():
-                # codeql[py/path-injection]: safe_path validated to prevent traversal
                 safe_path.mkdir(parents=True, exist_ok=True)
             else:
-                # codeql[py/path-injection]: parent from validated safe_path
                 safe_path.parent.mkdir(parents=True, exist_ok=True)
-                # codeql[py/path-injection]: safe_path validated in extraction_dir
+
                 with zip_ref.open(info) as source, safe_path.open("wb") as target:
                     # Read in chunks to control memory usage
                     while True:
@@ -523,14 +521,11 @@ def _pre_scan_tar_members(members):
 def _extract_tar_members(tar_ref, members, extraction_dir):
     """Extract validated TAR members to the extraction directory."""
     for member in members:
-        # codeql[py/path-injection]: safe_path from _get_safe_extraction_path
         safe_path = _get_safe_extraction_path(member.name, extraction_dir)
         # snyk[python/tarslip]: safe_path contains extraction_dir
         if member.isdir():
-            # codeql[py/path-injection]: safe_path validated against traversal
             safe_path.mkdir(parents=True, exist_ok=True)
         else:
-            # codeql[py/path-injection]: parent from validated safe_path
             safe_path.parent.mkdir(parents=True, exist_ok=True)
             _extract_file_content(tar_ref, member, safe_path)
 
@@ -617,7 +612,9 @@ def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
 
     # Normalise separators and join using a containment-checked join
     normalized = filename.replace("\\", "/").strip("/")
-    safe_path = _safe_join(extraction_dir.resolve(), normalized)
+    safe_path = _ensure_within_base_path(
+        _safe_join(extraction_dir.resolve(), normalized), extraction_dir.resolve()
+    )
 
     return safe_path
 
@@ -851,11 +848,14 @@ def _validate_and_list_cookbooks(cookbook_path: str) -> None:
     if safe_dir is None:
         return
 
-    if (
-        safe_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        and safe_dir.is_dir()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-    ):
-        _list_and_display_cookbooks(safe_dir)
+    # Validate the safe directory before use
+    dir_exists: bool = safe_dir.exists()
+    if dir_exists:
+        dir_is_dir: bool = safe_dir.is_dir()
+        if dir_is_dir:
+            _list_and_display_cookbooks(safe_dir)
+        else:
+            st.error(f"Directory not found: {safe_dir}")
     else:
         st.error(f"Directory not found: {safe_dir}")
 
@@ -1232,7 +1232,7 @@ def _analyze_with_ai(
         try:
             normalized = _normalize_path(path_str)
             recipes_dir = normalized / "recipes"
-            # codeql[py/path-injection]: Path validated by _normalize_path
+
             if recipes_dir.exists():
                 return len(list(recipes_dir.glob("*.rb")))
             return 0
@@ -1750,9 +1750,7 @@ def _validate_output_path(output_path: str) -> Path | None:
         base_dir = Path.cwd().resolve()
         # Use centralised containment validation
         validated = _ensure_within_base_path(safe_output_path, base_dir)
-        return (
-            validated if validated.exists() else None
-        )  # codeql[py/path-injection]  # lgtm[py/path-injection]
+        return validated if validated.exists() else None
     except ValueError:
         return None
 
@@ -1769,29 +1767,18 @@ def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
 
     """
     files_to_archive = []
-    base_path = safe_output_path.resolve()  # lgtm[py/path-injection]
+    # Path is already normalized; validate files within the output path are contained
+    base_path = safe_output_path
 
-    for root, _dirs, files in os.walk(
-        base_path
-    ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        root_path = Path(root).resolve()  # lgtm[py/path-injection]
-        try:
-            # Ensure each subdirectory is contained within base
-            _ensure_within_base_path(root_path, base_path)
-        except ValueError:
-            continue
+    for root, _dirs, files in os.walk(base_path):
+        root_path = _ensure_within_base_path(Path(root), base_path)
 
         for file in files:
             safe_name = _sanitize_filename(file)
-            candidate_path = (
-                root_path / safe_name
-            ).resolve()  # lgtm[py/path-injection]
+            candidate_path = _ensure_within_base_path(root_path / safe_name, base_path)
             try:
                 # Ensure each file is contained within base
-                _ensure_within_base_path(candidate_path, base_path)
-                arcname = candidate_path.relative_to(
-                    base_path
-                )  # codeql[py/path-injection]
+                arcname = candidate_path.relative_to(base_path)
                 files_to_archive.append((candidate_path, arcname))
             except ValueError:
                 continue
@@ -1833,9 +1820,7 @@ def _display_conversion_download_options(conversion_result: dict):
         st.error("Invalid output path")
         return
 
-    if (
-        safe_output_path.exists()
-    ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
+    if safe_output_path.exists():
         archive_data = _create_roles_zip_archive(safe_output_path)
 
         st.download_button(
@@ -2030,7 +2015,6 @@ def _update_progress(status_text, cookbook_name, current, total):
 def _find_cookbook_directory(cookbook_path, cookbook_name):
     """Find the directory for a specific cookbook by checking metadata."""
     try:
-        # codeql[py/path-injection]: cookbook_path validated via _normalize_path
         normalized_path = _normalize_path(cookbook_path)
         for d in normalized_path.iterdir():
             if d.is_dir():

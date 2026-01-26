@@ -5,5 +5,6 @@ paths-ignore:
 queries:
   - uses: security-extended
   - uses: security-and-quality
+  - uses: ./codeql-custom-queries-python
 
 disable-default-queries: false

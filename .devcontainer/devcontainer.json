@@ -2,9 +2,11 @@
     "name": "SousChef",
     "build": {
         "dockerfile": "Dockerfile",
+        "context": "..",
         "args": {
             "SNYK_VERSION": "latest",
-            "CODEQL_VERSION": "latest"
+            "CODEQL_VERSION": "latest",
+            "SONAR_SCANNER_VERSION": "latest"
         }
     },
     "workspaceFolder": "/workspaces/souschef",
@@ -117,7 +119,7 @@
             ]
         }
     },
-    "onCreateCommand": "curl -sSL https://install.python-poetry.org | python3 - && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc",
+    "onCreateCommand": "echo '✅ Container created - Poetry and tools available'",
     "postCreateCommand": "chmod +x .devcontainer/post-create.sh && .devcontainer/post-create.sh",
     "remoteUser": "vscode",
     "mounts": [

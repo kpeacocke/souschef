@@ -70,7 +70,6 @@ def _normalize_path(path_str: str | Path) -> Path:
         # Path.resolve() normalizes the path, resolving symlinks and ".." sequences
         # CodeQL recognizes this as path normalization/sanitization
         normalized: Path = path_obj.expanduser().resolve()
-        # codeql[py/path-injection]: This function IS the sanitizer
         return normalized
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
