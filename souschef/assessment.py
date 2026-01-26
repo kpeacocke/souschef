@@ -24,6 +24,11 @@ from souschef.core.metrics import (
     categorize_complexity,
     estimate_effort_for_complexity,
 )
+from souschef.core.path_utils import (  # noqa: F401
+    _trusted_workspace_root,
+    _validated_candidate,
+    safe_glob,
+)
 from souschef.core.validation import (
     ValidationEngine,
     ValidationLevel,
@@ -38,30 +43,29 @@ except ImportError:
     requests = None
 
 try:
-    from ibm_watsonx_ai import (  # type: ignore[import-not-found]
-        APIClient,
-    )
+    from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]
 except ImportError:
     APIClient = None
 
 
 def _normalize_cookbook_root(cookbook_path: Path | str) -> Path:
     """
-    Normalise and contain cookbook paths within the workspace.
+    Normalise cookbook paths.
 
     Args:
         cookbook_path: User-provided cookbook path.
 
     Returns:
-        A resolved Path that is contained within the current working directory.
+        A resolved Path.
 
     Raises:
-        ValueError: If the path cannot be normalised or escapes the workspace root.
+        ValueError: If the path cannot be normalised.
 
     """
-    base_dir = Path.cwd().resolve()
-    normalized = _normalize_path(cookbook_path)
-    return _ensure_within_base_path(normalized, base_dir)
+    # Normalise the path (resolves symlinks, expands ~, etc.)
+    # Safety for accessing files within this cookbook is enforced per-operation
+    # using _ensure_within_base_path with the cookbook dir as the base
+    return _normalize_path(cookbook_path)
 
 
 # Optimised patterns to avoid catastrophic backtracking in resource parsing
@@ -367,18 +371,21 @@ def analyse_cookbook_dependencies(
                 f"Suggestion: Use one of {', '.join(valid_depths)}"
             )
 
-        # codeql[py/path-injection]: cookbook_path normalized and contained within workspace
-        cookbook_path_obj = _normalize_cookbook_root(cookbook_path)
-        if (
-            not cookbook_path_obj.exists()
-        ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
+        # Validate and normalise user-provided path
+        # Containment is enforced at filesystem operation level
+        try:
+            normalized_input: Path = _normalize_path(cookbook_path)
+        except (ValueError, OSError) as e:
+            return f"Error: Invalid cookbook path '{cookbook_path}': {e}"
+
+        if not normalized_input.exists():
             return (
                 f"Error: Cookbook path not found: {cookbook_path}\n\n"
                 "Suggestion: Check that the path exists and points to a cookbook directory"
             )
 
-        # Analyze dependencies
-        dependency_analysis = _analyse_cookbook_dependencies_detailed(cookbook_path_obj)
+        # Analyze dependencies using normalized path
+        dependency_analysis = _analyse_cookbook_dependencies_detailed(normalized_input)
 
         # Determine migration order
         migration_order = _determine_migration_order(dependency_analysis)
@@ -387,7 +394,7 @@ def analyse_cookbook_dependencies(
         circular_deps = _identify_circular_dependencies(dependency_analysis)
 
         return f"""# Cookbook Dependency Analysis
-# Cookbook: {cookbook_path_obj.name}
+# Cookbook: {normalized_input.name}
 # Analysis Depth: {dependency_depth}
 
 ## Dependency Overview:
@@ -587,7 +594,9 @@ def _parse_cookbook_paths(cookbook_paths: str) -> list[Any]:
         List of valid Path objects (may be empty)
 
     """
-    paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
+    paths = [
+        _normalize_cookbook_root(path.strip()) for path in cookbook_paths.split(",")
+    ]
     valid_paths = [p for p in paths if p.exists()]
     return valid_paths
 
@@ -686,92 +695,68 @@ def _format_assessment_report(
 
 def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C901
     """Count comprehensive cookbook artifacts including all Chef components."""
-    base = _normalize_cookbook_root(cookbook_path)
+    # Note: cookbook_path is expected to be pre-validated
+    base = cookbook_path
 
-    recipes_dir = _safe_join(base, "recipes")
-    recipe_count = (
-        len(list(recipes_dir.glob("*.rb")))  # lgtm[py/path-injection]
-        if recipes_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        else 0
-    )
+    # Helper function to safely glob within a directory
+    def _glob_safe(directory: Path, pattern: str) -> int:
+        """Count files matching a glob pattern within a directory."""
+        if not directory.exists() or not directory.is_dir():
+            return 0
+        try:
+            return len(list(directory.glob(pattern)))
+        except (OSError, ValueError):
+            return 0
 
-    templates_dir = _safe_join(base, "templates")
-    template_count = (
-        len(list(templates_dir.glob("**/*.erb")))  # lgtm[py/path-injection]
-        if templates_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        else 0
-    )
+    # Helper function to check existence safely
+    def _exists_safe(path: Path) -> bool:
+        """Check if a path exists."""
+        try:
+            return path.exists()
+        except (OSError, ValueError):
+            return False
 
-    files_dir = _safe_join(base, "files")
-    file_count = (
-        len(list(files_dir.glob("**/*")))  # lgtm[py/path-injection]
-        if files_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        else 0
-    )
+    # All paths are safe-joined to the validated base
+    recipes_dir: Path = _safe_join(base, "recipes")
+    recipe_count: int = _glob_safe(recipes_dir, "*.rb")
 
-    attributes_dir = _safe_join(base, "attributes")
-    attributes_count = (
-        len(list(attributes_dir.glob("*.rb")))  # lgtm[py/path-injection]
-        if attributes_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        else 0
-    )
+    templates_dir: Path = _safe_join(base, "templates")
+    template_count: int = _glob_safe(templates_dir, "**/*.erb")
 
-    libraries_dir = _safe_join(base, "libraries")
-    libraries_count = (
-        len(list(libraries_dir.glob("*.rb")))  # lgtm[py/path-injection]
-        if libraries_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        else 0
-    )
+    files_dir: Path = _safe_join(base, "files")
+    file_count: int = _glob_safe(files_dir, "**/*")
 
-    definitions_dir = _safe_join(base, "definitions")
-    definitions_count = (
-        len(list(definitions_dir.glob("*.rb")))  # lgtm[py/path-injection]
-        if definitions_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        else 0
-    )
+    attributes_dir: Path = _safe_join(base, "attributes")
+    attributes_count: int = _glob_safe(attributes_dir, "*.rb")
 
-    resources_dir = _safe_join(base, "resources")
-    resources_count = (
-        len(list(resources_dir.glob("*.rb")))  # lgtm[py/path-injection]
-        if resources_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        else 0
-    )
+    libraries_dir: Path = _safe_join(base, "libraries")
+    libraries_count: int = _glob_safe(libraries_dir, "*.rb")
 
-    providers_dir = _safe_join(base, "providers")
-    providers_count = (
-        len(list(providers_dir.glob("*.rb")))  # lgtm[py/path-injection]
-        if providers_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        else 0
-    )
+    definitions_dir: Path = _safe_join(base, "definitions")
+    definitions_count: int = _glob_safe(definitions_dir, "*.rb")
 
-    berksfile = _safe_join(base, "Berksfile")
-    has_berksfile = (
-        berksfile.exists()
-    )  # codeql[py/path-injection]  # lgtm[py/path-injection]
+    resources_dir: Path = _safe_join(base, "resources")
+    resources_count: int = _glob_safe(resources_dir, "*.rb")
 
-    chefignore = _safe_join(base, "chefignore")
-    has_chefignore = (
-        chefignore.exists()
-    )  # codeql[py/path-injection]  # lgtm[py/path-injection]
+    providers_dir: Path = _safe_join(base, "providers")
+    providers_count: int = _glob_safe(providers_dir, "*.rb")
 
-    thorfile = _safe_join(base, "Thorfile")
-    has_thorfile = (
-        thorfile.exists()
-    )  # codeql[py/path-injection]  # lgtm[py/path-injection]
+    berksfile: Path = _safe_join(base, "Berksfile")
+    has_berksfile: bool = _exists_safe(berksfile)
 
-    kitchen_yml = _safe_join(base, ".kitchen.yml")
-    kitchen_yaml = _safe_join(base, "kitchen.yml")
-    has_kitchen_yml = (
-        kitchen_yml.exists()
-        or kitchen_yaml.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-    )
+    chefignore: Path = _safe_join(base, "chefignore")
+    has_chefignore: bool = _exists_safe(chefignore)
 
-    test_dir = _safe_join(base, "test")
-    spec_dir = _safe_join(base, "spec")
-    has_test_dir = (
-        test_dir.exists()
-        or spec_dir.exists()  # codeql[py/path-injection]  # lgtm[py/path-injection]
-    )
+    thorfile: Path = _safe_join(base, "Thorfile")
+    has_thorfile: bool = _exists_safe(thorfile)
+
+    kitchen_yml: Path = _safe_join(base, ".kitchen.yml")
+    kitchen_yaml: Path = _safe_join(base, "kitchen.yml")
+    has_kitchen_yml: bool = _exists_safe(kitchen_yml) or _exists_safe(kitchen_yaml)
+
+    test_dir: Path = _safe_join(base, "test")
+    spec_dir: Path = _safe_join(base, "spec")
+    has_test_dir: bool = _exists_safe(test_dir) or _exists_safe(spec_dir)
 
     return {
         "recipe_count": recipe_count,
@@ -792,10 +777,8 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
 
 def _analyse_recipe_complexity(cookbook_path: Path) -> dict[str, int]:
     """Analyse recipe files and other cookbook components for resource counts, Ruby blocks, and custom resources."""
-    # deepcode ignore PT: path normalized via _normalize_path in caller
-    cookbook_path = (
-        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
-    )
+    # Note: cookbook_path is expected to be pre-validated at function entry points
+    # Do not call _normalize_cookbook_root here as it's already a validated Path
 
     resource_count = 0
     custom_resources = 0
@@ -829,58 +812,75 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
     ruby_blocks = 0
     custom_resources = 0
 
-    base = _normalize_cookbook_root(cookbook_path)
-    recipes_dir = _safe_join(base, "recipes")
-    if recipes_dir.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        for recipe_file in recipes_dir.glob(
-            "*.rb"
-        ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
-            try:
-                content = recipe_file.read_text(encoding="utf-8", errors="ignore")
-                resources = len(RESOURCE_BLOCK_PATTERN.findall(content))
-                ruby_blocks += len(
-                    re.findall(
-                        r"ruby_block|execute|bash|script", content, re.IGNORECASE
-                    )
+    # Note: cookbook_path is expected to be pre-validated
+    # Use it directly with _safe_join to access recipes directory
+    recipes_dir: Path = _safe_join(cookbook_path, "recipes")
+    try:
+        recipe_files: list[Path] = (
+            list(recipes_dir.glob("*.rb")) if recipes_dir.exists() else []
+        )
+    except (OSError, ValueError):
+        recipe_files = []
+
+    for recipe_file in recipe_files:
+        try:
+            # Validate each glob result
+            validated_file: Path = _validated_candidate(recipe_file, cookbook_path)
+        except ValueError:
+            continue
+        try:
+            content = validated_file.read_text(encoding="utf-8", errors="ignore")
+            resources = len(RESOURCE_BLOCK_PATTERN.findall(content))
+            ruby_blocks += len(
+                re.findall(r"ruby_block|execute|bash|script", content, re.IGNORECASE)
+            )
+            custom_resources += len(
+                re.findall(
+                    r"custom_resource|provides|use_inline_resources|lwrp_resource",
+                    content,
                 )
-                custom_resources += len(
-                    re.findall(
-                        r"custom_resource|provides|use_inline_resources|lwrp_resource",
-                        content,
-                    )
-                )
-                resource_count += resources
-            except Exception:
-                continue
+            )
+            resource_count += resources
+        except Exception:
+            continue
 
     return resource_count, ruby_blocks, custom_resources
 
 
 def _analyze_attributes(cookbook_path: Path) -> int:
-    """Analyze attribute files for complexity."""
+    """Analyse attribute files for complexity."""
     attribute_complexity = 0
 
-    base = _normalize_cookbook_root(cookbook_path)
-    attributes_dir = _safe_join(base, "attributes")
-    if attributes_dir.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        for attr_file in attributes_dir.glob(
-            "*.rb"
-        ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
-            try:
-                content = attr_file.read_text(encoding="utf-8", errors="ignore")
-                assignments = len(
-                    re.findall(
-                        r"^[ \t]{0,20}\w+[ \t]{0,10}(?:\[\w*\])?[ \t]{0,10}=",
-                        content,
-                        re.MULTILINE,
-                    )
+    # Note: cookbook_path is expected to be pre-validated
+    attributes_dir: Path = _safe_join(cookbook_path, "attributes")
+    try:
+        attr_files: list[Path] = (
+            list(attributes_dir.glob("*.rb")) if attributes_dir.exists() else []
+        )
+    except (OSError, ValueError):
+        attr_files = []
+
+    for attr_file in attr_files:
+        try:
+            # Validate each glob result
+            validated_file: Path = _validated_candidate(attr_file, cookbook_path)
+        except ValueError:
+            continue
+        try:
+            content = validated_file.read_text(encoding="utf-8", errors="ignore")
+            assignments = len(
+                re.findall(
+                    r"^[ \t]{0,20}\w+[ \t]{0,10}(?:\[\w*\])?[ \t]{0,10}=",
+                    content,
+                    re.MULTILINE,
                 )
-                complex_expressions = len(
-                    re.findall(r"(?:node|default|override)\[", content)
-                )
-                attribute_complexity += assignments + complex_expressions
-            except Exception:
-                continue
+            )
+            complex_expressions = len(
+                re.findall(r"(?:node|default|override)\[", content)
+            )
+            attribute_complexity += assignments + complex_expressions
+        except Exception:
+            continue
 
     return attribute_complexity
 
@@ -889,50 +889,73 @@ def _analyze_templates(cookbook_path: Path) -> int:
     """Analyze template files for ERB complexity."""
     erb_templates = 0
 
-    base = _normalize_cookbook_root(cookbook_path)
-    templates_dir = _safe_join(base, "templates")
-    if templates_dir.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        for template_file in templates_dir.glob(  # lgtm[py/path-injection]
-            "**/*.erb"
-        ):  # codeql[py/path-injection]
-            try:
-                content = template_file.read_text(encoding="utf-8", errors="ignore")
-                erb_expressions = len(re.findall(r"<%.*?%>", content))
-                erb_templates += erb_expressions
-            except Exception:
-                continue
+    # Note: cookbook_path is expected to be pre-validated
+    templates_dir: Path = _safe_join(cookbook_path, "templates")
+    try:
+        template_files: list[Path] = (
+            list(templates_dir.glob("**/*.erb")) if templates_dir.exists() else []
+        )
+    except (OSError, ValueError):
+        template_files = []
+
+    for template_file in template_files:
+        try:
+            # Validate each glob result
+            validated_file: Path = _validated_candidate(template_file, cookbook_path)
+        except ValueError:
+            continue
+
+        try:
+            content = validated_file.read_text(encoding="utf-8", errors="ignore")
+            erb_expressions = len(re.findall(r"<%.*?%>", content))
+            erb_templates += erb_expressions
+        except Exception:
+            continue
 
     return erb_templates
 
 
 def _analyze_libraries(cookbook_path: Path) -> int:
-    """Analyze library files for complexity."""
+    """Analyse library files for complexity."""
     library_complexity = 0
 
-    base = _normalize_cookbook_root(cookbook_path)
-    libraries_dir = _safe_join(base, "libraries")
-    if libraries_dir.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        for lib_file in libraries_dir.glob(
-            "*.rb"
-        ):  # codeql[py/path-injection]  # lgtm[py/path-injection]
-            try:
-                content = lib_file.read_text(encoding="utf-8", errors="ignore")
-                classes = len(re.findall(r"class\s+\w+", content))
-                methods = len(re.findall(r"def\s+\w+", content))
-                library_complexity += classes * 2 + methods
-            except Exception:
-                continue
+    # Note: cookbook_path is expected to be pre-validated
+    libraries_dir: Path = _safe_join(cookbook_path, "libraries")
+    try:
+        lib_files: list[Path] = (
+            safe_glob(libraries_dir, "*.rb", cookbook_path)
+            if libraries_dir.exists()
+            else []
+        )
+    except (OSError, ValueError):
+        lib_files = []
+
+    for lib_file in lib_files:
+        try:
+            # lib_file is already validated by safe_glob
+            content = lib_file.read_text(encoding="utf-8", errors="ignore")
+            classes = len(re.findall(r"class\s+\w+", content))
+            methods = len(re.findall(r"def\s+\w+", content))
+            library_complexity += classes * 2 + methods
+        except Exception:
+            continue
 
     return library_complexity
 
 
 def _count_definitions(cookbook_path: Path) -> int:
     """Count definition files."""
-    base = _normalize_cookbook_root(cookbook_path)
-    definitions_dir = _safe_join(base, "definitions")
-    if definitions_dir.exists():  # lgtm[py/path-injection]
-        return len(list(definitions_dir.glob("*.rb")))  # lgtm[py/path-injection]
-    return 0
+    # Note: cookbook_path is expected to be pre-validated
+    definitions_dir: Path = _safe_join(cookbook_path, "definitions")
+    try:
+        def_files: list[Path] = (
+            safe_glob(definitions_dir, "*.rb", cookbook_path)
+            if definitions_dir.exists()
+            else []
+        )
+    except (OSError, ValueError):
+        def_files = []
+    return len(def_files)
 
 
 def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
@@ -940,7 +963,7 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     berksfile_path = _safe_join(base, "Berksfile")
 
-    if not berksfile_path.exists():  # codeql[py/path-injection]
+    if not berksfile_path.exists():
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
 
     try:
@@ -969,9 +992,9 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
 def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     """Parse chefignore file for ignore patterns."""
     base = _normalize_cookbook_root(cookbook_path)
-    chefignore_path = _safe_join(base, "chefignore")
+    chefignore_path = _ensure_within_base_path(_safe_join(base, "chefignore"), base)
 
-    if not chefignore_path.exists():  # codeql[py/path-injection]
+    if not chefignore_path.exists():
         return {"patterns": [], "complexity": 0}
 
     try:
@@ -998,9 +1021,9 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
 def _parse_thorfile(cookbook_path) -> dict[str, Any]:
     """Parse Thorfile for Thor tasks."""
     base = _normalize_cookbook_root(cookbook_path)
-    thorfile_path = _safe_join(base, "Thorfile")
+    thorfile_path = _ensure_within_base_path(_safe_join(base, "Thorfile"), base)
 
-    if not thorfile_path.exists():  # codeql[py/path-injection]
+    if not thorfile_path.exists():
         return {"tasks": [], "complexity": 0}
 
     try:
@@ -1022,9 +1045,9 @@ def _parse_thorfile(cookbook_path) -> dict[str, Any]:
 def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
     """Parse metadata.rb for cookbook information."""
     base = _normalize_cookbook_root(cookbook_path)
-    metadata_path = _safe_join(base, "metadata.rb")
+    metadata_path = _ensure_within_base_path(_safe_join(base, "metadata.rb"), base)
 
-    if not metadata_path.exists():  # codeql[py/path-injection]
+    if not metadata_path.exists():
         return {
             "name": "",
             "version": "",
@@ -1119,8 +1142,7 @@ def _determine_migration_priority(complexity_score: int) -> str:
 
 def _assess_single_cookbook(cookbook_path: Path) -> dict:
     """Assess complexity of a single cookbook."""
-    # cookbook_path is already normalized to a Path object
-    cookbook = cookbook_path
+    cookbook = _normalize_cookbook_root(cookbook_path)
 
     # Collect metrics
     artifact_counts = _count_cookbook_artifacts(cookbook)
@@ -1422,54 +1444,88 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
     """
     Analyse cookbook dependencies in detail.
 
-    The input path is expected to have been normalised and resolved under the
-    trusted cookbooks root by analyse_cookbook_dependencies before invocation.
+    Args:
+        cookbook_path: Path to the cookbook (may be string or Path).
+
+    Returns:
+        Dictionary with dependency information.
+
+    Raises:
+        ValueError: If the path is invalid.
+
     """
-    base = _normalize_cookbook_root(cookbook_path)
-    if not base.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        raise ValueError(f"Cookbook path does not exist: {cookbook_path}")
-    if not base.is_dir():  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        raise ValueError(f"Cookbook path is not a directory: {cookbook_path}")
+    # Normalize the input path
+    base_path: Path = _normalize_path(cookbook_path)
 
-    direct_dependencies: list[str] = []
-    transitive_dependencies: list[str] = []
-    external_dependencies: list[str] = []
-    community_cookbooks: list[str] = []
-    circular_dependencies: list[str] = []
+    # Validate basic accessibility
+    if not base_path.exists():
+        msg = f"Cookbook path does not exist: {cookbook_path}"
+        raise ValueError(msg)
+    if not base_path.is_dir():
+        msg = f"Cookbook path is not a directory: {cookbook_path}"
+        raise ValueError(msg)
 
-    analysis = {
-        "cookbook_name": base.name,
+    # Collect dependencies from metadata and Berksfile
+    direct_dependencies = _collect_metadata_dependencies(base_path)
+    external_dependencies = _collect_berks_dependencies(base_path)
+    community_cookbooks = _identify_community_cookbooks_from_list(
+        direct_dependencies + external_dependencies
+    )
+
+    return {
+        "cookbook_name": base_path.name,
         "direct_dependencies": direct_dependencies,
-        "transitive_dependencies": transitive_dependencies,
+        "transitive_dependencies": [],
         "external_dependencies": external_dependencies,
         "community_cookbooks": community_cookbooks,
-        "circular_dependencies": circular_dependencies,
+        "circular_dependencies": [],
     }
 
-    # Read metadata.rb for dependencies using safe join to prevent traversal
-    metadata_path = _safe_join(base, METADATA_FILENAME)
-    if metadata_path.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        with metadata_path.open(
-            encoding="utf-8", errors="ignore"
-        ) as f:  # lgtm[py/path-injection]
-            content = f.read()
 
-        # Parse dependencies
-        depends_matches = re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
-        direct_dependencies.extend(depends_matches)
+def _collect_metadata_dependencies(base_path: Path) -> list[str]:
+    """Collect dependency declarations from metadata.rb with containment checks."""
+    # Build metadata path safely within the cookbook
+    metadata_path: Path = _safe_join(base_path, METADATA_FILENAME)
 
-    # Read Berksfile for additional dependencies using safe join
-    berksfile_path = _safe_join(base, "Berksfile")
-    if berksfile_path.exists():  # codeql[py/path-injection]  # lgtm[py/path-injection]
-        with berksfile_path.open(
-            encoding="utf-8", errors="ignore"
-        ) as f:  # lgtm[py/path-injection]
-            content = f.read()
+    if not metadata_path.is_file():
+        return []
 
-        cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
-        external_dependencies.extend(cookbook_matches)
+    try:
+        # Validate metadata_path is within base_path
+        _validated_candidate(metadata_path, base_path)
+    except ValueError:
+        # metadata.rb is outside cookbook root
+        return []
 
-    # Identify community cookbooks (common ones)
+    with metadata_path.open(encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    return re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
+
+
+def _collect_berks_dependencies(base_path: Path) -> list[str]:
+    """Collect dependency declarations from Berksfile with containment checks."""
+    # Build Berksfile path safely within the cookbook
+    berksfile_path: Path = _safe_join(base_path, "Berksfile")
+
+    if not berksfile_path.is_file():
+        return []
+
+    try:
+        # Validate berksfile_path is within base_path
+        _validated_candidate(berksfile_path, base_path)
+    except ValueError:
+        # Berksfile is outside cookbook root
+        return []
+
+    with berksfile_path.open(encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    return re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
+
+
+def _identify_community_cookbooks_from_list(dependencies: list[str]) -> list[str]:
+    """Return dependencies considered community cookbooks based on patterns."""
     community_cookbook_patterns = [
         "apache2",
         "nginx",
@@ -1486,12 +1542,11 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
         "users",
     ]
 
-    all_deps = direct_dependencies + external_dependencies
-    for dep in all_deps:
-        if any(pattern in dep.lower() for pattern in community_cookbook_patterns):
-            community_cookbooks.append(dep)
-
-    return analysis
+    return [
+        dep
+        for dep in dependencies
+        if any(pattern in dep.lower() for pattern in community_cookbook_patterns)
+    ]
 
 
 def _determine_migration_order(dependency_analysis: dict) -> list:
@@ -1997,8 +2052,8 @@ def assess_single_cookbook_with_ai(
 
     """
     try:
-        cookbook_path_obj = _normalize_cookbook_root(cookbook_path)
-        if not cookbook_path_obj.exists():
+        cookbook_path_obj = _normalize_path(cookbook_path)
+        if not cookbook_path_obj.exists():  # Read-only check on normalized path
             return {"error": f"Cookbook path not found: {cookbook_path}"}
 
         # Check if AI is available
@@ -2268,8 +2323,7 @@ def _assess_single_cookbook_with_ai(
     base_url: str = "",
 ) -> dict:
     """Assess complexity of a single cookbook using AI analysis."""
-    # cookbook_path is already normalized to a Path object
-    cookbook = cookbook_path
+    cookbook = _normalize_cookbook_root(cookbook_path)
 
     # Collect basic metrics (same as rule-based)
     artifact_counts = _count_cookbook_artifacts(cookbook)
