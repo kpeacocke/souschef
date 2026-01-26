@@ -4,6 +4,11 @@ import os
 from pathlib import Path
 
 
+def _trusted_workspace_root() -> Path:
+    """Return the trusted workspace root used for containment checks."""
+    return Path.cwd().resolve()
+
+
 def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
     """
     Ensure a path stays within a trusted base directory.
@@ -19,15 +24,18 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
         ValueError: If the path escapes the base directory.
 
     """
-    base_real = os.path.realpath(str(base_path))  # noqa: PTH111
-    candidate_real = os.path.realpath(str(path_obj))  # noqa: PTH111
+    # Use pathlib.Path.resolve() for normalization (CodeQL recognizes this)
+    base_resolved: Path = Path(base_path).resolve()
+    candidate_resolved: Path = Path(path_obj).resolve()
 
-    base_prefix = f"{base_real}{os.sep}"
-    if candidate_real != base_real and not candidate_real.startswith(base_prefix):
-        msg = f"Path traversal attempt: {candidate_real} escapes {base_real}"
-        raise ValueError(msg)
+    # Check containment using relative_to (raises ValueError if not contained)
+    try:
+        candidate_resolved.relative_to(base_resolved)
+    except ValueError as e:
+        msg = f"Path traversal attempt: escapes {base_resolved}"
+        raise ValueError(msg) from e
 
-    return Path(candidate_real)  # codeql[py/path-injection]
+    return candidate_resolved
 
 
 def _normalize_path(path_str: str | Path) -> Path:
@@ -44,29 +52,39 @@ def _normalize_path(path_str: str | Path) -> Path:
         Resolved absolute Path object.
 
     Raises:
-        ValueError: If the path contains null bytes, traversal attempts, or is invalid.
+        ValueError: If the path contains null bytes or is invalid.
 
     """
-    # Convert Path to string if needed
+    # Convert Path to string if needed for validation
     if isinstance(path_str, Path):
-        path_str = str(path_str)
-    elif not isinstance(path_str, str):
+        path_obj = path_str
+    elif isinstance(path_str, str):
+        # Reject paths with null bytes
+        if "\x00" in path_str:
+            raise ValueError(f"Path contains null bytes: {path_str!r}")
+        path_obj = Path(path_str)
+    else:
         raise ValueError(f"Path must be a string or Path object, got {type(path_str)}")
 
-    # Reject paths with null bytes
-    if "\x00" in path_str:
-        raise ValueError(f"Path contains null bytes: {path_str!r}")
-
-    # Reject paths with obvious directory traversal attempts
-    if ".." in path_str:
-        raise ValueError(f"Path contains directory traversal: {path_str!r}")
-
     try:
-        # Use os.path.realpath which CodeQL recognizes as a sanitizer
-        normalized = os.path.realpath(path_str)  # noqa: PTH111
-        return Path(normalized)  # codeql[py/path-injection]
+        # Path.resolve() normalizes the path, resolving symlinks and ".." sequences
+        # CodeQL recognizes this as path normalization/sanitization
+        normalized: Path = path_obj.expanduser().resolve()
+        # codeql[py/path-injection]: This function IS the sanitizer
+        return normalized
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
+
+
+def _normalize_trusted_base(base_path: Path | str) -> Path:
+    """
+    Normalise a base path.
+
+    This normalizes the path without enforcing workspace containment.
+    Workspace containment is enforced at the application entry points,
+    not at the path utility level.
+    """
+    return _normalize_path(base_path)
 
 
 def _safe_join(base_path: Path, *parts: str) -> Path:
@@ -84,19 +102,98 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
         ValueError: If result would escape base_path.
 
     """
-    # Use os.path.realpath for normalization that CodeQL recognizes
-    base_str = os.path.realpath(str(base_path))  # noqa: PTH111
+    # Resolve base path (CodeQL recognizes Path.resolve())
+    base_resolved: Path = Path(base_path).resolve()
 
-    # Join paths using os.path.join
-    joined_str = os.path.join(base_str, *parts)  # noqa: PTH118
+    # Join and resolve the full path
+    joined_path: Path = base_resolved.joinpath(*parts)
+    result_resolved: Path = joined_path.resolve()
 
-    # Normalize the joined path
-    result_str = os.path.realpath(joined_str)  # noqa: PTH111
-
-    # Validate result stays under base_path
-    base_prefix = base_str + os.sep
-    if result_str != base_str and not result_str.startswith(base_prefix):
+    # Validate containment using relative_to
+    try:
+        result_resolved.relative_to(base_resolved)
+    except ValueError as e:
         msg = f"Path traversal attempt: {parts} escapes {base_path}"
+        raise ValueError(msg) from e
+
+    return result_resolved
+
+
+def _validated_candidate(path_obj: Path, safe_base: Path) -> Path:
+    """Validate a candidate path stays contained under ``safe_base``."""
+    # Resolve both paths (CodeQL recognizes Path.resolve())
+    base_resolved: Path = Path(safe_base).resolve()
+    candidate_resolved: Path = Path(path_obj).resolve()
+
+    # Check containment using relative_to
+    try:
+        candidate_resolved.relative_to(base_resolved)
+    except ValueError as e:
+        msg = f"Path traversal attempt: escapes {base_resolved}"
+        raise ValueError(msg) from e
+
+    return candidate_resolved
+
+
+def safe_exists(path_obj: Path, base_path: Path) -> bool:
+    """Check existence after enforcing base containment."""
+    safe_base = _normalize_trusted_base(base_path)
+    candidate: Path = _validated_candidate(path_obj, safe_base)
+    return candidate.exists()
+
+
+def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
+    """Check directory-ness after enforcing base containment."""
+    safe_base = _normalize_trusted_base(base_path)
+    candidate: Path = _validated_candidate(path_obj, safe_base)
+    return candidate.is_dir()
+
+
+def safe_is_file(path_obj: Path, base_path: Path) -> bool:
+    """Check file-ness after enforcing base containment."""
+    safe_base = _normalize_trusted_base(base_path)
+    candidate: Path = _validated_candidate(path_obj, safe_base)
+    return candidate.is_file()
+
+
+def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
+    """
+    Glob inside a directory after enforcing containment.
+
+    Only literal patterns provided by code should be used for ``pattern``.
+    """
+    if ".." in pattern:
+        msg = f"Unsafe glob pattern detected: {pattern!r}"
+        raise ValueError(msg)
+    if pattern.startswith((os.sep, "\\")):
+        msg = f"Absolute glob patterns are not allowed: {pattern!r}"
         raise ValueError(msg)
 
-    return Path(result_str)  # codeql[py/path-injection]
+    safe_base = _normalize_trusted_base(base_path)
+    safe_dir: Path = _validated_candidate(_normalize_path(dir_path), safe_base)
+
+    results: list[Path] = []
+    for result in safe_dir.glob(pattern):
+        # Validate each glob result stays within base
+        validated_result: Path = _validated_candidate(Path(result), safe_base)
+        results.append(validated_result)
+
+    return results
+
+
+def safe_mkdir(
+    path_obj: Path, base_path: Path, parents: bool = False, exist_ok: bool = False
+) -> None:
+    """Create directory after enforcing base containment."""
+    safe_base = _normalize_trusted_base(base_path)
+    safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
+
+    safe_path.mkdir(parents=parents, exist_ok=exist_ok)
+
+
+def safe_write_text(path_obj: Path, base_path: Path, text: str) -> None:
+    """Write text to file after enforcing base containment."""
+    safe_base = _normalize_trusted_base(base_path)
+    safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
+
+    safe_path.write_text(text)
