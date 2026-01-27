@@ -10,7 +10,7 @@ ARG SONAR_SCANNER_VERSION=latest
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install Poetry, system packages, and optional tools
-# hadolint ignore=DL4006
+# hadolint ignore=DL3016,DL4006
 RUN curl -sSL https://install.python-poetry.org | python3 - && \
     ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
     poetry config virtualenvs.in-project true && \
