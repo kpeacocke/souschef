@@ -18,7 +18,7 @@ CODEQL_DIR=".codeql"
 DB_DIR="${CODEQL_DIR}/databases/python-db"
 CONFIG_DIR="${CODEQL_DIR}/config"
 REPORTS_DIR="${CODEQL_DIR}/reports"
-CODEQLIGNORE="${CONFIG_DIR}/.codeqlignore"
+export CODEQLIGNORE="${CONFIG_DIR}/.codeqlignore"
 
 # Function to print colored output
 print_status() {
@@ -44,14 +44,15 @@ check_codeql() {
         echo "Install from: https://github.com/github/codeql-cli-binaries/releases"
         exit 1
     fi
-    local version=$(codeql version)
+    local version
+    version=$(codeql version)
     print_success "CodeQL CLI found: ${version}"
 }
 
 # Function to build CodeQL database
 build_database() {
     print_status "Building CodeQL database for Python..."
-    
+
     if [ -d "${DB_DIR}" ]; then
         print_warning "Database already exists at ${DB_DIR}"
         read -p "Delete and rebuild? (y/N) " -n 1 -r
@@ -64,41 +65,38 @@ build_database() {
             return 0
         fi
     fi
-    
+
     mkdir -p "${DB_DIR}"
-    
+
     codeql database create "${DB_DIR}" \
         --language=python \
-        --source-root="${PROJECT_ROOT}" \
-        --codescanning-config="${CONFIG_DIR}/config.yml" \
-        --source-map-filters="${CODEQLIGNORE}" \
-        --skip-classification || {
+        --source-root="${PROJECT_ROOT}" || {
         print_error "Failed to create CodeQL database"
         rm -rf "${DB_DIR}"
         exit 1
     }
-    
+
     print_success "CodeQL database created successfully"
 }
 
 # Function to run analysis
 analyze() {
     print_status "Running CodeQL analysis..."
-    
+
     if [ ! -d "${DB_DIR}" ]; then
         print_error "Database not found. Run 'build' first."
         exit 1
     fi
-    
-    mkdir -p "${REPORTS_DIR}"
-    
+
+    mkdir -p "${REPORTS_DIR}/archive"
+
     # Archive previous latest.sarif if it exists
     if [ -f "${REPORTS_DIR}/latest.sarif" ]; then
         timestamp=$(date +%Y%m%d-%H%M%S)
         mv "${REPORTS_DIR}/latest.sarif" "${REPORTS_DIR}/archive/${timestamp}.sarif"
         print_status "Archived previous report to archive/${timestamp}.sarif"
     fi
-    
+
     codeql database analyze "${DB_DIR}" \
         --format=sarif-latest \
         --output="${REPORTS_DIR}/latest.sarif" \
@@ -106,12 +104,13 @@ analyze() {
         print_error "CodeQL analysis failed"
         exit 1
     }
-    
+
     print_success "Analysis complete"
-    
+
     # Count findings
     if command -v jq &> /dev/null; then
-        local find_count=$(jq '.runs[].results | length' "${REPORTS_DIR}/latest.sarif" | paste -sd+ - | bc)
+        local find_count
+        find_count=$(jq '.runs[].results | length' "${REPORTS_DIR}/latest.sarif" | paste -sd+ - | bc)
         echo "Total findings: ${find_count}"
     fi
 }
@@ -119,12 +118,12 @@ analyze() {
 # Function to clean databases
 clean_databases() {
     print_status "Cleaning CodeQL databases..."
-    
+
     if [ -d "${DB_DIR}" ]; then
         rm -rf "${DB_DIR}"
         print_success "Removed database at ${DB_DIR}"
     fi
-    
+
     mkdir -p "${DB_DIR}"
     touch "${DB_DIR}/.gitkeep"
     print_success "Database directory reset"
@@ -171,7 +170,7 @@ EOF
 # Main script
 main() {
     local command="${1:-analyze}"
-    
+
     case "${command}" in
         build)
             check_codeql

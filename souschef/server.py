@@ -264,11 +264,6 @@ from souschef.parsers.template import parse_template as _parse_template
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
 
-# Error message templates
-ERROR_FILE_NOT_FOUND = "Error: File not found at {path}"
-ERROR_IS_DIRECTORY = "Error: {path} is a directory, not a file"
-ERROR_PERMISSION_DENIED = "Error: Permission denied for {path}"
-
 # File constants
 METADATA_RB = "metadata.rb"
 

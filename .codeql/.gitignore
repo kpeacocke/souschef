@@ -17,5 +17,8 @@ __pycache__/
 
 # Keep configuration and results
 # config/ - NOT IGNORED (includes .codeqlignore and query pack config)
-# reports/ - NOT IGNORED (includes SARIF results for tracking)
 # queries/ - NOT IGNORED (includes custom query definitions)
+
+# Ignore SARIF reports (generated artifacts, not source)
+reports/*.sarif
+reports/**/*.sarif
