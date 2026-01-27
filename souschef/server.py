@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 from mcp.server import FastMCP
 
 # Import assessment functions with aliases to avoid name conflicts
@@ -519,7 +519,6 @@ def _extract_resource_subscriptions(
     return subscriptions
 
 
-@mcp.tool()
 def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
     """
     Parse all control files from an InSpec profile directory.

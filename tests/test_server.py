@@ -2616,17 +2616,11 @@ control 'test-1' do
   end
 end
 """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        control_path = Path(tmpdir) / "test.rb"
+        control_path.write_text(inspec_content)
 
-    with patch("souschef.parsers.inspec._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.exists.return_value = True
-        mock_instance.is_dir.return_value = False
-        mock_instance.is_file.return_value = True
-        mock_instance.read_text.return_value = inspec_content
-        mock_instance.name = "test.rb"
-
-        result = parse_inspec_profile("/path/to/test.rb")
+        result = parse_inspec_profile(str(control_path))
 
         assert "test-1" in result
         assert "controls_count" in result
@@ -2641,33 +2635,17 @@ control 'dir-test' do
     end
 end
 """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        profile_path = Path(tmpdir)
+        controls_dir = profile_path / "controls"
+        controls_dir.mkdir()
 
-    with patch("souschef.parsers.inspec._normalize_path") as mock_path:
-        # Create a proper Path mock that works with _safe_join's os.path operations
-        mock_instance = MagicMock(spec=Path)
-        mock_path.return_value = mock_instance
-        mock_instance.exists.return_value = True
-        mock_instance.is_dir.return_value = True
-        mock_instance.is_file.return_value = False
-        mock_instance.__str__ = MagicMock(return_value="/path/to/profile")
+        control_file = controls_dir / "test.rb"
+        control_file.write_text(inspec_content)
 
-        # Mock controls directory
-        controls_dir = MagicMock(spec=Path)
-        controls_dir.exists.return_value = True
+        result = parse_inspec_profile(str(profile_path))
 
-        # Mock control file
-        control_file = MagicMock(spec=Path)
-        control_file.read_text.return_value = inspec_content
-        control_file.relative_to.return_value = Path("controls/test.rb")
-
-        # Patch _safe_join to return our mocked controls_dir
-        with patch("souschef.parsers.inspec._safe_join") as mock_safe_join:
-            mock_safe_join.return_value = controls_dir
-            controls_dir.glob.return_value = [control_file]
-
-            result = parse_inspec_profile("/path/to/profile")
-
-            assert "dir-test" in result or "controls_count" in result
+        assert "dir-test" in result or "controls_count" in result
 
 
 def test_parse_inspec_profile_not_found():
@@ -3077,7 +3055,7 @@ def test_convert_chef_databag_to_vars_success():
     # Create databag content
     databag_data = {
         "id": "database",
-        "password": f"test-{uuid.uuid4()}",
+        "password": f"test-{uuid.uuid4()}",  # NOSONAR - Dynamically generated test fixture, not a real credential
         "host": "db-host",
     }
     databag_content = json.dumps(databag_data)
@@ -9073,7 +9051,7 @@ end""",
                     'mount "/mnt/shared" do\n'
                     '  device "//server/share"\n'
                     '  fstype "cifs"\n'
-                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'
+                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'  # NOSONAR - Chef recipe test fixture, not real credentials
                     "  dump 0\n"
                     "  pass 0\n"
                     "  action [:mount, :enable]\n"
