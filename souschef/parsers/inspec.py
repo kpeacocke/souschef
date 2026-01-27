@@ -212,6 +212,7 @@ def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
     controls = []
     for control_file in controls_dir.glob("*.rb"):
         try:
+            # lgtm[py/path-injection]: control_file from validated controls_dir glob
             content = control_file.read_text()
             file_controls = _parse_inspec_control(content)
             for ctrl in file_controls:

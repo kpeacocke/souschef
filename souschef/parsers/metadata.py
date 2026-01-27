@@ -58,6 +58,7 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
     """
     try:
         file_path = _normalize_path(path)
+        # lgtm[py/path-injection]: file_path validated via _normalize_path
         content = safe_read_text(file_path, file_path.parent, encoding="utf-8")
 
         metadata = _extract_metadata(content)

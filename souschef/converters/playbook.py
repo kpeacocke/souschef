@@ -1198,6 +1198,7 @@ if __name__ == "__main__":
     main()
 '''
 
+    # lgtm[py/path-injection]: queries_data from parsed cookbook, not user input
     # Convert queries_data to JSON string for embedding
     queries_json = json.dumps(
         {
