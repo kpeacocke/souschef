@@ -9,7 +9,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+import yaml  # type: ignore[import-untyped]
+from mcp.server import FastMCP
 
 # Import assessment functions with aliases to avoid name conflicts
 from souschef.assessment import (
@@ -729,8 +730,6 @@ def convert_chef_databag_to_vars(
 
     """
     try:
-        import yaml
-
         # Validate inputs
         if not databag_content or not databag_content.strip():
             return (
@@ -1401,8 +1400,6 @@ def _generate_inventory_group_from_environment(
     env_data: dict, env_name: str, include_constraints: bool
 ) -> str:
     """Generate Ansible inventory group configuration from environment data."""
-    import yaml
-
     group_vars: dict[str, Any] = {}
 
     # Add environment metadata
@@ -1488,8 +1485,6 @@ def _generate_yaml_inventory(environments: dict) -> str:
         YAML inventory string
 
     """
-    import yaml
-
     inventory: dict[str, Any] = {"all": {"children": {}}}
 
     for env_name, env_data in environments.items():
@@ -1879,8 +1874,6 @@ def _convert_databag_to_ansible_vars(
 
 def _generate_vault_content(vars_dict: dict, databag_name: str) -> str:
     """Generate Ansible Vault YAML content from variables dictionary."""
-    import yaml
-
     # Structure for vault file
     vault_vars = {f"{databag_name}_vault": vars_dict}
 
@@ -3143,8 +3136,6 @@ def _convert_attributes(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert Chef attributes to Ansible variables."""
-    import yaml
-
     attributes_dir = _safe_join(cookbook_dir, "attributes")
     role_defaults_dir = _safe_join(role_dir, "defaults")
 
@@ -3247,8 +3238,6 @@ def _create_role_metadata(
     conversion_summary: dict,
 ) -> None:
     """Create Ansible role metadata file."""
-    import yaml
-
     # Use _safe_join to construct metadata file path
 
     meta_dir = _safe_join(role_dir, "meta")

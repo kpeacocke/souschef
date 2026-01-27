@@ -1507,6 +1507,7 @@ def test_validate_databags_directory_empty_path():
     """Test _validate_databags_directory with empty path."""
     result = _validate_databags_directory("")
     assert result[0] is None
+    assert result[1] is not None
     assert "Databags directory path cannot be empty" in result[1]
 
 
@@ -1514,6 +1515,7 @@ def test_validate_databags_directory_nonexistent():
     """Test _validate_databags_directory with nonexistent directory."""
     result = _validate_databags_directory("/nonexistent/path")
     assert result[0] is None
+    assert result[1] is not None
     assert "Data bags directory not found" in result[1]
 
 
@@ -1523,6 +1525,7 @@ def test_validate_databags_directory_not_directory():
     with tempfile.NamedTemporaryFile() as tmp_file:
         result = _validate_databags_directory(tmp_file.name)
         assert result[0] is None
+        assert result[1] is not None
         assert "Path is not a directory" in result[1]
 
 
@@ -2646,7 +2649,7 @@ end
         mock_instance.exists.return_value = True
         mock_instance.is_dir.return_value = True
         mock_instance.is_file.return_value = False
-        mock_instance.__str__.return_value = "/path/to/profile"
+        mock_instance.__str__ = MagicMock(return_value="/path/to/profile")
 
         # Mock controls directory
         controls_dir = MagicMock(spec=Path)
