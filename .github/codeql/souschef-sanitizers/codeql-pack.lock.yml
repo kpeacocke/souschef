@@ -1,0 +1,3 @@
+lockFileVersion: 1.0.0
+packs:
+  codeql/python: 0.13.5

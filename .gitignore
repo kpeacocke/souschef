@@ -90,6 +90,8 @@ Thumbs.db
 codeql-db/
 python-db/
 codeql-results/
+# Ignore downloaded CodeQL pack modules (created by `codeql pack install`)
+**/codeql_modules/
 
 # Note: .codeql/config/, .codeql/reports/, and specific .sarif files are committed
 # See .codeql/.gitignore for details
