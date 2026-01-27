@@ -212,13 +212,14 @@ def safe_mkdir(
     safe_path.mkdir(parents=parents, exist_ok=exist_ok)
 
 
-def safe_read_text(path_obj: Path, base_path: Path) -> str:
+def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
     """
     Read text from file after enforcing base containment.
 
     Args:
         path_obj: Path to the file to read.
         base_path: Trusted base directory for containment check.
+        encoding: Text encoding (default: 'utf-8').
 
     Returns:
         File contents as string.
@@ -230,12 +231,50 @@ def safe_read_text(path_obj: Path, base_path: Path) -> str:
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    return safe_path.read_text()
+    return safe_path.read_text(encoding=encoding)
 
 
-def safe_write_text(path_obj: Path, base_path: Path, text: str) -> None:
-    """Write text to file after enforcing base containment."""
+def safe_write_text(
+    path_obj: Path, base_path: Path, text: str, encoding: str = "utf-8"
+) -> None:
+    """
+    Write text to file after enforcing base containment.
+
+    Args:
+        path_obj: Path to the file to write.
+        base_path: Trusted base directory for containment check.
+        text: Text content to write.
+        encoding: Text encoding (default: 'utf-8').
+
+    """
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    safe_path.write_text(text)
+    safe_path.write_text(text, encoding=encoding)
+
+
+def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
+    """
+    Iterate directory contents after enforcing base containment.
+
+    Args:
+        path_obj: Directory path to iterate.
+        base_path: Trusted base directory for containment check.
+
+    Returns:
+        List of validated paths within the directory.
+
+    Raises:
+        ValueError: If path escapes the base directory.
+
+    """
+    safe_base = _normalize_trusted_base(base_path)
+    safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
+
+    results: list[Path] = []
+    for item in safe_path.iterdir():
+        # Validate each item stays within base
+        validated_item: Path = _validated_candidate(item, safe_base)
+        results.append(validated_item)
+
+    return results

@@ -110,6 +110,8 @@ from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     _safe_join,
     _validated_candidate,
     safe_glob,
+    safe_read_text,
+    safe_write_text,
 )
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
@@ -543,9 +545,9 @@ def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
         raise FileNotFoundError(f"No controls directory found in {profile_path}")
 
     controls = []
-    for control_file in controls_dir.glob("*.rb"):
+    for control_file in safe_glob(controls_dir, "*.rb", profile_path):
         try:
-            content = control_file.read_text()
+            content = safe_read_text(control_file, profile_path)
             file_controls = _parse_inspec_control(content)
             for ctrl in file_controls:
                 ctrl["file"] = str(control_file.relative_to(profile_path))
@@ -571,7 +573,7 @@ def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
 
     """
     try:
-        content = profile_path.read_text()
+        content = safe_read_text(profile_path, profile_path.parent)
         controls = _parse_inspec_control(content)
         for ctrl in controls:
             ctrl["file"] = profile_path.name
@@ -838,13 +840,14 @@ def _validate_databags_directory(
     return databags_path, None
 
 
-def _convert_databag_item(item_file, databag_name: str, output_directory: str) -> dict:
+def _convert_databag_item(
+    item_file, databag_name: str, output_directory: str, base_path: Path
+) -> dict:
     """Convert a single databag item file to Ansible format."""
     item_name = item_file.stem
 
     try:
-        with item_file.open() as f:
-            content = f.read()
+        content = safe_read_text(item_file, base_path)
 
         # Detect if encrypted
         is_encrypted = _detect_encrypted_databag(content)
@@ -869,13 +872,17 @@ def _convert_databag_item(item_file, databag_name: str, output_directory: str) -
         return {"databag": databag_name, "item": item_name, "error": str(e)}
 
 
-def _process_databag_directory(databag_dir, output_directory: str) -> list[dict]:
+def _process_databag_directory(
+    databag_dir, output_directory: str, base_path: Path
+) -> list[dict]:
     """Process all items in a single databag directory."""
     results = []
     databag_name = databag_dir.name
 
-    for item_file in databag_dir.glob("*.json"):
-        result = _convert_databag_item(item_file, databag_name, output_directory)
+    for item_file in safe_glob(databag_dir, "*.json", base_path):
+        result = _convert_databag_item(
+            item_file, databag_name, output_directory, base_path
+        )
         results.append(result)
 
     return results
@@ -910,11 +917,14 @@ def generate_ansible_vault_from_databags(
         conversion_results = []
 
         # Process each data bag directory
+        # lgtm[py/path-injection]: databags_path validated via _validate_databags_directory
         for databag_dir in databags_path.iterdir():
             if not databag_dir.is_dir():
                 continue
 
-            results = _process_databag_directory(databag_dir, output_directory)
+            results = _process_databag_directory(
+                databag_dir, output_directory, databags_path
+            )
             conversion_results.extend(results)
 
         # Generate summary and file structure
@@ -1056,12 +1066,11 @@ def generate_inventory_from_chef_environments(
         environments = {}
         processing_results = []
 
-        for env_file in env_path.glob("*.rb"):
+        for env_file in safe_glob(env_path, "*.rb", env_path):
             env_name = env_file.stem
 
             try:
-                with env_file.open("r") as f:
-                    content = f.read()
+                content = safe_read_text(env_file, env_path)
 
                 env_data = _parse_chef_environment_content(content)
                 environments[env_name] = env_data
@@ -1617,8 +1626,7 @@ def _extract_environment_usage_from_cookbook(cookbook_path) -> list:
     # Search for environment usage in Ruby files
     for ruby_file in cookbook_path.rglob("*.rb"):
         try:
-            with ruby_file.open("r") as f:
-                content = f.read()
+            content = safe_read_text(ruby_file, cookbook_path)
 
             # Find environment usage patterns
             found_patterns = _find_environment_patterns_in_content(
@@ -1675,13 +1683,12 @@ def _analyse_environments_structure(environments_path) -> dict:
     """Analyse the structure of Chef environments directory."""
     structure: dict[str, Any] = {"total_environments": 0, "environments": {}}
 
-    for env_file in environments_path.glob("*.rb"):
+    for env_file in safe_glob(environments_path, "*.rb", environments_path):
         structure["total_environments"] += 1
         env_name = env_file.stem
 
         try:
-            with env_file.open("r") as f:
-                content = f.read()
+            content = safe_read_text(env_file, environments_path)
 
             env_data = _parse_chef_environment_content(content)
 
@@ -2059,8 +2066,7 @@ def _extract_databag_usage_from_cookbook(cookbook_path) -> list:
     # Search for data bag usage in Ruby files
     for ruby_file in cookbook_path.rglob("*.rb"):
         try:
-            with ruby_file.open() as f:
-                content = f.read()
+            content = safe_read_text(ruby_file, cookbook_path)
 
             # Find data bag usage patterns
             found_patterns = _find_databag_patterns_in_content(content, str(ruby_file))
@@ -2122,6 +2128,7 @@ def _analyse_databag_structure(databags_path) -> dict:
         "databags": {},
     }
 
+    # lgtm[py/path-injection]: databags_path from parameter validated in parent function
     for databag_dir in databags_path.iterdir():
         if not databag_dir.is_dir():
             continue
@@ -2130,13 +2137,12 @@ def _analyse_databag_structure(databags_path) -> dict:
         structure["total_databags"] += 1
 
         items = []
-        for item_file in databag_dir.glob("*.json"):
+        for item_file in safe_glob(databag_dir, "*.json", databags_path):
             structure["total_items"] += 1
             item_name = item_file.stem
 
             try:
-                with item_file.open() as f:
-                    content = f.read()
+                content = safe_read_text(item_file, databags_path)
 
                 is_encrypted = _detect_encrypted_databag(content)
                 if is_encrypted:
@@ -3058,7 +3064,7 @@ def _convert_recipes(
             task_file = _safe_join(role_dir, "tasks", f"{recipe_name}.yml")
             try:
                 task_file.parent.mkdir(parents=True, exist_ok=True)
-                task_file.write_text(playbook_yaml)
+                safe_write_text(task_file, role_dir, playbook_yaml)
             except OSError as write_err:
                 conversion_summary["errors"].append(
                     f"Failed to write task file {task_file.name}: {write_err}"
@@ -3114,7 +3120,7 @@ def _convert_templates(
                     role_dir, "templates", str(rel_path.with_suffix(""))
                 )
                 target_file.parent.mkdir(parents=True, exist_ok=True)
-                target_file.write_text(jinja2_content)
+                safe_write_text(target_file, role_dir, jinja2_content)
 
                 conversion_summary["converted_files"].append(
                     {
@@ -3150,7 +3156,7 @@ def _convert_attributes(
         try:
             validated_attr = _validated_candidate(attr_file, attributes_dir)
             # Read the file content
-            content = validated_attr.read_text()
+            content = safe_read_text(validated_attr, cookbook_dir)
 
             # Extract attributes (already imported at top of file)
             raw_attributes = _extract_attributes(content)
@@ -3178,7 +3184,7 @@ def _convert_attributes(
             defaults_file: Path = _safe_join(role_defaults_dir, defaults_filename)
             defaults_yaml = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
             defaults_file.parent.mkdir(parents=True, exist_ok=True)
-            defaults_file.write_text(defaults_yaml)
+            safe_write_text(defaults_file, role_dir, defaults_yaml)
 
             conversion_summary["converted_files"].append(
                 {
@@ -3219,7 +3225,7 @@ def _create_main_task_file(
 
         playbook_yaml = generate_playbook_from_recipe(str(default_recipe))
         default_task_file.parent.mkdir(parents=True, exist_ok=True)
-        default_task_file.write_text(playbook_yaml)
+        safe_write_text(default_task_file, role_dir, playbook_yaml)
         conversion_summary["converted_files"].append(
             {
                 "type": "task",
@@ -3267,7 +3273,7 @@ def _create_role_metadata(
             meta_content["dependencies"] = [{"role": dep} for dep in deps]
 
     meta_yaml = yaml.dump(meta_content, default_flow_style=False, indent=2)
-    meta_file.write_text(meta_yaml)
+    safe_write_text(meta_file, role_dir, meta_yaml)
 
     conversion_summary["converted_files"].append(
         {

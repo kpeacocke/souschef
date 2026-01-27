@@ -738,10 +738,8 @@ depends 'iptables'
 supports 'ubuntu'
 supports 'debian'
     """
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = metadata_content
+    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+        mock_read.return_value = metadata_content
 
         result = read_cookbook_metadata("/cookbook/metadata.rb")
 
@@ -757,10 +755,8 @@ supports 'debian'
 def test_read_cookbook_metadata_minimal():
     """Test read_cookbook_metadata with minimal metadata."""
     metadata_content = "name 'simple'"
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = metadata_content
+    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+        mock_read.return_value = metadata_content
 
         result = read_cookbook_metadata("/cookbook/metadata.rb")
 
@@ -770,10 +766,8 @@ def test_read_cookbook_metadata_minimal():
 
 def test_read_cookbook_metadata_empty():
     """Test read_cookbook_metadata with empty file."""
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = ""
+    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+        mock_read.return_value = ""
 
         result = read_cookbook_metadata("/cookbook/metadata.rb")
 
@@ -782,10 +776,8 @@ def test_read_cookbook_metadata_empty():
 
 def test_read_cookbook_metadata_not_found():
     """Test read_cookbook_metadata with non-existent file."""
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = FileNotFoundError()
+    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+        mock_read.side_effect = FileNotFoundError()
 
         result = read_cookbook_metadata("/nonexistent/metadata.rb")
 
@@ -794,10 +786,8 @@ def test_read_cookbook_metadata_not_found():
 
 def test_read_cookbook_metadata_is_directory():
     """Test read_cookbook_metadata when path is a directory."""
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = IsADirectoryError()
+    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+        mock_read.side_effect = IsADirectoryError()
 
         result = read_cookbook_metadata("/some/directory")
 
@@ -807,10 +797,8 @@ def test_read_cookbook_metadata_is_directory():
 
 def test_read_cookbook_metadata_permission_denied():
     """Test read_cookbook_metadata with permission error."""
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = PermissionError()
+    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+        mock_read.side_effect = PermissionError()
 
         result = read_cookbook_metadata("/forbidden/metadata.rb")
 
@@ -819,12 +807,8 @@ def test_read_cookbook_metadata_permission_denied():
 
 def test_read_cookbook_metadata_unicode_error():
     """Test read_cookbook_metadata with unicode decode error."""
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = UnicodeDecodeError(
-            "utf-8", b"", 0, 1, "invalid"
-        )
+    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+        mock_read.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
 
         result = read_cookbook_metadata("/binary/file")
 
@@ -833,10 +817,8 @@ def test_read_cookbook_metadata_unicode_error():
 
 def test_read_cookbook_metadata_other_exception():
     """Test read_cookbook_metadata with unexpected exception."""
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = Exception("Unexpected")
+    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+        mock_read.side_effect = Exception("Unexpected")
 
         result = read_cookbook_metadata("/some/path/metadata.rb")
 
@@ -1531,13 +1513,18 @@ def test_validate_databags_directory_not_directory():
 
 def test_convert_databag_item_with_error():
     """Test _convert_databag_item with file read error."""
+    from pathlib import Path
+
     mock_file = MagicMock()
     mock_file.stem = "test_item"
-    mock_file.open.side_effect = Exception("Read error")
 
-    result = _convert_databag_item(mock_file, "testbag", "group_vars")
-    assert "error" in result
-    assert result["error"] == "Read error"
+    # Mock safe_read_text to raise an exception
+    with patch("souschef.server.safe_read_text", side_effect=Exception("Read error")):
+        result = _convert_databag_item(
+            mock_file, "testbag", "group_vars", Path("/base")
+        )
+        assert "error" in result
+        assert result["error"] == "Read error"
 
 
 def test_generate_ansible_vault_from_databags_invalid_directory():
@@ -1686,13 +1673,14 @@ def test_flatten_environment_vars_with_overrides():
 
 def test_extract_environment_usage_from_cookbook_with_error():
     """Test _extract_environment_usage_from_cookbook with file read error."""
+    from pathlib import Path
+
     mock_cookbook = MagicMock(spec=Path)
-    mock_cookbook.rglob.return_value = [MagicMock()]
-    mock_file = MagicMock()
-    mock_file.open.side_effect = Exception("Read error")
+    mock_file = MagicMock(spec=Path)
+    mock_file.__str__.return_value = "test.rb"
     mock_cookbook.rglob.return_value = [mock_file]
 
-    with patch("souschef.server._normalize_path", return_value=mock_cookbook):
+    with patch("souschef.server.safe_read_text", side_effect=Exception("Read error")):
         result = _extract_environment_usage_from_cookbook(mock_cookbook)
         assert len(result) == 1
         assert "error" in result[0]
@@ -1721,13 +1709,16 @@ def test_analyse_environments_structure_with_parse_error():
     mock_env_file = MagicMock(spec=Path)
     mock_env_file.stem = "test_env"
     mock_env_path.glob.return_value = [mock_env_file]
-    mock_env_file.open.side_effect = Exception("Parse error")
 
-    result = _analyse_environments_structure(mock_env_path)
-    assert result["total_environments"] == 1
-    assert "test_env" in result["environments"]
-    assert "error" in result["environments"]["test_env"]
-    assert result["environments"]["test_env"]["error"] == "Parse error"
+    with (
+        patch("souschef.server.safe_glob", return_value=[mock_env_file]),
+        patch("souschef.server.safe_read_text", side_effect=Exception("Parse error")),
+    ):
+        result = _analyse_environments_structure(mock_env_path)
+        assert result["total_environments"] == 1
+        assert "test_env" in result["environments"]
+        assert "error" in result["environments"]["test_env"]
+        assert result["environments"]["test_env"]["error"] == "Parse error"
 
 
 def test_analyse_usage_pattern_recommendations_empty():
