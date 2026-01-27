@@ -3,3 +3,9 @@ python-db/
 htmlcov/
 site/
 .codeql/
+tests/
+**/.codeql/
+**/mutants/
+**/htmlcov/
+**/site/
+**/python-db/

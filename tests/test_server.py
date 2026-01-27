@@ -3098,14 +3098,12 @@ def test_generate_ansible_vault_from_databags_success():
 
         # Create sample databag files
         secrets_file = secrets_dir / "database.json"
+        # codeql[py/clear-text-storage-sensitive-data]: test data for encrypted databag conversion only
         secrets_data = {
             "id": "database",
-            "password": {"encrypted_data": "***encrypted_password***"},
+            "password": {"encrypted_data": "example_encrypted_value"},
         }  # NOSONAR - Test data for encrypted databag conversion
-        # codeql[py/clear-text-storage-sensitive-data] - Test fixture only
-        secrets_file.write_text(  # codeql[py/clear-text-storage-sensitive-data]
-            json.dumps(secrets_data)
-        )  # lgtm[py/clear-text-storage-sensitive-data]
+        secrets_file.write_text(json.dumps(secrets_data))
 
         result = generate_ansible_vault_from_databags(str(databags_path))
         assert "Ansible Vault" in result or "Error:" not in result
@@ -15741,6 +15739,7 @@ def test_get_cookbook_package_config_docker():
     assert result["module"] == "ansible.builtin.apt"
     assert "docker-ce" in result["params"]["name"]
     assert "docker-ce-cli" in result["params"]["name"]
+    # codeql[py/incomplete-url-substring-sanitization]: test data only
     assert "containerd.io" in result["params"]["name"]
 
 

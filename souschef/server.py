@@ -1,5 +1,7 @@
 """SousChef MCP Server - Chef to Ansible conversion assistant."""
 
+# codeql[py/unused-import]: Intentional re-exports for MCP tools and test compatibility
+
 import ast
 import json
 import os
@@ -25,7 +27,7 @@ from souschef.assessment import validate_conversion as _validate_conversion
 
 # Import extracted modules
 # Import private helper functions still used in server.py
-from souschef.converters.habitat import (  # noqa: F401
+from souschef.converters.habitat import (  # noqa: F401, codeql[py/unused-import]
     _add_service_build,
     _add_service_dependencies,
     _add_service_environment,
@@ -47,7 +49,7 @@ from souschef.converters.habitat import (
 
 # Import playbook converter functions
 # Re-exports of playbook internal functions for backward compatibility (tests)
-from souschef.converters.playbook import (  # noqa: F401
+from souschef.converters.playbook import (  # noqa: F401, codeql[py/unused-import]
     _add_general_recommendations,
     _convert_chef_block_to_ansible,
     _convert_chef_condition_to_ansible,
@@ -79,7 +81,7 @@ from souschef.converters.playbook import (
 from souschef.converters.playbook import (
     generate_dynamic_inventory_script as _generate_dynamic_inventory_script,
 )
-from souschef.converters.resource import (  # noqa: F401
+from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-import]
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
     _get_file_params,
@@ -91,7 +93,7 @@ from souschef.converters.resource import (
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
-from souschef.core.constants import (  # noqa: F401
+from souschef.core.constants import (  # noqa: F401, codeql[py/unused-import]
     ACTION_TO_STATE,
     ANSIBLE_SERVICE_MODULE,
     ERROR_PREFIX,
@@ -101,7 +103,7 @@ from souschef.core.constants import (  # noqa: F401
 
 # Import core utilities
 from souschef.core.errors import format_error_with_context
-from souschef.core.path_utils import (  # noqa: F401
+from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     _ensure_within_base_path,
     _normalize_path,
     _safe_join,
@@ -114,11 +116,13 @@ from souschef.core.path_utils import (  # noqa: F401
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
-from souschef.core.ruby_utils import _normalize_ruby_value  # noqa: F401
+from souschef.core.ruby_utils import (
+    _normalize_ruby_value,  # noqa: F401, codeql[py/unused-import]
+)
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
-from souschef.core.validation import (  # noqa: F401
+from souschef.core.validation import (  # noqa: F401, codeql[py/unused-import]
     ValidationCategory,
     ValidationEngine,
     ValidationLevel,
@@ -131,7 +135,7 @@ from souschef.core.validation import (  # noqa: F401
 # Re-exports of deployment internal functions for backward compatibility (tests)
 # Public re-exports of deployment functions for test backward compatibility
 # Note: MCP tool wrappers exist for some of these, but tests import directly
-from souschef.deployment import (  # noqa: F401
+from souschef.deployment import (  # noqa: F401, codeql[py/unused-import]
     _analyse_cookbook_for_awx,
     _analyse_cookbooks_directory,
     _detect_deployment_patterns_in_recipe,
@@ -180,7 +184,7 @@ from souschef.filesystem import list_directory as _list_directory
 from souschef.filesystem import read_file as _read_file
 
 # Import parser functions
-from souschef.parsers.attributes import (  # noqa: F401
+from souschef.parsers.attributes import (  # noqa: F401, codeql[py/unused-import]
     _extract_attributes,
     _format_attributes,
     _format_resolved_attributes,
@@ -190,7 +194,7 @@ from souschef.parsers.attributes import (  # noqa: F401
 from souschef.parsers.attributes import parse_attributes as _parse_attributes
 
 # Import Habitat parser internal functions for backward compatibility
-from souschef.parsers.habitat import (  # noqa: F401
+from souschef.parsers.habitat import (  # noqa: F401, codeql[py/unused-import]
     _extract_plan_array,
     _extract_plan_exports,
     _extract_plan_function,
@@ -200,7 +204,7 @@ from souschef.parsers.habitat import (  # noqa: F401
 from souschef.parsers.habitat import parse_habitat_plan as _parse_habitat_plan
 
 # Re-export InSpec internal functions for backward compatibility (tests)
-from souschef.parsers.inspec import (  # noqa: F401
+from souschef.parsers.inspec import (  # noqa: F401, codeql[py/unused-import]
     _convert_inspec_to_ansible_assert,
     _convert_inspec_to_goss,
     _convert_inspec_to_serverspec,
@@ -236,7 +240,7 @@ from souschef.parsers.resource import (
 from souschef.parsers.resource import parse_custom_resource as _parse_custom_resource
 
 # Import internal functions for backward compatibility (used by tests)
-from souschef.parsers.template import (  # noqa: F401
+from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
     _convert_erb_to_jinja2,
     _extract_code_block_variables,
     _extract_heredoc_strings,
