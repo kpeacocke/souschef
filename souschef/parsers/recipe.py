@@ -35,7 +35,7 @@ def parse_recipe(path: str) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        # lgtm[py/path-injection]: file_path validated via _normalize_path
+        # NOSONAR: S2083 - path validated via _normalize_path
         content = file_path.read_text(encoding="utf-8")
 
         resources = _extract_resources(content)

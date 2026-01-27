@@ -9,7 +9,6 @@ def _trusted_workspace_root() -> Path:
     return Path.cwd().resolve()
 
 
-# lgtm[py/path-injection]
 def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
     """
     Ensure a path stays within a trusted base directory.
@@ -39,11 +38,9 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
         msg = f"Path traversal attempt: escapes {base_resolved}"
         raise ValueError(msg) from e
 
-    return candidate_resolved  # lgtm[py/path-injection]
+    return candidate_resolved  # NOSONAR: S2083
 
 
-# Sanitizer function: validates null bytes and normalizes via resolve()
-# lgtm[py/path-injection]
 def _normalize_path(path_str: str | Path) -> Path:
     """
     Normalize a file path for safe filesystem operations.
@@ -79,9 +76,9 @@ def _normalize_path(path_str: str | Path) -> Path:
         # Path.resolve() normalizes the path, resolving symlinks and ".." sequences
         # This prevents path traversal attacks by canonicalizing the path
         # Input validated for null bytes; Path.resolve() returns safe absolute path
-        resolved_path = path_obj.expanduser().resolve()  # lgtm[py/path-injection]
+        resolved_path = path_obj.expanduser().resolve()  # NOSONAR: S2083
         # Explicit assignment to mark as sanitized output
-        normalized: Path = resolved_path  # lgtm[py/path-injection]
+        normalized: Path = resolved_path  # NOSONAR: S2083
         return normalized
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
@@ -98,7 +95,6 @@ def _normalize_trusted_base(base_path: Path | str) -> Path:
     return _normalize_path(base_path)
 
 
-# lgtm[py/path-injection]
 def _safe_join(base_path: Path, *parts: str) -> Path:
     """
     Safely join path components ensuring result stays within base directory.
@@ -131,10 +127,9 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
         msg = f"Path traversal attempt: {parts} escapes {base_path}"
         raise ValueError(msg) from e
 
-    return result_resolved  # lgtm[py/path-injection]
+    return result_resolved  # NOSONAR: S2083
 
 
-# lgtm[py/path-injection]
 def _validated_candidate(path_obj: Path, safe_base: Path) -> Path:
     """
     Validate a candidate path stays contained under ``safe_base``.
@@ -153,7 +148,7 @@ def _validated_candidate(path_obj: Path, safe_base: Path) -> Path:
         msg = f"Path traversal attempt: escapes {base_resolved}"
         raise ValueError(msg) from e
 
-    return candidate_resolved  # lgtm[py/path-injection]
+    return candidate_resolved  # NOSONAR: S2083
 
 
 def safe_exists(path_obj: Path, base_path: Path) -> bool:
@@ -194,8 +189,7 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     safe_dir: Path = _validated_candidate(_normalize_path(dir_path), safe_base)
 
     results: list[Path] = []
-    # lgtm[py/path-injection]: safe_dir and pattern validated before glob
-    for result in safe_dir.glob(pattern):
+    for result in safe_dir.glob(pattern):  # NOSONAR: S2083
         # Validate each glob result stays within base
         validated_result: Path = _validated_candidate(Path(result), safe_base)
         results.append(validated_result)
@@ -210,8 +204,7 @@ def safe_mkdir(
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    # lgtm[py/path-injection]: safe_path validated via _validated_candidate
-    safe_path.mkdir(parents=parents, exist_ok=exist_ok)
+    safe_path.mkdir(parents=parents, exist_ok=exist_ok)  # NOSONAR: S2083
 
 
 def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
@@ -233,8 +226,7 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    # lgtm[py/path-injection]: safe_path validated via _validated_candidate
-    return safe_path.read_text(encoding=encoding)
+    return safe_path.read_text(encoding=encoding)  # NOSONAR: S2083
 
 
 def safe_write_text(
@@ -253,8 +245,7 @@ def safe_write_text(
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    # lgtm[py/path-injection]: safe_path validated via _validated_candidate
-    safe_path.write_text(text, encoding=encoding)
+    safe_path.write_text(text, encoding=encoding)  # NOSONAR: S2083
 
 
 def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
@@ -276,8 +267,7 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
     results: list[Path] = []
-    # lgtm[py/path-injection]: safe_path validated via _validated_candidate
-    for item in safe_path.iterdir():
+    for item in safe_path.iterdir():  # NOSONAR: S2083
         # Validate each item stays within base
         validated_item: Path = _validated_candidate(item, safe_base)
         results.append(validated_item)

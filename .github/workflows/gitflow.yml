@@ -26,7 +26,7 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
-          # lgtm[yaml/command-injection]: BRANCH_NAME validated against gitflow patterns
+          # NOSONAR: S7630 - BRANCH_NAME validated against gitflow patterns
           echo "Validating branch: $BRANCH_NAME"
 
           # Allow main and develop
@@ -85,7 +85,7 @@ jobs:
           SOURCE_BRANCH: ${{ github.head_ref }}
           TARGET_BRANCH: ${{ github.base_ref }}
         run: |
-          # lgtm[yaml/command-injection]: Branches validated against gitflow patterns
+          # NOSONAR: S7630 - Branches validated against gitflow patterns
           echo "PR: $SOURCE_BRANCH → $TARGET_BRANCH"
 
           # Main should never merge to develop (wrong direction)

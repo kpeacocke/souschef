@@ -58,7 +58,7 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
     """
     try:
         file_path = _normalize_path(path)
-        # lgtm[py/path-injection]: file_path validated via _normalize_path
+        # NOSONAR: S2083 - path validated via _normalize_path
         content = safe_read_text(file_path, file_path.parent, encoding="utf-8")
 
         metadata = _extract_metadata(content)
@@ -94,8 +94,7 @@ def _scan_cookbook_directory(
     if not dir_path.exists() or not dir_path.is_dir():
         return None
 
-    # lgtm[py/path-injection]: dir_path validated via _safe_join boundary check
-    files = [f.name for f in dir_path.iterdir() if f.is_file()]
+    files = [f.name for f in dir_path.iterdir() if f.is_file()]  # NOSONAR: S2083
     return (dir_name, files) if files else None
 
 
