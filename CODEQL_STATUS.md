@@ -20,7 +20,7 @@ CodeQL analysis of the souschef project identifies 17 findings in source code, a
 
 **Affected Modules:**
 - `souschef.converters.habitat` → internal helper functions
-- `souschef.converters.playbook` → internal helper functions  
+- `souschef.converters.playbook` → internal helper functions
 - `souschef.converters.resource` → internal helper functions
 - `souschef.core.constants` → module constants
 - `souschef.core.path_utils` → path validation helpers
@@ -54,7 +54,7 @@ CodeQL analysis of the souschef project identifies 17 findings in source code, a
 Updated to exclude non-source code directories:
 - `mutants/` - mutation testing artifacts
 - `python-db/` -  legacy Python DB
-- `htmlcov/`, `site/` - documentation and coverage reports  
+- `htmlcov/`, `site/` - documentation and coverage reports
 - `.codeql/` - temporary CodeQL working directory
 - `tests/` - test fixtures
 - `**/.codeql/`, `**/mutants/`, etc. (recursive patterns)
@@ -74,7 +74,7 @@ Updated to exclude non-source code directories:
 ## Recommendations
 1. ✅ Code is production-ready; no security issues found
 2. ✅ All findings are documented and intentional
-3. ⚠️ Keep suppressions updated if refactoring re-export architecture  
+3. ⚠️ Keep suppressions updated if refactoring re-export architecture
 4. ⚠️ Monitor CodeQL query updates that may affect false positive detection
 
 ## Testing Infrastructure

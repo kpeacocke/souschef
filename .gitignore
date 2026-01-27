@@ -82,12 +82,17 @@ Thumbs.db
 .github/instructions/snyk_rules.instructions.md
 
 # CodeQL Security Scanning
-.codeql/
+# Ignore databases and build artifacts, but commit config and reports
+.codeql/databases/
+.codeql/queries/**
+!.codeql/queries/.gitkeep
 .codeql-db/
 codeql-db/
 python-db/
 codeql-results/
-*.sarif
+
+# Note: .codeql/config/, .codeql/reports/, and specific .sarif files are committed
+# See .codeql/.gitignore for details
 
 # GitHub Security Scanning Exports
 code_scanning_alerts*.json

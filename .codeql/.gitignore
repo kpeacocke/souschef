@@ -1,0 +1,21 @@
+# CodeQL Database and Analysis Artifacts
+# This .gitignore file applies to the .codeql/ directory only
+
+# Ignore generated CodeQL databases
+databases/
+!databases/.gitkeep
+
+# Ignore analysis work directories
+*/working/
+*/trap/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Keep configuration and results
+# config/ - NOT IGNORED (includes .codeqlignore and query pack config)
+# reports/ - NOT IGNORED (includes SARIF results for tracking)
+# queries/ - NOT IGNORED (includes custom query definitions)

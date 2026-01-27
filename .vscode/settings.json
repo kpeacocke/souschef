@@ -7,6 +7,10 @@
         "--cov=souschef",
         "--cov-report=term-missing"
     ],
+    // Disable legacy linting in favour of Ruff
+    "python.linting.enabled": false,
+    "python.linting.flake8Enabled": false,
+    "python.linting.pylintEnabled": false,
     "python.testing.cwd": "${workspaceFolder}",
     // Pylance: Real-time type checking and intellisense in VS Code
     // Note: mypy runs in CI for stricter checks; Pylance provides immediate feedback
