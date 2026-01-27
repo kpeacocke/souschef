@@ -190,6 +190,27 @@ def safe_mkdir(
     safe_path.mkdir(parents=parents, exist_ok=exist_ok)
 
 
+def safe_read_text(path_obj: Path, base_path: Path) -> str:
+    """
+    Read text from file after enforcing base containment.
+
+    Args:
+        path_obj: Path to the file to read.
+        base_path: Trusted base directory for containment check.
+
+    Returns:
+        File contents as string.
+
+    Raises:
+        ValueError: If the path escapes the base directory.
+
+    """
+    safe_base = _normalize_trusted_base(base_path)
+    safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
+
+    return safe_path.read_text()
+
+
 def safe_write_text(path_obj: Path, base_path: Path, text: str) -> None:
     """Write text to file after enforcing base containment."""
     safe_base = _normalize_trusted_base(base_path)

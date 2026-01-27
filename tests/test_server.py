@@ -11891,7 +11891,7 @@ class TestChefSearchPatterns:
         from souschef.server import _extract_search_patterns_from_file
 
         with patch("pathlib.Path.read_text", side_effect=PermissionError):
-            result = _extract_search_patterns_from_file(Path("test.rb"))
+            result = _extract_search_patterns_from_file(Path("test.rb"), Path.cwd())
             assert result == []
 
 

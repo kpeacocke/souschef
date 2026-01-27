@@ -24,11 +24,7 @@ from souschef.core.metrics import (
     categorize_complexity,
     estimate_effort_for_complexity,
 )
-from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
-    _trusted_workspace_root,
-    _validated_candidate,
-    safe_glob,
-)
+from souschef.core.path_utils import _validated_candidate, safe_glob
 from souschef.core.validation import (
     ValidationEngine,
     ValidationLevel,
