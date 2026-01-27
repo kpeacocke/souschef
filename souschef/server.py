@@ -158,13 +158,6 @@ from souschef.deployment import (  # noqa: F401, codeql[py/unused-import]
     _parse_chef_runlist,
     _recommend_ansible_strategies,
     analyse_chef_application_patterns,
-    convert_chef_deployment_to_ansible_strategy,
-    generate_awx_inventory_source_from_chef,
-    generate_awx_job_template_from_cookbook,
-    generate_awx_project_from_cookbooks,
-    generate_awx_workflow_from_chef_runlist,
-    generate_blue_green_deployment_playbook,
-    generate_canary_deployment_strategy,
 )
 from souschef.deployment import (
     convert_chef_deployment_to_ansible_strategy as _convert_chef_deployment_to_ansible_strategy,
