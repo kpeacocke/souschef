@@ -232,8 +232,8 @@ jobs:
       uses: trufflesecurity/trufflehog@50aa4695becccb04c958215388cab34a75e0fd31 # main
       with:
         path: ./
-        base: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
-        head: ${{ github.event.pull_request.head.sha || github.sha }}
+        base: ${{ github.event.before || 'HEAD~1' }}
+        head: ${{ github.sha }}
         extra_args: --only-verified
 
   ansible-lint:
