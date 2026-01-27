@@ -224,7 +224,9 @@ jobs:
     - name: Run security checks
       run: |
         # Check for known vulnerabilities in dependencies
-        poetry run pip-audit
+        # Use --skip-editable to skip local editable packages (mcp-souschef)
+        # This avoids warnings about packages not found on PyPI
+        poetry run pip-audit --skip-editable
 
     - name: Check for secrets
       uses: trufflesecurity/trufflehog@50aa4695becccb04c958215388cab34a75e0fd31 # main
