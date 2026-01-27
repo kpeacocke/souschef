@@ -108,11 +108,8 @@ from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     _ensure_within_base_path,
     _normalize_path,
     _safe_join,
-    _trusted_workspace_root,
     _validated_candidate,
     safe_glob,
-    safe_mkdir,
-    safe_write_text,
 )
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
@@ -129,6 +126,15 @@ from souschef.core.validation import (  # noqa: F401, codeql[py/unused-import]
     ValidationLevel,
     ValidationResult,
 )
+
+# Explicit re-exports for language servers and type checkers
+# These names are intentionally available from souschef.server
+__all__ = [
+    "ValidationCategory",
+    "ValidationEngine",
+    "ValidationLevel",
+    "ValidationResult",
+]
 
 # Re-exports for backward compatibility (used by tests)
 # These are imported and re-exported intentionally
@@ -217,9 +223,9 @@ from souschef.parsers.inspec import (  # noqa: F401, codeql[py/unused-import]
 from souschef.parsers.inspec import convert_inspec_to_test as _convert_inspec_test
 from souschef.parsers.inspec import parse_inspec_profile as _parse_inspec
 from souschef.parsers.metadata import (
-    _extract_metadata,  # noqa: F401
-    _format_cookbook_structure,  # noqa: F401
-    _format_metadata,  # noqa: F401
+    _extract_metadata,  # noqa: F401, codeql[py/unused-import]
+    _format_cookbook_structure,  # noqa: F401, codeql[py/unused-import]
+    _format_metadata,  # noqa: F401, codeql[py/unused-import]
 )
 from souschef.parsers.metadata import (
     list_cookbook_structure as _list_cookbook_structure,
@@ -229,14 +235,17 @@ from souschef.parsers.metadata import (
 )
 from souschef.parsers.metadata import read_cookbook_metadata as _read_cookbook_metadata
 from souschef.parsers.recipe import (
-    _extract_conditionals,  # noqa: F401
-    _extract_resources,  # noqa: F401
-    _format_resources,  # noqa: F401
+    _extract_conditionals,  # noqa: F401, codeql[py/unused-import]
+    _extract_resources,  # noqa: F401, codeql[py/unused-import]
+    _format_resources,  # noqa: F401, codeql[py/unused-import]
 )
 from souschef.parsers.recipe import parse_recipe as _parse_recipe
+
+# Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
+# These imports are intentionally exposed for external test access
 from souschef.parsers.resource import (
-    _extract_resource_actions,  # noqa: F401
-    _extract_resource_properties,  # noqa: F401
+    _extract_resource_actions,  # noqa: F401, codeql[py/unused-import]
+    _extract_resource_properties,  # noqa: F401, codeql[py/unused-import]
 )
 from souschef.parsers.resource import parse_custom_resource as _parse_custom_resource
 
