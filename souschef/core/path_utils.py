@@ -194,6 +194,7 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     safe_dir: Path = _validated_candidate(_normalize_path(dir_path), safe_base)
 
     results: list[Path] = []
+    # lgtm[py/path-injection]: safe_dir and pattern validated before glob
     for result in safe_dir.glob(pattern):
         # Validate each glob result stays within base
         validated_result: Path = _validated_candidate(Path(result), safe_base)
@@ -209,6 +210,7 @@ def safe_mkdir(
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
+    # lgtm[py/path-injection]: safe_path validated via _validated_candidate
     safe_path.mkdir(parents=parents, exist_ok=exist_ok)
 
 
@@ -231,6 +233,7 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
+    # lgtm[py/path-injection]: safe_path validated via _validated_candidate
     return safe_path.read_text(encoding=encoding)
 
 
@@ -250,6 +253,7 @@ def safe_write_text(
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
+    # lgtm[py/path-injection]: safe_path validated via _validated_candidate
     safe_path.write_text(text, encoding=encoding)
 
 
@@ -272,6 +276,7 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
     results: list[Path] = []
+    # lgtm[py/path-injection]: safe_path validated via _validated_candidate
     for item in safe_path.iterdir():
         # Validate each item stays within base
         validated_item: Path = _validated_candidate(item, safe_base)

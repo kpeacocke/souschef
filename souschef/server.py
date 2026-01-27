@@ -3013,6 +3013,7 @@ def _create_role_structure(output_dir: Path, role_name: str) -> Path:
         role_vars_dir,
         role_defaults_dir,
     ]:
+        # lgtm[py/path-injection]: path validated via os.path.commonpath containment check
         directory.mkdir(parents=True, exist_ok=True)
 
     return role_dir
@@ -3063,6 +3064,7 @@ def _convert_recipes(
             # Write as task file; _safe_join already enforces containment within role_dir
             task_file = _safe_join(role_dir, "tasks", f"{recipe_name}.yml")
             try:
+                # lgtm[py/path-injection]: task_file validated via _safe_join containment check
                 task_file.parent.mkdir(parents=True, exist_ok=True)
                 safe_write_text(task_file, role_dir, playbook_yaml)
             except OSError as write_err:
