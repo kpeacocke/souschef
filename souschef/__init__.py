@@ -27,22 +27,12 @@ from souschef.assessment import (  # noqa: E402
     generate_migration_report,
     validate_conversion,
 )
-from souschef.deployment import (  # noqa: E402
-    analyse_chef_application_patterns,
-)
+from souschef.deployment import analyse_chef_application_patterns  # noqa: E402
 
 # Import server functions only if MCP is available
 try:
-    from souschef.server import (
-        analyse_chef_search_patterns,
-    )
-
-    # lgtm [py/unused-local-variable]: Set for future feature gating
-    _server_available = True  # noqa: F841  # codeql[py/unused-global-variable]
+    from souschef.server import analyse_chef_search_patterns
 except ImportError:
-    # lgtm [py/unused-local-variable]: Set for future feature gating
-    _server_available = False  # noqa: F841  # codeql[py/unused-global-variable]
-
     # Define a placeholder function for when MCP is not available
     def analyse_chef_search_patterns(*args, **kwargs):
         raise NotImplementedError("MCP server not available")

@@ -1,0 +1,3 @@
+# Ignore downloaded packages but allow lock file
+/codeql_modules/
+!codeql-pack.lock.yml

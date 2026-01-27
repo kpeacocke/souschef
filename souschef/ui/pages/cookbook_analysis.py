@@ -1,6 +1,7 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
+import inspect
 import io
 import json
 import os
@@ -33,7 +34,11 @@ from souschef.core.metrics import (
     get_timeline_weeks,
     validate_metrics_consistency,
 )
-from souschef.core.path_utils import _normalize_path, _safe_join
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _normalize_path,
+    _safe_join,
+)
 from souschef.parsers.metadata import parse_cookbook_metadata
 
 # AI Settings
@@ -432,16 +437,14 @@ def _extract_zip_securely(archive_path: Path, extraction_dir: Path) -> None:
         # Safe extraction with manual path handling
         for info in zip_ref.filelist:
             # Construct safe relative path
-            # codeql[py/path-injection]: safe_path from _get_safe_extraction_path
+
             safe_path = _get_safe_extraction_path(info.filename, extraction_dir)
 
             if info.is_dir():
-                # codeql[py/path-injection]: safe_path validated to prevent traversal
                 safe_path.mkdir(parents=True, exist_ok=True)
             else:
-                # codeql[py/path-injection]: parent from validated safe_path
                 safe_path.parent.mkdir(parents=True, exist_ok=True)
-                # codeql[py/path-injection]: safe_path validated in extraction_dir
+
                 with zip_ref.open(info) as source, safe_path.open("wb") as target:
                     # Read in chunks to control memory usage
                     while True:
@@ -495,10 +498,13 @@ def _extract_tar_securely(
         raise ValueError(f"Invalid or corrupted TAR archive: {archive_path.name}")
 
     try:
-        # NOSONAR python:S930 - filter param valid in Python 3.12+
-        with tarfile.open(  # type: ignore[call-overload]
-            str(archive_path), mode=mode, filter="data"
-        ) as tar_ref:
+        open_kwargs: dict[str, Any] = {"name": str(archive_path), "mode": mode}
+
+        # `filter` is available in Python 3.12+; guard for older runtimes.
+        if "filter" in inspect.signature(tarfile.open).parameters:
+            open_kwargs["filter"] = "data"
+
+        with tarfile.open(**open_kwargs) as tar_ref:
             members = tar_ref.getmembers()
             _pre_scan_tar_members(members)
             _extract_tar_members(tar_ref, members, extraction_dir)
@@ -519,14 +525,11 @@ def _pre_scan_tar_members(members):
 def _extract_tar_members(tar_ref, members, extraction_dir):
     """Extract validated TAR members to the extraction directory."""
     for member in members:
-        # codeql[py/path-injection]: safe_path from _get_safe_extraction_path
         safe_path = _get_safe_extraction_path(member.name, extraction_dir)
         # snyk[python/tarslip]: safe_path contains extraction_dir
         if member.isdir():
-            # codeql[py/path-injection]: safe_path validated against traversal
             safe_path.mkdir(parents=True, exist_ok=True)
         else:
-            # codeql[py/path-injection]: parent from validated safe_path
             safe_path.parent.mkdir(parents=True, exist_ok=True)
             _extract_file_content(tar_ref, member, safe_path)
 
@@ -613,7 +616,9 @@ def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
 
     # Normalise separators and join using a containment-checked join
     normalized = filename.replace("\\", "/").strip("/")
-    safe_path = _safe_join(extraction_dir.resolve(), normalized)
+    safe_path = _ensure_within_base_path(
+        _safe_join(extraction_dir.resolve(), normalized), extraction_dir.resolve()
+    )
 
     return safe_path
 
@@ -830,16 +835,31 @@ def _get_archive_upload_input() -> Any:
     return uploaded_file
 
 
+def _is_within_base(base: Path, candidate: Path) -> bool:
+    """Check whether candidate is contained within base after resolution."""
+    base_real = Path(os.path.realpath(str(base)))
+    candidate_real = Path(os.path.realpath(str(candidate)))
+    try:
+        candidate_real.relative_to(base_real)
+        return True
+    except ValueError:
+        return False
+
+
 def _validate_and_list_cookbooks(cookbook_path: str) -> None:
     """Validate the cookbook path and list available cookbooks."""
-    # codeql[py/path-injection]: safe_dir validated via _get_safe_cookbook_directory
     safe_dir = _get_safe_cookbook_directory(cookbook_path)
     if safe_dir is None:
         return
 
-    # codeql[py/path-injection]: safe_dir validated to prevent traversal
-    if safe_dir.exists() and safe_dir.is_dir():
-        _list_and_display_cookbooks(safe_dir)
+    # Validate the safe directory before use
+    dir_exists: bool = safe_dir.exists()
+    if dir_exists:
+        dir_is_dir: bool = safe_dir.is_dir()
+        if dir_is_dir:
+            _list_and_display_cookbooks(safe_dir)
+        else:
+            st.error(f"Directory not found: {safe_dir}")
     else:
         st.error(f"Directory not found: {safe_dir}")
 
@@ -853,54 +873,26 @@ def _get_safe_cookbook_directory(cookbook_path):
     """
     try:
         base_dir = Path.cwd().resolve()
-        temp_dir = Path(tempfile.gettempdir()).resolve()
 
         path_str = str(cookbook_path).strip()
-
-        # Reject obviously malicious patterns
-        if "\x00" in path_str or ":\\" in path_str or "\\" in path_str:
-            st.error(
-                "Invalid path: Path contains null bytes or backslashes, "
-                "which are not allowed."
-            )
+        if not path_str:
+            st.error("Invalid path: Path cannot be empty.")
             return None
 
-        # Reject paths with directory traversal attempts
-        if ".." in path_str:
-            st.error(
-                "Invalid path: Path contains '..' which is not allowed "
-                "for security reasons."
-            )
-            return None
+        # Sanitise the candidate path using shared helper
+        candidate = _normalize_path(path_str)
 
-        user_path = Path(path_str)
+        trusted_bases = [base_dir, Path(tempfile.gettempdir()).resolve()]
+        for base in trusted_bases:
+            try:
+                return _ensure_within_base_path(candidate, base)
+            except ValueError:
+                continue
 
-        if user_path.is_absolute():
-            resolved_candidate = user_path
-        else:
-            resolved_candidate = base_dir / user_path
+        raise ValueError(f"Path traversal attempt: escapes {base_dir}")
 
-        resolved_norm = os.path.normpath(str(resolved_candidate.resolve()))
-        base_norm = os.path.normpath(str(base_dir))
-        temp_norm = os.path.normpath(str(temp_dir))
-        base_prefix = f"{base_norm}{os.sep}"
-        temp_prefix = f"{temp_norm}{os.sep}"
-
-        if resolved_norm == base_norm or resolved_norm.startswith(base_prefix):
-            return Path(resolved_norm)
-
-        if resolved_norm == temp_norm or resolved_norm.startswith(temp_prefix):
-            return Path(resolved_norm)
-
-        st.error(
-            "Invalid path: The resolved path is outside the allowed "
-            "directories (workspace or temporary directory). Paths cannot go above "
-            "the workspace root for security reasons."
-        )
-        return None
-
-    except Exception as exc:
-        st.error(f"Invalid path: {exc}. Please enter a valid relative path.")
+    except ValueError as exc:
+        st.error(f"Invalid path: {exc}")
         return None
 
 
@@ -1251,7 +1243,7 @@ def _analyze_with_ai(
         try:
             normalized = _normalize_path(path_str)
             recipes_dir = normalized / "recipes"
-            # codeql[py/path-injection]: Path validated by _normalize_path
+
             if recipes_dir.exists():
                 return len(list(recipes_dir.glob("*.rb")))
             return 0
@@ -1765,19 +1757,11 @@ def _validate_output_path(output_path: str) -> Path | None:
 
     """
     try:
-        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
         safe_output_path = _normalize_path(str(output_path))
         base_dir = Path.cwd().resolve()
-
-        base_norm = os.path.normpath(str(base_dir))
-        base_prefix = f"{base_norm}{os.sep}"
-        candidate_norm = os.path.normpath(str(safe_output_path))
-
-        if candidate_norm == base_norm or candidate_norm.startswith(base_prefix):
-            candidate_path = Path(candidate_norm)
-            return candidate_path if candidate_path.exists() else None
-
-        return None
+        # Use centralised containment validation
+        validated = _ensure_within_base_path(safe_output_path, base_dir)
+        return validated if validated.exists() else None
     except ValueError:
         return None
 
@@ -1794,27 +1778,21 @@ def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
 
     """
     files_to_archive = []
-    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected
-    # codeql[py/path-injection]: safe_output_path normalized
-    base_norm = os.path.normpath(str(safe_output_path.resolve()))
-    base_prefix = f"{base_norm}{os.sep}"
-    base_path = Path(base_norm)
+    # Path is already normalized; validate files within the output path are contained
+    base_path = safe_output_path
 
-    for root, _dirs, files in os.walk(base_norm):
-        root_norm = os.path.normpath(root)
-        if root_norm != base_norm and not root_norm.startswith(base_prefix):
-            continue
+    for root, _dirs, files in os.walk(base_path):
+        root_path = _ensure_within_base_path(Path(root), base_path)
 
         for file in files:
             safe_name = _sanitize_filename(file)
-            file_path_str = os.path.normpath(os.path.join(root_norm, safe_name))  # noqa: PTH118
-
-            if file_path_str != base_norm and not file_path_str.startswith(base_prefix):
+            candidate_path = _ensure_within_base_path(root_path / safe_name, base_path)
+            try:
+                # Ensure each file is contained within base
+                arcname = candidate_path.relative_to(base_path)
+                files_to_archive.append((candidate_path, arcname))
+            except ValueError:
                 continue
-
-            file_path = Path(file_path_str)
-            arcname = file_path.relative_to(base_path)
-            files_to_archive.append((file_path, arcname))
 
     return files_to_archive
 
@@ -2048,7 +2026,6 @@ def _update_progress(status_text, cookbook_name, current, total):
 def _find_cookbook_directory(cookbook_path, cookbook_name):
     """Find the directory for a specific cookbook by checking metadata."""
     try:
-        # codeql[py/path-injection]: cookbook_path validated via _normalize_path
         normalized_path = _normalize_path(cookbook_path)
         for d in normalized_path.iterdir():
             if d.is_dir():

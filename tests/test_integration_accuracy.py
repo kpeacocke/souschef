@@ -344,7 +344,7 @@ class TestDatabagConversion:
 
     def test_simple_databag_to_vars(self):
         """Test simple databag conversion."""
-        databag_content = '{"mysql": {"root_password": "secret123"}}'
+        databag_content = '{"mysql": {"root_password": "not_secret_value"}}'
         result = convert_chef_databag_to_vars(
             databag_content=databag_content, databag_name="mysql", item_name="default"
         )
@@ -352,7 +352,7 @@ class TestDatabagConversion:
         # Verify vars structure
         assert "mysql" in result
         assert "root_password" in result
-        assert "secret123" in result
+        assert "not_secret_value" in result
 
     def test_nested_databag_to_vars(self):
         """Test nested databag structure conversion."""
@@ -361,7 +361,7 @@ class TestDatabagConversion:
                 "name": "myapp",
                 "config": {
                     "database": {
-                        "host": "db.example.com",
+                        "host": "db-host",
                         "port": 5432
                     }
                 }
@@ -376,7 +376,7 @@ class TestDatabagConversion:
         assert "myapp" in result
         assert "database" in result or "config" in result
         # Check for database host value in converted YAML (not URL sanitization)
-        assert "host: db.example.com" in result or "db.example.com" in result
+        assert "host: db-host" in result or "db-host" in result
         assert "5432" in result
 
 

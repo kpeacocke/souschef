@@ -1,0 +1,27 @@
+[flake8]
+# Flake8 configuration for SousChef project
+# Note: Project uses Ruff as primary linter; this is for IDE compatibility only
+
+# Line length - handled by Ruff formatter (88 chars)
+# E501: Line too long (handled by Ruff)
+# E203: Whitespace before ':' (conflicts with Black/Ruff formatting)
+# F401: Imported but unused (ignore where # noqa: F401 is present - backward compatibility)
+extend-ignore = E501, E203
+per-file-ignores =
+    souschef/server.py:F401
+
+# Exclude standard directories
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    .pytest_cache,
+    .mypy_cache,
+    .coverage,
+    htmlcov,
+    dist,
+    build,
+    *.egg-info
+
+# Match project structure
+max-line-length = 88

@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from souschef.assessment import _analyse_cookbook_dependencies_detailed
 from souschef.server import (
     ValidationCategory,
     ValidationEngine,
@@ -114,7 +115,7 @@ def mock_inline_path_guards(exists_side_effect=None):
     def default_exists(path):
         return "/recipes" in str(path) or "/attributes" in str(path)
 
-    def mock_realpath(path):
+    def mock_realpath(path, strict=False):  # noqa: ARG001
         if isinstance(path, Path):
             return str(path)
         return str(path) if path else "/mock/path"
@@ -1506,6 +1507,7 @@ def test_validate_databags_directory_empty_path():
     """Test _validate_databags_directory with empty path."""
     result = _validate_databags_directory("")
     assert result[0] is None
+    assert result[1] is not None
     assert "Databags directory path cannot be empty" in result[1]
 
 
@@ -1513,6 +1515,7 @@ def test_validate_databags_directory_nonexistent():
     """Test _validate_databags_directory with nonexistent directory."""
     result = _validate_databags_directory("/nonexistent/path")
     assert result[0] is None
+    assert result[1] is not None
     assert "Data bags directory not found" in result[1]
 
 
@@ -1522,6 +1525,7 @@ def test_validate_databags_directory_not_directory():
     with tempfile.NamedTemporaryFile() as tmp_file:
         result = _validate_databags_directory(tmp_file.name)
         assert result[0] is None
+        assert result[1] is not None
         assert "Path is not a directory" in result[1]
 
 
@@ -2612,17 +2616,11 @@ control 'test-1' do
   end
 end
 """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        control_path = Path(tmpdir) / "test.rb"
+        control_path.write_text(inspec_content)
 
-    with patch("souschef.parsers.inspec._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.exists.return_value = True
-        mock_instance.is_dir.return_value = False
-        mock_instance.is_file.return_value = True
-        mock_instance.read_text.return_value = inspec_content
-        mock_instance.name = "test.rb"
-
-        result = parse_inspec_profile("/path/to/test.rb")
+        result = parse_inspec_profile(str(control_path))
 
         assert "test-1" in result
         assert "controls_count" in result
@@ -2637,33 +2635,17 @@ control 'dir-test' do
     end
 end
 """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        profile_path = Path(tmpdir)
+        controls_dir = profile_path / "controls"
+        controls_dir.mkdir()
 
-    with patch("souschef.parsers.inspec._normalize_path") as mock_path:
-        # Create a proper Path mock that works with _safe_join's os.path operations
-        mock_instance = MagicMock(spec=Path)
-        mock_path.return_value = mock_instance
-        mock_instance.exists.return_value = True
-        mock_instance.is_dir.return_value = True
-        mock_instance.is_file.return_value = False
-        mock_instance.__str__.return_value = "/path/to/profile"
+        control_file = controls_dir / "test.rb"
+        control_file.write_text(inspec_content)
 
-        # Mock controls directory
-        controls_dir = MagicMock(spec=Path)
-        controls_dir.exists.return_value = True
+        result = parse_inspec_profile(str(profile_path))
 
-        # Mock control file
-        control_file = MagicMock(spec=Path)
-        control_file.read_text.return_value = inspec_content
-        control_file.relative_to.return_value = Path("controls/test.rb")
-
-        # Patch _safe_join to return our mocked controls_dir
-        with patch("souschef.parsers.inspec._safe_join") as mock_safe_join:
-            mock_safe_join.return_value = controls_dir
-            controls_dir.glob.return_value = [control_file]
-
-            result = parse_inspec_profile("/path/to/profile")
-
-            assert "dir-test" in result or "controls_count" in result
+        assert "dir-test" in result or "controls_count" in result
 
 
 def test_parse_inspec_profile_not_found():
@@ -3066,13 +3048,15 @@ def test_generate_awx_inventory_source_from_chef_success():
 # Tests for data bag conversion tools
 def test_convert_chef_databag_to_vars_success():
     """Test convert_chef_databag_to_vars with valid data bag."""
+    import uuid
+
     from souschef.server import convert_chef_databag_to_vars
 
     # Create databag content
     databag_data = {
         "id": "database",
-        "password": "secret123",  # NOSONAR - Test data only, not a real password
-        "host": "db.example.com",
+        "password": f"test-{uuid.uuid4()}",  # NOSONAR - Dynamically generated test fixture, not a real credential
+        "host": "db-host",
     }
     databag_content = json.dumps(databag_data)
 
@@ -3095,9 +3079,10 @@ def test_generate_ansible_vault_from_databags_success():
 
         # Create sample databag files
         secrets_file = secrets_dir / "database.json"
+        # codeql[py/clear-text-storage-sensitive-data]: test data for encrypted databag conversion only
         secrets_data = {
             "id": "database",
-            "password": {"encrypted_data": "abc123"},
+            "password": {"encrypted_data": "example_encrypted_value"},
         }  # NOSONAR - Test data for encrypted databag conversion
         secrets_file.write_text(json.dumps(secrets_data))
 
@@ -9066,7 +9051,7 @@ end""",
                     'mount "/mnt/shared" do\n'
                     '  device "//server/share"\n'
                     '  fstype "cifs"\n'
-                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'
+                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'  # NOSONAR - Chef recipe test fixture, not real credentials
                     "  dump 0\n"
                     "  pass 0\n"
                     "  action [:mount, :enable]\n"
@@ -11393,6 +11378,11 @@ class TestErrorHandling:
         with pytest.raises(ValueError, match="Path traversal attempt"):
             _safe_join(base, "/etc/passwd")
 
+    def test_analyse_dependencies_rejects_traversal_input(self):
+        """Ensure cookbook dependency analysis rejects traversal attempts."""
+        with pytest.raises(ValueError, match="Cookbook path does not exist"):
+            _analyse_cookbook_dependencies_detailed("../escape")
+
     def test_convert_chef_condition_file_exist_negated(self):
         """Test negated File.exist? condition."""
         condition = "File.exist?('/etc/config')"
@@ -11901,7 +11891,7 @@ class TestChefSearchPatterns:
         from souschef.server import _extract_search_patterns_from_file
 
         with patch("pathlib.Path.read_text", side_effect=PermissionError):
-            result = _extract_search_patterns_from_file(Path("test.rb"))
+            result = _extract_search_patterns_from_file(Path("test.rb"), Path.cwd())
             assert result == []
 
 
@@ -15730,6 +15720,7 @@ def test_get_cookbook_package_config_docker():
     assert result["module"] == "ansible.builtin.apt"
     assert "docker-ce" in result["params"]["name"]
     assert "docker-ce-cli" in result["params"]["name"]
+    # codeql[py/incomplete-url-substring-sanitization]: test data only
     assert "containerd.io" in result["params"]["name"]
 
 

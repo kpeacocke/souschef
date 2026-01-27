@@ -21,10 +21,37 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 func testAccPreCheck(_ *testing.T) {
 	// Set default souschef path for testing if not set
 	if os.Getenv("TF_VAR_souschef_path") == "" {
-		// Try common locations
-		venvPath := "/workspaces/souschef/.venv/bin/souschef"
-		if _, err := os.Stat(venvPath); err == nil {
-			os.Setenv("TF_VAR_souschef_path", venvPath)
+		// Get the directory of this test file
+		_, filename, _, ok := runtime.Caller(0)
+		if !ok {
+			return
+		}
+
+		// Navigate from provider_test.go location to repo root
+		// provider_test.go is in: terraform-provider/internal/provider/
+		repoRoot := filepath.Join(filepath.Dir(filename), "..", "..", "..")
+		repoRoot = filepath.Clean(repoRoot)
+
+		// Try common locations in order of preference
+		possiblePaths := []string{
+			// Poetry virtual environment (most common for macOS/Linux dev)
+			filepath.Join(repoRoot, ".venv", "bin", "souschef"),
+			// Dev container
+			"/workspaces/souschef/.venv/bin/souschef",
+			// System-wide poetry installation
+			filepath.Join(os.Getenv("HOME"), ".cache", "pypoetry", "virtualenvs", "souschef-*/bin/souschef"),
+		}
+
+		for _, path := range possiblePaths {
+			// Handle glob patterns for poetry cache
+			if matches, err := filepath.Glob(path); err == nil && len(matches) > 0 {
+				path = matches[0]
+			}
+
+			if _, err := os.Stat(path); err == nil {
+				os.Setenv("TF_VAR_souschef_path", path)
+				return
+			}
 		}
 	}
 }
