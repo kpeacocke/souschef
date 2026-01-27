@@ -138,5 +138,6 @@ check_untyped_defs = false
 module = [
     "plotly.*",
     "streamlit.*",
+    "mcp.*",
 ]
 ignore_missing_imports = true

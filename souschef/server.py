@@ -1435,7 +1435,7 @@ def _generate_inventory_group_from_environment(
         ),
     }
 
-    return yaml.dump(group_vars, default_flow_style=False, indent=2)
+    return str(yaml.dump(group_vars, default_flow_style=False, indent=2))
 
 
 def _build_conversion_summary(results: list) -> str:
@@ -1884,7 +1884,7 @@ def _generate_vault_content(vars_dict: dict, databag_name: str) -> str:
     # Structure for vault file
     vault_vars = {f"{databag_name}_vault": vars_dict}
 
-    return yaml.dump(vault_vars, default_flow_style=False, indent=2)
+    return str(yaml.dump(vault_vars, default_flow_style=False, indent=2))
 
 
 def _detect_encrypted_databag(content: str) -> bool:
@@ -3158,12 +3158,7 @@ def _convert_attributes(
             # Read the file content
             content = validated_attr.read_text()
 
-            # Extract attributes using internal function
-            from souschef.parsers.attributes import (
-                _extract_attributes,
-                _resolve_attribute_precedence,
-            )
-
+            # Extract attributes (already imported at top of file)
             raw_attributes = _extract_attributes(content)
 
             if not raw_attributes:

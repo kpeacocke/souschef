@@ -3,8 +3,12 @@
 # Note: Project uses Ruff as primary linter; this is for IDE compatibility only
 
 # Line length - handled by Ruff formatter (88 chars)
-# Ignore E501 for assessment.py which has legitimate long lines
-extend-ignore = E501
+# E501: Line too long (handled by Ruff)
+# E203: Whitespace before ':' (conflicts with Black/Ruff formatting)
+# F401: Imported but unused (ignore where # noqa: F401 is present - backward compatibility)
+extend-ignore = E501, E203
+per-file-ignores =
+    souschef/server.py:F401
 
 # Exclude standard directories
 exclude =
