@@ -73,6 +73,10 @@ souschef/
 
 ### Code Quality
 - **Zero warnings policy**: All code must be free of errors and warnings from **all tools** (Ruff, mypy, Pylance) without disabling them
+- **Code suppressions require approval**: NEVER add code suppressions (`# noqa`, `# type: ignore`, `# pylint: disable`, `# codeql[...]`, `|| true`, `|| echo`, `continue-on-error`, etc.) without explicitly asking the user first. Always fix the underlying issue rather than masking it. The only exceptions are:
+  - Pre-existing `# noqa: F401` markers for backward compatibility exports (respect these, never remove them)
+  - User-approved suppressions for legitimate false positives after attempting proper fixes
+  - Document the reason for any approved suppression with a comment explaining why it's necessary
 - **Type hints**: Use Python type hints for all function signatures in source code (`souschef/`). For test files, pytest fixtures (`tmp_path`, `benchmark`) and parameterized test parameters can omit type hints for brevity
 - **Docstrings**: Every function, class, and module must have clear docstrings following Google style
 - **Linting**: Code must pass `ruff check` with no violations
@@ -305,7 +309,10 @@ def test_handles_any_input(random_input):
 ```
 
 ## Anti-Patterns to Avoid
--  Disabling linting warnings without fixing the underlying issue
+-  **Adding suppressions without user approval** - Never add `# noqa`, `# type: ignore`, `# pylint: disable`, `# codeql[...]`, `|| true`, `|| echo`, `continue-on-error: true`, `--skip-editable`, or similar bypasses without explicitly asking the user first
+-  **Masking problems instead of fixing them** - Always attempt to fix the underlying issue rather than suppressing warnings or errors
+-  **Disabling linting warnings** - Don't disable warnings without user approval and documented justification
+-  **Accepting test/check failures** - Don't use `|| true`, `|| echo`, or similar patterns to ignore failures without user consent
 -  Missing type hints
 -  Untested code paths
 -  Platform-specific path handling
