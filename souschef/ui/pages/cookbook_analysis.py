@@ -1,6 +1,7 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
+import inspect
 import io
 import json
 import os
@@ -497,10 +498,13 @@ def _extract_tar_securely(
         raise ValueError(f"Invalid or corrupted TAR archive: {archive_path.name}")
 
     try:
-        # NOSONAR python:S930 - filter param valid in Python 3.12+
-        with tarfile.open(  # type: ignore[call-overload]
-            str(archive_path), mode=mode, filter="data"
-        ) as tar_ref:
+        open_kwargs: dict[str, Any] = {"name": str(archive_path), "mode": mode}
+
+        # `filter` is available in Python 3.12+; guard for older runtimes.
+        if "filter" in inspect.signature(tarfile.open).parameters:
+            open_kwargs["filter"] = "data"
+
+        with tarfile.open(**open_kwargs) as tar_ref:
             members = tar_ref.getmembers()
             _pre_scan_tar_members(members)
             _extract_tar_members(tar_ref, members, extraction_dir)
@@ -877,8 +881,15 @@ def _get_safe_cookbook_directory(cookbook_path):
 
         # Sanitise the candidate path using shared helper
         candidate = _normalize_path(path_str)
-        # Use centralised containment validation
-        return _ensure_within_base_path(candidate, base_dir)
+
+        trusted_bases = [base_dir, Path(tempfile.gettempdir()).resolve()]
+        for base in trusted_bases:
+            try:
+                return _ensure_within_base_path(candidate, base)
+            except ValueError:
+                continue
+
+        raise ValueError(f"Path traversal attempt: escapes {base_dir}")
 
     except ValueError as exc:
         st.error(f"Invalid path: {exc}")
