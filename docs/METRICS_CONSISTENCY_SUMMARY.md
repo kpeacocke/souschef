@@ -71,27 +71,31 @@ All tests pass with 100% pass rate (1335 total tests in project).
 ## Key Benefits
 
 ### 1. **Consistency Guaranteed**
-   - All components use the same underlying calculations
-   - Mathematical consistency between days, hours, and weeks
-   - No contradictory information in reports
+
+- All components use the same underlying calculations
+- Mathematical consistency between days, hours, and weeks
+- No contradictory information in reports
 
 ### 2. **Quality Maintained**
-   - Type-safe EffortMetrics container prevents unit mixing
-   - Validation function catches contradictions before reporting
-   - Explicit formulas make assumptions clear
-   - Strategy multipliers preserve nuance (phased, big_bang, parallel)
+
+- Type-safe EffortMetrics container prevents unit mixing
+- Validation function catches contradictions before reporting
+- Explicit formulas make assumptions clear
+- Strategy multipliers preserve nuance (phased, big_bang, parallel)
 
 ### 3. **Flexibility**
-   - Base unit (days) allows all components to use same numbers
-   - Different representations (days, hours, weeks ranges) for UI display
-   - Strategy-aware timeline calculations
-   - Team size recommendations based on effort
+
+- Base unit (days) allows all components to use same numbers
+- Different representations (days, hours, weeks ranges) for UI display
+- Strategy-aware timeline calculations
+- Team size recommendations based on effort
 
 ### 4. **Code Quality**
-   - Zero linting errors (Ruff compliant)
-   - Full type hints with mypy validation
-   - Comprehensive docstrings
-   - No external dependencies
+
+- Zero linting errors (Ruff compliant)
+- Full type hints with mypy validation
+- Comprehensive docstrings
+- No external dependencies
 
 ## Usage Examples
 
@@ -148,6 +152,7 @@ if not is_valid:
 ## Implementation Checklist
 
 ### Phase 1: Core Module (COMPLETED)
+
 - ✅ Created `souschef/core/metrics.py` with EffortMetrics class
 - ✅ Implemented 8 utility functions
 - ✅ Created comprehensive tests in `tests/test_metrics.py`
@@ -156,23 +161,27 @@ if not is_valid:
 - ✅ Type hints complete
 
 ### Phase 2: Integration with Assessment (READY)
+
 - Refactor `assessment.py` to use `EffortMetrics`
 - Replace hardcoded week ranges with derived properties
 - Use `estimate_effort_for_complexity()` instead of local calculations
 - Use `categorize_complexity()` for priority determination
 
 ### Phase 3: Integration with Deployment (READY)
+
 - Refactor `deployment.py` to use centralized functions
 - Replace hardcoded ranges with `get_timeline_weeks()`
 - Use `get_team_recommendation()` for team sizing
 - Remove duplicate complexity calculations
 
 ### Phase 4: Integration with UI Components (READY)
+
 - Update validation to use `validate_metrics_consistency()`
 - Display consistent formats across all reports
 - Use `EffortMetrics` properties for all representations
 
 ### Phase 5: Testing & Validation (READY)
+
 - Add integration tests for refactored components
 - Add regression tests to ensure consistency
 - Update documentation with new patterns

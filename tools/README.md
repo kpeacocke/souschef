@@ -3,6 +3,7 @@
 This directory contains development and validation tools for the SousChef project.
 
 Companion docs:
+
 - [LOCAL_CODEQL_GUIDE.md](LOCAL_CODEQL_GUIDE.md) — full guide to running CodeQL locally
 - [CODEQL_QUICK_REFERENCE.md](CODEQL_QUICK_REFERENCE.md) — quick reference card
 
@@ -15,6 +16,7 @@ A local validation tool that verifies CodeQL path-injection security suppression
 CodeQL is GitHub's code analysis tool that detects potential security vulnerabilities, including "path-injection" attacks where user input could be used unsafely in file path operations.
 
 This tool validates that:
+
 - All path operations that could be flagged by CodeQL have proper inline suppressions
 - The suppression format is correct: `# codeql [py/path-injection]` (with space)
 - All files with path operations are checked
@@ -28,7 +30,8 @@ python3 tools/check_codeql_suppressions.py
 ### Output Examples
 
 **Success (all suppressions in place):**
-```
+
+```text
 ======================================================================
 LOCAL CODEQL SUPPRESSION VALIDATION
 ======================================================================
@@ -41,7 +44,8 @@ Checking souschef/assessment.py:
 ```
 
 **Failure (missing suppressions):**
-```
+
+```text
 Checking souschef/assessment.py:
   ✗ 22/30 suppressions found (MISSING 8)
 ...
@@ -56,11 +60,13 @@ CodeQL runs on every push to GitHub and will block PRs if security warnings are 
 ### Understanding CodeQL Suppressions
 
 CodeQL suppressions must:
+
 1. Use the exact format: `# codeql [py/path-injection]` (note the space between "codeql" and "[")
 2. Be on the **same line** as the path operation that triggered the warning
 3. Only suppress issues that are actually safe (e.g., paths normalized via `_normalize_path()` or `_safe_join()`)
 
 **Example:**
+
 ```python
 # Safe: cookbook_path is normalized by caller via _normalize_path()
 recipe_path = cookbook_path / "recipes" / recipe_name  # codeql [py/path-injection]
@@ -101,16 +107,19 @@ git push origin main
 ### Troubleshooting
 
 To see which files have suppressions:
+
 ```bash
 grep -r "codeql \[py/path-injection\]" souschef/
 ```
 
 To count total suppressions:
+
 ```bash
 grep -r "codeql \[py/path-injection\]" souschef/ | wc -l
 ```
 
 To check a specific file:
+
 ```bash
 grep "codeql \[py/path-injection\]" souschef/assessment.py | wc -l
 ```

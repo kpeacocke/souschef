@@ -12,6 +12,7 @@ python3 tools/check_codeql_suppressions.py
 ```
 
 This is the **recommended approach** for the SousChef project. It:
+
 - ✅ Runs instantly (no downloads needed)
 - ✅ Checks for proper `# codeql [py/path-injection]` suppressions
 - ✅ Validates your code before pushing to GitHub
@@ -56,7 +57,7 @@ snyk code test /workspaces/souschef
 The `tools/check_codeql_suppressions.py` script is optimized for SousChef development:
 
 | Feature | Local Validator | CodeQL CLI | Snyk |
-|---------|-----------------|-----------|------|
+| --------- | --------- | --------- | ------ |
 | Setup time | < 1 second | 2-5 minutes | 1-2 minutes |
 | Identifies missing suppressions | ✓ Yes | ✓ Yes | ~ Limited |
 | Catches code before GitHub | ✓ Yes | ✓ Yes | ✓ Yes |
@@ -93,7 +94,7 @@ The local validator checks these files for CodeQL path-injection suppressions:
 - `souschef/core/path_utils.py` (2 suppressions)
 - `souschef/ui/app.py` (1 suppression)
 
-**Total: 82+ suppressions verified**
+Total: 82+ suppressions verified
 
 ## Understanding CodeQL Path-Injection Warnings
 
@@ -122,18 +123,21 @@ Then add the suppression comment to tell CodeQL: "This is safe, I've validated i
 ## Common Suppression Patterns in SousChef
 
 ### Pattern 1: Normalized paths
+
 ```python
 # In caller: path = _normalize_path(user_input)
 recipe_file = path / "recipes" / "default.rb"  # codeql [py/path-injection]
 ```
 
 ### Pattern 2: Safe path joining
+
 ```python
 from souschef.core.path_utils import _safe_join
 file_path = _safe_join(base_dir, user_file)  # codeql [py/path-injection]
 ```
 
 ### Pattern 3: Archive extraction (validated)
+
 ```python
 # Validated via _get_safe_extraction_path()
 extract_path = archive_dir / member_path  # codeql [py/path-injection]
@@ -143,6 +147,7 @@ extract_path = archive_dir / member_path  # codeql [py/path-injection]
 
 **Q: Validator says "missing suppressions" but I see them in the code**
 A: Make sure the suppression is on the **same line** as the path operation:
+
 ```python
 # ❌ Wrong - suppression on wrong line
 cookbook_path = Path(user_input)
@@ -154,6 +159,7 @@ path = cookbook_path / "recipes"  # codeql [py/path-injection]
 
 **Q: GitHub CodeQL still complains even though local validator passes**
 A: Possible causes:
+
 1. Suppression format differs (must be exactly `# codeql [py/path-injection]`)
 2. Code wasn't actually pushed (check `git status`)
 3. CodeQL found a different issue than path-injection

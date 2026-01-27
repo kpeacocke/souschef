@@ -65,6 +65,7 @@ poetry install
 ## Core Capabilities
 
 ### 1. Chef Cookbook Analysis & Parsing
+
 Complete cookbook introspection and analysis tools:
 
 - **parse_template** - Parse ERB templates with Jinja2 conversion and variable extraction
@@ -77,6 +78,7 @@ Complete cookbook introspection and analysis tools:
 - **list_cookbook_structure** - Display complete cookbook directory hierarchy
 
 ### 2. Chef-to-Ansible Conversion Engine
+
 Advanced resource-to-task conversion with intelligent module selection:
 
 - **convert_resource_to_task** - Transform individual Chef resources to Ansible tasks
@@ -89,6 +91,7 @@ Advanced resource-to-task conversion with intelligent module selection:
   - Platform checks, node attributes, file/directory existence, and command execution
 
 ### 3. Chef Search & Inventory Integration
+
 Convert Chef search patterns to dynamic Ansible inventory:
 
 - **convert_chef_search_to_inventory** - Transform Chef search queries to Ansible inventory groups
@@ -96,6 +99,7 @@ Convert Chef search patterns to dynamic Ansible inventory:
 - **analyse_chef_search_patterns** - Discover and analyse search usage in cookbooks
 
 ### 4. InSpec Integration & Validation
+
 Complete InSpec-to-Ansible testing pipeline:
 
 - **parse_inspec_profile** - Parse InSpec profiles and extract controls
@@ -103,6 +107,7 @@ Complete InSpec-to-Ansible testing pipeline:
 - **generate_inspec_from_recipe** - Auto-generate InSpec validation from Chef recipes
 
 ### 5. Data Bags & Secrets Management
+
 Chef data bags to Ansible vars/vault conversion:
 
 - **convert_chef_databag_to_vars** - Transform data bags to Ansible variable files
@@ -110,6 +115,7 @@ Chef data bags to Ansible vars/vault conversion:
 - **analyse_chef_databag_usage** - Analyse data bag usage patterns in cookbooks
 
 ### 6. Environment & Configuration Management
+
 Chef environments to Ansible inventory groups:
 
 - **convert_chef_environment_to_inventory_group** - Transform Chef environments to inventory
@@ -117,6 +123,7 @@ Chef environments to Ansible inventory groups:
 - **analyse_chef_environment_usage** - Analyse environment usage in cookbooks
 
 ### 7. AWX/Ansible Automation Platform Integration
+
 Enterprise AWX/AAP configuration generation:
 
 - **generate_awx_job_template_from_cookbook** - Create AWX job templates from cookbooks
@@ -125,6 +132,7 @@ Enterprise AWX/AAP configuration generation:
 - **generate_awx_inventory_source_from_chef** - Create dynamic inventory sources from Chef server
 
 ### 8. Chef Habitat to Container Conversion
+
 Modernize Habitat applications to containerized deployments:
 
 - **parse_habitat_plan** - Parse Chef Habitat plan files (plan.sh) and extract package metadata, dependencies, build/install hooks, and service configuration
@@ -132,6 +140,7 @@ Modernize Habitat applications to containerized deployments:
 - **generate_compose_from_habitat** - Generate docker-compose.yml from multiple Habitat plans for multi-service deployments
 
 ### 9. Advanced Deployment Patterns & Migration Assessment
+
 Modern deployment strategies and migration planning:
 
 - **convert_chef_deployment_to_ansible_strategy** - Convert deployment recipes to Ansible strategies
@@ -139,6 +148,7 @@ Modern deployment strategies and migration planning:
 - **generate_canary_deployment_strategy** - Generate canary deployment configurations
 
 ### 10. CI/CD Pipeline Generation
+
 Generate Jenkins, GitLab CI, and GitHub Actions workflows from Chef cookbook CI patterns:
 
 - **generate_jenkinsfile_from_chef** - Generate Jenkinsfile (Declarative or Scripted) from Chef cookbook CI/CD patterns
@@ -146,6 +156,7 @@ Generate Jenkins, GitLab CI, and GitHub Actions workflows from Chef cookbook CI 
 - **generate_github_workflow_from_chef** - Generate GitHub Actions workflow from Chef cookbook CI/CD patterns
 
 Automatically detects and converts:
+
 - **Test Kitchen** configurations (.kitchen.yml) → Integration test stages
 - **ChefSpec** tests (spec/) → Unit test stages
 - **Cookstyle/Foodcritic** → Lint stages
@@ -171,7 +182,10 @@ souschef generate-gitlab-ci ./mycookbook --no-cache --no-artifacts
 souschef generate-github-workflow ./mycookbook --workflow-name "My CI" --no-cache
 ```
 
+#### Command Line Usage
+
 **MCP Tool Usage:**
+
 ```python
 # From an AI assistant with SousChef MCP
 
@@ -199,6 +213,7 @@ generate_github_workflow_from_chef(
 ```
 
 ### 11. Conversion Validation Framework
+
 Comprehensive validation of Chef-to-Ansible conversions:
 
 - **validate_conversion** - Validate conversions across multiple dimensions
@@ -209,18 +224,20 @@ Comprehensive validation of Chef-to-Ansible conversions:
   - **Performance Recommendations**: Efficiency suggestions and optimizations
 
 #### Validation Levels
+
 - **ERROR**: Critical issues that will prevent execution
 - **WARNING**: Potential problems or anti-patterns that may cause issues
 - **INFO**: Suggestions for improvements and best practices
 
 #### Validation Categories
+
 - **Syntax**: Code structure and syntax correctness
 - **Semantic**: Logical equivalence and meaning preservation
 - **Best Practice**: Ansible community standards and patterns
 - **Security**: Security considerations and recommendations
 - **Performance**: Efficiency and optimization suggestions
 
-#### Example Usage
+#### Validation Examples
 
 ```python
 # Validate a resource conversion
@@ -236,6 +253,7 @@ validate_conversion(
 ```
 
 Output formats:
+
 - **text**: Detailed report with all findings grouped by severity
 - **json**: Structured JSON for programmatic processing
 - **summary**: Quick overview with counts only
@@ -249,6 +267,7 @@ Output formats:
 ## Migration Workflow
 
 ### Phase 1: Discovery & Assessment
+
 ```bash
 # Assess migration complexity
 assess_chef_migration_complexity /path/to/cookbooks
@@ -261,6 +280,7 @@ generate_migration_plan '{\"cookbooks\": [\"/path/to/cookbook1\", \"/path/to/coo
 ```
 
 ### Phase 2: Content Conversion
+
 ```bash
 # Convert recipes to playbooks
 generate_playbook_from_recipe /path/to/recipe.rb
@@ -273,6 +293,7 @@ generate_inventory_from_chef_environments /path/to/environments
 ```
 
 ### Phase 3: AWX/AAP Integration
+
 ```bash
 # Generate AWX job templates
 generate_awx_job_template_from_cookbook /path/to/cookbook cookbook_name
@@ -285,6 +306,7 @@ generate_awx_inventory_source_from_chef https://chef.example.com production web_
 ```
 
 ### Phase 4: Habitat to Container Migration
+
 ```bash
 # Parse Habitat plan
 parse_habitat_plan /path/to/plan.sh
@@ -297,6 +319,7 @@ generate_compose_from_habitat "/path/to/plan1.sh,/path/to/plan2.sh" my_network
 ```
 
 ### Phase 5: Validation & Testing
+
 ```bash
 # Generate InSpec validation
 generate_inspec_from_recipe /path/to/recipe.rb
@@ -306,6 +329,7 @@ convert_inspec_to_test /path/to/inspec_profile testinfra
 ```
 
 ### Performance Profiling & Optimization
+
 Profile cookbook parsing performance to identify bottlenecks and optimize large-scale migrations:
 
 ```bash
@@ -326,6 +350,7 @@ profile_parsing_operation recipe /path/to/recipe.rb --detailed
 ```
 
 ### 10. Visual Migration Planning Interface
+
 Interactive web-based interface for Chef-to-Ansible migration planning and visualization:
 
 - **Cookbook Analysis Dashboard**: Interactive directory scanning with metadata parsing and complexity assessment
@@ -335,6 +360,7 @@ Interactive web-based interface for Chef-to-Ansible migration planning and visua
 - **Progress Tracking**: Real-time migration progress with completion metrics and bottleneck identification
 
 **Launch the UI:**
+
 ```bash
 # Using Poetry (development)
 poetry run souschef ui
@@ -347,6 +373,7 @@ souschef ui --port 8080
 ```
 
 **Run in Docker:**
+
 ```bash
 # Build the image
 docker build -t souschef-ui .
@@ -371,6 +398,7 @@ nano .env
 ```
 
 **Example .env file:**
+
 ```dotenv
 # AI Configuration
 SOUSCHEF_AI_PROVIDER=Anthropic (Claude)
@@ -387,12 +415,14 @@ STREAMLIT_SERVER_HEADLESS=true
 ```
 
 **Supported AI Providers:**
+
 - `Anthropic (Claude)` - Anthropic Claude models
 - `OpenAI (GPT)` - OpenAI GPT models
 - `IBM Watsonx` - IBM Watsonx AI models
 - `Red Hat Lightspeed` - Red Hat Lightspeed models
 
 **Environment Variables:**
+
 - `SOUSCHEF_AI_PROVIDER` - AI provider name (required)
 - `SOUSCHEF_AI_MODEL` - Model name (required)
 - `SOUSCHEF_AI_API_KEY` - API key for authentication (required)
@@ -402,6 +432,7 @@ STREAMLIT_SERVER_HEADLESS=true
 - `SOUSCHEF_AI_MAX_TOKENS` - Maximum tokens to generate (optional, default: 4000)
 
 **Docker Compose (recommended for development):**
+
 ```yaml
 version: '3.8'
 services:
@@ -420,6 +451,7 @@ services:
 ```
 
 **Features:**
+
 - Clean, professional design matching documentation standards
 - Real-time cookbook analysis with progress indicators
 - **Interactive dependency visualization** with Plotly graphs and NetworkX analysis
@@ -432,6 +464,7 @@ services:
 ### Advanced UI Features
 
 #### Interactive Dependency Visualization
+
 The UI includes sophisticated dependency graph visualization powered by NetworkX and Plotly:
 
 - **Graph Analysis**: Automatic detection of cookbook dependencies, circular references, and migration ordering
@@ -441,6 +474,7 @@ The UI includes sophisticated dependency graph visualization powered by NetworkX
 - **Large Graph Support**: Optimized layouts for complex cookbook ecosystems
 
 #### Real-Time Progress Tracking
+
 All analysis operations include comprehensive progress feedback:
 
 - **Progress Bars**: Visual progress indicators for long-running operations
@@ -449,18 +483,21 @@ All analysis operations include comprehensive progress feedback:
 - **Error Handling**: Graceful error display with recovery suggestions
 
 #### Enhanced User Experience
+
 - **Responsive Design**: Clean, professional interface that works across different screen sizes
 - **Export Options**: Download analysis results, graphs, and migration plans
 - **Session Persistence**: Maintain analysis state across page refreshes
 - **Quick Actions**: One-click access to common migration tasks
 
 ### Migration Assessment & Reporting
+
 - **Complexity Analysis**: Automated assessment of migration effort and risk factors
 - **Dependency Mapping**: Complete cookbook dependency analysis with migration ordering
 - **Impact Analysis**: Resource usage patterns and conversion recommendations
 - **Executive Reports**: Stakeholder-ready migration reports with timelines and costs
 
 ### Modern Deployment Patterns
+
 - **Blue/Green Deployments**: Zero-downtime deployment strategies
 - **Canary Releases**: Gradual rollout configurations
 - **Application Patterns**: Modern containerized and cloud-native deployment patterns
@@ -468,6 +505,7 @@ All analysis operations include comprehensive progress feedback:
 - **Habitat to Container**: Convert Chef Habitat plans to Docker and Docker Compose configurations
 
 ### Enterprise Integration
+
 - **AWX/AAP Ready**: Native Ansible Automation Platform integration
 - **Dynamic Inventory**: Chef server integration for hybrid environments
 - **Secrets Management**: Secure data bag to Vault conversion
@@ -476,6 +514,7 @@ All analysis operations include comprehensive progress feedback:
 ## Installation & Setup
 
 ### Prerequisites
+
 - Python 3.14+
 - [Poetry](https://python-poetry.org/) for dependency management
 - MCP-compatible client (Claude Desktop, VS Code 1.102+ with GitHub Copilot, etc.)
@@ -483,6 +522,7 @@ All analysis operations include comprehensive progress feedback:
 ### Quick Start
 
 1. **Install SousChef**:
+
    ```bash
    pip install mcp-souschef
    ```
@@ -492,12 +532,14 @@ All analysis operations include comprehensive progress feedback:
    Use the pre-configured files in the `config/` directory for quick setup with Claude Desktop, VS Code Copilot, or other MCP clients.
 
    **Claude Desktop** (macOS):
+
    ```bash
    cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
    # Restart Claude Desktop
    ```
 
    **VS Code + GitHub Copilot** (requires VS Code 1.102+):
+
    ```bash
    # macOS/Linux
    cp config/vscode-copilot.json ~/.config/Code/User/mcp.json
@@ -508,7 +550,7 @@ All analysis operations include comprehensive progress feedback:
    # Reload VS Code window, then trust the server when prompted
    ```
 
-   ** See [config/CONFIGURATION.md](config/CONFIGURATION.md) for:**
+   **See [config/CONFIGURATION.md](config/CONFIGURATION.md) for:**
    - Platform-specific setup (macOS/Linux/Windows)
    - Model provider configurations (Red Hat AI, OpenAI, local models)
    - Development setup
@@ -538,6 +580,7 @@ souschef-cli inspec-convert controls.rb --format testinfra
 ```
 
 **Available Commands:**
+
 - `recipe` - Parse Chef recipe files and extract resources
 - `template` - Convert ERB templates to Jinja2 with variable extraction
 - `resource` - Parse custom resources and LWRPs
@@ -593,15 +636,17 @@ poetry update              # All packages
 ```
 
 **Automated Systems:**
--  Pre-commit hooks auto-update `poetry.lock` when `pyproject.toml` changes
--  CI validates lock file on every PR
--  Dependabot sends weekly dependency updates
+
+- Pre-commit hooks auto-update `poetry.lock` when `pyproject.toml` changes
+- CI validates lock file on every PR
+- Dependabot sends weekly dependency updates
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#-managing-dependencies) for detailed dependency management guide.
 
 ## Architecture & Design
 
 ### MCP Protocol Integration
+
 SousChef leverages the Model Context Protocol (MCP) to provide seamless integration with AI assistants and development environments:
 
 - **38 Specialized Tools**: Each migration capability exposed as dedicated MCP tool
@@ -610,6 +655,7 @@ SousChef leverages the Model Context Protocol (MCP) to provide seamless integrat
 - **Streaming Support**: Efficient handling of large cookbook conversions
 
 ### Testing Strategy
+
 Following enterprise-grade testing standards with comprehensive test coverage:
 
 - **Unit Tests**: Mock-based testing for individual functions (test_server.py, test_cli.py, test_mcp.py)
@@ -621,6 +667,7 @@ Following enterprise-grade testing standards with comprehensive test coverage:
 - **92% Coverage**: Comprehensive test coverage exceeding the 90% target for production readiness
 
 ### Quality Assurance
+
 - **Zero Warnings Policy**: All code passes linting without disabling checks
 - **Type Safety**: Complete type annotations throughout the codebase
 - **Automated Testing**: CI/CD pipeline with comprehensive test suites
@@ -629,7 +676,9 @@ Following enterprise-grade testing standards with comprehensive test coverage:
 ## Documentation
 
 ### Tool Reference
+
 Each MCP tool includes comprehensive documentation:
+
 - Purpose and use cases
 - Parameter descriptions and types
 - Return value specifications
@@ -637,72 +686,11 @@ Each MCP tool includes comprehensive documentation:
 - Error handling behaviors
 
 ### Migration Guides
+
 - **[Enterprise Migration Guide](docs/enterprise-migration.md)** - Complete methodology for large-scale migrations
 - **[AWX Integration Guide](docs/awx-integration.md)** - Step-by-step AWX/AAP setup and configuration
 - **[Testing Strategy Guide](docs/testing-strategy.md)** - Validation and testing approaches
 - **[Best Practices](docs/best-practices.md)** - Recommended patterns and approaches
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
-- Development setup and workflow
-- Code style and testing requirements
-- Pull request process
-- Issue reporting guidelines
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Roadmap
-
-### Completed
--  Complete Chef cookbook parsing (recipes, attributes, metadata, templates)
--  InSpec profile parsing and conversion to Testinfra/Ansible tests
--  Chef resource to Ansible task conversion with module mapping
--  Data bags to Ansible Vault conversion
--  Chef environments to Ansible inventory conversion
--  Chef search patterns to dynamic inventory conversion
--  AWX/AAP job templates, workflows, and project generation
--  Blue/green and canary deployment pattern generation
--  Migration complexity assessment and planning tools
--  Comprehensive testing suite (unit, integration, property-based)
--  Command-line interface (CLI) for standalone usage
--  Enhanced Chef guard handling (arrays, lambda syntax, complex nested conditions)
--  Advanced attribute precedence resolution (6 levels with conflict detection)
--  Automated release management with Release Please
--  Automated branch cleanup for release PRs
--  Automated conversion validation and testing framework
--  Chef Habitat to containerized deployment conversion (parse_habitat_plan, convert_habitat_to_dockerfile, generate_compose_from_habitat)
--  Enhanced error handling with custom exceptions and actionable recovery suggestions
--  Technical debt reduction - ALL PHASES COMPLETE: 16 functions refactored (15 C-grade eliminated, 70+ helpers extracted, average 77% complexity reduction, zero C-grade functions remaining)
--  Performance profiling and optimization for large cookbooks (profiling module, CLI commands, MCP tools)
--  Code duplication elimination (InSpec functions refactored: 55 duplicate lines removed, improved architecture)
--  Documentation website with MkDocs + Material theme (charcoal + teal colour scheme, 16 pages)
--  Comprehensive documentation content (Getting Started, Tool Reference, Migration Guide, API docs, Examples)
--  Integration with additional test frameworks (ServerSpec, Goss) - InSpec conversion now supports 4 output formats
--  Jenkins/GitLab CI pipeline generation from Chef cookbook CI patterns (Test Kitchen, ChefSpec, Cookstyle)
--  Visual migration planning interface with Streamlit-based web UI for interactive cookbook analysis and migration planning
--  **Interactive dependency mapping and visualization** with Plotly graphs and NetworkX analysis
--  **Real-time progress tracking** for all analysis operations with Streamlit progress bars
--  **Static graph visualization** with matplotlib for reports and documentation
--  **Automated ERB to Jinja2 template conversion** - Converts Chef ERB templates to Ansible Jinja2 templates during cookbook conversion
-   -  Converts ERB syntax to Jinja2: `<%= var %>` → `{{ var }}`, `<% if %>` → `{% if %}`
-   -  Extracts template variables for validation and documentation
-   -  Includes converted templates in downloadable playbook archives
-   -  UI displays converted templates with variable lists and preview
-
-### Planned
-- 📅 Enhanced graph layout algorithms for large dependency networks (force-directed, hierarchical)
-- 📅 Export functionality for graphs (PNG, SVG, PDF formats)
-- 📅 UI configuration options and themes
-- 📅 Performance caching for expensive analysis operations
-- 📅 Mobile-responsive design improvements
-- 📅 Accessibility enhancements (ARIA labels, keyboard navigation)
-- 📅 Integration testing for UI components
-- 📅 Advanced filtering and search in dependency graphs
-- 📅 Migration templates and presets
-- 📅 Terraform provider for infrastructure state management
 
 ## Support & Community
 
@@ -712,326 +700,23 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**SousChef** - *Transforming infrastructure automation, one recipe at a time.*
-  desc 'Ensure package nginx is properly configured'
-  impact 1.0
+## SousChef
 
-  describe package('nginx') do
-    it { should be_installed }
-  end
-end
-
-control 'service-nginx' do
-  title 'Verify service nginx'
-  desc 'Ensure service nginx is properly configured'
-  impact 1.0
-
-  describe service('nginx') do
-    it { should be_running }
-    it { should be_enabled }
-  end
-end
-
-control 'template--etc-nginx-nginx.conf' do
-  title 'Verify template /etc/nginx/nginx.conf'
-  desc 'Ensure template /etc/nginx/nginx.conf is properly configured'
-  impact 1.0
-
-  describe file('/etc/nginx/nginx.conf') do
-    it { should exist }
-    its('mode') { should cmp '0644' }
-    its('owner') { should eq 'root' }
-    its('group') { should eq 'root' }
-  end
-end
-```
-
-#### Testinfra Integration
-
-Convert to Python tests for CI/CD pipelines:
-
-```bash
-souschef-cli inspec-convert validation-controls.rb --format testinfra
-```
-
-```python
-import pytest
-
-def test_package_nginx(host):
-    """Ensure package nginx is properly configured"""
-    pkg = host.package("nginx")
-    assert pkg.is_installed
-
-def test_service_nginx(host):
-    """Ensure service nginx is properly configured"""
-    svc = host.service("nginx")
-    assert svc.is_running
-    assert svc.is_enabled
-
-def test_template_etc_nginx_nginx_conf(host):
-    """Ensure template /etc/nginx/nginx.conf is properly configured"""
-    f = host.file("/etc/nginx/nginx.conf")
-    assert f.exists
-    assert oct(f.mode) == "0644"
-    assert f.user == "root"
-    assert f.group == "root"
-```
-
-#### Ansible Assert Integration
-
-For Ansible playbook validation:
-
-```bash
-souschef-cli inspec-convert validation-controls.rb --format ansible_assert
-```
-
-```yaml
----
-# Validation tasks converted from InSpec
-
-- name: Verify package nginx
-  ansible.builtin.assert:
-    that:
-      - ansible_facts.packages['nginx'] is defined
-    fail_msg: "Ensure package nginx is properly configured validation failed"
-
-- name: Verify service nginx
-  ansible.builtin.assert:
-    that:
-      - services['nginx'].state == 'running'
-      - services['nginx'].status == 'enabled'
-    fail_msg: "Ensure service nginx is properly configured validation failed"
-```
-
-#### Benefits
-
-- **Consistency Validation** - Ensure Chef and Ansible produce identical infrastructure state
-- **AI Context Enhancement** - InSpec profiles help AI understand infrastructure intent
-- **Automated Testing** - Generate tests automatically from Chef recipes
-- **Multiple Test Formats** - Support for InSpec, Testinfra, and Ansible assert
-- **CI/CD Integration** - Easy integration with existing test pipelines
-
-### As an MCP Server
-
-SousChef is designed to be used as an MCP server with AI assistants that support the Model Context Protocol.
-
-#### Configure with Claude Desktop
-
-Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
-```json
-{
-  "mcpServers": {
-    "souschef": {
-      "command": "poetry",
-      "args": [
-        "-C",
-        "/path/to/souschef",
-        "run",
-        "souschef"
-      ]
-    }
-  }
-}
-```
-
-### Available Tools
-
-#### `list_directory(path: str)`
-List the contents of a directory.
-
-**Example:**
-```python
-list_directory("/path/to/cookbooks")
-# Returns: ['nginx', 'apache2', 'mysql']
-```
-
-#### `read_file(path: str)`
-Read the contents of a file.
-
-**Example:**
-```python
-read_file("/path/to/cookbook/recipes/default.rb")
-# Returns: file contents as string
-```
-
-#### `read_cookbook_metadata(path: str)`
-Parse Chef cookbook metadata.rb file.
-
-**Example:**
-```python
-read_cookbook_metadata("/path/to/cookbook/metadata.rb")
-# Returns:
-# name: nginx
-# maintainer: Chef Software, Inc.
-# version: 8.0.0
-# depends: logrotate, iptables
-```
-
-#### `parse_recipe(path: str)`
-Parse a Chef recipe file and extract resources.
-
-**Example:**
-```python
-parse_recipe("/path/to/cookbook/recipes/default.rb")
-# Returns:
-# Resource 1:
-#   Type: package
-#   Name: nginx
-#   Action: install
-```
-
-#### `parse_attributes(path: str, resolve_precedence: bool = True)`
-Parse a Chef attributes file and extract attribute definitions with precedence analysis.
-
-**Chef Attribute Precedence** (lowest to highest):
-1. `default` - Normal default value
-2. `force_default` - Forced default, higher than regular default
-3. `normal` - Normal attribute set by cookbook
-4. `override` - Override values
-5. `force_override` - Forced override, cannot be overridden
-6. `automatic` - Automatically detected by Ohai (highest precedence)
-
-When multiple attributes with the same path exist at different precedence levels, the highest precedence wins. The tool automatically resolves conflicts and reports which values were overridden.
-
-**Parameters:**
-- `path`: Path to the attributes (.rb) file
-- `resolve_precedence`: If True (default), resolves conflicts and shows only winning values. If False, shows all attributes.
-
-**Example:**
-```python
-# With precedence resolution (default)
-parse_attributes("/path/to/cookbook/attributes/default.rb")
-# Returns:
-# Resolved Attributes (with precedence):
-# ==================================================
-#
-# Attribute: nginx.port
-#   Value: 443
-#   Precedence: force_override (level 5)
-#     Overridden values: default=80, normal=8080
-#
-# Attribute: nginx.ssl_port
-#   Value: 443
-#   Precedence: default (level 1)
-#
-# ==================================================
-# Total attributes: 2
-# Attributes with precedence conflicts: 1
-
-# Without precedence resolution (show all)
-parse_attributes("/path/to/cookbook/attributes/default.rb", resolve_precedence=False)
-# Returns:
-# default[nginx.port] = 80
-# normal[nginx.port] = 8080
-# force_override[nginx.port] = 443
-# default[nginx.ssl_port] = 443
-```
-
-**Use Cases:**
-- Understanding attribute conflicts in complex cookbooks
-- Debugging which attributes will actually be applied
-- Planning attribute migrations to Ansible variables
-- Identifying force_override attributes that need special handling
-
-#### `list_cookbook_structure(path: str)`
-List the structure of a Chef cookbook directory.
-
-**Example:**
-```python
-list_cookbook_structure("/path/to/cookbook")
-# Returns:
-# recipes/
-#   default.rb
-#   install.rb
-# attributes/
-#   default.rb
-# metadata/
-#   metadata.rb
-```
-
-#### `parse_template(path: str)`
-Parse a Chef ERB template file and convert it to Jinja2 format.
-
-**Example:**
-```python
-parse_template("/path/to/cookbook/templates/default/nginx.conf.erb")
-# Returns JSON with:
-# {
-#   "original_file": "/path/to/cookbook/templates/default/nginx.conf.erb",
-#   "variables": [
-#     "nginx']['port",
-#     "nginx']['server_name",
-#     "nginx']['ssl_enabled"
-#   ],
-#   "jinja2_template": "server {\n  listen {{ nginx']['port }};\n  {% if nginx']['ssl_enabled %}\n  ssl on;\n  {% endif %}\n}"
-# }
-```
-
-**ERB to Jinja2 Conversion:**
-- Variable output: `<%= var %>` → `{{ var }}`
-- Instance variables: `<%= @var %>` → `{{ var }}`
-- Node attributes: `<%= node['attr'] %>` → `{{ attr }}`
-- Conditionals: `<% if cond %>` → `{% if cond %}`
-- Unless: `<% unless cond %>` → `{% if not cond %}`
-- Elsif: `<% elsif cond %>` → `{% elif cond %}`
-- Else: `<% else %>` → `{% else %}`
-- Loops: `<% arr.each do |item| %>` → `{% for item in arr %}`
-- End blocks: `<% end %>` → `{% endif %}` or `{% endfor %}`
-
-#### `parse_custom_resource(path: str)`
-Parse a Chef custom resource or LWRP file and extract properties, attributes, and actions.
-
-**Example:**
-```python
-parse_custom_resource("/path/to/cookbook/resources/app_config.rb")
-# Returns JSON with:
-# {
-#   "resource_file": "/path/to/cookbook/resources/app_config.rb",
-#   "resource_name": "app_config",
-#   "resource_type": "custom_resource",  # or "lwrp"
-#   "properties": [
-#     {
-#       "name": "config_name",
-#       "type": "String",
-#       "name_property": true
-#     },
-#     {
-#       "name": "port",
-#       "type": "Integer",
-#       "default": "8080"
-#     },
-#     {
-#       "name": "ssl_enabled",
-#       "type": "[true, false]",
-#       "default": "false"
-#     }
-#   ],
-#   "actions": ["create", "delete"],
-#   "default_action": "create"
-# }
-```
-
-**Detected Resource Types:**
-- **Custom Resource** (modern) - Uses `property` keyword
-- **LWRP** (legacy) - Uses `attribute` keyword with `kind_of:`
-
-**Property/Attribute Fields:**
-- `name` - Property/attribute name
-- `type` - Type constraint (String, Integer, Boolean, Array, Hash, etc.)
-- `name_property` - Whether this is the resource's name property (true/false)
 - `default` - Default value if specified
 - `required` - Whether the property is required (true/false)
 
 **Action Extraction:**
+
 - Modern format: `action :name do ... end`
 - LWRP format: `actions :create, :delete, :update`
 - Supports both formats and mixed declarations
 
-#### `convert_resource_to_task(resource_type: str, resource_name: str, action: str = "create", properties: str = "")`
+### `convert_resource_to_task(resource_type: str, resource_name: str, action: str = "create", properties: str = "")`
+
 Convert a Chef resource to an Ansible task.
 
 **Example:**
+
 ```python
 convert_resource_to_task("package", "nginx", "install")
 # Returns:
@@ -1058,6 +743,7 @@ convert_resource_to_task("template", "/etc/nginx/nginx.conf.erb", "create")
 ```
 
 **Supported Resource Types:**
+
 - `package` → `ansible.builtin.package`
 - `service` → `ansible.builtin.service`
 - `template` → `ansible.builtin.template`
@@ -1070,9 +756,11 @@ convert_resource_to_task("template", "/etc/nginx/nginx.conf.erb", "create")
 - And more...
 
 #### `parse_habitat_plan(plan_path: str)`
+
 Parse a Chef Habitat plan file (plan.sh) and extract package metadata, dependencies, build/install hooks, and service configuration.
 
 **Example:**
+
 ```python
 parse_habitat_plan("/path/to/habitat/plan.sh")
 # Returns JSON with:
@@ -1108,6 +796,7 @@ parse_habitat_plan("/path/to/habitat/plan.sh")
 ```
 
 **Extracted Information:**
+
 - **Package metadata**: name, origin, version, maintainer, description
 - **Dependencies**: Build-time and runtime package dependencies
 - **Ports**: Exported port configurations for service discovery
@@ -1116,15 +805,18 @@ parse_habitat_plan("/path/to/habitat/plan.sh")
 - **Build callbacks**: do_build, do_install, do_init, and other lifecycle hooks
 
 **Use Cases:**
+
 - Understanding Habitat application structure before containerization
 - Extracting dependencies for Docker base image selection
 - Planning port mappings for docker-compose configurations
 - Analyzing service dependencies and orchestration needs
 
 #### `convert_habitat_to_dockerfile(plan_path: str, base_image: str = "ubuntu:22.04")`
+
 Convert a Chef Habitat plan to a production-ready Dockerfile with security validation.
 
 **Example:**
+
 ```python
 convert_habitat_to_dockerfile("/path/to/habitat/plan.sh", "ubuntu:22.04")
 # Returns:
@@ -1166,10 +858,12 @@ convert_habitat_to_dockerfile("/path/to/habitat/plan.sh", "ubuntu:22.04")
 ```
 
 **Parameters:**
+
 - `plan_path`: Path to the Habitat plan.sh file
 - `base_image`: Docker base image (default: ubuntu:22.04). Validated for security
 
 **Features:**
+
 - **Dependency mapping**: Converts Habitat dependencies to apt packages
 - **Build optimization**: Multi-stage builds when applicable
 - **Security scanning**: Detects dangerous patterns (curl|sh, eval, etc.)
@@ -1181,9 +875,11 @@ convert_habitat_to_dockerfile("/path/to/habitat/plan.sh", "ubuntu:22.04")
 The tool processes shell commands from Habitat plans and includes them in the Dockerfile. Only use with trusted Habitat plans from known sources. Review generated Dockerfiles before building images.
 
 #### `generate_compose_from_habitat(plan_paths: str, network_name: str = "habitat_net")`
+
 Generate docker-compose.yml from multiple Habitat plans for multi-service deployments.
 
 **Example:**
+
 ```python
 # Single service
 generate_compose_from_habitat("/path/to/nginx/plan.sh", "myapp_network")
@@ -1253,10 +949,12 @@ generate_compose_from_habitat(
 ```
 
 **Parameters:**
+
 - `plan_paths`: Comma-separated paths to plan.sh files for multiple services
 - `network_name`: Docker network name for service communication (default: habitat_net)
 
 **Features:**
+
 - **Multi-service orchestration**: Combines multiple Habitat plans into one compose file
 - **Automatic dependencies**: Creates depends_on from Habitat service binds
 - **Volume detection**: Identifies services needing persistent storage from do_init callbacks
@@ -1265,6 +963,7 @@ generate_compose_from_habitat(
 - **Environment variables**: Generates environment configuration from port definitions
 
 **Use Cases:**
+
 - Converting multi-service Habitat applications to Docker Compose
 - Creating development environments from production Habitat plans
 - Simplifying container orchestration for local testing
@@ -1274,7 +973,7 @@ generate_compose_from_habitat(
 
 ### Project Structure
 
-```
+```text
 souschef/
 ├── souschef/
 │   ├── __init__.py
@@ -1294,12 +993,14 @@ souschef/
 SousChef uses a modern Python toolchain for code quality:
 
 - **Ruff**: Primary linter and formatter (replaces Black, isort, flake8)
+
   ```bash
   poetry run ruff check .    # Lint code
   poetry run ruff format .   # Format code
   ```
 
 - **mypy**: Static type checking for CI/CD
+
   ```bash
   poetry run mypy souschef   # Type check source code
   ```
@@ -1309,11 +1010,13 @@ SousChef uses a modern Python toolchain for code quality:
   - Provides immediate feedback during development
 
 - **pytest**: Testing framework with coverage reporting
+
   ```bash
   poetry run pytest --cov=souschef --cov-report=term-missing
   ```
 
 **Quality Requirements:**
+
 - Zero warnings from all tools (Ruff, mypy, Pylance)
 - Type hints required for all functions
 - Google-style docstrings
@@ -1408,6 +1111,7 @@ poetry run mutmut results
 ### VS Code Tasks
 
 The project includes several VS Code tasks:
+
 - **Run Tests** - Execute test suite
 - **Run Tests with Coverage** - Generate coverage reports
 - **Lint (Ruff)** - Check code quality
@@ -1421,6 +1125,7 @@ Thank you for your interest in contributing to SousChef!
 **Before you start**, please read the [**Architecture Guide**](docs/ARCHITECTURE.md) to understand where different code belongs and why. This is essential for understanding how to structure your contributions.
 
 For complete contributing guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md), which includes:
+
 - Development setup instructions
 - Code standards and quality tools
 - Testing requirements and patterns
@@ -1428,6 +1133,7 @@ For complete contributing guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md), wh
 - Release procedures
 
 **Quick Checklist for Contributions:**
+
 1. Read [**docs/ARCHITECTURE.md**](docs/ARCHITECTURE.md) to understand module structure
 2. Ensure all tests pass: `poetry run pytest`
 3. Code passes linting: `poetry run ruff check .`
@@ -1444,5 +1150,3 @@ Questions? Check [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module responsibili
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-
-**SousChef** - *Ansible automation, one recipe at a time.*
