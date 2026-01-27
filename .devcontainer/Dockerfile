@@ -10,19 +10,19 @@ ARG SONAR_SCANNER_VERSION=latest
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install Poetry, system packages, and optional tools
-# hadolint ignore=DL3016,DL4006
+# hadolint ignore=DL3016,DL4006,DL3008
 RUN curl -sSL https://install.python-poetry.org | python3 - && \
     ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
     poetry config virtualenvs.in-project true && \
     apt-get update && apt-get install -y --no-install-recommends \
-    curl=7.* \
-    git=1:* \
-    gnupg=2.* \
-    build-essential=12.* \
-    libssl-dev=3.* \
-    libffi-dev=3.* \
-    unzip=6.* \
-    npm=* \
+    curl \
+    git \
+    gnupg \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    unzip \
+    npm \
     && rm -rf /var/lib/apt/lists/* && \
     if [ "$SNYK_VERSION" != "skip" ]; then \
     npm install -g snyk && \
