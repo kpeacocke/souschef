@@ -6,32 +6,29 @@ ARG SNYK_VERSION=latest
 ARG CODEQL_VERSION=latest
 ARG SONAR_SCANNER_VERSION=latest
 
-# Install Poetry - modern Python dependency manager
+# Set shell options for safer piping
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Install Poetry, system packages, and optional tools
+# hadolint ignore=DL4006
 RUN curl -sSL https://install.python-poetry.org | python3 - && \
     ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
-    poetry config virtualenvs.in-project true
-
-# Install system packages needed for the project
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    git \
-    gnupg \
-    build-essential \
-    libssl-dev \
-    libffi-dev \
-    unzip \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Snyk CLI if version specified
-RUN if [ "$SNYK_VERSION" != "skip" ]; then \
-    apt-get update && apt-get install -y --no-install-recommends npm && \
+    poetry config virtualenvs.in-project true && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    curl=7.* \
+    git=1:* \
+    gnupg=2.* \
+    build-essential=12.* \
+    libssl-dev=3.* \
+    libffi-dev=3.* \
+    unzip=6.* \
+    npm=* \
+    && rm -rf /var/lib/apt/lists/* && \
+    if [ "$SNYK_VERSION" != "skip" ]; then \
     npm install -g snyk && \
-    snyk --version && \
-    rm -rf /var/lib/apt/lists/*; \
-    fi
-
-# Install CodeQL if version specified and architecture supports it
-RUN if [ "$CODEQL_VERSION" != "skip" ]; then \
+    snyk --version; \
+    fi && \
+    if [ "$CODEQL_VERSION" != "skip" ]; then \
     ARCH=$(uname -m); \
     if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then \
         curl -L https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip -o /tmp/codeql.zip && \
@@ -39,10 +36,8 @@ RUN if [ "$CODEQL_VERSION" != "skip" ]; then \
         ln -s /opt/codeql/codeql /usr/local/bin/codeql && \
         rm /tmp/codeql.zip; \
     fi; \
-    fi
-
-# Install SonarScanner CLI if version specified
-RUN if [ "$SONAR_SCANNER_VERSION" != "skip" ]; then \
+    fi && \
+    if [ "$SONAR_SCANNER_VERSION" != "skip" ]; then \
     if [ "$SONAR_SCANNER_VERSION" = "latest" ]; then \
         SONAR_SCANNER_VERSION="6.2.1.4610"; \
     fi; \
@@ -61,9 +56,8 @@ COPY pyproject.toml poetry.lock* README.md ./
 
 # Install Python project dependencies with Poetry
 # Use --no-root to skip installing the package itself during the build
-RUN poetry install --no-interaction --no-ansi --no-root
-
 # Verify installations
-RUN poetry --version && \
+RUN poetry install --no-interaction --no-ansi --no-root && \
+    poetry --version && \
     python --version && \
     poetry run python --version
