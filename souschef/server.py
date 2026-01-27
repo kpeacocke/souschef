@@ -256,6 +256,28 @@ from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
 )
 from souschef.parsers.template import parse_template as _parse_template
 
+# Backward compatibility re-exports without underscore prefix (for tests)
+# noinspection PyUnusedLocal
+convert_chef_deployment_to_ansible_strategy = (  # noqa: F401
+    _convert_chef_deployment_to_ansible_strategy
+)
+generate_awx_inventory_source_from_chef = (  # noqa: F401
+    _generate_awx_inventory_source_from_chef
+)
+generate_awx_job_template_from_cookbook = (  # noqa: F401
+    _generate_awx_job_template_from_cookbook
+)
+generate_awx_project_from_cookbooks = _generate_awx_project_from_cookbooks  # noqa: F401
+generate_awx_workflow_from_chef_runlist = (  # noqa: F401
+    _generate_awx_workflow_from_chef_runlist
+)
+generate_blue_green_deployment_playbook = (  # noqa: F401
+    _generate_blue_green_deployment_playbook
+)
+generate_canary_deployment_strategy = (  # noqa: F401
+    _generate_canary_deployment_strategy
+)
+
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
 
