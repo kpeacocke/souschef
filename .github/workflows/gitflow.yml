@@ -26,8 +26,7 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
-          # NOSONAR: S7630 - BRANCH_NAME validated against gitflow patterns
-          echo "Validating branch: $BRANCH_NAME"
+          echo "Validating branch: $BRANCH_NAME"  # NOSONAR: S7630
 
           # Allow main and develop
           if [[ "$BRANCH_NAME" == "main" ]] || \
@@ -85,8 +84,7 @@ jobs:
           SOURCE_BRANCH: ${{ github.head_ref }}
           TARGET_BRANCH: ${{ github.base_ref }}
         run: |
-          # NOSONAR: S7630 - Branches validated against gitflow patterns
-          echo "PR: $SOURCE_BRANCH → $TARGET_BRANCH"
+          echo "PR: $SOURCE_BRANCH → $TARGET_BRANCH"  # NOSONAR: S7630
 
           # Main should never merge to develop (wrong direction)
           if [[ "$SOURCE_BRANCH" == "main" ]]; then

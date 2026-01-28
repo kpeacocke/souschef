@@ -36,8 +36,7 @@ def parse_template(path: str) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        # NOSONAR: S2083 - path validated via _normalize_path
-        content = file_path.read_text(encoding="utf-8")
+        content = file_path.read_text(encoding="utf-8")  # NOSONAR: S2083
 
         # Extract variables
         variables = _extract_template_variables(content)

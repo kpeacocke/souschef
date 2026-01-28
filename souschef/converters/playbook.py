@@ -1197,9 +1197,8 @@ def main():
 if __name__ == "__main__":
     main()
 '''
-    # NOSONAR: S2083 - data from parsed cookbook, not user input
     # Convert queries_data to JSON string for embedding
-    queries_json = json.dumps(
+    queries_json = json.dumps(  # NOSONAR: S2083
         {
             item.get("group_name", f"group_{i}"): item.get("search_query", "")
             for i, item in enumerate(queries_data)

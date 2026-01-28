@@ -37,8 +37,7 @@ def parse_habitat_plan(plan_path: str) -> str:
         if normalized_path.is_dir():
             return ERROR_IS_DIRECTORY.format(path=normalized_path)
 
-        # NOSONAR: S2083 - path validated via _normalize_path
-        content = normalized_path.read_text(encoding="utf-8")
+        content = normalized_path.read_text(encoding="utf-8")  # NOSONAR: S2083
         metadata: dict[str, Any] = {
             "package": {},
             "dependencies": {"build": [], "runtime": []},

@@ -932,8 +932,7 @@ def generate_ansible_vault_from_databags(
         conversion_results = []
 
         # Process each data bag directory
-        # NOSONAR: S2083 - path validated via _validate_databags_directory
-        for databag_dir in databags_path.iterdir():
+        for databag_dir in databags_path.iterdir():  # NOSONAR: S2083
             if not databag_dir.is_dir():
                 continue
 
@@ -2143,8 +2142,7 @@ def _analyse_databag_structure(databags_path) -> dict:
         "databags": {},
     }
 
-    # NOSONAR: S2083 - path validated in parent function
-    for databag_dir in databags_path.iterdir():
+    for databag_dir in databags_path.iterdir():  # NOSONAR: S2083
         if not databag_dir.is_dir():
             continue
 
@@ -3028,9 +3026,7 @@ def _create_role_structure(output_dir: Path, role_name: str) -> Path:
         role_vars_dir,
         role_defaults_dir,
     ]:
-        directory.mkdir(
-            parents=True, exist_ok=True
-        )  # NOSONAR: S2083 - path validated via containment check
+        directory.mkdir(parents=True, exist_ok=True)  # NOSONAR: S2083
 
     return role_dir
 
@@ -3080,8 +3076,7 @@ def _convert_recipes(
             # Write as task file; _safe_join already enforces containment within role_dir
             task_file = _safe_join(role_dir, "tasks", f"{recipe_name}.yml")
             try:
-                # NOSONAR: S2083 - via _safe_join containment check
-                task_file.parent.mkdir(parents=True, exist_ok=True)
+                task_file.parent.mkdir(parents=True, exist_ok=True)  # NOSONAR: S2083
                 safe_write_text(task_file, role_dir, playbook_yaml)
             except OSError as write_err:
                 conversion_summary["errors"].append(

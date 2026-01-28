@@ -41,8 +41,7 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        # NOSONAR: S2083 - path validated via _normalize_path
-        content = file_path.read_text(encoding="utf-8")
+        content = file_path.read_text(encoding="utf-8")  # NOSONAR: S2083
 
         attributes = _extract_attributes(content)
 
