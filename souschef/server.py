@@ -3010,6 +3010,10 @@ def _setup_conversion_metadata(cookbook_dir: Path, role_name: str) -> tuple[str,
 
 def _create_role_structure(output_dir: Path, role_name: str) -> Path:
     """Create the standard Ansible role directory structure."""
+    # Validate role_name to ensure it's safe for filesystem operations
+    if not role_name or ".." in role_name or "/" in role_name or "\\" in role_name:
+        raise ValueError(f"Invalid role name: {role_name}")
+
     base = os.path.realpath(str(output_dir))
     role_dir_str = os.path.realpath(os.path.join(base, role_name))  # noqa: PTH111, PTH118
     if os.path.commonpath([base, role_dir_str]) != base:
