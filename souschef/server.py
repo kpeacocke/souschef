@@ -3021,14 +3021,13 @@ def _create_role_structure(output_dir: Path, role_name: str) -> Path:
     role_defaults_dir = role_dir / "defaults"
 
     # All paths are validated via os.path.commonpath containment check above
-    # nosonar: S2083
     for directory in [
         role_tasks_dir,
         role_templates_dir,
         role_vars_dir,
         role_defaults_dir,
     ]:
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True)  # nosonar
 
     return role_dir
 
