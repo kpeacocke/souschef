@@ -3027,7 +3027,7 @@ def _create_role_structure(output_dir: Path, role_name: str) -> Path:
         role_vars_dir,
         role_defaults_dir,
     ]:
-        directory.mkdir(parents=True, exist_ok=True)  # nosonar
+        directory.mkdir(parents=True, exist_ok=True)  # nosonar: S2083
 
     return role_dir
 
