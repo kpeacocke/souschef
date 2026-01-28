@@ -10,12 +10,12 @@ ignore:
   # 1. Path is validated via _get_safe_extraction_path() before use
   # 2. Symlinks and device files are rejected in _validate_tar_file_security()
   # 3. tarfile.open() uses filter='data' when available (Python 3.12+)
-  'python/tarslip':
+  python/tarslip:
     - 'souschef/ui/pages/cookbook_analysis.py:534'
     - 'souschef/ui/pages/cookbook_analysis.py:540'
-  global:
-    - tests/fixtures/**
-    - examples/**
-    - htmlcov/**
-    - "**/__pycache__/**"
-    - "**/*.egg-info/**"
+
+# Patch rules
+patch: {}
+
+# Exclude paths from scanning
+exclude:
