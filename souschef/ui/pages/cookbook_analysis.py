@@ -526,11 +526,11 @@ def _extract_tar_members(tar_ref, members, extraction_dir):
     """Extract validated TAR members to the extraction directory."""
     for member in members:
         safe_path = _get_safe_extraction_path(member.name, extraction_dir)
-        # snyk[python/tarslip]: safe_path contains extraction_dir
         if member.isdir():
             safe_path.mkdir(parents=True, exist_ok=True)
         else:
             safe_path.parent.mkdir(parents=True, exist_ok=True)
+            # snyk[python/tarslip]: safe_path validated via _get_safe_extraction_path
             _extract_file_content(tar_ref, member, safe_path)
 
 
