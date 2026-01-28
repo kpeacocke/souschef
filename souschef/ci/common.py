@@ -54,7 +54,7 @@ def _parse_kitchen_configuration(kitchen_file: Path) -> tuple[list[str], list[st
     kitchen_platforms: list[str] = []
 
     try:
-        with kitchen_file.open() as file_handle:  # NOSONAR: S2083
+        with kitchen_file.open() as file_handle:  # nosonar
             kitchen_config = yaml.safe_load(file_handle)
             if not kitchen_config:
                 return kitchen_suites, kitchen_platforms

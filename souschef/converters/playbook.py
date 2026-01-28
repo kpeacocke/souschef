@@ -1198,7 +1198,7 @@ if __name__ == "__main__":
     main()
 '''
     # Convert queries_data to JSON string for embedding
-    queries_json = json.dumps(  # NOSONAR: S2083
+    queries_json = json.dumps(  # nosonar
         {
             item.get("group_name", f"group_{i}"): item.get("search_query", "")
             for i, item in enumerate(queries_data)

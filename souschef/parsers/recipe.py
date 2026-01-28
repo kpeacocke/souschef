@@ -35,7 +35,7 @@ def parse_recipe(path: str) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        content = file_path.read_text(encoding="utf-8")  # NOSONAR: S2083
+        content = file_path.read_text(encoding="utf-8")  # nosonar
 
         resources = _extract_resources(content)
         include_recipes = _extract_include_recipes(content)

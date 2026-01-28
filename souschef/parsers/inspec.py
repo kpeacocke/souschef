@@ -212,7 +212,7 @@ def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
     controls = []
     for control_file in controls_dir.glob("*.rb"):
         try:
-            content = control_file.read_text()  # NOSONAR: S2083
+            content = control_file.read_text()  # nosonar
             file_controls = _parse_inspec_control(content)
             for ctrl in file_controls:
                 ctrl["file"] = str(control_file.relative_to(profile_path))

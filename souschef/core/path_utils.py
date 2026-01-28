@@ -38,7 +38,7 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
         msg = f"Path traversal attempt: escapes {base_resolved}"
         raise ValueError(msg) from e
 
-    return candidate_resolved  # NOSONAR: S2083
+    return candidate_resolved  # nosonar
 
 
 def _normalize_path(path_str: str | Path) -> Path:
@@ -76,9 +76,9 @@ def _normalize_path(path_str: str | Path) -> Path:
         # Path.resolve() normalizes the path, resolving symlinks and ".." sequences
         # This prevents path traversal attacks by canonicalizing the path
         # Input validated for null bytes; Path.resolve() returns safe absolute path
-        resolved_path = path_obj.expanduser().resolve()  # NOSONAR: S2083
+        resolved_path = path_obj.expanduser().resolve()  # nosonar
         # Explicit assignment to mark as sanitized output
-        normalized: Path = resolved_path  # NOSONAR: S2083
+        normalized: Path = resolved_path  # nosonar
         return normalized
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
@@ -127,7 +127,7 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
         msg = f"Path traversal attempt: {parts} escapes {base_path}"
         raise ValueError(msg) from e
 
-    return result_resolved  # NOSONAR: S2083
+    return result_resolved  # nosonar
 
 
 def _validated_candidate(path_obj: Path, safe_base: Path) -> Path:
@@ -148,7 +148,7 @@ def _validated_candidate(path_obj: Path, safe_base: Path) -> Path:
         msg = f"Path traversal attempt: escapes {base_resolved}"
         raise ValueError(msg) from e
 
-    return candidate_resolved  # NOSONAR: S2083
+    return candidate_resolved  # nosonar
 
 
 def safe_exists(path_obj: Path, base_path: Path) -> bool:
@@ -189,7 +189,7 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     safe_dir: Path = _validated_candidate(_normalize_path(dir_path), safe_base)
 
     results: list[Path] = []
-    for result in safe_dir.glob(pattern):  # NOSONAR: S2083
+    for result in safe_dir.glob(pattern):  # nosonar
         # Validate each glob result stays within base
         validated_result: Path = _validated_candidate(Path(result), safe_base)
         results.append(validated_result)
@@ -204,7 +204,7 @@ def safe_mkdir(
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    safe_path.mkdir(parents=parents, exist_ok=exist_ok)  # NOSONAR: S2083
+    safe_path.mkdir(parents=parents, exist_ok=exist_ok)  # nosonar
 
 
 def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
@@ -226,7 +226,7 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    return safe_path.read_text(encoding=encoding)  # NOSONAR: S2083
+    return safe_path.read_text(encoding=encoding)  # nosonar
 
 
 def safe_write_text(
@@ -245,7 +245,7 @@ def safe_write_text(
     safe_base = _normalize_trusted_base(base_path)
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    safe_path.write_text(text, encoding=encoding)  # NOSONAR: S2083
+    safe_path.write_text(text, encoding=encoding)  # nosonar
 
 
 def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
@@ -267,7 +267,7 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
     results: list[Path] = []
-    for item in safe_path.iterdir():  # NOSONAR: S2083
+    for item in safe_path.iterdir():  # nosonar
         # Validate each item stays within base
         validated_item: Path = _validated_candidate(item, safe_base)
         results.append(validated_item)
