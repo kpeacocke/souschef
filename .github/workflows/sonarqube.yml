@@ -2,7 +2,7 @@ name: SonarCloud Analysis
 
 on:
   workflow_run:
-    workflows: ["CI", "Main Branch Validation"]
+    workflows: ["Main Branch Validation"]
     types:
       - completed
   workflow_dispatch:

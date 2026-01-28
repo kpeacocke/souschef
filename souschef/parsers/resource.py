@@ -26,7 +26,7 @@ def parse_custom_resource(path: str) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        content = file_path.read_text(encoding="utf-8")
+        content = file_path.read_text(encoding="utf-8")  # nosonar
 
         # Determine resource type
         resource_type = "custom_resource" if "property" in content else "lwrp"

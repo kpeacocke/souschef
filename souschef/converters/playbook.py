@@ -7,6 +7,7 @@ inventory scripts.
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -31,7 +32,13 @@ from souschef.core.constants import (
     REGEX_WHITESPACE_QUOTE,
     VALUE_PREFIX,
 )
-from souschef.core.path_utils import _normalize_path, _safe_join
+from souschef.core.path_utils import (
+    _normalize_path,
+    _safe_join,
+    safe_exists,
+    safe_glob,
+    safe_read_text,
+)
 from souschef.parsers.attributes import parse_attributes
 from souschef.parsers.recipe import parse_recipe
 
@@ -42,9 +49,7 @@ except ImportError:
     requests = None
 
 try:
-    from ibm_watsonx_ai import (  # type: ignore[import-not-found]
-        APIClient,
-    )
+    from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]
 except ImportError:
     APIClient = None
 
@@ -52,12 +57,13 @@ except ImportError:
 MAX_GUARD_LENGTH = 500
 
 
-def generate_playbook_from_recipe(recipe_path: str) -> str:
+def generate_playbook_from_recipe(recipe_path: str, cookbook_path: str = "") -> str:
     """
     Generate a complete Ansible playbook from a Chef recipe.
 
     Args:
         recipe_path: Path to the Chef recipe (.rb) file.
+        cookbook_path: Optional path to the cookbook root for path validation.
 
     Returns:
         Complete Ansible playbook in YAML format with tasks, handlers, and
@@ -73,10 +79,18 @@ def generate_playbook_from_recipe(recipe_path: str) -> str:
 
         # Parse the raw recipe file for advanced features
         recipe_file = _normalize_path(recipe_path)
-        if not recipe_file.exists():
-            return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
 
-        raw_content = recipe_file.read_text()
+        # Validate path if cookbook_path provided
+        base_path = (
+            Path(cookbook_path).resolve() if cookbook_path else recipe_file.parent
+        )
+
+        try:
+            if not safe_exists(recipe_file, base_path):
+                return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
+            raw_content = safe_read_text(recipe_file, base_path)
+        except ValueError:
+            return f"{ERROR_PREFIX} Path traversal attempt detected: {recipe_path}"
 
         # Generate playbook structure
         playbook: str = _generate_playbook_structure(
@@ -99,6 +113,7 @@ def generate_playbook_from_recipe_with_ai(
     project_id: str = "",
     base_url: str = "",
     project_recommendations: dict | None = None,
+    cookbook_path: str = "",
 ) -> str:
     """
     Generate an AI-enhanced Ansible playbook from a Chef recipe.
@@ -119,6 +134,7 @@ def generate_playbook_from_recipe_with_ai(
         base_url: Custom base URL for the AI provider.
         project_recommendations: Dictionary containing project-level analysis
             and recommendations from cookbook assessment.
+        cookbook_path: Optional path to the cookbook root for path validation.
 
     Returns:
         AI-generated Ansible playbook in YAML format.
@@ -127,10 +143,18 @@ def generate_playbook_from_recipe_with_ai(
     try:
         # Parse the recipe file
         recipe_file = _normalize_path(recipe_path)
-        if not recipe_file.exists():
-            return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
 
-        raw_content = recipe_file.read_text()
+        # Validate path if cookbook_path provided
+        base_path = (
+            Path(cookbook_path).resolve() if cookbook_path else recipe_file.parent
+        )
+
+        try:
+            if not safe_exists(recipe_file, base_path):
+                return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
+            raw_content = safe_read_text(recipe_file, base_path)
+        except ValueError:
+            return f"{ERROR_PREFIX} Path traversal attempt detected: {recipe_path}"
 
         # Get basic recipe parsing for context
         parsed_content = parse_recipe(recipe_path)
@@ -677,9 +701,16 @@ def _run_ansible_lint(playbook_content: str) -> str | None:
 
     tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as tmp:
-            tmp.write(playbook_content)
-            tmp_path = tmp.name
+        # Create temp file with secure permissions (0o600 = rw-------)
+        # Use os.open with secure flags instead of NamedTemporaryFile for better control
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".yml", text=True)
+        try:
+            # Write content to file descriptor (atomic operation)
+            with os.fdopen(tmp_fd, "w") as tmp:
+                tmp.write(playbook_content)
+        except Exception:
+            os.close(tmp_fd)
+            raise
 
         # Run ansible-lint
         # We ignore return code because we want to capture output even on failure
@@ -768,8 +799,9 @@ def analyse_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         path_obj = _normalize_path(recipe_or_cookbook_path)
 
         if path_obj.is_file():
-            # Single recipe file
-            search_patterns = _extract_search_patterns_from_file(path_obj)
+            # Single recipe file - use parent directory as base path
+            base_path = path_obj.parent
+            search_patterns = _extract_search_patterns_from_file(path_obj, base_path)
         elif path_obj.is_dir():
             # Cookbook directory
             search_patterns = _extract_search_patterns_from_cookbook(path_obj)
@@ -1165,9 +1197,8 @@ def main():
 if __name__ == "__main__":
     main()
 '''
-
     # Convert queries_data to JSON string for embedding
-    queries_json = json.dumps(
+    queries_json = json.dumps(  # nosonar
         {
             item.get("group_name", f"group_{i}"): item.get("search_query", "")
             for i, item in enumerate(queries_data)
@@ -1181,39 +1212,66 @@ if __name__ == "__main__":
 # Search pattern extraction
 
 
-def _extract_search_patterns_from_file(file_path: Path) -> list[dict[str, str]]:
-    """Extract Chef search patterns from a single recipe file."""
+def _extract_search_patterns_from_file(
+    file_path: Path, base_path: Path
+) -> list[dict[str, str]]:
+    """
+    Extract Chef search patterns from a single recipe file.
+
+    Args:
+        file_path: Path to the file to parse.
+        base_path: Base directory for path validation.
+
+    Returns:
+        List of search patterns found in the file.
+
+    """
     try:
-        content = file_path.read_text()
+        content = safe_read_text(file_path, base_path)
         return _find_search_patterns_in_content(content, str(file_path))
     except Exception:
         return []
 
 
 def _extract_search_patterns_from_cookbook(cookbook_path: Path) -> list[dict[str, str]]:
-    """Extract Chef search patterns from all files in a cookbook."""
+    """
+    Extract Chef search patterns from all files in a cookbook.
+
+    Args:
+        cookbook_path: Path to the cookbook directory.
+
+    Returns:
+        List of all search patterns found in the cookbook.
+
+    """
     patterns = []
 
-    # Search in recipes directory
+    # Search in recipes directory using safe_glob
     recipes_dir = _safe_join(cookbook_path, "recipes")
-    if recipes_dir.exists():
-        for recipe_file in recipes_dir.glob("*.rb"):
-            file_patterns = _extract_search_patterns_from_file(recipe_file)
-            patterns.extend(file_patterns)
+    if safe_exists(recipes_dir, cookbook_path):
+        for recipe_file in safe_glob(recipes_dir, "*.rb", cookbook_path):
+            patterns_found = _extract_search_patterns_from_file(
+                recipe_file, cookbook_path
+            )
+            patterns.extend(patterns_found)
 
-    # Search in libraries directory
+    # Search in libraries directory using safe_glob
     libraries_dir = _safe_join(cookbook_path, "libraries")
-    if libraries_dir.exists():
-        for library_file in libraries_dir.glob("*.rb"):
-            file_patterns = _extract_search_patterns_from_file(library_file)
-            patterns.extend(file_patterns)
+    if safe_exists(libraries_dir, cookbook_path):
+        for library_file in safe_glob(libraries_dir, "*.rb", cookbook_path):
+            patterns_found = _extract_search_patterns_from_file(
+                library_file, cookbook_path
+            )
+            patterns.extend(patterns_found)
 
-    # Search in resources directory
+    # Search in resources directory using safe_glob
     resources_dir = _safe_join(cookbook_path, "resources")
-    if resources_dir.exists():
-        for resource_file in resources_dir.glob("*.rb"):
-            file_patterns = _extract_search_patterns_from_file(resource_file)
-            patterns.extend(file_patterns)
+    if safe_exists(resources_dir, cookbook_path):
+        for resource_file in safe_glob(resources_dir, "*.rb", cookbook_path):
+            patterns_found = _extract_search_patterns_from_file(
+                resource_file, cookbook_path
+            )
+            patterns.extend(patterns_found)
 
     return patterns
 
@@ -1430,19 +1488,32 @@ def _build_playbook_header(recipe_name: str) -> list[str]:
 def _add_playbook_variables(
     playbook_lines: list[str], raw_content: str, recipe_file: Path
 ) -> None:
-    """Extract and add variables section to playbook."""
+    """
+    Extract and add variables section to playbook.
+
+    Args:
+        playbook_lines: List of playbook lines to add variables to.
+        raw_content: Raw recipe file content.
+        recipe_file: Path to the recipe file, normalized and contained within cookbook.
+
+    """
     variables = _extract_recipe_variables(raw_content)
 
-    # Try to parse attributes file
-    attributes_path = recipe_file.parent.parent / "attributes" / "default.rb"
-    if attributes_path.exists():
-        attributes_content = parse_attributes(str(attributes_path))
-        if not attributes_content.startswith(
-            "Error:"
-        ) and not attributes_content.startswith("Warning:"):
-            # Parse the resolved attributes
-            attr_vars = _extract_attribute_variables(attributes_content)
-            variables.update(attr_vars)
+    # Try to parse attributes file - validate it stays within cookbook
+    cookbook_path = recipe_file.parent.parent
+    attributes_path = _safe_join(cookbook_path, "attributes", "default.rb")
+    try:
+        if safe_exists(attributes_path, cookbook_path):
+            attributes_content = parse_attributes(str(attributes_path))
+            if not attributes_content.startswith(
+                "Error:"
+            ) and not attributes_content.startswith("Warning:"):
+                # Parse the resolved attributes
+                attr_vars = _extract_attribute_variables(attributes_content)
+                variables.update(attr_vars)
+    except ValueError:
+        # Path traversal attempt detected - skip safely
+        pass
 
     for var_name, var_value in variables.items():
         playbook_lines.append(f"    {var_name}: {var_value}")

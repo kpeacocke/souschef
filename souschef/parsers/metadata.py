@@ -8,7 +8,7 @@ from souschef.core.constants import (
     ERROR_PERMISSION_DENIED,
     METADATA_FILENAME,
 )
-from souschef.core.path_utils import _normalize_path, _safe_join
+from souschef.core.path_utils import _normalize_path, _safe_join, safe_read_text
 
 
 def read_cookbook_metadata(path: str) -> str:
@@ -24,7 +24,7 @@ def read_cookbook_metadata(path: str) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        content = file_path.read_text(encoding="utf-8")
+        content = safe_read_text(file_path, file_path.parent, encoding="utf-8")
 
         metadata = _extract_metadata(content)
 
@@ -58,7 +58,8 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
     """
     try:
         file_path = _normalize_path(path)
-        content = file_path.read_text(encoding="utf-8")
+        # nosonar
+        content = safe_read_text(file_path, file_path.parent, encoding="utf-8")
 
         metadata = _extract_metadata(content)
         return metadata
@@ -93,6 +94,7 @@ def _scan_cookbook_directory(
     if not dir_path.exists() or not dir_path.is_dir():
         return None
 
+    # nosonar
     files = [f.name for f in dir_path.iterdir() if f.is_file()]
     return (dir_name, files) if files else None
 

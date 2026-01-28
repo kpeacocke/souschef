@@ -27,20 +27,12 @@ from souschef.assessment import (  # noqa: E402
     generate_migration_report,
     validate_conversion,
 )
-from souschef.deployment import (  # noqa: E402
-    analyse_chef_application_patterns,
-)
+from souschef.deployment import analyse_chef_application_patterns  # noqa: E402
 
 # Import server functions only if MCP is available
 try:
-    from souschef.server import (
-        analyse_chef_search_patterns,
-    )
-
-    _server_available = True
+    from souschef.server import analyse_chef_search_patterns
 except ImportError:
-    _server_available = False
-
     # Define a placeholder function for when MCP is not available
     def analyse_chef_search_patterns(*args, **kwargs):
         raise NotImplementedError("MCP server not available")

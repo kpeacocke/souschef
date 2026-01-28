@@ -9,13 +9,7 @@ if str(app_path) not in sys.path:
 import contextlib
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Concatenate,
-    ParamSpec,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
 
 import streamlit as st
 
@@ -27,6 +21,8 @@ if TYPE_CHECKING:
 P = ParamSpec("P")
 R = TypeVar("R")
 
+from souschef.core import _ensure_within_base_path, _normalize_path
+from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_is_file
 from souschef.ui.pages.ai_settings import show_ai_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 
@@ -2550,28 +2546,31 @@ def _collect_files_to_validate(input_path: str) -> list[Path]:
         # Error already reported by _normalize_and_validate_input_path
         return []
 
-    path_obj = validated_path
-    files_to_validate = []
+    # Path is normalized and validated to be within app root
+    path_obj: Path = validated_path
+    files_to_validate: list[Path] = []
 
-    if not path_obj.exists():
+    # Check if path exists using safe function
+    if not safe_exists(path_obj, Path.cwd()):
         st.error(f"Path does not exist: {path_obj}")
         return []
 
-    if path_obj.is_file():
+    # Determine if it's a file or directory
+    if safe_is_file(path_obj, Path.cwd()):
         if path_obj.suffix in [".yml", ".yaml"] and path_obj.name not in [
             ".kitchen.yml",
             "kitchen.yml",
             "docker-compose.yml",
         ]:
             files_to_validate.append(path_obj)
-    elif path_obj.is_dir():
+    elif safe_is_dir(path_obj, Path.cwd()):
         # Filter out obvious non-playbook files
         excluded_files = {".kitchen.yml", "kitchen.yml", "docker-compose.yml"}
 
-        yml_files = list(path_obj.glob("**/*.yml"))
-        yaml_files = list(path_obj.glob("**/*.yaml"))
+        yml_files: list[Path] = safe_glob(path_obj, "**/*.yml", Path.cwd())
+        yaml_files: list[Path] = safe_glob(path_obj, "**/*.yaml", Path.cwd())
 
-        raw_files = yml_files + yaml_files
+        raw_files: list[Path] = yml_files + yaml_files
         files_to_validate.extend([f for f in raw_files if f.name not in excluded_files])
 
     return files_to_validate
@@ -2743,21 +2742,13 @@ def _normalize_and_validate_input_path(input_path: str) -> Path | None:
         return None
 
     try:
-        # Expand user home and resolve to an absolute, normalized path
-        path_obj = Path(raw).expanduser().resolve()
-    except Exception:
-        st.error(f"Invalid path: {raw}")
-        return None
-
-    # Optional safety: constrain to the application root directory
-    try:
+        path_obj = _normalize_path(raw)
         app_root = Path(app_path).resolve()
-        path_obj.relative_to(app_root)
-    except Exception:
-        st.error("Path must be within the SousChef project directory.")
+        # Use centralised containment validation
+        return _ensure_within_base_path(path_obj, app_root)
+    except (ValueError, OSError) as e:
+        st.error(f"Invalid path: {e}")
         return None
-
-    return path_obj
 
 
 def _handle_validation_execution(input_path: str, options: Mapping[str, Any]) -> None:
@@ -2777,8 +2768,11 @@ def _handle_validation_execution(input_path: str, options: Mapping[str, Any]) ->
             # Error is handled inside _collect_files_to_validate
             # if path doesn't exist or is invalid
             validated_path = _normalize_and_validate_input_path(input_path)
-            if validated_path is not None and validated_path.exists():
-                st.warning(f"No YAML files found in {validated_path}")
+            if validated_path is not None:
+                # Check if the validated path exists
+                path_exists: bool = safe_exists(validated_path, Path.cwd())
+                if path_exists:
+                    st.warning(f"No YAML files found in {validated_path}")
             return
 
         progress_tracker.update(3, f"Validating {len(files_to_validate)} files...")

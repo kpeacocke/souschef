@@ -66,6 +66,7 @@ ENV/
 .devcontainer/*
 !.devcontainer/devcontainer.json
 !.devcontainer/post-create.sh
+!.devcontainer/Dockerfile
 
 # macOS
 .DS_Store
@@ -81,9 +82,22 @@ Thumbs.db
 .github/instructions/snyk_rules.instructions.md
 
 # CodeQL Security Scanning
+# Ignore databases and build artifacts, but commit config and reports
+.codeql/databases/
+.codeql/queries/**
+!.codeql/queries/.gitkeep
 .codeql-db/
+codeql-db/
+python-db/
 codeql-results/
-*.sarif
+# Ignore downloaded CodeQL pack modules (created by `codeql pack install`)
+**/codeql_modules/
+
+# Note: .codeql/config/, .codeql/reports/, and specific .sarif files are committed
+# See .codeql/.gitignore for details
+
+# GitHub Security Scanning Exports
+code_scanning_alerts*.json
 
 # GitHub Security Scanning Exports
 code_scanning_alerts*.json

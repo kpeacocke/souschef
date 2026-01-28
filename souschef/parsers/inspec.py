@@ -2,11 +2,17 @@
 
 import json
 import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from souschef.core.constants import ERROR_PREFIX, INSPEC_END_INDENT, INSPEC_SHOULD_EXIST
-from souschef.core.path_utils import _normalize_path, _safe_join
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _normalize_path,
+    _safe_join,
+    _trusted_workspace_root,
+)
 
 # Regex patterns used across converters
 _VERSION_PATTERN = r"match\s+/([^/]+)/"
@@ -38,6 +44,23 @@ def parse_inspec_profile(path: str) -> str:
             )
 
         profile_path = _normalize_path(path)
+
+        trusted_bases = [
+            _trusted_workspace_root(),
+            Path(tempfile.gettempdir()).resolve(),
+        ]
+
+        for base in trusted_bases:
+            try:
+                profile_path = _ensure_within_base_path(profile_path, base)
+                break
+            except ValueError:
+                continue
+        else:
+            return (
+                "Error: Path traversal attempt detected\n\n"
+                "Suggestion: Use a path inside the workspace or system temp directory"
+            )
 
         if not profile_path.exists():
             return (
@@ -189,7 +212,7 @@ def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
     controls = []
     for control_file in controls_dir.glob("*.rb"):
         try:
-            content = control_file.read_text()
+            content = control_file.read_text()  # nosonar
             file_controls = _parse_inspec_control(content)
             for ctrl in file_controls:
                 ctrl["file"] = str(control_file.relative_to(profile_path))

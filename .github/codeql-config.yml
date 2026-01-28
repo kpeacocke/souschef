@@ -1,0 +1,12 @@
+paths-ignore:
+  - "**/test*"
+  - "**/node_modules"
+
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+
+packs:
+  - .github/codeql/souschef-sanitizers
+
+disable-default-queries: false

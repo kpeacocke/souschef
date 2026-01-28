@@ -58,8 +58,8 @@ jobs:
           languages: python
           # Use default queries plus security-extended for more comprehensive scanning
           queries: +security-extended,security-and-quality
-          # Setup Python dependencies for better analysis
-          setup-python-dependencies: true
+          # Config file includes custom model extensions
+          config-file: ./.github/codeql-config.yml
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -82,10 +82,6 @@ jobs:
           category: "/language:python"
           # Upload results even if there are findings
           upload: always
-          # Use SARIF format for detailed results
-          output: sarif-results
-          # Add extra context for security findings
-          add-snippets: true
 
       - name: Upload SARIF as artifact
         if: always()

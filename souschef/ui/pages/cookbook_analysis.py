@@ -1,6 +1,7 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
+import inspect
 import io
 import json
 import os
@@ -33,6 +34,11 @@ from souschef.core.metrics import (
     get_timeline_weeks,
     validate_metrics_consistency,
 )
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _normalize_path,
+    _safe_join,
+)
 from souschef.parsers.metadata import parse_cookbook_metadata
 
 # AI Settings
@@ -42,6 +48,48 @@ OPENAI_PROVIDER = "OpenAI (GPT)"
 LOCAL_PROVIDER = "Local Model"
 IBM_WATSONX = "IBM Watsonx"
 RED_HAT_LIGHTSPEED = "Red Hat Lightspeed"
+
+
+def _sanitize_filename(filename: str) -> str:
+    """
+    Sanitise filename to prevent path injection attacks.
+
+    Args:
+        filename: The filename to sanitise.
+
+    Returns:
+        Sanitised filename safe for file operations.
+
+    """
+    import re
+
+    # Remove any path separators and parent directory references
+    sanitised = filename.replace("..", "_").replace("/", "_").replace("\\", "_")
+    # Remove any null bytes or control characters
+    sanitised = re.sub(r"[\x00-\x1f\x7f]", "_", sanitised)
+    # Remove leading/trailing whitespace and dots
+    sanitised = sanitised.strip(". ")
+    # Limit length to prevent issues
+    sanitised = sanitised[:255]
+    return sanitised if sanitised else "unnamed"
+
+
+def _get_secure_ai_config_path() -> Path:
+    """Return a private, non-world-writable path for AI config storage."""
+    config_dir = Path(tempfile.gettempdir()) / ".souschef"
+    config_dir.mkdir(mode=0o700, exist_ok=True)
+    with contextlib.suppress(OSError):
+        config_dir.chmod(0o700)
+
+    if config_dir.is_symlink():
+        raise ValueError("AI config directory cannot be a symlink")
+
+    config_file = config_dir / "ai_config.json"
+    # Ensure config file has secure permissions if it exists
+    if config_file.exists():
+        with contextlib.suppress(OSError):
+            config_file.chmod(0o600)
+    return config_file
 
 
 def load_ai_settings() -> dict[str, str | float | int]:
@@ -94,14 +142,13 @@ def _load_ai_settings_from_env() -> dict[str, str | float | int]:
 def _load_ai_settings_from_file() -> dict[str, str | float | int]:
     """Load AI settings from configuration file."""
     try:
-        # Use /tmp/.souschef for container compatibility (tmpfs is writable)
-        config_file = Path("/tmp/.souschef/ai_config.json")
+        config_file = _get_secure_ai_config_path()
         if config_file.exists():
             with config_file.open() as f:
                 file_config = json.load(f)
                 return dict(file_config) if isinstance(file_config, dict) else {}
-    except Exception:
-        pass  # Ignore errors when loading config file; return empty dict as fallback
+    except (ValueError, OSError):
+        return {}
     return {}
 
 
@@ -339,7 +386,12 @@ license 'All rights reserved'
 description 'Automatically extracted cookbook from archive'
 version '1.0.0'
 """
-    (synthetic_cookbook_dir / METADATA_FILENAME).write_text(metadata_content)
+    try:
+        metadata_file = synthetic_cookbook_dir / METADATA_FILENAME
+        metadata_file.parent.mkdir(parents=True, exist_ok=True)
+        metadata_file.write_text(metadata_content)
+    except OSError as e:
+        raise OSError(f"Failed to write metadata file: {e}") from e
 
     return extraction_dir
 
@@ -385,15 +437,14 @@ def _extract_zip_securely(archive_path: Path, extraction_dir: Path) -> None:
         # Safe extraction with manual path handling
         for info in zip_ref.filelist:
             # Construct safe relative path
+
             safe_path = _get_safe_extraction_path(info.filename, extraction_dir)
 
             if info.is_dir():
-                # Create directory
                 safe_path.mkdir(parents=True, exist_ok=True)
             else:
-                # Create parent directories if needed
                 safe_path.parent.mkdir(parents=True, exist_ok=True)
-                # Extract file content manually
+
                 with zip_ref.open(info) as source, safe_path.open("wb") as target:
                     # Read in chunks to control memory usage
                     while True:
@@ -440,8 +491,20 @@ def _extract_tar_securely(
     """Extract TAR archive with security checks."""
     mode = "r:gz" if gzipped else "r"
 
+    if not archive_path.is_file():
+        raise ValueError(f"Archive path is not a file: {archive_path}")
+
+    if not tarfile.is_tarfile(str(archive_path)):
+        raise ValueError(f"Invalid or corrupted TAR archive: {archive_path.name}")
+
     try:
-        with tarfile.open(str(archive_path), mode=mode) as tar_ref:  # type: ignore[call-overload]
+        open_kwargs: dict[str, Any] = {"name": str(archive_path), "mode": mode}
+
+        # `filter` is available in Python 3.12+; guard for older runtimes.
+        if "filter" in inspect.signature(tarfile.open).parameters:
+            open_kwargs["filter"] = "data"
+
+        with tarfile.open(**open_kwargs) as tar_ref:
             members = tar_ref.getmembers()
             _pre_scan_tar_members(members)
             _extract_tar_members(tar_ref, members, extraction_dir)
@@ -549,29 +612,11 @@ def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
     ):
         raise ValueError(f"Path traversal or absolute path detected: {filename}")
 
-    # Normalize path separators and remove leading/trailing slashes
+    # Normalise separators and join using a containment-checked join
     normalized = filename.replace("\\", "/").strip("/")
-
-    # Split into components and filter out dangerous ones
-    parts: list[str] = []
-    for part in normalized.split("/"):
-        if part == "" or part == ".":
-            continue
-        elif part == "..":
-            # Remove parent directory if we have one
-            if parts:
-                parts.pop()
-        else:
-            parts.append(part)
-
-    # Join parts back and resolve against extraction_dir
-    safe_path = extraction_dir / "/".join(parts)
-
-    # Ensure the final path is still within extraction_dir
-    try:
-        safe_path.resolve().relative_to(extraction_dir.resolve())
-    except ValueError:
-        raise ValueError(f"Path traversal detected: {filename}") from None
+    safe_path = _ensure_within_base_path(
+        _safe_join(extraction_dir.resolve(), normalized), extraction_dir.resolve()
+    )
 
     return safe_path
 
@@ -698,7 +743,7 @@ def _show_analysis_input() -> None:
                     # Store temp_dir in session state to prevent premature cleanup
                     st.session_state.temp_dir = temp_dir
                 st.success("Archive extracted successfully to temporary location")
-            except Exception as e:
+            except (OSError, zipfile.BadZipFile, tarfile.TarError) as e:
                 st.error(f"Failed to extract archive: {e}")
                 return
 
@@ -788,14 +833,31 @@ def _get_archive_upload_input() -> Any:
     return uploaded_file
 
 
+def _is_within_base(base: Path, candidate: Path) -> bool:
+    """Check whether candidate is contained within base after resolution."""
+    base_real = Path(os.path.realpath(str(base)))
+    candidate_real = Path(os.path.realpath(str(candidate)))
+    try:
+        candidate_real.relative_to(base_real)
+        return True
+    except ValueError:
+        return False
+
+
 def _validate_and_list_cookbooks(cookbook_path: str) -> None:
     """Validate the cookbook path and list available cookbooks."""
     safe_dir = _get_safe_cookbook_directory(cookbook_path)
     if safe_dir is None:
         return
 
-    if safe_dir.exists() and safe_dir.is_dir():
-        _list_and_display_cookbooks(safe_dir)
+    # Validate the safe directory before use
+    dir_exists: bool = safe_dir.exists()
+    if dir_exists:
+        dir_is_dir: bool = safe_dir.is_dir()
+        if dir_is_dir:
+            _list_and_display_cookbooks(safe_dir)
+        else:
+            st.error(f"Directory not found: {safe_dir}")
     else:
         st.error(f"Directory not found: {safe_dir}")
 
@@ -809,54 +871,26 @@ def _get_safe_cookbook_directory(cookbook_path):
     """
     try:
         base_dir = Path.cwd().resolve()
-        temp_dir = Path(tempfile.gettempdir()).resolve()
 
         path_str = str(cookbook_path).strip()
-
-        # Reject obviously malicious patterns
-        if "\x00" in path_str or ":\\" in path_str or "\\" in path_str:
-            st.error(
-                "Invalid path: Path contains null bytes or backslashes, "
-                "which are not allowed."
-            )
+        if not path_str:
+            st.error("Invalid path: Path cannot be empty.")
             return None
 
-        # Reject paths with directory traversal attempts
-        if ".." in path_str:
-            st.error(
-                "Invalid path: Path contains '..' which is not allowed "
-                "for security reasons."
-            )
-            return None
+        # Sanitise the candidate path using shared helper
+        candidate = _normalize_path(path_str)
 
-        user_path = Path(path_str)
+        trusted_bases = [base_dir, Path(tempfile.gettempdir()).resolve()]
+        for base in trusted_bases:
+            try:
+                return _ensure_within_base_path(candidate, base)
+            except ValueError:
+                continue
 
-        # Resolve the path safely
-        if user_path.is_absolute():
-            resolved_path = user_path.resolve()
-        else:
-            resolved_path = (base_dir / user_path).resolve()
+        raise ValueError(f"Path traversal attempt: escapes {base_dir}")
 
-        # Check if the resolved path is within allowed directories
-        try:
-            resolved_path.relative_to(base_dir)
-            return resolved_path
-        except ValueError:
-            pass
-
-        try:
-            resolved_path.relative_to(temp_dir)
-            return resolved_path
-        except ValueError:
-            st.error(
-                "Invalid path: The resolved path is outside the allowed "
-                "directories (workspace or temporary directory). Paths cannot go above "
-                "the workspace root for security reasons."
-            )
-            return None
-
-    except Exception as exc:
-        st.error(f"Invalid path: {exc}. Please enter a valid relative path.")
+    except ValueError as exc:
+        st.error(f"Invalid path: {exc}")
         return None
 
 
@@ -1086,7 +1120,7 @@ def _show_cookbook_validation_warnings(cookbook_data: list):
     # Check for cookbooks without recipes
     cookbooks_without_recipes = []
     for cookbook in cookbook_data:
-        cookbook_dir = Path(cookbook["Path"])
+        cookbook_dir = _normalize_path(cookbook["Path"])
         recipes_dir = cookbook_dir / "recipes"
         if not recipes_dir.exists() or not list(recipes_dir.glob("*.rb")):
             cookbooks_without_recipes.append(cookbook["Name"])
@@ -1202,22 +1236,26 @@ def _analyze_with_ai(
     st.info(f"Using AI-enhanced analysis with {provider_name} ({model})")
 
     # Count total recipes across all cookbooks
-    total_recipes = sum(
-        len(list((Path(cb["Path"]) / "recipes").glob("*.rb")))
-        if (Path(cb["Path"]) / "recipes").exists()
-        else 0
-        for cb in cookbook_data
-    )
+    def _safe_count_recipes(path_str: str) -> int:
+        """Count recipes safely with CodeQL-recognized containment checks."""
+        try:
+            normalized = _normalize_path(path_str)
+            recipes_dir = normalized / "recipes"
+
+            if recipes_dir.exists():
+                return len(list(recipes_dir.glob("*.rb")))
+            return 0
+        except (ValueError, OSError):
+            return 0
+
+    total_recipes = sum(_safe_count_recipes(cb["Path"]) for cb in cookbook_data)
 
     st.info(f"Detected {len(cookbook_data)} cookbook(s) with {total_recipes} recipe(s)")
 
     results = []
     for i, cb_data in enumerate(cookbook_data):
         # Count recipes in this cookbook
-        recipes_dir = Path(cb_data["Path"]) / "recipes"
-        recipe_count = (
-            len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
-        )
+        recipe_count = _safe_count_recipes(cb_data["Path"])
 
         st.info(
             f"Analyzing {cb_data['Name']} ({recipe_count} recipes)... "
@@ -1538,20 +1576,26 @@ def _parse_summary_line(line: str, structured: dict):
         try:
             count = int(line.split(":")[-1].strip())
             structured["summary"]["total_cookbooks"] = count
-        except ValueError:
-            pass
+        except ValueError as err:
+            structured.setdefault("parse_errors", []).append(
+                f"total_cookbooks_parse_failed: {err}"
+            )
     elif "Successfully converted:" in line:
         try:
             count = int(line.split(":")[-1].strip())
             structured["summary"]["cookbooks_converted"] = count
-        except ValueError:
-            pass
+        except ValueError as err:
+            structured.setdefault("parse_errors", []).append(
+                f"cookbooks_converted_parse_failed: {err}"
+            )
     elif "Total files converted:" in line:
         try:
             count = int(line.split(":")[-1].strip())
             structured["summary"]["total_converted_files"] = count
-        except ValueError:
-            pass
+        except ValueError as err:
+            structured.setdefault("parse_errors", []).append(
+                f"total_converted_files_parse_failed: {err}"
+            )
 
 
 def _parse_converted_cookbook(line: str, structured: dict):
@@ -1572,8 +1616,10 @@ def _parse_converted_cookbook(line: str, structured: dict):
                     "files_count": 0,
                 }
             )
-    except (IndexError, ValueError):
-        pass
+    except (IndexError, ValueError) as err:
+        structured.setdefault("parse_errors", []).append(
+            f"converted_cookbook_parse_failed: {err}"
+        )
 
 
 def _parse_failed_cookbook(line: str, structured: dict):
@@ -1590,8 +1636,10 @@ def _parse_failed_cookbook(line: str, structured: dict):
                     "error": error,
                 }
             )
-    except (IndexError, ValueError):
-        pass
+    except (IndexError, ValueError) as err:
+        structured.setdefault("parse_errors", []).append(
+            f"failed_cookbook_parse_failed: {err}"
+        )
 
 
 def _extract_warnings_from_text(result_text: str, structured: dict):
@@ -1695,38 +1743,107 @@ def _display_conversion_report(result_text: str):
         st.code(result_text, language="markdown")
 
 
+def _validate_output_path(output_path: str) -> Path | None:
+    """
+    Validate and normalize output path.
+
+    Args:
+        output_path: Path string to validate.
+
+    Returns:
+        Normalized Path object or None if invalid.
+
+    """
+    try:
+        safe_output_path = _normalize_path(str(output_path))
+        base_dir = Path.cwd().resolve()
+        # Use centralised containment validation
+        validated = _ensure_within_base_path(safe_output_path, base_dir)
+        return validated if validated.exists() else None
+    except ValueError:
+        return None
+
+
+def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
+    """
+    Collect all files from converted roles directory.
+
+    Args:
+        safe_output_path: Validated base path.
+
+    Returns:
+        List of (file_path, archive_name) tuples.
+
+    """
+    files_to_archive = []
+    # Path is already normalized; validate files within the output path are contained
+    base_path = safe_output_path
+
+    for root, _dirs, files in os.walk(base_path):
+        root_path = _ensure_within_base_path(Path(root), base_path)
+
+        for file in files:
+            safe_name = _sanitize_filename(file)
+            candidate_path = _ensure_within_base_path(root_path / safe_name, base_path)
+            try:
+                # Ensure each file is contained within base
+                arcname = candidate_path.relative_to(base_path)
+                files_to_archive.append((candidate_path, arcname))
+            except ValueError:
+                continue
+
+    return files_to_archive
+
+
+def _create_roles_zip_archive(safe_output_path: Path) -> bytes:
+    """
+    Create ZIP archive of converted roles.
+
+    Args:
+        safe_output_path: Validated path containing roles.
+
+    Returns:
+        ZIP archive as bytes.
+
+    """
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        files_to_archive = _collect_role_files(safe_output_path)
+        for file_path, arcname in files_to_archive:
+            zip_file.write(str(file_path), str(arcname))
+
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
+
+
 def _display_conversion_download_options(conversion_result: dict):
     """Display download options for converted roles."""
-    if "output_path" in conversion_result:
-        st.subheader("Download Converted Roles")
+    if "output_path" not in conversion_result:
+        return
 
-        output_path = conversion_result["output_path"]
-        # deepcode ignore PT: output_path generated internally
-        safe_output_path = Path(output_path).resolve()
-        if safe_output_path.exists():
-            # Create ZIP archive of all converted roles
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                for root, _dirs, files in os.walk(str(safe_output_path)):
-                    for file in files:
-                        file_path = Path(root) / file
-                        arcname = file_path.relative_to(safe_output_path)
-                        zip_file.write(str(file_path), str(arcname))
+    st.subheader("Download Converted Roles")
+    output_path = conversion_result["output_path"]
 
-            zip_buffer.seek(0)
+    safe_output_path = _validate_output_path(output_path)
+    if safe_output_path is None:
+        st.error("Invalid output path")
+        return
 
-            st.download_button(
-                label="📦 Download All Ansible Roles",
-                data=zip_buffer.getvalue(),
-                file_name="ansible_roles_holistic.zip",
-                mime="application/zip",
-                help="Download ZIP archive containing all converted Ansible roles",
-                key="download_holistic_roles",
-            )
+    if safe_output_path.exists():
+        archive_data = _create_roles_zip_archive(safe_output_path)
 
-            st.info(f"📂 Roles saved to: {output_path}")
-        else:
-            st.warning("Output directory not found for download")
+        st.download_button(
+            label="📦 Download All Ansible Roles",
+            data=archive_data,
+            file_name="ansible_roles_holistic.zip",
+            mime="application/zip",
+            help="Download ZIP archive containing all converted Ansible roles",
+            key="download_holistic_roles",
+        )
+
+        st.info(f"📂 Roles saved to: {output_path}")
+    else:
+        st.warning("Output directory not found for download")
 
 
 def _handle_dashboard_upload():
@@ -1906,18 +2023,23 @@ def _update_progress(status_text, cookbook_name, current, total):
 
 def _find_cookbook_directory(cookbook_path, cookbook_name):
     """Find the directory for a specific cookbook by checking metadata."""
-    for d in Path(cookbook_path).iterdir():
-        if d.is_dir():
-            # Check if this directory contains a cookbook with the matching name
-            metadata_file = d / METADATA_FILENAME
-            if metadata_file.exists():
-                try:
-                    metadata = parse_cookbook_metadata(str(metadata_file))
-                    if metadata.get("name") == cookbook_name:
-                        return d
-                except Exception:
-                    # If metadata parsing fails, skip this directory
-                    continue
+    try:
+        normalized_path = _normalize_path(cookbook_path)
+        for d in normalized_path.iterdir():
+            if d.is_dir():
+                # Check if this directory contains a cookbook with the matching name
+                metadata_file = d / METADATA_FILENAME
+                if metadata_file.exists():
+                    try:
+                        metadata = parse_cookbook_metadata(str(metadata_file))
+                        if metadata.get("name") == cookbook_name:
+                            return d
+                    except (ValueError, OSError, KeyError):
+                        # If metadata parsing fails, skip this directory
+                        continue
+    except ValueError:
+        # Invalid path, return None
+        return None
     return None
 
 
@@ -2340,7 +2462,7 @@ def _build_dependency_graph(cookbook_path: str, selected_cookbooks: list[str]) -
                 # Parse the markdown response to extract dependencies
                 dependencies = _extract_dependencies_from_markdown(dep_analysis)
                 dependency_graph[cookbook_name] = dependencies
-            except Exception:
+            except (ValueError, OSError, RuntimeError):
                 # If dependency analysis fails, assume no dependencies
                 dependency_graph[cookbook_name] = []
 
@@ -3061,7 +3183,9 @@ def _convert_and_download_playbooks(results):
             for _i, playbook in enumerate(playbooks):
                 # Sanitize filename - include recipe name to avoid conflicts
                 recipe_name = playbook["recipe_file"].replace(".rb", "")
-                filename = f"{playbook['cookbook_name']}_{recipe_name}.yml"
+                cookbook_name = _sanitize_filename(playbook["cookbook_name"])
+                recipe_name = _sanitize_filename(recipe_name)
+                filename = f"{cookbook_name}_{recipe_name}.yml"
                 (output_dir / filename).write_text(playbook["playbook_content"])
 
             # Store path in session state for validation page
@@ -3364,17 +3488,18 @@ def _create_playbook_archive(playbooks, templates=None):
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         # Organize playbooks by cookbook in subdirectories
         for playbook in playbooks:
-            # Create cookbook directory structure
-            cookbook_name = playbook["cookbook_name"]
-            recipe_name = playbook["recipe_file"].replace(".rb", "")
+            # Create cookbook directory structure with sanitised names
+            cookbook_name = _sanitize_filename(playbook["cookbook_name"])
+            recipe_name = _sanitize_filename(playbook["recipe_file"].replace(".rb", ""))
             playbook_filename = f"{cookbook_name}/{recipe_name}.yml"
             zip_file.writestr(playbook_filename, playbook["playbook_content"])
 
         # Add converted templates
         for template in templates:
-            cookbook_name = template["cookbook_name"]
-            template_filename = f"{cookbook_name}/templates/{template['template_file']}"
-            zip_file.writestr(template_filename, template["template_content"])
+            cookbook_name = _sanitize_filename(template["cookbook_name"])
+            template_filename = _sanitize_filename(template["template_file"])
+            archive_path = f"{cookbook_name}/templates/{template_filename}"
+            zip_file.writestr(archive_path, template["template_content"])
 
         # Count unique cookbooks
         unique_cookbooks = len({p["cookbook_name"] for p in playbooks})
@@ -3406,24 +3531,28 @@ This archive contains {len(playbooks)} Ansible playbooks and {template_count} ""
 
         for cookbook_name, cookbook_playbooks in sorted(by_cookbook.items()):
             cookbook_templates = by_cookbook_templates.get(cookbook_name, [])
+            # Sanitise cookbook name for display in README
+            safe_cookbook_name = _sanitize_filename(cookbook_name)
             readme_content += (
-                f"\n### {cookbook_name}/ "
+                f"\n### {safe_cookbook_name}/ "
                 f"({len(cookbook_playbooks)} recipes, "
                 f"{len(cookbook_templates)} templates)\n"
             )
             for playbook in cookbook_playbooks:
                 conversion_method = playbook.get("conversion_method", "Deterministic")
                 recipe_name = playbook["recipe_file"].replace(".rb", "")
+                safe_recipe_name = _sanitize_filename(recipe_name)
                 readme_content += (
-                    f"  - {recipe_name}.yml "
+                    f"  - {safe_recipe_name}.yml "
                     f"(from {playbook['recipe_file']}, "
                     f"{conversion_method})\n"
                 )
             if cookbook_templates:
                 readme_content += "  - templates/\n"
                 for template in cookbook_templates:
+                    safe_template_name = _sanitize_filename(template["template_file"])
                     readme_content += (
-                        f"    - {template['template_file']} "
+                        f"    - {safe_template_name} "
                         f"(from {template['original_file']})\n"
                     )
 

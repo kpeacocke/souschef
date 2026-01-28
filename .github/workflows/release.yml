@@ -1,100 +1,120 @@
 name: Release
 
-# Only trigger on release published (created by Release Please)
-# Don't trigger on tag push to avoid duplicate runs
+# Trigger after Main Branch Validation succeeds to avoid releasing before checks finish
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Main Branch Validation"]
+    types: [completed]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag to publish (e.g., v2.0.0)'
-        required: true
-        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false  # Don't cancel releases
 
 env:
-  PYTHON_VERSION: "3.14"
+  PYTHON_VERSION: "3.12"
 
 jobs:
-  # Skip tests - they already passed in CI before merge to main
+  # Skip tests - they already passed in CI before merge to main and in Main Branch Validation
   # This workflow focuses on building and publishing the release
   validate:
+    if: ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+         || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write  # Need write to create tags
+      actions: read    # Needed to verify CodeQL run status
     outputs:
       tag: ${{ steps.get-tag.outputs.tag }}
+      version: ${{ steps.get-tag.outputs.version }}
+      should_release: ${{ steps.decision.outputs.should_release }}
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+        fetch-tags: true
+
+    - name: Ensure CodeQL scan succeeded for this commit (best-effort)
+      if: github.event_name == 'workflow_run'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      run: |
+        echo "Checking CodeQL status for $HEAD_SHA"
+        api_url="https://api.github.com/repos/${REPO}/actions/workflows/codeql.yml/runs?head_sha=${HEAD_SHA}"
+        run_json=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$api_url") || true
+        conclusion=$(echo "$run_json" | jq -r '.workflow_runs[0].conclusion // "none"')
+        if [ "$conclusion" != "success" ]; then
+          echo "Warning: CodeQL workflow not successful for $HEAD_SHA (conclusion=$conclusion). Proceeding because Main Branch Validation succeeded."
+        else
+          echo "CodeQL succeeded for $HEAD_SHA"
+        fi
 
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Determine release tag
+    - name: Determine version from pyproject.toml
       id: get-tag
-      env:
-        INPUT_TAG: ${{ inputs.tag }}
-        RELEASE_TAG: ${{ github.event.release.tag_name }}
-        EVENT_NAME: ${{ github.event_name }}
       run: |
-        if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-          TAG="$INPUT_TAG"
-        else
-          TAG="$RELEASE_TAG"
-        fi
+        VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['tool']['poetry']['version'])")
+        TAG="v${VERSION}"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "tag=$TAG" >> $GITHUB_OUTPUT
-        echo "Using tag: $TAG"
+        echo "Version from pyproject.toml: $VERSION"
+        echo "Release tag: $TAG"
 
-    - name: Validate release is on main branch
+    - name: Check remote for existing tag
+      id: check-tag
       env:
         TAG: ${{ steps.get-tag.outputs.tag }}
       run: |
-        if ! git branch -r --contains "$TAG" 2>/dev/null | grep -q 'origin/main'; then
-          echo "Error: Release tag must be on main branch"
-          git branch -r --contains "$TAG" 2>/dev/null || echo "Tag not found"
-          exit 1
+        if git ls-remote --tags origin "$TAG" | grep -q "refs/tags/${TAG}$"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "Tag $TAG already exists on remote"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "Tag $TAG does not exist on remote"
         fi
-        echo "✓ Release tag is on main branch"
 
-    - name: Validate semver tag
+    - name: Check PyPI for existing version
+      id: check-pypi
       env:
-        TAG: ${{ steps.get-tag.outputs.tag }}
+        VERSION: ${{ steps.get-tag.outputs.version }}
       run: |
-        if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-          echo "Error: Tag '$TAG' does not follow semver format (vX.Y.Z)"
-          exit 1
+        set -e
+        exists=$(curl -fsSL https://pypi.org/pypi/souschef/json | jq -r --arg v "$VERSION" '.releases[$v] | if . == null then "false" else "true" end') || exists=false
+        echo "exists=$exists" >> $GITHUB_OUTPUT
+        if [ "$exists" = "true" ]; then
+          echo "Version $VERSION already exists on PyPI"
+        else
+          echo "Version $VERSION not found on PyPI"
         fi
-        echo "✓ Tag '$TAG' is valid semver"
 
-    - name: Verify tag version matches pyproject.toml
+    - name: Decide whether to release
+      id: decision
       env:
-        TAG: ${{ steps.get-tag.outputs.tag }}
+        TAG_EXISTS: ${{ steps.check-tag.outputs.exists }}
+        PYPI_EXISTS: ${{ steps.check-pypi.outputs.exists }}
       run: |
-        TAG_VERSION="${TAG#v}"
-        # Use Python to parse TOML since it's more reliable than sed
-        PYPROJECT_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['tool']['poetry']['version'])")
-        if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
-          echo "Error: Tag version ($TAG_VERSION) != pyproject.toml version ($PYPROJECT_VERSION)"
-          exit 1
+        if [ "$TAG_EXISTS" = "true" ] || [ "$PYPI_EXISTS" = "true" ]; then
+          echo "should_release=false" >> $GITHUB_OUTPUT
+          echo "Skipping release: tag or PyPI version already exists."
+        else
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "Proceeding with release."
         fi
-        echo "✓ Version $TAG_VERSION matches pyproject.toml"
 
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate
+    if: needs.validate.outputs.should_release == 'true'
     permissions:
       contents: read
 
@@ -102,7 +122,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6
       with:
-        ref: ${{ needs.validate.outputs.tag }}
+        # Checkout the exact commit that triggered the workflow. The tag does
+        # not exist yet (created later in create-release), so using the tag
+        # here causes checkout failures.
+        ref: ${{ github.sha }}
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -127,6 +151,9 @@ jobs:
     - name: Install dependencies
       run: poetry install --no-interaction
 
+    - name: Install Twine (for package validation)
+      run: poetry run python -m pip install --upgrade pip twine
+
     - name: Build Python package
       run: poetry build
 
@@ -143,11 +170,32 @@ jobs:
   publish-pypi:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: build
+    needs: [validate, build]
+    if: needs.validate.outputs.should_release == 'true'
     permissions:
       contents: read
+      id-token: write  # For trusted publishing
+      deployments: write  # For deployment status updates
 
     steps:
+    - name: Verify PyPI token configured
+      env:
+        PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        if [ -z "$PYPI_API_TOKEN" ]; then
+          echo "PYPI_API_TOKEN secret is not configured; aborting publish."
+          exit 1
+        fi
+
+    - name: Start deployment
+      uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+      id: deployment
+      with:
+        step: start
+        token: ${{ secrets.GITHUB_TOKEN }}
+        env: pypi
+        ref: ${{ needs.validate.outputs.tag }}
+
     - name: Download package artifacts
       uses: actions/download-artifact@v7
       with:
@@ -160,14 +208,59 @@ jobs:
         password: ${{ secrets.PYPI_API_TOKEN }}
         attestations: false
 
-  attach-to-release:
+    - name: Update deployment status (success)
+      uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+      if: success()
+      with:
+        step: finish
+        token: ${{ secrets.GITHUB_TOKEN }}
+        status: ${{ job.status }}
+        env: ${{ steps.deployment.outputs.env }}
+        deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+        env_url: https://pypi.org/project/souschef/${{ needs.validate.outputs.version }}/
+
+    - name: Update deployment status (failure)
+      uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+      if: failure()
+      with:
+        step: finish
+        token: ${{ secrets.GITHUB_TOKEN }}
+        status: ${{ job.status }}
+        env: ${{ steps.deployment.outputs.env }}
+        deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+
+  create-release:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [validate, build]
+    if: needs.validate.outputs.should_release == 'true'
     permissions:
       contents: write
 
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        ref: main
+        fetch-depth: 0
+        fetch-tags: true
+
+    - name: Create git tag and GitHub release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ needs.validate.outputs.tag }}
+        VERSION: ${{ needs.validate.outputs.version }}
+      run: |
+        # Create and push tag (tag main HEAD explicitly)
+        git tag "$TAG"
+        git push origin "$TAG"
+
+        # Create GitHub release with auto-generated notes
+        gh release create "$TAG" \
+          --title "Release $VERSION" \
+          --generate-notes \
+          --latest
+
     - name: Download package artifacts
       uses: actions/download-artifact@v7
       with:
@@ -178,7 +271,6 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG: ${{ needs.validate.outputs.tag }}
-        REPO: ${{ github.repository }}
       run: |
         echo "Attaching packages to release $TAG..."
-        gh release upload "$TAG" dist/* --repo "$REPO"
+        gh release upload "$TAG" dist/*

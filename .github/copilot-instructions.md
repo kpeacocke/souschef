@@ -73,6 +73,10 @@ souschef/
 
 ### Code Quality
 - **Zero warnings policy**: All code must be free of errors and warnings from **all tools** (Ruff, mypy, Pylance) without disabling them
+- **Code suppressions require approval**: NEVER add code suppressions (`# noqa`, `# type: ignore`, `# pylint: disable`, `# codeql[...]`, `|| true`, `|| echo`, `continue-on-error`, etc.) without explicitly asking the user first. Always fix the underlying issue rather than masking it. The only exceptions are:
+  - Pre-existing `# noqa: F401` markers for backward compatibility exports (respect these, never remove them)
+  - User-approved suppressions for legitimate false positives after attempting proper fixes
+  - Document the reason for any approved suppression with a comment explaining why it's necessary
 - **Type hints**: Use Python type hints for all function signatures in source code (`souschef/`). For test files, pytest fixtures (`tmp_path`, `benchmark`) and parameterized test parameters can omit type hints for brevity
 - **Docstrings**: Every function, class, and module must have clear docstrings following Google style
 - **Linting**: Code must pass `ruff check` with no violations
@@ -169,12 +173,47 @@ The project maintains three types of tests - ensure all are updated when adding 
 - **Lock file**: Always commit `poetry.lock` to version control
 - **Dev dependencies**: Keep development dependencies separate in `[tool.poetry.group.dev.dependencies]`
 
+## Pre-Submission Quality Checks
+**CRITICAL**: Before committing or submitting ANY code changes, you MUST run these checks and ensure they all pass:
+
+1.  **Ruff Linting** (REQUIRED - must exit with code 0):
+    ```bash
+    poetry run ruff check .
+    ```
+    - All errors must be fixed (no exit code 1)
+    - Use `poetry run ruff check . --fix` for auto-fixable errors
+    - Manually fix remaining errors before proceeding
+
+2.  **Type Checking** (REQUIRED - must have zero errors):
+    ```bash
+    poetry run mypy souschef
+    ```
+    - No type errors allowed in source code
+    - Standard library stub warnings can be ignored
+
+3.  **Test Suite** (REQUIRED - all tests must pass):
+    ```bash
+    poetry run pytest --cov=souschef
+    ```
+    - All tests must pass (exit code 0)
+    - Coverage should be maintained at 90%+
+
+4.  **Git Status** (REQUIRED - clean state):
+    ```bash
+    git status
+    ```
+    - No uncommitted changes should remain
+    - All intended changes should be committed
+    - Temporary files should be removed
+
+**IMPORTANT**: These checks are mandatory quality gates. Do not skip them or commit code that fails any of these checks.
+
 ## Code Review Checklist
 Before suggesting code, ensure:
-1.  No linting errors (`ruff check`)
+1.  No linting errors (`ruff check`) - **MANDATORY PRE-SUBMISSION CHECK**
 2.  Properly formatted (`ruff format`)
-3.  No type errors (`mypy souschef`)
-4.  All tests pass (`pytest`)
+3.  No type errors (`mypy souschef`) - **MANDATORY PRE-SUBMISSION CHECK**
+4.  All tests pass (`pytest`) - **MANDATORY PRE-SUBMISSION CHECK**
 5.  Coverage maintained at 90%+ (`pytest --cov`)
 6.  Unit tests added/updated in `test_server.py`
 7.  Integration tests added/updated in `test_integration.py`
@@ -186,6 +225,7 @@ Before suggesting code, ensure:
 13. Cross-platform compatible
 14. **Architecture respected**: Code follows module structure from [ARCHITECTURE.md](../docs/ARCHITECTURE.md) - if uncertain about placement, use the decision tree
 15. **Australian English used**: All documentation, comments, and docstrings use Australian English spelling (colour, organise, recognise, etc.)
+16. **Pre-submission checks completed**: All mandatory quality checks from "Pre-Submission Quality Checks" section have passed
 
 ## Preferred Patterns
 
@@ -269,7 +309,10 @@ def test_handles_any_input(random_input):
 ```
 
 ## Anti-Patterns to Avoid
--  Disabling linting warnings without fixing the underlying issue
+-  **Adding suppressions without user approval** - Never add `# noqa`, `# type: ignore`, `# pylint: disable`, `# codeql[...]`, `|| true`, `|| echo`, `continue-on-error: true`, `--skip-editable`, or similar bypasses without explicitly asking the user first
+-  **Masking problems instead of fixing them** - Always attempt to fix the underlying issue rather than suppressing warnings or errors
+-  **Disabling linting warnings** - Don't disable warnings without user approval and documented justification
+-  **Accepting test/check failures** - Don't use `|| true`, `|| echo`, or similar patterns to ignore failures without user consent
 -  Missing type hints
 -  Untested code paths
 -  Platform-specific path handling

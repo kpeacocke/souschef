@@ -1,12 +1,16 @@
 """SousChef MCP Server - Chef to Ansible conversion assistant."""
 
+# codeql[py/unused-import]: Intentional re-exports for MCP tools and test compatibility
+
 import ast
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+import yaml
+from mcp.server import FastMCP
 
 # Import assessment functions with aliases to avoid name conflicts
 from souschef.assessment import (
@@ -15,23 +19,16 @@ from souschef.assessment import (
 from souschef.assessment import (
     assess_chef_migration_complexity as _assess_chef_migration_complexity,
 )
-from souschef.assessment import (
-    generate_migration_plan as _generate_migration_plan,
-)
-from souschef.assessment import (
-    generate_migration_report as _generate_migration_report,
-)
+from souschef.assessment import generate_migration_plan as _generate_migration_plan
+from souschef.assessment import generate_migration_report as _generate_migration_report
 from souschef.assessment import (
     parse_chef_migration_assessment as _parse_chef_migration_assessment,
 )
-from souschef.assessment import (
-    validate_conversion as _validate_conversion,
-)
+from souschef.assessment import validate_conversion as _validate_conversion
 
 # Import extracted modules
 # Import private helper functions still used in server.py
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.converters.habitat import (  # noqa: F401
+from souschef.converters.habitat import (  # noqa: F401, codeql[py/unused-import]
     _add_service_build,
     _add_service_dependencies,
     _add_service_environment,
@@ -51,9 +48,9 @@ from souschef.converters.habitat import (
     generate_compose_from_habitat as _generate_compose_from_habitat,
 )
 
+# Import playbook converter functions
 # Re-exports of playbook internal functions for backward compatibility (tests)
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.converters.playbook import (  # noqa: F401
+from souschef.converters.playbook import (  # noqa: F401, codeql[py/unused-import]
     _add_general_recommendations,
     _convert_chef_block_to_ansible,
     _convert_chef_condition_to_ansible,
@@ -76,8 +73,6 @@ from souschef.converters.playbook import (  # noqa: F401
     _parse_search_condition,
     _process_subscribes,
 )
-
-# Import playbook converter functions
 from souschef.converters.playbook import (
     analyse_chef_search_patterns as _analyse_chef_search_patterns,
 )
@@ -87,9 +82,7 @@ from souschef.converters.playbook import (
 from souschef.converters.playbook import (
     generate_dynamic_inventory_script as _generate_dynamic_inventory_script,
 )
-
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.converters.resource import (  # noqa: F401
+from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-import]
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
     _get_file_params,
@@ -101,8 +94,7 @@ from souschef.converters.resource import (
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.core.constants import (  # noqa: F401
+from souschef.core.constants import (  # noqa: F401, codeql[py/unused-import]
     ACTION_TO_STATE,
     ANSIBLE_SERVICE_MODULE,
     ERROR_PREFIX,
@@ -112,33 +104,47 @@ from souschef.core.constants import (  # noqa: F401
 
 # Import core utilities
 from souschef.core.errors import format_error_with_context
-
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.core.path_utils import _normalize_path, _safe_join  # noqa: F401
-
-# Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
-# These imports are intentionally exposed for external test access
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.core.ruby_utils import (  # noqa: F401
-    _normalize_ruby_value,
+from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
+    _ensure_within_base_path,
+    _normalize_path,
+    _safe_join,
+    _validated_candidate,
+    safe_glob,
+    safe_read_text,
+    safe_write_text,
 )
 
 # Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
 # These imports are intentionally exposed for external test access
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.core.validation import (  # noqa: F401
+from souschef.core.ruby_utils import (
+    _normalize_ruby_value,  # noqa: F401, codeql[py/unused-import]
+)
+
+# Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
+# These imports are intentionally exposed for external test access
+from souschef.core.validation import (  # noqa: F401, codeql[py/unused-import]
     ValidationCategory,
     ValidationEngine,
     ValidationLevel,
     ValidationResult,
 )
 
+# Explicit re-exports for language servers and type checkers
+# These names are intentionally available from souschef.server
+__all__ = [
+    "ValidationCategory",
+    "ValidationEngine",
+    "ValidationLevel",
+    "ValidationResult",
+]
+
+# Re-exports for backward compatibility (used by tests)
+# These are imported and re-exported intentionally
 # Import validation framework
 # Re-exports of deployment internal functions for backward compatibility (tests)
 # Public re-exports of deployment functions for test backward compatibility
 # Note: MCP tool wrappers exist for some of these, but tests import directly
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.deployment import (  # noqa: F401
+from souschef.deployment import (  # noqa: F401, codeql[py/unused-import]
     _analyse_cookbook_for_awx,
     _analyse_cookbooks_directory,
     _detect_deployment_patterns_in_recipe,
@@ -152,17 +158,7 @@ from souschef.deployment import (  # noqa: F401
     _parse_chef_runlist,
     _recommend_ansible_strategies,
     analyse_chef_application_patterns,
-    convert_chef_deployment_to_ansible_strategy,
-    generate_awx_inventory_source_from_chef,
-    generate_awx_job_template_from_cookbook,
-    generate_awx_project_from_cookbooks,
-    generate_awx_workflow_from_chef_runlist,
-    generate_blue_green_deployment_playbook,
-    generate_canary_deployment_strategy,
 )
-
-# Re-exports for backward compatibility (used by tests)
-# These are imported and re-exported intentionally
 from souschef.deployment import (
     convert_chef_deployment_to_ansible_strategy as _convert_chef_deployment_to_ansible_strategy,
 )
@@ -189,33 +185,28 @@ from souschef.deployment import (
 from souschef.filesystem import list_directory as _list_directory
 from souschef.filesystem import read_file as _read_file
 
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.parsers.attributes import (  # noqa: F401
+# Import parser functions
+from souschef.parsers.attributes import (  # noqa: F401, codeql[py/unused-import]
     _extract_attributes,
     _format_attributes,
     _format_resolved_attributes,
     _get_precedence_level,
     _resolve_attribute_precedence,
 )
-
-# Import parser functions
 from souschef.parsers.attributes import parse_attributes as _parse_attributes
 
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.parsers.habitat import (  # noqa: F401
+# Import Habitat parser internal functions for backward compatibility
+from souschef.parsers.habitat import (  # noqa: F401, codeql[py/unused-import]
     _extract_plan_array,
     _extract_plan_exports,
     _extract_plan_function,
     _extract_plan_var,
     _update_quote_state,
 )
-
-# Import Habitat parser internal functions for backward compatibility
 from souschef.parsers.habitat import parse_habitat_plan as _parse_habitat_plan
 
 # Re-export InSpec internal functions for backward compatibility (tests)
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.parsers.inspec import (  # noqa: F401
+from souschef.parsers.inspec import (  # noqa: F401, codeql[py/unused-import]
     _convert_inspec_to_ansible_assert,
     _convert_inspec_to_goss,
     _convert_inspec_to_serverspec,
@@ -224,18 +215,12 @@ from souschef.parsers.inspec import (  # noqa: F401
     _generate_inspec_from_resource,
     _parse_inspec_control,
 )
-from souschef.parsers.inspec import (
-    convert_inspec_to_test as _convert_inspec_test,
-)
-from souschef.parsers.inspec import (
-    parse_inspec_profile as _parse_inspec,
-)
-
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.parsers.metadata import (  # noqa: F401
-    _extract_metadata,
-    _format_cookbook_structure,
-    _format_metadata,
+from souschef.parsers.inspec import convert_inspec_to_test as _convert_inspec_test
+from souschef.parsers.inspec import parse_inspec_profile as _parse_inspec
+from souschef.parsers.metadata import (
+    _extract_metadata,  # noqa: F401, codeql[py/unused-import]
+    _format_cookbook_structure,  # noqa: F401, codeql[py/unused-import]
+    _format_metadata,  # noqa: F401, codeql[py/unused-import]
 )
 from souschef.parsers.metadata import (
     list_cookbook_structure as _list_cookbook_structure,
@@ -244,24 +229,23 @@ from souschef.parsers.metadata import (
     parse_cookbook_metadata as _parse_cookbook_metadata,
 )
 from souschef.parsers.metadata import read_cookbook_metadata as _read_cookbook_metadata
-
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.parsers.recipe import (  # noqa: F401
-    _extract_conditionals,
-    _extract_resources,
-    _format_resources,
+from souschef.parsers.recipe import (
+    _extract_conditionals,  # noqa: F401, codeql[py/unused-import]
+    _extract_resources,  # noqa: F401, codeql[py/unused-import]
+    _format_resources,  # noqa: F401, codeql[py/unused-import]
 )
 from souschef.parsers.recipe import parse_recipe as _parse_recipe
 
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.parsers.resource import (  # noqa: F401
-    _extract_resource_actions,
-    _extract_resource_properties,
+# Re-exports for backward compatibility (used by tests) - DO NOT REMOVE
+# These imports are intentionally exposed for external test access
+from souschef.parsers.resource import (
+    _extract_resource_actions,  # noqa: F401, codeql[py/unused-import]
+    _extract_resource_properties,  # noqa: F401, codeql[py/unused-import]
 )
 from souschef.parsers.resource import parse_custom_resource as _parse_custom_resource
 
-# codeql[py/unused-import]: Backward compatibility exports for test suite
-from souschef.parsers.template import (  # noqa: F401
+# Import internal functions for backward compatibility (used by tests)
+from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
     _convert_erb_to_jinja2,
     _extract_code_block_variables,
     _extract_heredoc_strings,
@@ -270,17 +254,35 @@ from souschef.parsers.template import (  # noqa: F401
     _extract_template_variables,
     _strip_ruby_comments,
 )
-
-# Import internal functions for backward compatibility (used by tests)
 from souschef.parsers.template import parse_template as _parse_template
+
+# Backward compatibility re-exports without underscore prefix (for tests)
+# noinspection PyUnusedLocal
+convert_chef_deployment_to_ansible_strategy = (  # noqa: F401
+    _convert_chef_deployment_to_ansible_strategy
+)
+generate_awx_inventory_source_from_chef = (  # noqa: F401
+    _generate_awx_inventory_source_from_chef
+)
+generate_awx_job_template_from_cookbook = (  # noqa: F401
+    _generate_awx_job_template_from_cookbook
+)
+generate_awx_project_from_cookbooks = _generate_awx_project_from_cookbooks  # noqa: F401
+generate_awx_workflow_from_chef_runlist = (  # noqa: F401
+    _generate_awx_workflow_from_chef_runlist
+)
+generate_blue_green_deployment_playbook = (  # noqa: F401
+    _generate_blue_green_deployment_playbook
+)
+generate_canary_deployment_strategy = (  # noqa: F401
+    _generate_canary_deployment_strategy
+)
 
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
 
-# Error message templates
-ERROR_FILE_NOT_FOUND = "Error: File not found at {path}"
-ERROR_IS_DIRECTORY = "Error: {path} is a directory, not a file"
-ERROR_PERMISSION_DENIED = "Error: Permission denied for {path}"
+# File constants
+METADATA_RB = "metadata.rb"
 
 # File constants
 METADATA_RB = "metadata.rb"
@@ -300,6 +302,10 @@ def parse_template(path: str) -> str:
         JSON string with extracted variables and Jinja2-converted template.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating template path", path)
     return _parse_template(path)
 
 
@@ -315,6 +321,10 @@ def parse_custom_resource(path: str) -> str:
         JSON string with extracted properties, actions, and metadata.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating resource path", path)
     return _parse_custom_resource(path)
 
 
@@ -330,6 +340,10 @@ def list_directory(path: str) -> list[str] | str:
         A list of filenames in the directory, or an error message.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating directory path", path)
     result: list[str] | str = _list_directory(path)
     return result
 
@@ -346,6 +360,10 @@ def read_file(path: str) -> str:
         The contents of the file, or an error message.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating file path", path)
     result: str = _read_file(path)
     return result
 
@@ -362,6 +380,10 @@ def read_cookbook_metadata(path: str) -> str:
         Formatted string with extracted metadata.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating metadata path", path)
     return _read_cookbook_metadata(path)
 
 
@@ -377,6 +399,10 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
         Dictionary containing extracted metadata fields.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return {"error": str(e)}
     return _parse_cookbook_metadata(path)
 
 
@@ -392,6 +418,10 @@ def parse_recipe(path: str) -> str:
         Formatted string with extracted Chef resources and their properties.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating recipe path", path)
     return _parse_recipe(path)
 
 
@@ -421,6 +451,10 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
         Formatted string with extracted attributes.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating attributes path", path)
     return _parse_attributes(path, resolve_precedence)
 
 
@@ -436,6 +470,10 @@ def list_cookbook_structure(path: str) -> str:
         Formatted string showing the cookbook structure.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating cookbook path", path)
     return _list_cookbook_structure(path)
 
 
@@ -505,7 +543,6 @@ def _extract_resource_subscriptions(
     return subscriptions
 
 
-@mcp.tool()
 def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
     """
     Parse all control files from an InSpec profile directory.
@@ -526,9 +563,9 @@ def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
         raise FileNotFoundError(f"No controls directory found in {profile_path}")
 
     controls = []
-    for control_file in controls_dir.glob("*.rb"):
+    for control_file in safe_glob(controls_dir, "*.rb", profile_path):
         try:
-            content = control_file.read_text()
+            content = safe_read_text(control_file, profile_path)
             file_controls = _parse_inspec_control(content)
             for ctrl in file_controls:
                 ctrl["file"] = str(control_file.relative_to(profile_path))
@@ -554,7 +591,7 @@ def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
 
     """
     try:
-        content = profile_path.read_text()
+        content = safe_read_text(profile_path, profile_path.parent)
         controls = _parse_inspec_control(content)
         for ctrl in controls:
             ctrl["file"] = profile_path.name
@@ -575,6 +612,10 @@ def parse_inspec_profile(path: str) -> str:
         JSON string with parsed controls, or error message.
 
     """
+    try:
+        path = str(_normalize_path(path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating InSpec path", path)
     return _parse_inspec(path)
 
 
@@ -591,6 +632,10 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
         Converted test code or error message.
 
     """
+    try:
+        inspec_path = str(_normalize_path(inspec_path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating InSpec path", inspec_path)
     return _convert_inspec_test(inspec_path, output_format)
 
 
@@ -646,6 +691,9 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:
 
     """
     try:
+        # Validate and normalize path
+        recipe_path = str(_normalize_path(recipe_path))
+
         # First parse the recipe
         recipe_result: str = parse_recipe(recipe_path)
 
@@ -705,8 +753,6 @@ def convert_chef_databag_to_vars(
 
     """
     try:
-        import yaml
-
         # Validate inputs
         if not databag_content or not databag_content.strip():
             return (
@@ -812,13 +858,14 @@ def _validate_databags_directory(
     return databags_path, None
 
 
-def _convert_databag_item(item_file, databag_name: str, output_directory: str) -> dict:
+def _convert_databag_item(
+    item_file, databag_name: str, output_directory: str, base_path: Path
+) -> dict:
     """Convert a single databag item file to Ansible format."""
     item_name = item_file.stem
 
     try:
-        with item_file.open() as f:
-            content = f.read()
+        content = safe_read_text(item_file, base_path)
 
         # Detect if encrypted
         is_encrypted = _detect_encrypted_databag(content)
@@ -843,13 +890,17 @@ def _convert_databag_item(item_file, databag_name: str, output_directory: str) -
         return {"databag": databag_name, "item": item_name, "error": str(e)}
 
 
-def _process_databag_directory(databag_dir, output_directory: str) -> list[dict]:
+def _process_databag_directory(
+    databag_dir, output_directory: str, base_path: Path
+) -> list[dict]:
     """Process all items in a single databag directory."""
     results = []
     databag_name = databag_dir.name
 
-    for item_file in databag_dir.glob("*.json"):
-        result = _convert_databag_item(item_file, databag_name, output_directory)
+    for item_file in safe_glob(databag_dir, "*.json", base_path):
+        result = _convert_databag_item(
+            item_file, databag_name, output_directory, base_path
+        )
         results.append(result)
 
     return results
@@ -884,11 +935,13 @@ def generate_ansible_vault_from_databags(
         conversion_results = []
 
         # Process each data bag directory
-        for databag_dir in databags_path.iterdir():
+        for databag_dir in databags_path.iterdir():  # nosonar
             if not databag_dir.is_dir():
                 continue
 
-            results = _process_databag_directory(databag_dir, output_directory)
+            results = _process_databag_directory(
+                databag_dir, output_directory, databags_path
+            )
             conversion_results.extend(results)
 
         # Generate summary and file structure
@@ -915,6 +968,9 @@ def analyse_chef_databag_usage(cookbook_path: str, databags_path: str = "") -> s
         Analysis of data bag usage and migration recommendations
 
     """
+    cookbook_path = str(_normalize_path(cookbook_path))
+    if databags_path:
+        databags_path = str(_normalize_path(databags_path))
     try:
         cookbook = _normalize_path(cookbook_path)
         if not cookbook.exists():
@@ -1027,12 +1083,11 @@ def generate_inventory_from_chef_environments(
         environments = {}
         processing_results = []
 
-        for env_file in env_path.glob("*.rb"):
+        for env_file in safe_glob(env_path, "*.rb", env_path):
             env_name = env_file.stem
 
             try:
-                with env_file.open("r") as f:
-                    content = f.read()
+                content = safe_read_text(env_file, env_path)
 
                 env_data = _parse_chef_environment_content(content)
                 environments[env_name] = env_data
@@ -1374,8 +1429,6 @@ def _generate_inventory_group_from_environment(
     env_data: dict, env_name: str, include_constraints: bool
 ) -> str:
     """Generate Ansible inventory group configuration from environment data."""
-    import yaml
-
     group_vars: dict[str, Any] = {}
 
     # Add environment metadata
@@ -1408,7 +1461,7 @@ def _generate_inventory_group_from_environment(
         ),
     }
 
-    return yaml.dump(group_vars, default_flow_style=False, indent=2)
+    return str(yaml.dump(group_vars, default_flow_style=False, indent=2))
 
 
 def _build_conversion_summary(results: list) -> str:
@@ -1461,8 +1514,6 @@ def _generate_yaml_inventory(environments: dict) -> str:
         YAML inventory string
 
     """
-    import yaml
-
     inventory: dict[str, Any] = {"all": {"children": {}}}
 
     for env_name, env_data in environments.items():
@@ -1592,8 +1643,7 @@ def _extract_environment_usage_from_cookbook(cookbook_path) -> list:
     # Search for environment usage in Ruby files
     for ruby_file in cookbook_path.rglob("*.rb"):
         try:
-            with ruby_file.open("r") as f:
-                content = f.read()
+            content = safe_read_text(ruby_file, cookbook_path)
 
             # Find environment usage patterns
             found_patterns = _find_environment_patterns_in_content(
@@ -1650,13 +1700,12 @@ def _analyse_environments_structure(environments_path) -> dict:
     """Analyse the structure of Chef environments directory."""
     structure: dict[str, Any] = {"total_environments": 0, "environments": {}}
 
-    for env_file in environments_path.glob("*.rb"):
+    for env_file in safe_glob(environments_path, "*.rb", environments_path):
         structure["total_environments"] += 1
         env_name = env_file.stem
 
         try:
-            with env_file.open("r") as f:
-                content = f.read()
+            content = safe_read_text(env_file, environments_path)
 
             env_data = _parse_chef_environment_content(content)
 
@@ -1852,12 +1901,10 @@ def _convert_databag_to_ansible_vars(
 
 def _generate_vault_content(vars_dict: dict, databag_name: str) -> str:
     """Generate Ansible Vault YAML content from variables dictionary."""
-    import yaml
-
     # Structure for vault file
     vault_vars = {f"{databag_name}_vault": vars_dict}
 
-    return yaml.dump(vault_vars, default_flow_style=False, indent=2)
+    return str(yaml.dump(vault_vars, default_flow_style=False, indent=2))
 
 
 def _detect_encrypted_databag(content: str) -> bool:
@@ -2036,8 +2083,7 @@ def _extract_databag_usage_from_cookbook(cookbook_path) -> list:
     # Search for data bag usage in Ruby files
     for ruby_file in cookbook_path.rglob("*.rb"):
         try:
-            with ruby_file.open() as f:
-                content = f.read()
+            content = safe_read_text(ruby_file, cookbook_path)
 
             # Find data bag usage patterns
             found_patterns = _find_databag_patterns_in_content(content, str(ruby_file))
@@ -2099,7 +2145,7 @@ def _analyse_databag_structure(databags_path) -> dict:
         "databags": {},
     }
 
-    for databag_dir in databags_path.iterdir():
+    for databag_dir in databags_path.iterdir():  # nosonar
         if not databag_dir.is_dir():
             continue
 
@@ -2107,13 +2153,12 @@ def _analyse_databag_structure(databags_path) -> dict:
         structure["total_databags"] += 1
 
         items = []
-        for item_file in databag_dir.glob("*.json"):
+        for item_file in safe_glob(databag_dir, "*.json", databags_path):
             structure["total_items"] += 1
             item_name = item_file.stem
 
             try:
-                with item_file.open() as f:
-                    content = f.read()
+                content = safe_read_text(item_file, databags_path)
 
                 is_encrypted = _detect_encrypted_databag(content)
                 if is_encrypted:
@@ -2359,8 +2404,10 @@ def assess_chef_migration_complexity(
         Detailed assessment report in markdown format.
 
     """
+    # Sanitise and contain user-provided cookbook paths before processing
+    sanitized = _sanitize_cookbook_paths_input(cookbook_paths)
     return _assess_chef_migration_complexity(
-        cookbook_paths, migration_scope, target_platform
+        sanitized, migration_scope, target_platform
     )
 
 
@@ -2385,7 +2432,9 @@ def generate_migration_plan(
         Detailed migration plan in markdown format.
 
     """
-    return _generate_migration_plan(cookbook_paths, migration_strategy, timeline_weeks)
+    # Sanitise and contain user-provided cookbook paths before processing
+    sanitized = _sanitize_cookbook_paths_input(cookbook_paths)
+    return _generate_migration_plan(sanitized, migration_strategy, timeline_weeks)
 
 
 @mcp.tool()
@@ -2403,7 +2452,9 @@ def analyse_cookbook_dependencies(cookbook_paths: str) -> str:
         Dependency analysis report in markdown format.
 
     """
-    return _analyse_cookbook_dependencies(cookbook_paths)
+    # Sanitise and contain user-provided cookbook paths before processing
+    sanitized = _sanitize_cookbook_paths_input(cookbook_paths)
+    return _analyse_cookbook_dependencies(sanitized)
 
 
 @mcp.tool()
@@ -2427,9 +2478,45 @@ def generate_migration_report(
         Comprehensive migration report in markdown format.
 
     """
+    # Sanitise and contain user-provided cookbook paths before processing
+    sanitized = _sanitize_cookbook_paths_input(cookbook_paths)
     return _generate_migration_report(
-        cookbook_paths, report_format, include_technical_details
+        sanitized, report_format, include_technical_details
     )
+
+
+def _sanitize_cookbook_paths_input(cookbook_paths: str) -> str:
+    """
+    Sanitise a comma-separated list of cookbook paths.
+
+    Args:
+        cookbook_paths: Comma-separated paths provided by the user.
+
+    Returns:
+        A comma-separated string of normalised paths.
+
+    Raises:
+        ValueError: If any path is invalid.
+
+    """
+    sanitized_paths: list[str] = []
+    for raw in cookbook_paths.split(","):
+        candidate = raw.strip()
+        if not candidate:
+            continue
+        # Normalize the path (resolves ., .., symlinks)
+
+        # prevents traversal attacks; file access is further contained by per-operation checks
+        normalised = _normalize_path(candidate)
+
+        # Validate it's an absolute path after normalization
+        if not normalised.is_absolute():
+            msg = f"Path must be absolute after normalization: {candidate}"
+            raise ValueError(msg)
+
+        # Use the normalized absolute path (temp dirs, workspace dirs all allowed)
+        sanitized_paths.append(str(normalised))
+    return ",".join(sanitized_paths)
 
 
 @mcp.tool()
@@ -2474,6 +2561,7 @@ def parse_habitat_plan(plan_path: str) -> str:
         JSON string with parsed plan metadata
 
     """
+    plan_path = str(_normalize_path(plan_path))
     return _parse_habitat_plan(plan_path)
 
 
@@ -2571,6 +2659,7 @@ def analyse_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
         Analysis of search patterns found.
 
     """
+    recipe_or_cookbook_path = str(_normalize_path(recipe_or_cookbook_path))
     return _analyse_chef_search_patterns(recipe_or_cookbook_path)
 
 
@@ -2593,6 +2682,7 @@ def profile_cookbook_performance(cookbook_path: str) -> str:
     from souschef.profiling import generate_cookbook_performance_report
 
     try:
+        cookbook_path = str(_normalize_path(cookbook_path))
         report = generate_cookbook_performance_report(cookbook_path)
         return str(report)
     except Exception as e:
@@ -2638,6 +2728,7 @@ def profile_parsing_operation(
     func = operation_map[operation]
 
     try:
+        file_path = str(_normalize_path(file_path))
         if detailed:
             _, profile_result = detailed_profile_function(func, file_path)
             result = str(profile_result)
@@ -2681,6 +2772,7 @@ def generate_jenkinsfile_from_chef(
     from souschef.ci.jenkins_pipeline import generate_jenkinsfile_from_chef_ci
 
     try:
+        cookbook_path = str(_normalize_path(cookbook_path))
         # Convert string to boolean
         enable_parallel_bool = enable_parallel.lower() in ("yes", "true", "1")
 
@@ -2723,6 +2815,7 @@ def generate_gitlab_ci_from_chef(
     from souschef.ci.gitlab_ci import generate_gitlab_ci_from_chef_ci
 
     try:
+        cookbook_path = str(_normalize_path(cookbook_path))
         enable_cache_bool = enable_cache.lower() in ("yes", "true", "1")
         enable_artifacts_bool = enable_artifacts.lower() in ("yes", "true", "1")
         result = generate_gitlab_ci_from_chef_ci(
@@ -2768,6 +2861,7 @@ def generate_github_workflow_from_chef(
     from souschef.ci.github_actions import generate_github_workflow_from_chef_ci
 
     try:
+        cookbook_path = str(_normalize_path(cookbook_path))
         enable_cache_bool = enable_cache.lower() in ("yes", "true", "1")
         enable_artifacts_bool = enable_artifacts.lower() in ("yes", "true", "1")
         result = generate_github_workflow_from_chef_ci(
@@ -2917,21 +3011,46 @@ def _setup_conversion_metadata(cookbook_dir: Path, role_name: str) -> tuple[str,
     return cookbook_name, role_name
 
 
+def _validate_role_name(role_name: str) -> None:
+    """
+    Validate that role_name is safe for filesystem operations.
+
+    Args:
+        role_name: The role name to validate.
+
+    Raises:
+        ValueError: If the role name contains unsafe characters.
+
+    """
+    if not role_name:
+        raise ValueError("Role name cannot be empty")
+    if ".." in role_name or "/" in role_name or "\\" in role_name:
+        raise ValueError(f"Role name contains unsafe characters: {role_name}")
+
+
 def _create_role_structure(output_dir: Path, role_name: str) -> Path:
     """Create the standard Ansible role directory structure."""
-    role_dir = output_dir / role_name
+    # Validate role_name to ensure it's safe for filesystem operations
+    _validate_role_name(role_name)
+
+    base = os.path.realpath(str(output_dir))
+    role_dir_str = os.path.realpath(os.path.join(base, role_name))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, role_dir_str]) != base:
+        raise RuntimeError("Unsafe role path outside output directory")
+    role_dir = Path(role_dir_str)
     role_tasks_dir = role_dir / "tasks"
     role_templates_dir = role_dir / "templates"
     role_vars_dir = role_dir / "vars"
     role_defaults_dir = role_dir / "defaults"
 
+    # All paths are validated via os.path.commonpath containment check above
     for directory in [
         role_tasks_dir,
         role_templates_dir,
         role_vars_dir,
         role_defaults_dir,
     ]:
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True)  # nosonar: S2083
 
     return role_dir
 
@@ -2940,9 +3059,11 @@ def _convert_recipes(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert Chef recipes to Ansible tasks."""
-    recipes_dir = cookbook_dir / "recipes"
-    role_tasks_dir = role_dir / "tasks"
-
+    cookbook_base = os.path.realpath(str(cookbook_dir))
+    recipes_dir_str = os.path.realpath(os.path.join(cookbook_base, "recipes"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([cookbook_base, recipes_dir_str]) != cookbook_base:
+        raise RuntimeError("Unsafe recipes path outside cookbook directory")
+    recipes_dir = Path(recipes_dir_str)
     if not recipes_dir.exists():
         conversion_summary["warnings"].append(
             f"No recipes directory found in {cookbook_dir.name}. "
@@ -2952,7 +3073,7 @@ def _convert_recipes(
 
     from souschef.converters.playbook import generate_playbook_from_recipe
 
-    recipe_files = list(recipes_dir.glob("*.rb"))
+    recipe_files = safe_glob(recipes_dir, "*.rb", cookbook_dir)
     if not recipe_files:
         conversion_summary["warnings"].append(
             f"No recipe files (*.rb) found in {cookbook_dir.name}/recipes/. "
@@ -2962,10 +3083,11 @@ def _convert_recipes(
 
     for recipe_file in recipe_files:
         try:
-            recipe_name = recipe_file.stem
+            validated_recipe = _validated_candidate(recipe_file, recipes_dir)
+            recipe_name = validated_recipe.stem
 
             # Parse recipe to validate it can be processed
-            parse_result = _parse_recipe(str(recipe_file))
+            parse_result = _parse_recipe(str(validated_recipe))
             if parse_result.startswith("Error:"):
                 conversion_summary["errors"].append(
                     f"Failed to parse recipe {recipe_name}: {parse_result}"
@@ -2973,11 +3095,18 @@ def _convert_recipes(
                 continue
 
             # Convert to Ansible tasks
-            playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
+            playbook_yaml = generate_playbook_from_recipe(str(validated_recipe))
 
-            # Write as task file
-            task_file = role_tasks_dir / f"{recipe_name}.yml"
-            task_file.write_text(playbook_yaml)
+            # Write as task file; _safe_join already enforces containment within role_dir
+            task_file = _safe_join(role_dir, "tasks", f"{recipe_name}.yml")
+            try:
+                task_file.parent.mkdir(parents=True, exist_ok=True)  # nosonar
+                safe_write_text(task_file, role_dir, playbook_yaml)
+            except OSError as write_err:
+                conversion_summary["errors"].append(
+                    f"Failed to write task file {task_file.name}: {write_err}"
+                )
+                continue
 
             conversion_summary["converted_files"].append(
                 {
@@ -2997,19 +3126,21 @@ def _convert_templates(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert ERB templates to Jinja2 templates."""
-    templates_dir = cookbook_dir / "templates"
-    role_templates_dir = role_dir / "templates"
+    templates_dir = _safe_join(cookbook_dir, "templates")
 
     if not templates_dir.exists():
         return
 
-    for template_file in templates_dir.rglob("*.erb"):
+    for template_file in safe_glob(templates_dir, "**/*.erb", cookbook_dir):
+        validated_template = template_file
         try:
             # Convert ERB to Jinja2
-            conversion_result = _parse_template(str(template_file))
+            validated_template = _validated_candidate(template_file, templates_dir)
+
+            conversion_result = _parse_template(str(validated_template))
             if conversion_result.startswith("Error:"):
                 conversion_summary["errors"].append(
-                    f"Failed to convert template {template_file.name}: {conversion_result}"
+                    f"Failed to convert template {validated_template.name}: {conversion_result}"
                 )
                 continue
 
@@ -3018,13 +3149,15 @@ def _convert_templates(
                 template_data = json.loads(conversion_result)
                 jinja2_content = template_data.get("jinja2_template", "")
 
-                # Determine relative path for role templates
-                rel_path = template_file.relative_to(templates_dir)
-                target_file = role_templates_dir / rel_path.with_suffix(
-                    ""
-                )  # Remove .erb extension
+                # Determine relative path for role templates using _safe_join
+
+                rel_path = validated_template.relative_to(templates_dir)
+                # Build target file path with inline containment guard
+                target_file = _safe_join(
+                    role_dir, "templates", str(rel_path.with_suffix(""))
+                )
                 target_file.parent.mkdir(parents=True, exist_ok=True)
-                target_file.write_text(jinja2_content)
+                safe_write_text(target_file, role_dir, jinja2_content)
 
                 conversion_summary["converted_files"].append(
                     {
@@ -3036,12 +3169,12 @@ def _convert_templates(
 
             except json.JSONDecodeError:
                 conversion_summary["errors"].append(
-                    f"Invalid JSON result for template {template_file.name}"
+                    f"Invalid JSON result for template {validated_template.name}"
                 )
 
         except Exception as e:
             conversion_summary["errors"].append(
-                f"Error converting template {template_file.name}: {str(e)}"
+                f"Error converting template {validated_template.name}: {str(e)}"
             )
 
 
@@ -3049,30 +3182,25 @@ def _convert_attributes(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert Chef attributes to Ansible variables."""
-    import yaml
-
-    attributes_dir = cookbook_dir / "attributes"
-    role_defaults_dir = role_dir / "defaults"
+    attributes_dir = _safe_join(cookbook_dir, "attributes")
+    role_defaults_dir = _safe_join(role_dir, "defaults")
 
     if not attributes_dir.exists():
         return
 
-    for attr_file in attributes_dir.glob("*.rb"):
+    for attr_file in safe_glob(attributes_dir, "*.rb", cookbook_dir):
+        validated_attr = attr_file
         try:
+            validated_attr = _validated_candidate(attr_file, attributes_dir)
             # Read the file content
-            content = attr_file.read_text()
+            content = safe_read_text(validated_attr, cookbook_dir)
 
-            # Extract attributes using internal function
-            from souschef.parsers.attributes import (
-                _extract_attributes,
-                _resolve_attribute_precedence,
-            )
-
+            # Extract attributes (already imported at top of file)
             raw_attributes = _extract_attributes(content)
 
             if not raw_attributes:
                 conversion_summary["warnings"].append(
-                    f"No attributes found in {attr_file.name}"
+                    f"No attributes found in {validated_attr.name}"
                 )
                 continue
 
@@ -3087,22 +3215,25 @@ def _convert_attributes(
                 ansible_key = attr_path.replace(".", "_")
                 ansible_vars[ansible_key] = attr_info["value"]
 
-            # Write as defaults
-            defaults_file = role_defaults_dir / f"{attr_file.stem}.yml"
+            # Write as defaults using _safe_join to prevent path injection
+            # All paths are validated via _safe_join to ensure containment within role_defaults_dir
+            defaults_filename: str = f"{validated_attr.stem}.yml"
+            defaults_file: Path = _safe_join(role_defaults_dir, defaults_filename)
             defaults_yaml = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
-            defaults_file.write_text(defaults_yaml)
+            defaults_file.parent.mkdir(parents=True, exist_ok=True)
+            safe_write_text(defaults_file, role_dir, defaults_yaml)
 
             conversion_summary["converted_files"].append(
                 {
                     "type": "defaults",
-                    "source": f"attributes/{attr_file.name}",
-                    "target": f"{role_dir.name}/defaults/{attr_file.stem}.yml",
+                    "source": f"attributes/{validated_attr.name}",
+                    "target": f"{role_dir.name}/defaults/{validated_attr.stem}.yml",
                 }
             )
 
         except Exception as e:
             conversion_summary["errors"].append(
-                f"Error converting attributes {attr_file.name}: {str(e)}"
+                f"Error converting attributes {validated_attr.name}: {str(e)}"
             )
 
 
@@ -3113,11 +3244,16 @@ def _create_main_task_file(
     if not include_recipes:
         return
 
-    default_task_file = role_dir / "tasks" / "main.yml"
+    # Build path to tasks directory safely
+    tasks_dir: Path = _safe_join(role_dir, "tasks")
+    # Build path to main.yml within tasks directory
+    default_task_file: Path = _safe_join(tasks_dir, "main.yml")
     if default_task_file.exists():
         return  # Already exists
 
-    default_recipe = cookbook_dir / "recipes" / "default.rb"
+    # Build path to default recipe safely
+    recipes_dir: Path = _safe_join(cookbook_dir, "recipes")
+    default_recipe: Path = _safe_join(recipes_dir, "default.rb")
     if not default_recipe.exists():
         return
 
@@ -3125,7 +3261,8 @@ def _create_main_task_file(
         from souschef.converters.playbook import generate_playbook_from_recipe
 
         playbook_yaml = generate_playbook_from_recipe(str(default_recipe))
-        default_task_file.write_text(playbook_yaml)
+        default_task_file.parent.mkdir(parents=True, exist_ok=True)
+        safe_write_text(default_task_file, role_dir, playbook_yaml)
         conversion_summary["converted_files"].append(
             {
                 "type": "task",
@@ -3147,11 +3284,11 @@ def _create_role_metadata(
     conversion_summary: dict,
 ) -> None:
     """Create Ansible role metadata file."""
-    import yaml
+    # Use _safe_join to construct metadata file path
 
-    meta_dir = role_dir / "meta"
-    meta_dir.mkdir(exist_ok=True)
-    meta_file = meta_dir / "main.yml"
+    meta_dir = _safe_join(role_dir, "meta")
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    meta_file = _safe_join(meta_dir, "main.yml")
 
     meta_content: dict[str, Any] = {
         "galaxy_info": {
@@ -3173,7 +3310,7 @@ def _create_role_metadata(
             meta_content["dependencies"] = [{"role": dep} for dep in deps]
 
     meta_yaml = yaml.dump(meta_content, default_flow_style=False, indent=2)
-    meta_file.write_text(meta_yaml)
+    safe_write_text(meta_file, role_dir, meta_yaml)
 
     conversion_summary["converted_files"].append(
         {
@@ -3201,13 +3338,13 @@ def _generate_conversion_report(conversion_summary: dict, role_dir: Path) -> str
         summary_lines.append("")
         summary_lines.append("## Errors:")
         for error in conversion_summary["errors"]:
-            summary_lines.append(f"- ❌ {error}")
+            summary_lines.append(f"- ERROR: {error}")
 
     if conversion_summary["warnings"]:
         summary_lines.append("")
         summary_lines.append("## Warnings:")
         for warning in conversion_summary["warnings"]:
-            summary_lines.append(f"- ⚠️ {warning}")
+            summary_lines.append(f"- WARNING: {warning}")
 
     summary_lines.append("")
     summary_lines.append(f"## Role Location: {role_dir}")
@@ -3282,13 +3419,24 @@ def _validate_conversion_paths(
     cookbooks_path: str, output_path: str
 ) -> tuple[Path, Path]:
     """Validate and return Path objects for conversion paths."""
-    from souschef.core.path_utils import _normalize_path
+    base_dir = Path.cwd().resolve()
 
-    cookbooks_dir = _normalize_path(cookbooks_path)
-    output_dir = _normalize_path(output_path)
+    cookbooks_candidate = _normalize_path(cookbooks_path)
+    try:
+        cookbooks_dir = _ensure_within_base_path(cookbooks_candidate, base_dir)
+    except ValueError as e:
+        raise ValueError(f"Cookbooks path is invalid or outside workspace: {e}") from e
 
-    if not cookbooks_dir.exists():
+    from souschef.core.path_utils import safe_exists
+
+    if not safe_exists(cookbooks_dir, base_dir):
         raise ValueError(f"Cookbooks path does not exist: {cookbooks_path}")
+
+    output_candidate = _normalize_path(output_path)
+    try:
+        output_dir = _ensure_within_base_path(output_candidate, base_dir)
+    except ValueError as e:
+        raise ValueError(f"Output path is invalid or outside workspace: {e}") from e
 
     return cookbooks_dir, output_dir
 

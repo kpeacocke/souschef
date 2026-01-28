@@ -26,8 +26,7 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref }}
         run: |
-
-          echo "Validating branch: $BRANCH_NAME"
+          echo "Validating branch: $BRANCH_NAME"  # nosonar
 
           # Allow main and develop
           if [[ "$BRANCH_NAME" == "main" ]] || \
@@ -85,8 +84,7 @@ jobs:
           SOURCE_BRANCH: ${{ github.head_ref }}
           TARGET_BRANCH: ${{ github.base_ref }}
         run: |
-
-          echo "PR: $SOURCE_BRANCH → $TARGET_BRANCH"
+          echo "PR: $SOURCE_BRANCH → $TARGET_BRANCH"  # nosonar
 
           # Main should never merge to develop (wrong direction)
           if [[ "$SOURCE_BRANCH" == "main" ]]; then

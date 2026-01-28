@@ -6,11 +6,17 @@ generating migration plans, analyzing dependencies, and validating conversions.
 """
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
-from souschef.core import METADATA_FILENAME, _normalize_path, _safe_join
+from souschef.core import (
+    METADATA_FILENAME,
+    _ensure_within_base_path,
+    _normalize_path,
+    _safe_join,
+)
 from souschef.core.errors import format_error_with_context
 from souschef.core.metrics import (
     ComplexityLevel,
@@ -18,6 +24,7 @@ from souschef.core.metrics import (
     categorize_complexity,
     estimate_effort_for_complexity,
 )
+from souschef.core.path_utils import _validated_candidate, safe_glob
 from souschef.core.validation import (
     ValidationEngine,
     ValidationLevel,
@@ -32,11 +39,33 @@ except ImportError:
     requests = None
 
 try:
-    from ibm_watsonx_ai import (  # type: ignore[import-not-found]
-        APIClient,
-    )
+    from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]
 except ImportError:
     APIClient = None
+
+
+def _normalize_cookbook_root(cookbook_path: Path | str) -> Path:
+    """
+    Normalise cookbook paths.
+
+    Args:
+        cookbook_path: User-provided cookbook path.
+
+    Returns:
+        A resolved Path.
+
+    Raises:
+        ValueError: If the path cannot be normalised.
+
+    """
+    # Normalise the path (resolves symlinks, expands ~, etc.)
+    # Safety for accessing files within this cookbook is enforced per-operation
+    # using _ensure_within_base_path with the cookbook dir as the base
+    return _normalize_path(cookbook_path)
+
+
+# Optimised patterns to avoid catastrophic backtracking in resource parsing
+RESOURCE_BLOCK_PATTERN = re.compile(r"\w{1,100}\s+['\"]([^'\"\r\n]{0,200})['\"]\s+do")
 
 
 def assess_chef_migration_complexity(
@@ -223,7 +252,6 @@ def _parse_and_assess_cookbooks(cookbook_paths: str) -> tuple[list, str | None]:
 
     cookbook_assessments = []
     for cookbook_path in valid_paths:
-        # deepcode ignore PT: path normalized via _normalize_path
         assessment = _assess_single_cookbook(cookbook_path)
         cookbook_assessments.append(assessment)
 
@@ -326,7 +354,8 @@ def analyse_cookbook_dependencies(
         dependency_depth: Analysis depth (direct, transitive, full)
 
     Returns:
-        Dependency analysis with migration order recommendations
+        Dependency analysis with migration order recommendations.
+
 
     """
     try:
@@ -338,15 +367,21 @@ def analyse_cookbook_dependencies(
                 f"Suggestion: Use one of {', '.join(valid_depths)}"
             )
 
-        cookbook_path_obj = _normalize_path(cookbook_path)
-        if not cookbook_path_obj.exists():
+        # Validate and normalise user-provided path
+        # Containment is enforced at filesystem operation level
+        try:
+            normalized_input: Path = _normalize_path(cookbook_path)
+        except (ValueError, OSError) as e:
+            return f"Error: Invalid cookbook path '{cookbook_path}': {e}"
+
+        if not normalized_input.exists():
             return (
                 f"Error: Cookbook path not found: {cookbook_path}\n\n"
                 "Suggestion: Check that the path exists and points to a cookbook directory"
             )
 
-        # Analyze dependencies
-        dependency_analysis = _analyse_cookbook_dependencies_detailed(cookbook_path_obj)
+        # Analyze dependencies using normalized path
+        dependency_analysis = _analyse_cookbook_dependencies_detailed(normalized_input)
 
         # Determine migration order
         migration_order = _determine_migration_order(dependency_analysis)
@@ -355,7 +390,7 @@ def analyse_cookbook_dependencies(
         circular_deps = _identify_circular_dependencies(dependency_analysis)
 
         return f"""# Cookbook Dependency Analysis
-# Cookbook: {cookbook_path_obj.name}
+# Cookbook: {normalized_input.name}
 # Analysis Depth: {dependency_depth}
 
 ## Dependency Overview:
@@ -555,7 +590,9 @@ def _parse_cookbook_paths(cookbook_paths: str) -> list[Any]:
         List of valid Path objects (may be empty)
 
     """
-    paths = [_normalize_path(path.strip()) for path in cookbook_paths.split(",")]
+    paths = [
+        _normalize_cookbook_root(path.strip()) for path in cookbook_paths.split(",")
+    ]
     valid_paths = [p for p in paths if p.exists()]
     return valid_paths
 
@@ -583,7 +620,6 @@ def _analyse_cookbook_metrics(
     }
 
     for cookbook_path in valid_paths:
-        # deepcode ignore PT: path normalized via _normalize_path
         assessment = _assess_single_cookbook(cookbook_path)
         cookbook_assessments.append(assessment)
 
@@ -653,30 +689,70 @@ def _format_assessment_report(
 """
 
 
-def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
+def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C901
     """Count comprehensive cookbook artifacts including all Chef components."""
-    # deepcode ignore PT: path normalized via _normalize_path in caller
-    cookbook_path = (
-        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
-    )
+    # Note: cookbook_path is expected to be pre-validated
+    base = cookbook_path
 
-    # Basic directory counts
-    recipes_dir = cookbook_path / "recipes"
-    recipe_count = len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
+    # Helper function to safely glob within a directory
+    def _glob_safe(directory: Path, pattern: str) -> int:
+        """Count files matching a glob pattern within a directory."""
+        if not directory.exists() or not directory.is_dir():
+            return 0
+        try:
+            return len(list(directory.glob(pattern)))
+        except (OSError, ValueError):
+            return 0
 
-    templates_dir = cookbook_path / "templates"
-    template_count = (
-        len(list(templates_dir.glob("**/*.erb"))) if templates_dir.exists() else 0
-    )
+    # Helper function to check existence safely
+    def _exists_safe(path: Path) -> bool:
+        """Check if a path exists."""
+        try:
+            return path.exists()
+        except (OSError, ValueError):
+            return False
 
-    files_dir = cookbook_path / "files"
-    file_count = len(list(files_dir.glob("**/*"))) if files_dir.exists() else 0
+    # All paths are safe-joined to the validated base
+    recipes_dir: Path = _safe_join(base, "recipes")
+    recipe_count: int = _glob_safe(recipes_dir, "*.rb")
 
-    # Additional Chef components
-    attributes_dir = cookbook_path / "attributes"
-    attributes_count = (
-        len(list(attributes_dir.glob("*.rb"))) if attributes_dir.exists() else 0
-    )
+    templates_dir: Path = _safe_join(base, "templates")
+    template_count: int = _glob_safe(templates_dir, "**/*.erb")
+
+    files_dir: Path = _safe_join(base, "files")
+    file_count: int = _glob_safe(files_dir, "**/*")
+
+    attributes_dir: Path = _safe_join(base, "attributes")
+    attributes_count: int = _glob_safe(attributes_dir, "*.rb")
+
+    libraries_dir: Path = _safe_join(base, "libraries")
+    libraries_count: int = _glob_safe(libraries_dir, "*.rb")
+
+    definitions_dir: Path = _safe_join(base, "definitions")
+    definitions_count: int = _glob_safe(definitions_dir, "*.rb")
+
+    resources_dir: Path = _safe_join(base, "resources")
+    resources_count: int = _glob_safe(resources_dir, "*.rb")
+
+    providers_dir: Path = _safe_join(base, "providers")
+    providers_count: int = _glob_safe(providers_dir, "*.rb")
+
+    berksfile: Path = _safe_join(base, "Berksfile")
+    has_berksfile: bool = _exists_safe(berksfile)
+
+    chefignore: Path = _safe_join(base, "chefignore")
+    has_chefignore: bool = _exists_safe(chefignore)
+
+    thorfile: Path = _safe_join(base, "Thorfile")
+    has_thorfile: bool = _exists_safe(thorfile)
+
+    kitchen_yml: Path = _safe_join(base, ".kitchen.yml")
+    kitchen_yaml: Path = _safe_join(base, "kitchen.yml")
+    has_kitchen_yml: bool = _exists_safe(kitchen_yml) or _exists_safe(kitchen_yaml)
+
+    test_dir: Path = _safe_join(base, "test")
+    spec_dir: Path = _safe_join(base, "spec")
+    has_test_dir: bool = _exists_safe(test_dir) or _exists_safe(spec_dir)
 
     libraries_dir = cookbook_path / "libraries"
     libraries_count = (
@@ -728,10 +804,8 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:
 
 def _analyse_recipe_complexity(cookbook_path: Path) -> dict[str, int]:
     """Analyse recipe files and other cookbook components for resource counts, Ruby blocks, and custom resources."""
-    # deepcode ignore PT: path normalized via _normalize_path in caller
-    cookbook_path = (
-        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
-    )
+    # Note: cookbook_path is expected to be pre-validated at function entry points
+    # Do not call _normalize_cookbook_root here as it's already a validated Path
 
     resource_count = 0
     custom_resources = 0
@@ -765,54 +839,75 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
     ruby_blocks = 0
     custom_resources = 0
 
-    recipes_dir = cookbook_path / "recipes"
-    if recipes_dir.exists():
-        for recipe_file in recipes_dir.glob("*.rb"):
-            try:
-                content = recipe_file.read_text(encoding="utf-8", errors="ignore")
-                # Count Chef resources
-                resources = len(
-                    re.findall(r'\w{1,100}\s+[\'"]([^\'"]{0,200})[\'"]\s+do', content)
+    # Note: cookbook_path is expected to be pre-validated
+    # Use it directly with _safe_join to access recipes directory
+    recipes_dir: Path = _safe_join(cookbook_path, "recipes")
+    try:
+        recipe_files: list[Path] = (
+            list(recipes_dir.glob("*.rb")) if recipes_dir.exists() else []
+        )
+    except (OSError, ValueError):
+        recipe_files = []
+
+    for recipe_file in recipe_files:
+        try:
+            # Validate each glob result
+            validated_file: Path = _validated_candidate(recipe_file, cookbook_path)
+        except ValueError:
+            continue
+        try:
+            content = validated_file.read_text(encoding="utf-8", errors="ignore")
+            resources = len(RESOURCE_BLOCK_PATTERN.findall(content))
+            ruby_blocks += len(
+                re.findall(r"ruby_block|execute|bash|script", content, re.IGNORECASE)
+            )
+            custom_resources += len(
+                re.findall(
+                    r"custom_resource|provides|use_inline_resources|lwrp_resource",
+                    content,
                 )
-                ruby_blocks += len(
-                    re.findall(
-                        r"ruby_block|execute|bash|script", content, re.IGNORECASE
-                    )
-                )
-                custom_resources += len(
-                    re.findall(
-                        r"custom_resource|provides|use_inline_resources|lwrp_resource",
-                        content,
-                    )
-                )
-                resource_count += resources
-            except Exception:
-                continue
+            )
+            resource_count += resources
+        except Exception:
+            continue
 
     return resource_count, ruby_blocks, custom_resources
 
 
 def _analyze_attributes(cookbook_path: Path) -> int:
-    """Analyze attribute files for complexity."""
+    """Analyse attribute files for complexity."""
     attribute_complexity = 0
 
-    attributes_dir = (
-        cookbook_path / "attributes"
-    )  # deepcode ignore PT: path normalized via _normalize_path
-    if attributes_dir.exists():
-        for attr_file in attributes_dir.glob("*.rb"):
-            try:
-                content = attr_file.read_text(encoding="utf-8", errors="ignore")
-                # Count attribute assignments and complex expressions
-                assignments = len(
-                    re.findall(r"^\s*\w+\s*\[?\w*\]?\s*=", content, re.MULTILINE)
+    # Note: cookbook_path is expected to be pre-validated
+    attributes_dir: Path = _safe_join(cookbook_path, "attributes")
+    try:
+        attr_files: list[Path] = (
+            list(attributes_dir.glob("*.rb")) if attributes_dir.exists() else []
+        )
+    except (OSError, ValueError):
+        attr_files = []
+
+    for attr_file in attr_files:
+        try:
+            # Validate each glob result
+            validated_file: Path = _validated_candidate(attr_file, cookbook_path)
+        except ValueError:
+            continue
+        try:
+            content = validated_file.read_text(encoding="utf-8", errors="ignore")
+            assignments = len(
+                re.findall(
+                    r"^[ \t]{0,20}\w+[ \t]{0,10}(?:\[\w*\])?[ \t]{0,10}=",
+                    content,
+                    re.MULTILINE,
                 )
-                complex_expressions = len(
-                    re.findall(r"(?:node|default|override)\[", content)
-                )
-                attribute_complexity += assignments + complex_expressions
-            except Exception:
-                continue
+            )
+            complex_expressions = len(
+                re.findall(r"(?:node|default|override)\[", content)
+            )
+            attribute_complexity += assignments + complex_expressions
+        except Exception:
+            continue
 
     return attribute_complexity
 
@@ -821,74 +916,91 @@ def _analyze_templates(cookbook_path: Path) -> int:
     """Analyze template files for ERB complexity."""
     erb_templates = 0
 
-    templates_dir = (
-        cookbook_path / "templates"
-    )  # deepcode ignore PT: path normalized via _normalize_path
-    if templates_dir.exists():
-        for template_file in templates_dir.glob("**/*.erb"):
-            try:
-                content = template_file.read_text(encoding="utf-8", errors="ignore")
-                # Count ERB expressions and complex logic
-                erb_expressions = len(re.findall(r"<%.*?%>", content))
-                erb_templates += erb_expressions
-            except Exception:
-                continue
+    # Note: cookbook_path is expected to be pre-validated
+    templates_dir: Path = _safe_join(cookbook_path, "templates")
+    try:
+        template_files: list[Path] = (
+            list(templates_dir.glob("**/*.erb")) if templates_dir.exists() else []
+        )
+    except (OSError, ValueError):
+        template_files = []
+
+    for template_file in template_files:
+        try:
+            # Validate each glob result
+            validated_file: Path = _validated_candidate(template_file, cookbook_path)
+        except ValueError:
+            continue
+
+        try:
+            content = validated_file.read_text(encoding="utf-8", errors="ignore")
+            erb_expressions = len(re.findall(r"<%.*?%>", content))
+            erb_templates += erb_expressions
+        except Exception:
+            continue
 
     return erb_templates
 
 
 def _analyze_libraries(cookbook_path: Path) -> int:
-    """Analyze library files for complexity."""
+    """Analyse library files for complexity."""
     library_complexity = 0
 
-    libraries_dir = (
-        cookbook_path / "libraries"
-    )  # deepcode ignore PT: path normalized via _normalize_path
-    if libraries_dir.exists():
-        for lib_file in libraries_dir.glob("*.rb"):
-            try:
-                content = lib_file.read_text(encoding="utf-8", errors="ignore")
-                # Count class definitions, methods, and complex Ruby constructs
-                classes = len(re.findall(r"class\s+\w+", content))
-                methods = len(re.findall(r"def\s+\w+", content))
-                library_complexity += classes * 2 + methods
-            except Exception:
-                continue
+    # Note: cookbook_path is expected to be pre-validated
+    libraries_dir: Path = _safe_join(cookbook_path, "libraries")
+    try:
+        lib_files: list[Path] = (
+            safe_glob(libraries_dir, "*.rb", cookbook_path)
+            if libraries_dir.exists()
+            else []
+        )
+    except (OSError, ValueError):
+        lib_files = []
+
+    for lib_file in lib_files:
+        try:
+            # lib_file is already validated by safe_glob
+            content = lib_file.read_text(encoding="utf-8", errors="ignore")
+            classes = len(re.findall(r"class\s+\w+", content))
+            methods = len(re.findall(r"def\s+\w+", content))
+            library_complexity += classes * 2 + methods
+        except Exception:
+            continue
 
     return library_complexity
 
 
 def _count_definitions(cookbook_path: Path) -> int:
     """Count definition files."""
-    definitions_dir = (
-        cookbook_path / "definitions"
-    )  # deepcode ignore PT: path normalized via _normalize_path
-    if definitions_dir.exists():
-        return len(list(definitions_dir.glob("*.rb")))
-    return 0
+    # Note: cookbook_path is expected to be pre-validated
+    definitions_dir: Path = _safe_join(cookbook_path, "definitions")
+    try:
+        def_files: list[Path] = (
+            safe_glob(definitions_dir, "*.rb", cookbook_path)
+            if definitions_dir.exists()
+            else []
+        )
+    except (OSError, ValueError):
+        def_files = []
+    return len(def_files)
 
 
 def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     """Parse Berksfile for dependency information."""
-    # deepcode ignore PT: path normalized via _normalize_path in caller
-    cookbook_path = (
-        Path(cookbook_path) if not isinstance(cookbook_path, Path) else cookbook_path
-    )
-    berksfile = cookbook_path / "Berksfile"
+    base = _normalize_cookbook_root(cookbook_path)
+    berksfile_path = _safe_join(base, "Berksfile")
 
-    if not berksfile.exists():
+    if not berksfile_path.exists():
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
 
     try:
-        content = berksfile.read_text(encoding="utf-8", errors="ignore")
+        content = berksfile_path.read_text(encoding="utf-8", errors="ignore")
 
-        # Parse cookbook dependencies
         cookbook_deps = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
         external_deps = re.findall(
             r'cookbook\s+[\'"]([^\'"]+)[\'"]\s*,\s*[\'"]([^\'"]+)[\'"]', content
         )
 
-        # Count complex dependency specifications (with version constraints, git sources, etc.)
         complex_deps = len(re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]\s*,', content))
         git_sources = len(re.findall(r"git:", content))
         path_sources = len(re.findall(r"path:", content))
@@ -906,21 +1018,20 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
 
 def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     """Parse chefignore file for ignore patterns."""
-    cookbook_path = Path(cookbook_path)
-    chefignore = cookbook_path / "chefignore"
+    base = _normalize_cookbook_root(cookbook_path)
+    chefignore_path = _ensure_within_base_path(_safe_join(base, "chefignore"), base)
 
-    if not chefignore.exists():
+    if not chefignore_path.exists():
         return {"patterns": [], "complexity": 0}
 
     try:
-        content = chefignore.read_text(encoding="utf-8", errors="ignore")
+        content = chefignore_path.read_text(encoding="utf-8", errors="ignore")
         lines = [
             line.strip()
             for line in content.split("\n")
             if line.strip() and not line.startswith("#")
         ]
 
-        # Count complex patterns (wildcards, directories, etc.)
         wildcard_patterns = len([p for p in lines if "*" in p or "?" in p])
         directory_patterns = len([p for p in lines if p.endswith("/") or "/" in p])
 
@@ -936,16 +1047,15 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
 
 def _parse_thorfile(cookbook_path) -> dict[str, Any]:
     """Parse Thorfile for Thor tasks."""
-    cookbook_path = Path(cookbook_path)
-    thorfile = cookbook_path / "Thorfile"
+    base = _normalize_cookbook_root(cookbook_path)
+    thorfile_path = _ensure_within_base_path(_safe_join(base, "Thorfile"), base)
 
-    if not thorfile.exists():
+    if not thorfile_path.exists():
         return {"tasks": [], "complexity": 0}
 
     try:
-        content = thorfile.read_text(encoding="utf-8", errors="ignore")
+        content = thorfile_path.read_text(encoding="utf-8", errors="ignore")
 
-        # Count Thor tasks and methods
         tasks = len(re.findall(r'desc\s+[\'"]([^\'"]+)[\'"]', content))
         methods = len(re.findall(r"def\s+\w+", content))
 
@@ -961,10 +1071,10 @@ def _parse_thorfile(cookbook_path) -> dict[str, Any]:
 
 def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
     """Parse metadata.rb for cookbook information."""
-    cookbook_path = Path(cookbook_path)
-    metadata_file = cookbook_path / "metadata.rb"
+    base = _normalize_cookbook_root(cookbook_path)
+    metadata_path = _ensure_within_base_path(_safe_join(base, "metadata.rb"), base)
 
-    if not metadata_file.exists():
+    if not metadata_path.exists():
         return {
             "name": "",
             "version": "",
@@ -974,9 +1084,8 @@ def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
         }
 
     try:
-        content = metadata_file.read_text(encoding="utf-8", errors="ignore")
+        content = metadata_path.read_text(encoding="utf-8", errors="ignore")
 
-        # Extract basic metadata
         name_match = re.search(r'name\s+[\'"]([^\'"]+)[\'"]', content)
         version_match = re.search(r'version\s+[\'"]([^\'"]+)[\'"]', content)
 
@@ -1060,8 +1169,7 @@ def _determine_migration_priority(complexity_score: int) -> str:
 
 def _assess_single_cookbook(cookbook_path: Path) -> dict:
     """Assess complexity of a single cookbook."""
-    # cookbook_path is already normalized to a Path object
-    cookbook = cookbook_path
+    cookbook = _normalize_cookbook_root(cookbook_path)
 
     # Collect metrics
     artifact_counts = _count_cookbook_artifacts(cookbook)
@@ -1359,38 +1467,92 @@ def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
 • **Training:** 2-3 days Ansible/AWX training for team"""
 
 
-def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
-    """Analyze cookbook dependencies in detail."""
-    analysis = {
-        "cookbook_name": cookbook_path.name,
-        "direct_dependencies": [],
+def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
+    """
+    Analyse cookbook dependencies in detail.
+
+    Args:
+        cookbook_path: Path to the cookbook (may be string or Path).
+
+    Returns:
+        Dictionary with dependency information.
+
+    Raises:
+        ValueError: If the path is invalid.
+
+    """
+    # Normalize the input path
+    base_path: Path = _normalize_path(cookbook_path)
+
+    # Validate basic accessibility
+    if not base_path.exists():
+        msg = f"Cookbook path does not exist: {cookbook_path}"
+        raise ValueError(msg)
+    if not base_path.is_dir():
+        msg = f"Cookbook path is not a directory: {cookbook_path}"
+        raise ValueError(msg)
+
+    # Collect dependencies from metadata and Berksfile
+    direct_dependencies = _collect_metadata_dependencies(base_path)
+    external_dependencies = _collect_berks_dependencies(base_path)
+    community_cookbooks = _identify_community_cookbooks_from_list(
+        direct_dependencies + external_dependencies
+    )
+
+    return {
+        "cookbook_name": base_path.name,
+        "direct_dependencies": direct_dependencies,
         "transitive_dependencies": [],
-        "external_dependencies": [],
-        "community_cookbooks": [],
+        "external_dependencies": external_dependencies,
+        "community_cookbooks": community_cookbooks,
         "circular_dependencies": [],
     }
 
-    # Read metadata.rb for dependencies
-    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
-    if metadata_file.exists():
-        with metadata_file.open("r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
 
-        # Parse dependencies
+def _collect_metadata_dependencies(base_path: Path) -> list[str]:
+    """Collect dependency declarations from metadata.rb with containment checks."""
+    # Build metadata path safely within the cookbook
+    metadata_path: Path = _safe_join(base_path, METADATA_FILENAME)
 
-        depends_matches = re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
-        analysis["direct_dependencies"] = depends_matches
+    if not metadata_path.is_file():
+        return []
 
-    # Read Berksfile for additional dependencies
-    berksfile = _safe_join(cookbook_path, "Berksfile")
-    if berksfile.exists():
-        with berksfile.open("r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
+    try:
+        # Validate metadata_path is within base_path
+        _validated_candidate(metadata_path, base_path)
+    except ValueError:
+        # metadata.rb is outside cookbook root
+        return []
 
-        cookbook_matches = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
-        analysis["external_dependencies"].extend(cookbook_matches)
+    with metadata_path.open(encoding="utf-8", errors="ignore") as f:
+        content = f.read()
 
-    # Identify community cookbooks (common ones)
+    return re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
+
+
+def _collect_berks_dependencies(base_path: Path) -> list[str]:
+    """Collect dependency declarations from Berksfile with containment checks."""
+    # Build Berksfile path safely within the cookbook
+    berksfile_path: Path = _safe_join(base_path, "Berksfile")
+
+    if not berksfile_path.is_file():
+        return []
+
+    try:
+        # Validate berksfile_path is within base_path
+        _validated_candidate(berksfile_path, base_path)
+    except ValueError:
+        # Berksfile is outside cookbook root
+        return []
+
+    with berksfile_path.open(encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    return re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
+
+
+def _identify_community_cookbooks_from_list(dependencies: list[str]) -> list[str]:
+    """Return dependencies considered community cookbooks based on patterns."""
     community_cookbook_patterns = [
         "apache2",
         "nginx",
@@ -1407,12 +1569,11 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path) -> dict:
         "users",
     ]
 
-    all_deps = analysis["direct_dependencies"] + analysis["external_dependencies"]
-    for dep in all_deps:
-        if any(pattern in dep.lower() for pattern in community_cookbook_patterns):
-            analysis["community_cookbooks"].append(dep)
-
-    return analysis
+    return [
+        dep
+        for dep in dependencies
+        if any(pattern in dep.lower() for pattern in community_cookbook_patterns)
+    ]
 
 
 def _determine_migration_order(dependency_analysis: dict) -> list:
@@ -1919,7 +2080,7 @@ def assess_single_cookbook_with_ai(
     """
     try:
         cookbook_path_obj = _normalize_path(cookbook_path)
-        if not cookbook_path_obj.exists():
+        if not cookbook_path_obj.exists():  # Read-only check on normalized path
             return {"error": f"Cookbook path not found: {cookbook_path}"}
 
         # Check if AI is available
@@ -2189,8 +2350,7 @@ def _assess_single_cookbook_with_ai(
     base_url: str = "",
 ) -> dict:
     """Assess complexity of a single cookbook using AI analysis."""
-    # cookbook_path is already normalized to a Path object
-    cookbook = cookbook_path
+    cookbook = _normalize_cookbook_root(cookbook_path)
 
     # Collect basic metrics (same as rule-based)
     artifact_counts = _count_cookbook_artifacts(cookbook)
@@ -2317,10 +2477,15 @@ Provide your analysis in JSON format with keys: complexity_score, estimated_effo
 
 def _get_recipe_content_sample(cookbook_path: Path) -> str:
     """Get a sample of ALL recipe content for AI analysis."""
-    recipes_dir = _safe_join(cookbook_path, "recipes")
-    if not recipes_dir.exists():
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    recipes_dir_str = os.path.realpath(os.path.join(base, "recipes"))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, recipes_dir_str]) != base:
+        raise RuntimeError("Path traversal")
+    if not os.path.exists(recipes_dir_str):  # noqa: PTH110
         return "No recipes directory found"
 
+    recipes_dir = Path(recipes_dir_str)
     recipe_files = list(recipes_dir.glob("*.rb"))
     if not recipe_files:
         return "No recipe files found"
@@ -2358,12 +2523,16 @@ def _get_recipe_content_sample(cookbook_path: Path) -> str:
 
 def _get_metadata_content(cookbook_path: Path) -> str:
     """Get metadata content for AI analysis."""
-    metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
-    if not metadata_file.exists():
+    # Inline guard directly adjacent to sink
+    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
+    metadata_file_str = os.path.realpath(os.path.join(base, METADATA_FILENAME))  # noqa: PTH111, PTH118
+    if os.path.commonpath([base, metadata_file_str]) != base:
+        raise RuntimeError("Path traversal")
+    if not os.path.exists(metadata_file_str):  # noqa: PTH110
         return "No metadata.rb found"
 
     try:
-        return metadata_file.read_text(encoding="utf-8", errors="ignore")
+        return Path(metadata_file_str).read_text(encoding="utf-8", errors="ignore")
     except Exception:
         return "Could not read metadata"
 

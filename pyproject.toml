@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mcp-souschef"
-version = "2.8.0"
+version = "3.1.0"
 description = "AI-powered MCP server for Chef to Ansible conversion"
 readme = "README.md"
 homepage = "https://github.com/kpeacocke/souschef"
@@ -10,19 +10,18 @@ keywords = ["chef", "ansible", "migration", "infrastructure", "automation", "mcp
 authors = ["SousChef Contributors"]
 license = "MIT"
 packages = [{include = "souschef"}]
-classifiers = ["Development Status :: 4 - Beta", "Intended Audience :: Developers", "Intended Audience :: System Administrators", "License :: OSI Approved :: MIT License", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.14", "Topic :: Software Development :: Libraries :: Python Modules", "Topic :: System :: Systems Administration", "Topic :: Utilities"]
+classifiers = ["Development Status :: 4 - Beta", "Intended Audience :: Developers", "Intended Audience :: System Administrators", "License :: OSI Approved :: MIT License", "Operating System :: OS Independent", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.13", "Programming Language :: Python :: 3.14", "Topic :: Software Development :: Libraries :: Python Modules", "Topic :: System :: Systems Administration", "Topic :: Utilities"]
 
 [tool.poetry.urls]
 
 [tool.poetry.dependencies]
-python = ">=3.14,<4.0"
+python = ">=3.13,<4.0"
 anthropic = ">=0.75.0"
 openai = ">=1.0.0"
 click = ">=8.1.0"
 mcp = ">=1.25.0"
 python-dotenv = ">=1.2.1"
 pyyaml = ">=6.0.0"
-zod = ">=0.8.0"
 pandas = {version = ">=2.0.0", optional = true}
 streamlit = ">=1.28.0"
 plotly = ">=5.0.0"
@@ -50,7 +49,7 @@ mkdocstrings = {extras = ["python"], version = ">=0.26,<1.1"}
 mkdocs-git-revision-date-localized-plugin = "^1.2.0"
 streamlit = "^1.28.0"
 networkx = "^3.2.0"
-plotly = "^5.17.0"
+plotly = ">=5.17,<7.0"
 matplotlib = "^3.8.0"
 types-networkx = "^3.6.1.20251220"
 
@@ -64,6 +63,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 line-length = 88
+exclude = ["tools/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "C90", "I", "N", "UP", "B", "A", "C4", "T20", "SIM", "PTH", "ISC"]
@@ -118,7 +118,7 @@ source = [
 backup = false
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -137,5 +137,6 @@ check_untyped_defs = false
 module = [
     "plotly.*",
     "streamlit.*",
+    "mcp.*",
 ]
 ignore_missing_imports = true

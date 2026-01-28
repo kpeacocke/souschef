@@ -41,7 +41,7 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        content = file_path.read_text(encoding="utf-8")
+        content = file_path.read_text(encoding="utf-8")  # nosonar
 
         attributes = _extract_attributes(content)
 

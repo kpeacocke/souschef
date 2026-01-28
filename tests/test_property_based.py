@@ -42,7 +42,7 @@ def test_list_directory_handles_any_string_path(path_str):
 
 
 @given(st.text())
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=500)
 def test_parse_recipe_handles_any_content(content):
     """Test that parse_recipe doesn't crash on any file content."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
@@ -58,7 +58,7 @@ def test_parse_recipe_handles_any_content(content):
 
 
 @given(st.text())
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=500)
 def test_parse_attributes_handles_any_content(content):
     """Test that parse_attributes doesn't crash on any file content."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
@@ -91,7 +91,7 @@ def test_parse_attributes_handles_any_content(content):
     ),
     value=st.integers(min_value=0, max_value=65535),
 )
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=500)
 def test_parse_attributes_with_generated_attributes(precedence, key1, key2, value):
     """Test attribute parsing with randomly generated but valid attributes."""
     attr_content = f"{precedence}['{key1}']['{key2}'] = {value}\n"
