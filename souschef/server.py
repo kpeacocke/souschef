@@ -3008,11 +3008,27 @@ def _setup_conversion_metadata(cookbook_dir: Path, role_name: str) -> tuple[str,
     return cookbook_name, role_name
 
 
+def _validate_role_name(role_name: str) -> None:
+    """
+    Validate that role_name is safe for filesystem operations.
+
+    Args:
+        role_name: The role name to validate.
+
+    Raises:
+        ValueError: If the role name contains unsafe characters.
+
+    """
+    if not role_name:
+        raise ValueError("Role name cannot be empty")
+    if ".." in role_name or "/" in role_name or "\\" in role_name:
+        raise ValueError(f"Role name contains unsafe characters: {role_name}")
+
+
 def _create_role_structure(output_dir: Path, role_name: str) -> Path:
     """Create the standard Ansible role directory structure."""
     # Validate role_name to ensure it's safe for filesystem operations
-    if not role_name or ".." in role_name or "/" in role_name or "\\" in role_name:
-        raise ValueError(f"Invalid role name: {role_name}")
+    _validate_role_name(role_name)
 
     base = os.path.realpath(str(output_dir))
     role_dir_str = os.path.realpath(os.path.join(base, role_name))  # noqa: PTH111, PTH118
