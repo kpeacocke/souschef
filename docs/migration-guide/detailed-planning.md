@@ -109,13 +109,13 @@ This guide provides comprehensive questions and considerations for planning a co
   - Playbook/role defaults
   - External variable files
   - AWX/AAP credential stores
-  
+
 - **Secret management**:
   - Ansible Vault for simple encryption
   - External vault systems (HashiCorp Vault)
   - Cloud provider secret managers
   - AWX/AAP credential handling
-  
+
 - **Precedence strategy**: How will you handle variable precedence conflicts?
 
 ### Playbook Organisation
@@ -220,7 +220,7 @@ db_password: !vault-encrypted
 - name: Get secrets from vault
   hashicorp.vault.vault_write:
     path: secret/data/database
-    
+
 # Option 3: AWX credential store
 - name: Use AAP credentials
   vars:

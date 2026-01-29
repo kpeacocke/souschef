@@ -13,7 +13,7 @@ echo "🍳 Setting up SousChef development environment..."
 # Handles Linux (docker group) and Windows/WSL2 (socket binding)
 if [ -S /var/run/docker.sock ]; then
     echo "🐳 Configuring Docker socket access..."
-    
+
     # Detect if we're on Linux (docker group exists) or Windows/WSL2
     if uname -s | grep -q "Linux"; then
         # Linux-specific: use docker group
@@ -24,12 +24,12 @@ if [ -S /var/run/docker.sock ]; then
                     echo "  ✓ Created docker group"
                 fi
             fi
-            
+
             # Add vscode user to docker group
             if sudo usermod -aG docker vscode 2>/dev/null; then
                 echo "  ✓ Added vscode to docker group"
             fi
-            
+
             # Fix socket permissions (redundant but safe)
             if sudo chmod 666 /var/run/docker.sock 2>/dev/null; then
                 echo "  ✓ Fixed socket permissions"
@@ -44,7 +44,7 @@ if [ -S /var/run/docker.sock ]; then
             echo "  ⚠️  Docker socket not readable - may need manual fix"
         fi
     fi
-    
+
     # Verify docker CLI is accessible
     if docker ps >/dev/null 2>&1; then
         DOCKER_VERSION=$(docker --version 2>/dev/null || echo "Docker CLI")
