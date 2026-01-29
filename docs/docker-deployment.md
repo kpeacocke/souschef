@@ -26,7 +26,7 @@ The SousChef project includes a production-ready Dockerfile for containerising t
 make docker-build
 
 # Or directly with Docker
-docker build -t ghcr.io/kpeacocke/souschef:latest .
+docker build -t ghcr.io/mcp-souschef:latest .
 ```
 
 ### Running Locally
@@ -107,7 +107,7 @@ docker login ghcr.io
 # Build for multiple platforms
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/kpeacocke/souschef:v1.0.0 \
+  -t ghcr.io/mcp-souschef:v1.0.0 \
   --push .
 ```
 
@@ -188,7 +188,7 @@ spec:
         runAsUser: 1001
       containers:
       - name: souschef-ui
-        image: ghcr.io/kpeacocke/souschef:v1.0.0
+        image: ghcr.io/mcp-souschef:v1.0.0
         ports:
         - containerPort: 9999
         resources:
@@ -216,7 +216,7 @@ spec:
 
 ```bash
 # Pull image from registry
-docker pull ghcr.io/kpeacocke/souschef:v1.0.0
+docker pull ghcr.io/mcp-souschef:v1.0.0
 
 # Create service
 docker service create \
@@ -224,14 +224,14 @@ docker service create \
   --publish 9999:9999 \
   --limit-memory 1G \
   --limit-cpus 0.5 \
-  ghcr.io/kpeacocke/souschef:v1.0.0
+  ghcr.io/mcp-souschef:v1.0.0
 ```
 
 ### Plain Docker
 
 ```bash
 # Pull image
-docker pull ghcr.io/kpeacocke/souschef:v1.0.0
+docker pull ghcr.io/mcp-souschef:v1.0.0
 
 # Run container
 docker run -d \
@@ -241,7 +241,7 @@ docker run -d \
   --cpus 0.5 \
   --restart unless-stopped \
   -e STREAMLIT_SERVER_HEADLESS=true \
-  ghcr.io/kpeacocke/souschef:v1.0.0
+  ghcr.io/mcp-souschef:v1.0.0
 ```
 
 ## Testing
@@ -255,11 +255,11 @@ make docker-test
 # Manually test with docker run
 docker run --rm \
   -p 9999:9999 \
-  ghcr.io/kpeacocke/souschef:latest
+  ghcr.io/mcp-souschef:latest
 
 # Test health check
 docker run --rm \
-  ghcr.io/kpeacocke/souschef:latest \
+  ghcr.io/mcp-souschef:latest \
   python -m souschef.ui.health_check
 ```
 
@@ -270,7 +270,7 @@ docker run --rm \
 make docker-scan
 
 # Or manually
-trivy image ghcr.io/kpeacocke/souschef:latest
+trivy image ghcr.io/mcp-souschef:latest
 ```
 
 ## Troubleshooting
@@ -282,7 +282,7 @@ trivy image ghcr.io/kpeacocke/souschef:latest
 docker logs <container_id>
 
 # Run with verbose logging
-docker run -e STREAMLIT_LOGGER_LEVEL=debug ghcr.io/kpeacocke/souschef:latest
+docker run -e STREAMLIT_LOGGER_LEVEL=debug ghcr.io/mcp-souschef:latest
 ```
 
 ### Permission denied errors
@@ -303,7 +303,7 @@ docker exec <container_id> ls -la /app
 ```bash
 # Test health check manually
 docker run --rm \
-  ghcr.io/kpeacocke/souschef:latest \
+  ghcr.io/mcp-souschef:latest \
   python -m souschef.ui.health_check
 
 # Expected output:
@@ -330,17 +330,17 @@ deploy:
 1. **Always use version tags**
    ```bash
    # Good
-   docker pull ghcr.io/kpeacocke/souschef:v1.0.0
+   docker pull ghcr.io/mcp-souschef:v1.0.0
    
    # Avoid (unpredictable)
-   docker pull ghcr.io/kpeacocke/souschef:latest
+   docker pull ghcr.io/mcp-souschef:latest
    ```
 
 2. **Run as non-root user**
    ```bash
    # Already configured in image (user: app, uid: 1001)
    # Verify with:
-   docker run ghcr.io/kpeacocke/souschef:latest id
+   docker run ghcr.io/mcp-souschef:latest id
    # uid=1001(app) gid=1001(app) groups=1001(app)
    ```
 
@@ -382,7 +382,7 @@ org.opencontainers.image.source=https://github.com/kpeacocke/souschef
 View metadata:
 
 ```bash
-docker inspect ghcr.io/kpeacocke/souschef:latest | grep -A10 Labels
+docker inspect ghcr.io/mcp-souschef:latest | grep -A10 Labels
 ```
 
 ## Registry Information
@@ -390,7 +390,7 @@ docker inspect ghcr.io/kpeacocke/souschef:latest | grep -A10 Labels
 ### GitHub Container Registry (GHCR)
 
 - Registry: `ghcr.io`
-- Image: `ghcr.io/kpeacocke/souschef`
+- Image: `ghcr.io/mcp-souschef`
 - Documentation: https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
 - Authentication: GitHub token or personal access token
 
@@ -399,7 +399,7 @@ docker inspect ghcr.io/kpeacocke/souschef:latest | grep -A10 Labels
 docker login ghcr.io
 
 # Pull
-docker pull ghcr.io/kpeacocke/souschef:v1.0.0
+docker pull ghcr.io/mcp-souschef:v1.0.0
 ```
 
 ## Additional Resources

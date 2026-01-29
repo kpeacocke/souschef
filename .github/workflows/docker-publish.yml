@@ -19,7 +19,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: mcp-souschef
 
 jobs:
   validate:
@@ -60,13 +60,13 @@ jobs:
             VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['tool']['poetry']['version'])")
             TAG="v${VERSION}"
           fi
-          
+
           # Validate version format
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "ERROR: Invalid version format: $VERSION"
             exit 1
           fi
-          
+
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}, Tag: ${TAG}"
@@ -215,14 +215,14 @@ jobs:
           set -e
           # Pull the image first to ensure it's available
           docker pull "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}"
-          
+
           # Test if container can start (with 10-second timeout)
           timeout 10 docker run --rm \
             -e STREAMLIT_SERVER_HEADLESS=true \
             -e STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}" \
             /bin/true || true
-          
+
           echo "Container started successfully"
 
       - name: Verify health check works
@@ -231,9 +231,9 @@ jobs:
           OUTPUT=$(docker run --rm \
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}" \
             python -m souschef.ui.health_check)
-          
+
           echo "Health check output: $OUTPUT"
-          
+
           if echo "$OUTPUT" | grep -q "healthy"; then
             echo "Health check passed"
           else
@@ -246,7 +246,7 @@ jobs:
     timeout-minutes: 5
     needs: [validate, build-and-push, scan-image, test-image]
     if: |
-      needs.validate.result == 'success' 
+      needs.validate.result == 'success'
       && needs.build-and-push.result == 'success'
       && needs.scan-image.result == 'success'
       && needs.test-image.result == 'success'
@@ -264,13 +264,13 @@ jobs:
             const imageName = "${{ env.IMAGE_NAME }}";
             const digest = "${{ needs.build-and-push.outputs.image-digest }}";
             const tag = "${{ needs.validate.outputs.tag }}";
-            
+
             const versionParts = version.split('.');
-            const majorMinor = versionParts.length >= 2 
+            const majorMinor = versionParts.length >= 2
               ? versionParts[0] + "." + versionParts[1]
               : versionParts[0];
             const major = versionParts[0];
-            
+
             let body = "## Docker Image Published\n\n";
             body += "**Image:** `" + registry + "/" + imageName + ":" + version + "`\n\n";
             body += "**Digest:** " + digest + "\n\n";
@@ -340,7 +340,7 @@ jobs:
           - Image is ready for deployment
           - See security scan results in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)
           - Pull the image with: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version || 'latest' }}\`
-          
+
           ## Workflow Run Details
           - **Workflow:** ${{ github.workflow }}
           - **Run ID:** ${{ github.run_id }}

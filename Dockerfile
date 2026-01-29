@@ -38,10 +38,10 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     ca-certificates \
     curl \
     git \
-    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* && \
 
 # Create non-root user with consistent UID for container orchestration
-RUN groupadd -r app --gid=1001 && \
+    groupadd -r app --gid=1001 && \
     useradd -r -g app --uid=1001 --create-home --shell /sbin/nologin app && \
     mkdir -p /app && \
     chown -R app:app /app
@@ -67,8 +67,8 @@ COPY --chown=app:app pyproject.toml poetry.lock ./
 
 # Install Poetry with pinned version for reproducibility
 RUN pip install --no-cache-dir --require-hashes \
-    poetry==${POETRY_VERSION} || \
-    pip install --no-cache-dir poetry==${POETRY_VERSION}
+    poetry=="$POETRY_VERSION" || \
+    pip install --no-cache-dir poetry=="$POETRY_VERSION"
 
 # Configure poetry to not create virtual environment (install globally)
 RUN poetry config virtualenvs.create false
@@ -117,11 +117,11 @@ HEALTHCHECK \
     --retries=3 \
     CMD python -m souschef.ui.health_check || exit 1
 
-# Use ENTRYPOINT for proper signal handling  
+# Use ENTRYPOINT for proper signal handling
 # This ensures Ctrl+C and container stop signals work correctly
 ENTRYPOINT ["python", "-m", "streamlit", "run"]
 
-# CMD provides the default arguments  
+# CMD provides the default arguments
 CMD ["souschef/ui/app.py", \
      "--server.address", "0.0.0.0", \
      "--server.port", "9999", \
