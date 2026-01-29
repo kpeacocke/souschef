@@ -6,6 +6,7 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -38,6 +39,10 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
     _safe_join,
+)
+from souschef.generators.repo import (
+    analyse_conversion_output,
+    generate_ansible_repository,
 )
 from souschef.parsers.metadata import parse_cookbook_metadata
 
@@ -252,6 +257,7 @@ METADATA_STATUS_NO = "No"
 ANALYSIS_STATUS_ANALYSED = "Analysed"
 ANALYSIS_STATUS_FAILED = "Failed"
 METADATA_COLUMN_NAME = "Has Metadata"
+MIME_TYPE_ZIP = "application/zip"
 
 # Security limits for archive extraction
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024  # 100MB total
@@ -488,7 +494,16 @@ def _validate_zip_file_security(info, file_count: int, total_size: int) -> None:
 def _extract_tar_securely(
     archive_path: Path, extraction_dir: Path, gzipped: bool
 ) -> None:
-    """Extract TAR archive with security checks."""
+    """
+    Extract TAR archive with resource consumption controls (S5042).
+
+    Resource consumption is controlled via:
+    - Pre-scanning all members before extraction
+    - Validating file sizes, counts, and directory depth
+    - Using tarfile.filter='data' (Python 3.12+) to prevent symlink traversal
+    - Limiting extraction to validated safe paths
+
+    """
     mode = "r:gz" if gzipped else "r"
 
     if not archive_path.is_file():
@@ -500,13 +515,20 @@ def _extract_tar_securely(
     try:
         open_kwargs: dict[str, Any] = {"name": str(archive_path), "mode": mode}
 
-        # `filter` is available in Python 3.12+; guard for older runtimes.
+        # Apply safe filter if available (Python 3.12+) to prevent traversal attacks.
+        # For older Python versions, resource consumption is controlled via pre-scanning
+        # and member validation before extraction.
         if "filter" in inspect.signature(tarfile.open).parameters:
+            # Use 'data' filter to prevent extraction of special files and symlinks
             open_kwargs["filter"] = "data"
 
         with tarfile.open(**open_kwargs) as tar_ref:
             members = tar_ref.getmembers()
+            # Pre-validate all members before allowing extraction
+            # This controls resource consumption and prevents
+            # zip bombs/decompression bombs
             _pre_scan_tar_members(members)
+            # Extract only validated members to pre-validated safe paths
             _extract_tar_members(tar_ref, members, extraction_dir)
     except tarfile.TarError as e:
         raise ValueError(f"Invalid or corrupted TAR archive: {e}") from e
@@ -515,10 +537,20 @@ def _extract_tar_securely(
 
 
 def _pre_scan_tar_members(members):
-    """Pre-scan TAR members for security issues and accumulate totals."""
+    """
+    Pre-scan TAR members to control resource consumption (S5042).
+
+    Validates all members before extraction to prevent:
+    - Compression/decompression bombs (via size limits)
+    - Excessive memory consumption (via file count limits)
+    - Directory traversal attacks (via depth limits)
+    - Malicious file inclusion (via extension and type checks)
+
+    """
     total_size = 0
     for file_count, member in enumerate(members, start=1):
         total_size += member.size
+        # Validate member and accumulate size for bounds checking
         _validate_tar_file_security(member, file_count, total_size)
 
 
@@ -776,8 +808,18 @@ def _display_results_view() -> None:
             st.session_state.analysis_cookbook_path = None
             st.session_state.total_cookbooks = None
             st.session_state.analysis_info_messages = None
+            st.session_state.conversion_results = None
+            st.session_state.generated_playbook_repo = None
             st.session_state.analysis_page_key += 1
             st.rerun()
+
+    # Check if we have conversion results to display
+    if "conversion_results" in st.session_state and st.session_state.conversion_results:
+        # Display conversion results instead of analysis results
+        playbooks = st.session_state.conversion_results["playbooks"]
+        templates = st.session_state.conversion_results["templates"]
+        _handle_playbook_download(playbooks, templates)
+        return
 
     _display_analysis_results(
         st.session_state.analysis_results,
@@ -1083,7 +1125,7 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
 
         with col3:
             if st.button(
-                f"📋 Select All ({len(cookbook_names)})",
+                f"Select All ({len(cookbook_names)})",
                 help=f"Select all {len(cookbook_names)} cookbooks",
                 key="select_all",
             ):
@@ -1701,7 +1743,7 @@ def _display_conversion_summary(structured_result: dict):
 def _display_conversion_warnings_errors(structured_result: dict):
     """Display conversion warnings and errors."""
     if "warnings" in structured_result and structured_result["warnings"]:
-        st.warning("⚠️ Conversion Warnings")
+        st.warning("Conversion Warnings")
         for warning in structured_result["warnings"]:
             st.write(f"• {warning}")
 
@@ -1718,7 +1760,8 @@ def _display_conversion_details(structured_result: dict):
 
         for cookbook_result in structured_result["cookbook_results"]:
             with st.expander(
-                f"📁 {cookbook_result.get('cookbook_name', 'Unknown')}", expanded=False
+                f"Cookbook {cookbook_result.get('cookbook_name', 'Unknown')}",
+                expanded=False,
             ):
                 col1, col2 = st.columns(2)
 
@@ -1731,7 +1774,7 @@ def _display_conversion_details(structured_result: dict):
                     st.metric("Files", cookbook_result.get("files_count", 0))
 
                 if cookbook_result.get("status") == "success":
-                    st.success("✅ Conversion successful")
+                    st.success("Conversion successful")
                 else:
                     error_msg = cookbook_result.get("error", "Unknown error")
                     st.error(f"❌ Conversion failed: {error_msg}")
@@ -1816,6 +1859,213 @@ def _create_roles_zip_archive(safe_output_path: Path) -> bytes:
     return zip_buffer.getvalue()
 
 
+def _get_git_path() -> str:
+    """
+    Find git executable in system PATH.
+
+    Returns:
+        The path to git executable.
+
+    Raises:
+        FileNotFoundError: If git is not found in PATH.
+
+    """
+    # Try common locations first
+    common_paths = [
+        "/usr/bin/git",
+        "/usr/local/bin/git",
+        "/opt/homebrew/bin/git",
+    ]
+
+    for path in common_paths:
+        if Path(path).exists():
+            return path
+
+    # Try to find git using 'which' command
+    try:
+        result = subprocess.run(
+            ["which", "git"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        git_path = result.stdout.strip()
+        if git_path and Path(git_path).exists():
+            return git_path
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+    ) as exc:
+        # Non-fatal: failure to use 'which' just means we fall back to other checks.
+        st.write(f"Debug: 'which git' probe failed: {exc}")
+
+    # Last resort: try the basic 'git' command
+    try:
+        result = subprocess.run(
+            ["git", "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return "git"
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+    ) as exc:
+        # Non-fatal: failure to run 'git --version' just means git is not available.
+        st.write(f"Debug: 'git --version' probe failed: {exc}")
+
+    raise FileNotFoundError(
+        "git executable not found. Please ensure Git is installed and in your "
+        "PATH. Visit https://git-scm.com/downloads for installation instructions."
+    )
+
+
+def _determine_num_recipes(cookbook_path: str, num_roles: int) -> int:
+    """Determine the number of recipes from the cookbook path."""
+    if not cookbook_path:
+        return num_roles
+
+    recipes_dir = Path(cookbook_path) / "recipes"
+    return len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 1
+
+
+def _get_roles_directory(temp_repo: Path) -> Path:
+    """Get or create the roles directory in the repository."""
+    roles_dir = temp_repo / "roles"
+    if not roles_dir.exists():
+        roles_dir = (
+            temp_repo / "ansible_collections" / "souschef" / "platform" / "roles"
+        )
+
+    roles_dir.mkdir(parents=True, exist_ok=True)
+    return roles_dir
+
+
+def _copy_roles_to_repository(output_path: str, roles_dir: Path) -> None:
+    """Copy roles from output_path to the repository roles directory."""
+    output_path_obj = Path(output_path)
+    if not output_path_obj.exists():
+        return
+
+    for role_dir in output_path_obj.iterdir():
+        if not role_dir.is_dir():
+            continue
+
+        dest_dir = roles_dir / role_dir.name
+        if dest_dir.exists():
+            shutil.rmtree(dest_dir)
+        shutil.copytree(role_dir, dest_dir)
+
+
+def _commit_repository_changes(temp_repo: Path, num_roles: int) -> None:
+    """Commit repository changes to git."""
+    try:
+        subprocess.run(
+            ["git", "add", "."],
+            cwd=temp_repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            [
+                "git",
+                "commit",
+                "-m",
+                f"Add converted Ansible roles ({num_roles} role(s))",
+            ],
+            cwd=temp_repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        # Ignore if there's nothing to commit
+        pass
+
+
+def _create_ansible_repository(
+    output_path: str, cookbook_path: str = "", num_roles: int = 1
+) -> dict:
+    """Create a complete Ansible repository structure."""
+    try:
+        # Check that git is available early
+        _get_git_path()
+
+        # Create temp directory for the repo (parent directory)
+        temp_parent = tempfile.mkdtemp(prefix="ansible_repo_parent_")
+        temp_repo = Path(temp_parent) / "ansible_repository"
+
+        # Analyse and determine repo type
+        num_recipes = _determine_num_recipes(cookbook_path, num_roles)
+
+        repo_type = analyse_conversion_output(
+            cookbook_path=cookbook_path or output_path,
+            num_recipes=num_recipes,
+            num_roles=num_roles,
+            has_multiple_apps=num_roles > 3,
+            needs_multi_env=True,
+        )
+
+        # Generate the repository
+        result = generate_ansible_repository(
+            output_path=str(temp_repo),
+            repo_type=repo_type,
+            org_name="souschef",
+            init_git=True,
+        )
+
+        if result["success"]:
+            # Copy converted roles into the repository
+            roles_dir = _get_roles_directory(temp_repo)
+            _copy_roles_to_repository(output_path, roles_dir)
+            _commit_repository_changes(temp_repo, num_roles)
+            result["temp_path"] = str(temp_repo)
+
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def _create_repository_zip(repo_path: str) -> bytes:
+    """Create a ZIP archive of the Ansible repository including git history."""
+    zip_buffer = io.BytesIO()
+    repo_path_obj = Path(repo_path)
+
+    # Files/directories to exclude from the archive
+    exclude_names = {".DS_Store", "Thumbs.db", "*.pyc", "__pycache__"}
+
+    # Important dotfiles to always include
+    include_dotfiles = {".gitignore", ".gitattributes", ".editorconfig"}
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for file_path in repo_path_obj.rglob("*"):
+            if file_path.is_file():
+                # Skip excluded files
+                if file_path.name in exclude_names:
+                    continue
+                # Include .git directory, .gitignore, and other important dotfiles
+                # Skip hidden dotfiles unless they're in our include list or in .git
+                if (
+                    file_path.name.startswith(".")
+                    and ".git" not in str(file_path)
+                    and file_path.name not in include_dotfiles
+                ):
+                    continue
+
+                arcname = file_path.relative_to(repo_path_obj.parent)
+                zip_file.write(str(file_path), str(arcname))
+
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
+
+
 def _display_conversion_download_options(conversion_result: dict):
     """Display download options for converted roles."""
     if "output_path" not in conversion_result:
@@ -1830,20 +2080,174 @@ def _display_conversion_download_options(conversion_result: dict):
         return
 
     if safe_output_path.exists():
-        archive_data = _create_roles_zip_archive(safe_output_path)
+        _display_role_download_buttons(safe_output_path)
+        repo_placeholder = st.container()
+        _display_generated_repo_section(repo_placeholder)
+        st.info(f"Roles saved to: {output_path}")
+    else:
+        st.warning("Output directory not found for download")
 
+
+def _create_repo_callback(safe_output_path: Path) -> None:
+    """Handle repository creation callback."""
+    try:
+        num_roles = len(
+            [
+                d
+                for d in safe_output_path.iterdir()
+                if d.is_dir() and not d.name.startswith(".")
+            ]
+        )
+
+        repo_result = _create_ansible_repository(
+            output_path=str(safe_output_path),
+            cookbook_path="",
+            num_roles=num_roles,
+        )
+
+        if repo_result["success"]:
+            st.session_state.generated_repo = repo_result
+            st.session_state.repo_created_successfully = True
+            st.session_state.repo_creation_error = None
+        else:
+            _handle_repo_creation_failure(repo_result.get("error", "Unknown error"))
+    except Exception as e:
+        _handle_repo_creation_failure(f"Exception: {str(e)}")
+
+
+def _handle_repo_creation_failure(error_msg: str) -> None:
+    """Handle repository creation failure."""
+    st.session_state.repo_creation_error = error_msg
+    st.session_state.generated_repo = None
+    st.session_state.repo_created_successfully = False
+
+
+def _display_role_download_buttons(safe_output_path: Path) -> None:
+    """Display download buttons for roles and repository creation."""
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        archive_data = _create_roles_zip_archive(safe_output_path)
         st.download_button(
-            label="📦 Download All Ansible Roles",
+            label="Download All Ansible Roles",
             data=archive_data,
             file_name="ansible_roles_holistic.zip",
-            mime="application/zip",
+            mime=MIME_TYPE_ZIP,
             help="Download ZIP archive containing all converted Ansible roles",
             key="download_holistic_roles",
         )
 
-        st.info(f"📂 Roles saved to: {output_path}")
-    else:
-        st.warning("Output directory not found for download")
+    with col2:
+        st.button(
+            "Create Ansible Repository",
+            help="Generate a complete Ansible repository structure with these roles",
+            key="create_repo_from_roles",
+            on_click=lambda: _create_repo_callback(safe_output_path),
+        )
+
+        if st.session_state.get("repo_creation_error"):
+            st.error(
+                f"Failed to create repository: {st.session_state.repo_creation_error}"
+            )
+
+
+def _display_generated_repo_section(placeholder) -> None:
+    """Display the generated repository section if it exists."""
+    if not _should_display_generated_repo():
+        return
+
+    repo_result = st.session_state.generated_repo
+
+    with placeholder:
+        st.markdown("---")
+        st.success("Ansible Repository Generated!")
+        _display_repo_info(repo_result)
+        _display_repo_structure(repo_result)
+        _display_repo_download(repo_result)
+        _display_repo_git_instructions()
+        _display_repo_clear_button(repo_result)
+
+
+def _should_display_generated_repo() -> bool:
+    """Check if generated repo should be displayed."""
+    return "generated_repo" in st.session_state and st.session_state.get(
+        "repo_created_successfully", False
+    )
+
+
+def _display_repo_info(repo_result: dict) -> None:
+    """Display repository information."""
+    repo_type = repo_result["repo_type"].replace("_", " ").title()
+    files_count = len(repo_result["files_created"])
+
+    st.info(
+        f"**Repository Type:** {repo_type}\n\n"
+        f"**Files Created:** {files_count}\n\n"
+        "Includes: ansible.cfg, requirements.yml, inventory, playbooks, roles"
+    )
+
+
+def _display_repo_structure(repo_result: dict) -> None:
+    """Display repository structure."""
+    with st.expander("Repository Structure", expanded=True):
+        files_sorted = sorted(repo_result["files_created"])
+        st.code("\n".join(files_sorted[:40]), language="text")
+        if len(files_sorted) > 40:
+            remaining = len(files_sorted) - 40
+            st.caption(f"... and {remaining} more files")
+
+
+def _display_repo_download(repo_result: dict) -> None:
+    """Display repository download button."""
+    repo_zip = _create_repository_zip(repo_result["temp_path"])
+    st.download_button(
+        label="Download Ansible Repository",
+        data=repo_zip,
+        file_name="ansible_repository.zip",
+        mime=MIME_TYPE_ZIP,
+        help="Download complete Ansible repository as ZIP archive",
+        key="download_generated_repo",
+    )
+
+
+def _display_repo_git_instructions() -> None:
+    """Display git clone instructions."""
+    with st.expander("Git Clone Instructions", expanded=True):
+        st.markdown("""
+After downloading and extracting the repository:
+
+```bash
+cd ansible_repository
+
+# Repository is already initialized with git!
+# Check commits:
+git log --oneline
+
+# Push to remote repository:
+git remote add origin <your-git-url>
+git push -u origin master
+```
+
+**Repository includes:**
+- ✅ All converted roles with tasks
+- ✅ Ansible configuration (`ansible.cfg`)
+- ✅ `.gitignore` for Ansible projects
+- ✅ `.gitattributes` for consistent line endings
+- ✅ `.editorconfig` for consistent coding styles
+- ✅ README with usage instructions
+- ✅ **Git repository initialized with all files committed**
+        """)
+
+
+def _display_repo_clear_button(repo_result: dict) -> None:
+    """Display repository clear button."""
+    if st.button("Clear Repository", key="clear_generated_repo"):
+        with contextlib.suppress(Exception):
+            shutil.rmtree(repo_result["temp_path"])
+        del st.session_state.generated_repo
+        if "repo_created_successfully" in st.session_state:
+            del st.session_state.repo_created_successfully
+        st.rerun()
 
 
 def _handle_dashboard_upload():
@@ -3194,6 +3598,12 @@ def _convert_and_download_playbooks(results):
         except Exception as e:
             st.warning(f"Could not stage playbooks for validation: {e}")
 
+    # Store conversion results in session state to persist across reruns
+    st.session_state.conversion_results = {
+        "playbooks": playbooks,
+        "templates": templates,
+    }
+
     _handle_playbook_download(playbooks, templates)
 
 
@@ -3375,6 +3785,19 @@ def _handle_playbook_download(playbooks: list, templates: list | None = None) ->
         st.error("No playbooks were successfully generated.")
         return
 
+    # Add back to analysis button
+    col1, _ = st.columns([1, 4])
+    with col1:
+        if st.button(
+            "← Back to Analysis",
+            help="Return to analysis results",
+            key="back_to_analysis_from_conversion",
+        ):
+            # Clear conversion results to go back to analysis view
+            st.session_state.conversion_results = None
+            st.session_state.generated_playbook_repo = None
+            st.rerun()
+
     templates = templates or []
     playbook_archive = _create_playbook_archive(playbooks, templates)
 
@@ -3389,8 +3812,10 @@ def _handle_playbook_download(playbooks: list, templates: list | None = None) ->
     # Show summary
     _display_playbook_summary(len(playbooks), template_count)
 
-    # Provide download button
-    _display_download_button(len(playbooks), template_count, playbook_archive)
+    # Provide download button and repository creation
+    _display_download_button(
+        len(playbooks), template_count, playbook_archive, playbooks
+    )
 
     # Show previews
     _display_playbook_previews(playbooks)
@@ -3415,23 +3840,203 @@ def _display_playbook_summary(playbook_count: int, template_count: int) -> None:
         )
 
 
+def _build_download_label(playbook_count: int, template_count: int) -> str:
+    """Build the download button label."""
+    label = f"Download Ansible Playbooks ({playbook_count} playbooks"
+    if template_count > 0:
+        label += f", {template_count} templates"
+    label += ")"
+    return label
+
+
+def _write_playbooks_to_temp_dir(playbooks: list, temp_dir: str) -> None:
+    """Write playbooks to temporary directory."""
+    for playbook in playbooks:
+        cookbook_name = _sanitize_filename(playbook["cookbook_name"])
+        recipe_name = _sanitize_filename(playbook["recipe_file"].replace(".rb", ""))
+        playbook_file = Path(temp_dir) / f"{cookbook_name}_{recipe_name}.yml"
+        playbook_file.write_text(playbook["playbook_content"])
+
+
+def _get_playbooks_dir(repo_result: dict) -> Path:
+    """Get or create the playbooks directory in the repository."""
+    playbooks_dir = Path(repo_result["temp_path"]) / "playbooks"
+    if not playbooks_dir.exists():
+        playbooks_dir = (
+            Path(repo_result["temp_path"])
+            / "ansible_collections"
+            / "souschef"
+            / "platform"
+            / "playbooks"
+        )
+    playbooks_dir.mkdir(parents=True, exist_ok=True)
+    return playbooks_dir
+
+
+def _copy_playbooks_to_repo(temp_dir: str, playbooks_dir: Path) -> None:
+    """Copy playbooks from temp directory to repository."""
+    for playbook_file in Path(temp_dir).glob("*.yml"):
+        shutil.copy(playbook_file, playbooks_dir / playbook_file.name)
+
+
+def _commit_playbooks_to_git(temp_dir: str, repo_path: str) -> None:
+    """Commit playbooks to git repository."""
+    try:
+        subprocess.run(
+            ["git", "add", "."],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        num_playbooks = len(list(Path(temp_dir).glob("*.yml")))
+        commit_msg = f"Add converted Ansible playbooks ({num_playbooks} playbook(s))"
+        subprocess.run(
+            ["git", "commit", "-m", commit_msg],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        # If there's nothing to commit, that's okay
+        pass
+
+
+def _handle_repo_creation(temp_dir: str, playbooks: list) -> None:
+    """Handle repository creation and setup."""
+    repo_result = _create_ansible_repository(
+        output_path=temp_dir,
+        cookbook_path="",
+        num_roles=len({p["cookbook_name"] for p in playbooks}),
+    )
+
+    if not repo_result["success"]:
+        st.error(
+            f"Failed to create repository: {repo_result.get('error', 'Unknown error')}"
+        )
+        return
+
+    playbooks_dir = _get_playbooks_dir(repo_result)
+    _copy_playbooks_to_repo(temp_dir, playbooks_dir)
+    _commit_playbooks_to_git(temp_dir, repo_result["temp_path"])
+    st.session_state.generated_playbook_repo = repo_result
+
+
+def _display_repo_structure_section(repo_result: dict) -> None:
+    """Display repository structure in an expander."""
+    with st.expander("Repository Structure", expanded=True):
+        files_sorted = sorted(repo_result["files_created"])
+        st.code("\n".join(files_sorted[:40]), language="text")
+        if len(files_sorted) > 40:
+            remaining = len(files_sorted) - 40
+            st.caption(f"... and {remaining} more files")
+
+
+def _display_repo_info_section(repo_result: dict) -> None:
+    """Display repository information."""
+    repo_type = repo_result["repo_type"].replace("_", " ").title()
+    st.info(
+        f"**Repository Type:** {repo_type}\n\n"
+        f"**Files Created:** {len(repo_result['files_created'])}\n\n"
+        "Includes: ansible.cfg, requirements.yml, inventory, playbooks"
+    )
+
+
+def _display_generated_repo_section_internal(repo_result: dict) -> None:
+    """Display the complete generated repository section."""
+    st.markdown("---")
+    st.success("Ansible Playbook Repository Generated!")
+    _display_repo_info_section(repo_result)
+    _display_repo_structure_section(repo_result)
+
+    repo_zip = _create_repository_zip(repo_result["temp_path"])
+    st.download_button(
+        label="Download Ansible Repository",
+        data=repo_zip,
+        file_name="ansible_playbook_repository.zip",
+        mime=MIME_TYPE_ZIP,
+        help="Download complete Ansible repository as ZIP archive",
+        key="download_playbook_repo",
+    )
+
+    with st.expander("Git Clone Instructions", expanded=True):
+        st.markdown("""
+After downloading and extracting the repository:
+
+```bash
+cd ansible_playbook_repository
+
+# Repository is already initialized with git!
+# Check commits:
+git log --oneline
+
+# Push to remote repository:
+git remote add origin <your-git-url>
+git push -u origin master
+```
+
+**What's included:**
+- ✅ Ansible configuration (`ansible.cfg`)
+- ✅ Dependency management (`requirements.yml`)
+- ✅ Inventory structure
+- ✅ All converted playbooks
+- ✅ `.gitignore` for Ansible projects
+- ✅ `.gitattributes` for consistent line endings
+- ✅ `.editorconfig` for consistent coding styles
+- ✅ README with usage instructions
+- ✅ **Git repository initialized with all files committed**
+        """)
+
+    if st.button("Clear Repository", key="clear_playbook_repo"):
+        if "generated_playbook_repo" in st.session_state:
+            with contextlib.suppress(Exception):
+                shutil.rmtree(repo_result["temp_path"])
+            del st.session_state.generated_playbook_repo
+        st.rerun()
+
+
 def _display_download_button(
-    playbook_count: int, template_count: int, archive_data: bytes
+    playbook_count: int,
+    template_count: int,
+    archive_data: bytes,
+    playbooks: list | None = None,
 ) -> None:
     """Display the download button for the archive."""
-    download_label = f"Download Ansible Playbooks ({playbook_count} playbooks"
-    if template_count > 0:
-        download_label += f", {template_count} templates"
-    download_label += ")"
+    download_label = _build_download_label(playbook_count, template_count)
 
-    st.download_button(
-        label=download_label,
-        data=archive_data,
-        file_name="ansible_playbooks.zip",
-        mime="application/zip",
-        help=f"Download ZIP archive containing {playbook_count} playbooks "
-        f"and {template_count} templates",
-    )
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.download_button(
+            label=download_label,
+            data=archive_data,
+            file_name="ansible_playbooks.zip",
+            mime=MIME_TYPE_ZIP,
+            help=f"Download ZIP archive containing {playbook_count} playbooks "
+            f"and {template_count} templates",
+            key="download_playbooks_archive",
+        )
+
+    with col2:
+        if st.button(
+            "Create Ansible Repository",
+            help=(
+                "Generate a complete Ansible repository structure with these playbooks"
+            ),
+            key="create_repo_from_playbooks",
+        ):
+            with st.spinner("Creating Ansible repository with playbooks..."):
+                temp_playbook_dir = tempfile.mkdtemp(prefix="playbooks_")
+                if playbooks:
+                    _write_playbooks_to_temp_dir(playbooks, temp_playbook_dir)
+                    _handle_repo_creation(temp_playbook_dir, playbooks)
+
+    # Display generated repository options for playbooks
+    if "generated_playbook_repo" in st.session_state:
+        _display_generated_repo_section_internal(
+            st.session_state.generated_playbook_repo
+        )
 
 
 def _display_playbook_previews(playbooks: list) -> None:

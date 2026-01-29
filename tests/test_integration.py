@@ -1222,3 +1222,80 @@ class TestHabitatIntegration:
 
         # Verify basic structure is present
         assert result.count("nginx:") > 0
+
+
+class TestAIRepositoryTypeDetermination:
+    """Integration tests for AI-based repository type selection."""
+
+    def test_analyse_with_mock_ai_assessment(self):
+        """Test that AI assessment is used when credentials provided."""
+        from souschef.generators.repo import RepoType, analyse_conversion_output
+
+        mock_assessment = {
+            "complexity_score": 85,
+            "estimated_effort_days": 20,
+            "ai_insights": "Complex multi-tier application",
+        }
+
+        with patch(
+            "souschef.assessment.assess_single_cookbook_with_ai",
+            return_value=mock_assessment,
+        ):
+            result = analyse_conversion_output(
+                cookbook_path=str(SAMPLE_COOKBOOK),
+                num_recipes=10,
+                num_roles=2,  # 2 roles + high complexity = collection
+                has_multiple_apps=False,
+                needs_multi_env=True,
+                ai_provider="anthropic",
+                api_key="test-key-12345",
+            )
+
+        # High complexity with multiple roles should recommend collection
+        assert result == RepoType.COLLECTION
+
+    def test_analyse_falls_back_without_ai_credentials(self):
+        """Test that heuristics are used when no AI credentials provided."""
+        from souschef.generators.repo import (
+            RepoType,
+            analyse_conversion_output,
+        )
+
+        result = analyse_conversion_output(
+            cookbook_path=str(SAMPLE_COOKBOOK),
+            num_recipes=5,
+            num_roles=3,  # 3+ roles suggests collection
+            has_multiple_apps=False,
+            needs_multi_env=True,
+        )
+
+        # Heuristics should suggest collection for 3+ roles
+        assert result == RepoType.COLLECTION
+
+    def test_analyse_uses_heuristics_on_ai_error(self):
+        """Test that heuristics are used when AI assessment fails."""
+        from souschef.generators.repo import (
+            RepoType,
+            analyse_conversion_output,
+        )
+
+        mock_assessment = {
+            "error": "AI service temporary unavailable",
+        }
+
+        with patch(
+            "souschef.assessment.assess_single_cookbook_with_ai",
+            return_value=mock_assessment,
+        ):
+            result = analyse_conversion_output(
+                cookbook_path=str(SAMPLE_COOKBOOK),
+                num_recipes=2,
+                num_roles=1,
+                has_multiple_apps=False,
+                needs_multi_env=False,
+                ai_provider="anthropic",
+                api_key="test-key",
+            )
+
+        # Should fall back to heuristics - small simple project
+        assert result == RepoType.PLAYBOOKS_ROLES

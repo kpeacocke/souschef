@@ -754,6 +754,37 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
     spec_dir: Path = _safe_join(base, "spec")
     has_test_dir: bool = _exists_safe(test_dir) or _exists_safe(spec_dir)
 
+    libraries_dir = cookbook_path / "libraries"
+    libraries_count = (
+        len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
+    )
+
+    definitions_dir = cookbook_path / "definitions"
+    definitions_count = (
+        len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
+    )
+
+    resources_dir = cookbook_path / "resources"
+    resources_count = (
+        len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
+    )
+
+    providers_dir = cookbook_path / "providers"
+    providers_count = (
+        len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
+    )
+
+    # Configuration files
+    has_berksfile = (cookbook_path / "Berksfile").exists()
+    has_chefignore = (cookbook_path / "chefignore").exists()
+    has_thorfile = (cookbook_path / "Thorfile").exists()
+    has_kitchen_yml = (cookbook_path / ".kitchen.yml").exists() or (
+        cookbook_path / "kitchen.yml"
+    ).exists()
+    has_test_dir = (cookbook_path / "test").exists() or (
+        cookbook_path / "spec"
+    ).exists()
+
     return {
         "recipe_count": recipe_count,
         "template_count": template_count,

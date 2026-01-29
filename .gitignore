@@ -99,6 +99,9 @@ codeql-results/
 # GitHub Security Scanning Exports
 code_scanning_alerts*.json
 
+# GitHub Security Scanning Exports
+code_scanning_alerts*.json
+
 # MkDocs
 site/
 
