@@ -4,6 +4,9 @@ name: Sync Main to Develop
 on:
   release:
     types: [published]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
