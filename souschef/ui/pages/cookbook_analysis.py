@@ -1916,8 +1916,9 @@ def _get_git_path() -> str:
         subprocess.CalledProcessError,
         FileNotFoundError,
         subprocess.TimeoutExpired,
-    ):
-        pass
+    ) as exc:
+        # Non-fatal: failure to run 'git --version' just means git is not available.
+        st.write(f"Debug: 'git --version' probe failed: {exc}")
 
     raise FileNotFoundError(
         "git executable not found. Please ensure Git is installed and in your "
