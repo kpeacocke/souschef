@@ -2884,6 +2884,96 @@ def generate_github_workflow_from_chef(
 
 
 @mcp.tool()
+def generate_ansible_repository(
+    output_path: str,
+    repo_type: str = "auto",
+    cookbook_path: str = "",
+    org_name: str = "myorg",
+    init_git: str = "yes",
+) -> str:
+    """
+    Generate a complete Ansible repository structure.
+
+    Analyses converted Chef cookbooks and creates an appropriate Ansible
+    repository structure with proper organisation, configuration files,
+    and git initialisation.
+
+    Repo Types:
+    - auto: Auto-detect based on conversion analysis (recommended)
+    - inventory_first: Classic inventory-first (best for infra management)
+    - playbooks_roles: Simple playbooks + roles (best for small projects)
+    - collection: Ansible Collection layout (best for reusable automation)
+    - mono_repo: Multi-project mono-repo (best for platform teams)
+
+    Args:
+        output_path: Path where the repository should be created
+        repo_type: Type of repository structure (auto/inventory_first/playbooks_roles/collection/mono_repo)
+        cookbook_path: Optional path to Chef cookbook for analysis (used with repo_type='auto')
+        org_name: Organisation name for the repository
+        init_git: Whether to initialise a git repository ('yes' or 'no')
+
+    Returns:
+        JSON string with generation results including success status, files created, and git status
+
+    """
+    from souschef.generators.repo import (
+        analyse_conversion_output,
+    )
+    from souschef.generators.repo import (
+        generate_ansible_repository as gen_repo,
+    )
+
+    try:
+        output_path = str(_normalize_path(output_path))
+        init_git_bool = init_git.lower() in ("yes", "true", "1")
+
+        # Determine repo type
+        if repo_type == "auto":
+            if not cookbook_path:
+                return json.dumps(
+                    {
+                        "success": False,
+                        "error": "cookbook_path required when repo_type='auto'",
+                    }
+                )
+
+            cookbook_path = str(_normalize_path(cookbook_path))
+
+            # Analyse the cookbook to determine best repo type
+            # Count recipes
+            recipes_dir = Path(cookbook_path) / "recipes"
+            num_recipes = (
+                len(list(recipes_dir.glob("*.rb"))) if recipes_dir.exists() else 0
+            )
+
+            # Basic heuristics for repo type selection
+            has_multiple_apps = num_recipes > 5
+            num_roles = max(1, num_recipes // 2)  # Estimate roles from recipes
+
+            determined_type = analyse_conversion_output(
+                cookbook_path=cookbook_path,
+                num_recipes=num_recipes,
+                num_roles=num_roles,
+                has_multiple_apps=has_multiple_apps,
+                needs_multi_env=True,
+            )
+            result = gen_repo(output_path, determined_type, org_name, init_git_bool)
+        else:
+            # Use specified repo type
+            result = gen_repo(output_path, repo_type, org_name, init_git_bool)
+
+        return json.dumps(result, indent=2)
+
+    except Exception as e:
+        return json.dumps(
+            {
+                "success": False,
+                "error": f"Failed to generate repository: {e}",
+            }
+        )
+
+
+@mcp.tool()
 def parse_chef_migration_assessment(
     cookbook_paths: str,
     migration_scope: str = "full",
