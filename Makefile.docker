@@ -66,20 +66,20 @@ docker-test:
 		--name souschef-test \
 		-p 9999:9999 \
 		$(IMAGE_LATEST)
-	
+
 	@echo "  2. Waiting for container to be ready..."
 	sleep 5
-	
+
 	@echo "  3. Running health check..."
 	docker exec souschef-test python -m souschef.ui.health_check || true
-	
+
 	@echo "  4. Checking logs..."
 	docker logs souschef-test || true
-	
+
 	@echo "  5. Cleaning up..."
 	docker stop souschef-test || true
 	docker rm souschef-test || true
-	
+
 	@echo "✓ Image test completed"
 
 docker-scan:

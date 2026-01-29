@@ -10,13 +10,15 @@ ARG POETRY_VERSION=1.8.3
 FROM python:${PYTHON_VERSION}-slim AS base
 
 # Metadata for Docker registry and CI/CD
-LABEL org.opencontainers.image.title="SousChef UI" \
-      org.opencontainers.image.description="AI-powered UI for Chef to Ansible conversion" \
+LABEL org.opencontainers.image.title="SousChef - MCP AI Chef to Ansible Converter" \
+      org.opencontainers.image.description="AI-powered Model Context Protocol server and web UI for converting Chef cookbooks to Ansible playbooks" \
       org.opencontainers.image.authors="SousChef Contributors" \
       org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="SousChef Project" \
       org.opencontainers.image.url="https://github.com/kpeacocke/souschef" \
       org.opencontainers.image.documentation="https://kpeacocke.github.io/souschef/" \
-      org.opencontainers.image.source="https://github.com/kpeacocke/souschef"
+      org.opencontainers.image.source="https://github.com/kpeacocke/souschef" \
+      org.opencontainers.image.base.name="python:${PYTHON_VERSION}-slim"
 
 # Set environment variables for Python and Streamlit
 ENV PYTHONUNBUFFERED=1 \

@@ -7,7 +7,7 @@ This guide covers building, testing, and deploying the SousChef UI as a Docker c
 The SousChef project includes a production-ready Dockerfile for containerising the Streamlit UI. The Docker image is:
 
 - **Secure**: Runs as non-root user, minimal dependencies, security scanning
-- **Robust**: Multi-stage build, health checks, proper signal handling  
+- **Robust**: Multi-stage build, health checks, proper signal handling
 - **Efficient**: Optimised for caching, supports multiple architectures (amd64, arm64)
 - **Observable**: Comprehensive logging, health checks, metadata labels
 
@@ -42,6 +42,55 @@ make docker-logs
 
 # Stop the container
 make docker-stop
+```
+
+## Published Images on GitHub Container Registry (GHCR)
+
+The SousChef project automatically publishes Docker images to [GitHub Container Registry](https://ghcr.io) on each release.
+
+### Finding the Image
+
+1. **Direct URL**: https://ghcr.io/mcp-souschef
+2. **GitHub Package Page**: https://github.com/kpeacocke/souschef/pkgs/container/mcp-souschef
+3. **Command Line**:
+   ```bash
+   docker search ghcr.io/mcp-souschef
+   ```
+
+### What's Displayed on GHCR
+
+The image metadata includes:
+
+- **Title**: "SousChef - MCP AI Chef to Ansible Converter"
+- **Description**: "AI-powered Model Context Protocol server and web UI for converting Chef cookbooks to Ansible playbooks"
+- **License**: MIT
+- **Vendor**: SousChef Project
+- **Documentation**: https://kpeacocke.github.io/souschef/
+- **Source**: https://github.com/kpeacocke/souschef
+
+### Available Tags
+
+- `latest` - Most recent release
+- `3.2.0` - Specific version (semver)
+- `3.2` - Latest patch of minor version
+- `3` - Latest patch of major version
+
+### Pulling and Running Images
+
+```bash
+# Pull latest release
+docker pull ghcr.io/mcp-souschef:latest
+
+# Pull specific version
+docker pull ghcr.io/mcp-souschef:3.2.0
+
+# Run with environment configuration
+docker run -p 9999:9999 \
+  --env-file .env \
+  ghcr.io/mcp-souschef:latest
+
+# Check image details
+docker inspect ghcr.io/mcp-souschef:latest
 ```
 
 ## Image Architecture
@@ -146,14 +195,14 @@ services:
     tmpfs:                        # Temporary filesystems with restrictions
       - /tmp:noexec,nosuid
       - /run:noexec,nosuid
-    
+
     # Resource limits
     deploy:
       resources:
         limits:
           memory: 1G
           cpus: 0.5
-    
+
     # Health monitoring
     healthcheck:
       test: python -m souschef.ui.health_check
@@ -331,7 +380,7 @@ deploy:
    ```bash
    # Good
    docker pull ghcr.io/mcp-souschef:v1.0.0
-   
+
    # Avoid (unpredictable)
    docker pull ghcr.io/mcp-souschef:latest
    ```
