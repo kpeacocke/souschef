@@ -1897,8 +1897,9 @@ def _get_git_path() -> str:
         subprocess.CalledProcessError,
         FileNotFoundError,
         subprocess.TimeoutExpired,
-    ):
-        pass
+    ) as exc:
+        # Non-fatal: failure to use 'which' just means we fall back to other checks.
+        st.write(f"Debug: 'which git' probe failed: {exc}")
 
     # Last resort: try the basic 'git' command
     try:
