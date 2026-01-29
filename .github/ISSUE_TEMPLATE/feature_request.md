@@ -7,6 +7,10 @@ assignees: ''
 
 ---
 
+## 💡 Feature Request
+
+**Fill out what's relevant to your request — you don't need to complete every section.**
+
 ## Feature Description
 
 A clear and concise description of the feature you'd like to see added.

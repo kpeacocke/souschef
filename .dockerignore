@@ -1,48 +1,56 @@
 # Version control
 .git
 .gitignore
+.gitattributes
 
 # Python
-__pycache__
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
 .Python
-env
-venv
-.venv
-pip-log.txt
-pip-delete-this-directory.txt
-.tox
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git
-.mypy_cache
-.pytest_cache
-.hypothesis
-
-# Virtual environments
-.env
-.venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
+coverage.json
+coverage.html
+htmlcov/
+*.cover
+*.log
 
-# IDE
+# Type checking and linting
+.mypy_cache/
+.mypy_cache
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+
+# Virtual environments (duplicates for clarity)
+.env
+.env.local
+.env.*.local
+
+# IDE and editors
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
-# OS
+# OS files
 .DS_Store
 .DS_Store?
 ._*
@@ -53,21 +61,81 @@ Thumbs.db
 
 # Documentation build
 site/
-htmlcov/
+mkdocs-draft/
+docs/_build/
 
 # Test artifacts
-.mutmut-cache
+.mutmut-cache/
 tests/__snapshots__/
+tests/fixtures/**/build/
 
 # CI/CD
 .github/
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
 
-# Terraform provider
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+*.so
+*.whl
+
+# Development tools
+Makefile
+Dockerfile.dev
+docker-compose*.yml
+docker-compose*.yaml
+
+# Terraform provider (separate service)
 terraform-provider/
+go.work
+*.tfstate*
 
 # Node modules (if any)
 node_modules/
+npm-debug.log
+yarn-error.log
 
-# Temporary files
+# Temporary and cache files
 *.tmp
 *.temp
+*.bak
+*.swp
+*.swo
+.cache/
+*.pid
+core
+vgcore.*
+
+# Development configs
+.editorconfig
+pyproject.toml.bak
+poetry.lock.bak
+
+# Large files that shouldn't be in image
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+*.iso
+*.img
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Development documentation
+CONTRIBUTING.md
+DEVELOPMENT.md
+CODEQL_SETUP.md
+METRICS_CONSISTENCY_SUMMARY.md
+metrics-consistency.md
+CODE_OF_CONDUCT.md
+CHANGELOG.md
+CITATION.cff
+SECURITY.md

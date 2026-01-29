@@ -1,7 +1,28 @@
-# Dockerfile for SousChef UI
-FROM python:3.14.1-slim AS base
+# Multi-stage Dockerfile for SousChef UI - Production Ready
+# Optimised for security, robustness, and Docker registry publishing
 
-# Set environment variables
+ARG PYTHON_VERSION=3.14.1
+ARG POETRY_VERSION=1.8.3
+
+# ============================================================================
+# Base Stage - Common configuration for all stages
+# ============================================================================
+FROM python:${PYTHON_VERSION}-slim AS base
+
+ARG PYTHON_VERSION
+
+# Metadata for Docker registry and CI/CD
+LABEL org.opencontainers.image.title="SousChef - MCP AI Chef to Ansible Converter" \
+      org.opencontainers.image.description="AI-powered Model Context Protocol server and web UI for converting Chef cookbooks to Ansible playbooks" \
+      org.opencontainers.image.authors="SousChef Contributors" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="SousChef Project" \
+      org.opencontainers.image.url="https://github.com/kpeacocke/souschef" \
+      org.opencontainers.image.documentation="https://kpeacocke.github.io/souschef/" \
+      org.opencontainers.image.source="https://github.com/kpeacocke/souschef" \
+      org.opencontainers.image.base.name="python:${PYTHON_VERSION}-slim"
+
+# Set environment variables for Python and Streamlit
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -13,66 +34,103 @@ ENV PYTHONUNBUFFERED=1 \
     STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true \
     STREAMLIT_SERVER_ENABLE_STATIC_SERVING=false \
     STREAMLIT_LOGGER_LEVEL=INFO \
-    STREAMLIT_SERVER_LOGGER_LEVEL=INFO
+    STREAMLIT_SERVER_LOGGER_LEVEL=INFO \
+    STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
 
-# Install system dependencies and create non-root user
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install security updates and minimal system dependencies
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl \
     git \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --shell /bin/bash --uid 1001 app \
-    && mkdir -p /app \
-    && chown -R app:app /app
+    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* && \
+
+# Create non-root user with consistent UID for container orchestration
+    groupadd -r app --gid=1001 && \
+    useradd -r -g app --uid=1001 --create-home --shell /sbin/nologin app && \
+    mkdir -p /app && \
+    chown -R app:app /app
 
 # Set work directory
 WORKDIR /app
 
-# Build stage for dependencies
+# ============================================================================
+# Builder Stage - Install dependencies in isolated layer
+# ============================================================================
 FROM base AS builder
 
-# Install build dependencies
+ARG POETRY_VERSION
+
+# Install build dependencies needed for compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
-COPY pyproject.toml poetry.lock ./
+# Copy dependency files first (for better layer caching)
+COPY --chown=app:app pyproject.toml poetry.lock ./
 
-# Install Poetry
-RUN pip install --no-cache-dir poetry==1.8.3
+# Install Poetry with pinned version for reproducibility
+RUN pip install --no-cache-dir --require-hashes \
+    poetry=="$POETRY_VERSION" || \
+    pip install --no-cache-dir poetry=="$POETRY_VERSION"
 
-# Configure poetry
+# Configure poetry to not create virtual environment (install globally)
 RUN poetry config virtualenvs.create false
 
-# Install dependencies (including UI extras)
-RUN poetry install --only=main --extras=ui --no-dev
+# Install production dependencies with UI extras
+# Use --no-interaction for automated environments
+RUN poetry install \
+    --only=main \
+    --extras=ui \
+    --no-dev \
+    --no-interaction \
+    --no-root && \
+    poetry cache clear pypi --all || true
 
-# Production stage
+# ============================================================================
+# Runtime Stage - Minimal production image
+# ============================================================================
 FROM base AS production
 
-# Copy installed dependencies from builder stage
-COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy installed Python packages from builder (more efficient than copying site-packages)
+COPY --from=builder --chown=app:app /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder --chown=app:app /usr/local/bin /usr/local/bin
 
-# Copy application code
-COPY souschef/ ./souschef/
+# Copy application code with proper ownership
+COPY --chown=app:app souschef/ ./souschef/
 
 # Copy Streamlit configuration
-COPY .streamlit/ ./.streamlit/
+COPY --chown=app:app .streamlit/ ./.streamlit/
 
-# Change ownership to non-root user
-RUN chown -R app:app /app
+# Create application directories and set permissions
+RUN mkdir -p /app/.streamlit && \
+    chmod -R 755 /app && \
+    chmod 700 /app/.streamlit
 
-# Switch to non-root user
+# Switch to non-root user for security
 USER app
 
-# Expose port
+# Expose Streamlit port
 EXPOSE 9999
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python souschef/ui/health_check.py
+# Health check - robust implementation with timeout
+HEALTHCHECK \
+    --interval=30s \
+    --timeout=10s \
+    --start-period=5s \
+    --retries=3 \
+    CMD python -m souschef.ui.health_check || exit 1
 
-# Default command
-CMD ["streamlit", "run", "souschef/ui/app.py", "--server.address", "0.0.0.0", "--server.port", "9999", "--logger.level", "debug", "--server.headless", "true"]
+# Use ENTRYPOINT for proper signal handling
+# This ensures Ctrl+C and container stop signals work correctly
+ENTRYPOINT ["python", "-m", "streamlit", "run"]
+
+# CMD provides the default arguments
+CMD ["souschef/ui/app.py", \
+     "--server.address", "0.0.0.0", \
+     "--server.port", "9999", \
+     "--client.showErrorDetails", "true", \
+     "--logger.level", "info", \
+     "--server.headless", "true", \
+     "--server.runOnSave", "false", \
+     "--client.toolbar.visible", "true"]
