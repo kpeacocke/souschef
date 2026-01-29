@@ -526,7 +526,10 @@ class TestRepositoryIntegration:
     has_multiple_apps=st.booleans(),
     needs_multi_env=st.booleans(),
 )
-@settings(max_examples=50)
+@settings(
+    max_examples=50,
+    suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture],
+)
 def test_analyse_always_returns_valid_repo_type(
     num_recipes, num_roles, has_multiple_apps, needs_multi_env, tmp_path
 ):

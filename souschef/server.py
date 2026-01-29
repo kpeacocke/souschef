@@ -2939,6 +2939,15 @@ def generate_ansible_repository(
 
             cookbook_path = str(_normalize_path(cookbook_path))
 
+            # Validate cookbook path exists
+            if not Path(cookbook_path).exists():
+                return json.dumps(
+                    {
+                        "success": False,
+                        "error": f"Cookbook path does not exist: {cookbook_path}",
+                    }
+                )
+
             # Analyse the cookbook to determine best repo type
             # Count recipes
             recipes_dir = Path(cookbook_path) / "recipes"
