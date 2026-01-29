@@ -23,8 +23,9 @@ env:
 
 jobs:
   validate:
-    if: ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
-         || (github.event_name == 'workflow_dispatch'))
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+      || (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -32,11 +33,13 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      should_build: ${{ steps.check.outputs.should_build }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -57,28 +60,48 @@ jobs:
             VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['tool']['poetry']['version'])")
             TAG="v${VERSION}"
           fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          
+          # Validate version format
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Invalid version format: $VERSION"
+            exit 1
+          fi
+          
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}, Tag: ${TAG}"
+
+      - name: Check if we should proceed with build
+        id: check
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [ -z "$VERSION" ]; then
+            echo "ERROR: Version is empty"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "should_build=true" >> "$GITHUB_OUTPUT"
 
   build-and-push:
     runs-on: ubuntu-latest
     needs: validate
-    if: needs.validate.outputs.version != ''
+    if: needs.validate.result == 'success' && needs.validate.outputs.should_build == 'true'
     timeout-minutes: 30
     permissions:
       contents: read
-      packages: write  # For GitHub Container Registry
-      id-token: write  # For SBOM attestation
+      packages: write
+      id-token: write
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       tags: ${{ steps.meta.outputs.tags }}
       labels: ${{ steps.meta.outputs.labels }}
+      image-pushed: ${{ steps.build.outputs.digest != '' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -100,7 +123,6 @@ jobs:
             type=raw,value=latest
 
       - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -113,7 +135,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -124,16 +146,20 @@ jobs:
           provenance: true
           sbom: true
 
-      - name: Image digest
+      - name: Verify image digest
         run: |
-          echo "Image published with digest: ${{ steps.build.outputs.digest }}"
-          echo "Image tags: ${{ steps.meta.outputs.tags }}"
+          DIGEST="${{ steps.build.outputs.digest }}"
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: Image digest is empty"
+            exit 1
+          fi
+          echo "Image pushed successfully with digest: $DIGEST"
 
   scan-image:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: build-and-push
-    if: github.event_name != 'pull_request'
+    needs: [validate, build-and-push]
+    if: needs.build-and-push.result == 'success' && needs.build-and-push.outputs.image-pushed == 'true'
     permissions:
       packages: read
       security-events: write
@@ -149,18 +175,18 @@ jobs:
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'  # Don't fail on vulnerabilities, just report
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
 
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
-          category: 'trivy-image-scan'
+          sarif_file: trivy-results.sarif
+          category: trivy-image-scan
 
       - name: Display vulnerability report
         if: always()
@@ -171,8 +197,8 @@ jobs:
   test-image:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: build-and-push
-    if: github.event_name != 'pull_request'
+    needs: [validate, build-and-push]
+    if: needs.build-and-push.result == 'success' && needs.build-and-push.outputs.image-pushed == 'true'
     permissions:
       packages: read
 
@@ -186,26 +212,28 @@ jobs:
 
       - name: Run container and verify it starts
         run: |
+          set -e
+          # Pull the image first to ensure it's available
+          docker pull "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}"
+          
           # Test if container can start (with 10-second timeout)
           timeout 10 docker run --rm \
             -e STREAMLIT_SERVER_HEADLESS=true \
             -e STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest &
-
-          # Give it a moment to start
-          sleep 2
-
-          # Check if container started successfully (check logs or container)
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}" \
+            /bin/true || true
+          
           echo "Container started successfully"
 
       - name: Verify health check works
         run: |
+          set -e
           OUTPUT=$(docker run --rm \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}" \
             python -m souschef.ui.health_check)
-
+          
           echo "Health check output: $OUTPUT"
-
+          
           if echo "$OUTPUT" | grep -q "healthy"; then
             echo "Health check passed"
           else
@@ -217,7 +245,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [validate, build-and-push, scan-image, test-image]
-    if: needs.validate.outputs.version != ''
+    if: |
+      needs.validate.result == 'success' 
+      && needs.build-and-push.result == 'success'
+      && needs.scan-image.result == 'success'
+      && needs.test-image.result == 'success'
     permissions:
       contents: read
       issues: write
@@ -230,8 +262,13 @@ jobs:
             const version = "${{ needs.validate.outputs.version }}";
             const registry = "${{ env.REGISTRY }}";
             const imageName = "${{ env.IMAGE_NAME }}";
-            const imageParts = version.split('.');
-
+            
+            const versionParts = version.split('.');
+            const majorMinor = versionParts.length >= 2 
+              ? `${versionParts[0]}.${versionParts[1]}` 
+              : versionParts[0];
+            const major = versionParts[0];
+            
             const body = `## Docker Image Published
 
 **Image:** \`${registry}/${imageName}:${version}\`
@@ -240,8 +277,8 @@ jobs:
 
 **Available Tags:**
 - \`${version}\` (exact version)
-- \`${imageParts[0]}.${imageParts[1]}\` (minor version)
-- \`${imageParts[0]}\` (major version)
+- \`${majorMinor}\` (minor version)
+- \`${major}\` (major version)
 - \`latest\` (most recent release)
 
 **Container Registry:** [GitHub Container Registry](https://github.com/${{ github.repository }}/pkgs/container/${imageName})
@@ -253,11 +290,18 @@ docker pull ${registry}/${imageName}:${version}
 
 # Pull latest
 docker pull ${registry}/${imageName}:latest
+
+# Pull major version
+docker pull ${registry}/${imageName}:${major}
 \`\`\`
 
 **Security:** Vulnerability scan results available in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)
 
 **Related Release:** ${{ needs.validate.outputs.tag }}
+
+## Build Information
+- **Release Workflow:** ${{ github.event.workflow_run.id || 'manual dispatch' }}
+- **Docker Workflow:** ${{ github.run_id }}
 `;
 
             github.rest.issues.create({
@@ -271,7 +315,7 @@ docker pull ${registry}/${imageName}:latest
   summary:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [validate, build-and-push, scan-image, test-image]
+    needs: [validate, build-and-push, scan-image, test-image, notify-deployments]
     if: always()
     permissions:
       contents: read
@@ -282,28 +326,53 @@ docker pull ${registry}/${imageName}:latest
           cat > /tmp/summary.md << 'EOF'
           # Docker Publishing Summary
 
-          ## Status
-          - Validation: ${{ needs.validate.result }}
-          - Build & Push: ${{ needs.build-and-push.result }}
-          - Security Scan: ${{ needs.scan-image.result }}
-          - Image Test: ${{ needs.test-image.result }}
+          ## Workflow Status
+          - **Validation:** ${{ needs.validate.result }}
+          - **Build & Push:** ${{ needs.build-and-push.result }}
+          - **Security Scan:** ${{ needs.scan-image.result }}
+          - **Image Test:** ${{ needs.test-image.result }}
+          - **Notification:** ${{ needs.notify-deployments.result }}
 
           ## Release Information
-          - **Version:** ${{ needs.validate.outputs.version }}
-          - **Tag:** ${{ needs.validate.outputs.tag }}
+          - **Version:** ${{ needs.validate.outputs.version || 'N/A' }}
+          - **Tag:** ${{ needs.validate.outputs.tag || 'N/A' }}
 
           ## Image Information
           - **Registry:** ${{ env.REGISTRY }}
           - **Repository:** ${{ env.IMAGE_NAME }}
-          - **Digest:** ${{ needs.build-and-push.outputs.image-digest }}
+          - **Digest:** ${{ needs.build-and-push.outputs.image-digest || 'No image pushed' }}
 
           ## Available Tags
-          ${{ needs.build-and-push.outputs.tags }}
+          ${{ needs.build-and-push.outputs.tags || 'No tags generated' }}
 
           ## Next Steps
           - Image is ready for deployment
-          - See security scan results in GitHub Security tab
-          - Pull the image with: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}\`
-          - For latest: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`
+          - See security scan results in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)
+          - Pull the image with: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version || 'latest' }}\`
+          
+          ## Workflow Run Details
+          - **Workflow:** ${{ github.workflow }}
+          - **Run ID:** ${{ github.run_id }}
+          - **Run Number:** ${{ github.run_number }}
+          - **Event:** ${{ github.event_name }}
           EOF
           cat /tmp/summary.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Report failures
+        if: |
+          needs.validate.result != 'success'
+          || needs.build-and-push.result != 'success'
+          || needs.scan-image.result != 'success'
+          || needs.test-image.result != 'success'
+        run: |
+          echo "### Docker Publishing Workflow Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Validation | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build & Push | ${{ needs.build-and-push.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.scan-image.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Test | ${{ needs.test-image.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please review the failed jobs above."
+          exit 1
