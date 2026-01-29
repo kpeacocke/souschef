@@ -262,52 +262,43 @@ jobs:
             const version = "${{ needs.validate.outputs.version }}";
             const registry = "${{ env.REGISTRY }}";
             const imageName = "${{ env.IMAGE_NAME }}";
+            const digest = "${{ needs.build-and-push.outputs.image-digest }}";
+            const tag = "${{ needs.validate.outputs.tag }}";
             
             const versionParts = version.split('.');
             const majorMinor = versionParts.length >= 2 
-              ? `${versionParts[0]}.${versionParts[1]}` 
+              ? versionParts[0] + "." + versionParts[1]
               : versionParts[0];
             const major = versionParts[0];
             
-            const body = `## Docker Image Published
-
-**Image:** \`${registry}/${imageName}:${version}\`
-
-**Digest:** ${{ needs.build-and-push.outputs.image-digest }}
-
-**Available Tags:**
-- \`${version}\` (exact version)
-- \`${majorMinor}\` (minor version)
-- \`${major}\` (major version)
-- \`latest\` (most recent release)
-
-**Container Registry:** [GitHub Container Registry](https://github.com/${{ github.repository }}/pkgs/container/${imageName})
-
-**Pull Commands:**
-\`\`\`bash
-# Pull specific version
-docker pull ${registry}/${imageName}:${version}
-
-# Pull latest
-docker pull ${registry}/${imageName}:latest
-
-# Pull major version
-docker pull ${registry}/${imageName}:${major}
-\`\`\`
-
-**Security:** Vulnerability scan results available in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)
-
-**Related Release:** ${{ needs.validate.outputs.tag }}
-
-## Build Information
-- **Release Workflow:** ${{ github.event.workflow_run.id || 'manual dispatch' }}
-- **Docker Workflow:** ${{ github.run_id }}
-`;
+            let body = "## Docker Image Published\n\n";
+            body += "**Image:** `" + registry + "/" + imageName + ":" + version + "`\n\n";
+            body += "**Digest:** " + digest + "\n\n";
+            body += "**Available Tags:**\n";
+            body += "- `" + version + "` (exact version)\n";
+            body += "- `" + majorMinor + "` (minor version)\n";
+            body += "- `" + major + "` (major version)\n";
+            body += "- `latest` (most recent release)\n\n";
+            body += "**Container Registry:** [GitHub Container Registry](https://github.com/${{ github.repository }}/pkgs/container/" + imageName + ")\n\n";
+            body += "**Pull Commands:**\n";
+            body += "```bash\n";
+            body += "# Pull specific version\n";
+            body += "docker pull " + registry + "/" + imageName + ":" + version + "\n\n";
+            body += "# Pull latest\n";
+            body += "docker pull " + registry + "/" + imageName + ":latest\n\n";
+            body += "# Pull major version\n";
+            body += "docker pull " + registry + "/" + imageName + ":" + major + "\n";
+            body += "```\n\n";
+            body += "**Security:** Vulnerability scan results available in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)\n\n";
+            body += "**Related Release:** " + tag + "\n\n";
+            body += "## Build Information\n";
+            body += "- **Release Workflow:** ${{ github.event.workflow_run.id || 'manual dispatch' }}\n";
+            body += "- **Docker Workflow:** ${{ github.run_id }}";
 
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Docker Image Published: ${{ needs.validate.outputs.tag }}`,
+              title: "Docker Image Published: " + tag,
               body: body,
               labels: ['deployment', 'docker', 'release']
             });
