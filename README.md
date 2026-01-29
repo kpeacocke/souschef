@@ -385,6 +385,51 @@ docker run -p 9999:9999 souschef-ui
 docker-compose up
 ```
 
+**Run Published Image from GitHub Container Registry:**
+
+SousChef images are automatically published to GitHub Container Registry (GHCR) on each release:
+
+```bash
+# Pull the latest released image
+docker pull ghcr.io/mcp-souschef:latest
+
+# Or pull a specific version
+docker pull ghcr.io/mcp-souschef:3.2.0
+
+# Run the image with your .env file
+docker run -p 9999:9999 \
+  --env-file .env \
+  ghcr.io/mcp-souschef:latest
+
+# Or with docker-compose
+cat > docker-compose.override.yml << 'EOF'
+version: '3.8'
+services:
+  souschef-ui:
+    image: ghcr.io/mcp-souschef:latest
+    build: ~
+EOF
+docker-compose up
+```
+
+**Container Images:**
+
+- **Registry**: GitHub Container Registry (GHCR)
+- **Image Name**: `mcp-souschef`
+- **Full URL**: `ghcr.io/mcp-souschef`
+- **Available Tags**:
+  - `latest` - Most recent release
+  - `3.2.0` - Specific version (semver)
+  - `3.2` - Latest patch of a minor version
+  - `3` - Latest patch of a major version
+
+**Why use GHCR?**
+
+- Integrated with GitHub releases and CI/CD
+- Faster pulls for users in GitHub ecosystem
+- Security scanning and SBOM included
+- Multi-platform support (amd64, arm64)
+
 **Docker Environment Configuration:**
 
 SousChef supports AI configuration via environment variables in Docker containers. Create a `.env` file in your project root:
@@ -471,7 +516,7 @@ The UI includes sophisticated dependency graph visualization powered by NetworkX
 - **Interactive Exploration**: Zoom, pan, and hover over nodes to explore complex dependency relationships
 - **Color Coding**: Visual distinction between cookbooks, dependencies, community cookbooks, and circular dependencies
 - **Static Export**: Matplotlib-based static graphs for reports and documentation
-- **Large Graph Support**: Optimized layouts for complex cookbook ecosystems
+- **Large Graph Support**: Optimised layouts for complex cookbook ecosystems
 
 #### Real-Time Progress Tracking
 
