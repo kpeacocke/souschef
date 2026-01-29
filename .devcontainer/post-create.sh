@@ -5,6 +5,15 @@ set -e
 
 echo "🍳 Setting up SousChef development environment..."
 
+# Ensure Poetry is in PATH
+export PATH="/root/.local/bin:/usr/local/bin:$PATH"
+
+# Verify Poetry is available
+if ! command -v poetry &> /dev/null; then
+    echo "⚠️  Poetry not found in PATH, installing..."
+    curl -sSL https://install.python-poetry.org | python3 -
+fi
+
 # Configure git to include host config
 cat > ~/.gitconfig << 'EOF'
 [include]
