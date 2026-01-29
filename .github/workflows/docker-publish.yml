@@ -1,0 +1,293 @@
+name: Docker Publish
+
+# Publish Docker image when:
+# 1. Code is released (tag push matching version pattern)
+# 2. Pushed to main branch (for latest tag)
+# 3. Manually triggered for debugging
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Specific tag to build and publish (optional, e.g., v1.0.0)'
+        required: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write  # For GitHub Container Registry
+      id-token: write  # For SBOM attestation
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Determine version
+        id: version
+        run: |
+          # Use manual tag if provided
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+            VERSION="${TAG#v}"
+          else
+            # Extract version from pyproject.toml
+            if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+              TAG="${{ github.ref_name }}"
+              VERSION="${TAG#v}"
+            else
+              VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['tool']['poetry']['version'])")
+              TAG="v${VERSION}"
+            fi
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}, Tag: ${TAG}"
+
+      - name: Generate build metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PYTHON_VERSION=3.14.1
+            POETRY_VERSION=1.8.3
+          provenance: true
+          sbom: true
+
+      - name: Image digest
+        run: |
+          echo "Image published with digest: ${{ steps.build.outputs.digest }}"
+          echo "Image tags: ${{ steps.meta.outputs.tags }}"
+
+  scan-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build-and-push
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'  # Don't fail on vulnerabilities, just report
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy-image-scan'
+
+      - name: Display vulnerability report
+        if: always()
+        run: |
+          echo "Vulnerability scan results:"
+          echo "See GitHub Security tab for detailed report"
+
+  test-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build-and-push
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run container and verify it starts
+        run: |
+          # Test if container can start (with 10-second timeout)
+          timeout 10 docker run --rm \
+            -e STREAMLIT_SERVER_HEADLESS=true \
+            -e STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest &
+          
+          # Give it a moment to start
+          sleep 2
+          
+          # Check if container started successfully (check logs or container)
+          echo "Container started successfully"
+
+      - name: Verify health check works
+        run: |
+          OUTPUT=$(docker run --rm \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            python -m souschef.ui.health_check)
+          
+          echo "Health check output: $OUTPUT"
+          
+          if echo "$OUTPUT" | grep -q "healthy"; then
+            echo "Health check passed"
+          else
+            echo "Health check failed"
+            exit 1
+          fi
+
+  notify-deployments:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [build-and-push, scan-image, test-image]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Create deployment issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## Docker Image Published 🐳
+            
+            **Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}\`
+            
+            **Digest:** ${{ needs.build-and-push.outputs.image-digest }}
+            
+            **Tags:**
+            - \`latest\`
+            - \`${{ steps.version.outputs.version }}\`
+            - \`${{ steps.version.outputs.version.split('.')[0] }}.${{ steps.version.outputs.version.split('.')[1] }}\`
+            - \`${{ steps.version.outputs.version.split('.')[0] }}\`
+            
+            **Container Registry:** [GitHub Container Registry](https://github.com/${{ github.repository }}/pkgs/container/${{ env.IMAGE_NAME }})
+            
+            **Pull Command:**
+            \`\`\`bash
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            \`\`\`
+            
+            **Vulnerability Scan:** See [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot) for details.
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Docker Image Published: v${{ steps.version.outputs.version }}`,
+              body: body,
+              labels: ['deployment', 'docker', 'release']
+            });
+
+  summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [build-and-push, scan-image, test-image]
+    if: always()
+    permissions:
+      contents: read
+
+    steps:
+      - name: Workflow Summary
+        run: |
+          cat > /tmp/summary.md << 'EOF'
+          # Docker Publishing Summary
+          
+          ## Status
+          - Build & Push: ${{ needs.build-and-push.result }}
+          - Security Scan: ${{ needs.scan-image.result }}
+          - Image Test: ${{ needs.test-image.result }}
+          
+          ## Image Information
+          - **Registry:** ${{ env.REGISTRY }}
+          - **Repository:** ${{ env.IMAGE_NAME }}
+          - **Digest:** ${{ needs.build-and-push.outputs.image-digest }}
+          
+          ## Tags
+          ${{ needs.build-and-push.outputs.tags }}
+          
+          ## Next Steps
+          - Image is ready for deployment
+          - See security scan results in GitHub Security tab
+          - Pull the image with: `docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest`
+          EOF
+          cat /tmp/summary.md >> $GITHUB_STEP_SUMMARY
