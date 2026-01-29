@@ -516,7 +516,7 @@ The UI includes sophisticated dependency graph visualization powered by NetworkX
 - **Interactive Exploration**: Zoom, pan, and hover over nodes to explore complex dependency relationships
 - **Color Coding**: Visual distinction between cookbooks, dependencies, community cookbooks, and circular dependencies
 - **Static Export**: Matplotlib-based static graphs for reports and documentation
-- **Large Graph Support**: Optimized layouts for complex cookbook ecosystems
+- **Large Graph Support**: Optimised layouts for complex cookbook ecosystems
 
 #### Real-Time Progress Tracking
 
