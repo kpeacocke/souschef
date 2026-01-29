@@ -1,9 +1,9 @@
 name: Release
 
-# Trigger after Main Branch Validation succeeds to avoid releasing before checks finish
+# Trigger after CI succeeds to avoid releasing before checks finish
 on:
   workflow_run:
-    workflows: ["Main Branch Validation"]
+    workflows: ["CI"]
     types: [completed]
   workflow_dispatch:
 
