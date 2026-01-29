@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for SousChef UI - Production Ready
 # Optimised for security, robustness, and Docker registry publishing
 
-ARG PYTHON_VERSION=3.14.1
+ARG PYTHON_VERSION=3.13.1
 ARG POETRY_VERSION=1.8.3
 
 # ============================================================================
@@ -93,7 +93,7 @@ RUN poetry install \
 FROM base AS production
 
 # Copy installed Python packages from builder (more efficient than copying site-packages)
-COPY --from=builder --chown=app:app /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder --chown=app:app /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder --chown=app:app /usr/local/bin /usr/local/bin
 
 # Copy application code with proper ownership

@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        PYTHON_VERSION: "3.14.1"
+        PYTHON_VERSION: "3.13.1"
         POETRY_VERSION: "1.8.3"
     ports:
       - "9999:9999"
