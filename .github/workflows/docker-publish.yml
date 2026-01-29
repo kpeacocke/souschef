@@ -14,7 +14,7 @@ on:
         required: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: false
 
 env:
@@ -135,7 +135,6 @@ jobs:
     needs: build-and-push
     if: github.event_name != 'pull_request'
     permissions:
-      contents: read
       packages: read
       security-events: write
 
@@ -173,15 +172,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: build-and-push
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     permissions:
-      contents: read
       packages: read
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -236,7 +231,7 @@ jobs:
             const registry = "${{ env.REGISTRY }}";
             const imageName = "${{ env.IMAGE_NAME }}";
             const imageParts = version.split('.');
-            
+
             const body = `## Docker Image Published
 
 **Image:** \`${registry}/${imageName}:${version}\`
