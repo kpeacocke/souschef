@@ -133,4 +133,4 @@ CMD ["souschef/ui/app.py", \
      "--logger.level", "info", \
      "--server.headless", "true", \
      "--server.runOnSave", "false", \
-     "--client.toolbar.visible", "true"]
+     "--client.toolbarMode", "auto"]
