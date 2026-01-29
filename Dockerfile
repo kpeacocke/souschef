@@ -9,6 +9,8 @@ ARG POETRY_VERSION=1.8.3
 # ============================================================================
 FROM python:${PYTHON_VERSION}-slim AS base
 
+ARG PYTHON_VERSION
+
 # Metadata for Docker registry and CI/CD
 LABEL org.opencontainers.image.title="SousChef - MCP AI Chef to Ansible Converter" \
       org.opencontainers.image.description="AI-powered Model Context Protocol server and web UI for converting Chef cookbooks to Ansible playbooks" \
