@@ -39,6 +39,7 @@ RUN curl -sSL https://install.python-poetry.org | python3 - && \
     libffi-dev \
     unzip \
     npm \
+    docker.io \
     && rm -rf /var/lib/apt/lists/* && \
     if [ "$SNYK_VERSION" != "skip" ]; then \
     npm install -g snyk && \
