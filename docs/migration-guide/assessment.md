@@ -148,11 +148,11 @@ Summary:
 
 ---
 
-## Step 3: Assess Complexity
+## Step 3: Assess Complexity & Effort
 
 ### Automated Complexity Assessment
 
-SousChef's complexity assessment tool analyzes multiple dimensions:
+SousChef's complexity assessment tool analyzes multiple dimensions and provides dual effort estimates:
 
 === "MCP (AI Assistant)"
     ```
@@ -177,8 +177,16 @@ SousChef's complexity assessment tool analyzes multiple dimensions:
   "version": "2.1.0",
   "complexity_score": 6.5,
   "complexity_level": "Medium",
-  "estimated_effort_hours": 40,
-  "risk_level": "Medium",
+
+  "effort_estimates": {
+    "manual_effort_days": 5,
+    "manual_effort_hours": 40,
+    "with_souschef_days": 2.5,
+    "with_souschef_hours": 20,
+    "time_saved_days": 2.5,
+    "time_saved_hours": 20,
+    "efficiency_gain_percent": 50
+  },
 
   "metrics": {
     "recipes": {
@@ -242,7 +250,34 @@ SousChef's complexity assessment tool analyzes multiple dimensions:
 }
 ```
 
-### Complexity Scoring
+### Effort Estimation Model
+
+SousChef provides realistic effort estimates for both manual and AI-assisted migrations:
+
+**Manual Migration Effort:**
+- Full person-days for complete manual conversion
+- Includes all boilerplate, validation, custom logic, and testing
+- Baseline estimate for understanding true time investment
+
+**AI-Assisted with SousChef:**
+- 50% time reduction from manual effort
+- SousChef automatically handles 60-70% of boilerplate conversion
+- Humans still required for:
+  - Validation and quality assurance
+  - Custom logic and edge cases
+  - Testing and integration
+  - Documentation and knowledge transfer
+
+**Example Calculation:**
+```
+Manual: 40 hours (5 person-days)
+With SousChef: 20 hours (2.5 person-days)
+Time Saved: 20 hours (50%)
+Team Size Reduction: 2 devs → 1 dev
+Timeline Reduction: 3 weeks → 1-2 weeks
+``` & Effort Multiplier
+
+Effort estimates scale with complexity:
 
 **Score Range: 1-10**
 

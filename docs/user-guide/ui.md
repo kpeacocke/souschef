@@ -7,6 +7,7 @@ SousChef provides a modern web-based interface for interactive Chef-to-Ansible m
 The SousChef UI is a Streamlit-based web application that provides:
 
 - **Interactive Cookbook Analysis**: Upload and analyse Chef cookbooks with real-time feedback
+- **Dual Effort Estimation**: Compare manual migration effort with AI-assisted SousChef time savings
 - **Dependency Visualisation**: Network graphs showing cookbook relationships and migration ordering
 - **Archive Upload Support**: Secure handling of cookbook archives with built-in security measures
 - **Migration Planning Wizards**: Step-by-step guidance through complex migrations
@@ -57,11 +58,15 @@ services:
 
 ### Cookbook Analysis Dashboard
 
-Upload and analyse Chef cookbooks with comprehensive metadata extraction:
+Upload and analyse Chef cookbooks with comprehensive metadata extraction and effort estimation:
 
 - **Archive Upload**: Secure handling of ZIP and TAR archives with size limits and security validation
 - **Directory Scanning**: Interactive exploration of cookbook structures
 - **Metadata Parsing**: Automatic extraction of cookbook dependencies, versions, and attributes
+- **Dual Effort Estimation**: 
+  - **Manual Migration**: Estimated effort without AI assistance
+  - **AI-Assisted with SousChef**: 50% time reduction through automated boilerplate conversion
+  - **Time Savings**: Clearly displayed comparison showing hours and percentage saved
 - **Complexity Assessment**: Real-time calculation of migration effort and risk factors
 
 ### Interactive Dependency Visualisation

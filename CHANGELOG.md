@@ -5,7 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0](https://github.com/kpeacocke/souschef/compare/v2.8.2...v3.0.0) (2026-01-22)
+## [3.3.0](https://github.com/kpeacocke/souschef/releases/tag/v3.3.0) (2026-01-30)
+
+### Features
+
+* **assessment:** Add realistic AI-assisted effort estimates with 50% time reduction factor
+* **metrics:** Enhance EffortMetrics class with SousChef-assisted effort properties
+  - `estimated_days_with_souschef` - Effort reduction with AI assistance (50%)
+  - `time_saved` - Days saved by using SousChef
+  - `efficiency_gain_percent` - Percentage speedup
+  - `estimated_hours_with_souschef` - Hours with AI assistance
+  - `estimated_weeks_range_with_souschef` - Week range with AI assistance
+  - `get_comparison_summary()` - Formatted comparison output
+* **assessment:** Display side-by-side effort comparison in migration assessments
+  - Manual Migration Effort (WITHOUT SousChef)
+  - AI-Assisted Migration (WITH SousChef)
+  - Time Saved and Efficiency Gains
+* **ui:** Update Streamlit UI to show dual effort estimates
+  - Summary metrics: Manual hours with delta showing AI-assisted savings
+  - Individual cookbooks: 3-column layout (Complexity | Manual | With SousChef)
+  - Metric cards with green delta indicators for visual comparison
+  - Report generation with both manual and AI-assisted timelines
+
+### Documentation
+
+* Update UI documentation with effort estimation features
+* Update assessment guide with realistic effort estimation model
+* Add effort estimation model explanation to README
+* Document 50% time reduction factor and assumptions
+
+## [3.2.0](https://github.com/kpeacocke/souschef/releases/tag/v3.2.0) (2026-01-22)
 
 
 ### ⚠ BREAKING CHANGES

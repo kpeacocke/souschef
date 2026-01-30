@@ -48,6 +48,19 @@ As a user, you'll primarily interact with the 27 documented tools. Your AI assis
 - **[API Reference](docs/api-reference/)** - Detailed tool documentation
 - **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
 
+## What's New in v3.3.0
+
+**AI-Assisted Effort Estimation** - SousChef now displays realistic migration effort comparisons directly in the Streamlit UI:
+
+- **Manual Migration Estimates**: Full effort without AI assistance
+- **SousChef-Assisted Estimates**: 50% time reduction through automated boilerplate conversion
+- **Time Savings Display**: Instant visual comparison showing hours saved and efficiency gains
+- **Interactive Metrics**: Summary and per-cookbook effort comparisons with clear deltas
+
+Example: A cookbook estimated at 40 hours of manual work shows SousChef-assisted time as 20 hours, saving 20 hours (50%) and reducing team needs from 2 developers to 1.
+
+See the [Assessment Guide](docs/migration-guide/assessment.md#effort-estimation-model) for details on the effort estimation model.
+
 ## Installation
 
 ```bash
@@ -354,7 +367,12 @@ profile_parsing_operation recipe /path/to/recipe.rb --detailed
 Interactive web-based interface for Chef-to-Ansible migration planning and visualization:
 
 - **Cookbook Analysis Dashboard**: Interactive directory scanning with metadata parsing and complexity assessment
-- **Migration Planning Wizard**: Step-by-step migration planning with effort estimation and risk analysis
+- **AI-Assisted Effort Estimation** (v3.3.0+):
+  - **Manual Migration Estimate**: Full effort without AI assistance
+  - **SousChef-Assisted Estimate**: 50% time reduction through automated boilerplate conversion
+  - **Time Savings Display**: Clear comparison showing hours saved and efficiency percentage
+  - **Visual Metrics**: Side-by-side metric cards for instant visual comparison
+- **Migration Planning Wizard**: Step-by-step migration planning with dual effort scenarios and risk analysis
 - **Dependency Mapping**: Visual dependency graphs showing cookbook relationships and migration ordering
 - **Validation Reports**: Conversion validation results with syntax checking and best practice compliance
 - **Progress Tracking**: Real-time migration progress with completion metrics and bottleneck identification
