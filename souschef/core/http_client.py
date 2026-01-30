@@ -229,7 +229,17 @@ class HTTPClient:
                 timeout=timeout_value,
             )
             response.raise_for_status()
-            return response.json()  # type: ignore[no-any-return]
+
+            # Parse and validate JSON response
+            json_response = response.json()
+            if not isinstance(json_response, dict):
+                response_type = type(json_response).__name__
+                raise SousChefError(
+                    f"Expected JSON object response, got {response_type}",
+                    "The API returned an unexpected response format. "
+                    "Check the API documentation and endpoint.",
+                )
+            return json_response
         except RequestsHTTPError as e:
             if response is not None:
                 raise HTTPError(
@@ -297,7 +307,17 @@ class HTTPClient:
                 timeout=timeout_value,
             )
             response.raise_for_status()
-            return response.json()  # type: ignore[no-any-return]
+
+            # Parse and validate JSON response
+            json_response = response.json()
+            if not isinstance(json_response, dict):
+                response_type = type(json_response).__name__
+                raise SousChefError(
+                    f"Expected JSON object response, got {response_type}",
+                    "The API returned an unexpected response format. "
+                    "Check the API documentation and endpoint.",
+                )
+            return json_response
         except RequestsHTTPError as e:
             if response is not None:
                 raise HTTPError(
