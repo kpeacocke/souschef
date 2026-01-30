@@ -665,6 +665,11 @@ def create_results_archive(results: list, cookbook_path: str) -> bytes:
         # Add individual cookbook reports
         for result in results:
             if result["status"] == ANALYSIS_STATUS_ANALYSED:
+                manual_hours = result["estimated_hours"]
+                souschef_hours = result.get(
+                    "estimated_hours_with_souschef", manual_hours * 0.5
+                )
+                time_saved = manual_hours - souschef_hours
                 report_content = f"""# Cookbook Analysis Report: {result["name"]}
 
 ## Metadata
@@ -672,7 +677,14 @@ def create_results_archive(results: list, cookbook_path: str) -> bytes:
 - **Maintainer**: {result["maintainer"]}
 - **Dependencies**: {result["dependencies"]}
 - **Complexity**: {result["complexity"]}
-- **Estimated Hours**: {result["estimated_hours"]:.1f}
+
+## Effort Estimates
+### Manual Migration (Without SousChef):
+- **Estimated Hours**: {manual_hours:.1f}
+
+### AI-Assisted (With SousChef):
+- **Estimated Hours**: {souschef_hours:.1f}
+- **Time Saved**: {time_saved:.1f} hours (50% faster)
 
 ## Recommendations
 {result["recommendations"]}
@@ -686,16 +698,27 @@ def create_results_archive(results: list, cookbook_path: str) -> bytes:
         successful = len(
             [r for r in results if r["status"] == ANALYSIS_STATUS_ANALYSED]
         )
-        total_hours = sum(r.get("estimated_hours", 0) for r in results)
+        total_hours_manual = sum(r.get("estimated_hours", 0) for r in results)
+        total_hours_souschef = sum(
+            r.get("estimated_hours_with_souschef", r.get("estimated_hours", 0) * 0.5)
+            for r in results
+        )
+        time_saved_total = total_hours_manual - total_hours_souschef
 
         summary_content = f"""# SousChef Cookbook Analysis Summary
 
 ## Overview
 - **Cookbooks Analysed**: {len(results)}
-
 - **Successfully Analysed**: {successful}
 
-- **Total Estimated Hours**: {total_hours:.1f}
+## Effort Estimates
+### Manual Migration (Without AI):
+- **Total Estimated Hours**: {total_hours_manual:.1f}
+
+### AI-Assisted (With SousChef):
+- **Total Estimated Hours**: {total_hours_souschef:.1f}
+- **Time Saved**: {time_saved_total:.1f} hours (50% faster)
+
 - **Source**: {cookbook_path}  # deepcode ignore PT: used for display only
 
 ## Results Summary
@@ -704,10 +727,15 @@ def create_results_archive(results: list, cookbook_path: str) -> bytes:
             status_icon = (
                 "PASS" if result["status"] == ANALYSIS_STATUS_ANALYSED else "FAIL"
             )
+            manual_hours = result.get("estimated_hours", 0)
+            souschef_hours = result.get(
+                "estimated_hours_with_souschef", manual_hours * 0.5
+            )
             summary_content += f"- {status_icon} {result['name']}: {result['status']}"
             if result["status"] == ANALYSIS_STATUS_ANALYSED:
                 summary_content += (
-                    f" ({result['estimated_hours']:.1f} hours, "
+                    f" (Manual: {manual_hours:.1f}h, "
+                    f"With SousChef: {souschef_hours:.1f}h, "
                     f"{result['complexity']} complexity)"
                 )
             summary_content += "\n"
@@ -1415,6 +1443,9 @@ def _build_assessment_result(
         "dependencies": int(cookbook_assessment.get("dependencies", 0) or 0),
         "complexity": cookbook_assessment.get("migration_priority", "Unknown").title(),
         "estimated_hours": effort_metrics.estimated_hours,
+        "estimated_hours_with_souschef": effort_metrics.estimated_hours_with_souschef,
+        "time_saved_hours": effort_metrics.time_saved * 8,
+        "efficiency_gain_percent": effort_metrics.efficiency_gain_percent,
         "recommendations": recommendations,
         "status": ANALYSIS_STATUS_ANALYSED,
     }
