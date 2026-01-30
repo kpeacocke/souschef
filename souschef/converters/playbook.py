@@ -269,23 +269,74 @@ def _initialize_ai_client(
         return f"{ERROR_PREFIX} Unsupported AI provider: {ai_provider}"
 
 
-def _call_ai_api(
+def _call_ai_api(  # noqa: C901  # Complexity inherent to multi-provider AI support
     client: Any,
     ai_provider: str,
     prompt: str,
     model: str,
     temperature: float,
     max_tokens: int,
+    response_format: dict[str, Any] | None = None,
 ) -> str:
-    """Call the appropriate AI API based on provider."""
+    """
+    Call the appropriate AI API based on provider.
+
+    Args:
+        client: Initialized AI client.
+        ai_provider: AI provider name.
+        prompt: Prompt text.
+        model: Model identifier.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens in response.
+        response_format: Optional response format specification for structured
+            outputs. For OpenAI: {"type": "json_object"}. For Anthropic: Use
+            tool calling instead.
+
+    Returns:
+        AI-generated response text.
+
+    """
     if ai_provider.lower() == "anthropic":
-        response = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return str(response.content[0].text)
+        # Anthropic uses tool calling for structured outputs
+        if response_format and response_format.get("type") == "json_object":
+            # Use tool calling for structured JSON responses
+            response = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[{"role": "user", "content": prompt}],
+                tools=[
+                    {
+                        "name": "format_response",
+                        "description": "Format the response as structured JSON",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "response": {
+                                    "type": "string",
+                                    "description": "The formatted response",
+                                }
+                            },
+                            "required": ["response"],
+                        },
+                    }
+                ],
+            )
+            # Extract from tool use or fallback to text
+            for block in response.content:
+                if hasattr(block, "type") and block.type == "tool_use":
+                    return str(block.input.get("response", ""))
+            # Fallback to text content
+            return str(response.content[0].text)
+        else:
+            # Standard text response
+            response = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return str(response.content[0].text)
     elif ai_provider.lower() == "watson":
         response = client.generate_text(
             model_id=model,
@@ -311,6 +362,8 @@ def _call_ai_api(
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        if response_format:
+            payload["response_format"] = response_format
         response = requests.post(
             f"{client['base_url']}/v1/completions",
             headers=headers,
@@ -339,6 +392,8 @@ def _call_ai_api(
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        if response_format:
+            payload["response_format"] = response_format
         # GitHub Copilot uses OpenAI-compatible chat completions endpoint
         response = requests.post(
             f"{client['base_url']}/copilot/chat/completions",
@@ -354,12 +409,15 @@ def _call_ai_api(
                 f"{response.status_code} - {response.text}"
             )
     else:  # OpenAI
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        kwargs = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if response_format:
+            kwargs["response_format"] = response_format
+        response = client.chat.completions.create(**kwargs)
         return str(response.choices[0].message.content)
 
 

@@ -46,7 +46,7 @@ Fixes #[issue number]
 ### Files Modified
 - `souschef/server.py` - [description of changes]
 - `souschef/cli.py` - [description of changes]
-- `tests/test_*.py` - [description of test changes]
+- `tests/unit/test_*.py`, `tests/integration/test_*.py`, `tests/e2e/test_*.py` - [description of test changes]
 - `README.md` - [description of documentation changes]
 
 ## Testing

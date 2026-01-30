@@ -10,7 +10,9 @@ import souschef
 from souschef.cli import cli
 
 # Define the fixtures directory
-FIXTURES_DIR = Path(__file__).parent / "fixtures" / "sample_cookbook"
+FIXTURES_DIR = (
+    Path(__file__).parents[1] / "integration" / "fixtures" / "sample_cookbook"
+)
 
 
 @pytest.fixture

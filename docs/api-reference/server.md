@@ -108,9 +108,9 @@ Benefits:
 
 See the test suite for examples of testing MCP tools:
 
-- **Unit tests**: [tests/test_server.py](https://github.com/kpeacocke/souschef/blob/main/tests/test_server.py)
-- **Integration tests**: [tests/test_integration.py](https://github.com/kpeacocke/souschef/blob/main/tests/test_integration.py)
-- **MCP protocol tests**: [tests/test_mcp.py](https://github.com/kpeacocke/souschef/blob/main/tests/test_mcp.py)
+- **Unit tests**: [tests/unit/test_server.py](https://github.com/kpeacocke/souschef/blob/main/tests/unit/test_server.py)
+- **Integration tests**: [tests/integration/test_integration.py](https://github.com/kpeacocke/souschef/blob/main/tests/integration/test_integration.py)
+- **MCP protocol tests**: [tests/e2e/test_mcp.py](https://github.com/kpeacocke/souschef/blob/main/tests/e2e/test_mcp.py)
 
 ---
 

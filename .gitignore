@@ -113,7 +113,7 @@ site/
 !.env.example
 
 # Test artifacts
-tests/fixtures/*.tar.gz
-tests/fixtures/*.zip
-tests/fixtures/*.tar.bz2
-tests/fixtures/*.tar.xz
+tests/integration/fixtures/*.tar.gz
+tests/integration/fixtures/*.zip
+tests/integration/fixtures/*.tar.bz2
+tests/integration/fixtures/*.tar.xz

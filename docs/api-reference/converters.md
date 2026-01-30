@@ -257,9 +257,9 @@ def validate_conversion_logic(chef_resource: dict, ansible_task: dict) -> bool:
 
 See test suite for converter testing:
 
-- **Unit tests**: [tests/test_server.py](https://github.com/kpeacocke/souschef/blob/main/tests/test_server.py)
-- **Integration tests**: [tests/test_integration.py](https://github.com/kpeacocke/souschef/blob/main/tests/test_integration.py)
-- **Accuracy tests**: [tests/test_integration_accuracy.py](https://github.com/kpeacocke/souschef/blob/main/tests/test_integration_accuracy.py)
+- **Unit tests**: [tests/unit/test_server.py](https://github.com/kpeacocke/souschef/blob/main/tests/unit/test_server.py)
+- **Integration tests**: [tests/integration/test_integration.py](https://github.com/kpeacocke/souschef/blob/main/tests/integration/test_integration.py)
+- **Accuracy tests**: [tests/integration/test_integration_accuracy.py](https://github.com/kpeacocke/souschef/blob/main/tests/integration/test_integration_accuracy.py)
 
 ---
 

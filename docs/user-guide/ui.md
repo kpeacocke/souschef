@@ -63,7 +63,7 @@ Upload and analyse Chef cookbooks with comprehensive metadata extraction and eff
 - **Archive Upload**: Secure handling of ZIP and TAR archives with size limits and security validation
 - **Directory Scanning**: Interactive exploration of cookbook structures
 - **Metadata Parsing**: Automatic extraction of cookbook dependencies, versions, and attributes
-- **Dual Effort Estimation**: 
+- **Dual Effort Estimation**:
   - **Manual Migration**: Estimated effort without AI assistance
   - **AI-Assisted with SousChef**: 50% time reduction through automated boilerplate conversion
   - **Time Savings**: Clearly displayed comparison showing hours and percentage saved
@@ -228,7 +228,7 @@ poetry install
 poetry run streamlit run souschef/ui/app.py --server.headless true --server.port 8501
 
 # Run tests
-poetry run pytest tests/test_ui/
+poetry run pytest tests/unit/test_ui.py
 ```
 
 ### UI Architecture

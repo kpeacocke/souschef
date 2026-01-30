@@ -147,9 +147,9 @@ def parse_cookbook_parallel(cookbook_path: str) -> dict:
 
 See test suite for parser testing examples:
 
-- **Unit tests**: [tests/test_server.py](https://github.com/kpeacocke/souschef/blob/main/tests/test_server.py)
-- **Integration tests**: [tests/test_integration.py](https://github.com/kpeacocke/souschef/blob/main/tests/test_integration.py)
-- **Property-based tests**: [tests/test_property_based.py](https://github.com/kpeacocke/souschef/blob/main/tests/test_property_based.py)
+- **Unit tests**: [tests/unit/test_server.py](https://github.com/kpeacocke/souschef/blob/main/tests/unit/test_server.py)
+- **Integration tests**: [tests/integration/test_integration.py](https://github.com/kpeacocke/souschef/blob/main/tests/integration/test_integration.py)
+- **Property-based tests**: [tests/unit/test_property_based.py](https://github.com/kpeacocke/souschef/blob/main/tests/unit/test_property_based.py)
 
 ---
 
