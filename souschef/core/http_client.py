@@ -6,6 +6,7 @@ error handling, authentication, and retry logic.
 """
 
 from typing import TYPE_CHECKING, Any, Literal
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from requests.adapters import HTTPAdapter
@@ -131,6 +132,9 @@ class HTTPClient:
             backoff_factor: Exponential backoff multiplier for retries.
             user_agent: User-Agent header value.
 
+        Raises:
+            SousChefError: If base_url does not use HTTPS.
+
         """
         if not REQUESTS_AVAILABLE or Retry is None or HTTPAdapter is None:
             raise SousChefError(
@@ -141,6 +145,15 @@ class HTTPClient:
         assert requests is not None
 
         self.base_url = base_url.rstrip("/")
+
+        # Validate HTTPS usage for security
+        parsed_url = urlparse(self.base_url)
+        if parsed_url.scheme != "https":
+            raise SousChefError(
+                "Insecure HTTP connection not allowed",
+                "Use HTTPS for secure communication with the API.",
+            )
+
         self.api_key = api_key
         self.timeout = timeout
         self.user_agent = user_agent
@@ -156,8 +169,9 @@ class HTTPClient:
             allowed_methods=["GET", "POST", "PUT", "DELETE"],
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
+
+        https_scheme = "https://"
+        self.session.mount(https_scheme, adapter)
 
     def _get_headers(
         self,

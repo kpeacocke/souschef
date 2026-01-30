@@ -39,6 +39,15 @@ jobs:
         fetch-depth: 0
         fetch-tags: true
 
+    - name: Verify code is from main branch
+      run: |
+        BRANCH="${{ github.event.workflow_run.head_branch }}"
+        if [[ -z "$BRANCH" ]] || [[ "$BRANCH" != "main" ]]; then
+          echo "ERROR: Release workflow can only run on main branch, got: '$BRANCH'"
+          exit 1
+        fi
+        echo "Verified: code is from main branch"
+
     - name: Ensure CodeQL scan succeeded for this commit (best-effort)
       if: github.event_name == 'workflow_run'
       env:

@@ -9042,9 +9042,9 @@ end""",
             (
                 (
                     'mount "/mnt/shared" do\n'
-                    '  device "//server/share"\n'
-                    '  fstype "cifs"\n'
-                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'  # NOSONAR - Chef recipe test fixture, not real credentials
+                    '  device "nfs-server:/export/path"\n'
+                    '  fstype "nfs"\n'
+                    '  options "rw,bg,soft,intr"\n'
                     "  dump 0\n"
                     "  pass 0\n"
                     "  action [:mount, :enable]\n"
