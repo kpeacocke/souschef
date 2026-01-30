@@ -120,7 +120,7 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
    # Run SousChef in an isolated directory
    mkdir ~/souschef-workspace
    cd ~/souschef-workspace
-   
+
    # Set explicit workspace root
    export SOUSCHEF_WORKSPACE=$(pwd)
    ```
@@ -134,7 +134,7 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
    ```bash
    # Use environment variables
    export ANTHROPIC_API_KEY="your-key"
-   
+
    # Or use .env file (never commit!)
    echo "ANTHROPIC_API_KEY=your-key" > .env
    chmod 600 .env
@@ -157,13 +157,13 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 - name: Install SousChef
   run: |
     pip install mcp-souschef[all]
-    
+
 - name: Run conversion
   env:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
   run: |
     souschef convert --input cookbooks/ --output playbooks/
-    
+
 - name: Security scan output
   run: |
     ansible-lint playbooks/
@@ -209,7 +209,7 @@ def test_path_validation_prevents_traversal():
     """Ensure path validation blocks directory traversal."""
     base = Path("/safe/workspace")
     attack_path = base / ".." / ".." / "etc" / "passwd"
-    
+
     with pytest.raises(ValueError, match="Path traversal"):
         _ensure_within_base_path(attack_path, base)
 ```
