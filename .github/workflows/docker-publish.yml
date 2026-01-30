@@ -9,6 +9,8 @@ on:
   workflow_run:
     workflows: ["Release"]
     types: [completed]
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       tag_name:
@@ -26,7 +28,7 @@ env:
 jobs:
   validate:
     if: |
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
       || (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 5
