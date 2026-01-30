@@ -43,7 +43,7 @@ jobs:
       run: |
         BRANCH="${{ github.event.workflow_run.head_branch }}"
         if [[ -z "$BRANCH" ]] || [[ "$BRANCH" != "main" ]]; then
-          echo "ERROR: Release workflow can only run on main branch, got: '$BRANCH'"
+          printf 'ERROR: Release workflow can only run on main branch, got: %s\n' "$BRANCH" >&2
           exit 1
         fi
         echo "Verified: code is from main branch"
