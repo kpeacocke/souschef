@@ -1,16 +1,10 @@
 name: Docker Publish
 
-# Publish Docker image only when a GitHub release is actually created.
-# Triggered after Release workflow completes, but validates that a release exists before building.
-# This prevents building on every main push (e.g., dependency updates, merges) where no release occurs.
-# Only builds if the GitHub release is recent (within last hour) to avoid re-building old releases.
-# Can also be manually triggered for testing (bypasses release check).
+# Build and publish Docker image when a GitHub release is created.
+# This provides a reliable signal that the release (and PyPI publish) is complete.
 on:
-  workflow_run:
-    workflows: ["Release"]
-    types: [completed]
-    branches:
-      - main
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
@@ -18,7 +12,7 @@ on:
         required: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -28,7 +22,7 @@ env:
 jobs:
   validate:
     if: |
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'release')
       || (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -37,13 +31,11 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
-      should_build: ${{ steps.check.outputs.should_build }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -55,19 +47,23 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          # Use manual tag if provided
+          # Use provided tag if manual dispatch
           if [ -n "${{ github.event.inputs.tag_name }}" ]; then
             TAG="${{ github.event.inputs.tag_name }}"
             VERSION="${TAG#v}"
+          # Use release tag from release event
+          elif [ -n "${{ github.event.release.tag_name }}" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+            VERSION="${TAG#v}"
+          # Fallback to pyproject.toml
           else
-            # Extract version from pyproject.toml
             VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['tool']['poetry']['version'])")
             TAG="v${VERSION}"
           fi
 
           # Validate version format
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERROR: Invalid version format: $VERSION"
+            printf 'ERROR: Invalid version format: %s\n' "$VERSION" >&2
             exit 1
           fi
 
@@ -75,73 +71,17 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}, Tag: ${TAG}"
 
-      - name: Check if GitHub release exists for this version
-        id: check
+      - name: Verify release exists
+        if: github.event_name == 'release'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if [ -z "$VERSION" ]; then
-            echo "ERROR: Version is empty"
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
-          # Manual dispatch bypasses release check
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-            echo "Manual dispatch: building Docker image for version $VERSION"
-            exit 0
-          fi
-
-          # Wait up to 30 seconds for release to be created (handles workflow race condition)
-          MAX_ATTEMPTS=6
-          ATTEMPT=0
-          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-            if gh release view "$TAG" &>/dev/null; then
-              echo "Release $TAG found"
-              break
-            fi
-            ATTEMPT=$((ATTEMPT + 1))
-            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-              echo "Release $TAG not found yet, waiting... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
-              sleep 5
-            fi
-          done
-
-          # Check if the release exists on GitHub
-          if gh release view "$TAG" &>/dev/null; then
-            # Release exists, check if it was created recently (within last hour)
-            # This prevents re-building on every main push
-            RELEASE_CREATED=$(gh release view "$TAG" --json createdAt --jq '.createdAt')
-            if [ -z "$RELEASE_CREATED" ]; then
-              echo "ERROR: Could not retrieve release creation date"
-              echo "should_build=false" >> "$GITHUB_OUTPUT"
-              exit 1
-            fi
-
-            CREATED_TIMESTAMP=$(date -d "$RELEASE_CREATED" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$RELEASE_CREATED" +%s 2>/dev/null || echo "0")
-            CURRENT_TIMESTAMP=$(date +%s)
-            AGE_SECONDS=$((CURRENT_TIMESTAMP - CREATED_TIMESTAMP))
-
-            # Only build if release is less than 1 hour old (3600 seconds)
-            if [ "$AGE_SECONDS" -lt 3600 ]; then
-              echo "should_build=true" >> "$GITHUB_OUTPUT"
-              echo "Release $TAG exists and was created recently (${AGE_SECONDS}s ago). Proceeding with Docker build."
-            else
-              echo "should_build=false" >> "$GITHUB_OUTPUT"
-              echo "Release $TAG exists but is old (${AGE_SECONDS}s ago). Skipping Docker build to avoid duplicate work."
-            fi
-          else
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
-            echo "Release $TAG does not exist after waiting. Skipping Docker build - release may not have been created by Release workflow."
-          fi
+          echo "Release $TAG published, proceeding with Docker build"
 
   build-and-push:
     runs-on: ubuntu-latest
     needs: validate
-    if: needs.validate.result == 'success' && needs.validate.outputs.should_build == 'true'
+    if: needs.validate.result == 'success'
     timeout-minutes: 30
     permissions:
       contents: read
@@ -157,7 +97,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -348,7 +287,7 @@ jobs:
             body += "**Security:** Vulnerability scan results available in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)\n\n";
             body += "**Related Release:** " + tag + "\n\n";
             body += "## Build Information\n";
-            body += "- **Release Workflow:** ${{ github.event.workflow_run.id || 'manual dispatch' }}\n";
+            body += "- **Release Event:** ${{ github.event.release.id || 'manual dispatch' }}\n";
             body += "- **Docker Workflow:** ${{ github.run_id }}";
 
             github.rest.issues.create({
