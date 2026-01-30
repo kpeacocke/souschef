@@ -20,7 +20,7 @@ jobs:
   # Skip tests - they already passed in CI before merge to main and in Main Branch Validation
   # This workflow focuses on building and publishing the release
   validate:
-    if: ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    if: ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
          || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -38,6 +38,15 @@ jobs:
       with:
         fetch-depth: 0
         fetch-tags: true
+
+    - name: Verify code is from main branch
+      run: |
+        BRANCH="${{ github.event.workflow_run.head_branch }}"
+        if [[ -z "$BRANCH" ]] || [[ "$BRANCH" != "main" ]]; then
+          printf 'ERROR: Release workflow can only run on main branch, got: %s\n' "$BRANCH" >&2
+          exit 1
+        fi
+        echo "Verified: code is from main branch"
 
     - name: Ensure CodeQL scan succeeded for this commit (best-effort)
       if: github.event_name == 'workflow_run'
