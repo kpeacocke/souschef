@@ -342,7 +342,3 @@ def log_operation(operation_name: str):
         return wrapper
 
     return decorator
-
-
-# Initialize default logging configuration
-configure_logging()
