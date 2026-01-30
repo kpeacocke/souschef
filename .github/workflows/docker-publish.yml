@@ -93,11 +93,32 @@ jobs:
             exit 0
           fi
 
+          # Wait up to 30 seconds for release to be created (handles workflow race condition)
+          MAX_ATTEMPTS=6
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if gh release view "$TAG" &>/dev/null; then
+              echo "Release $TAG found"
+              break
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              echo "Release $TAG not found yet, waiting... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+              sleep 5
+            fi
+          done
+
           # Check if the release exists on GitHub
           if gh release view "$TAG" &>/dev/null; then
             # Release exists, check if it was created recently (within last hour)
             # This prevents re-building on every main push
             RELEASE_CREATED=$(gh release view "$TAG" --json createdAt --jq '.createdAt')
+            if [ -z "$RELEASE_CREATED" ]; then
+              echo "ERROR: Could not retrieve release creation date"
+              echo "should_build=false" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            
             CREATED_TIMESTAMP=$(date -d "$RELEASE_CREATED" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$RELEASE_CREATED" +%s 2>/dev/null || echo "0")
             CURRENT_TIMESTAMP=$(date +%s)
             AGE_SECONDS=$((CURRENT_TIMESTAMP - CREATED_TIMESTAMP))
@@ -112,7 +133,7 @@ jobs:
             fi
           else
             echo "should_build=false" >> "$GITHUB_OUTPUT"
-            echo "Release $TAG does not exist. Skipping Docker build - this was likely a non-release push to main."
+            echo "Release $TAG does not exist after waiting. Skipping Docker build - release may not have been created by Release workflow."
           fi
 
   build-and-push:
