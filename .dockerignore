@@ -67,7 +67,7 @@ docs/_build/
 # Test artifacts
 .mutmut-cache/
 tests/__snapshots__/
-tests/fixtures/**/build/
+tests/integration/fixtures/**/build/
 
 # CI/CD
 .github/

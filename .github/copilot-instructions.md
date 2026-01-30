@@ -121,26 +121,26 @@ SousChef uses a modern Python toolchain:
 #### Multiple Test Types
 The project maintains three types of tests - ensure all are updated when adding features:
 
-1. **Unit Tests** (`tests/test_server.py`)
+1. **Unit Tests** (`tests/unit/test_server.py`)
    - Mock-based tests for individual functions
    - Test error handling and edge cases
    - Fast execution, isolated from filesystem
    - Use `unittest.mock` to patch dependencies
 
-2. **Integration Tests** (`tests/test_integration.py`)
+2. **Integration Tests** (`tests/integration/test_integration.py`)
    - Real file operations with test fixtures
-   - Test with actual Chef cookbook files from `tests/fixtures/`
+- Test with actual Chef cookbook files from `tests/integration/fixtures/`
    - Use parameterized tests (`@pytest.mark.parametrize`) for multiple scenarios
    - Include performance benchmarks for parsing functions
 
-3. **Property-Based Tests** (`tests/test_property_based.py`)
+3. **Property-Based Tests** (`tests/unit/test_property_based.py`)
    - Use Hypothesis for fuzz testing
    - Generate random inputs to find edge cases
    - Ensure functions handle any input gracefully
    - Limit to 50 examples per test with `@settings(max_examples=50)`
 
 #### Test Fixtures
-- **Location**: `tests/fixtures/sample_cookbook/`
+- **Location**: `tests/integration/fixtures/sample_cookbook/`
 - **Contents**: Real Chef cookbook structure (metadata.rb, recipes/, attributes/)
 - **Maintenance**: Update fixtures when adding new parsing capabilities
 - **Adding fixtures**: Create realistic Chef content that exercises new features

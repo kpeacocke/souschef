@@ -104,6 +104,7 @@ from souschef.core.constants import (  # noqa: F401, codeql[py/unused-import]
 
 # Import core utilities
 from souschef.core.errors import format_error_with_context
+from souschef.core.logging import configure_logging
 from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     _ensure_within_base_path,
     _normalize_path,
@@ -3734,6 +3735,7 @@ def main() -> None:
 
     This is the main entry point for running the server.
     """
+    configure_logging()
     mcp.run()
 
 

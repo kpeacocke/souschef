@@ -27,7 +27,7 @@ from souschef.ci.jenkins_pipeline import (
 )
 
 # Test fixtures
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parents[1] / "integration" / "fixtures"
 SAMPLE_COOKBOOK = FIXTURES_DIR / "sample_cookbook"
 
 

@@ -13,6 +13,7 @@ import click
 
 from souschef import __version__
 from souschef.converters.playbook import generate_playbook_from_recipe
+from souschef.core.logging import configure_logging
 from souschef.core.path_utils import _normalize_path
 from souschef.profiling import (
     generate_cookbook_performance_report,
@@ -1250,6 +1251,7 @@ def ui(port: int) -> None:
 
 def main() -> NoReturn:
     """Run the CLI."""
+    configure_logging()
     cli()
     sys.exit(0)
 

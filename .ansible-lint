@@ -8,7 +8,7 @@ exclude_paths:
   - .git/
   - .venv/
   - htmlcov/
-  - tests/fixtures/  # Chef fixtures, not Ansible
+  - tests/integration/fixtures/  # Chef fixtures, not Ansible
 
 # Skip specific rules if needed
 skip_list:

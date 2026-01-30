@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.14"
+  PYTHON_VERSION: "3.13"
 
 jobs:
   test:
@@ -31,9 +31,9 @@ jobs:
     permissions:
       contents: read
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        python-version: ["3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
     - name: Checkout repository
@@ -60,7 +60,7 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Lint with ruff
       run: |
@@ -77,7 +77,7 @@ jobs:
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
-      if: matrix.python-version == '3.14'
+      if: matrix.python-version == '3.13'
       with:
         files: ./coverage.xml
         flags: unittests
@@ -86,11 +86,48 @@ jobs:
 
     - name: Upload coverage for SonarCloud
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-      if: matrix.python-version == '3.14'
+      if: matrix.python-version == '3.13'
       with:
         name: coverage-report
         path: coverage.xml
         retention-days: 1
+
+  security-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a # v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Cache Poetry dependencies
+      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5
+      with:
+        path: .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
+
+    - name: Install dependencies
+      run: poetry install --no-interaction --all-extras
+
+    - name: Run security tests
+      run: |
+        poetry run pytest tests/unit/test_security.py -v --tb=short
 
   mutation-test:
     runs-on: ubuntu-latest
@@ -125,12 +162,12 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Run mutation testing on core modules
       run: |
         # Run mutation testing on core validation module with limited scope
-        MUTMUT=1 timeout 480 poetry run mutmut run --paths-to-mutate souschef/core/validation.py --test-command "poetry run pytest tests/test_server.py::TestValidationFramework -x --tb=line" --runner pytest || true
+        MUTMUT=1 timeout 480 poetry run mutmut run --paths-to-mutate souschef/core/validation.py --test-command "poetry run pytest tests/unit/test_server.py::TestValidationFramework -x --tb=line" --runner pytest || true
 
         # Show results
         poetry run mutmut results | head -20
@@ -164,7 +201,7 @@ jobs:
         virtualenvs-in-project: true
 
     - name: Install Python dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Set souschef path for Terraform tests
       run: |
@@ -215,7 +252,7 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Test CLI functionality
       run: |
@@ -223,17 +260,17 @@ jobs:
         poetry run souschef --help
 
         # Test with fixture files
-        poetry run souschef ls tests/fixtures/sample_cookbook
-        poetry run souschef structure tests/fixtures/sample_cookbook
-        poetry run souschef metadata tests/fixtures/sample_cookbook/metadata.rb
+        poetry run souschef ls tests/integration/fixtures/sample_cookbook
+        poetry run souschef structure tests/integration/fixtures/sample_cookbook
+        poetry run souschef metadata tests/integration/fixtures/sample_cookbook/metadata.rb
 
         # Test recipe parsing
-        if [ -f tests/fixtures/sample_cookbook/recipes/default.rb ]; then
-          poetry run souschef recipe tests/fixtures/sample_cookbook/recipes/default.rb
+        if [ -f tests/integration/fixtures/sample_cookbook/recipes/default.rb ]; then
+          poetry run souschef recipe tests/integration/fixtures/sample_cookbook/recipes/default.rb
         fi
 
         # Test template parsing
-        TEMPLATE_FILE=$(find tests/fixtures/sample_cookbook/templates/default -name '*.erb' -type f | head -n 1)
+        TEMPLATE_FILE=$(find tests/integration/fixtures/sample_cookbook/templates/default -name '*.erb' -type f | head -n 1)
         if [ -n "$TEMPLATE_FILE" ]; then
           poetry run souschef template "$TEMPLATE_FILE"
         fi
@@ -271,14 +308,12 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Run security checks
       run: |
         # Check for known vulnerabilities in dependencies
-        # Use --skip-editable to skip local editable packages (mcp-souschef)
-        # TODO: Update protobuf to patch version when available (CVE-2026-0994)
-        poetry run pip-audit --skip-editable || echo "Vulnerabilities detected - review required"
+        poetry run pip-audit || echo "::warning::Vulnerabilities detected - review required"
 
     - name: Check for secrets
       uses: trufflesecurity/trufflehog@50aa4695becccb04c958215388cab34a75e0fd31 # main
@@ -339,7 +374,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [test, test-terraform-provider, test-cli, security, ansible-lint]
+    needs: [test, security-tests, test-terraform-provider, test-cli, security, ansible-lint]
     permissions:
       contents: read
 
@@ -367,7 +402,7 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Build package
       run: poetry build

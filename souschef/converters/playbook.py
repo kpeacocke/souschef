@@ -44,9 +44,9 @@ from souschef.parsers.recipe import parse_recipe
 
 # Optional AI provider imports
 try:
-    import requests  # type: ignore[import-untyped]
+    import requests
 except ImportError:
-    requests = None
+    requests = None  # type: ignore[assignment]
 
 try:
     from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]
@@ -269,16 +269,47 @@ def _initialize_ai_client(
         return f"{ERROR_PREFIX} Unsupported AI provider: {ai_provider}"
 
 
-def _call_ai_api(
+def _call_anthropic_api(
     client: Any,
-    ai_provider: str,
     prompt: str,
     model: str,
     temperature: float,
     max_tokens: int,
+    response_format: dict[str, Any] | None = None,
 ) -> str:
-    """Call the appropriate AI API based on provider."""
-    if ai_provider.lower() == "anthropic":
+    """Call Anthropic API with optional structured output via tool calling."""
+    if response_format and response_format.get("type") == "json_object":
+        # Use tool calling for structured JSON responses
+        response = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            messages=[{"role": "user", "content": prompt}],
+            tools=[
+                {
+                    "name": "format_response",
+                    "description": "Format the response as structured JSON",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "response": {
+                                "type": "string",
+                                "description": "The formatted response",
+                            }
+                        },
+                        "required": ["response"],
+                    },
+                }
+            ],
+        )
+        # Extract from tool use or fallback to text
+        for block in response.content:
+            if hasattr(block, "type") and block.type == "tool_use":
+                return str(block.input.get("response", ""))
+        # Fallback to text content
+        return str(response.content[0].text)
+    else:
+        # Standard text response
         response = client.messages.create(
             model=model,
             max_tokens=max_tokens,
@@ -286,81 +317,179 @@ def _call_ai_api(
             messages=[{"role": "user", "content": prompt}],
         )
         return str(response.content[0].text)
-    elif ai_provider.lower() == "watson":
-        response = client.generate_text(
-            model_id=model,
-            input=prompt,
-            parameters={
-                "max_new_tokens": max_tokens,
-                "temperature": temperature,
-                "min_new_tokens": 1,
-            },
-        )
-        return str(response["results"][0]["generated_text"])
-    elif ai_provider.lower() == "lightspeed":
-        if requests is None:
-            return f"{ERROR_PREFIX} requests library not available"
 
-        headers = {
-            "Authorization": f"Bearer {client['api_key']}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-        response = requests.post(
-            f"{client['base_url']}/v1/completions",
-            headers=headers,
-            json=payload,
-            timeout=60,
-        )
-        if response.status_code == 200:
-            return str(response.json()["choices"][0]["text"])
-        else:
-            return (
-                f"{ERROR_PREFIX} Red Hat Lightspeed API error: "
-                f"{response.status_code} - {response.text}"
-            )
-    elif ai_provider.lower() == "github_copilot":
-        if requests is None:
-            return f"{ERROR_PREFIX} requests library not available"
 
-        headers = {
-            "Authorization": f"Bearer {client['api_key']}",
-            "Content-Type": "application/json",
-            "User-Agent": "SousChef/1.0",
-        }
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
+def _call_watson_api(
+    client: Any,
+    prompt: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+) -> str:
+    """Call IBM Watsonx API."""
+    response = client.generate_text(
+        model_id=model,
+        input=prompt,
+        parameters={
+            "max_new_tokens": max_tokens,
             "temperature": temperature,
-        }
-        # GitHub Copilot uses OpenAI-compatible chat completions endpoint
-        response = requests.post(
-            f"{client['base_url']}/copilot/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=60,
+            "min_new_tokens": 1,
+        },
+    )
+    return str(response["results"][0]["generated_text"])
+
+
+def _call_lightspeed_api(
+    client: dict[str, str],
+    prompt: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    response_format: dict[str, Any] | None = None,
+) -> str:
+    """Call Red Hat Lightspeed API."""
+    if requests is None:
+        return f"{ERROR_PREFIX} requests library not available"
+
+    headers = {
+        "Authorization": f"Bearer {client['api_key']}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if response_format:
+        payload["response_format"] = response_format
+
+    response = requests.post(
+        f"{client['base_url']}/v1/completions",
+        headers=headers,
+        json=payload,
+        timeout=60,
+    )
+    if response.status_code == 200:
+        return str(response.json()["choices"][0]["text"])
+    else:
+        return (
+            f"{ERROR_PREFIX} Red Hat Lightspeed API error: "
+            f"{response.status_code} - {response.text}"
         )
-        if response.status_code == 200:
-            return str(response.json()["choices"][0]["message"]["content"])
-        else:
-            return (
-                f"{ERROR_PREFIX} GitHub Copilot API error: "
-                f"{response.status_code} - {response.text}"
-            )
+
+
+def _call_github_copilot_api(
+    client: dict[str, str],
+    prompt: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    response_format: dict[str, Any] | None = None,
+) -> str:
+    """Call GitHub Copilot API."""
+    if requests is None:
+        return f"{ERROR_PREFIX} requests library not available"
+
+    headers = {
+        "Authorization": f"Bearer {client['api_key']}",
+        "Content-Type": "application/json",
+        "User-Agent": "SousChef/1.0",
+    }
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if response_format:
+        payload["response_format"] = response_format
+
+    # GitHub Copilot uses OpenAI-compatible chat completions endpoint
+    response = requests.post(
+        f"{client['base_url']}/copilot/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=60,
+    )
+    if response.status_code == 200:
+        return str(response.json()["choices"][0]["message"]["content"])
+    else:
+        return (
+            f"{ERROR_PREFIX} GitHub Copilot API error: "
+            f"{response.status_code} - {response.text}"
+        )
+
+
+def _call_openai_api(
+    client: Any,
+    prompt: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    response_format: dict[str, Any] | None = None,
+) -> str:
+    """Call OpenAI API."""
+    kwargs = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if response_format:
+        kwargs["response_format"] = response_format
+
+    response = client.chat.completions.create(**kwargs)
+    return str(response.choices[0].message.content)
+
+
+def _call_ai_api(
+    client: Any,
+    ai_provider: str,
+    prompt: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    response_format: dict[str, Any] | None = None,
+) -> str:
+    """
+    Call the appropriate AI API based on provider.
+
+    Args:
+        client: Initialized AI client.
+        ai_provider: AI provider name.
+        prompt: Prompt text.
+        model: Model identifier.
+        temperature: Sampling temperature.
+        max_tokens: Maximum tokens in response.
+        response_format: Optional response format specification for structured
+            outputs. For OpenAI: {"type": "json_object"}. For Anthropic: Use
+            tool calling instead.
+
+    Returns:
+        AI-generated response text.
+
+    """
+    provider = ai_provider.lower()
+
+    if provider == "anthropic":
+        return _call_anthropic_api(
+            client, prompt, model, temperature, max_tokens, response_format
+        )
+    elif provider == "watson":
+        return _call_watson_api(client, prompt, model, temperature, max_tokens)
+    elif provider == "lightspeed":
+        return _call_lightspeed_api(
+            client, prompt, model, temperature, max_tokens, response_format
+        )
+    elif provider == "github_copilot":
+        return _call_github_copilot_api(
+            client, prompt, model, temperature, max_tokens, response_format
+        )
     else:  # OpenAI
-        response = client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
+        return _call_openai_api(
+            client, prompt, model, temperature, max_tokens, response_format
         )
-        return str(response.choices[0].message.content)
 
 
 def _create_ai_conversion_prompt(

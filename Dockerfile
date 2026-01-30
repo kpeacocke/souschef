@@ -42,10 +42,8 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     ca-certificates \
     curl \
     git \
-    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* && \
-
-# Create non-root user with consistent UID for container orchestration
-    groupadd -r app --gid=1001 && \
+    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r app --gid=1001 && \
     useradd -r -g app --uid=1001 --create-home --shell /sbin/nologin app && \
     mkdir -p /app && \
     chown -R app:app /app
@@ -67,7 +65,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files first (for better layer caching)
-COPY --chown=app:app pyproject.toml poetry.lock ./
+COPY pyproject.toml poetry.lock ./
 
 # Install Poetry with pinned version for reproducibility
 RUN pip install --no-cache-dir --require-hashes \
@@ -82,6 +80,7 @@ RUN poetry config virtualenvs.create false
 RUN poetry install \
     --only=main \
     --extras=ui \
+    --extras=ai \
     --no-dev \
     --no-interaction \
     --no-root && \
@@ -93,19 +92,26 @@ RUN poetry install \
 FROM base AS production
 
 # Copy installed Python packages from builder (more efficient than copying site-packages)
-COPY --from=builder --chown=app:app /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
-COPY --from=builder --chown=app:app /usr/local/bin /usr/local/bin
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code with proper ownership
-COPY --chown=app:app souschef/ ./souschef/
+# Copy application code (keep root-owned for security)
+COPY souschef/ ./souschef/
 
 # Copy Streamlit configuration
-COPY --chown=app:app .streamlit/ ./.streamlit/
+COPY .streamlit/ ./.streamlit/
 
-# Create application directories and set permissions
+# Create application directories with restricted permissions
 RUN mkdir -p /app/.streamlit && \
-    chmod -R 755 /app && \
-    chmod 700 /app/.streamlit
+    mkdir -p /app/.cache && \
+    mkdir -p /app/.tmp && \
+    chmod 755 /app && \
+    chmod 755 /app/souschef && \
+    chmod 755 /app/.streamlit && \
+    chmod 755 /app/.cache && \
+    chmod 755 /app/.tmp && \
+    find /app -type f -name '*.py' -exec chmod 644 {} \; && \
+    chown -R app:app /app/.streamlit /app/.cache /app/.tmp
 
 # Switch to non-root user for security
 USER app

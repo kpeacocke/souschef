@@ -101,6 +101,8 @@ from souschef.server import (
     validate_conversion,
 )
 
+FIXTURES_DIR = Path(__file__).parents[1] / "integration" / "fixtures"
+
 
 @contextlib.contextmanager
 def mock_inline_path_guards(exists_side_effect=None):
@@ -501,7 +503,7 @@ def test_convert_chef_deployment_to_ansible_strategy_success():
     from souschef.server import convert_chef_deployment_to_ansible_strategy
 
     # Use fixture cookbook path which has proper structure
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = convert_chef_deployment_to_ansible_strategy(cookbook_path)
@@ -3446,7 +3448,7 @@ class TestMCPToolsWithFixtures:
         """Test basic file operations with real fixtures."""
         from souschef.server import list_cookbook_structure, list_directory
 
-        fixtures_dir = Path(__file__).parent / "fixtures"
+        fixtures_dir = FIXTURES_DIR
         if fixtures_dir.exists():
             # Test with real fixture directory
             result = list_directory(str(fixtures_dir))
@@ -6784,7 +6786,7 @@ class TestCoverageBoosterFunctions:
         from souschef.server import list_cookbook_structure
 
         # Test with the actual test fixtures if they exist
-        fixtures_dir = Path(__file__).parent / "fixtures"
+        fixtures_dir = FIXTURES_DIR
         if fixtures_dir.exists():
             result = list_cookbook_structure(str(fixtures_dir))
             assert isinstance(result, str)
@@ -9040,9 +9042,9 @@ end""",
             (
                 (
                     'mount "/mnt/shared" do\n'
-                    '  device "//server/share"\n'
-                    '  fstype "cifs"\n'
-                    '  options "username=user,password=pass,uid=1000,gid=1000"\n'  # NOSONAR - Chef recipe test fixture, not real credentials
+                    '  device "nfs-server:/export/path"\n'
+                    '  fstype "nfs"\n'
+                    '  options "rw,bg,soft,intr"\n'
                     "  dump 0\n"
                     "  pass 0\n"
                     "  action [:mount, :enable]\n"
@@ -15360,7 +15362,7 @@ def test_generate_jenkinsfile_from_chef_success():
     """Test generate_jenkinsfile_from_chef MCP tool with valid cookbook."""
     from souschef.server import generate_jenkinsfile_from_chef
 
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_jenkinsfile_from_chef(
@@ -15380,7 +15382,7 @@ def test_generate_jenkinsfile_from_chef_scripted_type():
     """Test Jenkins scripted pipeline generation."""
     from souschef.server import generate_jenkinsfile_from_chef
 
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_jenkinsfile_from_chef(
@@ -15400,7 +15402,7 @@ def test_generate_jenkinsfile_from_chef_default_params():
     """Test Jenkinsfile generation with default parameters."""
     from souschef.server import generate_jenkinsfile_from_chef
 
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_jenkinsfile_from_chef(cookbook_path=cookbook_path)
@@ -15428,7 +15430,7 @@ def test_generate_jenkinsfile_from_chef_enable_parallel_variations():
     """Test enable_parallel parameter accepts different true/false values."""
     from souschef.server import generate_jenkinsfile_from_chef
 
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     # Test 'yes', 'true', '1'
@@ -15454,7 +15456,7 @@ def test_generate_gitlab_ci_from_chef_success():
     """Test generate_gitlab_ci_from_chef MCP tool with valid cookbook."""
     from souschef.server import generate_gitlab_ci_from_chef
 
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_gitlab_ci_from_chef(
@@ -15475,7 +15477,7 @@ def test_generate_gitlab_ci_from_chef_without_cache():
     """Test GitLab CI generation without caching."""
     from souschef.server import generate_gitlab_ci_from_chef
 
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_gitlab_ci_from_chef(
@@ -15494,7 +15496,7 @@ def test_generate_gitlab_ci_from_chef_without_artifacts():
     """Test GitLab CI generation without artifacts."""
     from souschef.server import generate_gitlab_ci_from_chef
 
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_gitlab_ci_from_chef(
@@ -15512,7 +15514,7 @@ def test_generate_gitlab_ci_from_chef_default_params():
     """Test GitLab CI generation with default parameters."""
     from souschef.server import generate_gitlab_ci_from_chef
 
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_gitlab_ci_from_chef(cookbook_path=cookbook_path)
@@ -15540,7 +15542,7 @@ def test_generate_gitlab_ci_from_chef_boolean_param_variations():
     """Test GitLab CI boolean parameters accept different formats."""
     from souschef.server import generate_gitlab_ci_from_chef
 
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     # Test variations of true
@@ -15568,7 +15570,7 @@ def test_generate_gitlab_ci_from_chef_boolean_param_variations():
 
 def test_generate_github_workflow_from_chef_success():
     """Test generate_github_workflow_from_chef with valid cookbook."""
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_github_workflow_from_chef(
@@ -15585,7 +15587,7 @@ def test_generate_github_workflow_from_chef_success():
 
 def test_generate_github_workflow_from_chef_without_cache():
     """Test generate_github_workflow_from_chef without caching."""
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_github_workflow_from_chef(
@@ -15601,7 +15603,7 @@ def test_generate_github_workflow_from_chef_without_cache():
 
 def test_generate_github_workflow_from_chef_without_artifacts():
     """Test generate_github_workflow_from_chef without artifacts."""
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_github_workflow_from_chef(
@@ -15617,7 +15619,7 @@ def test_generate_github_workflow_from_chef_without_artifacts():
 
 def test_generate_github_workflow_from_chef_default_params():
     """Test generate_github_workflow_from_chef with default parameters."""
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_github_workflow_from_chef(cookbook_path=cookbook_path)
@@ -15646,7 +15648,7 @@ def test_generate_github_workflow_from_chef_nonexistent_path():
 )
 def test_generate_github_workflow_from_chef_boolean_param_variations(cache, artifacts):
     """Test boolean parameter variations for GitHub workflow generation."""
-    fixtures_dir = Path(__file__).parent / "fixtures"
+    fixtures_dir = FIXTURES_DIR
     cookbook_path = str(fixtures_dir / "sample_cookbook")
 
     result = generate_github_workflow_from_chef(

@@ -198,7 +198,7 @@ class TestAISettings:
             "Anthropic", "test-key", "claude-3-5-sonnet-20241022", "", 0.7, 4000
         )
 
-        mock_mkdir.assert_called_once_with(exist_ok=True)
+        mock_mkdir.assert_called_once_with(mode=0o700, parents=True, exist_ok=True)
         mock_open.assert_called_once()
         mock_json_dump.assert_called_once()
 

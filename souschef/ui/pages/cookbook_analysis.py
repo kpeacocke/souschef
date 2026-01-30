@@ -522,6 +522,9 @@ def _extract_tar_securely(
             # Use 'data' filter to prevent extraction of special files and symlinks
             open_kwargs["filter"] = "data"
 
+        # Resource consumption controls (S5042): Pre-scan validates all members for
+        # size limits (MAX_ARCHIVE_SIZE, MAX_FILE_SIZE), file count (MAX_FILES),
+        # depth (MAX_DEPTH), and blocks malicious files before extraction.
         with tarfile.open(**open_kwargs) as tar_ref:
             members = tar_ref.getmembers()
             # Pre-validate all members before allowing extraction

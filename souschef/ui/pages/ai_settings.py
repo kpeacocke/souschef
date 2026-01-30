@@ -34,9 +34,9 @@ except ImportError:
     APIClient = None
 
 try:
-    import requests  # type: ignore[import-untyped]
+    import requests
 except ImportError:
-    requests = None
+    requests = None  # type: ignore[assignment]
 
 try:
     import openai
@@ -441,9 +441,9 @@ def save_ai_settings(
 ):
     """Save AI settings to configuration file."""
     try:
-        # Use /tmp/.souschef for container compatibility (tmpfs is writable)
-        config_dir = Path("/tmp/.souschef")
-        config_dir.mkdir(exist_ok=True)
+        # Use user-specific directory with secure permissions
+        config_dir = Path.home() / ".souschef"
+        config_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         config_file = config_dir / "ai_config.json"
 
         config = {
@@ -552,7 +552,7 @@ def _load_ai_settings_from_env() -> dict[str, str | float | int]:
 def _load_ai_settings_from_file() -> dict[str, Any]:
     """Load AI settings from configuration file."""
     try:
-        config_file = Path("/tmp/.souschef/ai_config.json")
+        config_file = Path.home() / ".souschef" / "ai_config.json"
         if config_file.exists():
             with config_file.open() as f:
                 result = json.load(f)
