@@ -55,6 +55,8 @@ mkdocs-git-revision-date-localized-plugin = "^1.2.0"
 networkx = "^3.2.0"
 matplotlib = "^3.8.0"
 types-networkx = "^3.6.1.20251220"
+types-requests = "^2.32.4.20260107"
+types-urllib3 = "^1.26.25.14"
 
 [tool.poetry.scripts]
 souschef = "souschef.cli:main"

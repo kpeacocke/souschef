@@ -34,9 +34,9 @@ except ImportError:
     APIClient = None
 
 try:
-    import requests  # type: ignore[import-untyped]
+    import requests
 except ImportError:
-    requests = None
+    requests = None  # type: ignore[assignment]
 
 try:
     import openai

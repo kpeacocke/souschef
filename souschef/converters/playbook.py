@@ -44,9 +44,9 @@ from souschef.parsers.recipe import parse_recipe
 
 # Optional AI provider imports
 try:
-    import requests  # type: ignore[import-untyped]
+    import requests
 except ImportError:
-    requests = None
+    requests = None  # type: ignore[assignment]
 
 try:
     from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]

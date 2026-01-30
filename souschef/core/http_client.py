@@ -5,9 +5,23 @@ Provides a unified interface for making HTTP requests with consistent
 error handling, authentication, and retry logic.
 """
 
-# mypy: disable-error-code="import-untyped,misc,assignment"
+from typing import TYPE_CHECKING, Any, Literal
 
-from typing import Any, Literal
+if TYPE_CHECKING:
+    from requests.adapters import HTTPAdapter
+    from requests.exceptions import (
+        ConnectionError as RequestsConnectionError,
+    )
+    from requests.exceptions import (
+        HTTPError as RequestsHTTPError,
+    )
+    from requests.exceptions import (
+        RequestException,
+    )
+    from requests.exceptions import (
+        Timeout as RequestsTimeout,
+    )
+    from urllib3.util.retry import Retry
 
 try:
     import requests
@@ -28,13 +42,14 @@ try:
 
     REQUESTS_AVAILABLE = True
 except ImportError:  # pragma: no cover
-    requests = None
-    HTTPAdapter = None
-    Retry = None
-    RequestsHTTPError = Exception
-    RequestsTimeout = Exception
-    RequestsConnectionError = Exception
-    RequestException = Exception
+    # Fallback when requests is not installed
+    requests = None  # type: ignore[assignment]
+    HTTPAdapter = None  # type: ignore[assignment,misc]
+    Retry = None  # type: ignore[assignment,misc]
+    RequestsHTTPError = Exception  # type: ignore[misc,assignment]
+    RequestsTimeout = Exception  # type: ignore[misc,assignment]
+    RequestsConnectionError = Exception  # type: ignore[misc,assignment]
+    RequestException = Exception  # type: ignore[misc,assignment]
     REQUESTS_AVAILABLE = False
 
 from souschef.core.errors import SousChefError
