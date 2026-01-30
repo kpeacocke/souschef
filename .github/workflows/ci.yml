@@ -60,7 +60,7 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Lint with ruff
       run: |
@@ -123,7 +123,7 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Run security tests
       run: |
@@ -162,7 +162,7 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Run mutation testing on core modules
       run: |
@@ -201,7 +201,7 @@ jobs:
         virtualenvs-in-project: true
 
     - name: Install Python dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Set souschef path for Terraform tests
       run: |
@@ -252,7 +252,7 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Test CLI functionality
       run: |
@@ -308,7 +308,7 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Run security checks
       run: |
@@ -402,7 +402,7 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Build package
       run: poetry build
