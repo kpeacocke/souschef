@@ -89,8 +89,13 @@ ignore = ["D100", "D104", "D105", "D107", "D203", "D212"]
 minversion = "6.0"
 addopts = "-ra -q --cov=souschef --cov-report=term-missing"
 testpaths = [
-    "tests",
+    "tests/unit",
+    "tests/integration",
+    "tests/e2e",
 ]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 
 [tool.coverage.run]
 source = ["souschef"]
