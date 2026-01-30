@@ -56,7 +56,7 @@ All benchmarks measured on: Linux, Python 3.13, single-threaded execution.
 **Key Insights:**
 - Nanosecond-level performance for basic conversions
 - Resource conversion highly parallelizable
-- Playbook generation is the most expensive operation (millisecondsrange)
+- Playbook generation is the most expensive operation (milliseconds range)
 
 ### Structure Analysis
 
