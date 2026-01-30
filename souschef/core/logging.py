@@ -125,7 +125,7 @@ class StructuredFormatter(logging.Formatter):
             } and not key.startswith("_"):
                 log_data[key] = value
 
-        return json.dumps(log_data)
+        return json.dumps(log_data, default=str)
 
     def _format_text(self, record: logging.LogRecord) -> str:
         """Format record as human-readable text."""
