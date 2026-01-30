@@ -42,10 +42,8 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     ca-certificates \
     curl \
     git \
-    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* && \
-
-# Create non-root user with consistent UID for container orchestration
-    groupadd -r app --gid=1001 && \
+    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r app --gid=1001 && \
     useradd -r -g app --uid=1001 --create-home --shell /sbin/nologin app && \
     mkdir -p /app && \
     chown -R app:app /app
@@ -82,6 +80,7 @@ RUN poetry config virtualenvs.create false
 RUN poetry install \
     --only=main \
     --extras=ui \
+    --extras=ai \
     --no-dev \
     --no-interaction \
     --no-root && \
