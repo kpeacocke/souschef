@@ -33,32 +33,72 @@ class EffortMetrics:
     - Base unit: person-days (with decimal precision)
     - Derived: hours, weeks with consistent conversion factors
     - Ranges: For display purposes, converting days to week ranges
+    - WITH/WITHOUT SousChef: Shows effort reduction with AI assistance
 
     Ensures all components (migration planning, dependency mapping,
     validation reports) use the same underlying numbers.
     """
 
     estimated_days: float
-    """Base unit: person-days (e.g., 2.5, 5.0, 10.0)"""
+    """Base unit: person-days WITHOUT SousChef assistance (manual migration)"""
+
+    @property
+    def estimated_days_with_souschef(self) -> float:
+        """
+        Effort WITH SousChef AI assistance.
+
+        Realistic reduction factors based on complexity:
+        - SousChef handles 60-70% of boilerplate conversion automatically
+        - Human still needed for validation, custom logic, testing
+        - Overall reduction: 40-50% of manual effort
+        """
+        return round(self.estimated_days * 0.5, 1)
+
+    @property
+    def time_saved(self) -> float:
+        """Time saved by using SousChef (in days)."""
+        return round(self.estimated_days - self.estimated_days_with_souschef, 1)
+
+    @property
+    def efficiency_gain_percent(self) -> int:
+        """Efficiency gain percentage from using SousChef."""
+        if self.estimated_days == 0:
+            return 0
+        return round((self.time_saved / self.estimated_days) * 100)
 
     @property
     def estimated_hours(self) -> float:
-        """Convert days to hours using standard 8-hour workday."""
+        """Convert days to hours using standard 8-hour workday (WITHOUT SousChef)."""
         return self.estimated_days * 8
 
     @property
+    def estimated_hours_with_souschef(self) -> float:
+        """Convert days to hours using standard 8-hour workday (WITH SousChef)."""
+        return self.estimated_days_with_souschef * 8
+
+    @property
     def estimated_weeks_low(self) -> int:
-        """Conservative estimate: assumes optimal parallelization."""
+        """Conservative estimate: assumes optimal parallelization (WITHOUT SousChef)."""
         return max(1, int(self.estimated_days / 7))
 
     @property
     def estimated_weeks_high(self) -> int:
-        """Realistic estimate: assumes sequential/limited parallelization."""
+        """Realistic estimate: sequential parallelization (WITHOUT SousChef)."""
         return max(1, int(self.estimated_days / 3.5))
 
     @property
+    def estimated_weeks_low_with_souschef(self) -> int:
+        """Conservative estimate: assumes optimal parallelization (WITH SousChef)."""
+        return max(1, int(self.estimated_days_with_souschef / 7))
+
+    @property
+    def estimated_weeks_high_with_souschef(self) -> int:
+        """Realistic estimate: sequential parallelization (WITH SousChef)."""
+        return max(1, int(self.estimated_days_with_souschef / 3.5))
+
+    @property
     def estimated_weeks_range(self) -> str:
-        """Human-readable week range (e.g., '2-4 weeks')."""
+        """Human-readable week range WITHOUT SousChef (e.g., '2-4 weeks')."""
         low = self.estimated_weeks_low
         high = self.estimated_weeks_high
         if low == high:
@@ -66,15 +106,42 @@ class EffortMetrics:
         return f"{low}-{high} weeks"
 
     @property
+    def estimated_weeks_range_with_souschef(self) -> str:
+        """Human-readable week range WITH SousChef (e.g., '1-2 weeks')."""
+        low = self.estimated_weeks_low_with_souschef
+        high = self.estimated_weeks_high_with_souschef
+        if low == high:
+            return f"{low} week{'s' if low != 1 else ''}"
+        return f"{low}-{high} weeks"
+
+    @property
     def estimated_days_formatted(self) -> str:
-        """Formatted days with appropriate precision."""
+        """Formatted days with appropriate precision (WITHOUT SousChef)."""
         if self.estimated_days == int(self.estimated_days):
             return f"{int(self.estimated_days)} days"
         return f"{self.estimated_days:.1f} days"
 
+    @property
+    def estimated_days_formatted_with_souschef(self) -> str:
+        """Formatted days with appropriate precision (WITH SousChef)."""
+        if self.estimated_days_with_souschef == int(self.estimated_days_with_souschef):
+            return f"{int(self.estimated_days_with_souschef)} days"
+        return f"{self.estimated_days_with_souschef:.1f} days"
+
     def __str__(self) -> str:
         """Return a string representation of effort metrics."""
         return f"{self.estimated_days_formatted} ({self.estimated_weeks_range})"
+
+    def get_comparison_summary(self) -> str:
+        """Format comparison of manual vs SousChef-assisted effort."""
+        return (
+            f"Without SousChef: {self.estimated_days_formatted} "
+            f"({self.estimated_weeks_range})\n"
+            f"With SousChef:    {self.estimated_days_formatted_with_souschef} "
+            f"({self.estimated_weeks_range_with_souschef})\n"
+            f"Time Saved:       {self.time_saved} days "
+            f"({self.efficiency_gain_percent}% faster)"
+        )
 
 
 class TeamRecommendation(NamedTuple):

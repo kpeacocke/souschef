@@ -1200,17 +1200,28 @@ def _assess_single_cookbook(cookbook_path: Path) -> dict:
 
 
 def _format_overall_metrics(metrics: dict) -> str:
-    """Format overall migration metrics."""
+    """Format overall migration metrics with manual and SousChef-assisted estimates."""
+    effort_metrics = EffortMetrics(metrics["estimated_effort_days"])
+
     return f"""• Total Cookbooks: {metrics["total_cookbooks"]}
 • Total Recipes: {metrics["total_recipes"]}
 • Total Resources: {metrics["total_resources"]}
 • Average Complexity: {metrics.get("avg_complexity", 0):.1f}/100
-• Estimated Total Effort: {metrics["estimated_effort_days"]:.1f} person-days
-• Estimated Duration: {EffortMetrics(metrics["estimated_effort_days"]).estimated_weeks_range}"""
+
+## Manual Migration Effort (Without SousChef):
+• Estimated Effort: {metrics["estimated_effort_days"]:.1f} person-days ({effort_metrics.estimated_hours:.0f} hours)
+• Estimated Duration: {effort_metrics.estimated_weeks_range}
+• Team Required: {max(2, int(metrics["estimated_effort_days"] / 15))} developers
+
+## AI-Assisted Migration (With SousChef):
+• Estimated Effort: {effort_metrics.estimated_days_with_souschef:.1f} person-days ({effort_metrics.estimated_hours_with_souschef:.0f} hours)
+• Estimated Duration: {effort_metrics.estimated_weeks_range_with_souschef}
+• Team Required: {max(1, int(effort_metrics.estimated_days_with_souschef / 15))} developers
+• **Time Saved: {effort_metrics.time_saved:.1f} days ({effort_metrics.efficiency_gain_percent}% faster)**"""
 
 
 def _format_cookbook_assessments(assessments: list) -> str:
-    """Format individual cookbook assessments."""
+    """Format individual cookbook assessments with manual and AI-assisted estimates."""
     if not assessments:
         return "No cookbooks assessed."
 
@@ -1226,13 +1237,14 @@ def _format_cookbook_assessments(assessments: list) -> str:
     formatted = []
     for assessment in assessments:
         priority_icon = _get_priority_icon(assessment["migration_priority"])
+        effort_metrics = EffortMetrics(assessment["estimated_effort_days"])
+
         formatted.append(f"""### {assessment["cookbook_name"]} {priority_icon}
 • Complexity Score: {assessment["complexity_score"]:.1f}/100
-• Estimated Effort: {assessment["estimated_effort_days"]} days
-• Recipes: {assessment["metrics"]["recipe_count"]}
-• Resources: {assessment["metrics"]["resource_count"]}
-• Custom Resources: {assessment["metrics"]["custom_resources"]}
-• Challenges: {len(assessment["challenges"])}""")
+• Recipes: {assessment["metrics"]["recipe_count"]} | Resources: {assessment["metrics"]["resource_count"]} | Custom Resources: {assessment["metrics"]["custom_resources"]}
+• Manual Effort: {assessment["estimated_effort_days"]:.1f} days ({effort_metrics.estimated_weeks_range})
+• With SousChef: {effort_metrics.estimated_days_with_souschef:.1f} days ({effort_metrics.estimated_weeks_range_with_souschef}) - Save {effort_metrics.time_saved:.1f} days
+• Migration Challenges: {len(assessment["challenges"])}""")
 
     return "\n\n".join(formatted)
 
@@ -1445,26 +1457,56 @@ def _assess_migration_risks(assessments: list, target_platform: str) -> str:
 
 
 def _estimate_resource_requirements(metrics: dict, target_platform: str) -> str:
-    """Estimate resource requirements for migration."""
+    """Estimate resource requirements for migration with and without SousChef."""
     total_effort = metrics["estimated_effort_days"]
+    effort_metrics = EffortMetrics(total_effort)
 
-    # Team size recommendations
+    # Manual migration requirements
     if total_effort < 20:
-        team_size = "1 developer + 1 reviewer"
-        timeline = "4-6 weeks"
+        manual_team = "1 developer + 1 reviewer"
+        manual_timeline = "4-6 weeks"
     elif total_effort < 50:
-        team_size = "2 developers + 1 senior reviewer"
-        timeline = "6-10 weeks"
+        manual_team = "2 developers + 1 senior reviewer"
+        manual_timeline = "6-10 weeks"
     else:
-        team_size = "3-4 developers + 1 tech lead + 1 architect"
-        timeline = "10-16 weeks"
+        manual_team = "3-4 developers + 1 tech lead + 1 architect"
+        manual_timeline = "10-16 weeks"
 
-    return f"""• **Team Size:** {team_size}
-• **Estimated Timeline:** {timeline}
-• **Total Effort:** {total_effort:.1f} person-days
+    # SousChef-assisted requirements
+    souschef_effort = effort_metrics.estimated_days_with_souschef
+    if souschef_effort < 20:
+        souschef_team = "1 developer (with SousChef AI assistance)"
+        souschef_timeline = "2-3 weeks"
+    elif souschef_effort < 50:
+        souschef_team = "1-2 developers + 1 reviewer (with SousChef)"
+        souschef_timeline = "3-5 weeks"
+    else:
+        souschef_team = "2-3 developers + 1 tech lead (with SousChef)"
+        souschef_timeline = "5-8 weeks"
+
+    return f"""## Manual Migration (Without AI Assistance):
+• **Team Size:** {manual_team}
+• **Estimated Timeline:** {manual_timeline}
+• **Total Effort:** {total_effort:.1f} person-days ({effort_metrics.estimated_hours:.0f} hours)
 • **Infrastructure:** {target_platform.replace("_", "/").upper()} environment
-• **Testing:** Dedicated test environment recommended
-• **Training:** 2-3 days Ansible/AWX training for team"""
+• **Testing:** Dedicated test environment required
+• **Training:** 3-5 days Ansible/AWX training for team
+
+## AI-Assisted Migration (With SousChef):
+• **Team Size:** {souschef_team}
+• **Estimated Timeline:** {souschef_timeline}
+• **Total Effort:** {souschef_effort:.1f} person-days ({effort_metrics.estimated_hours_with_souschef:.0f} hours)
+• **Time Savings:** {effort_metrics.time_saved:.1f} days ({effort_metrics.efficiency_gain_percent}% reduction)
+• **Infrastructure:** {target_platform.replace("_", "/").upper()} environment
+• **Testing:** Automated validation + human review
+• **Training:** 1-2 days SousChef usage + Ansible basics
+
+**SousChef Benefits:**
+• Automated boilerplate conversion (60-70% of work)
+• Built-in best practices validation
+• Faster iteration cycles
+• Consistent output quality
+• Reduced human error"""
 
 
 def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
