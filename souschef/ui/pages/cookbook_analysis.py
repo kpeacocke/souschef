@@ -3435,8 +3435,18 @@ def _display_analysis_summary(results, total_cookbooks):
         st.metric("Successfully Analysed", f"{successful}/{total_cookbooks}")
 
     with col2:
-        total_hours = sum(r.get("estimated_hours", 0) for r in results)
-        st.metric("Total Estimated Hours", f"{total_hours:.1f}")
+        total_hours_manual = sum(r.get("estimated_hours", 0) for r in results)
+        total_hours_souschef = sum(
+            r.get("estimated_hours_with_souschef", r.get("estimated_hours", 0) * 0.5)
+            for r in results
+        )
+        time_saved = total_hours_manual - total_hours_souschef
+        st.metric(
+            "Manual Effort (hrs)",
+            f"{total_hours_manual:.1f}",
+            delta=f"With AI: {total_hours_souschef:.1f}h (save {time_saved:.1f}h)",
+            delta_color="inverse",
+        )
 
     with col3:
         complexities = [r.get("complexity", "Unknown") for r in results]
@@ -3522,7 +3532,7 @@ def _display_single_cookbook_details(result):
             st.metric("Dependencies", result.get("dependencies", 0))
 
         # Complexity and effort
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             complexity = result.get("complexity", "Unknown")
             if complexity == "High":
@@ -3532,8 +3542,20 @@ def _display_single_cookbook_details(result):
             else:
                 st.metric("Complexity", complexity, delta="Low")
         with col2:
-            hours = result.get("estimated_hours", 0)
-            st.metric("Estimated Hours", f"{hours:.1f}")
+            hours_manual = result.get("estimated_hours", 0)
+            st.metric("Manual Effort (hrs)", f"{hours_manual:.1f}")
+        with col3:
+            hours_souschef = result.get(
+                "estimated_hours_with_souschef", hours_manual * 0.5
+            )
+            time_saved = hours_manual - hours_souschef
+            savings_pct = int((time_saved / hours_manual) * 100)
+            st.metric(
+                "With SousChef (hrs)",
+                f"{hours_souschef:.1f}",
+                delta=f"Save {time_saved:.1f}h ({savings_pct}%)",
+                delta_color="inverse",
+            )
 
         # Path
         st.write(f"**Cookbook Path:** {result['path']}")
