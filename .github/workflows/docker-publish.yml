@@ -118,7 +118,7 @@ jobs:
               echo "should_build=false" >> "$GITHUB_OUTPUT"
               exit 1
             fi
-            
+
             CREATED_TIMESTAMP=$(date -d "$RELEASE_CREATED" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$RELEASE_CREATED" +%s 2>/dev/null || echo "0")
             CURRENT_TIMESTAMP=$(date +%s)
             AGE_SECONDS=$((CURRENT_TIMESTAMP - CREATED_TIMESTAMP))
