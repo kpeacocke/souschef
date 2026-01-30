@@ -1,8 +1,10 @@
 name: Docker Publish
 
-# Publish Docker image only during releases to maintain consistency with PyPI publishing.
-# Triggered after Release workflow completes (same as PyPI publishing pattern).
-# Can also be manually triggered for testing.
+# Publish Docker image only when a GitHub release is actually created.
+# Triggered after Release workflow completes, but validates that a release exists before building.
+# This prevents building on every main push (e.g., dependency updates, merges) where no release occurs.
+# Only builds if the GitHub release is recent (within last hour) to avoid re-building old releases.
+# Can also be manually triggered for testing (bypasses release check).
 on:
   workflow_run:
     workflows: ["Release"]
@@ -71,16 +73,47 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}, Tag: ${TAG}"
 
-      - name: Check if we should proceed with build
+      - name: Check if GitHub release exists for this version
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if [ -z "$VERSION" ]; then
             echo "ERROR: Version is empty"
             echo "should_build=false" >> "$GITHUB_OUTPUT"
             exit 1
           fi
-          echo "should_build=true" >> "$GITHUB_OUTPUT"
+
+          # Manual dispatch bypasses release check
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch: building Docker image for version $VERSION"
+            exit 0
+          fi
+
+          # Check if the release exists on GitHub
+          if gh release view "$TAG" &>/dev/null; then
+            # Release exists, check if it was created recently (within last hour)
+            # This prevents re-building on every main push
+            RELEASE_CREATED=$(gh release view "$TAG" --json createdAt --jq '.createdAt')
+            CREATED_TIMESTAMP=$(date -d "$RELEASE_CREATED" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$RELEASE_CREATED" +%s 2>/dev/null || echo "0")
+            CURRENT_TIMESTAMP=$(date +%s)
+            AGE_SECONDS=$((CURRENT_TIMESTAMP - CREATED_TIMESTAMP))
+
+            # Only build if release is less than 1 hour old (3600 seconds)
+            if [ "$AGE_SECONDS" -lt 3600 ]; then
+              echo "should_build=true" >> "$GITHUB_OUTPUT"
+              echo "Release $TAG exists and was created recently (${AGE_SECONDS}s ago). Proceeding with Docker build."
+            else
+              echo "should_build=false" >> "$GITHUB_OUTPUT"
+              echo "Release $TAG exists but is old (${AGE_SECONDS}s ago). Skipping Docker build to avoid duplicate work."
+            fi
+          else
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG does not exist. Skipping Docker build - this was likely a non-release push to main."
+          fi
 
   build-and-push:
     runs-on: ubuntu-latest
