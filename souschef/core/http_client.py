@@ -117,11 +117,13 @@ class HTTPClient:
             user_agent: User-Agent header value.
 
         """
-        if not REQUESTS_AVAILABLE:
+        if not REQUESTS_AVAILABLE or Retry is None or HTTPAdapter is None:
             raise SousChefError(
                 "requests library not available",
                 "Install with: pip install requests",
             )
+
+        assert requests is not None
 
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
