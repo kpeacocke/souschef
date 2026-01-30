@@ -26,7 +26,7 @@ SousChef implements comprehensive path containment validation to prevent directo
 
 **Test Coverage:**
 
-Comprehensive security tests in [tests/test_security.py](../tests/test_security.py):
+Comprehensive security tests in [tests/unit/test_security.py](../tests/unit/test_security.py):
 - 42+ security-focused tests
 - Path traversal attack scenarios
 - Symlink attack prevention
@@ -184,7 +184,7 @@ SousChef includes comprehensive security testing:
 
 ```bash
 # Run security tests
-poetry run pytest tests/test_security.py -v
+poetry run pytest tests/unit/test_security.py -v
 
 # Run all tests with coverage
 poetry run pytest --cov=souschef --cov-report=html

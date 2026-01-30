@@ -55,7 +55,7 @@ A new centralized metrics module provides a single source of truth for all effor
 
 ### Comprehensive Testing
 
-Created `tests/test_metrics.py` with 34 comprehensive tests covering:
+Created `tests/unit/test_metrics.py` with 34 comprehensive tests covering:
 
 - Unit tests for EffortMetrics properties
 - Conversion function tests
@@ -155,7 +155,7 @@ if not is_valid:
 
 - ✅ Created `souschef/core/metrics.py` with EffortMetrics class
 - ✅ Implemented 8 utility functions
-- ✅ Created comprehensive tests in `tests/test_metrics.py`
+- ✅ Created comprehensive tests in `tests/unit/test_metrics.py`
 - ✅ All tests passing (34/34)
 - ✅ Linting compliant
 - ✅ Type hints complete
@@ -206,7 +206,7 @@ if not is_valid:
 
 1. **Created**:
    - `/workspaces/souschef/souschef/core/metrics.py` (315 lines)
-   - `/workspaces/souschef/tests/test_metrics.py` (352 lines)
+   - `/workspaces/souschef/tests/unit/test_metrics.py` (352 lines)
 
 2. **Fixed**:
    - `/workspaces/souschef/souschef/converters/template.py` - Fixed syntax error
@@ -226,5 +226,5 @@ Each phase can be completed independently, allowing for incremental integration 
 ## References
 
 - Core Module: [souschef/core/metrics.py](souschef/core/metrics.py)
-- Tests: [tests/test_metrics.py](tests/test_metrics.py)
+- Tests: [tests/unit/test_metrics.py](tests/unit/test_metrics.py)
 - Implementation Guide: [docs/metrics-consistency.md](docs/metrics-consistency.md)

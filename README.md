@@ -1097,18 +1097,18 @@ poetry run pytest
 poetry run pytest --cov=souschef --cov-report=term-missing --cov-report=html
 
 # Run specific test suites
-poetry run pytest tests/test_server.py              # Core unit tests
-poetry run pytest tests/test_cli.py                 # CLI tests
-poetry run pytest tests/test_mcp.py                 # MCP protocol tests
-poetry run pytest tests/test_integration.py         # Integration tests
-poetry run pytest tests/test_integration_accuracy.py # Accuracy validation
-poetry run pytest tests/test_enhanced_guards.py     # Guard conversion tests
-poetry run pytest tests/test_error_paths.py         # Error handling
-poetry run pytest tests/test_error_recovery.py      # Error recovery
-poetry run pytest tests/test_real_world_fixtures.py # Real-world cookbooks
-poetry run pytest tests/test_property_based.py      # Hypothesis fuzz tests
-poetry run pytest tests/test_performance.py         # Performance benchmarks
-poetry run pytest tests/test_snapshots.py           # Snapshot regression tests
+poetry run pytest tests/unit/test_server.py              # Core unit tests
+poetry run pytest tests/unit/test_cli.py                 # CLI tests
+poetry run pytest tests/e2e/test_mcp.py                  # MCP protocol tests
+poetry run pytest tests/integration/test_integration.py         # Integration tests
+poetry run pytest tests/integration/test_integration_accuracy.py # Accuracy validation
+poetry run pytest tests/unit/test_enhanced_guards.py     # Guard conversion tests
+poetry run pytest tests/unit/test_error_paths.py         # Error handling
+poetry run pytest tests/unit/test_error_recovery.py      # Error recovery
+poetry run pytest tests/integration/test_real_world_fixtures.py # Real-world cookbooks
+poetry run pytest tests/unit/test_property_based.py      # Hypothesis fuzz tests
+poetry run pytest tests/integration/test_performance.py         # Performance benchmarks
+poetry run pytest tests/unit/test_snapshots.py           # Snapshot regression tests
 
 # Run with benchmarks
 poetry run pytest --benchmark-only
@@ -1148,7 +1148,7 @@ The project includes comprehensive test coverage across multiple dimensions:
    - **Snapshots** (`test_snapshots.py`): Regression testing for output stability
 
 5. **Test Fixtures**
-   - Sample Chef cookbooks in `tests/fixtures/`
+  - Sample Chef cookbooks in `tests/integration/fixtures/`
    - Multiple cookbook types: apache2, docker, mysql, nodejs, legacy Chef 12, Habitat plans
    - Real-world metadata, recipes, attributes, and resources
    - Used across integration and accuracy testing

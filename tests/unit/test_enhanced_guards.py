@@ -12,7 +12,7 @@ from souschef.server import (
     parse_recipe,
 )
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parents[1] / "integration" / "fixtures"
 
 
 class TestGuardPatternExtraction:

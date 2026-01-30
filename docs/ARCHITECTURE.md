@@ -385,25 +385,25 @@ I'm adding a new feature. Where does it go?
 **"I need to parse Chef Berkshelf files"**
 1. Create `parsers/berkshelf.py`
 2. Implement `parse_berkshelf(file_path) -> dict`
-3. Add tests in `tests/test_server.py` (unit) and `tests/test_integration.py`
+3. Add tests in `tests/unit/test_server.py` (unit) and `tests/integration/test_integration.py`
 4. Export from `server.py` if it's an MCP tool
 
 **"I need to score complexity differently"**
 1. Update complexity function in `assessment.py`
 2. Or create `core/complexity_calculator.py` if it's reusable
-3. Update tests in `tests/test_server.py`
+3. Update tests in `tests/unit/test_server.py`
 4. Update documentation
 
 **"I need to support a new deployment strategy"**
 1. Add to `deployment.py`
 2. Implement strategy logic
-3. Add tests in `tests/test_integration.py`
+3. Add tests in `tests/integration/test_integration.py`
 4. Register MCP tool in `server.py` if user-facing
 
 **"I need a new CLI command"**
 1. Add command in `cli.py`
 2. Call existing function from appropriate module
-3. Add tests in `tests/test_server.py`
+3. Add tests in `tests/unit/test_server.py`
 
 ## Design Patterns
 
@@ -457,7 +457,7 @@ def assess_cookbook(path: str) -> dict:
     recipe_data = parse_recipe(path)  # Uses it here
     ...
 
-# Test in: tests/test_server.py
+# Test in: tests/unit/test_server.py
 def test_assess_cookbook():
     with patch("souschef.assessment.parse_recipe") as mock:
         # Patch where it's USED, not where it's defined
@@ -478,7 +478,7 @@ def _assess_complexity(path: str) -> str:
 # In souschef/server.py
 from souschef.assessment import _assess_complexity  # noqa: F401
 
-# In tests/test_server.py
+# In tests/unit/test_server.py
 from souschef.server import _assess_complexity
 ```
 
@@ -495,8 +495,8 @@ from souschef.server import _assess_complexity
 - [ ] Created/updated file in appropriate location
 - [ ] Added type hints to all functions
 - [ ] Added docstrings (Google style)
-- [ ] Wrote unit tests in `tests/test_server.py`
-- [ ] Wrote integration tests in `tests/test_integration.py`
+- [ ] Wrote unit tests in `tests/unit/test_server.py`
+- [ ] Wrote integration tests in `tests/integration/test_integration.py`
 - [ ] Added property-based tests if applicable
 - [ ] Ran `poetry run ruff check .` and `poetry run ruff format .`
 - [ ] Ran `poetry run mypy souschef`
@@ -522,7 +522,7 @@ def parse_berkshelf(file_path: str) -> dict:
 
 **Step 2**: Create tests
 ```python
-# tests/test_server.py (unit)
+# tests/unit/test_server.py (unit)
 def test_parse_berkshelf_success():
     """Test parsing valid Berkshelf file."""
     with patch("souschef.parsers.berkshelf.Path.read_text") as mock:
@@ -530,7 +530,7 @@ def test_parse_berkshelf_success():
         result = parse_berkshelf("/path/to/Berksfile")
         assert "nginx" in result["sources"]
 
-# tests/test_integration.py (integration)
+# tests/integration/test_integration.py (integration)
 def test_parse_real_berkshelf_file():
     """Test with actual Berkshelf file."""
     fixture_path = FIXTURES_DIR / "Berksfile"
@@ -564,8 +564,8 @@ def parse_berkshelf_file(file_path: str) -> str:
 3. `parsers/` - Data extraction (might be missing something)
 
 **What to check**:
-- Unit tests in `tests/test_server.py`
-- Integration tests in `tests/test_integration.py`
+- Unit tests in `tests/unit/test_server.py`
+- Integration tests in `tests/integration/test_integration.py`
 - Complexity thresholds in `core/constants.py`
 
 ### Scenario 2: "Recipe parsing misses a resource type"
@@ -598,7 +598,7 @@ def parse_berkshelf_file(file_path: str) -> str:
 3. `core/` - Utilities and error handling
 
 **What to check**:
-- CLI tests in `tests/test_server.py`
+- CLI tests in `tests/unit/test_server.py`
 - Error handling in underlying module
 - Argument validation
 

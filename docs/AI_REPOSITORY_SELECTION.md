@@ -132,7 +132,7 @@ If AI assessment is unavailable or fails:
 
 ### Unit Tests
 
-Located in [tests/test_generators_repo.py](../tests/test_generators_repo.py):
+Located in [tests/unit/test_generators_repo.py](../tests/unit/test_generators_repo.py):
 
 ```python
 # Test AI-based analysis with mock assessment
@@ -149,7 +149,7 @@ def test_no_ai_credentials_uses_heuristics():
 
 ### Integration Tests
 
-Located in [tests/test_integration.py](../tests/test_integration.py):
+Located in [tests/integration/test_integration.py](../tests/integration/test_integration.py):
 
 - `test_analyse_with_mock_ai_assessment` - AI decision logic
 - `test_analyse_falls_back_without_ai_credentials` - Heuristic fallback

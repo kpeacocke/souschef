@@ -79,7 +79,7 @@ SousChef scales linearly with cookbook size:
 
 ```python
 # Small cookbook (10 resources): ~1.4ms
-# Medium cookbook (50 resources): ~1.5ms  
+# Medium cookbook (50 resources): ~1.5ms
 # Large cookbook (100 resources): ~1.4ms
 # Very large cookbook (500 resources): ~7-10ms (estimated)
 ```
@@ -315,7 +315,7 @@ import gc
 for cookbook in large_cookbook_list:
     result = convert_cookbook(cookbook)
     process_result(result)
-    
+
     # Manual garbage collection
     gc.collect()
 ```
@@ -362,13 +362,13 @@ When adding new features, include benchmarks:
 def test_benchmark_my_new_feature(benchmark):
     """Benchmark the new feature."""
     result = benchmark(my_new_feature, input_data)
-    
+
     # Assert performance requirements
     assert benchmark.stats['mean'] < 0.001  # <1ms mean
     assert benchmark.stats['max'] < 0.010   # <10ms max
 ```
 
-See [tests/test_integration.py](../../tests/test_integration.py) for examples.
+See [tests/integration/test_integration.py](../../tests/integration/test_integration.py) for examples.
 
 ## Resources
 

@@ -228,7 +228,7 @@ poetry install
 poetry run streamlit run souschef/ui/app.py --server.headless true --server.port 8501
 
 # Run tests
-poetry run pytest tests/test_ui/
+poetry run pytest tests/unit/test_ui.py
 ```
 
 ### UI Architecture

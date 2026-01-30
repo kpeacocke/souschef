@@ -177,7 +177,7 @@ SousChef uses a modern Python toolchain for quality and consistency:
 ### **File Organization**
 - Source code in `souschef/`
 - Tests in `tests/` mirroring source structure
-- Test fixtures in `tests/fixtures/`
+- Test fixtures in `tests/integration/fixtures/`
 - Follow established patterns for new modules
 
 ### **Security**
@@ -190,7 +190,7 @@ SousChef uses a modern Python toolchain for quality and consistency:
 
 SousChef maintains comprehensive test coverage with three types of tests:
 
-### 1. **Unit Tests** (`tests/test_server.py`)
+### 1. **Unit Tests** (`tests/unit/test_server.py`)
 - Mock-based tests for individual functions
 - Test error handling and edge cases
 - Fast execution, isolated from filesystem
@@ -207,9 +207,9 @@ def test_parse_recipe_success():
         assert "nginx" in result
 ```
 
-### 2. **Integration Tests** (`tests/test_integration.py`)
+### 2. **Integration Tests** (`tests/integration/test_integration.py`)
 - Real file operations with test fixtures
-- Test with actual Chef cookbook files from `tests/fixtures/`
+- Test with actual Chef cookbook files from `tests/integration/fixtures/`
 - Use parameterized tests for multiple scenarios
 - Include performance benchmarks
 
@@ -228,7 +228,7 @@ def test_parse_real_recipes(recipe_file, expected_resources):
         assert resource_type in result
 ```
 
-### 3. **Property-Based Tests** (`tests/test_property_based.py`)
+### 3. **Property-Based Tests** (`tests/unit/test_property_based.py`)
 - Use Hypothesis for fuzz testing
 - Generate random inputs to find edge cases
 - Ensure functions handle any input gracefully
@@ -261,9 +261,9 @@ poetry run pytest
 poetry run pytest --cov=souschef --cov-report=term-missing
 
 # Run specific test types
-poetry run pytest tests/test_server.py          # Unit tests
-poetry run pytest tests/test_integration.py    # Integration tests
-poetry run pytest tests/test_property_based.py # Property-based tests
+poetry run pytest tests/unit/test_server.py          # Unit tests
+poetry run pytest tests/integration/test_integration.py    # Integration tests
+poetry run pytest tests/unit/test_property_based.py # Property-based tests
 
 # Run performance benchmarks
 poetry run pytest --benchmark-only
@@ -633,7 +633,7 @@ def your_command(parameter: str) -> None:
 ## Development Tips
 
 ### **Working with Chef Cookbook Fixtures**
-- Add realistic Chef content to `tests/fixtures/sample_cookbook/`
+- Add realistic Chef content to `tests/integration/fixtures/sample_cookbook/`
 - Include edge cases and complex scenarios
 - Update fixtures when adding new parsing capabilities
 
