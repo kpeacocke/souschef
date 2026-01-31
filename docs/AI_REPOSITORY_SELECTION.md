@@ -165,14 +165,14 @@ Located in [tests/integration/test_integration.py](../tests/integration/test_int
 
 - **API Keys**: Passed as parameters, never logged
 - **Sensitive data**: Assessment results don't contain cookbook content
-- **Provider validation**: Supports authenticated providers (Anthropic, OpenAI, Watson)
+- **Provider validation**: Supports authenticated providers (Anthropic, OpenAI, Watson, Red Hat Lightspeed)
+- **Local models**: Supports local model servers (Ollama, llama.cpp, vLLM, LM Studio) without requiring API keys
 
 ## Future Enhancements
 
 - [ ] Cache AI assessments per cookbook
 - [ ] Provide assessment reasoning in repository metadata
 - [ ] UI option to override AI recommendation
-- [ ] Support for custom AI providers
 - [ ] Integration with existing CI/CD assessment tools
 
 ## Examples

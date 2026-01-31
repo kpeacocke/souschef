@@ -96,6 +96,20 @@ Step-by-step guidance through complex migration scenarios:
 - **Validation Wizard**: Test conversions and verify accuracy
 - **Reporting Wizard**: Create executive and technical migration reports
 
+### AI Settings and Configuration
+
+Configure AI providers for enhanced analysis and repository selection:
+
+- **Provider Selection**: Choose from Anthropic (Claude), OpenAI (GPT), IBM Watsonx, Red Hat Lightspeed, or Local Models
+- **Local Model Support**: Connect to local model servers without requiring API keys
+  - **Ollama**: Default local model server (http://localhost:11434)
+  - **llama.cpp**: Lightweight local inference
+  - **vLLM**: High-performance inference server
+  - **LM Studio**: User-friendly local model interface
+- **Configuration Validation**: Test connection to AI providers before saving
+- **Model Selection**: Choose specific models based on your provider
+- **Secure Storage**: API keys stored in user-specific configuration directory (~/.souschef/)
+
 ## Archive Upload Security
 
 The UI includes comprehensive security measures for archive handling:
@@ -239,6 +253,7 @@ souschef/ui/
 ├── pages/              # Page modules
 │   ├── cookbook_analysis.py    # Cookbook analysis page
 │   ├── migration_planning.py   # Migration planning wizards
+│   ├── ai_settings.py          # AI provider configuration
 │   └── reports.py              # Report generation
 ├── components/         # Reusable UI components
 │   ├── dependency_graph.py     # Network visualisation

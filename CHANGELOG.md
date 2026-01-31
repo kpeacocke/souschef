@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+* **chef-server:** Implement Chef Server API integration for dynamic inventory
+  - Query Chef server using REST API `/search/node` endpoint
+  - Extract node data including roles, environment, platform, and IP addresses
+  - Graceful fallback when Chef server is unavailable
+  - Support for environment-based configuration via `CHEF_SERVER_URL` and `CHEF_NODE_NAME`
+* **ui:** Complete local model validation in AI Settings page
+  - Support for Ollama, llama.cpp, vLLM, and LM Studio servers
+  - Validation checks for both Ollama and OpenAI-compatible APIs
+  - UI configuration for local model server URL and model name
+  - Automatic model availability detection
+  - User-friendly error messages for troubleshooting
+
+### Changed
+
+* **converters:** Replace Chef Server API placeholder with working implementation
+* **ui:** Replace "not yet implemented" message with full local model support
+
+### Fixed
+
+* **converters:** Remove TODO comment from `get_chef_nodes()` - now fully implemented
+* **ui:** Remove "Local model validation not implemented yet" informational message
+
 ## [3.3.0](https://github.com/kpeacocke/souschef/releases/tag/v3.3.0) (2026-01-30)
 
 ### Features
