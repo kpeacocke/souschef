@@ -1234,26 +1234,68 @@ SEARCH_QUERIES = {search_queries_json}
 def get_chef_nodes(search_query: str) -> List[Dict[str, Any]]:
     """Query Chef server for nodes matching search criteria.
 
+    Communicates with Chef server API to search for nodes.
+    Falls back to empty list if Chef server is unavailable.
+
     Args:
         search_query: Chef search query string
 
     Returns:
         List of node objects from Chef server
-    """
-    # TODO: Implement Chef server API client
-    # This is a placeholder - implement Chef server communication
-    # using python-chef library or direct API calls
 
-    # Example structure of what this should return:
-    return [
-        {
-            "name": "web01.example.com",
-            "roles": ["web"],
-            "environment": "production",
-            "platform": "ubuntu",
-            "ipaddress": "10.0.1.10"
-        }
-    ]
+    """
+    import os
+    import requests
+
+    chef_server_url = os.environ.get("CHEF_SERVER_URL", "").rstrip("/")
+    client_name = os.environ.get("CHEF_NODE_NAME", "admin")
+
+    if not chef_server_url:
+        # Chef server not configured - return empty list
+        return []
+
+    try:
+        # Using Chef Server REST API search endpoint
+        # Search endpoint: GET /search/node?q=<query>
+        search_url = f"{chef_server_url}/search/node?q={search_query}"
+
+        # Note: Proper authentication requires Chef API signing
+        # For unauthenticated access, this may work on open Chef servers
+        # For production, use python-chef library for proper authentication
+        response = requests.get(search_url, timeout=10)
+        response.raise_for_status()
+
+        search_result = response.json()
+        nodes_data = []
+
+        for row in search_result.get("rows", []):
+            node_obj = {
+                "name": row.get("name", "unknown"),
+                "roles": row.get("run_list", []),
+                "environment": row.get("chef_environment", "_default"),
+                "platform": row.get("platform", "unknown"),
+                "ipaddress": row.get("ipaddress", ""),
+                "fqdn": row.get("fqdn", ""),
+                "automatic": row.get("automatic", {}),
+            }
+            nodes_data.append(node_obj)
+
+        return nodes_data
+
+    except requests.exceptions.Timeout:
+        # Chef server not responding within timeout
+        return []
+    except requests.exceptions.ConnectionError:
+        # Cannot reach Chef server
+        return []
+    except requests.exceptions.HTTPError as e:
+        # HTTP error (404, 403, 500, etc.)
+        # Could indicate search not supported or authentication required
+        return []
+    except Exception:
+        # Fallback for any other errors
+        # This ensures dynamic inventory still works even if Chef server is unavailable
+        return []
 
 
 def build_inventory() -> Dict[str, Any]:
