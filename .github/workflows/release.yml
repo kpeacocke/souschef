@@ -40,8 +40,9 @@ jobs:
         fetch-tags: true
 
     - name: Verify code is from main branch
+      env:
+        BRANCH: ${{ github.event.workflow_run.head_branch }}
       run: |
-        BRANCH="${{ github.event.workflow_run.head_branch }}"
         if [[ -z "$BRANCH" ]] || [[ "$BRANCH" != "main" ]]; then
           printf 'ERROR: Release workflow can only run on main branch, got: %s\n' "$BRANCH" >&2
           exit 1
