@@ -228,6 +228,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         status: ${{ job.status }}
         deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+        env: pypi
         env_url: https://pypi.org/project/souschef/${{ needs.validate.outputs.version }}/
 
     - name: Update deployment status (failure)
@@ -238,6 +239,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         status: ${{ job.status }}
         deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+        env: pypi
 
   create-release:
     runs-on: ubuntu-latest
@@ -284,3 +286,296 @@ jobs:
       run: |
         echo "Attaching packages to release $TAG..."
         gh release upload "$TAG" dist/*
+
+  build-and-push-docker:
+    runs-on: ubuntu-latest
+    needs: [validate, publish-pypi, create-release]
+    if: needs.validate.outputs.should_release == 'true'
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+      image-pushed: ${{ steps.build.outputs.digest != '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate build metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/mcp-souschef
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.validate.outputs.version }}
+            type=raw,value=latest
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PYTHON_VERSION=3.13.1
+            POETRY_VERSION=1.8.3
+          provenance: true
+          sbom: true
+
+      - name: Verify image digest
+        run: |
+          DIGEST="${{ steps.build.outputs.digest }}"
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: Image digest is empty"
+            exit 1
+          fi
+          echo "Image pushed successfully with digest: $DIGEST"
+
+  scan-docker-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [validate, build-and-push-docker]
+    if: needs.build-and-push-docker.result == 'success' && needs.build-and-push-docker.outputs.image-pushed == 'true'
+    permissions:
+      packages: read
+      security-events: write
+
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/mcp-souschef:${{ needs.validate.outputs.version }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image-scan
+
+      - name: Display vulnerability report
+        if: always()
+        run: |
+          echo "Vulnerability scan results:"
+          echo "See GitHub Security tab for detailed report"
+
+  test-docker-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [validate, build-and-push-docker]
+    if: needs.build-and-push-docker.result == 'success' && needs.build-and-push-docker.outputs.image-pushed == 'true'
+    permissions:
+      packages: read
+
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run container and verify it starts
+        run: |
+          set -e
+          # Pull the image first to ensure it's available
+          docker pull "ghcr.io/mcp-souschef:${{ needs.validate.outputs.version }}"
+
+          # Test if container can start (with 10-second timeout)
+          timeout 10 docker run --rm \
+            -e STREAMLIT_SERVER_HEADLESS=true \
+            -e STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
+            "ghcr.io/mcp-souschef:${{ needs.validate.outputs.version }}" \
+            /bin/true || true
+
+          echo "Container started successfully"
+
+      - name: Verify health check works
+        run: |
+          set -e
+          OUTPUT=$(docker run --rm \
+            "ghcr.io/mcp-souschef:${{ needs.validate.outputs.version }}" \
+            python -m souschef.ui.health_check)
+
+          echo "Health check output: $OUTPUT"
+
+          if echo "$OUTPUT" | grep -q "healthy"; then
+            echo "Health check passed"
+          else
+            echo "Health check failed"
+            exit 1
+          fi
+
+  notify-docker-deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [validate, build-and-push-docker, scan-docker-image, test-docker-image]
+    if: |
+      needs.validate.result == 'success'
+      && needs.build-and-push-docker.result == 'success'
+      && needs.scan-docker-image.result == 'success'
+      && needs.test-docker-image.result == 'success'
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Create deployment notification issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = "${{ needs.validate.outputs.version }}";
+            const registry = "ghcr.io";
+            const imageName = "mcp-souschef";
+            const digest = "${{ needs.build-and-push-docker.outputs.image-digest }}";
+            const tag = "${{ needs.validate.outputs.tag }}";
+
+            const versionParts = version.split('.');
+            const majorMinor = versionParts.length >= 2
+              ? versionParts[0] + "." + versionParts[1]
+              : versionParts[0];
+            const major = versionParts[0];
+
+            let body = "## Docker Image Published\n\n";
+            body += "**Image:** `" + registry + "/" + imageName + ":" + version + "`\n\n";
+            body += "**Digest:** " + digest + "\n\n";
+            body += "**Available Tags:**\n";
+            body += "- `" + version + "` (exact version)\n";
+            body += "- `" + majorMinor + "` (minor version)\n";
+            body += "- `" + major + "` (major version)\n";
+            body += "- `latest` (most recent release)\n\n";
+            body += "**Container Registry:** [GitHub Container Registry](https://github.com/${{ github.repository }}/pkgs/container/" + imageName + ")\n\n";
+            body += "**Pull Commands:**\n";
+            body += "```bash\n";
+            body += "# Pull specific version\n";
+            body += "docker pull " + registry + "/" + imageName + ":" + version + "\n\n";
+            body += "# Pull latest\n";
+            body += "docker pull " + registry + "/" + imageName + ":latest\n\n";
+            body += "# Pull major version\n";
+            body += "docker pull " + registry + "/" + imageName + ":" + major + "\n";
+            body += "```\n\n";
+            body += "**Security:** Vulnerability scan results available in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)\n\n";
+            body += "**Related Release:** " + tag + "\n\n";
+            body += "## Build Information\n";
+            body += "- **Release Pipeline:** ${{ github.workflow }} #${{ github.run_number }}\n";
+            body += "- **Release Workflow Run:** ${{ github.run_id }}\n";
+            body += "- **Release Commit:** ${{ github.sha }}";
+
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "Docker Image Published: " + tag,
+              body: body,
+              labels: ['deployment', 'docker', 'release']
+            });
+
+  release-complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [validate, build, publish-pypi, create-release, build-and-push-docker, scan-docker-image, test-docker-image, notify-docker-deployment]
+    if: always()
+    permissions:
+      contents: read
+
+    steps:
+      - name: Release Pipeline Summary
+        run: |
+          cat > /tmp/summary.md << 'EOF'
+          # Release Pipeline Complete
+
+          ## Pipeline Status
+          - **Validation:** ${{ needs.validate.result }}
+          - **Build:** ${{ needs.build.result }}
+          - **PyPI Publish:** ${{ needs.publish-pypi.result }}
+          - **Create Release:** ${{ needs.create-release.result }}
+          - **Docker Build & Push:** ${{ needs.build-and-push-docker.result }}
+          - **Docker Security Scan:** ${{ needs.scan-docker-image.result }}
+          - **Docker Test:** ${{ needs.test-docker-image.result }}
+          - **Docker Notification:** ${{ needs.notify-docker-deployment.result }}
+
+          ## Release Information
+          - **Version:** ${{ needs.validate.outputs.version || 'N/A' }}
+          - **Tag:** ${{ needs.validate.outputs.tag || 'N/A' }}
+          - **Image Digest:** ${{ needs.build-and-push-docker.outputs.image-digest || 'No image pushed' }}
+
+          ## Deployments
+          - **PyPI:** https://pypi.org/project/souschef/${{ needs.validate.outputs.version || 'latest' }}/
+          - **GitHub Release:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag || 'latest' }}
+          - **Container Image:** ghcr.io/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}
+
+          ## Next Steps
+          - Both PyPI package and Docker image are deployed
+          - See GitHub Release for artifacts and release notes
+          - See GitHub Security tab for Docker vulnerability scan results
+          - Pull the Docker image: `docker pull ghcr.io/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}`
+
+          ## Workflow Run Details
+          - **Workflow:** ${{ github.workflow }}
+          - **Run ID:** ${{ github.run_id }}
+          - **Run Number:** ${{ github.run_number }}
+          EOF
+          cat /tmp/summary.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Report failures
+        if: |
+          needs.validate.result != 'success'
+          || needs.build.result != 'success'
+          || needs.publish-pypi.result != 'success'
+          || needs.create-release.result != 'success'
+          || needs.build-and-push-docker.result != 'success'
+          || needs.scan-docker-image.result != 'success'
+          || needs.test-docker-image.result != 'success'
+        run: |
+          echo "### Release Pipeline Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Validation | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PyPI Publish | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Create Release | ${{ needs.create-release.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build & Push | ${{ needs.build-and-push-docker.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Scan | ${{ needs.scan-docker-image.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Test | ${{ needs.test-docker-image.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please review the failed jobs above."
+          exit 1

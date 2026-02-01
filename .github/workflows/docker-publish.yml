@@ -1,10 +1,8 @@
-name: Docker Publish
+name: Docker Publish (Manual)
 
-# Build and publish Docker image when a GitHub release is created.
-# This provides a reliable signal that the release (and PyPI publish) is complete.
+# Build and publish Docker image on manual dispatch.
+# For automatic publishing during releases, use the Release workflow.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:
@@ -21,9 +19,7 @@ env:
 
 jobs:
   validate:
-    if: |
-      (github.event_name == 'release')
-      || (github.event_name == 'workflow_dispatch')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -70,13 +66,6 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}, Tag: ${TAG}"
-
-      - name: Verify release exists
-        if: github.event_name == 'release'
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          echo "Release $TAG published, proceeding with Docker build"
 
   build-and-push:
     runs-on: ubuntu-latest
@@ -310,7 +299,7 @@ jobs:
       - name: Workflow Summary
         run: |
           cat > /tmp/summary.md << 'EOF'
-          # Docker Publishing Summary
+          # Docker Publishing Summary (Manual)
 
           ## Workflow Status
           - **Validation:** ${{ needs.validate.result }}
@@ -330,6 +319,9 @@ jobs:
 
           ## Available Tags
           ${{ needs.build-and-push.outputs.tags || 'No tags generated' }}
+
+          ## Note
+          For automatic Docker image publishing during releases, see the [Release workflow](.github/workflows/release.yml). This workflow is for manual on-demand builds only.
 
           ## Next Steps
           - Image is ready for deployment
