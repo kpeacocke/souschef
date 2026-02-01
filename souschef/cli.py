@@ -42,6 +42,9 @@ CI_JOB_LINT = "  • Lint (cookstyle/foodcritic)"
 CI_JOB_UNIT_TESTS = "  • Unit Tests (ChefSpec)"
 CI_JOB_INTEGRATION_TESTS = "  • Integration Tests (Test Kitchen)"
 
+# File name constants
+METADATA_FILENAME = "metadata.rb"
+
 
 def _resolve_output_path(output: str | None, default_path: Path) -> Path:
     """Normalise and validate output paths for generated files."""
@@ -336,7 +339,7 @@ def cookbook(cookbook_path: str, output: str | None, dry_run: bool) -> None:
     click.echo("=" * 50)
 
     # Parse metadata
-    metadata_file = cookbook_dir / "metadata.rb"
+    metadata_file = cookbook_dir / METADATA_FILENAME
     if metadata_file.exists():
         click.echo("\n📋 Metadata:")
         click.echo("-" * 50)
@@ -405,7 +408,7 @@ def _save_cookbook_conversion(cookbook_dir: Path, output_path: str) -> None:
     }
 
     # Convert metadata
-    metadata_file = cookbook_dir / "metadata.rb"
+    metadata_file = cookbook_dir / METADATA_FILENAME
     if metadata_file.exists():
         click.echo("Converting metadata...")
         metadata_result = read_cookbook_metadata(str(metadata_file))
@@ -1335,10 +1338,9 @@ def ui(port: int) -> None:
     Opens a web-based interface for interactive Chef to Ansible migration planning,
     cookbook analysis, and visualization.
     """
-    try:
-        import subprocess
-        import sys
+    import subprocess
 
+    try:
         # Launch Streamlit app
         cmd = [
             sys.executable,
@@ -1361,6 +1363,135 @@ def ui(port: int) -> None:
         click.echo(
             "Streamlit is not installed. Install with: pip install streamlit", err=True
         )
+        sys.exit(1)
+
+
+@cli.command("validate-chef-server")
+@click.option("--server-url", prompt="Chef Server URL", help="Chef Server base URL")
+@click.option("--node-name", default="admin", help="Chef node name for authentication")
+def validate_chef_server(server_url: str, node_name: str) -> None:
+    """
+    Validate Chef Server connectivity and configuration.
+
+    Tests the connection to the Chef Server REST API to ensure it's
+    reachable and properly configured.
+    """
+    click.echo("🔍 Validating Chef Server connection...")
+    from souschef.ui.pages.chef_server_settings import _validate_chef_server_connection
+
+    success, message = _validate_chef_server_connection(server_url, node_name)
+
+    if success:
+        click.echo(f"✅ {message}")
+    else:
+        click.echo(f"❌ {message}", err=True)
+        sys.exit(1)
+
+
+def _display_node_text(node: dict) -> None:
+    """Display a single node's information in text format."""
+    click.echo(f"\n  📍 {node.get('name', 'unknown')}")
+    click.echo(f"     Environment: {node.get('environment', '_default')}")
+    click.echo(f"     Platform: {node.get('platform', 'unknown')}")
+    if node.get("ipaddress"):
+        click.echo(f"     IP: {node['ipaddress']}")
+    if node.get("fqdn"):
+        click.echo(f"     FQDN: {node['fqdn']}")
+    if node.get("roles"):
+        click.echo(f"     Roles: {', '.join(node['roles'])}")
+
+
+def _output_chef_nodes(nodes: list, output_json: bool) -> None:
+    """Output nodes in requested format."""
+    if output_json:
+        click.echo(json.dumps(nodes, indent=2))
+    else:
+        for node in nodes:
+            _display_node_text(node)
+
+
+@cli.command("query-chef-nodes")
+@click.option("--search-query", default="*:*", help="Chef search query for nodes")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def query_chef_nodes(search_query: str, output_json: bool) -> None:
+    """
+    Query Chef Server for nodes matching search criteria.
+
+    Retrieves nodes from Chef Server that match the provided search query,
+    extracting role assignments, environment, platform, and IP address
+    information for dynamic inventory generation.
+    """
+    import os
+
+    if not os.environ.get("CHEF_SERVER_URL"):
+        click.echo("❌ CHEF_SERVER_URL not set", err=True)
+        sys.exit(1)
+
+    click.echo(f"🔎 Querying Chef Server for nodes matching: {search_query}")
+
+    from souschef.converters.playbook import get_chef_nodes
+
+    try:
+        nodes = get_chef_nodes(search_query)
+
+        if not nodes:
+            click.echo("ℹ️  No nodes found matching the search query")
+            return
+
+        click.echo(f"Found {len(nodes)} nodes:")
+        _output_chef_nodes(nodes, output_json)
+    except Exception as e:
+        click.echo(f"❌ Error querying Chef Server: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("convert-template-ai")
+@click.argument("erb_path", type=click.Path(exists=True))
+@click.option("--ai/--no-ai", default=True, help="Use AI enhancement")
+@click.option("--output", type=click.Path(), help="Output path for template")
+def convert_template_ai(erb_path: str, ai: bool, output: str | None) -> None:
+    """
+    Convert an ERB template to Jinja2 with optional AI assistance.
+
+    Converts Chef ERB templates to Ansible Jinja2 format with optional
+    AI-based validation and improvement for complex Ruby logic.
+    """
+    click.echo(f"🔄 Converting template: {erb_path}")
+    if ai:
+        click.echo("✨ Using AI enhancement for complex conversions")
+    else:
+        click.echo("📝 Using rule-based conversion only")
+
+    from souschef.converters.template import convert_template_with_ai
+
+    try:
+        result = convert_template_with_ai(erb_path, ai_service=None)
+
+        if result.get("success"):
+            method = result.get("conversion_method", "unknown")
+            click.echo(f"✅ Conversion successful ({method})")
+
+            if output:
+                output_path = Path(output)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(result.get("jinja2_output", ""))
+                click.echo(f"💾 Converted template saved to: {output}")
+            else:
+                click.echo("\nConverted Template:")
+                click.echo("-" * 50)
+                click.echo(result.get("jinja2_output", ""))
+                click.echo("-" * 50)
+
+            if result.get("warnings"):
+                click.echo("\n⚠️  Warnings:")
+                for warning in result["warnings"]:
+                    click.echo(f"  - {warning}")
+        else:
+            error_msg = result.get("error", "Unknown error")
+            click.echo(f"❌ Conversion failed: {error_msg}", err=True)
+            sys.exit(1)
+    except Exception as e:
+        click.echo(f"❌ Error converting template: {e}", err=True)
         sys.exit(1)
 
 

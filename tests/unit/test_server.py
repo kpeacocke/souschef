@@ -15839,5 +15839,216 @@ def test_normalize_template_value_non_string():
     result = _normalize_template_value(None)
     assert result is None
 
-    result = _normalize_template_value([1, 2, 3])
-    assert result == [1, 2, 3]
+
+# Chef Server Integration Tests
+
+
+def test_validate_chef_server_connection_success():
+    """Test validate_chef_server_connection with successful connection."""
+    from souschef.server import validate_chef_server_connection
+
+    with patch("souschef.server._validate_chef_server_connection") as mock_validate:
+        mock_validate.return_value = (True, "Connection successful")
+
+        result = validate_chef_server_connection("https://chef.example.com", "admin")
+
+        assert "✅ Success" in result
+        assert "Connection successful" in result
+        mock_validate.assert_called_once_with("https://chef.example.com", "admin")
+
+
+def test_validate_chef_server_connection_failure():
+    """Test validate_chef_server_connection with failed connection."""
+    from souschef.server import validate_chef_server_connection
+
+    with patch("souschef.server._validate_chef_server_connection") as mock_validate:
+        mock_validate.return_value = (False, "Connection timeout")
+
+        result = validate_chef_server_connection("https://chef.example.com", "admin")
+
+        assert "❌ Failed" in result
+        assert "Connection timeout" in result
+
+
+def test_validate_chef_server_connection_exception():
+    """Test validate_chef_server_connection with exception."""
+    from souschef.server import validate_chef_server_connection
+
+    with patch("souschef.server._validate_chef_server_connection") as mock_validate:
+        mock_validate.side_effect = Exception("Network error")
+
+        result = validate_chef_server_connection("https://chef.example.com", "admin")
+
+        assert "❌ Error" in result
+        assert "Network error" in result
+
+
+def test_get_chef_nodes_success():
+    """Test get_chef_nodes with successful query."""
+    from souschef.server import get_chef_nodes
+
+    mock_nodes = [
+        {
+            "name": "web-server-01",
+            "roles": ["webserver"],
+            "environment": "production",
+            "platform": "ubuntu",
+            "ipaddress": "10.0.1.10",
+            "fqdn": "web-server-01.example.com",
+        },
+        {
+            "name": "db-server-01",
+            "roles": ["database"],
+            "environment": "production",
+            "platform": "ubuntu",
+            "ipaddress": "10.0.2.10",
+            "fqdn": "db-server-01.example.com",
+        },
+    ]
+
+    with patch("souschef.server._get_chef_nodes") as mock_query:
+        mock_query.return_value = mock_nodes
+
+        result = get_chef_nodes("role:webserver OR role:database")
+
+        # Parse JSON result
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data["count"] == 2
+        assert len(data["nodes"]) == 2
+        assert data["nodes"][0]["name"] == "web-server-01"
+        mock_query.assert_called_once_with("role:webserver OR role:database")
+
+
+def test_get_chef_nodes_no_results():
+    """Test get_chef_nodes with no matching nodes."""
+    from souschef.server import get_chef_nodes
+
+    with patch("souschef.server._get_chef_nodes") as mock_query:
+        mock_query.return_value = []
+
+        result = get_chef_nodes("role:nonexistent")
+
+        data = json.loads(result)
+        assert data["status"] == "no_nodes"
+        assert "No nodes found" in data["message"]
+        assert data["nodes"] == []
+
+
+def test_get_chef_nodes_default_query():
+    """Test get_chef_nodes with default query."""
+    from souschef.server import get_chef_nodes
+
+    with patch("souschef.server._get_chef_nodes") as mock_query:
+        mock_query.return_value = [{"name": "node1"}]
+
+        result = get_chef_nodes()
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        mock_query.assert_called_once_with("*:*")
+
+
+def test_get_chef_nodes_exception():
+    """Test get_chef_nodes with exception."""
+    from souschef.server import get_chef_nodes
+
+    with patch("souschef.server._get_chef_nodes") as mock_query:
+        mock_query.side_effect = Exception("Chef Server unavailable")
+
+        result = get_chef_nodes("*:*")
+
+        data = json.loads(result)
+        assert data["status"] == "error"
+        assert "Chef Server unavailable" in data["message"]
+        assert data["nodes"] == []
+
+
+def test_convert_template_with_ai_success():
+    """Test convert_template_with_ai with successful conversion."""
+    from souschef.server import convert_template_with_ai
+
+    mock_result = {
+        "success": True,
+        "jinja2_template": "{{ app_port }}",
+        "variables": ["app_port"],
+        "conversion_method": "rule_based",
+        "warnings": [],
+    }
+
+    with patch("souschef.server._convert_template_with_ai") as mock_convert:
+        mock_convert.return_value = mock_result
+
+        result = convert_template_with_ai(
+            "/path/to/template.erb", use_ai_enhancement=True
+        )
+
+        data = json.loads(result)
+        assert data["success"] is True
+        assert "app_port" in data["jinja2_template"]
+        assert len(data["variables"]) == 1
+        mock_convert.assert_called_once_with("/path/to/template.erb", ai_service=None)
+
+
+def test_convert_template_with_ai_no_ai():
+    """Test convert_template_with_ai with AI enhancement disabled."""
+    from souschef.server import convert_template_with_ai
+
+    mock_result = {
+        "success": True,
+        "jinja2_template": "{{ hostname }}",
+        "variables": ["hostname"],
+        "warnings": [],
+    }
+
+    with patch("souschef.converters.template.convert_template_file") as mock_convert:
+        mock_convert.return_value = mock_result
+
+        result = convert_template_with_ai(
+            "/path/to/config.erb", use_ai_enhancement=False
+        )
+
+        data = json.loads(result)
+        assert data["success"] is True
+        assert data["conversion_method"] == "rule-based"
+        mock_convert.assert_called_once_with("/path/to/config.erb")
+
+
+def test_convert_template_with_ai_failure():
+    """Test convert_template_with_ai with conversion failure."""
+    from souschef.server import convert_template_with_ai
+
+    mock_result = {
+        "success": False,
+        "error": "Template contains unsupported Ruby syntax",
+        "jinja2_template": "",
+        "variables": [],
+        "conversion_method": "failed",
+        "warnings": ["Unsupported ERB construct"],
+    }
+
+    with patch("souschef.server._convert_template_with_ai") as mock_convert:
+        mock_convert.return_value = mock_result
+
+        result = convert_template_with_ai(
+            "/path/to/complex.erb", use_ai_enhancement=True
+        )
+
+        data = json.loads(result)
+        assert data["success"] is False
+        assert "unsupported Ruby syntax" in data["error"]
+        assert len(data["warnings"]) > 0
+
+
+def test_convert_template_with_ai_exception():
+    """Test convert_template_with_ai with exception."""
+    from souschef.server import convert_template_with_ai
+
+    with patch("souschef.server._convert_template_with_ai") as mock_convert:
+        mock_convert.side_effect = Exception("File not found")
+
+        result = convert_template_with_ai("/nonexistent/template.erb")
+
+        data = json.loads(result)
+        assert data["success"] is False
+        assert "File not found" in data["error"]

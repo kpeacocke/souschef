@@ -652,6 +652,10 @@ def _build_conversion_requirements_parts() -> list[str]:
         "",
         "7. **Conditionals**: Convert Chef guards (only_if/not_if) to Ansible when",
         "   conditions.",
+        "   - For file or directory checks, add a stat task with register,",
+        "     then use a boolean when expression like 'stat_result.stat.exists'.",
+        "   - Do NOT put module names or task mappings under when.",
+        "   - Keep when expressions as valid YAML scalars (strings or lists).",
         "",
         "8. **Notifications**: Convert Chef notifications to Ansible handlers",
         "   where appropriate.",
@@ -747,7 +751,7 @@ def _build_output_format_parts() -> list[str]:
 
 
 def _clean_ai_playbook_response(ai_response: str) -> str:
-    """Clean and validate the AI-generated playbook response."""
+    """Clean the AI-generated playbook response."""
     if not ai_response or not ai_response.strip():
         return f"{ERROR_PREFIX} AI returned empty response"
 
@@ -759,15 +763,19 @@ def _clean_ai_playbook_response(ai_response: str) -> str:
     if not cleaned.startswith("---") and not cleaned.startswith("- name:"):
         return f"{ERROR_PREFIX} AI response does not appear to be valid YAML playbook"
 
-    # Try to parse as YAML to validate structure
+    return cleaned
+
+
+def _validate_playbook_yaml(playbook_content: str) -> str | None:
+    """Validate YAML syntax and return an error message if invalid."""
     try:
         import yaml
 
-        yaml.safe_load(cleaned)
-    except Exception as e:
-        return f"{ERROR_PREFIX} AI generated invalid YAML: {e}"
+        yaml.safe_load(playbook_content)
+    except Exception as exc:
+        return str(exc)
 
-    return cleaned
+    return None
 
 
 def _validate_and_fix_playbook(
@@ -782,7 +790,12 @@ def _validate_and_fix_playbook(
     if playbook_content.startswith(ERROR_PREFIX):
         return playbook_content
 
-    validation_error = _run_ansible_lint(playbook_content)
+    yaml_error = _validate_playbook_yaml(playbook_content)
+    if yaml_error:
+        validation_error = f"YAML parse error: {yaml_error}"
+    else:
+        validation_error = _run_ansible_lint(playbook_content)
+
     if not validation_error:
         return playbook_content
 
@@ -815,6 +828,10 @@ Just the YAML content.
             # Fallback to the original (valid-but-lint-failing) playbook
             # rather than returning an error string
             return playbook_content
+
+        fixed_yaml_error = _validate_playbook_yaml(cleaned_response)
+        if fixed_yaml_error:
+            return f"{ERROR_PREFIX} AI generated invalid YAML: {fixed_yaml_error}"
 
         return cleaned_response
     except Exception:
@@ -1209,7 +1226,16 @@ def _generate_ansible_inventory_from_search(
 
 def _generate_inventory_script_content(queries_data: list[dict[str, str]]) -> str:
     """Generate Python dynamic inventory script content."""
-    script_template = '''#!/usr/bin/env python3
+    # Convert queries_data to JSON string for embedding
+    queries_json = json.dumps(  # nosonar
+        {
+            item.get("group_name", f"group_{i}"): item.get("search_query", "")
+            for i, item in enumerate(queries_data)
+        },
+        indent=4,
+    )
+
+    script_template = f'''#!/usr/bin/env python3
 """Dynamic Ansible Inventory Script.
 
 Generated from Chef search queries by SousChef
@@ -1218,21 +1244,93 @@ This script converts Chef search queries to Ansible inventory groups.
 Requires: python-requests (for Chef server API)
 """
 import json
+import os
 import sys
 import argparse
 from typing import Dict, List, Any
 
-# Chef server configuration
-CHEF_SERVER_URL = "https://your-chef-server"
-CLIENT_NAME = "your-client-name"
-CLIENT_KEY_PATH = "/path/to/client.pem"
-
 # Search query to group mappings
-SEARCH_QUERIES = {search_queries_json}
-
+SEARCH_QUERIES = {queries_json}
 
 def get_chef_nodes(search_query: str) -> List[Dict[str, Any]]:
-    """Query Chef server for nodes matching search criteria.
+    """Query Chef server for nodes matching search criteria."""
+    import requests
+
+    chef_server_url = os.environ.get("CHEF_SERVER_URL", "").rstrip("/")
+    if not chef_server_url:
+        return []
+
+    try:
+        search_url = f"{{chef_server_url}}/search/node?q={{search_query}}"
+        response = requests.get(search_url, timeout=10)
+        response.raise_for_status()
+        search_result = response.json()
+        nodes_data = []
+
+        for row in search_result.get("rows", []):
+            node_obj = {{
+                "name": row.get("name", "unknown"),
+                "roles": row.get("run_list", []),
+                "environment": row.get("chef_environment", "_default"),
+                "platform": row.get("platform", "unknown"),
+                "ipaddress": row.get("ipaddress", ""),
+                "fqdn": row.get("fqdn", ""),
+            }}
+            nodes_data.append(node_obj)
+        return nodes_data
+    except Exception:
+        return []
+
+def build_inventory() -> Dict[str, Any]:
+    """Build Ansible inventory from Chef searches."""
+    inventory = {{"_meta": {{"hostvars": {{}}}}}}
+
+    for group_name, search_query in SEARCH_QUERIES.items():
+        inventory[group_name] = {{
+            "hosts": [],
+            "vars": {{"chef_search_query": search_query}},
+        }}
+        try:
+            nodes = get_chef_nodes(search_query)
+            for node in nodes:
+                hostname = node.get("name", node.get("fqdn", "unknown"))
+                inventory[group_name]["hosts"].append(hostname)
+                inventory["_meta"]["hostvars"][hostname] = {{
+                    "chef_roles": node.get("roles", []),
+                    "chef_environment": node.get("environment", ""),
+                    "chef_platform": node.get("platform", ""),
+                    "ansible_host": node.get("ipaddress", hostname)
+                }}
+        except Exception:
+            pass
+
+    return inventory
+
+def main():
+    """Main entry point for dynamic inventory script."""
+    parser = argparse.ArgumentParser(description="Dynamic Ansible Inventory from Chef")
+    parser.add_argument("--list", action="store_true", help="List all groups")
+    parser.add_argument("--host", help="Get variables for specific host")
+
+    args = parser.parse_args()
+
+    if args.list:
+        inventory = build_inventory()
+        print(json.dumps(inventory, indent=2))
+    elif args.host:
+        print(json.dumps({{}}))
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()
+'''
+    return script_template
+
+
+def get_chef_nodes(search_query: str) -> list[dict[str, Any]]:
+    """
+    Query Chef server for nodes matching search criteria.
 
     Communicates with Chef server API to search for nodes.
     Falls back to empty list if Chef server is unavailable.
@@ -1244,11 +1342,10 @@ def get_chef_nodes(search_query: str) -> List[Dict[str, Any]]:
         List of node objects from Chef server
 
     """
-    import os
-    import requests
+    if not requests:
+        return []
 
     chef_server_url = os.environ.get("CHEF_SERVER_URL", "").rstrip("/")
-    client_name = os.environ.get("CHEF_NODE_NAME", "admin")
 
     if not chef_server_url:
         # Chef server not configured - return empty list
@@ -1288,96 +1385,12 @@ def get_chef_nodes(search_query: str) -> List[Dict[str, Any]]:
     except requests.exceptions.ConnectionError:
         # Cannot reach Chef server
         return []
-    except requests.exceptions.HTTPError as e:
+    except requests.exceptions.HTTPError:
         # HTTP error (404, 403, 500, etc.)
-        # Could indicate search not supported or authentication required
         return []
     except Exception:
         # Fallback for any other errors
-        # This ensures dynamic inventory still works even if Chef server is unavailable
         return []
-
-
-def build_inventory() -> Dict[str, Any]:
-    """Build Ansible inventory from Chef searches.
-
-    Returns:
-        Ansible inventory dictionary
-    """
-    inventory = {
-        "_meta": {
-            "hostvars": {}
-        }
-    }
-
-    for group_name, search_query in SEARCH_QUERIES.items():
-        inventory[group_name] = {
-            "hosts": [],
-            "vars": {
-                "chef_search_query": search_query
-            }
-        }
-
-        try:
-            nodes = get_chef_nodes(search_query)
-
-            for node in nodes:
-                hostname = node.get("name", node.get("fqdn", "unknown"))
-                inventory[group_name]["hosts"].append(hostname)
-
-                # Add host variables
-                inventory["_meta"]["hostvars"][hostname] = {
-                    "chef_roles": node.get("roles", []),
-                    "chef_environment": node.get("environment", ""),
-                    "chef_platform": node.get("platform", ""),
-                    "ansible_host": node.get("ipaddress", hostname)
-                }
-
-        except Exception as e:
-            print(
-                f"Error querying Chef server for group {group_name}: {e}",
-                file=sys.stderr,
-            )
-
-    return inventory
-
-
-def main():
-    """Main entry point for dynamic inventory script."""
-    parser = argparse.ArgumentParser(
-        description="Dynamic Ansible Inventory from Chef"
-    )
-    parser.add_argument(
-        "--list", action="store_true", help="List all groups and hosts"
-    )
-    parser.add_argument("--host", help="Get variables for specific host")
-
-    args = parser.parse_args()
-
-    if args.list:
-        inventory = build_inventory()
-        print(json.dumps(inventory, indent=2))
-    elif args.host:
-        # Return empty dict for host-specific queries
-        # All host vars are included in _meta/hostvars
-        print(json.dumps({}))
-    else:
-        parser.print_help()
-
-
-if __name__ == "__main__":
-    main()
-'''
-    # Convert queries_data to JSON string for embedding
-    queries_json = json.dumps(  # nosonar
-        {
-            item.get("group_name", f"group_{i}"): item.get("search_query", "")
-            for i, item in enumerate(queries_data)
-        },
-        indent=4,
-    )
-
-    return script_template.replace("{search_queries_json}", queries_json)
 
 
 # Search pattern extraction

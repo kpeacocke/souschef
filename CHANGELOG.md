@@ -9,11 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **mcp:** Expose Chef Server and AI template conversion as MCP tools
+  - `validate_chef_server_connection` - Test Chef Server REST API connectivity
+  - `get_chef_nodes` - Query Chef Server for nodes matching search criteria
+  - `convert_template_with_ai` - Convert ERB templates to Jinja2 with AI validation
+* **cli:** Add three new command-line tools for Chef Server and template conversion
+  - `validate-chef-server` - Command to validate Chef Server connectivity from CLI
+  - `query-chef-nodes` - Command to query Chef Server nodes with JSON output support
+  - `convert-template-ai` - Command to convert templates with optional AI enhancement
 * **chef-server:** Implement Chef Server API integration for dynamic inventory
   - Query Chef server using REST API `/search/node` endpoint
   - Extract node data including roles, environment, platform, and IP addresses
   - Graceful fallback when Chef server is unavailable
   - Support for environment-based configuration via `CHEF_SERVER_URL` and `CHEF_NODE_NAME`
+* **template-conversion:** Add AI-enhanced template conversion with validation
+  - Convert ERB templates to Jinja2 with AI analysis of complex Ruby logic
+  - Automatic fallback to rule-based conversion if AI service is unavailable
+  - Detection of complex Ruby constructs requiring AI analysis
+  - Security validation for sensitive template operations
+* **ui:** Chef Server Settings page for managing server configuration
+  - Interactive Chef Server connection validation in UI
+  - Configuration input for server URL and node names
+  - Live connection testing with user-friendly error messages
 * **ui:** Complete local model validation in AI Settings page
   - Support for Ollama, llama.cpp, vLLM, and LM Studio servers
   - Validation checks for both Ollama and OpenAI-compatible APIs
@@ -24,12 +41,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * **converters:** Replace Chef Server API placeholder with working implementation
+* **server:** Update tool count from 35 to 38 public tools (40 total with internal utilities)
+* **readme:** Add section 12 "Chef Server Integration & Dynamic Inventory"
 * **ui:** Replace "not yet implemented" message with full local model support
 
 ### Fixed
 
 * **converters:** Remove TODO comment from `get_chef_nodes()` - now fully implemented
+* **server:** Properly expose Chef Server and template conversion functions as MCP tools
 * **ui:** Remove "Local model validation not implemented yet" informational message
+* **documentation:** Update tool counts and capability areas to reflect new features
 
 ## [3.3.0](https://github.com/kpeacocke/souschef/releases/tag/v3.3.0) (2026-01-30)
 

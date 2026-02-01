@@ -265,7 +265,7 @@ Respond in JSON format:
     import re
 
     # Extract JSON from response (may be wrapped in markdown code blocks)
-    json_match = re.search(r"```json\s*(\{.*?\})\s*```", response_text, re.DOTALL)
+    json_match = re.search(r"```json\s*(\{[^\}]*\})\s*```", response_text, re.DOTALL)
     if json_match:
         response_text = json_match.group(1)
 

@@ -82,6 +82,7 @@ from souschef.converters.playbook import (
 from souschef.converters.playbook import (
     generate_dynamic_inventory_script as _generate_dynamic_inventory_script,
 )
+from souschef.converters.playbook import get_chef_nodes as _get_chef_nodes
 from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-import]
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
@@ -145,6 +146,10 @@ __all__ = [
 # Re-exports of deployment internal functions for backward compatibility (tests)
 # Public re-exports of deployment functions for test backward compatibility
 # Note: MCP tool wrappers exist for some of these, but tests import directly
+# Import converters.template functions
+from souschef.converters.template import (
+    convert_template_with_ai as _convert_template_with_ai,
+)
 from souschef.deployment import (  # noqa: F401, codeql[py/unused-import]
     _analyse_cookbook_for_awx,
     _analyse_cookbooks_directory,
@@ -256,6 +261,11 @@ from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
     _strip_ruby_comments,
 )
 from souschef.parsers.template import parse_template as _parse_template
+
+# Import UI helper functions for MCP exposure
+from souschef.ui.pages.chef_server_settings import (
+    _validate_chef_server_connection,
+)
 
 # Backward compatibility re-exports without underscore prefix (for tests)
 # noinspection PyUnusedLocal
@@ -2542,6 +2552,124 @@ def validate_conversion(
 
     """
     return _validate_conversion(conversion_type, result_content, output_format)
+
+
+# Chef Server Integration Tools
+
+
+@mcp.tool()
+def validate_chef_server_connection(
+    server_url: str,
+    node_name: str,
+) -> str:
+    """
+    Validate Chef Server connectivity and configuration.
+
+    Tests the Chef Server REST API connection to ensure the server is
+    reachable and properly configured.
+
+    Args:
+        server_url: Base URL of the Chef Server (e.g., https://chef.example.com).
+        node_name: Chef node name for authentication.
+
+    Returns:
+        Success/failure message indicating the connection status.
+
+    """
+    try:
+        success, message = _validate_chef_server_connection(server_url, node_name)
+        result = "✅ Success" if success else "❌ Failed"
+        return f"{result}: {message}"
+    except Exception as e:
+        return f"❌ Error validating Chef Server connection: {e}"
+
+
+@mcp.tool()
+def get_chef_nodes(search_query: str = "*:*") -> str:
+    """
+    Query Chef Server for nodes matching search criteria.
+
+    Retrieves nodes from Chef Server that match the provided search query,
+    extracting role assignments, environment, platform, and IP address
+    information for dynamic inventory generation.
+
+    Args:
+        search_query: Chef search query (default: '*:*' for all nodes).
+
+    Returns:
+        JSON string containing list of matching nodes with their attributes.
+
+    """
+    try:
+        nodes = _get_chef_nodes(search_query)
+        if not nodes:
+            return json.dumps(
+                {
+                    "status": "no_nodes",
+                    "message": "No nodes found matching the search query",
+                    "nodes": [],
+                }
+            )
+        return json.dumps(
+            {
+                "status": "success",
+                "count": len(nodes),
+                "nodes": nodes,
+            }
+        )
+    except Exception as e:
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"Error querying Chef Server: {str(e)}",
+                "nodes": [],
+            }
+        )
+
+
+# Template Conversion Tools
+
+
+@mcp.tool()
+def convert_template_with_ai(
+    erb_path: str,
+    use_ai_enhancement: bool = True,
+) -> str:
+    """
+    Convert an ERB template to Jinja2 with optional AI assistance.
+
+    Converts Chef ERB templates to Ansible Jinja2 format with optional
+    AI-based validation and improvement for complex Ruby logic that cannot
+    be automatically converted.
+
+    Args:
+        erb_path: Path to the ERB template file.
+        use_ai_enhancement: Whether to use AI for validation (default: True).
+
+    Returns:
+        JSON string with conversion results including success status,
+        Jinja2 output, warnings, and conversion method used.
+
+    """
+    try:
+        if use_ai_enhancement:
+            result = _convert_template_with_ai(erb_path, ai_service=None)
+        else:
+            # Fall back to rule-based conversion
+            from souschef.converters.template import convert_template_file
+
+            result = convert_template_file(erb_path)
+            result["conversion_method"] = "rule-based"
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return json.dumps(
+            {
+                "success": False,
+                "error": f"Error converting template: {str(e)}",
+                "template": erb_path,
+                "jinja2_output": "",
+            }
+        )
 
 
 # Habitat Parsing Tool

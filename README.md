@@ -5,7 +5,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 [![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](htmlcov/index.html)
+[![Test Coverage](https://img.shields.io/badge/coverage-83%25-green.svg)](htmlcov/index.html)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
@@ -14,17 +14,17 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview - Chef to Ansible features
 
-SousChef is a complete enterprise-grade migration platform with **32 primary MCP tools** organised across **10 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with **35 primary MCP tools** organised across **11 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, and CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### About Tool Counts
 
-**Why 32 tools in the documentation but more in the server?**
+**Why 35 tools in the documentation but more in the server?**
 
-The MCP server provides **37 total tools** (35 public + 2 internal). This documentation focuses on the **32 primary user-facing tools** that cover the main migration capabilities. The remaining 3 tools are low-level filesystem operations and helper utilities used internally by the main tools.
+The MCP server provides **38 total tools**. This documentation focuses on the **35 primary user-facing tools** that cover the main migration capabilities. The remaining 3 tools are low-level filesystem operations used internally by the main tools.
 
-As a user, you'll primarily interact with the 27 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
+As a user, you'll primarily interact with the documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
-> **For developers:** See `souschef/server.py` for the complete list of all 37 registered tools.
+> **For developers:** See `souschef/server.py` for the complete list of all 38 registered tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -37,7 +37,7 @@ As a user, you'll primarily interact with the 27 documented tools. Your AI assis
 - **Local Models** (Ollama, llama.cpp, etc.)
 - **Custom Enterprise Models**
 
-**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 27 specialized tools. The model calls these tools to help with your migration.
+**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 35 specialized tools. The model calls these tools to help with your migration.
 
 > See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
 
@@ -47,6 +47,15 @@ As a user, you'll primarily interact with the 27 documented tools. Your AI assis
 - **[User Guide](docs/user-guide/)** - Complete documentation
 - **[API Reference](docs/api-reference/)** - Detailed tool documentation
 - **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
+
+## What's New in v3.4.0-beta
+
+**Chef Server Integration & AI-Enhanced Template Conversion** - New tools for dynamic inventory and intelligent template conversion:
+
+- **Chef Server Connectivity**: Validate Chef Server connections and query nodes with `validate_chef_server_connection` and `get_chef_nodes`
+- **AI-Enhanced Templates**: Convert ERB to Jinja2 with AI validation using `convert_template_with_ai` for complex Ruby logic
+- **CLI Commands**: New commands `validate-chef-server`, `query-chef-nodes`, and `convert-template-ai` for command-line access
+- **Streamlit UI**: Chef Server Settings page for managing server configuration and validation
 
 ## What's New in v3.3.0
 
@@ -276,6 +285,54 @@ Output formats:
 - **generate_migration_plan** - Create detailed migration execution plans
 - **analyse_cookbook_dependencies** - Analyse dependencies and migration order
 - **generate_migration_report** - Generate executive and technical migration reports
+
+### 12. Chef Server Integration & Dynamic Inventory
+
+Dynamic inventory generation and Chef Server connectivity for hybrid environments:
+
+- **validate_chef_server_connection** - Test Chef Server REST API connectivity and authentication
+- **get_chef_nodes** - Query Chef Server for nodes matching search criteria, extracting roles, environment, platform, and IP information
+- **convert_template_with_ai** - Convert ERB templates to Jinja2 with AI-based validation for complex Ruby logic
+
+#### Chef Server Features
+
+- **Connection Validation**: Test Chef Server connectivity before migrations
+- **Dynamic Node Queries**: Search Chef Server by role, environment, or custom attributes
+- **Node Metadata Extraction**: Retrieve IP addresses, FQDNs, platforms, and roles for inventory
+- **AI-Enhanced Conversion**: Intelligent ERB→Jinja2 conversion with validation for complex Ruby constructs
+- **Fallback Handling**: Graceful degradation when Chef Server is unavailable
+
+#### Usage Examples
+
+```bash
+# Validate Chef Server connection
+souschef validate-chef-server --server-url https://chef.example.com --node-name admin
+
+# Query Chef Server for nodes
+souschef query-chef-nodes --search-query "role:web_server" --json
+
+# Convert template with AI assistance
+souschef convert-template-ai /path/to/template.erb --ai --output /path/to/output.j2
+```
+
+#### MCP Tool Usage
+
+```python
+# Validate Chef Server from AI assistant
+validate_chef_server_connection(
+    server_url="https://chef.example.com",
+    node_name="admin"
+)
+
+# Query nodes for dynamic inventory
+get_chef_nodes(search_query="role:web_server AND environment:production")
+
+# Convert template with AI validation
+convert_template_with_ai(
+    erb_path="/path/to/template.erb",
+    use_ai_enhancement=True
+)
+```
 
 ## Migration Workflow
 
@@ -727,7 +784,7 @@ Following enterprise-grade testing standards with comprehensive test coverage:
 - **Specialized Tests**: Enhanced guards (test_enhanced_guards.py), error handling (test_error_paths.py, test_error_recovery.py), real-world fixtures (test_real_world_fixtures.py)
 - **Performance Tests**: Benchmarking and optimization validation (test_performance.py)
 - **Snapshot Tests**: Regression testing for output stability (test_snapshots.py)
-- **92% Coverage**: Comprehensive test coverage exceeding the 90% target for production readiness
+- **83% Coverage**: Comprehensive test coverage approaching the 90% target for production readiness
 
 ### Quality Assurance
 
