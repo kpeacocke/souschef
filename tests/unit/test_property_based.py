@@ -1,5 +1,6 @@
 """Property-based tests using Hypothesis."""
 
+import contextlib
 import tempfile
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from souschef.core.url_validation import validate_user_provided_url
 from souschef.server import (
     _convert_erb_to_jinja2,
     _extract_resource_actions,
@@ -39,6 +41,14 @@ def test_list_directory_handles_any_string_path(path_str):
     result = list_directory(path_str)
     # Should return either a list or an error string
     assert isinstance(result, (list, str))
+
+
+@given(st.text(min_size=1, max_size=200))
+@settings(max_examples=50)
+def test_validate_user_provided_url_handles_any_input(raw_url):
+    """Test URL validation handles any string input safely."""
+    with contextlib.suppress(ValueError):
+        validate_user_provided_url(raw_url, default_url="https://example.com")
 
 
 @given(st.text())

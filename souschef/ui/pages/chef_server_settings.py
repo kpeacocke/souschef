@@ -8,6 +8,8 @@ import os
 
 import streamlit as st
 
+from souschef.core.url_validation import validate_user_provided_url
+
 try:
     import requests
     from requests.exceptions import (
@@ -18,6 +20,35 @@ except ImportError:
     requests = None  # type: ignore[assignment]
     ConnectionError = Exception  # type: ignore[assignment,misc]  # noqa: A001
     Timeout = Exception  # type: ignore[assignment,misc]
+
+
+def _handle_chef_server_response(
+    response: "requests.Response", server_url: str
+) -> tuple[bool, str]:
+    """
+    Handle Chef Server search response.
+
+    Args:
+        response: HTTP response from Chef Server
+        server_url: The Chef Server URL that was queried
+
+    Returns:
+        Tuple of (success: bool, message: str)
+
+    """
+    if response.status_code == 200:
+        return True, f"✅ Successfully connected to Chef Server at {server_url}"
+    if response.status_code == 401:
+        return (
+            False,
+            "❌ Authentication failed - check your Chef Server credentials",
+        )
+    if response.status_code == 404:
+        return False, "❌ Chef Server search endpoint not found"
+    return (
+        False,
+        f"❌ Connection failed with status code {response.status_code}",
+    )
 
 
 def _validate_chef_server_connection(
@@ -37,8 +68,13 @@ def _validate_chef_server_connection(
     if not requests:
         return False, "requests library not installed"
 
-    if not server_url or not server_url.startswith("http"):
-        return False, "Invalid server URL - must start with http:// or https://"
+    if not server_url:
+        return False, "Server URL is required"
+
+    try:
+        server_url = validate_user_provided_url(server_url)
+    except ValueError as exc:
+        return False, f"Invalid server URL: {exc}"
 
     if not node_name:
         return False, "Node name is required for authentication"
@@ -52,21 +88,7 @@ def _validate_chef_server_connection(
             timeout=5,
             headers={"Accept": "application/json"},
         )
-
-        if response.status_code == 200:
-            return True, f"✅ Successfully connected to Chef Server at {server_url}"
-        elif response.status_code == 401:
-            return (
-                False,
-                "❌ Authentication failed - check your Chef Server credentials",
-            )
-        elif response.status_code == 404:
-            return False, "❌ Chef Server search endpoint not found"
-        else:
-            return (
-                False,
-                f"❌ Connection failed with status code {response.status_code}",
-            )
+        return _handle_chef_server_response(response, server_url)
 
     except Timeout:
         return False, f"❌ Connection timeout - could not reach {server_url}"

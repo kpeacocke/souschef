@@ -528,6 +528,7 @@ SOUSCHEF_AI_BASE_URL=
 SOUSCHEF_AI_PROJECT_ID=
 SOUSCHEF_AI_TEMPERATURE=0.7
 SOUSCHEF_AI_MAX_TOKENS=4000
+SOUSCHEF_ALLOWED_HOSTNAMES=api.example.com,*.example.org
 
 # Streamlit Configuration (optional)
 STREAMLIT_SERVER_PORT=9999
@@ -550,6 +551,7 @@ STREAMLIT_SERVER_HEADLESS=true
 - `SOUSCHEF_AI_PROJECT_ID` - Project ID for Watsonx (optional)
 - `SOUSCHEF_AI_TEMPERATURE` - Model temperature 0.0-2.0 (optional, default: 0.7)
 - `SOUSCHEF_AI_MAX_TOKENS` - Maximum tokens to generate (optional, default: 4000)
+- `SOUSCHEF_ALLOWED_HOSTNAMES` - Comma-separated list of allowed hostnames for outbound API requests (optional)
 
 **Docker Compose (recommended for development):**
 

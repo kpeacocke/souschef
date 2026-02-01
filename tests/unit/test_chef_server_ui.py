@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from souschef.ui.pages.chef_server_settings import (
     _validate_chef_server_connection,
     show_chef_server_settings_page,
@@ -55,35 +53,33 @@ class TestChefServerValidation:
         assert success is False
         assert "not found" in message
 
-    @pytest.mark.skip(reason="Exception mocking complex with requests module")
-    def test_validate_connection_timeout(self):
+    @patch("souschef.ui.pages.chef_server_settings.requests")
+    def test_validate_connection_timeout(self, mock_requests):
         """Test connection timeout."""
         from requests.exceptions import Timeout
 
-        with patch("souschef.ui.pages.chef_server_settings.requests.get") as mock_get:
-            mock_get.side_effect = Timeout()
+        mock_requests.get.side_effect = Timeout()
 
-            success, message = _validate_chef_server_connection(
-                "https://chef.example.com", "my-node"
-            )
+        success, message = _validate_chef_server_connection(
+            "https://chef.example.com", "my-node"
+        )
 
-            assert success is False
-            assert "timeout" in message.lower()
+        assert success is False
+        assert "timeout" in message.lower()
 
-    @pytest.mark.skip(reason="Exception mocking complex with requests module")
-    def test_validate_connection_error(self):
+    @patch("souschef.ui.pages.chef_server_settings.requests")
+    def test_validate_connection_error(self, mock_requests):
         """Test connection error."""
         from requests.exceptions import ConnectionError as RequestsConnectionError
 
-        with patch("souschef.ui.pages.chef_server_settings.requests.get") as mock_get:
-            mock_get.side_effect = RequestsConnectionError()
+        mock_requests.get.side_effect = RequestsConnectionError()
 
-            success, message = _validate_chef_server_connection(
-                "https://chef.example.com", "my-node"
-            )
+        success, message = _validate_chef_server_connection(
+            "https://chef.example.com", "my-node"
+        )
 
-            assert success is False
-            assert "not reachable" in message
+        assert success is False
+        assert "not reachable" in message
 
     def test_validate_invalid_url(self):
         """Test validation with invalid URL."""

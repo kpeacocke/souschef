@@ -39,6 +39,7 @@ from souschef.core.path_utils import (
     safe_glob,
     safe_read_text,
 )
+from souschef.core.url_validation import validate_user_provided_url
 from souschef.parsers.attributes import parse_attributes
 from souschef.parsers.recipe import parse_recipe
 
@@ -244,18 +245,36 @@ def _initialize_ai_client(
         if APIClient is None:
             return f"{ERROR_PREFIX} ibm_watsonx_ai library not available"
 
+        try:
+            validated_url = validate_user_provided_url(
+                base_url,
+                default_url="https://us-south.ml.cloud.ibm.com",
+            )
+        except ValueError as exc:
+            return f"{ERROR_PREFIX} Invalid Watsonx base URL: {exc}"
+
         return APIClient(
             api_key=api_key,
             project_id=project_id,
-            url=base_url or "https://us-south.ml.cloud.ibm.com",
+            url=validated_url,
         )
     elif ai_provider.lower() == "lightspeed":
         if requests is None:
             return f"{ERROR_PREFIX} requests library not available"
 
+        try:
+            validated_url = validate_user_provided_url(
+                base_url,
+                default_url="https://api.redhat.com",
+                allowed_hosts={"api.redhat.com"},
+                strip_path=True,
+            )
+        except ValueError as exc:
+            return f"{ERROR_PREFIX} Invalid Lightspeed base URL: {exc}"
+
         return {
             "api_key": api_key,
-            "base_url": base_url or "https://api.redhat.com",
+            "base_url": validated_url,
         }
     elif ai_provider.lower() == "github_copilot":
         return (
@@ -1230,7 +1249,9 @@ def _generate_inventory_script_content(queries_data: list[dict[str, str]]) -> st
     # Convert queries_data to JSON string for embedding
     queries_json = json.dumps(  # nosonar
         {
-            item.get("group_name", f"group_{i}"): item.get("search_query", "")
+            item.get("group_name", f"group_{i}"): (
+                item.get("search_query") or item.get("query", "")
+            )
             for i, item in enumerate(queries_data)
         },
         indent=4,
@@ -1248,10 +1269,51 @@ import json
 import os
 import sys
 import argparse
+import ipaddress
+from urllib.parse import urlparse, urlunparse
 from typing import Dict, List, Any
 
 # Search query to group mappings
 SEARCH_QUERIES = {queries_json}
+
+def validate_chef_server_url(server_url: str) -> str:
+    """Validate Chef Server URL to avoid unsafe requests."""
+    url_value = str(server_url).strip()
+    if not url_value:
+        raise ValueError("Chef Server URL is required")
+
+    if "://" not in url_value:
+        url_value = f"https://{{url_value}}"
+
+    parsed = urlparse(url_value)
+    if parsed.scheme.lower() != "https":
+        raise ValueError("Chef Server URL must use HTTPS")
+
+    if not parsed.hostname:
+        raise ValueError("Chef Server URL must include a hostname")
+
+    hostname = parsed.hostname.lower()
+    local_suffixes = (".localhost", ".local", ".localdomain", ".internal")
+    if hostname == "localhost" or hostname.endswith(local_suffixes):
+        raise ValueError("Chef Server URL must use a public hostname")
+
+    try:
+        ip_address = ipaddress.ip_address(hostname)
+    except ValueError:
+        ip_address = None
+
+    if ip_address and (
+        ip_address.is_private
+        or ip_address.is_loopback
+        or ip_address.is_link_local
+        or ip_address.is_reserved
+        or ip_address.is_multicast
+        or ip_address.is_unspecified
+    ):
+        raise ValueError("Chef Server URL must use a public hostname")
+
+    cleaned = parsed._replace(params="", query="", fragment="")
+    return urlunparse(cleaned).rstrip("/")
 
 def get_chef_nodes(search_query: str) -> List[Dict[str, Any]]:
     """Query Chef server for nodes matching search criteria."""
@@ -1259,6 +1321,11 @@ def get_chef_nodes(search_query: str) -> List[Dict[str, Any]]:
 
     chef_server_url = os.environ.get("CHEF_SERVER_URL", "").rstrip("/")
     if not chef_server_url:
+        return []
+
+    try:
+        chef_server_url = validate_chef_server_url(chef_server_url)
+    except ValueError:
         return []
 
     try:
@@ -1350,6 +1417,11 @@ def get_chef_nodes(search_query: str) -> list[dict[str, Any]]:
 
     if not chef_server_url:
         # Chef server not configured - return empty list
+        return []
+
+    try:
+        chef_server_url = validate_user_provided_url(chef_server_url)
+    except ValueError:
         return []
 
     try:
