@@ -173,12 +173,26 @@ Standard Streamlit environment variables can be set via:
 Key variables:
 
 ```bash
+# Streamlit Configuration
 STREAMLIT_SERVER_PORT=9999              # UI port
 STREAMLIT_SERVER_HEADLESS=true          # No browser auto-open
 STREAMLIT_BROWSER_GATHER_USAGE_STATS=false  # Disable telemetry
 STREAMLIT_SERVER_ENABLE_CORS=true       # Enable CORS
 STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true  # Enable XSRF protection
 PYTHONUNBUFFERED=1                      # Immediate log output
+
+# AI Configuration (for automatic AI model setup)
+SOUSCHEF_AI_PROVIDER=Anthropic (Claude)  # AI provider
+SOUSCHEF_AI_MODEL=claude-3-5-sonnet-20241022  # AI model
+SOUSCHEF_AI_API_KEY=your-api-key-here   # API key for provider
+SOUSCHEF_AI_BASE_URL=                   # Optional: Custom API endpoint
+SOUSCHEF_AI_PROJECT_ID=                 # For IBM Watsonx
+SOUSCHEF_AI_TEMPERATURE=0.7             # Model temperature
+SOUSCHEF_AI_MAX_TOKENS=4000             # Max response tokens
+
+# Chef Server Configuration (for dynamic inventory queries)
+CHEF_SERVER_URL=https://chef.example.com  # Chef Server URL
+CHEF_NODE_NAME=my-node                  # Chef node for authentication
 ```
 
 ### Docker Compose Configuration

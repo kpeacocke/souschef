@@ -24,6 +24,7 @@ R = TypeVar("R")
 from souschef.core import _ensure_within_base_path, _normalize_path
 from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_is_file
 from souschef.ui.pages.ai_settings import show_ai_settings_page
+from souschef.ui.pages.chef_server_settings import show_chef_server_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 
 # Constants
@@ -35,6 +36,7 @@ NAV_MIGRATION_PLANNING = "Migration Planning"
 NAV_DEPENDENCY_MAPPING = "Dependency Mapping"
 NAV_VALIDATION_REPORTS = "Validation Reports"
 NAV_AI_SETTINGS = "AI Settings"
+NAV_CHEF_SERVER_SETTINGS = "Chef Server Settings"
 NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
 BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
 INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
@@ -125,13 +127,14 @@ def main() -> None:
     # Navigation section
     st.subheader("Navigation")
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3 = st.columns(3)
+    col4, col5, col6 = st.columns(3)
 
     with col1:
         if st.button(
             "Cookbook Analysis",
             type="primary" if page == NAV_COOKBOOK_ANALYSIS else "secondary",
-            width="stretch",
+            use_container_width=True,
             key="nav_cookbook_analysis",
         ):
             st.session_state.current_page = NAV_COOKBOOK_ANALYSIS
@@ -141,7 +144,7 @@ def main() -> None:
         if st.button(
             "Migration Planning",
             type="primary" if page == NAV_MIGRATION_PLANNING else "secondary",
-            width="stretch",
+            use_container_width=True,
             key="nav_migration_planning",
         ):
             st.session_state.current_page = NAV_MIGRATION_PLANNING
@@ -151,7 +154,7 @@ def main() -> None:
         if st.button(
             "Dependency Mapping",
             type="primary" if page == NAV_DEPENDENCY_MAPPING else "secondary",
-            width="stretch",
+            use_container_width=True,
             key="nav_dependency_mapping",
         ):
             st.session_state.current_page = NAV_DEPENDENCY_MAPPING
@@ -161,7 +164,7 @@ def main() -> None:
         if st.button(
             "Validation Reports",
             type="primary" if page == NAV_VALIDATION_REPORTS else "secondary",
-            width="stretch",
+            use_container_width=True,
             key="nav_validation_reports",
         ):
             st.session_state.current_page = NAV_VALIDATION_REPORTS
@@ -171,10 +174,20 @@ def main() -> None:
         if st.button(
             "AI Settings",
             type="primary" if page == NAV_AI_SETTINGS else "secondary",
-            width="stretch",
+            use_container_width=True,
             key="nav_ai_settings",
         ):
             st.session_state.current_page = NAV_AI_SETTINGS
+            st.rerun()
+
+    with col6:
+        if st.button(
+            "Chef Server",
+            type="primary" if page == NAV_CHEF_SERVER_SETTINGS else "secondary",
+            use_container_width=True,
+            key="nav_chef_server_settings",
+        ):
+            st.session_state.current_page = NAV_CHEF_SERVER_SETTINGS
             st.rerun()
 
     st.divider()
@@ -192,6 +205,7 @@ def _route_to_page(page: str) -> None:
         NAV_DEPENDENCY_MAPPING: show_dependency_mapping,
         NAV_VALIDATION_REPORTS: show_validation_reports,
         NAV_AI_SETTINGS: show_ai_settings_page,
+        NAV_CHEF_SERVER_SETTINGS: show_chef_server_settings_page,
     }
 
     route_func = page_routes.get(page)

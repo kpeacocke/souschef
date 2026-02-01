@@ -8,9 +8,10 @@ import json
 import os
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse, urlunparse
 
 import streamlit as st
+
+from souschef.core.url_validation import validate_user_provided_url
 
 # AI Provider Constants
 ANTHROPIC_PROVIDER = "Anthropic (Claude)"
@@ -21,6 +22,7 @@ LOCAL_PROVIDER = "Local Model"
 
 # UI Constants
 API_KEY_LABEL = "API Key"
+REQUESTS_NOT_INSTALLED_MESSAGE = "requests library not installed"
 
 # Import AI libraries (optional dependencies)
 try:
@@ -70,8 +72,26 @@ def _get_model_options(provider):
 def _render_api_configuration(provider):
     """Render API configuration UI and return config values."""
     if provider == LOCAL_PROVIDER:
-        st.info("Local model configuration will be added in a future update.")
-        return "", "", ""
+        col1, col2 = st.columns(2)
+        with col1:
+            base_url = st.text_input(
+                "Local Server URL",
+                help=(
+                    "HTTPS URL of your local model server (Ollama, llama.cpp, vLLM, "
+                    "etc.). Add non-public hosts to SOUSCHEF_ALLOWED_HOSTNAMES."
+                ),
+                key="base_url_input",
+                placeholder="https://localhost:11434 (for Ollama)",
+                value="https://localhost:11434",
+            )
+        with col2:
+            model = st.text_input(
+                "Model Name",
+                help="Name of the model to use from your local server",
+                key="model_input",
+                placeholder="e.g., llama2, mistral, neural-chat",
+            )
+        return model, base_url, ""
     elif provider == WATSON_PROVIDER:
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -258,7 +278,7 @@ def show_ai_settings_page():
 
 def validate_ai_configuration(provider, api_key, model, base_url="", project_id=""):
     """Validate the AI configuration by making a test API call."""
-    if not api_key and provider != "Local Model":
+    if not api_key and provider != LOCAL_PROVIDER:
         st.error("API key is required for validation.")
         return
 
@@ -276,8 +296,10 @@ def validate_ai_configuration(provider, api_key, model, base_url="", project_id=
                 success, message = validate_watson_config(api_key, project_id, base_url)
             elif provider == LIGHTSPEED_PROVIDER:
                 success, message = validate_lightspeed_config(api_key, model, base_url)
+            elif provider == LOCAL_PROVIDER:
+                success, message = validate_local_model_config(base_url, model)
             else:
-                st.info("Local model validation not implemented yet.")
+                st.error("Unknown provider selected.")
                 return
 
             if success:
@@ -299,29 +321,116 @@ def _sanitize_lightspeed_base_url(base_url: str) -> str:
     - Strip any user-supplied path, query, or fragment.
     """
     default_url = "https://api.redhat.com"
-    allowed_hosts = {
-        "api.redhat.com",
-    }
+    allowed_hosts = {"api.redhat.com"}
 
-    if not base_url or not str(base_url).strip():
-        return default_url
+    return validate_user_provided_url(
+        base_url,
+        default_url=default_url,
+        allowed_hosts=allowed_hosts,
+        strip_path=True,
+    )
 
-    parsed = urlparse(base_url)
 
-    # If scheme is missing, assume https
-    if not parsed.scheme:
-        parsed = parsed._replace(scheme="https")
+def _check_ollama_server(base_url: str, model: str) -> tuple[bool, str]:
+    """Check Ollama server availability and models."""
+    if requests is None:
+        return False, REQUESTS_NOT_INSTALLED_MESSAGE
 
-    if parsed.scheme.lower() != "https":
-        raise ValueError("Base URL must use HTTPS.")
+    response = requests.get(f"{base_url}/api/tags", timeout=5)
+    if response.status_code == 200:
+        models_data = response.json()
+        available = [m.get("name", "") for m in models_data.get("models", [])]
 
-    hostname = (parsed.hostname or "").lower()
-    if hostname not in allowed_hosts:
-        raise ValueError("Base URL host must be a supported Red Hat domain.")
+        if model and model in available:
+            return True, f"Model '{model}' found on Ollama server"
+        elif available:
+            models_str = ", ".join(available[:3])
+            return True, f"Ollama server with models: {models_str}"
+        else:
+            return False, "Ollama server found but no models available"
+    return False, "Ollama API not responding"
 
-    # Normalize to scheme + netloc only; drop path/query/fragment.
-    cleaned = parsed._replace(path="", params="", query="", fragment="")
-    return urlunparse(cleaned)
+
+def _check_openai_compatible_server(base_url: str, model: str) -> tuple[bool, str]:
+    """Check OpenAI-compatible server availability and models."""
+    if requests is None:
+        return False, REQUESTS_NOT_INSTALLED_MESSAGE
+
+    response = requests.get(f"{base_url}/v1/models", timeout=5)
+    if response.status_code == 200:
+        models_data = response.json()
+        available = [m.get("id", "") for m in models_data.get("data", [])]
+
+        if model and model in available:
+            return True, f"Model '{model}' found on server"
+        elif available:
+            return True, f"OpenAI-compatible server running at {base_url}"
+        else:
+            return False, "Server found but no models available"
+    return False, "OpenAI API not responding"
+
+
+def validate_local_model_config(base_url="", model=""):
+    """
+    Validate local model server configuration.
+
+    Supports multiple local model servers:
+    - Ollama (default: https://localhost:11434)
+    - llama.cpp server (default: https://localhost:8000)
+    - vLLM (default: https://localhost:8000)
+    - LM Studio (default: https://localhost:1234)
+
+    Args:
+        base_url: Base URL of local model server
+        model: Model name to check availability
+
+    Returns:
+        Tuple of (success: bool, message: str)
+
+    """
+    if requests is None:
+        return False, REQUESTS_NOT_INSTALLED_MESSAGE
+
+    # Default to Ollama if no URL provided
+    if not base_url:
+        base_url = "https://localhost:11434"
+
+    try:
+        base_url = validate_user_provided_url(base_url)
+    except ValueError as exc:
+        return False, f"Invalid local model server URL: {exc}"
+
+    base_url = base_url.rstrip("/")
+
+    try:
+        # Try Ollama API first
+        success, message = _check_ollama_server(base_url, model)
+        if success or "Ollama server" in message:
+            return success, f"{message} at {base_url}"
+
+        # Try OpenAI-compatible API
+        success, message = _check_openai_compatible_server(base_url, model)
+        if success:
+            return success, message
+
+        # If neither endpoint works, server might not be running
+        return False, (
+            f"Cannot connect to local model server at {base_url}. "
+            "Make sure it's running."
+        )
+
+    except requests.exceptions.Timeout:
+        return (
+            False,
+            f"Connection timed out. Is server running at {base_url}?",
+        )
+    except requests.exceptions.ConnectionError:
+        return (
+            False,
+            f"Cannot reach {base_url}. Ensure local model server is running.",
+        )
+    except Exception as e:
+        return False, f"Error validating local model server: {e}"
 
 
 def validate_anthropic_config(api_key, model):
@@ -351,7 +460,12 @@ def validate_openai_config(api_key, model, base_url=""):
     try:
         client_kwargs = {"api_key": api_key}
         if base_url:
-            client_kwargs["base_url"] = base_url
+            try:
+                validated_url = validate_user_provided_url(base_url)
+            except ValueError as exc:
+                return False, f"Invalid base URL: {exc}"
+
+            client_kwargs["base_url"] = validated_url
 
         client = openai.OpenAI(**client_kwargs)
 
@@ -415,11 +529,18 @@ def validate_watson_config(api_key, project_id, base_url=""):
         )
 
     try:
+        validated_url = "https://us-south.ml.cloud.ibm.com"
+        if base_url:
+            try:
+                validated_url = validate_user_provided_url(base_url)
+            except ValueError as exc:
+                return False, f"Invalid base URL: {exc}"
+
         # Initialize Watsonx client
         client = APIClient(
             api_key=api_key,
             project_id=project_id,
-            url=base_url or "https://us-south.ml.cloud.ibm.com",
+            url=validated_url,
         )
 
         # Test connection by listing available models

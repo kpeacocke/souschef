@@ -1,19 +1,19 @@
 # MCP Tools Reference
 
-SousChef provides **32 specialised MCP tools** for comprehensive Chef-to-Ansible migration. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **35 specialised MCP tools** for comprehensive Chef-to-Ansible migration. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
 
 !!! info "About the Tool Count"
-    **Why 32 tools here but the server shows more?**
+    **Why 35 tools here but the server shows more?**
 
-    The MCP server actually provides **37 total tools** (35 public + 2 internal). This guide documents the **32 primary tools** you'll use for migrations. The remaining 5 are:
+    The MCP server actually provides **40 total tools** (38 public + 2 internal). This guide documents the **35 primary tools** you'll use for migrations. The remaining 5 are:
 
     - **Internal filesystem operations** - Low-level file reading and directory listing used by other tools
     - **Helper utilities** - Supporting functions that other tools call
 
-    Your AI assistant may use these additional tools automatically behind the scenes (e.g., when a tool needs to read a file, it calls the internal file reading tool). You don't need to invoke them directly - just use the 32 documented tools and let your AI assistant handle the rest.
+    Your AI assistant may use these additional tools automatically behind the scenes (e.g., when a tool needs to read a file, it calls the internal file reading tool). You don't need to invoke them directly - just use the 35 documented tools and let your AI assistant handle the rest.
 
 ## Quick Reference by Capability Area
 
@@ -29,6 +29,7 @@ SousChef provides **32 specialised MCP tools** for comprehensive Chef-to-Ansible
 | [Performance](#performance) | 2 tools | Profile and optimise parsing operations |
 | [CI/CD Pipeline Generation](#ci-cd-pipeline-generation) | 3 tools | Generate Jenkins, GitLab CI, and GitHub Actions |
 | [AWX/AAP Integration](#awx-aap-integration) | 3 tools | Generate AWX job templates, workflows, and inventory |
+| [Chef Server Integration](#chef-server-integration) | 3 tools | Validate Chef Server connections and query dynamic inventory |
 
 ---
 
@@ -1138,11 +1139,143 @@ Generate AWX dynamic inventory source from Chef server.
 
 ---
 
-### Tool Selection
+## Chef Server Integration
+
+Dynamic inventory generation and Chef Server connectivity for hybrid environments.
+
+### validate_chef_server_connection
+
+Validate Chef Server connectivity and authentication.
+
+**What it does**: Tests the Chef Server REST API connection to verify connectivity, authentication, and configuration. Ensures your Chef server is accessible and properly configured before using it for inventory operations.
+
+**Why you need this**: Before using your Chef server as a source for dynamic inventory or node information, you need to verify it's reachable and responding correctly. This tool does that validation instantly.
+
+**What you get**:
+- Confirmation that Chef Server is reachable
+- Status of API connectivity
+- Authentication verification
+- Clear error messages if there are issues
+
+**Real-world example**: Your DevOps team sets up a Chef server at `https://chef.staging.example.com`. Before configuring AWX to pull inventory from it, you use this tool to verify connectivity and get a success message confirming it's ready to use.
+
+**Parameters:**
+- `server_url` (string, required): Base URL of the Chef Server (e.g., https://chef.example.com)
+- `node_name` (string, required): Chef node name for authentication
+
+**Returns:**
+- Success/failure message with connection details
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Validate the Chef Server connection to https://chef.example.com
+    using node name "ansible-admin"
+    ```
+
+=== "CLI"
+    ```bash
+    souschef validate-chef-server --server-url https://chef.example.com --node-name ansible-admin
+    ```
+
+---
+
+### get_chef_nodes
+
+Query Chef Server for nodes matching search criteria.
+
+**What it does**: Searches your Chef server for nodes matching specific criteria (by role, environment, platform, custom attributes, etc.) and extracts relevant metadata including roles, environment, platform, and IP addresses. Provides JSON output suitable for dynamic inventory generation.
+
+**Why you need this**: Chef servers maintain the authoritative list of all your infrastructure nodes. Before containerising or migrating to Ansible, you need to understand your current node landscape. This tool queries that data instantly.
+
+**What you get**:
+- List of matching nodes with their names
+- Roles assigned to each node
+- Chef environment (production, staging, dev, etc.)
+- Platform information (Ubuntu, CentOS, etc.)
+- IP addresses (both private and FQDN)
+- Node attributes relevant for inventory
+
+**Real-world example**: Your Chef server has 150 nodes across multiple environments. You need to know which ones are web servers in production. Running this tool with search query `role:web_server AND environment:production` returns only the 15 production web servers with their IPs and roles, perfect for creating Ansible inventory groups.
+
+**Parameters:**
+- `search_query` (string, optional): Chef search query (default: '*:*' for all nodes)
+  - Examples: `role:web_server`, `environment:production`, `platform:ubuntu`
+
+**Returns:**
+- JSON string with list of matching nodes and their attributes
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Query the Chef Server for all nodes with role "database"
+    and return the list as JSON
+    ```
+
+=== "CLI"
+    ```bash
+    souschef query-chef-nodes --search-query "role:database" --json
+    ```
+
+---
+
+### convert_template_with_ai
+
+Convert ERB templates to Jinja2 with AI-based validation.
+
+**What it does**: Converts Chef ERB template files to Ansible Jinja2 format using rule-based conversion with optional AI-enhanced validation for complex Ruby logic. The tool first applies standard conversion rules, then optionally uses AI analysis to validate complex constructs and suggest improvements.
+
+**Why you need this**: ERB templates are common in Chef cookbooks. Many are simple variable substitutions that convert easily, but some contain complex Ruby logic (loops, conditionals, method calls) that requires careful translation. This tool handles both cases: quick conversion for simple templates and intelligent analysis for complex ones.
+
+**What you get**:
+- Converted Jinja2 template ready for Ansible
+- List of variables used in the template
+- Warnings about complex Ruby constructs
+- AI suggestions for improving the conversion (when AI enhancement is enabled)
+- Conversion method used (rule-based or AI-enhanced)
+
+**Real-world example**: Your cookbook has a simple ERB template `<%= @app_name %>` which converts instantly to Jinja2: `{{ app_name }}`. But you also have a complex template with Ruby conditionals and loops. For that one, you can enable AI enhancement to get insights on how to best structure it as Jinja2 loops and filters.
+
+**Parameters:**
+- `erb_path` (string, required): Path to the ERB template file
+- `use_ai_enhancement` (boolean, optional): Use AI for complex conversions (default: True)
+
+**Returns:**
+- JSON string with conversion results including:
+  - `success`: Whether conversion succeeded
+  - `jinja2_output`: The converted Jinja2 template
+  - `variables`: List of variables referenced
+  - `warnings`: Any issues found during conversion
+  - `conversion_method`: "rule-based", "ai-enhanced", or "rule-based-fallback"
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert the template at examples/database/templates/config.erb to Jinja2
+    using AI enhancement to validate complex logic
+    ```
+
+=== "CLI"
+    ```bash
+    souschef convert-template-ai templates/default/app.conf.erb --ai --output templates/app.conf.j2
+    ```
+
+    Without AI enhancement:
+    ```bash
+    souschef convert-template-ai templates/default/simple.conf.erb --no-ai
+    ```
+
+---
+
+## Tool Selection
 
 - **Start with analysis**: Use `parse_*` and `analyze_*` tools to understand your Chef infrastructure before converting
 - **Validate conversions**: Always use `validate_conversion` after converting resources or recipes
 - **Profile large cookbooks**: Use `profile_cookbook_performance` for cookbooks with many recipes
+- **Check Chef Server**: Use `validate_chef_server_connection` before using it for inventory operations
 
 ### Error Handling
 
@@ -1150,6 +1283,7 @@ All tools provide detailed error messages with suggestions:
 - File not found errors include path verification tips
 - Parse errors show line numbers and context
 - Validation errors explain what needs fixing
+- Connection errors provide troubleshooting steps
 
 ### Workflow Recommendations
 
@@ -1159,6 +1293,7 @@ All tools provide detailed error messages with suggestions:
 4. **Conversion**: Use `convert_*` tools for individual resources
 5. **Validation**: Use `generate_inspec_from_recipe` and `validate_conversion`
 6. **Assessment**: Use `generate_migration_report`
+7. **Chef Server Integration** (optional): Use `validate_chef_server_connection` → `get_chef_nodes` → inventory generation
 
 ---
 

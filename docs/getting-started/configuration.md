@@ -81,6 +81,8 @@ Available environment variables:
 | `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `SOUSCHEF_CONFIG_PATH` | - | Custom configuration file path |
 | `CHEF_REPO_PATH` | - | Default Chef repository path |
+| `CHEF_SERVER_URL` | - | Chef Server URL for dynamic inventory queries (e.g., `https://chef.example.com`) |
+| `CHEF_NODE_NAME` | - | Chef node name for Chef Server authentication |
 
 ## Model Provider Configuration
 

@@ -388,16 +388,19 @@ souschef-cli dependencies cookbook/
 - Template conversion
 - Metadata extraction
 - Recipe structure analysis
+- Chef Server API integration for dynamic inventory
+- Local model support (Ollama, llama.cpp, vLLM, LM Studio)
 
 **What needs manual work:**
-- Complex Chef search queries
-- Custom resource logic
+- Complex custom resource logic
 - Ad-hoc Ruby blocks
 - Complex attribute merging
 - Encrypted data bags
+- Chef Server authentication (requires environment configuration)
 
 **Strategy:**
 - Use SousChef for initial structure
+- Configure environment variables for Chef Server access (`CHEF_SERVER_URL`, `CHEF_NODE_NAME`)
 - Manually refine complex areas
 - Document custom mappings
 - Share learnings with team

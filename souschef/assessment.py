@@ -25,6 +25,7 @@ from souschef.core.metrics import (
     estimate_effort_for_complexity,
 )
 from souschef.core.path_utils import _validated_candidate, safe_glob
+from souschef.core.url_validation import validate_user_provided_url
 from souschef.core.validation import (
     ValidationEngine,
     ValidationLevel,
@@ -2596,8 +2597,21 @@ def _call_ai_api(
         elif ai_provider == "openai":
             return _call_openai_api(prompt, api_key, model, temperature, max_tokens)
         elif ai_provider == "watson":
+            validated_url = None
+            if base_url:
+                try:
+                    validated_url = validate_user_provided_url(base_url)
+                except ValueError:
+                    return None
+
             return _call_watson_api(
-                prompt, api_key, model, temperature, max_tokens, project_id, base_url
+                prompt,
+                api_key,
+                model,
+                temperature,
+                max_tokens,
+                project_id,
+                validated_url,
             )
         else:
             return None

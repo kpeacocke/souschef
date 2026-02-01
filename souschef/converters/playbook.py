@@ -39,6 +39,7 @@ from souschef.core.path_utils import (
     safe_glob,
     safe_read_text,
 )
+from souschef.core.url_validation import validate_user_provided_url
 from souschef.parsers.attributes import parse_attributes
 from souschef.parsers.recipe import parse_recipe
 
@@ -244,18 +245,36 @@ def _initialize_ai_client(
         if APIClient is None:
             return f"{ERROR_PREFIX} ibm_watsonx_ai library not available"
 
+        try:
+            validated_url = validate_user_provided_url(
+                base_url,
+                default_url="https://us-south.ml.cloud.ibm.com",
+            )
+        except ValueError as exc:
+            return f"{ERROR_PREFIX} Invalid Watsonx base URL: {exc}"
+
         return APIClient(
             api_key=api_key,
             project_id=project_id,
-            url=base_url or "https://us-south.ml.cloud.ibm.com",
+            url=validated_url,
         )
     elif ai_provider.lower() == "lightspeed":
         if requests is None:
             return f"{ERROR_PREFIX} requests library not available"
 
+        try:
+            validated_url = validate_user_provided_url(
+                base_url,
+                default_url="https://api.redhat.com",
+                allowed_hosts={"api.redhat.com"},
+                strip_path=True,
+            )
+        except ValueError as exc:
+            return f"{ERROR_PREFIX} Invalid Lightspeed base URL: {exc}"
+
         return {
             "api_key": api_key,
-            "base_url": base_url or "https://api.redhat.com",
+            "base_url": validated_url,
         }
     elif ai_provider.lower() == "github_copilot":
         return (
@@ -652,6 +671,10 @@ def _build_conversion_requirements_parts() -> list[str]:
         "",
         "7. **Conditionals**: Convert Chef guards (only_if/not_if) to Ansible when",
         "   conditions.",
+        "   - For file or directory checks, add a stat task with register,",
+        "     then use a boolean when expression like 'stat_result.stat.exists'.",
+        "   - Do NOT put module names or task mappings under when.",
+        "   - Keep when expressions as valid YAML scalars (strings or lists).",
         "",
         "8. **Notifications**: Convert Chef notifications to Ansible handlers",
         "   where appropriate.",
@@ -747,7 +770,7 @@ def _build_output_format_parts() -> list[str]:
 
 
 def _clean_ai_playbook_response(ai_response: str) -> str:
-    """Clean and validate the AI-generated playbook response."""
+    """Clean the AI-generated playbook response."""
     if not ai_response or not ai_response.strip():
         return f"{ERROR_PREFIX} AI returned empty response"
 
@@ -759,15 +782,19 @@ def _clean_ai_playbook_response(ai_response: str) -> str:
     if not cleaned.startswith("---") and not cleaned.startswith("- name:"):
         return f"{ERROR_PREFIX} AI response does not appear to be valid YAML playbook"
 
-    # Try to parse as YAML to validate structure
+    return cleaned
+
+
+def _validate_playbook_yaml(playbook_content: str) -> str | None:
+    """Validate YAML syntax and return an error message if invalid."""
     try:
         import yaml
 
-        yaml.safe_load(cleaned)
-    except Exception as e:
-        return f"{ERROR_PREFIX} AI generated invalid YAML: {e}"
+        yaml.safe_load(playbook_content)
+    except Exception as exc:
+        return str(exc)
 
-    return cleaned
+    return None
 
 
 def _validate_and_fix_playbook(
@@ -782,7 +809,13 @@ def _validate_and_fix_playbook(
     if playbook_content.startswith(ERROR_PREFIX):
         return playbook_content
 
-    validation_error = _run_ansible_lint(playbook_content)
+    yaml_error = _validate_playbook_yaml(playbook_content)
+    validation_error: str | None
+    if yaml_error:
+        validation_error = f"YAML parse error: {yaml_error}"
+    else:
+        validation_error = _run_ansible_lint(playbook_content)
+
     if not validation_error:
         return playbook_content
 
@@ -815,6 +848,10 @@ Just the YAML content.
             # Fallback to the original (valid-but-lint-failing) playbook
             # rather than returning an error string
             return playbook_content
+
+        fixed_yaml_error = _validate_playbook_yaml(cleaned_response)
+        if fixed_yaml_error:
+            return f"{ERROR_PREFIX} AI generated invalid YAML: {fixed_yaml_error}"
 
         return cleaned_response
     except Exception:
@@ -1209,7 +1246,18 @@ def _generate_ansible_inventory_from_search(
 
 def _generate_inventory_script_content(queries_data: list[dict[str, str]]) -> str:
     """Generate Python dynamic inventory script content."""
-    script_template = '''#!/usr/bin/env python3
+    # Convert queries_data to JSON string for embedding
+    queries_json = json.dumps(  # nosonar
+        {
+            item.get("group_name", f"group_{i}"): (
+                item.get("search_query") or item.get("query", "")
+            )
+            for i, item in enumerate(queries_data)
+        },
+        indent=4,
+    )
+
+    script_template = f'''#!/usr/bin/env python3
 """Dynamic Ansible Inventory Script.
 
 Generated from Chef search queries by SousChef
@@ -1218,96 +1266,118 @@ This script converts Chef search queries to Ansible inventory groups.
 Requires: python-requests (for Chef server API)
 """
 import json
+import os
 import sys
 import argparse
+import ipaddress
+from urllib.parse import urlparse, urlunparse
 from typing import Dict, List, Any
 
-# Chef server configuration
-CHEF_SERVER_URL = "https://your-chef-server"
-CLIENT_NAME = "your-client-name"
-CLIENT_KEY_PATH = "/path/to/client.pem"
-
 # Search query to group mappings
-SEARCH_QUERIES = {search_queries_json}
+SEARCH_QUERIES = {queries_json}
 
+def validate_chef_server_url(server_url: str) -> str:
+    """Validate Chef Server URL to avoid unsafe requests."""
+    url_value = str(server_url).strip()
+    if not url_value:
+        raise ValueError("Chef Server URL is required")
+
+    if "://" not in url_value:
+        url_value = f"https://{{url_value}}"
+
+    parsed = urlparse(url_value)
+    if parsed.scheme.lower() != "https":
+        raise ValueError("Chef Server URL must use HTTPS")
+
+    if not parsed.hostname:
+        raise ValueError("Chef Server URL must include a hostname")
+
+    hostname = parsed.hostname.lower()
+    local_suffixes = (".localhost", ".local", ".localdomain", ".internal")
+    if hostname == "localhost" or hostname.endswith(local_suffixes):
+        raise ValueError("Chef Server URL must use a public hostname")
+
+    try:
+        ip_address = ipaddress.ip_address(hostname)
+    except ValueError:
+        ip_address = None
+
+    if ip_address and (
+        ip_address.is_private
+        or ip_address.is_loopback
+        or ip_address.is_link_local
+        or ip_address.is_reserved
+        or ip_address.is_multicast
+        or ip_address.is_unspecified
+    ):
+        raise ValueError("Chef Server URL must use a public hostname")
+
+    cleaned = parsed._replace(params="", query="", fragment="")
+    return urlunparse(cleaned).rstrip("/")
 
 def get_chef_nodes(search_query: str) -> List[Dict[str, Any]]:
-    """Query Chef server for nodes matching search criteria.
+    """Query Chef server for nodes matching search criteria."""
+    import requests
 
-    Args:
-        search_query: Chef search query string
+    chef_server_url = os.environ.get("CHEF_SERVER_URL", "").rstrip("/")
+    if not chef_server_url:
+        return []
 
-    Returns:
-        List of node objects from Chef server
-    """
-    # TODO: Implement Chef server API client
-    # This is a placeholder - implement Chef server communication
-    # using python-chef library or direct API calls
+    try:
+        chef_server_url = validate_chef_server_url(chef_server_url)
+    except ValueError:
+        return []
 
-    # Example structure of what this should return:
-    return [
-        {
-            "name": "web01.example.com",
-            "roles": ["web"],
-            "environment": "production",
-            "platform": "ubuntu",
-            "ipaddress": "10.0.1.10"
-        }
-    ]
+    try:
+        search_url = f"{{chef_server_url}}/search/node?q={{search_query}}"
+        response = requests.get(search_url, timeout=10)
+        response.raise_for_status()
+        search_result = response.json()
+        nodes_data = []
 
+        for row in search_result.get("rows", []):
+            node_obj = {{
+                "name": row.get("name", "unknown"),
+                "roles": row.get("run_list", []),
+                "environment": row.get("chef_environment", "_default"),
+                "platform": row.get("platform", "unknown"),
+                "ipaddress": row.get("ipaddress", ""),
+                "fqdn": row.get("fqdn", ""),
+            }}
+            nodes_data.append(node_obj)
+        return nodes_data
+    except Exception:
+        return []
 
 def build_inventory() -> Dict[str, Any]:
-    """Build Ansible inventory from Chef searches.
-
-    Returns:
-        Ansible inventory dictionary
-    """
-    inventory = {
-        "_meta": {
-            "hostvars": {}
-        }
-    }
+    """Build Ansible inventory from Chef searches."""
+    inventory = {{"_meta": {{"hostvars": {{}}}}}}
 
     for group_name, search_query in SEARCH_QUERIES.items():
-        inventory[group_name] = {
+        inventory[group_name] = {{
             "hosts": [],
-            "vars": {
-                "chef_search_query": search_query
-            }
-        }
-
+            "vars": {{"chef_search_query": search_query}},
+        }}
         try:
             nodes = get_chef_nodes(search_query)
-
             for node in nodes:
                 hostname = node.get("name", node.get("fqdn", "unknown"))
                 inventory[group_name]["hosts"].append(hostname)
-
-                # Add host variables
-                inventory["_meta"]["hostvars"][hostname] = {
+                inventory["_meta"]["hostvars"][hostname] = {{
                     "chef_roles": node.get("roles", []),
                     "chef_environment": node.get("environment", ""),
                     "chef_platform": node.get("platform", ""),
                     "ansible_host": node.get("ipaddress", hostname)
-                }
-
-        except Exception as e:
-            print(
-                f"Error querying Chef server for group {group_name}: {e}",
-                file=sys.stderr,
-            )
+                }}
+        except Exception:
+            pass
 
     return inventory
 
-
 def main():
     """Main entry point for dynamic inventory script."""
-    parser = argparse.ArgumentParser(
-        description="Dynamic Ansible Inventory from Chef"
-    )
-    parser.add_argument(
-        "--list", action="store_true", help="List all groups and hosts"
-    )
+    parser = argparse.ArgumentParser(description="Dynamic Ansible Inventory from Chef")
+    parser.add_argument("--list", action="store_true", help="List all groups")
     parser.add_argument("--host", help="Get variables for specific host")
 
     args = parser.parse_args()
@@ -1316,26 +1386,84 @@ def main():
         inventory = build_inventory()
         print(json.dumps(inventory, indent=2))
     elif args.host:
-        # Return empty dict for host-specific queries
-        # All host vars are included in _meta/hostvars
-        print(json.dumps({}))
+        print(json.dumps({{}}))
     else:
         parser.print_help()
-
 
 if __name__ == "__main__":
     main()
 '''
-    # Convert queries_data to JSON string for embedding
-    queries_json = json.dumps(  # nosonar
-        {
-            item.get("group_name", f"group_{i}"): item.get("search_query", "")
-            for i, item in enumerate(queries_data)
-        },
-        indent=4,
-    )
+    return script_template
 
-    return script_template.replace("{search_queries_json}", queries_json)
+
+def get_chef_nodes(search_query: str) -> list[dict[str, Any]]:
+    """
+    Query Chef server for nodes matching search criteria.
+
+    Communicates with Chef server API to search for nodes.
+    Falls back to empty list if Chef server is unavailable.
+
+    Args:
+        search_query: Chef search query string
+
+    Returns:
+        List of node objects from Chef server
+
+    """
+    if not requests:
+        return []
+
+    chef_server_url = os.environ.get("CHEF_SERVER_URL", "").rstrip("/")
+
+    if not chef_server_url:
+        # Chef server not configured - return empty list
+        return []
+
+    try:
+        chef_server_url = validate_user_provided_url(chef_server_url)
+    except ValueError:
+        return []
+
+    try:
+        # Using Chef Server REST API search endpoint
+        # Search endpoint: GET /search/node?q=<query>
+        search_url = f"{chef_server_url}/search/node?q={search_query}"
+
+        # Note: Proper authentication requires Chef API signing
+        # For unauthenticated access, this may work on open Chef servers
+        # For production, use python-chef library for proper authentication
+        response = requests.get(search_url, timeout=10)
+        response.raise_for_status()
+
+        search_result = response.json()
+        nodes_data = []
+
+        for row in search_result.get("rows", []):
+            node_obj = {
+                "name": row.get("name", "unknown"),
+                "roles": row.get("run_list", []),
+                "environment": row.get("chef_environment", "_default"),
+                "platform": row.get("platform", "unknown"),
+                "ipaddress": row.get("ipaddress", ""),
+                "fqdn": row.get("fqdn", ""),
+                "automatic": row.get("automatic", {}),
+            }
+            nodes_data.append(node_obj)
+
+        return nodes_data
+
+    except requests.exceptions.Timeout:
+        # Chef server not responding within timeout
+        return []
+    except requests.exceptions.ConnectionError:
+        # Cannot reach Chef server
+        return []
+    except requests.exceptions.HTTPError:
+        # HTTP error (404, 403, 500, etc.)
+        return []
+    except Exception:
+        # Fallback for any other errors
+        return []
 
 
 # Search pattern extraction
