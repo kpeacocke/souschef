@@ -200,7 +200,12 @@ def test_cookbook_command_with_output(runner, tmp_path):
     )
 
     assert result.exit_code == 0
-    assert "Would save results" in result.output
+    # Now actually converts and saves files
+    assert "Conversion complete" in result.output
+    assert output_dir.exists()
+    # Check that output directory contains converted files
+    assert (output_dir / "README.md").exists()
+    assert (output_dir / "conversion_summary.json").exists()
 
 
 # Version and help tests
@@ -1979,6 +1984,435 @@ def test_convert_inspec_command_conversion_error(runner, tmp_path, monkeypatch):
 
     assert result.exit_code != 0
     assert "Error converting InSpec profile" in result.output
+
+
+# Chef Server Integration CLI Tests
+
+
+def test_validate_chef_server_command_success(runner, monkeypatch):
+    """Test validate-chef-server command with successful connection."""
+    import souschef.ui.pages.chef_server_settings
+
+    # Mock successful validation
+    def mock_validate(*args, **kwargs):
+        return (True, "Connection successful")
+
+    monkeypatch.setattr(
+        souschef.ui.pages.chef_server_settings,
+        "_validate_chef_server_connection",
+        mock_validate,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "validate-chef-server",
+            "--server-url",
+            "https://chef.example.com",
+            "--node-name",
+            "admin",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Connection successful" in result.output
+
+
+def test_validate_chef_server_command_failure(runner, monkeypatch):
+    """Test validate-chef-server command with failed connection."""
+    import souschef.ui.pages.chef_server_settings
+
+    # Mock failed validation
+    def mock_validate(*args, **kwargs):
+        return (False, "Connection timeout")
+
+    monkeypatch.setattr(
+        souschef.ui.pages.chef_server_settings,
+        "_validate_chef_server_connection",
+        mock_validate,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "validate-chef-server",
+            "--server-url",
+            "https://chef.example.com",
+            "--node-name",
+            "admin",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Connection timeout" in result.output
+
+
+def test_validate_chef_server_command_exception(runner, monkeypatch):
+    """Test validate-chef-server command with exception."""
+    import souschef.ui.pages.chef_server_settings
+
+    # Mock exception
+    def mock_validate(*args, **kwargs):
+        raise RuntimeError("Network error")
+
+    monkeypatch.setattr(
+        souschef.ui.pages.chef_server_settings,
+        "_validate_chef_server_connection",
+        mock_validate,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "validate-chef-server",
+            "--server-url",
+            "https://chef.example.com",
+        ],
+    )
+
+    assert result.exit_code != 0
+
+
+def test_query_chef_nodes_command_success(runner, monkeypatch):
+    """Test query-chef-nodes command with successful query."""
+    import souschef.converters.playbook
+
+    # Mock successful node query
+    def mock_get_nodes(*args, **kwargs):
+        return [
+            {
+                "name": "web-01",
+                "roles": ["webserver"],
+                "environment": "production",
+                "platform": "ubuntu",
+                "ipaddress": "10.0.1.10",
+                "fqdn": "web-01.example.com",
+            }
+        ]
+
+    monkeypatch.setattr(
+        souschef.converters.playbook,
+        "get_chef_nodes",
+        mock_get_nodes,
+    )
+    monkeypatch.setenv("CHEF_SERVER_URL", "https://chef.example.com")
+
+    result = runner.invoke(
+        cli,
+        [
+            "query-chef-nodes",
+            "--search-query",
+            "role:webserver",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "web-01" in result.output
+    assert "webserver" in result.output
+
+
+def test_query_chef_nodes_command_json_output(runner, monkeypatch):
+    """Test query-chef-nodes command with JSON output format."""
+    import souschef.converters.playbook
+
+    # Mock successful node query
+    def mock_get_nodes(*args, **kwargs):
+        return [
+            {
+                "name": "db-01",
+                "roles": ["database"],
+                "environment": "production",
+                "platform": "ubuntu",
+                "ipaddress": "10.0.2.10",
+                "fqdn": "db-01.example.com",
+            }
+        ]
+
+    monkeypatch.setattr(
+        souschef.converters.playbook,
+        "get_chef_nodes",
+        mock_get_nodes,
+    )
+    monkeypatch.setenv("CHEF_SERVER_URL", "https://chef.example.com")
+
+    result = runner.invoke(
+        cli,
+        [
+            "query-chef-nodes",
+            "--search-query",
+            "role:database",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    # Verify output contains JSON-like content
+    assert "db-01" in result.output
+
+
+def test_query_chef_nodes_command_no_results(runner, monkeypatch):
+    """Test query-chef-nodes command with no matching nodes."""
+    import souschef.converters.playbook
+
+    # Mock empty result
+    def mock_get_nodes(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr(
+        souschef.converters.playbook,
+        "get_chef_nodes",
+        mock_get_nodes,
+    )
+    monkeypatch.setenv("CHEF_SERVER_URL", "https://chef.example.com")
+
+    result = runner.invoke(
+        cli,
+        [
+            "query-chef-nodes",
+            "--search-query",
+            "role:nonexistent",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "No nodes found" in result.output
+
+
+def test_query_chef_nodes_command_exception(runner, monkeypatch):
+    """Test query-chef-nodes command with missing environment variable."""
+    # Don't set CHEF_SERVER_URL environment variable
+    result = runner.invoke(
+        cli,
+        [
+            "query-chef-nodes",
+            "--search-query",
+            "*:*",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "CHEF_SERVER_URL" in result.output
+
+
+def test_convert_template_ai_command_success(runner, tmp_path, monkeypatch):
+    """Test convert-template-ai command with successful conversion."""
+    import souschef.converters.template
+
+    # Create test ERB file
+    erb_file = tmp_path / "config.erb"
+    erb_file.write_text("<%= @hostname %>")
+
+    # Mock successful conversion
+    def mock_convert(*args, **kwargs):
+        return {
+            "success": True,
+            "jinja2_template": "{{ hostname }}",
+            "variables": ["hostname"],
+            "conversion_method": "rule_based",
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        souschef.converters.template,
+        "convert_template_with_ai",
+        mock_convert,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-template-ai",
+            str(erb_file),
+            "--ai",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Conversion successful" in result.output
+    assert "rule_based" in result.output
+
+
+def test_convert_template_ai_command_with_output(runner, tmp_path, monkeypatch):
+    """Test convert-template-ai command with output file."""
+    import souschef.converters.template
+
+    # Create test ERB file
+    erb_file = tmp_path / "app.conf.erb"
+    erb_file.write_text("<%= @app_port %>")
+
+    output_file = tmp_path / "app.conf.j2"
+
+    # Mock successful conversion
+    def mock_convert(*args, **kwargs):
+        return {
+            "success": True,
+            "jinja2_template": "{{ app_port }}",
+            "variables": ["app_port"],
+            "conversion_method": "rule_based",
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        souschef.converters.template,
+        "convert_template_with_ai",
+        mock_convert,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-template-ai",
+            str(erb_file),
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Conversion successful" in result.output
+
+
+def test_convert_template_ai_command_no_ai(runner, tmp_path, monkeypatch):
+    """Test convert-template-ai command without AI enhancement."""
+    import souschef.converters.template
+
+    # Create test ERB file
+    erb_file = tmp_path / "simple.erb"
+    erb_file.write_text("<%= @value %>")
+
+    # Mock successful conversion
+    def mock_convert(*args, **kwargs):
+        return {
+            "success": True,
+            "jinja2_template": "{{ value }}",
+            "variables": ["value"],
+            "conversion_method": "rule_based",
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        souschef.converters.template,
+        "convert_template_with_ai",
+        mock_convert,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-template-ai",
+            str(erb_file),
+            "--no-ai",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Conversion successful" in result.output
+
+
+def test_convert_template_ai_command_failure(runner, tmp_path, monkeypatch):
+    """Test convert-template-ai command with conversion failure."""
+    import souschef.converters.template
+
+    # Create test ERB file
+    erb_file = tmp_path / "complex.erb"
+    erb_file.write_text("<% complex ruby code %>")
+
+    # Mock failed conversion
+    def mock_convert(*args, **kwargs):
+        return {
+            "success": False,
+            "error": "Unsupported Ruby syntax",
+            "jinja2_template": "",
+            "variables": [],
+            "conversion_method": "failed",
+            "warnings": ["Complex Ruby constructs"],
+        }
+
+    monkeypatch.setattr(
+        souschef.converters.template,
+        "convert_template_with_ai",
+        mock_convert,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-template-ai",
+            str(erb_file),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Conversion failed" in result.output
+    assert "Unsupported Ruby syntax" in result.output
+
+
+def test_convert_template_ai_command_with_warnings(runner, tmp_path, monkeypatch):
+    """Test convert-template-ai command with conversion warnings."""
+    import souschef.converters.template
+
+    # Create test ERB file
+    erb_file = tmp_path / "partial.erb"
+    erb_file.write_text("<%= @var1 %>")
+
+    # Mock conversion with warnings
+    def mock_convert(*args, **kwargs):
+        return {
+            "success": True,
+            "jinja2_template": "{{ var1 }}",
+            "variables": ["var1"],
+            "conversion_method": "rule_based",
+            "warnings": ["Manual verification recommended for complex logic"],
+        }
+
+    monkeypatch.setattr(
+        souschef.converters.template,
+        "convert_template_with_ai",
+        mock_convert,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-template-ai",
+            str(erb_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Conversion successful" in result.output
+    assert "Warnings:" in result.output
+    assert "Manual verification" in result.output
+
+
+def test_convert_template_ai_command_exception(runner, tmp_path, monkeypatch):
+    """Test convert-template-ai command with exception."""
+    import souschef.converters.template
+
+    # Create test ERB file
+    erb_file = tmp_path / "error.erb"
+    erb_file.write_text("<%= @test %>")
+
+    # Mock exception
+    def mock_convert(*args, **kwargs):
+        raise RuntimeError("Template parsing error")
+
+    monkeypatch.setattr(
+        souschef.converters.template,
+        "convert_template_with_ai",
+        mock_convert,
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "convert-template-ai",
+            str(erb_file),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Error" in result.output
 
 
 def test_profile_command_error_handling(runner, monkeypatch):

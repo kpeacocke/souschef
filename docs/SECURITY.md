@@ -144,6 +144,7 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
    - Use HTTPS for all API communications
    - Verify SSL certificates
    - Use firewall rules to restrict outbound connections if needed
+   - Configure `SOUSCHEF_ALLOWED_HOSTNAMES` to allowlist approved outbound hosts
 
 5. **Input Validation**
    - Validate cookbook sources before conversion

@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from souschef.core.url_validation import validate_user_provided_url
 from souschef.server import (
     convert_habitat_to_dockerfile,
     convert_inspec_to_test,
@@ -98,6 +99,15 @@ class TestRealFileOperations:
         assert "metadata.rb" in result
         assert "recipes" in result
         assert "attributes" in result
+
+
+def test_validate_user_provided_url_with_allowlist_env(monkeypatch: pytest.MonkeyPatch):
+    """Test allowlist usage in URL validation with real env settings."""
+    monkeypatch.setenv("SOUSCHEF_ALLOWED_HOSTNAMES", "api.example.com")
+
+    result = validate_user_provided_url("https://api.example.com")
+
+    assert result == "https://api.example.com"
 
 
 @pytest.mark.parametrize(
