@@ -791,6 +791,7 @@ def _validate_and_fix_playbook(
         return playbook_content
 
     yaml_error = _validate_playbook_yaml(playbook_content)
+    validation_error: str | None
     if yaml_error:
         validation_error = f"YAML parse error: {yaml_error}"
     else:
