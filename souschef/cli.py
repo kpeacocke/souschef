@@ -373,9 +373,124 @@ def cookbook(cookbook_path: str, output: str | None, dry_run: bool) -> None:
         for template_file in templates_dir.glob("*.erb"):
             _display_template_summary(template_file)
 
+    # Convert and save if output directory specified
     if output and not dry_run:
+        _save_cookbook_conversion(cookbook_dir, output)
+    elif output and dry_run:
         click.echo(f"\n💾 Would save results to: {output}")
-        click.echo("(Full conversion not yet implemented)")
+        click.echo("(Dry run - no files will be written)")
+
+
+def _save_cookbook_conversion(cookbook_dir: Path, output_path: str) -> None:
+    """
+    Convert and save cookbook to Ansible format.
+
+    Args:
+        cookbook_dir: Path to Chef cookbook directory
+        output_path: Path to output directory for Ansible files
+
+    """
+    output_dir = Path(output_path)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    click.echo(f"\n💾 Saving conversion to: {output_dir}")
+    click.echo("=" * 50)
+
+    results = {
+        "cookbook_name": cookbook_dir.name,
+        "recipes": {},
+        "templates": {},
+        "attributes": {},
+        "metadata": {},
+    }
+
+    # Convert metadata
+    metadata_file = cookbook_dir / "metadata.rb"
+    if metadata_file.exists():
+        click.echo("Converting metadata...")
+        metadata_result = read_cookbook_metadata(str(metadata_file))
+        results["metadata"] = metadata_result
+
+        # Save metadata as README
+        readme_path = output_dir / "README.md"
+        with readme_path.open("w") as f:
+            f.write(f"# {cookbook_dir.name} - Converted from Chef\n\n")
+            f.write("## Metadata\n\n")
+            f.write(metadata_result)
+        click.echo(f"  ✓ Saved metadata to {readme_path}")
+
+    # Convert recipes to playbooks
+    recipes_dir = cookbook_dir / "recipes"
+    playbooks_dir = output_dir / "playbooks"
+    if recipes_dir.exists():
+        playbooks_dir.mkdir(parents=True, exist_ok=True)
+        click.echo("\nConverting recipes to playbooks...")
+
+        for recipe_file in recipes_dir.glob("*.rb"):
+            playbook_name = recipe_file.stem
+            playbook_content = generate_playbook_from_recipe(str(recipe_file))
+
+            playbook_path = playbooks_dir / f"{playbook_name}.yml"
+            with playbook_path.open("w") as f:
+                f.write(playbook_content)
+
+            results["recipes"][playbook_name] = str(playbook_path)
+            click.echo(f"  ✓ Converted {recipe_file.name} → {playbook_path}")
+
+    # Convert templates
+    templates_dir = cookbook_dir / "templates" / "default"
+    output_templates_dir = output_dir / "templates"
+    if templates_dir.exists():
+        from souschef.converters.template import convert_template_file
+
+        output_templates_dir.mkdir(parents=True, exist_ok=True)
+        click.echo("\nConverting ERB templates to Jinja2...")
+
+        for template_file in templates_dir.glob("*.erb"):
+            template_result = convert_template_file(str(template_file))
+
+            if template_result.get("success"):
+                jinja_name = template_file.stem + ".j2"
+                jinja_path = output_templates_dir / jinja_name
+
+                with jinja_path.open("w") as f:
+                    f.write(template_result.get("jinja2_template", ""))
+
+                results["templates"][template_file.name] = str(jinja_path)
+                click.echo(f"  ✓ Converted {template_file.name} → {jinja_path}")
+            else:
+                click.echo(f"  ✗ Failed to convert {template_file.name}")
+
+    # Parse and save attributes
+    attributes_dir = cookbook_dir / "attributes"
+    if attributes_dir.exists():
+        vars_dir = output_dir / "vars"
+        vars_dir.mkdir(parents=True, exist_ok=True)
+        click.echo("\nExtracting attributes...")
+
+        for attr_file in attributes_dir.glob("*.rb"):
+            attr_result = parse_attributes(str(attr_file))
+
+            # Save as YAML vars file
+            vars_name = attr_file.stem + ".yml"
+            vars_path = vars_dir / vars_name
+
+            with vars_path.open("w") as f:
+                f.write("# Converted from Chef attributes\n")
+                f.write(f"# Source: {attr_file.name}\n\n")
+                f.write(attr_result)
+
+            results["attributes"][attr_file.name] = str(vars_path)
+            click.echo(f"  ✓ Extracted {attr_file.name} → {vars_path}")
+
+    # Save conversion summary
+    summary_path = output_dir / "conversion_summary.json"
+    with summary_path.open("w") as f:
+        json.dump(results, f, indent=2)
+
+    click.echo("\n✅ Conversion complete!")
+    click.echo(f"📁 Output directory: {output_dir}")
+    click.echo(f"📄 Summary: {summary_path}")
 
 
 @cli.command()

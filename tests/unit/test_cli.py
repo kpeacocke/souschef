@@ -200,7 +200,12 @@ def test_cookbook_command_with_output(runner, tmp_path):
     )
 
     assert result.exit_code == 0
-    assert "Would save results" in result.output
+    # Now actually converts and saves files
+    assert "Conversion complete" in result.output
+    assert output_dir.exists()
+    # Check that output directory contains converted files
+    assert (output_dir / "README.md").exists()
+    assert (output_dir / "conversion_summary.json").exists()
 
 
 # Version and help tests

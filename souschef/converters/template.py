@@ -1,6 +1,7 @@
 """Chef ERB template to Jinja2 converter."""
 
 from pathlib import Path
+from typing import Any
 
 from souschef.parsers.template import (
     _convert_erb_to_jinja2,
@@ -168,10 +169,126 @@ def convert_template_with_ai(erb_path: str, ai_service=None) -> dict:
     # Add conversion method metadata
     result["conversion_method"] = "rule-based"
 
-    # Future enhancement: Use AI service to validate/improve complex conversions
-    if ai_service is not None:
-        # AI validation/improvement logic deferred to future enhancement
-        # when AI integration becomes more critical to the template conversion process
-        pass
+    # Use AI service to validate and improve complex conversions
+    if ai_service is not None and result.get("success"):
+        try:
+            # Enhanced AI validation for template conversion
+            result = _enhance_template_with_ai(result, erb_path, ai_service)
+            result["conversion_method"] = "ai-enhanced"
+        except Exception as e:
+            # If AI enhancement fails, return the rule-based result
+            result["ai_enhancement_error"] = str(e)
+            result["conversion_method"] = "rule-based-fallback"
 
     return result
+
+
+def _enhance_template_with_ai(
+    rule_based_result: dict, erb_path: str, ai_service: Any
+) -> dict:
+    """
+    Enhance rule-based template conversion using AI validation.
+
+    Args:
+        rule_based_result: Result from rule-based conversion
+        erb_path: Path to original ERB template
+        ai_service: AI service instance (Anthropic, OpenAI, etc.)
+
+    Returns:
+        Enhanced conversion result with AI improvements
+
+    """
+    # Read original ERB content
+    file_path = Path(erb_path)
+    with file_path.open(encoding="utf-8") as f:
+        erb_content = f.read()
+
+    jinja2_content = rule_based_result.get("jinja2_template", "")
+
+    # Create validation prompt
+    prompt = f"""You are an expert in both Chef ERB templates and \
+Ansible Jinja2 templates.
+
+Review the following ERB to Jinja2 conversion and provide feedback:
+
+**Original ERB Template:**
+```erb
+{erb_content}
+```
+
+**Converted Jinja2 Template:**
+```jinja2
+{jinja2_content}
+```
+
+Analyse the conversion and provide:
+1. Validation: Is the conversion accurate and complete?
+2. Issues: Any Ruby logic that wasn't properly converted?
+3. Improvements: Suggested improvements for better Jinja2 syntax
+4. Security: Any security concerns in the template
+
+Respond in JSON format:
+{{
+    "valid": true/false,
+    "issues": ["list of issues"],
+    "improvements": ["list of improvements"],
+    "security_concerns": ["list of security concerns"],
+    "improved_template": "improved Jinja2 template if applicable"
+}}
+"""
+
+    # Call AI service based on type
+    response_text = ""
+
+    if hasattr(ai_service, "messages") and hasattr(ai_service.messages, "create"):
+        # Anthropic API
+        response = ai_service.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        response_text = response.content[0].text
+    elif hasattr(ai_service, "chat") and hasattr(ai_service.chat, "completions"):
+        # OpenAI API
+        response = ai_service.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2000,
+        )
+        response_text = response.choices[0].message.content
+    else:
+        # Unsupported AI service
+        return rule_based_result
+
+    # Parse AI response
+    import json
+    import re
+
+    # Extract JSON from response (may be wrapped in markdown code blocks)
+    json_match = re.search(r"```json\s*(\{.*?\})\s*```", response_text, re.DOTALL)
+    if json_match:
+        response_text = json_match.group(1)
+
+    try:
+        ai_feedback = json.loads(response_text)
+
+        # Enhance result with AI feedback
+        enhanced_result = rule_based_result.copy()
+        enhanced_result["ai_validation"] = {
+            "valid": ai_feedback.get("valid", True),
+            "issues": ai_feedback.get("issues", []),
+            "improvements": ai_feedback.get("improvements", []),
+            "security_concerns": ai_feedback.get("security_concerns", []),
+        }
+
+        # Use improved template if provided and valid
+        if ai_feedback.get("improved_template") and ai_feedback.get("valid"):
+            enhanced_result["jinja2_template"] = ai_feedback["improved_template"]
+            enhanced_result["ai_improved"] = True
+
+        return enhanced_result
+
+    except json.JSONDecodeError:
+        # If AI response isn't valid JSON, add raw feedback
+        rule_based_result["ai_feedback_raw"] = response_text
+        return rule_based_result
