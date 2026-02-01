@@ -99,7 +99,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/mcp-souschef
           tags: |
             type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
@@ -110,7 +110,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
@@ -153,13 +153,13 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
@@ -191,20 +191,20 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run container and verify it starts
         run: |
           set -e
           # Pull the image first to ensure it's available
-          docker pull "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}"
+          docker pull "${{ env.REGISTRY }}/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}"
 
           # Test if container can start (with 10-second timeout)
           timeout 10 docker run --rm \
             -e STREAMLIT_SERVER_HEADLESS=true \
             -e STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
-            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}" \
+            "${{ env.REGISTRY }}/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}" \
             /bin/true || true
 
           echo "Container started successfully"
@@ -213,7 +213,7 @@ jobs:
         run: |
           set -e
           OUTPUT=$(docker run --rm \
-            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}" \
+            "${{ env.REGISTRY }}/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}" \
             python -m souschef.ui.health_check)
 
           echo "Health check output: $OUTPUT"
@@ -245,7 +245,7 @@ jobs:
           script: |
             const version = "${{ needs.validate.outputs.version }}";
             const registry = "${{ env.REGISTRY }}";
-            const imageName = "${{ env.IMAGE_NAME }}";
+            const imageName = "${{ github.repository_owner }}/mcp-souschef";
             const digest = "${{ needs.build-and-push.outputs.image-digest }}";
             const tag = "${{ needs.validate.outputs.tag }}";
 
@@ -314,7 +314,7 @@ jobs:
 
           ## Image Information
           - **Registry:** ${{ env.REGISTRY }}
-          - **Repository:** ${{ env.IMAGE_NAME }}
+          - **Repository:** ${{ github.repository_owner }}/mcp-souschef
           - **Digest:** ${{ needs.build-and-push.outputs.image-digest || 'No image pushed' }}
 
           ## Available Tags
@@ -326,7 +326,7 @@ jobs:
           ## Next Steps
           - Image is ready for deployment
           - See security scan results in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)
-          - Pull the image with: \`docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version || 'latest' }}\`
+          - Pull the image with: \`docker pull ${{ env.REGISTRY }}/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}\`
 
           ## Workflow Run Details
           - **Workflow:** ${{ github.workflow }}

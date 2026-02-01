@@ -319,7 +319,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/mcp-souschef
+            ghcr.io/${{ github.repository_owner }}/mcp-souschef
           tags: |
             type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
@@ -330,7 +330,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
@@ -373,13 +373,13 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ghcr.io/mcp-souschef:${{ needs.validate.outputs.version }}
+          image-ref: ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
@@ -411,20 +411,20 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run container and verify it starts
         run: |
           set -e
           # Pull the image first to ensure it's available
-          docker pull "ghcr.io/mcp-souschef:${{ needs.validate.outputs.version }}"
+          docker pull "ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}"
 
           # Test if container can start (with 10-second timeout)
           timeout 10 docker run --rm \
             -e STREAMLIT_SERVER_HEADLESS=true \
             -e STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
-            "ghcr.io/mcp-souschef:${{ needs.validate.outputs.version }}" \
+            "ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}" \
             /bin/true || true
 
           echo "Container started successfully"
@@ -433,7 +433,7 @@ jobs:
         run: |
           set -e
           OUTPUT=$(docker run --rm \
-            "ghcr.io/mcp-souschef:${{ needs.validate.outputs.version }}" \
+            "ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}" \
             python -m souschef.ui.health_check)
 
           echo "Health check output: $OUTPUT"
@@ -466,6 +466,7 @@ jobs:
             const version = "${{ needs.validate.outputs.version }}";
             const registry = "ghcr.io";
             const imageName = "mcp-souschef";
+            const owner = "${{ github.repository_owner }}";
             const digest = "${{ needs.build-and-push-docker.outputs.image-digest }}";
             const tag = "${{ needs.validate.outputs.tag }}";
 
@@ -476,7 +477,7 @@ jobs:
             const major = versionParts[0];
 
             let body = "## Docker Image Published\n\n";
-            body += "**Image:** `" + registry + "/" + imageName + ":" + version + "`\n\n";
+            body += "**Image:** `" + registry + "/" + owner + "/" + imageName + ":" + version + "`\n\n";
             body += "**Digest:** " + digest + "\n\n";
             body += "**Available Tags:**\n";
             body += "- `" + version + "` (exact version)\n";
@@ -487,11 +488,11 @@ jobs:
             body += "**Pull Commands:**\n";
             body += "```bash\n";
             body += "# Pull specific version\n";
-            body += "docker pull " + registry + "/" + imageName + ":" + version + "\n\n";
+            body += "docker pull " + registry + "/" + owner + "/" + imageName + ":" + version + "\n\n";
             body += "# Pull latest\n";
-            body += "docker pull " + registry + "/" + imageName + ":latest\n\n";
+            body += "docker pull " + registry + "/" + owner + "/" + imageName + ":latest\n\n";
             body += "# Pull major version\n";
-            body += "docker pull " + registry + "/" + imageName + ":" + major + "\n";
+            body += "docker pull " + registry + "/" + owner + "/" + imageName + ":" + major + "\n";
             body += "```\n\n";
             body += "**Security:** Vulnerability scan results available in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)\n\n";
             body += "**Related Release:** " + tag + "\n\n";
@@ -540,13 +541,13 @@ jobs:
           ## Deployments
           - **PyPI:** https://pypi.org/project/souschef/${{ needs.validate.outputs.version || 'latest' }}/
           - **GitHub Release:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag || 'latest' }}
-          - **Container Image:** ghcr.io/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}
+          - **Container Image:** ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}
 
           ## Next Steps
           - Both PyPI package and Docker image are deployed
           - See GitHub Release for artifacts and release notes
           - See GitHub Security tab for Docker vulnerability scan results
-          - Pull the Docker image: `docker pull ghcr.io/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}`
+          - Pull the Docker image: `docker pull ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}`
 
           ## Workflow Run Details
           - **Workflow:** ${{ github.workflow }}
