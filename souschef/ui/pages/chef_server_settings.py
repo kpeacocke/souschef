@@ -16,8 +16,8 @@ try:
     )
 except ImportError:
     requests = None  # type: ignore[assignment]
-    ConnectionError = Exception  # type: ignore[misc,assignment]  # noqa: A001
-    Timeout = Exception  # type: ignore[assignment]
+    ConnectionError = Exception  # type: ignore[assignment,misc]  # noqa: A001
+    Timeout = Exception  # type: ignore[assignment,misc]
 
 
 def _validate_chef_server_connection(

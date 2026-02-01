@@ -7,7 +7,7 @@ Provides easy access to Chef cookbook parsing and conversion tools.
 import json
 import sys
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, TypedDict
 
 import click
 
@@ -36,6 +36,17 @@ from souschef.server import (
     read_cookbook_metadata,
     read_file,
 )
+
+
+class ConversionResults(TypedDict):
+    """Type definition for cookbook conversion results."""
+
+    cookbook_name: str
+    recipes: dict[str, str]
+    templates: dict[str, str]
+    attributes: dict[str, str]
+    metadata: dict[str, str] | str
+
 
 # CI/CD job description constants
 CI_JOB_LINT = "  • Lint (cookstyle/foodcritic)"
@@ -399,7 +410,7 @@ def _save_cookbook_conversion(cookbook_dir: Path, output_path: str) -> None:
     click.echo(f"\n💾 Saving conversion to: {output_dir}")
     click.echo("=" * 50)
 
-    results = {
+    results: ConversionResults = {
         "cookbook_name": cookbook_dir.name,
         "recipes": {},
         "templates": {},
