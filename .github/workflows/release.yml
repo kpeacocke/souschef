@@ -432,7 +432,8 @@ jobs:
       - name: Verify health check works
         run: |
           set -e
-          OUTPUT=$(docker run --rm \
+          # Override the ENTRYPOINT to avoid streamlit run being prepended
+          OUTPUT=$(docker run --rm --entrypoint="" \
             "ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}" \
             python -m souschef.ui.health_check)
 
