@@ -120,12 +120,13 @@ USER app
 EXPOSE 9999
 
 # Health check - robust implementation with timeout
+# Note: Must override ENTRYPOINT to avoid streamlit run being prepended
 HEALTHCHECK \
     --interval=30s \
     --timeout=10s \
     --start-period=5s \
     --retries=3 \
-    CMD python -m souschef.ui.health_check || exit 1
+    CMD /bin/sh -c "python -m souschef.ui.health_check" || exit 1
 
 # Use ENTRYPOINT for proper signal handling
 # This ensures Ctrl+C and container stop signals work correctly
