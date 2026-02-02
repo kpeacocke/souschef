@@ -225,6 +225,69 @@ services:
       retries: 3
 ```
 
+### Persistent Storage Configuration
+
+The Docker Compose setup uses configurable bind mounts for persistent storage. All storage paths can be customised via environment variables in the `.env` file:
+
+```bash
+# Docker Compose Volume Configuration
+# Configure persistent storage paths (relative or absolute paths)
+SOUSCHEF_DATA_DIR=./data/souschef       # SQLite database and analysis history
+SOUSCHEF_STORAGE_DIR=./data/storage     # Generated artefacts and conversions
+POSTGRES_DATA_DIR=./data/postgres       # PostgreSQL database files
+MINIO_DATA_DIR=./data/minio             # MinIO object storage data
+```
+
+**Storage Overview:**
+
+| Volume | Default Path | Purpose | Container Mount Point |
+|--------|--------------|---------|----------------------|
+| `souschef-data` | `./data/souschef` | SQLite database, analysis results, conversion history | `/tmp/.souschef/data` |
+| `souschef-storage` | `./data/storage` | Generated playbooks, templates, artefacts (fallback) | `/tmp/.souschef/storage` |
+| `postgres-data` | `./data/postgres` | PostgreSQL database files | `/var/lib/postgresql/data` |
+| `minio-data` | `./data/minio` | MinIO object storage buckets | `/data` |
+
+**Key Features:**
+
+- **Configurable Paths**: All storage directories can be customised via `.env`
+- **Automatic Creation**: Directories are created automatically on first run
+- **Persistent Data**: Data survives container restarts and recreations
+- **Flexible Location**: Use relative paths (e.g., `./data`) or absolute paths (e.g., `/mnt/storage`)
+- **Backup Friendly**: Host-mounted directories are easy to backup and migrate
+
+**Example Configurations:**
+
+1. **Default (Relative Paths)**:
+   ```bash
+   SOUSCHEF_DATA_DIR=./data/souschef
+   SOUSCHEF_STORAGE_DIR=./data/storage
+   POSTGRES_DATA_DIR=./data/postgres
+   MINIO_DATA_DIR=./data/minio
+   ```
+
+2. **Absolute Paths**:
+   ```bash
+   SOUSCHEF_DATA_DIR=/var/lib/souschef/data
+   SOUSCHEF_STORAGE_DIR=/var/lib/souschef/storage
+   POSTGRES_DATA_DIR=/var/lib/souschef/postgres
+   MINIO_DATA_DIR=/var/lib/souschef/minio
+   ```
+
+3. **Network Storage**:
+   ```bash
+   SOUSCHEF_DATA_DIR=/mnt/nfs/souschef/data
+   SOUSCHEF_STORAGE_DIR=/mnt/nfs/souschef/storage
+   POSTGRES_DATA_DIR=/mnt/nfs/souschef/postgres
+   MINIO_DATA_DIR=/mnt/nfs/souschef/minio
+   ```
+
+**Important Notes:**
+
+- Ensure the directories are writable by the container users (UIDs: 1000 for souschef-ui, 999 for postgres, root for minio)
+- The `data/` directory is automatically ignored by Git (added to `.gitignore`)
+- For production deployments, consider using dedicated volumes or network storage
+- Back up these directories regularly, especially `postgres-data` and `souschef-data`
+
 ## Deployment
 
 ### Kubernetes

@@ -555,6 +555,25 @@ STREAMLIT_SERVER_HEADLESS=true
 - `SOUSCHEF_AI_MAX_TOKENS` - Maximum tokens to generate (optional, default: 4000)
 - `SOUSCHEF_ALLOWED_HOSTNAMES` - Comma-separated list of allowed hostnames for outbound API requests (optional)
 
+**Persistent Storage Configuration (Docker Compose):**
+
+All persistent storage paths are configurable via environment variables. Add these to your `.env` file to customise where data is stored:
+
+```dotenv
+# Docker Compose Volume Configuration (optional)
+SOUSCHEF_DATA_DIR=./data/souschef       # SQLite database and analysis history
+SOUSCHEF_STORAGE_DIR=./data/storage     # Generated artefacts and conversions
+POSTGRES_DATA_DIR=./data/postgres       # PostgreSQL database files
+MINIO_DATA_DIR=./data/minio             # MinIO object storage data
+```
+
+The storage paths default to `./data/` subdirectories (relative to docker-compose.yml) but can be set to any absolute or relative path. This allows you to:
+- Store data on different volumes or network storage
+- Easily backup and restore data by copying directories
+- Share data between development and production environments
+
+See [Docker Deployment Guide](docs/docker-deployment.md#persistent-storage-configuration) for detailed configuration options.
+
 **Docker Compose (recommended for development):**
 
 ```yaml

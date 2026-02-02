@@ -124,16 +124,38 @@ services:
 volumes:
   # Persistent SQLite database - stores analysis results and conversion history
   # Data survives container restarts
+  # Configure via SOUSCHEF_DATA_DIR in .env (default: ./data/souschef)
   souschef-data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SOUSCHEF_DATA_DIR:-./data/souschef}
   # Persistent blob storage - stores generated artefacts and conversions
   # Can be mounted to host filesystem or cloud storage
+  # Configure via SOUSCHEF_STORAGE_DIR in .env (default: ./data/storage)
   souschef-storage:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SOUSCHEF_STORAGE_DIR:-./data/storage}
+  # PostgreSQL database storage
+  # Configure via POSTGRES_DATA_DIR in .env (default: ./data/postgres)
   postgres-data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_DATA_DIR:-./data/postgres}
+  # MinIO object storage
+  # Configure via MINIO_DATA_DIR in .env (default: ./data/minio)
   minio-data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${MINIO_DATA_DIR:-./data/minio}
 
 networks:
   souschef-public:
