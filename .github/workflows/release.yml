@@ -296,6 +296,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      deployments: write  # For deployment status updates
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       tags: ${{ steps.meta.outputs.tags }}
@@ -308,6 +309,15 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Start Docker deployment
+        uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+        id: docker-deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: docker
+          ref: ${{ needs.validate.outputs.tag }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -358,6 +368,27 @@ jobs:
             exit 1
           fi
           echo "Image pushed successfully with digest: $DIGEST"
+
+      - name: Update Docker deployment status (success)
+        uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+        if: success()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: success
+          deployment_id: ${{ steps.docker-deployment.outputs.deployment_id }}
+          env: docker
+          env_url: ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}
+
+      - name: Update Docker deployment status (failure)
+        uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+        if: failure()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: failure
+          deployment_id: ${{ steps.docker-deployment.outputs.deployment_id }}
+          env: docker
 
   scan-docker-image:
     runs-on: ubuntu-latest
