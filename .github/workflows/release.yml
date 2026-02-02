@@ -182,7 +182,7 @@ jobs:
   publish-pypi:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [validate, build]
+    needs: [validate, build, create-release]
     if: needs.validate.outputs.should_release == 'true'
     permissions:
       contents: read
