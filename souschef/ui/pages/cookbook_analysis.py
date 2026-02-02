@@ -45,6 +45,9 @@ from souschef.generators.repo import (
     generate_ansible_repository,
 )
 from souschef.parsers.metadata import parse_cookbook_metadata
+from souschef.storage import (
+    get_storage_manager,
+)
 
 # AI Settings
 ANTHROPIC_PROVIDER = "Anthropic (Claude)"
@@ -249,6 +252,95 @@ def _get_ai_int_value(
         except ValueError:
             return default
     return default
+
+
+def _save_analysis_to_db(
+    result: dict,
+    ai_provider: str | None = None,
+    ai_model: str | None = None,
+) -> int | None:
+    """
+    Save analysis result to the database.
+
+    Args:
+        result: Analysis result dictionary.
+        ai_provider: AI provider used (if any).
+        ai_model: AI model used (if any).
+
+    Returns:
+        Database ID of saved analysis, or None on error.
+
+    """
+    try:
+        storage_manager = get_storage_manager()
+
+        # Extract data from result
+        analysis_data = {
+            "complexity": result.get("complexity"),
+            "recommendations": result.get("recommendations"),
+            "dependencies": result.get("dependencies"),
+        }
+
+        analysis_id = storage_manager.save_analysis(
+            cookbook_name=result.get("name", "Unknown"),
+            cookbook_path=result.get("path", ""),
+            cookbook_version=result.get("version", "Unknown"),
+            complexity=result.get("complexity", "Unknown"),
+            estimated_hours=float(result.get("estimated_hours", 0)),
+            estimated_hours_with_souschef=float(
+                result.get("estimated_hours_with_souschef", 0)
+            ),
+            recommendations=result.get("recommendations", ""),
+            analysis_data=analysis_data,
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+        )
+
+        return analysis_id
+    except Exception as e:
+        st.warning(f"Failed to save analysis to database: {e}")
+        return None
+
+
+def _check_analysis_cache(
+    cookbook_path: str,
+    ai_provider: str | None = None,
+    ai_model: str | None = None,
+) -> dict | None:
+    """
+    Check if analysis is cached in the database.
+
+    Args:
+        cookbook_path: Path to the cookbook.
+        ai_provider: AI provider used (if any).
+        ai_model: AI model used (if any).
+
+    Returns:
+        Cached result dictionary or None if not found.
+
+    """
+    try:
+        storage_manager = get_storage_manager()
+        cached = storage_manager.get_cached_analysis(
+            cookbook_path, ai_provider, ai_model
+        )
+
+        if cached:
+            return {
+                "name": cached.cookbook_name,
+                "path": cached.cookbook_path,
+                "version": cached.cookbook_version,
+                "complexity": cached.complexity,
+                "estimated_hours": cached.estimated_hours,
+                "estimated_hours_with_souschef": cached.estimated_hours_with_souschef,
+                "recommendations": cached.recommendations,
+                "status": ANALYSIS_STATUS_ANALYSED,
+                "cached": True,
+            }
+
+        return None
+    except Exception:
+        return None
 
 
 # Constants for repeated strings
@@ -1326,6 +1418,8 @@ def _analyze_with_ai(
     st.info(f"Detected {len(cookbook_data)} cookbook(s) with {total_recipes} recipe(s)")
 
     results = []
+    cached_count = 0
+
     for i, cb_data in enumerate(cookbook_data):
         # Count recipes in this cookbook
         recipe_count = _safe_count_recipes(cb_data["Path"])
@@ -1335,6 +1429,14 @@ def _analyze_with_ai(
             f"({i + 1}/{len(cookbook_data)})"
         )
         progress_bar.progress((i + 1) / len(cookbook_data))
+
+        # Check cache first
+        cached_result = _check_analysis_cache(cb_data["Path"], provider, model)
+        if cached_result:
+            st.info(f"Using cached analysis for {cb_data['Name']}")
+            results.append(cached_result)
+            cached_count += 1
+            continue
 
         assessment = assess_single_cookbook_with_ai(
             cb_data["Path"],
@@ -1348,7 +1450,16 @@ def _analyze_with_ai(
         )
 
         result = _build_cookbook_result(cb_data, assessment, ANALYSIS_STATUS_ANALYSED)
+
+        # Save to database
+        analysis_id = _save_analysis_to_db(result, provider, model)
+        if analysis_id:
+            result["analysis_id"] = analysis_id
+
         results.append(result)
+
+    if cached_count > 0:
+        st.success(f"Retrieved {cached_count} cached analysis result(s)")
 
     return results
 
@@ -1378,6 +1489,11 @@ def _analyze_rule_based(
         return [], {}
 
     results = _process_cookbook_assessments(assessment_result, cookbook_data)
+
+    # Save results to database
+    for result in results:
+        _save_analysis_to_db(result, ai_provider=None, ai_model="rule-based")
+
     return results, assessment_result
 
 

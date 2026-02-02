@@ -45,6 +45,7 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 
 - **[Terraform Provider](terraform-provider/README.md)** - Manage migrations with infrastructure-as-code
 - **[User Guide](docs/user-guide/)** - Complete documentation
+- **[Data Persistence Guide](docs/user-guide/data-persistence.md)** - History, caching, and storage backends
 - **[API Reference](docs/api-reference/)** - Detailed tool documentation
 - **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
 
@@ -433,6 +434,7 @@ Interactive web-based interface for Chef-to-Ansible migration planning and visua
 - **Dependency Mapping**: Visual dependency graphs showing cookbook relationships and migration ordering
 - **Validation Reports**: Conversion validation results with syntax checking and best practice compliance
 - **Progress Tracking**: Real-time migration progress with completion metrics and bottleneck identification
+- **History and Persistence**: Stored analysis history, cached results, and downloadable artefacts (SQLite or PostgreSQL, plus S3-compatible storage)
 
 **Launch the UI:**
 

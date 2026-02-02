@@ -98,6 +98,7 @@ nav:
       - MCP Tools: user-guide/mcp-tools.md
       - CLI Usage: user-guide/cli-usage.md
       - Examples: user-guide/examples.md
+      - Data Persistence: user-guide/data-persistence.md
   - Migration Guide:
       - Overview: migration-guide/overview.md
       - Assessment: migration-guide/assessment.md

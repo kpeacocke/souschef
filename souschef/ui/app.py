@@ -26,6 +26,7 @@ from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_i
 from souschef.ui.pages.ai_settings import show_ai_settings_page
 from souschef.ui.pages.chef_server_settings import show_chef_server_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
+from souschef.ui.pages.history import show_history_page
 
 # Constants
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
@@ -38,6 +39,7 @@ NAV_VALIDATION_REPORTS = "Validation Reports"
 NAV_AI_SETTINGS = "AI Settings"
 NAV_CHEF_SERVER_SETTINGS = "Chef Server Settings"
 NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
+NAV_HISTORY = "History"
 BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
 INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
 MIME_TEXT_MARKDOWN = "text/markdown"
@@ -127,8 +129,8 @@ def main() -> None:
     # Navigation section
     st.subheader("Navigation")
 
-    col1, col2, col3 = st.columns(3)
-    col4, col5, col6 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
+    col5, col6, col7, col8 = st.columns(4)
 
     with col1:
         if st.button(
@@ -162,6 +164,16 @@ def main() -> None:
 
     with col4:
         if st.button(
+            "History",
+            type="primary" if page == NAV_HISTORY else "secondary",
+            use_container_width=True,
+            key="nav_history",
+        ):
+            st.session_state.current_page = NAV_HISTORY
+            st.rerun()
+
+    with col5:
+        if st.button(
             "Validation Reports",
             type="primary" if page == NAV_VALIDATION_REPORTS else "secondary",
             use_container_width=True,
@@ -170,7 +182,7 @@ def main() -> None:
             st.session_state.current_page = NAV_VALIDATION_REPORTS
             st.rerun()
 
-    with col5:
+    with col6:
         if st.button(
             "AI Settings",
             type="primary" if page == NAV_AI_SETTINGS else "secondary",
@@ -180,7 +192,7 @@ def main() -> None:
             st.session_state.current_page = NAV_AI_SETTINGS
             st.rerun()
 
-    with col6:
+    with col7:
         if st.button(
             "Chef Server",
             type="primary" if page == NAV_CHEF_SERVER_SETTINGS else "secondary",
@@ -203,6 +215,7 @@ def _route_to_page(page: str) -> None:
         NAV_COOKBOOK_ANALYSIS: show_cookbook_analysis_page,
         NAV_MIGRATION_PLANNING: show_migration_planning,
         NAV_DEPENDENCY_MAPPING: show_dependency_mapping,
+        NAV_HISTORY: show_history_page,
         NAV_VALIDATION_REPORTS: show_validation_reports,
         NAV_AI_SETTINGS: show_ai_settings_page,
         NAV_CHEF_SERVER_SETTINGS: show_chef_server_settings_page,

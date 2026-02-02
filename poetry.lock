@@ -348,6 +348,48 @@ linting = ["black", "isort", "pycodestyle"]
 testing = ["pytest (>=6,!=7.0.0)", "pytest-xdist (>=2)"]
 
 [[package]]
+name = "boto3"
+version = "1.42.39"
+description = "The AWS SDK for Python"
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"storage\" or extra == \"all\""
+files = [
+    {file = "boto3-1.42.39-py3-none-any.whl", hash = "sha256:d9d6ce11df309707b490d2f5f785b761cfddfd6d1f665385b78c9d8ed097184b"},
+    {file = "boto3-1.42.39.tar.gz", hash = "sha256:d03f82363314759eff7f84a27b9e6428125f89d8119e4588e8c2c1d79892c956"},
+]
+
+[package.dependencies]
+botocore = ">=1.42.39,<1.43.0"
+jmespath = ">=0.7.1,<2.0.0"
+s3transfer = ">=0.16.0,<0.17.0"
+
+[package.extras]
+crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
+
+[[package]]
+name = "botocore"
+version = "1.42.39"
+description = "Low-level, data-driven core of boto 3."
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"storage\" or extra == \"all\""
+files = [
+    {file = "botocore-1.42.39-py3-none-any.whl", hash = "sha256:9e0d0fed9226449cc26fcf2bbffc0392ac698dd8378e8395ce54f3ec13f81d58"},
+    {file = "botocore-1.42.39.tar.gz", hash = "sha256:0f00355050821e91a5fe6d932f7bf220f337249b752899e3e4cf6ed54326249e"},
+]
+
+[package.dependencies]
+jmespath = ">=0.7.1,<2.0.0"
+python-dateutil = ">=2.1,<3.0.0"
+urllib3 = {version = ">=1.25.4,<2.2.0 || >2.2.0,<3", markers = "python_version >= \"3.10\""}
+
+[package.extras]
+crt = ["awscrt (==0.29.2)"]
+
+[[package]]
 name = "bracex"
 version = "2.6"
 description = "Bash style brace expander."
@@ -1714,6 +1756,19 @@ files = [
     {file = "jiter-0.12.0-graalpy312-graalpy250_312_native-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d96b264ab7d34bbb2312dedc47ce07cd53f06835eacbc16dde3761f47c3a9e7f"},
     {file = "jiter-0.12.0-graalpy312-graalpy250_312_native-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c24e864cb30ab82311c6425655b0cdab0a98c5d973b065c66a3f020740c2324c"},
     {file = "jiter-0.12.0.tar.gz", hash = "sha256:64dfcd7d5c168b38d3f9f8bba7fc639edb3418abcc74f22fdbe6b8938293f30b"},
+]
+
+[[package]]
+name = "jmespath"
+version = "1.1.0"
+description = "JSON Matching Expressions"
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"storage\" or extra == \"all\""
+files = [
+    {file = "jmespath-1.1.0-py3-none-any.whl", hash = "sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64"},
+    {file = "jmespath-1.1.0.tar.gz", hash = "sha256:472c87d80f36026ae83c6ddd0f1d05d4e510134ed462851fd5f754c8c3cbb88d"},
 ]
 
 [[package]]
@@ -3499,6 +3554,31 @@ files = [
 ]
 
 [[package]]
+name = "psycopg"
+version = "3.3.2"
+description = "PostgreSQL database adapter for Python"
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"storage\" or extra == \"all\""
+files = [
+    {file = "psycopg-3.3.2-py3-none-any.whl", hash = "sha256:3e94bc5f4690247d734599af56e51bae8e0db8e4311ea413f801fef82b14a99b"},
+    {file = "psycopg-3.3.2.tar.gz", hash = "sha256:707a67975ee214d200511177a6a80e56e654754c9afca06a7194ea6bbfde9ca7"},
+]
+
+[package.dependencies]
+typing-extensions = {version = ">=4.6", markers = "python_version < \"3.13\""}
+tzdata = {version = "*", markers = "sys_platform == \"win32\""}
+
+[package.extras]
+binary = ["psycopg-binary (==3.3.2) ; implementation_name != \"pypy\""]
+c = ["psycopg-c (==3.3.2) ; implementation_name != \"pypy\""]
+dev = ["ast-comments (>=1.1.2)", "black (>=24.1.0)", "codespell (>=2.2)", "cython-lint (>=0.16)", "dnspython (>=2.1)", "flake8 (>=4.0)", "isort-psycopg", "isort[colors] (>=6.0)", "mypy (>=1.19.0)", "pre-commit (>=4.0.1)", "types-setuptools (>=57.4)", "types-shapely (>=2.0)", "wheel (>=0.37)"]
+docs = ["Sphinx (>=5.0)", "furo (==2022.6.21)", "sphinx-autobuild (>=2021.3.14)", "sphinx-autodoc-typehints (>=1.12)"]
+pool = ["psycopg-pool"]
+test = ["anyio (>=4.0)", "mypy (>=1.19.0) ; implementation_name != \"pypy\"", "pproxy (>=2.7)", "pytest (>=6.2.5)", "pytest-cov (>=3.0)", "pytest-randomly (>=3.5)"]
+
+[[package]]
 name = "py-cpuinfo"
 version = "9.0.0"
 description = "Get CPU info with pure Python"
@@ -3961,7 +4041,7 @@ files = [
     {file = "python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3"},
     {file = "python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"},
 ]
-markers = {main = "extra == \"ui\" or extra == \"all\""}
+markers = {main = "extra == \"ui\" or extra == \"all\" or extra == \"storage\""}
 
 [package.dependencies]
 six = ">=1.5"
@@ -4621,6 +4701,25 @@ files = [
 ]
 
 [[package]]
+name = "s3transfer"
+version = "0.16.0"
+description = "An Amazon S3 Transfer Manager"
+optional = true
+python-versions = ">=3.9"
+groups = ["main"]
+markers = "extra == \"storage\" or extra == \"all\""
+files = [
+    {file = "s3transfer-0.16.0-py3-none-any.whl", hash = "sha256:18e25d66fed509e3868dc1572b3f427ff947dd2c56f844a5bf09481ad3f3b2fe"},
+    {file = "s3transfer-0.16.0.tar.gz", hash = "sha256:8e990f13268025792229cd52fa10cb7163744bf56e719e0b9cb925ab79abf920"},
+]
+
+[package.dependencies]
+botocore = ">=1.37.4,<2.0a0"
+
+[package.extras]
+crt = ["botocore[crt] (>=1.37.4,<2.0a0)"]
+
+[[package]]
 name = "secretstorage"
 version = "3.5.0"
 description = "Python bindings to FreeDesktop.org Secret Service API"
@@ -4758,7 +4857,7 @@ files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
 ]
-markers = {main = "extra == \"ui\" or extra == \"all\""}
+markers = {main = "extra == \"ui\" or extra == \"all\" or extra == \"storage\""}
 
 [[package]]
 name = "smmap"
@@ -5199,7 +5298,7 @@ files = [
     {file = "tzdata-2025.3-py2.py3-none-any.whl", hash = "sha256:06a47e5700f3081aab02b2e513160914ff0694bce9947d6b76ebd6bf57cfc5d1"},
     {file = "tzdata-2025.3.tar.gz", hash = "sha256:de39c2ca5dc7b0344f2eba86f49d614019d29f060fc4ebc8a417896a620b56a7"},
 ]
-markers = {main = "extra == \"ui\" or extra == \"all\"", dev = "sys_platform == \"win32\""}
+markers = {main = "(sys_platform == \"win32\" or extra == \"ui\" or extra == \"all\") and (extra == \"storage\" or extra == \"all\" or extra == \"ui\")", dev = "sys_platform == \"win32\""}
 
 [[package]]
 name = "uc-micro-py"
@@ -5378,10 +5477,11 @@ type = ["pytest-mypy"]
 
 [extras]
 ai = ["anthropic", "openai"]
-all = ["anthropic", "openai", "pandas", "plotly", "streamlit"]
+all = ["anthropic", "boto3", "openai", "pandas", "plotly", "psycopg", "streamlit"]
+storage = ["boto3", "psycopg"]
 ui = ["pandas", "plotly", "streamlit"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "b4b23664b3b77ef6be4cec795435367c716b0e5e7db2eb2e5dee09b7cfa69a38"
+content-hash = "3499eb7a2cd8d1f2811dca1869b62179678fe28ece088e1e8b311ee69ad5db6c"
