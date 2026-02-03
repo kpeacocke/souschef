@@ -581,15 +581,20 @@ class TestCookbookAnalysisStorageFunctions:
             mock_st.warning.assert_not_called()
 
     @patch("souschef.ui.pages.cookbook_analysis.st")
+    @patch("souschef.ui.pages.cookbook_analysis.get_storage_manager")
     @patch("souschef.ui.pages.cookbook_analysis.get_blob_storage")
-    def test_upload_cookbook_archive_success(self, mock_blob, mock_st):
+    def test_upload_cookbook_archive_success(self, mock_blob, mock_storage, mock_st):
         """Test successful cookbook archive upload."""
         import tempfile
         from pathlib import Path
 
-        # Setup mock
+        # Setup mocks
         mock_blob_instance = mock_blob.return_value
         mock_blob_instance.upload.return_value = "cookbook_blob_key_789"
+
+        # Mock storage manager to return None for existing analysis (no deduplication)
+        mock_storage_instance = mock_storage.return_value
+        mock_storage_instance.get_analysis_by_fingerprint.return_value = None
 
         with tempfile.TemporaryDirectory() as tmpdir:
             archive_path = Path(tmpdir) / "test_cookbook.tar.gz"
