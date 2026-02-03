@@ -2,6 +2,8 @@
 
 import json
 import sys
+import tarfile
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -269,17 +271,24 @@ def _trigger_conversion(analysis, blob_storage) -> None:
         with st.spinner("Downloading cookbook and preparing conversion..."):
             # Download the original cookbook from blob storage
             temp_dir = Path(tempfile.mkdtemp(prefix="souschef_history_convert_"))
+            # Download without assuming the format - we'll detect it
             cookbook_path = blob_storage.download(
                 analysis.cookbook_blob_key,
-                temp_dir / f"{analysis.cookbook_name}.tar.gz",
+                temp_dir / f"{analysis.cookbook_name}_archive",
             )
 
             if not cookbook_path or not cookbook_path.exists():
                 st.error("Failed to download cookbook from storage")
                 return
 
-            # Extract the cookbook
-            import tarfile
+            # Detect the archive format
+            archive_format = _detect_archive_format(cookbook_path)
+            if not archive_format:
+                st.error(
+                    "Unable to detect archive format. "
+                    "Supported formats: ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ"
+                )
+                return
 
             extract_dir = temp_dir / "extracted"
             extract_dir.mkdir(parents=True, exist_ok=True)
@@ -289,12 +298,35 @@ def _trigger_conversion(analysis, blob_storage) -> None:
             max_total_size = 500 * 1024 * 1024  # 500 MB total
             max_files = 10000  # Maximum number of files
 
-            # Safely extract tar archive with path validation and resource limits
-            with tarfile.open(cookbook_path, "r:gz") as tar:
-                safe_members = _filter_safe_tar_members(
-                    tar, extract_dir, max_file_size, max_total_size, max_files
+            # Extract based on detected format
+            if archive_format == "zip":
+                _extract_zip_safely(
+                    cookbook_path, extract_dir, max_file_size, max_total_size, max_files
                 )
-                tar.extractall(extract_dir, members=safe_members)
+            elif archive_format == "tar.gz":
+                with tarfile.open(cookbook_path, "r:gz") as tar:
+                    safe_members = _filter_safe_tar_members(
+                        tar, extract_dir, max_file_size, max_total_size, max_files
+                    )
+                    tar.extractall(extract_dir, members=safe_members)
+            elif archive_format == "tar.bz2":
+                with tarfile.open(cookbook_path, "r:bz2") as tar:
+                    safe_members = _filter_safe_tar_members(
+                        tar, extract_dir, max_file_size, max_total_size, max_files
+                    )
+                    tar.extractall(extract_dir, members=safe_members)
+            elif archive_format == "tar.xz":
+                with tarfile.open(cookbook_path, "r:xz") as tar:
+                    safe_members = _filter_safe_tar_members(
+                        tar, extract_dir, max_file_size, max_total_size, max_files
+                    )
+                    tar.extractall(extract_dir, members=safe_members)
+            elif archive_format == "tar":
+                with tarfile.open(cookbook_path, "r") as tar:
+                    safe_members = _filter_safe_tar_members(
+                        tar, extract_dir, max_file_size, max_total_size, max_files
+                    )
+                    tar.extractall(extract_dir, members=safe_members)
 
             # Find the cookbook directory (should be the only directory in extracted/)
             cookbook_dirs = [d for d in extract_dir.iterdir() if d.is_dir()]
@@ -346,9 +378,8 @@ def _filter_safe_tar_members(
     """
     safe_members = []
     total_size = 0
-    file_count = 0
 
-    for member in tar.getmembers():
+    for file_count, member in enumerate(tar.getmembers()):
         validation_result = _validate_tar_member(
             member,
             extract_dir,
@@ -368,9 +399,169 @@ def _filter_safe_tar_members(
         if validation_result["is_safe"]:
             safe_members.append(member)
             total_size = validation_result["new_total_size"]
-            file_count += 1
 
     return safe_members
+
+
+def _detect_archive_format(file_path: Path) -> str | None:
+    """
+    Detect archive format by attempting to open with different methods.
+
+    Args:
+        file_path: Path to the archive file.
+
+    Returns:
+        Format string: 'zip', 'tar.gz', 'tar.bz2', 'tar.xz', 'tar',
+        or None if format cannot be detected.
+
+    """
+    # Try ZIP first
+    try:
+        with zipfile.ZipFile(file_path, "r") as zf:
+            # Verify it's a valid ZIP by checking if we can list contents
+            _ = zf.namelist()
+            return "zip"
+    except (zipfile.BadZipFile, OSError):
+        pass
+
+    # Try gzipped tar (.tar.gz, .tgz)
+    try:
+        with tarfile.open(file_path, "r:gz") as tf:
+            # Verify it's valid by trying to get members
+            _ = tf.getmembers()
+            return "tar.gz"
+    except (tarfile.ReadError, OSError):
+        pass
+
+    # Try bzip2 compressed tar (.tar.bz2, .tbz2)
+    try:
+        with tarfile.open(file_path, "r:bz2") as tf:
+            # Verify it's valid by trying to get members
+            _ = tf.getmembers()
+            return "tar.bz2"
+    except (tarfile.ReadError, OSError):
+        pass
+
+    # Try xz compressed tar (.tar.xz, .txz)
+    try:
+        with tarfile.open(file_path, "r:xz") as tf:
+            # Verify it's valid by trying to get members
+            _ = tf.getmembers()
+            return "tar.xz"
+    except (tarfile.ReadError, OSError):
+        pass
+
+    # Try plain tar
+    try:
+        with tarfile.open(file_path, "r") as tf:
+            # Verify it's valid by trying to get members
+            _ = tf.getmembers()
+            return "tar"
+    except (tarfile.ReadError, OSError):
+        pass
+
+    return None
+
+
+def _extract_zip_safely(
+    zip_path: Path,
+    extract_dir: Path,
+    max_file_size: int,
+    max_total_size: int,
+    max_files: int,
+) -> None:
+    """
+    Safely extract ZIP archive with security validations.
+
+    Args:
+        zip_path: Path to ZIP archive.
+        extract_dir: Directory to extract to.
+        max_file_size: Maximum size per file in bytes.
+        max_total_size: Maximum total extraction size in bytes.
+        max_files: Maximum number of files to extract.
+
+    """
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        _prescan_zip_archive(zip_ref, max_files, max_file_size, max_total_size)
+        _extract_zip_members(zip_ref, extract_dir)
+
+
+def _prescan_zip_archive(
+    zip_ref: zipfile.ZipFile, max_files: int, max_file_size: int, max_total_size: int
+) -> None:
+    """
+    Pre-scan ZIP archive for security issues.
+
+    Args:
+        zip_ref: Open ZipFile reference.
+        max_files: Maximum number of files.
+        max_file_size: Maximum size per file in bytes.
+        max_total_size: Maximum total extraction size in bytes.
+
+    """
+    total_size = 0
+
+    for file_count, info in enumerate(zip_ref.filelist, start=1):
+        if file_count > max_files:
+            st.warning(f"Too many files in archive (limit: {max_files})")
+            break
+
+        if info.file_size > max_file_size:
+            st.warning(f"Skipping large file: {info.filename}")
+
+        total_size += info.file_size
+        if total_size > max_total_size:
+            st.warning(f"Total extraction size limit reached ({max_total_size} bytes)")
+            break
+
+        if ".." in info.filename or info.filename.startswith("/"):
+            st.warning(f"Skipping file with suspicious path: {info.filename}")
+
+
+def _extract_zip_members(zip_ref: zipfile.ZipFile, extract_dir: Path) -> None:
+    """
+    Extract ZIP members safely after validation.
+
+    Args:
+        zip_ref: Open ZipFile reference.
+        extract_dir: Directory to extract to.
+
+    """
+    for info in zip_ref.filelist:
+        try:
+            _extract_single_zip_member(zip_ref, info, extract_dir)
+        except Exception as e:
+            st.warning(f"Failed to extract {info.filename}: {e}")
+
+
+def _extract_single_zip_member(
+    zip_ref: zipfile.ZipFile, info: zipfile.ZipInfo, extract_dir: Path
+) -> None:
+    """
+    Extract a single ZIP member with path validation.
+
+    Args:
+        zip_ref: Open ZipFile reference.
+        info: ZipInfo for the member.
+        extract_dir: Directory to extract to.
+
+    """
+    member_path = (extract_dir / info.filename).resolve()
+
+    if not str(member_path).startswith(str(extract_dir.resolve())):
+        st.warning(f"Skipping file outside extraction directory: {info.filename}")
+        return
+
+    if info.is_dir():
+        member_path.mkdir(parents=True, exist_ok=True)
+    else:
+        member_path.parent.mkdir(parents=True, exist_ok=True)
+        with zip_ref.open(info) as source, member_path.open("wb") as target:
+            while True:
+                chunk = source.read(8192)
+                if not chunk:
+                    break
+                target.write(chunk)
 
 
 def _validate_tar_member(
