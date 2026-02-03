@@ -27,7 +27,7 @@ class TestAnsibleTask:
         assert task.notify is None
         assert task.tags is None
         assert task.become is None
-        assert task.register is None
+        assert task.register_var is None
 
     def test_full_task(self):
         """Test creating a task with all fields."""
@@ -48,7 +48,7 @@ class TestAnsibleTask:
         assert task.notify == ["restart nginx"]
         assert task.tags == ["packages", "nginx"]
         assert task.become is True
-        assert task.register == "nginx_result"
+        assert task.register_var == "nginx_result"
 
     def test_task_missing_required_fields(self):
         """Test that required fields are enforced."""

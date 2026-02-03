@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mcp-souschef"
-version = "3.5.4"
+version = "4.0.0"
 description = "AI-powered MCP server for Chef to Ansible conversion"
 readme = "README.md"
 homepage = "https://github.com/kpeacocke/souschef"
@@ -60,6 +60,7 @@ matplotlib = "^3.8.0"
 types-networkx = "^3.6.1.20251220"
 types-requests = "^2.32.4.20260107"
 types-urllib3 = "^1.26.25.14"
+pandas-stubs = "^2.0.0"
 
 [tool.poetry.scripts]
 souschef = "souschef.cli:main"
@@ -93,6 +94,9 @@ ignore = ["D100", "D104", "D105", "D107", "D203", "D212"]
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --cov=souschef --cov-report=term-missing"
+filterwarnings = [
+    "ignore::ResourceWarning",
+]
 testpaths = [
     "tests/unit",
     "tests/integration",

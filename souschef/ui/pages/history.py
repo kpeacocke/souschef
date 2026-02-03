@@ -13,6 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from souschef.storage import get_blob_storage, get_storage_manager
 
+# Constants
+DOWNLOAD_ARTEFACTS_LABEL = "Download Artefacts"
+
 
 def show_history_page() -> None:
     """Show the history page with past analyses and conversions."""
@@ -142,6 +145,19 @@ def _display_analysis_details(analysis) -> None:
         key=f"recommendations_{analysis.id}",
     )
 
+    # Check if conversions exist for this analysis
+    storage_manager = get_storage_manager()
+    blob_storage = get_blob_storage()
+    conversions = storage_manager.get_conversions_by_analysis_id(analysis.id)
+
+    st.divider()
+
+    # Show conversion actions based on whether conversions exist
+    if conversions:
+        _display_conversion_actions(analysis, conversions, blob_storage)
+    else:
+        _display_convert_button(analysis, blob_storage)
+
     # Full analysis data
     with st.expander("View Full Analysis Data"):
         try:
@@ -149,6 +165,157 @@ def _display_analysis_details(analysis) -> None:
             st.json(analysis_data)
         except json.JSONDecodeError:
             st.error("Unable to parse analysis data")
+
+
+def _display_conversion_actions(analysis, conversions, blob_storage) -> None:
+    """
+    Display download buttons for existing conversions.
+
+    Args:
+        analysis: The analysis result.
+        conversions: List of conversion results for this analysis.
+        blob_storage: Blob storage instance.
+
+    """
+    st.markdown("### Conversions")
+    st.success(f"✅ {len(conversions)} conversion(s) available for this analysis")
+
+    # Show most recent conversion
+    latest_conversion = conversions[0]
+
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.write(f"**Status:** {latest_conversion.status}")
+        st.write(f"**Output Type:** {latest_conversion.output_type}")
+        st.write(f"**Files Generated:** {latest_conversion.files_generated}")
+        st.write(f"**Date:** {_format_datetime(latest_conversion.created_at)}")
+
+    with col2:
+        if latest_conversion.blob_storage_key and st.button(
+            DOWNLOAD_ARTEFACTS_LABEL,
+            type="primary",
+            key=f"download_conversion_{analysis.id}",
+        ):
+            _download_conversion_artefacts(latest_conversion, blob_storage)
+
+    # Show all conversions in expander if there are multiple
+    if len(conversions) > 1:
+        with st.expander(f"View All {len(conversions)} Conversions"):
+            for idx, conv in enumerate(conversions):
+                date_status = _format_datetime(conv.created_at)
+                st.write(f"**{idx + 1}. {date_status}** - {conv.status}")
+                if conv.blob_storage_key and st.button(
+                    "Download",
+                    key=f"download_old_conversion_{conv.id}",
+                ):
+                    _download_conversion_artefacts(conv, blob_storage)
+
+
+def _display_convert_button(analysis, blob_storage) -> None:
+    """
+    Display convert button for analyses without conversions.
+
+    Args:
+        analysis: The analysis result.
+        blob_storage: Blob storage instance.
+
+    """
+    st.markdown("### Conversion")
+    st.info(
+        "No conversions found for this analysis. "
+        "Convert the cookbook to Ansible playbooks."
+    )
+
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.write(f"**Cookbook:** {analysis.cookbook_name}")
+        st.write(f"**Version:** {analysis.cookbook_version}")
+        if analysis.cookbook_blob_key:
+            st.write("✅ Original cookbook archive available")
+        else:
+            st.warning("⚠️ Original cookbook archive not found in storage")
+
+    with col2:
+        if analysis.cookbook_blob_key:
+            if st.button(
+                "Convert to Ansible",
+                type="primary",
+                key=f"convert_analysis_{analysis.id}",
+            ):
+                _trigger_conversion(analysis, blob_storage)
+        else:
+            st.button(
+                "Convert to Ansible",
+                type="primary",
+                disabled=True,
+                key=f"convert_analysis_{analysis.id}_disabled",
+            )
+            st.caption("Cannot convert: original cookbook not in storage")
+
+
+def _trigger_conversion(analysis, blob_storage) -> None:
+    """
+    Trigger conversion for an analysis from history.
+
+    Args:
+        analysis: The analysis result to convert.
+        blob_storage: Blob storage instance.
+
+    """
+    import tempfile
+    from pathlib import Path
+
+    try:
+        with st.spinner("Downloading cookbook and preparing conversion..."):
+            # Download the original cookbook from blob storage
+            temp_dir = Path(tempfile.mkdtemp(prefix="souschef_history_convert_"))
+            cookbook_path = blob_storage.download(
+                analysis.cookbook_blob_key,
+                temp_dir / f"{analysis.cookbook_name}.tar.gz",
+            )
+
+            if not cookbook_path or not cookbook_path.exists():
+                st.error("Failed to download cookbook from storage")
+                return
+
+            # Extract the cookbook
+            import tarfile
+
+            extract_dir = temp_dir / "extracted"
+            extract_dir.mkdir(parents=True, exist_ok=True)
+
+            with tarfile.open(cookbook_path, "r:gz") as tar:
+                tar.extractall(extract_dir)
+
+            # Find the cookbook directory (should be the only directory in extracted/)
+            cookbook_dirs = [d for d in extract_dir.iterdir() if d.is_dir()]
+            if not cookbook_dirs:
+                st.error("No cookbook directory found in archive")
+                return
+
+            cookbook_dir = cookbook_dirs[0]
+
+        # Store in session state and direct user to cookbook analysis page
+        st.session_state.history_convert_path = str(cookbook_dir)
+        st.session_state.history_convert_analysis_id = analysis.id
+        st.session_state.history_convert_cookbook_name = analysis.cookbook_name
+
+        st.success("✅ Cookbook downloaded and ready for conversion!")
+        st.info(
+            "Please navigate to the **Cookbook Analysis** page "
+            "to complete the conversion."
+        )
+        st.markdown("""
+        The cookbook has been downloaded from storage and is ready for conversion.
+        Go to the Cookbook Analysis page where you'll find a "Convert" button to
+        generate Ansible playbooks.
+        """)
+
+    except Exception as e:
+        st.error(f"Failed to prepare conversion: {e}")
+        import traceback
+
+        st.error(traceback.format_exc())
 
 
 def _show_conversion_history(storage_manager, blob_storage) -> None:
@@ -242,7 +409,7 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
 
             with col2:
                 if st.button(
-                    "Download Artefacts",
+                    DOWNLOAD_ARTEFACTS_LABEL,
                     type="primary",
                     key=f"download_{selected.id}",
                 ):

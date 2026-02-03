@@ -21,7 +21,6 @@ def assign_copilot_agent_to_issue(
     repo: str,
     issue_number: int,
     base_ref: str = "",
-    custom_instructions: str = "",
 ) -> str:
     """
     Assign GitHub Copilot to work on an issue.
@@ -31,7 +30,6 @@ def assign_copilot_agent_to_issue(
         repo: Repository name.
         issue_number: Issue number to assign Copilot to.
         base_ref: Git reference (branch) to start from. Defaults to repo default branch.
-        custom_instructions: Optional guidance for the agent beyond the issue body.
 
     Returns:
         Status message indicating the agent assignment was created.
@@ -286,7 +284,7 @@ def check_copilot_agent_status(
         status = _check_agent_labels(owner, repo, issue_number)
 
         # Get recent agent-related comments
-        recent_comments = _get_recent_agent_comments(owner, repo, issue_number)
+        recent_comments = _get_recent_agent_comments()
 
         status_emoji = {
             "active": "✅",
@@ -328,21 +326,39 @@ def _check_agent_labels(owner: str, repo: str, issue_number: int) -> str:
     try:
         # Check which control labels are present on the issue
         # This would use GitHub API through MCP
-        # For now, return a reasonable default
-
         # In a full implementation, this would:
         # 1. Call mcp_github tools to get issue details
         # 2. Check for our control labels
         # 3. Return appropriate status
 
-        # Placeholder logic - assumes not assigned by default
+        # Priority order: stopped > paused > active > not_assigned
+        if _issue_has_label(owner, repo, issue_number, LABEL_AGENT_STOPPED):
+            return "stopped"
+        if _issue_has_label(owner, repo, issue_number, LABEL_AGENT_PAUSED):
+            return "paused"
+        if _issue_has_label(owner, repo, issue_number, LABEL_AGENT_ACTIVE):
+            return "active"
         return "not_assigned"
 
     except Exception:
         return "not_assigned"
 
 
-def _add_label_to_issue(owner: str, repo: str, issue_number: int, label: str) -> None:
+def _issue_has_label(_owner: str, _repo: str, _issue_number: int, _label: str) -> bool:
+    """
+    Check if an issue has a specific label.
+
+    This function would use GitHub MCP tools to check labels.
+    In the MCP architecture, labels can be checked via GitHub API calls.
+    """
+    # Placeholder - in full implementation would use MCP GitHub tools
+    # The actual implementation would call the GitHub API through MCP
+    return False
+
+
+def _add_label_to_issue(
+    _owner: str, _repo: str, _issue_number: int, _label: str
+) -> None:
     """
     Add a label to an issue.
 
@@ -355,7 +371,7 @@ def _add_label_to_issue(owner: str, repo: str, issue_number: int, label: str) ->
 
 
 def _remove_label_from_issue(
-    owner: str, repo: str, issue_number: int, label: str
+    _owner: str, _repo: str, _issue_number: int, _label: str
 ) -> None:
     """
     Remove a label from an issue.
@@ -366,7 +382,9 @@ def _remove_label_from_issue(
     pass
 
 
-def _add_comment_to_issue(owner: str, repo: str, issue_number: int, body: str) -> None:
+def _add_comment_to_issue(
+    _owner: str, _repo: str, _issue_number: int, _body: str
+) -> None:
     """
     Add a comment to an issue.
 
@@ -378,7 +396,7 @@ def _add_comment_to_issue(owner: str, repo: str, issue_number: int, body: str) -
     pass
 
 
-def _get_recent_agent_comments(owner: str, repo: str, issue_number: int) -> str:
+def _get_recent_agent_comments() -> str:
     """
     Get recent agent-related comments from the issue.
 

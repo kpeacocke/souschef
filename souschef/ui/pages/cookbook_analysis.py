@@ -14,7 +14,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-import pandas as pd  # type: ignore[import-untyped]
+import pandas as pd
 import streamlit as st
 
 # Add the parent directory to the path so we can import souschef modules

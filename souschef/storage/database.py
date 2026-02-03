@@ -1,11 +1,12 @@
 """Database models and storage manager for SousChef."""
 
 import contextlib
+import gc
 import hashlib
 import importlib
 import json
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -152,6 +153,48 @@ class StorageManager:
         self.db_path = db_path
         self._ensure_database_exists()
 
+    def __enter__(self) -> "StorageManager":
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Context manager exit with cleanup."""
+        self.close()
+
+    def close(self) -> None:
+        """Close all database connections and ensure cleanup."""
+        # Execute a dummy query to ensure all pending operations are complete
+        # This helps prevent ResourceWarnings in tests
+        if self.db_path.exists():
+            conn = None
+            try:
+                conn = sqlite3.connect(str(self.db_path))
+                conn.execute("SELECT 1")
+                conn.commit()
+            except Exception:
+                pass
+            finally:
+                if conn is not None:
+                    conn.close()
+
+    @contextlib.contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """Create a SQLite connection with proper cleanup."""
+        conn = None
+        try:
+            conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.isolation_level = None
+            yield conn
+        finally:
+            if conn is not None:
+                try:
+                    conn.execute("PRAGMA optimize")
+                except Exception:
+                    pass
+                finally:
+                    conn.close()
+
     def _get_default_db_path(self) -> Path:
         """Get the default database path in a secure location."""
         import tempfile
@@ -167,7 +210,7 @@ class StorageManager:
 
     def _ensure_database_exists(self) -> None:
         """Create database schema if it doesn't exist."""
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with self._connect() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS analysis_results (
@@ -246,8 +289,8 @@ class StorageManager:
                 ON conversion_results(analysis_id)
             """
             )
-
-            conn.commit()
+        # Close connection explicitly after schema creation
+        gc.collect()
 
     def generate_cache_key(
         self,
@@ -346,7 +389,7 @@ class StorageManager:
 
         cache_key = self.generate_cache_key(cookbook_path, ai_provider, ai_model)
 
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO analysis_results (
@@ -392,8 +435,7 @@ class StorageManager:
             Existing AnalysisResult or None if not found.
 
         """
-        with sqlite3.connect(str(self.db_path)) as conn:
-            conn.row_factory = sqlite3.Row
+        with self._connect() as conn:
             cursor = conn.execute(
                 """
                 SELECT * FROM analysis_results
@@ -430,8 +472,7 @@ class StorageManager:
         """
         cache_key = self.generate_cache_key(cookbook_path, ai_provider, ai_model)
 
-        with sqlite3.connect(str(self.db_path)) as conn:
-            conn.row_factory = sqlite3.Row
+        with self._connect() as conn:
             cursor = conn.execute(
                 """
                 SELECT * FROM analysis_results
@@ -488,7 +529,7 @@ class StorageManager:
             The ID of the saved conversion result.
 
         """
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO conversion_results (
@@ -524,9 +565,7 @@ class StorageManager:
             List of AnalysisResult objects.
 
         """
-        with sqlite3.connect(str(self.db_path)) as conn:
-            conn.row_factory = sqlite3.Row
-
+        with self._connect() as conn:
             if cookbook_name:
                 cursor = conn.execute(
                     """
@@ -564,9 +603,7 @@ class StorageManager:
             List of ConversionResult objects.
 
         """
-        with sqlite3.connect(str(self.db_path)) as conn:
-            conn.row_factory = sqlite3.Row
-
+        with self._connect() as conn:
             if cookbook_name:
                 cursor = conn.execute(
                     """
@@ -590,6 +627,31 @@ class StorageManager:
             rows = cursor.fetchall()
             return [_conversion_from_row(row) for row in rows]
 
+    def get_conversions_by_analysis_id(
+        self, analysis_id: int
+    ) -> list[ConversionResult]:
+        """
+        Get conversions associated with a specific analysis.
+
+        Args:
+            analysis_id: ID of the analysis.
+
+        Returns:
+            List of ConversionResult objects.
+
+        """
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM conversion_results
+                WHERE analysis_id = ?
+                ORDER BY created_at DESC
+            """,
+                (analysis_id,),
+            )
+            rows = cursor.fetchall()
+            return [_conversion_from_row(row) for row in rows]
+
     def get_statistics(self) -> dict[str, Any]:
         """
         Get overall statistics.
@@ -598,7 +660,7 @@ class StorageManager:
             Dictionary with statistical data.
 
         """
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with self._connect() as conn:
             stats: dict[str, Any] = {}
 
             # Analysis statistics
@@ -1022,6 +1084,32 @@ class PostgresStorageManager:
 
         with self._connect() as conn:
             cursor = conn.execute(sql, params)
+            rows = cursor.fetchall()
+            return [_conversion_from_row(row) for row in rows]
+
+    def get_conversions_by_analysis_id(
+        self, analysis_id: int
+    ) -> list[ConversionResult]:
+        """
+        Get all conversions for a specific analysis.
+
+        Args:
+            analysis_id: The ID of the analysis.
+
+        Returns:
+            List of conversion results for the analysis.
+
+        """
+        sql = self._prepare_sql(
+            """
+            SELECT * FROM conversion_results
+            WHERE analysis_id = ?
+            ORDER BY created_at DESC
+        """
+        )
+
+        with self._connect() as conn:
+            cursor = conn.execute(sql, (analysis_id,))
             rows = cursor.fetchall()
             return [_conversion_from_row(row) for row in rows]
 

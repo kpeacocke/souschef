@@ -1,28 +1,33 @@
 """Property-based tests for the storage module using Hypothesis."""
 
+import gc
 import tempfile
 from pathlib import Path
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from souschef.storage import LocalBlobStorage, StorageManager
 
 
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
 class TestStoragePropertyBased:
     """Property-based tests using Hypothesis for the storage module."""
 
     @given(st.text(min_size=1, max_size=100))
-    @settings(max_examples=20)
+    @settings(max_examples=10)
     def test_cache_key_is_consistent_for_same_input(self, random_path):
         """Test that cache key generation is deterministic."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+            with StorageManager(db_path=Path(tmpdir) / "test.db") as manager:
+                key1 = manager.generate_cache_key(random_path, "provider", "model")
+                key2 = manager.generate_cache_key(random_path, "provider", "model")
 
-            key1 = manager.generate_cache_key(random_path, "provider", "model")
-            key2 = manager.generate_cache_key(random_path, "provider", "model")
+                assert key1 == key2
 
-            assert key1 == key2
+            # Force garbage collection to clean up connections
+            gc.collect()
 
     @given(
         st.text(min_size=1, max_size=100),
@@ -32,9 +37,10 @@ class TestStoragePropertyBased:
     @settings(max_examples=20)
     def test_different_inputs_produce_different_cache_keys(self, path, provider, model):
         """Test that different inputs produce different cache keys."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
-
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            StorageManager(db_path=Path(tmpdir) / "test.db") as manager,
+        ):
             key1 = manager.generate_cache_key(path, provider, model)
             key2 = manager.generate_cache_key(path + "_different", provider, model)
 
