@@ -52,6 +52,16 @@ class ConversionResult:
 
 def _analysis_from_row(row: Mapping[str, Any]) -> AnalysisResult:
     """Convert a database row into an AnalysisResult."""
+
+    # Helper to safely get optional columns
+    def safe_get(key: str) -> Any:
+        if isinstance(row, dict):
+            return row.get(key)
+        try:
+            return row[key]
+        except (KeyError, IndexError):
+            return None
+
     return AnalysisResult(
         id=row["id"],
         cookbook_name=row["cookbook_name"],
@@ -66,8 +76,8 @@ def _analysis_from_row(row: Mapping[str, Any]) -> AnalysisResult:
         analysis_data=row["analysis_data"],
         created_at=row["created_at"],
         cache_key=(row.get("cache_key") if isinstance(row, dict) else row["cache_key"]),
-        cookbook_blob_key=row.get("cookbook_blob_key", None),
-        content_fingerprint=row.get("content_fingerprint", None),
+        cookbook_blob_key=safe_get("cookbook_blob_key"),
+        content_fingerprint=safe_get("content_fingerprint"),
     )
 
 
@@ -691,7 +701,17 @@ class PostgresStorageManager:
                 conn.commit()
             except Exception:
                 # Column already exists
-                pass
+                conn.rollback()
+
+            # Add content_fingerprint column if it doesn't exist (migration)
+            try:
+                conn.execute(
+                    "ALTER TABLE analysis_results ADD COLUMN content_fingerprint TEXT"
+                )
+                conn.commit()
+            except Exception:
+                # Column already exists
+                conn.rollback()
 
             conn.execute(
                 """
@@ -721,6 +741,13 @@ class PostgresStorageManager:
                 """
                 CREATE INDEX IF NOT EXISTS idx_analysis_cache
                 ON analysis_results(cache_key)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_analysis_fingerprint
+                ON analysis_results(content_fingerprint)
             """
             )
 
