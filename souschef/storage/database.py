@@ -233,14 +233,12 @@ class StorageManager:
             )
 
             # Add cookbook_blob_key column if it doesn't exist (migration)
-            # Suppress OperationalError if column already exists
             with contextlib.suppress(sqlite3.OperationalError):
                 conn.execute(
                     "ALTER TABLE analysis_results ADD COLUMN cookbook_blob_key TEXT"
                 )
 
             # Add content_fingerprint column if it doesn't exist (migration)
-            # Suppress OperationalError if column already exists
             with contextlib.suppress(sqlite3.OperationalError):
                 conn.execute(
                     "ALTER TABLE analysis_results ADD COLUMN content_fingerprint TEXT"
@@ -768,7 +766,7 @@ class PostgresStorageManager:
                 )
                 conn.commit()
             except Exception:
-                # Column already exists
+                # Column may already exist; rollback and continue
                 conn.rollback()
 
             # Add content_fingerprint column if it doesn't exist (migration)
@@ -778,7 +776,7 @@ class PostgresStorageManager:
                 )
                 conn.commit()
             except Exception:
-                # Column already exists
+                # Column may already exist; rollback and continue
                 conn.rollback()
 
             conn.execute(
