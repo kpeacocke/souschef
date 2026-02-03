@@ -35,14 +35,14 @@ The persistence layer uses SQLite or PostgreSQL with the following tables:
 ### Storage Backends
 
 #### Local Storage (Default)
-Stores data in `~/.souschef/`:
-- `data/souschef.db` - SQLite database
-- `storage/` - Generated artefacts
+By default, SousChef stores data under a `.souschef` directory inside the system temporary directory (for example `/tmp/.souschef` on Linux/macOS):
+- `<system-temp>/.souschef/data/souschef.db` - SQLite database
+- `<system-temp>/.souschef/storage/` - Generated artefacts
 
 ```python
 from souschef.storage import get_storage_manager, get_blob_storage
 
-# Uses default local storage
+# Uses default local storage (system temporary directory, e.g. /tmp/.souschef)
 storage = get_storage_manager()
 blob = get_blob_storage("local")
 ```
@@ -271,7 +271,9 @@ export SOUSCHEF_DB_PORT=5432
 export SOUSCHEF_DB_NAME=souschef
 export SOUSCHEF_DB_USER=souschef
 export SOUSCHEF_DB_PASSWORD=souschef
-export SOUSCHEF_DB_SSLMODE=disable
+export SOUSCHEF_DB_SSLMODE=require
+# For local development against a PostgreSQL instance without TLS, you may override:
+# export SOUSCHEF_DB_SSLMODE=disable
 
 # For S3 storage
 export SOUSCHEF_STORAGE_BACKEND=s3
@@ -400,7 +402,7 @@ aws s3api put-bucket-versioning \
 - Use S3 storage for large numbers of conversions
 - Enable parallel processing for faster analysis
 
-### 4. Cost Optimization
+### 4. Cost Optimisation
 - Caching dramatically reduces AI API costs
 - Analyse similar cookbooks in the same session
 - Review cached results before re-analysing
@@ -461,7 +463,6 @@ print(f"Cached: {cached is not None}")
 
 Planned features for upcoming releases:
 
-- [ ] PostgreSQL backend for multi-user deployments
 - [ ] Manual cache invalidation controls
 - [ ] Export/import database snapshots
 - [ ] Azure Blob Storage support
@@ -470,6 +471,7 @@ Planned features for upcoming releases:
 - [ ] Data deduplication for similar cookbooks
 - [ ] Full-text search across analysis history
 - [ ] Collaborative analysis sharing
+- [ ] Enhanced PostgreSQL features (connection pooling, replication)
 
 ## Migration from Previous Versions
 

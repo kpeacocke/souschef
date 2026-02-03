@@ -2448,7 +2448,15 @@ def _upload_repository_to_storage(repo_result: dict, roles_path: Path) -> None:
 
                 st.success("✅ Repository uploaded to storage for future retrieval")
             except json.JSONDecodeError:
-                pass
+                # If existing conversion data is corrupt or unparsable, still
+                # expose the repository for this session but warn that it
+                # could not be associated with the saved conversion record.
+                st.session_state.repo_blob_key = blob_key_repo
+                st.warning(
+                    "Repository uploaded, but existing conversion data could not "
+                    "be parsed. The repository download link will only be "
+                    "available for this session."
+                )
 
     except Exception as e:
         # Non-fatal: just log warning

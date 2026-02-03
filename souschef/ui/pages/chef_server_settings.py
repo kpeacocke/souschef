@@ -353,7 +353,7 @@ def _format_time_estimate(seconds: float) -> str:
 def _render_bulk_operations(server_url: str) -> None:
     """Render bulk assessment and conversion operations."""
     st.markdown("---")
-    st.subheader("📦 Bulk Operations")
+    st.subheader("Bulk Operations")
 
     st.markdown("""
     Assess or convert **all cookbooks** from your Chef Server.
@@ -363,14 +363,12 @@ def _render_bulk_operations(server_url: str) -> None:
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button(
-            "🔍 Assess ALL Cookbooks", type="primary", use_container_width=True
-        ):
+        if st.button("Assess ALL Cookbooks", type="primary", use_container_width=True):
             _run_bulk_assessment(server_url)
 
     with col2:
         if st.button(
-            "🔄 Convert ALL Cookbooks",
+            "Convert ALL Cookbooks",
             type="secondary",
             use_container_width=True,
         ):
@@ -532,7 +530,7 @@ def _run_bulk_conversion(server_url: str) -> None:
         help="Directory where converted Ansible playbooks will be saved",
     )
 
-    if not st.button("▶️ Start Conversion", type="primary"):
+    if not st.button("Start Conversion", type="primary"):
         return
 
     # Run conversion with progress bar

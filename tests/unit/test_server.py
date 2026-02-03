@@ -16052,3 +16052,194 @@ def test_convert_template_with_ai_exception():
         data = json.loads(result)
         assert data["success"] is False
         assert "File not found" in data["error"]
+
+
+# GitHub Copilot Agent Control Tools Tests
+
+
+def test_assign_github_copilot_to_issue_success():
+    """Test assign_github_copilot_to_issue with valid parameters."""
+    from souschef.server import assign_github_copilot_to_issue
+
+    with patch("souschef.github.assign_copilot_agent_to_issue") as mock_assign:
+        mock_assign.return_value = "✅ Copilot agent assigned to issue #42"
+
+        result = assign_github_copilot_to_issue(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+            base_ref="main",
+            custom_instructions="Focus on tests",
+        )
+
+        assert "✅ Copilot agent assigned" in result
+        assert "#42" in result
+        mock_assign.assert_called_once_with(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+            base_ref="main",
+            custom_instructions="Focus on tests",
+        )
+
+
+def test_assign_github_copilot_to_issue_error():
+    """Test assign_github_copilot_to_issue with error."""
+    from souschef.server import assign_github_copilot_to_issue
+
+    with patch("souschef.github.assign_copilot_agent_to_issue") as mock_assign:
+        mock_assign.side_effect = Exception("API connection failed")
+
+        result = assign_github_copilot_to_issue(
+            owner="testorg", repo="testrepo", issue_number=42
+        )
+
+        assert "Error" in result or "error" in result.lower()
+
+
+def test_pause_github_copilot_agent_success():
+    """Test pause_github_copilot_agent with valid parameters."""
+    from souschef.server import pause_github_copilot_agent
+
+    with patch("souschef.github.pause_copilot_agent") as mock_pause:
+        mock_pause.return_value = "⏸️ Pause request sent to Copilot agent on issue #42"
+
+        result = pause_github_copilot_agent(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+            reason="Need to review approach",
+        )
+
+        assert "Pause request" in result or "pause" in result.lower()
+        assert "#42" in result
+        mock_pause.assert_called_once_with(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+            reason="Need to review approach",
+        )
+
+
+def test_pause_github_copilot_agent_error():
+    """Test pause_github_copilot_agent with error."""
+    from souschef.server import pause_github_copilot_agent
+
+    with patch("souschef.github.pause_copilot_agent") as mock_pause:
+        mock_pause.side_effect = Exception("Issue not found")
+
+        result = pause_github_copilot_agent(
+            owner="testorg", repo="testrepo", issue_number=42
+        )
+
+        assert "Error" in result or "error" in result.lower()
+
+
+def test_stop_github_copilot_agent_success():
+    """Test stop_github_copilot_agent with valid parameters."""
+    from souschef.server import stop_github_copilot_agent
+
+    with patch("souschef.github.stop_copilot_agent") as mock_stop:
+        mock_stop.return_value = "🛑 Copilot agent stopped on issue #42"
+
+        result = stop_github_copilot_agent(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+            reason="Requirements changed",
+        )
+
+        assert "stopped" in result.lower() or "stop" in result.lower()
+        assert "#42" in result
+        mock_stop.assert_called_once_with(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+            reason="Requirements changed",
+        )
+
+
+def test_stop_github_copilot_agent_error():
+    """Test stop_github_copilot_agent with error."""
+    from souschef.server import stop_github_copilot_agent
+
+    with patch("souschef.github.stop_copilot_agent") as mock_stop:
+        mock_stop.side_effect = Exception("Permission denied")
+
+        result = stop_github_copilot_agent(
+            owner="testorg", repo="testrepo", issue_number=42
+        )
+
+        assert "Error" in result or "error" in result.lower()
+
+
+def test_resume_github_copilot_agent_success():
+    """Test resume_github_copilot_agent with valid parameters."""
+    from souschef.server import resume_github_copilot_agent
+
+    with patch("souschef.github.resume_copilot_agent") as mock_resume:
+        mock_resume.return_value = "▶️ Copilot agent resumed on issue #42"
+
+        result = resume_github_copilot_agent(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+            additional_instructions="Add more tests",
+        )
+
+        assert "resumed" in result.lower() or "resume" in result.lower()
+        assert "#42" in result
+        mock_resume.assert_called_once_with(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+            additional_instructions="Add more tests",
+        )
+
+
+def test_resume_github_copilot_agent_error():
+    """Test resume_github_copilot_agent with error."""
+    from souschef.server import resume_github_copilot_agent
+
+    with patch("souschef.github.resume_copilot_agent") as mock_resume:
+        mock_resume.side_effect = Exception("Agent not paused")
+
+        result = resume_github_copilot_agent(
+            owner="testorg", repo="testrepo", issue_number=42
+        )
+
+        assert "Error" in result or "error" in result.lower()
+
+
+def test_check_github_copilot_agent_status_success():
+    """Test check_github_copilot_agent_status with valid parameters."""
+    from souschef.server import check_github_copilot_agent_status
+
+    with patch("souschef.github.check_copilot_agent_status") as mock_status:
+        mock_status.return_value = (
+            "✅ Copilot Agent Status for issue #42\n\nCurrent status: Active"
+        )
+
+        result = check_github_copilot_agent_status(
+            owner="testorg", repo="testrepo", issue_number=42
+        )
+
+        assert "Status" in result or "status" in result.lower()
+        assert "#42" in result
+        mock_status.assert_called_once_with(
+            owner="testorg", repo="testrepo", issue_number=42
+        )
+
+
+def test_check_github_copilot_agent_status_error():
+    """Test check_github_copilot_agent_status with error."""
+    from souschef.server import check_github_copilot_agent_status
+
+    with patch("souschef.github.check_copilot_agent_status") as mock_status:
+        mock_status.side_effect = Exception("Network timeout")
+
+        result = check_github_copilot_agent_status(
+            owner="testorg", repo="testrepo", issue_number=42
+        )
+
+        assert "Error" in result or "error" in result.lower()

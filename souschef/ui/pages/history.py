@@ -482,15 +482,17 @@ def _extract_zip_safely(
 
     """
     with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        _prescan_zip_archive(zip_ref, max_files, max_file_size, max_total_size)
-        _extract_zip_members(zip_ref, extract_dir)
+        safe_members = _filter_safe_zip_members(
+            zip_ref, max_files, max_file_size, max_total_size
+        )
+        _extract_zip_members(zip_ref, extract_dir, safe_members)
 
 
-def _prescan_zip_archive(
+def _filter_safe_zip_members(
     zip_ref: zipfile.ZipFile, max_files: int, max_file_size: int, max_total_size: int
-) -> None:
+) -> list[zipfile.ZipInfo]:
     """
-    Pre-scan ZIP archive for security issues.
+    Filter ZIP archive members to only include safe ones.
 
     Args:
         zip_ref: Open ZipFile reference.
@@ -498,36 +500,54 @@ def _prescan_zip_archive(
         max_file_size: Maximum size per file in bytes.
         max_total_size: Maximum total extraction size in bytes.
 
+    Returns:
+        List of safe ZipInfo members to extract.
+
     """
+    safe_members = []
     total_size = 0
 
     for file_count, info in enumerate(zip_ref.filelist, start=1):
+        # Check file count limit
         if file_count > max_files:
             st.warning(f"Too many files in archive (limit: {max_files})")
             break
 
+        # Check individual file size limit
         if info.file_size > max_file_size:
             st.warning(f"Skipping large file: {info.filename}")
+            continue
 
-        total_size += info.file_size
-        if total_size > max_total_size:
+        # Check total size limit
+        if total_size + info.file_size > max_total_size:
             st.warning(f"Total extraction size limit reached ({max_total_size} bytes)")
             break
 
+        # Check for path traversal attacks
         if ".." in info.filename or info.filename.startswith("/"):
             st.warning(f"Skipping file with suspicious path: {info.filename}")
+            continue
+
+        # File is safe, add to list
+        safe_members.append(info)
+        total_size += info.file_size
+
+    return safe_members
 
 
-def _extract_zip_members(zip_ref: zipfile.ZipFile, extract_dir: Path) -> None:
+def _extract_zip_members(
+    zip_ref: zipfile.ZipFile, extract_dir: Path, safe_members: list[zipfile.ZipInfo]
+) -> None:
     """
     Extract ZIP members safely after validation.
 
     Args:
         zip_ref: Open ZipFile reference.
         extract_dir: Directory to extract to.
+        safe_members: List of validated safe members to extract.
 
     """
-    for info in zip_ref.filelist:
+    for info in safe_members:
         try:
             _extract_single_zip_member(zip_ref, info, extract_dir)
         except Exception as e:
@@ -803,7 +823,7 @@ def _display_roles_download(
     if roles_path.is_file():
         with roles_path.open("rb") as f:
             st.download_button(
-                label="📦 Download Roles Archive",
+                label="Download Roles Archive",
                 data=f.read(),
                 file_name=f"{conversion.cookbook_name}_roles.tar.gz",
                 mime="application/gzip",
@@ -813,7 +833,7 @@ def _display_roles_download(
         _create_and_display_zip_download(
             roles_path,
             f"{conversion.cookbook_name}_roles.zip",
-            "📦 Download Roles Archive",
+            "Download Roles Archive",
             f"download_roles_{conversion.id}",
         )
 
@@ -833,7 +853,7 @@ def _display_repo_download(
     if repo_path.is_file():
         with repo_path.open("rb") as f:
             st.download_button(
-                label="🗂️ Download Repository Archive",
+                label="Download Repository Archive",
                 data=f.read(),
                 file_name=f"{conversion.cookbook_name}_repository.tar.gz",
                 mime="application/gzip",
@@ -843,7 +863,7 @@ def _display_repo_download(
         _create_and_display_zip_download(
             repo_path,
             f"{conversion.cookbook_name}_repository.zip",
-            "🗂️ Download Repository Archive",
+            "Download Repository Archive",
             f"download_repo_{conversion.id}",
         )
 
@@ -853,7 +873,6 @@ def _create_and_display_zip_download(
 ) -> None:
     """Create a ZIP archive from directory and display download button."""
     import io
-    import zipfile
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:

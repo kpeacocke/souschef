@@ -163,6 +163,8 @@ class LocalBlobStorage(BlobStorage):
                     path.unlink()
                 return True
         except OSError:
+            # If deletion fails (permissions, file in use, etc.),
+            # silently fail and return False below.
             pass
         return False
 

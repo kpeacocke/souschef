@@ -233,12 +233,14 @@ class StorageManager:
             )
 
             # Add cookbook_blob_key column if it doesn't exist (migration)
+            # Suppress OperationalError if column already exists
             with contextlib.suppress(sqlite3.OperationalError):
                 conn.execute(
                     "ALTER TABLE analysis_results ADD COLUMN cookbook_blob_key TEXT"
                 )
 
             # Add content_fingerprint column if it doesn't exist (migration)
+            # Suppress OperationalError if column already exists
             with contextlib.suppress(sqlite3.OperationalError):
                 conn.execute(
                     "ALTER TABLE analysis_results ADD COLUMN content_fingerprint TEXT"
@@ -323,6 +325,10 @@ class StorageManager:
             content_hash = self._hash_directory_contents(cookbook_dir)
             key_parts.append(content_hash)
         except (ValueError, OSError):
+            # If the cookbook path is invalid or the contents cannot be read,
+            # fall back to a cache key that does not include a content
+            # fingerprint so caching still works, albeit with reduced
+            # granularity.
             pass
 
         combined = "|".join(key_parts)
