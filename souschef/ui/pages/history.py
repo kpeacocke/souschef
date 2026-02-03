@@ -284,8 +284,17 @@ def _trigger_conversion(analysis, blob_storage) -> None:
             extract_dir = temp_dir / "extracted"
             extract_dir.mkdir(parents=True, exist_ok=True)
 
+            # Security limits for extraction (prevent zip bombs and resource exhaustion)
+            max_file_size = 100 * 1024 * 1024  # 100 MB per file
+            max_total_size = 500 * 1024 * 1024  # 500 MB total
+            max_files = 10000  # Maximum number of files
+
+            # Safely extract tar archive with path validation and resource limits
             with tarfile.open(cookbook_path, "r:gz") as tar:
-                tar.extractall(extract_dir)
+                safe_members = _filter_safe_tar_members(
+                    tar, extract_dir, max_file_size, max_total_size, max_files
+                )
+                tar.extractall(extract_dir, members=safe_members)
 
             # Find the cookbook directory (should be the only directory in extracted/)
             cookbook_dirs = [d for d in extract_dir.iterdir() if d.is_dir()]
@@ -316,6 +325,147 @@ def _trigger_conversion(analysis, blob_storage) -> None:
         import traceback
 
         st.error(traceback.format_exc())
+
+
+def _filter_safe_tar_members(
+    tar, extract_dir: Path, max_file_size: int, max_total_size: int, max_files: int
+):
+    """
+    Filter tar archive members to only include safe ones.
+
+    Args:
+        tar: Opened tar archive.
+        extract_dir: Directory where files will be extracted.
+        max_file_size: Maximum size per file in bytes.
+        max_total_size: Maximum total extraction size in bytes.
+        max_files: Maximum number of files to extract.
+
+    Returns:
+        List of safe tar members to extract.
+
+    """
+    safe_members = []
+    total_size = 0
+    file_count = 0
+
+    for member in tar.getmembers():
+        validation_result = _validate_tar_member(
+            member,
+            extract_dir,
+            file_count,
+            total_size,
+            max_file_size,
+            max_total_size,
+            max_files,
+        )
+
+        if validation_result["warning"]:
+            st.warning(validation_result["warning"])
+
+        if validation_result["should_stop"]:
+            break
+
+        if validation_result["is_safe"]:
+            safe_members.append(member)
+            total_size = validation_result["new_total_size"]
+            file_count += 1
+
+    return safe_members
+
+
+def _validate_tar_member(
+    member,
+    extract_dir: Path,
+    file_count: int,
+    total_size: int,
+    max_file_size: int,
+    max_total_size: int,
+    max_files: int,
+) -> dict:
+    """
+    Validate a tar archive member for safe extraction.
+
+    Args:
+        member: Tar member to validate.
+        extract_dir: Directory where files will be extracted.
+        file_count: Current file count.
+        total_size: Current total size in bytes.
+        max_file_size: Maximum size per file in bytes.
+        max_total_size: Maximum total extraction size in bytes.
+        max_files: Maximum number of files.
+
+    Returns:
+        Dictionary with validation results:
+        - is_safe: Whether member should be extracted
+        - new_total_size: Updated total size
+        - warning: Warning message if any
+        - should_stop: Whether to stop processing more members
+
+    """
+    # Check file count limit
+    if file_count >= max_files:
+        return {
+            "is_safe": False,
+            "new_total_size": total_size,
+            "warning": (
+                f"Extraction stopped: archive contains more than {max_files} files"
+            ),
+            "should_stop": True,
+        }
+
+    # Check individual file size
+    if member.size > max_file_size:
+        size_mb = member.size / (1024 * 1024)
+        limit_mb = max_file_size / (1024 * 1024)
+        return {
+            "is_safe": False,
+            "new_total_size": total_size,
+            "warning": (
+                f"Skipping large file {member.name}: "
+                f"{size_mb:.1f}MB exceeds {limit_mb:.0f}MB limit"
+            ),
+            "should_stop": False,
+        }
+
+    # Check total extraction size
+    new_total_size = total_size + member.size
+    if new_total_size > max_total_size:
+        limit_mb = max_total_size / (1024 * 1024)
+        return {
+            "is_safe": False,
+            "new_total_size": total_size,
+            "warning": f"Extraction stopped: total size exceeds {limit_mb:.0f}MB limit",
+            "should_stop": True,
+        }
+
+    # Validate path security
+    member_path = (extract_dir / member.name).resolve()
+    if not str(member_path).startswith(str(extract_dir.resolve())):
+        return {
+            "is_safe": False,
+            "new_total_size": total_size,
+            "warning": f"Skipping potentially unsafe path: {member.name}",
+            "should_stop": False,
+        }
+
+    # Validate symlink security
+    if member.issym() or member.islnk():
+        link_target = (extract_dir / member.linkname).resolve()
+        if not str(link_target).startswith(str(extract_dir.resolve())):
+            return {
+                "is_safe": False,
+                "new_total_size": total_size,
+                "warning": f"Skipping unsafe symlink: {member.name}",
+                "should_stop": False,
+            }
+
+    # Member is safe
+    return {
+        "is_safe": True,
+        "new_total_size": new_total_size,
+        "warning": None,
+        "should_stop": False,
+    }
 
 
 def _show_conversion_history(storage_manager, blob_storage) -> None:

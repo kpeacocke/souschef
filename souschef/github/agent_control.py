@@ -21,6 +21,7 @@ def assign_copilot_agent_to_issue(
     repo: str,
     issue_number: int,
     base_ref: str = "",
+    custom_instructions: str = "",
 ) -> str:
     """
     Assign GitHub Copilot to work on an issue.
@@ -30,6 +31,7 @@ def assign_copilot_agent_to_issue(
         repo: Repository name.
         issue_number: Issue number to assign Copilot to.
         base_ref: Git reference (branch) to start from. Defaults to repo default branch.
+        custom_instructions: Optional additional guidance for the agent.
 
     Returns:
         Status message indicating the agent assignment was created.
@@ -43,11 +45,17 @@ def assign_copilot_agent_to_issue(
         # Add active label to track assignment
         _add_label_to_issue(owner, repo, issue_number, LABEL_AGENT_ACTIVE)
 
+        instructions_note = (
+            f"\n**Custom instructions:** {custom_instructions}"
+            if custom_instructions
+            else ""
+        )
+
         return f"""✅ Copilot agent assigned to issue #{issue_number}
 
 **Repository:** {owner}/{repo}
 **Base branch:** {base_ref or "default"}
-**Status:** Agent is now working on the issue
+**Status:** Agent is now working on the issue{instructions_note}
 
 The agent will create a pull request with proposed changes.
 You can monitor progress in the issue comments.

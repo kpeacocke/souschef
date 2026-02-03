@@ -87,6 +87,8 @@ class TestStorageManager:
                 analysis_data={},
             )
 
+            assert id1 is not None
+            assert id2 is not None
             assert id1 < id2
 
     def test_get_cached_analysis_returns_none_for_missing_path(self):
