@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import streamlit as st
 
@@ -17,6 +18,20 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from souschef.assessment import assess_single_cookbook_with_ai
 from souschef.core.url_validation import validate_user_provided_url
 from souschef.storage import get_storage_manager
+
+if TYPE_CHECKING:
+    import requests as requests_module
+else:
+    try:
+        import requests as requests_module
+        from requests.exceptions import (
+            ConnectionError,  # noqa: A004
+            Timeout,
+        )
+    except ImportError:
+        requests_module = None  # type: ignore[assignment]
+        ConnectionError = Exception  # type: ignore[assignment,misc]  # noqa: A001
+        Timeout = Exception  # type: ignore[assignment,misc]
 
 try:
     import requests
@@ -29,9 +44,12 @@ except ImportError:
     ConnectionError = Exception  # type: ignore[assignment,misc]  # noqa: A001
     Timeout = Exception  # type: ignore[assignment,misc]
 
+# Constants
+JSON_CONTENT_TYPE = "application/json"
+
 
 def _handle_chef_server_response(
-    response: "requests.Response", server_url: str
+    response: "requests_module.Response", server_url: str
 ) -> tuple[bool, str]:
     """
     Handle Chef Server search response.
@@ -94,7 +112,7 @@ def _validate_chef_server_connection(
             search_url,
             params={"q": "*:*"},
             timeout=5,
-            headers={"Accept": "application/json"},
+            headers={"Accept": JSON_CONTENT_TYPE},
         )
         return _handle_chef_server_response(response, server_url)
 
@@ -277,7 +295,7 @@ def _get_chef_cookbooks(server_url: str) -> list[dict]:
         response = requests.get(
             cookbooks_url,
             timeout=10,
-            headers={"Accept": "application/json"},
+            headers={"Accept": JSON_CONTENT_TYPE},
         )
 
         if response.status_code == 200:
@@ -305,7 +323,7 @@ def _download_cookbook(
         response = requests.get(
             cookbook_url,
             timeout=30,
-            headers={"Accept": "application/json"},
+            headers={"Accept": JSON_CONTENT_TYPE},
         )
 
         if response.status_code != 200:
@@ -375,6 +393,80 @@ def _render_bulk_operations(server_url: str) -> None:
             _run_bulk_conversion(server_url)
 
 
+def _assess_single_cookbook(
+    storage,
+    server_url: str,
+    temp_path: Path,
+    cookbook: dict,
+    ai_provider: str,
+    ai_api_key: str,
+    ai_model: str,
+) -> bool:
+    """
+    Assess a single cookbook and save results.
+
+    Returns True if successful, False otherwise.
+    """
+    cookbook_name = cookbook["name"]
+    latest_version = cookbook["versions"][0] if cookbook["versions"] else "0.0.0"
+
+    # Download cookbook
+    cookbook_dir = _download_cookbook(
+        server_url, cookbook_name, latest_version, temp_path
+    )
+    if not cookbook_dir:
+        return False
+
+    # Check cache first
+    cached = storage.get_cached_analysis(
+        str(cookbook_dir), ai_provider=ai_provider, ai_model=ai_model
+    )
+    if cached:
+        return True
+
+    # Run assessment
+    if ai_api_key:
+        assessment = assess_single_cookbook_with_ai(
+            str(cookbook_dir),
+            ai_provider=ai_provider.lower().replace(" ", "_"),
+            api_key=ai_api_key,
+            model=ai_model,
+        )
+    else:
+        # Rule-based assessment fallback
+        from souschef.assessment import parse_chef_migration_assessment
+
+        assessment = parse_chef_migration_assessment(str(cookbook_dir))
+
+    # Save to storage
+    storage.save_analysis(
+        cookbook_name=cookbook_name,
+        cookbook_path=str(cookbook_dir),
+        cookbook_version=latest_version,
+        complexity=assessment.get("complexity", "Medium"),
+        estimated_hours=assessment.get("estimated_hours", 0.0),
+        estimated_hours_with_souschef=(assessment.get("estimated_hours", 0.0) * 0.5),
+        recommendations=assessment.get("recommendations", ""),
+        analysis_data=assessment,
+        ai_provider=ai_provider if ai_api_key else None,
+        ai_model=ai_model if ai_api_key else None,
+    )
+    return True
+
+
+def _confirm_bulk_operation(estimated_time: float, operation: str) -> bool:
+    """Show confirmation dialog if operation takes > 1 minute."""
+    if estimated_time <= 60:
+        return True
+
+    confirm = st.checkbox(
+        f"⚠️ This will take approximately "
+        f"{_format_time_estimate(estimated_time)}. Continue?",
+        key=f"confirm_{operation}_all",
+    )
+    return confirm
+
+
 def _run_bulk_assessment(server_url: str) -> None:
     """Run bulk assessment on all Chef Server cookbooks."""
     with st.spinner("Fetching cookbooks from Chef Server..."):
@@ -391,14 +483,8 @@ def _run_bulk_assessment(server_url: str) -> None:
     st.info(f"📊 Found {num_cookbooks} cookbook{'s' if num_cookbooks != 1 else ''}")
     st.warning(f"⏱️ Estimated time: {_format_time_estimate(estimated_time)}")
 
-    if estimated_time > 60:  # More than 1 minute
-        confirm = st.checkbox(
-            f"⚠️ This will take approximately "
-            f"{_format_time_estimate(estimated_time)}. Continue?",
-            key="confirm_assess_all",
-        )
-        if not confirm:
-            return
+    if not _confirm_bulk_operation(estimated_time, "assess"):
+        return
 
     # Run assessment with progress bar
     progress_bar = st.progress(0.0, text="Starting assessment...")
@@ -426,62 +512,25 @@ def _run_bulk_assessment(server_url: str) -> None:
             # Update progress
             progress = idx / num_cookbooks
             progress_bar.progress(
-                progress, text=f"Assessing {cookbook_name} ({idx}/{num_cookbooks})..."
+                progress,
+                text=f"Assessing {cookbook_name} ({idx}/{num_cookbooks})...",
             )
             status_text.text(f"📝 Processing: {cookbook_name} v{latest_version}")
 
             try:
-                # Download cookbook
-                cookbook_dir = _download_cookbook(
-                    server_url, cookbook_name, latest_version, temp_path
+                success = _assess_single_cookbook(
+                    storage,
+                    server_url,
+                    temp_path,
+                    cookbook,
+                    ai_provider,
+                    ai_api_key,
+                    ai_model,
                 )
-
-                if not cookbook_dir:
-                    failed += 1
-                    continue
-
-                # Check cache first
-                cached = storage.get_cached_analysis(
-                    str(cookbook_dir), ai_provider=ai_provider, ai_model=ai_model
-                )
-
-                if cached:
-                    status_text.text(f"✅ Using cached: {cookbook_name}")
+                if success:
                     successful += 1
-                    continue
-
-                # Run assessment
-                if ai_api_key:
-                    assessment = assess_single_cookbook_with_ai(
-                        str(cookbook_dir),
-                        ai_provider=ai_provider.lower().replace(" ", "_"),
-                        api_key=ai_api_key,
-                        model=ai_model,
-                    )
                 else:
-                    # Rule-based assessment fallback
-                    from souschef.assessment import parse_chef_migration_assessment
-
-                    assessment = parse_chef_migration_assessment(str(cookbook_dir))
-
-                # Save to storage
-                storage.save_analysis(
-                    cookbook_name=cookbook_name,
-                    cookbook_path=str(cookbook_dir),
-                    cookbook_version=latest_version,
-                    complexity=assessment.get("complexity", "Medium"),
-                    estimated_hours=assessment.get("estimated_hours", 0.0),
-                    estimated_hours_with_souschef=(
-                        assessment.get("estimated_hours", 0.0) * 0.5
-                    ),
-                    recommendations=assessment.get("recommendations", ""),
-                    analysis_data=assessment,
-                    ai_provider=ai_provider if ai_api_key else None,
-                    ai_model=ai_model if ai_api_key else None,
-                )
-
-                successful += 1
-
+                    failed += 1
             except Exception as e:
                 status_text.text(f"❌ Failed: {cookbook_name} - {str(e)}")
                 failed += 1

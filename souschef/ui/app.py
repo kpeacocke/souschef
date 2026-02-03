@@ -130,7 +130,7 @@ def main() -> None:
     st.subheader("Navigation")
 
     col1, col2, col3, col4 = st.columns(4)
-    col5, col6, col7, col8 = st.columns(4)
+    col5, col6, col7, _ = st.columns(4)
 
     with col1:
         if st.button(
