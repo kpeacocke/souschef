@@ -21,6 +21,7 @@ The persistence layer uses SQLite or PostgreSQL with the following tables:
 - AI provider and model used
 - Full analysis data (JSON)
 - Cache keys for efficient lookups
+- **Source archive reference** (v3.7+): Blob storage key for uploaded cookbook
 - Timestamps
 
 #### Conversion Results
@@ -85,6 +86,12 @@ The History page in the UI provides comprehensive access to all past analyses an
    - AI provider/model used
 5. Click on individual analyses to see full details and recommendations
 
+**Source Archive Storage** (v3.7+):
+- When you upload a cookbook archive (tar/zip), it's automatically stored alongside the analysis
+- Stored archives enable re-conversion without re-uploading
+- Archives are referenced by `cookbook_blob_key` in the database
+- Future versions will enable one-click re-conversion from stored archives
+
 ### Conversion History
 1. Navigate to **History** in the main navigation
 2. Click the **Conversion History** tab
@@ -94,6 +101,12 @@ The History page in the UI provides comprehensive access to all past analyses an
    - Files generated
    - Output types (playbook/role/collection)
 5. Download previously generated artefacts with one click
+
+**Automatic Archive Creation** (v3.6+):
+- Conversion artefacts are automatically stored as tar/zip archives during conversion
+- Both roles and repository archives are saved to blob storage
+- Archives are immediately available for download from the History page
+- No need to regenerate - just click to download pre-created archives
 
 ### Statistics Dashboard
 View overall metrics:
@@ -170,7 +183,8 @@ analysis_id = storage.save_analysis(
     recommendations="Use Ansible Galaxy nginx role...",
     analysis_data={"details": "..."},
     ai_provider="anthropic",
-    ai_model="claude-3-5-sonnet-20241022"
+    ai_model="claude-3-5-sonnet-20241022",
+    cookbook_blob_key="cookbooks/nginx/nginx-1.0.0.tar.gz"  # Optional: v3.7+
 )
 ```
 
@@ -194,16 +208,30 @@ if cached:
 
 ```python
 # Save conversion with blob storage reference
+# Note: In UI mode (v3.6+), this happens automatically during conversion
 conversion_id = storage.save_conversion(
     cookbook_name="nginx",
     output_type="role",
     status="success",
     files_generated=12,
-    conversion_data={"playbook": "...", "vars": "..."},
+    conversion_data={
+        "parsed_result": {...},
+        "roles_blob_key": "conversions/nginx/roles_20250202_123456",
+        "repo_blob_key": "conversions/nginx/repo_20250202_123500",
+        "timestamp": "20250202_123456"
+    },
     analysis_id=analysis_id,
-    blob_storage_key="conversions/nginx_20250202_123456.zip"
+    blob_storage_key="conversions/nginx/roles_20250202_123456"
 )
 ```
+
+**Automatic Conversion Storage (UI)**:
+- When you convert cookbooks in the UI, artefacts are automatically:
+  1. Uploaded to blob storage as tar/zip archives
+  2. Saved to database with blob storage keys
+  3. Made available for download from the History page
+- Both roles and repository archives are stored separately
+- Archives include timestamps for version tracking
 
 ### Uploading to Blob Storage
 

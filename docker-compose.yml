@@ -1,4 +1,15 @@
 ---
+# SousChef Docker Compose Configuration
+#
+# Database Backend Selection:
+#   - PostgreSQL (default): Robust production-ready database server
+#     $ docker compose up
+#
+#   - SQLite: Lightweight embedded database (set SOUSCHEF_DB_BACKEND=sqlite in .env)
+#     Still uses PostgreSQL service, but data stored locally in SQLite
+#
+# PostgreSQL service is always started. Configure which backend via SOUSCHEF_DB_BACKEND.
+#
 services:
   souschef-ui:
     build:
@@ -42,17 +53,6 @@ services:
         max-size: "10m"
         max-file: "3"
         labels: "service=souschef-ui"
-    volumes:
-      # Persistent SQLite database and analysis history (fallback)
-      # Maps to /tmp/.souschef/data (where StorageManager stores the database)
-      - souschef-data:/tmp/.souschef/data
-      # Persistent blob storage for generated artefacts and conversions (fallback)
-      # Maps to /tmp/.souschef/storage (where LocalBlobStorage stores files)
-      - souschef-storage:/tmp/.souschef/storage
-      # Mount local directory for development (optional, read-only)
-      # - ./souschef:/app/souschef:ro
-      # Mount .env for configuration
-      # - ./.env:/app/.env:ro
     healthcheck:
       test: ["CMD", "python", "-m", "souschef.ui.health_check"]
       interval: 30s
@@ -68,14 +68,17 @@ services:
     user: "1000:1000"
     read_only: true
     tmpfs:
-      # Use tmpfs only for runtime directories, not /tmp where storage volumes are mounted
+      # Temporary filesystems - writable directories for runtime use
+      - /tmp:noexec,nosuid,size=256m
       - /run:noexec,nosuid,size=50m
     networks:
       - souschef-public
       - souschef-internal
     depends_on:
-      - postgres
-      - minio
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
     container_name: souschef-ui
 
@@ -122,25 +125,26 @@ services:
       start_period: 10s
 
 volumes:
-  # Persistent SQLite database - stores analysis results and conversion history
+  # SQLite database volume - only needed if SOUSCHEF_DB_BACKEND=sqlite
   # Data survives container restarts
   # Configure via SOUSCHEF_DATA_DIR in .env (default: ./data/souschef)
-  souschef-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${SOUSCHEF_DATA_DIR:-./data/souschef}
-  # Persistent blob storage - stores generated artefacts and conversions
-  # Can be mounted to host filesystem or cloud storage
+  # souschef-data:
+  #   driver: local
+  #   driver_opts:
+  #     type: none
+  #     o: bind
+  #     device: ${SOUSCHEF_DATA_DIR:-./data/souschef}
+
+  # Local blob storage volume - only needed if SOUSCHEF_STORAGE_BACKEND=local
+  # Stores generated artefacts and conversions locally
   # Configure via SOUSCHEF_STORAGE_DIR in .env (default: ./data/storage)
-  souschef-storage:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${SOUSCHEF_STORAGE_DIR:-./data/storage}
-  # PostgreSQL database storage
+  # souschef-storage:
+  #   driver: local
+  #   driver_opts:
+  #     type: none
+  #     o: bind
+  #     device: ${SOUSCHEF_STORAGE_DIR:-./data/storage}
+  # PostgreSQL database storage (active by default)
   # Configure via POSTGRES_DATA_DIR in .env (default: ./data/postgres)
   postgres-data:
     driver: local
@@ -160,8 +164,6 @@ volumes:
 networks:
   souschef-public:
     driver: bridge
-    driver_opts:
-      com.docker.network.bridge.name: br-souschef
   souschef-internal:
     driver: bridge
     internal: true

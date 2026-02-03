@@ -75,12 +75,11 @@ RUN pip install --no-cache-dir --require-hashes \
 # Configure poetry to not create virtual environment (install globally)
 RUN poetry config virtualenvs.create false
 
-# Install production dependencies with UI extras
+# Install production dependencies with all required extras
 # Use --no-interaction for automated environments
 RUN poetry install \
     --only=main \
-    --extras=ui \
-    --extras=ai \
+    --extras "ui ai storage" \
     --no-dev \
     --no-interaction \
     --no-root && \

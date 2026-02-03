@@ -122,6 +122,135 @@ class TestStorageManager:
             assert cached is not None
             assert cached.cookbook_name == "test"
 
+    def test_calculate_file_fingerprint_returns_sha256(self):
+        """Test that calculate_file_fingerprint returns SHA256 hash."""
+        from souschef.storage.database import calculate_file_fingerprint
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test.txt"
+            test_file.write_text("Test content for fingerprinting")
+
+            fingerprint = calculate_file_fingerprint(test_file)
+
+            # SHA256 hash should be 64 characters (hexadecimal)
+            assert isinstance(fingerprint, str)
+            assert len(fingerprint) == 64
+            assert all(c in "0123456789abcdef" for c in fingerprint)
+
+    def test_calculate_file_fingerprint_same_content(self):
+        """Test that identical content produces identical fingerprints."""
+        from souschef.storage.database import calculate_file_fingerprint
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file1 = Path(tmpdir) / "file1.txt"
+            file2 = Path(tmpdir) / "file2.txt"
+
+            content = "Identical content for testing"
+            file1.write_text(content)
+            file2.write_text(content)
+
+            fp1 = calculate_file_fingerprint(file1)
+            fp2 = calculate_file_fingerprint(file2)
+
+            assert fp1 == fp2
+
+    def test_calculate_file_fingerprint_different_content(self):
+        """Test that different content produces different fingerprints."""
+        from souschef.storage.database import calculate_file_fingerprint
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file1 = Path(tmpdir) / "file1.txt"
+            file2 = Path(tmpdir) / "file2.txt"
+
+            file1.write_text("Content A")
+            file2.write_text("Content B")
+
+            fp1 = calculate_file_fingerprint(file1)
+            fp2 = calculate_file_fingerprint(file2)
+
+            assert fp1 != fp2
+
+    def test_get_analysis_by_fingerprint_none_when_missing(self):
+        """Test that get_analysis_by_fingerprint returns None for missing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+            result = manager.get_analysis_by_fingerprint("nonexistent_hash")
+            assert result is None
+
+    def test_get_analysis_by_fingerprint_returns_analysis(self):
+        """Test retrieving analysis by content fingerprint."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            # Save analysis with fingerprint
+            test_fingerprint = "a" * 64  # Mock SHA256 hash
+
+            manager.save_analysis(
+                cookbook_name="test-cookbook",
+                cookbook_path="/path",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=5.0,
+                estimated_hours_with_souschef=2.0,
+                recommendations="Test",
+                analysis_data={},
+                content_fingerprint=test_fingerprint,
+            )
+
+            # Retrieve by fingerprint
+            result = manager.get_analysis_by_fingerprint(test_fingerprint)
+
+            assert result is not None
+            assert result.cookbook_name == "test-cookbook"
+            assert result.content_fingerprint == test_fingerprint
+
+    def test_save_analysis_deduplicates_by_fingerprint(self):
+        """Test that save_analysis deduplicates using fingerprint."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            test_fingerprint = "b" * 64  # Mock SHA256 hash
+
+            # Save first analysis
+            id1 = manager.save_analysis(
+                cookbook_name="cookbook1",
+                cookbook_path="/path1",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=5.0,
+                estimated_hours_with_souschef=2.0,
+                recommendations="Test",
+                analysis_data={},
+                content_fingerprint=test_fingerprint,
+            )
+
+            # Try to save another with same fingerprint
+            id2 = manager.save_analysis(
+                cookbook_name="cookbook2",
+                cookbook_path="/path2",
+                cookbook_version="2.0.0",
+                complexity="high",
+                estimated_hours=20.0,
+                estimated_hours_with_souschef=10.0,
+                recommendations="Different",
+                analysis_data={},
+                content_fingerprint=test_fingerprint,
+            )
+
+            # Should return the same ID (deduplication)
+            assert id1 == id2
+
+            # Verify only one record with this fingerprint exists
+            with sqlite3.connect(str(manager.db_path)) as conn:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) FROM analysis_results "
+                    "WHERE content_fingerprint = ?",
+                    (test_fingerprint,),
+                )
+                count = cursor.fetchone()[0]
+
+            assert count == 1
+
     def test_save_conversion_creates_record(self):
         """Test saving a conversion result."""
         with tempfile.TemporaryDirectory() as tmpdir:

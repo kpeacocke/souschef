@@ -254,49 +254,114 @@ def _download_conversion_artefacts(conversion, blob_storage) -> None:
     import tempfile
 
     try:
-        with st.spinner("Downloading artefacts..."):
-            # Download to temporary location
+        with st.spinner("Preparing downloads..."):
+            # Parse conversion data to get blob keys
+            roles_blob_key, repo_blob_key = _parse_conversion_blob_keys(conversion)
+
+            # Download and display archives
             temp_dir = Path(tempfile.mkdtemp())
-            download_path = blob_storage.download(
-                conversion.blob_storage_key, temp_dir / "artefacts"
-            )
+            _display_roles_download(conversion, blob_storage, roles_blob_key, temp_dir)
+            _display_repo_download(conversion, blob_storage, repo_blob_key, temp_dir)
 
-            # Create download button
-            if download_path.exists():
-                if download_path.is_dir():
-                    # Create ZIP for download
-                    import io
-                    import zipfile
-
-                    zip_buffer = io.BytesIO()
-                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-                        for file_path in download_path.rglob("*"):
-                            if file_path.is_file():
-                                arcname = file_path.relative_to(download_path)
-                                zipf.write(file_path, arcname)
-
-                    zip_buffer.seek(0)
-                    st.download_button(
-                        label="Download ZIP",
-                        data=zip_buffer.getvalue(),
-                        file_name=f"{conversion.cookbook_name}_artefacts.zip",
-                        mime="application/zip",
-                        key=f"download_btn_{conversion.id}",
-                    )
-                else:
-                    # Single file download
-                    with download_path.open("rb") as f:
-                        st.download_button(
-                            label="Download File",
-                            data=f.read(),
-                            file_name=download_path.name,
-                            key=f"download_btn_{conversion.id}",
-                        )
-
-                st.success("Artefacts ready for download!")
+            st.success("✅ Archives ready for download!")
 
     except Exception as e:
         st.error(f"Failed to download artefacts: {e}")
+
+
+def _parse_conversion_blob_keys(conversion) -> tuple[str, str | None]:
+    """Parse conversion data to extract blob storage keys."""
+    try:
+        conversion_data = json.loads(conversion.conversion_data)
+        roles_blob_key = conversion_data.get(
+            "roles_blob_key", conversion.blob_storage_key
+        )
+        repo_blob_key = conversion_data.get("repo_blob_key")
+    except (json.JSONDecodeError, AttributeError):
+        roles_blob_key = conversion.blob_storage_key
+        repo_blob_key = None
+    return roles_blob_key, repo_blob_key
+
+
+def _display_roles_download(
+    conversion, blob_storage, roles_blob_key: str, temp_dir: Path
+) -> None:
+    """Download and display roles archive download button."""
+    roles_path = blob_storage.download(roles_blob_key, temp_dir / "roles_archive")
+
+    if not roles_path.exists():
+        return
+
+    if roles_path.is_file():
+        with roles_path.open("rb") as f:
+            st.download_button(
+                label="📦 Download Roles Archive",
+                data=f.read(),
+                file_name=f"{conversion.cookbook_name}_roles.tar.gz",
+                mime="application/gzip",
+                key=f"download_roles_{conversion.id}",
+            )
+    else:
+        _create_and_display_zip_download(
+            roles_path,
+            f"{conversion.cookbook_name}_roles.zip",
+            "📦 Download Roles Archive",
+            f"download_roles_{conversion.id}",
+        )
+
+
+def _display_repo_download(
+    conversion, blob_storage, repo_blob_key: str | None, temp_dir: Path
+) -> None:
+    """Download and display repository archive download button if available."""
+    if not repo_blob_key:
+        return
+
+    repo_path = blob_storage.download(repo_blob_key, temp_dir / "repo_archive")
+
+    if not repo_path.exists():
+        return
+
+    if repo_path.is_file():
+        with repo_path.open("rb") as f:
+            st.download_button(
+                label="🗂️ Download Repository Archive",
+                data=f.read(),
+                file_name=f"{conversion.cookbook_name}_repository.tar.gz",
+                mime="application/gzip",
+                key=f"download_repo_{conversion.id}",
+            )
+    else:
+        _create_and_display_zip_download(
+            repo_path,
+            f"{conversion.cookbook_name}_repository.zip",
+            "🗂️ Download Repository Archive",
+            f"download_repo_{conversion.id}",
+        )
+
+
+def _create_and_display_zip_download(
+    source_path: Path, file_name: str, label: str, key: str
+) -> None:
+    """Create a ZIP archive from directory and display download button."""
+    import io
+    import zipfile
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for file_path in source_path.rglob("*"):
+            if file_path.is_file():
+                arcname = file_path.relative_to(source_path)
+                zipf.write(file_path, arcname)
+
+    zip_buffer.seek(0)
+    st.download_button(
+        label=label,
+        data=zip_buffer.getvalue(),
+        file_name=file_name,
+        mime="application/zip",
+        key=key,
+    )
 
 
 def _show_statistics(storage_manager) -> None:

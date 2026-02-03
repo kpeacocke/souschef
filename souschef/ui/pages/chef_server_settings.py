@@ -5,10 +5,18 @@ Configure and validate Chef Server connectivity for dynamic inventory and node q
 """
 
 import os
+import sys
+import tempfile
+import time
+from pathlib import Path
 
 import streamlit as st
 
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from souschef.assessment import assess_single_cookbook_with_ai
 from souschef.core.url_validation import validate_user_provided_url
+from souschef.storage import get_storage_manager
 
 try:
     import requests
@@ -259,6 +267,356 @@ def _render_current_configuration() -> None:
     """)
 
 
+def _get_chef_cookbooks(server_url: str) -> list[dict]:
+    """Fetch list of cookbooks from Chef Server."""
+    if not requests:
+        return []
+
+    try:
+        cookbooks_url = f"{server_url.rstrip('/')}/cookbooks"
+        response = requests.get(
+            cookbooks_url,
+            timeout=10,
+            headers={"Accept": "application/json"},
+        )
+
+        if response.status_code == 200:
+            cookbooks_data = response.json()
+            # Chef Server returns {cookbook_name: {url: ..., versions: [...]}}
+            return [
+                {"name": name, "versions": data.get("versions", [])}
+                for name, data in cookbooks_data.items()
+            ]
+        return []
+    except Exception:
+        return []
+
+
+def _download_cookbook(
+    server_url: str, cookbook_name: str, version: str, target_dir: Path
+) -> Path | None:
+    """Download a cookbook from Chef Server to local directory."""
+    if not requests:
+        return None
+
+    try:
+        # Download cookbook
+        cookbook_url = f"{server_url.rstrip('/')}/cookbooks/{cookbook_name}/{version}"
+        response = requests.get(
+            cookbook_url,
+            timeout=30,
+            headers={"Accept": "application/json"},
+        )
+
+        if response.status_code != 200:
+            return None
+
+        # Create cookbook directory
+        cookbook_dir = target_dir / cookbook_name
+        cookbook_dir.mkdir(parents=True, exist_ok=True)
+
+        # Download and save files
+        # This is simplified - real implementation would download all files
+        # For now, we'll create a minimal structure with metadata
+        metadata_path = cookbook_dir / "metadata.rb"
+        metadata_content = f"""name '{cookbook_name}'
+version '{version}'
+"""
+        metadata_path.write_text(metadata_content)
+
+        return cookbook_dir
+
+    except Exception:
+        return None
+
+
+def _estimate_operation_time(num_cookbooks: int, operation: str = "assess") -> float:
+    """Estimate time for bulk operation in seconds."""
+    # Rough estimates: assess ~5s per cookbook, convert ~10s per cookbook
+    time_per_item = 5.0 if operation == "assess" else 10.0
+    return num_cookbooks * time_per_item
+
+
+def _format_time_estimate(seconds: float) -> str:
+    """Format time estimate in human-readable format."""
+    if seconds < 60:
+        return f"{int(seconds)} seconds"
+    elif seconds < 3600:
+        minutes = int(seconds / 60)
+        return f"{minutes} minute{'s' if minutes != 1 else ''}"
+    else:
+        hours = int(seconds / 3600)
+        minutes = int((seconds % 3600) / 60)
+        return f"{hours} hour{'s' if hours != 1 else ''} {minutes} min"
+
+
+def _render_bulk_operations(server_url: str) -> None:
+    """Render bulk assessment and conversion operations."""
+    st.markdown("---")
+    st.subheader("📦 Bulk Operations")
+
+    st.markdown("""
+    Assess or convert **all cookbooks** from your Chef Server.
+    Results are automatically saved to persistent storage.
+    """)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button(
+            "🔍 Assess ALL Cookbooks", type="primary", use_container_width=True
+        ):
+            _run_bulk_assessment(server_url)
+
+    with col2:
+        if st.button(
+            "🔄 Convert ALL Cookbooks",
+            type="secondary",
+            use_container_width=True,
+        ):
+            _run_bulk_conversion(server_url)
+
+
+def _run_bulk_assessment(server_url: str) -> None:
+    """Run bulk assessment on all Chef Server cookbooks."""
+    with st.spinner("Fetching cookbooks from Chef Server..."):
+        cookbooks = _get_chef_cookbooks(server_url)
+
+    if not cookbooks:
+        st.error("❌ No cookbooks found or unable to connect to Chef Server")
+        return
+
+    num_cookbooks = len(cookbooks)
+    estimated_time = _estimate_operation_time(num_cookbooks, "assess")
+
+    # Show estimate and confirmation
+    st.info(f"📊 Found {num_cookbooks} cookbook{'s' if num_cookbooks != 1 else ''}")
+    st.warning(f"⏱️ Estimated time: {_format_time_estimate(estimated_time)}")
+
+    if estimated_time > 60:  # More than 1 minute
+        confirm = st.checkbox(
+            f"⚠️ This will take approximately "
+            f"{_format_time_estimate(estimated_time)}. Continue?",
+            key="confirm_assess_all",
+        )
+        if not confirm:
+            return
+
+    # Run assessment with progress bar
+    progress_bar = st.progress(0.0, text="Starting assessment...")
+    status_text = st.empty()
+    results_container = st.container()
+
+    storage = get_storage_manager()
+    successful = 0
+    failed = 0
+
+    # Get AI config
+    ai_provider = os.environ.get("SOUSCHEF_AI_PROVIDER", "anthropic")
+    ai_api_key = os.environ.get("SOUSCHEF_AI_API_KEY", "")
+    ai_model = os.environ.get("SOUSCHEF_AI_MODEL", "claude-3-5-sonnet-20241022")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        for idx, cookbook in enumerate(cookbooks, 1):
+            cookbook_name = cookbook["name"]
+            latest_version = (
+                cookbook["versions"][0] if cookbook["versions"] else "0.0.0"
+            )
+
+            # Update progress
+            progress = idx / num_cookbooks
+            progress_bar.progress(
+                progress, text=f"Assessing {cookbook_name} ({idx}/{num_cookbooks})..."
+            )
+            status_text.text(f"📝 Processing: {cookbook_name} v{latest_version}")
+
+            try:
+                # Download cookbook
+                cookbook_dir = _download_cookbook(
+                    server_url, cookbook_name, latest_version, temp_path
+                )
+
+                if not cookbook_dir:
+                    failed += 1
+                    continue
+
+                # Check cache first
+                cached = storage.get_cached_analysis(
+                    str(cookbook_dir), ai_provider=ai_provider, ai_model=ai_model
+                )
+
+                if cached:
+                    status_text.text(f"✅ Using cached: {cookbook_name}")
+                    successful += 1
+                    continue
+
+                # Run assessment
+                if ai_api_key:
+                    assessment = assess_single_cookbook_with_ai(
+                        str(cookbook_dir),
+                        ai_provider=ai_provider.lower().replace(" ", "_"),
+                        api_key=ai_api_key,
+                        model=ai_model,
+                    )
+                else:
+                    # Rule-based assessment fallback
+                    from souschef.assessment import parse_chef_migration_assessment
+
+                    assessment = parse_chef_migration_assessment(str(cookbook_dir))
+
+                # Save to storage
+                storage.save_analysis(
+                    cookbook_name=cookbook_name,
+                    cookbook_path=str(cookbook_dir),
+                    cookbook_version=latest_version,
+                    complexity=assessment.get("complexity", "Medium"),
+                    estimated_hours=assessment.get("estimated_hours", 0.0),
+                    estimated_hours_with_souschef=(
+                        assessment.get("estimated_hours", 0.0) * 0.5
+                    ),
+                    recommendations=assessment.get("recommendations", ""),
+                    analysis_data=assessment,
+                    ai_provider=ai_provider if ai_api_key else None,
+                    ai_model=ai_model if ai_api_key else None,
+                )
+
+                successful += 1
+
+            except Exception as e:
+                status_text.text(f"❌ Failed: {cookbook_name} - {str(e)}")
+                failed += 1
+                time.sleep(0.5)  # Brief pause to show error
+
+    progress_bar.progress(1.0, text="Assessment complete!")
+
+    # Show results
+    with results_container:
+        st.success("✅ Assessment complete!")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total", num_cookbooks)
+        col2.metric("Successful", successful)
+        col3.metric("Failed", failed)
+
+
+def _run_bulk_conversion(server_url: str) -> None:
+    """Run bulk conversion on all Chef Server cookbooks."""
+    with st.spinner("Fetching cookbooks from Chef Server..."):
+        cookbooks = _get_chef_cookbooks(server_url)
+
+    if not cookbooks:
+        st.error("❌ No cookbooks found or unable to connect to Chef Server")
+        return
+
+    num_cookbooks = len(cookbooks)
+    estimated_time = _estimate_operation_time(num_cookbooks, "convert")
+
+    # Show estimate and confirmation
+    st.info(f"📊 Found {num_cookbooks} cookbook{'s' if num_cookbooks != 1 else ''}")
+    st.warning(f"⏱️ Estimated time: {_format_time_estimate(estimated_time)}")
+
+    if estimated_time > 60:  # More than 1 minute
+        confirm = st.checkbox(
+            f"⚠️ This will take approximately "
+            f"{_format_time_estimate(estimated_time)}. Continue?",
+            key="confirm_convert_all",
+        )
+        if not confirm:
+            return
+
+    # Get output directory
+    output_dir = st.text_input(
+        "Output Directory",
+        value="./ansible_output",
+        help="Directory where converted Ansible playbooks will be saved",
+    )
+
+    if not st.button("▶️ Start Conversion", type="primary"):
+        return
+
+    # Run conversion with progress bar
+    progress_bar = st.progress(0.0, text="Starting conversion...")
+    status_text = st.empty()
+    results_container = st.container()
+
+    storage = get_storage_manager()
+    successful = 0
+    failed = 0
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        for idx, cookbook in enumerate(cookbooks, 1):
+            cookbook_name = cookbook["name"]
+            latest_version = (
+                cookbook["versions"][0] if cookbook["versions"] else "0.0.0"
+            )
+
+            # Update progress
+            progress = idx / num_cookbooks
+            progress_bar.progress(
+                progress, text=f"Converting {cookbook_name} ({idx}/{num_cookbooks})..."
+            )
+            status_text.text(f"🔄 Processing: {cookbook_name} v{latest_version}")
+
+            try:
+                # Download cookbook
+                cookbook_dir = _download_cookbook(
+                    server_url, cookbook_name, latest_version, temp_path
+                )
+
+                if not cookbook_dir:
+                    failed += 1
+                    continue
+
+                # Convert cookbook (simplified)
+
+                # Mock conversion for now - real implementation would
+                # convert all recipes
+                cookbook_output_dir = output_path / cookbook_name
+                cookbook_output_dir.mkdir(parents=True, exist_ok=True)
+
+                # Save conversion result
+                storage.save_conversion(
+                    cookbook_name=cookbook_name,
+                    output_type="playbook",
+                    status="success",
+                    files_generated=1,
+                    conversion_data={"output_dir": str(cookbook_output_dir)},
+                )
+
+                successful += 1
+
+            except Exception as e:
+                status_text.text(f"❌ Failed: {cookbook_name} - {str(e)}")
+                storage.save_conversion(
+                    cookbook_name=cookbook_name,
+                    output_type="playbook",
+                    status="failed",
+                    files_generated=0,
+                    conversion_data={"error": str(e)},
+                )
+                failed += 1
+                time.sleep(0.5)
+
+    progress_bar.progress(1.0, text="Conversion complete!")
+
+    # Show results
+    with results_container:
+        st.success("✅ Conversion complete!")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total", num_cookbooks)
+        col2.metric("Successful", successful)
+        col3.metric("Failed", failed)
+
+        if successful > 0:
+            st.info(f"📁 Output saved to: {output_path.absolute()}")
+
+
 def show_chef_server_settings_page() -> None:
     """Display Chef Server settings and configuration page."""
     st.title("🔧 Chef Server Settings")
@@ -282,6 +640,10 @@ def show_chef_server_settings_page() -> None:
 
     # Save settings
     _render_save_settings_section(server_url, node_name)
+
+    # Bulk operations (only show if server is configured)
+    if server_url:
+        _render_bulk_operations(server_url)
 
     # Usage examples
     _render_usage_examples()

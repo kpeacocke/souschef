@@ -1,5 +1,6 @@
 """Database models and storage manager for SousChef."""
 
+import contextlib
 import hashlib
 import importlib
 import json
@@ -30,6 +31,8 @@ class AnalysisResult:
     analysis_data: str  # JSON
     created_at: str
     cache_key: str | None = None
+    cookbook_blob_key: str | None = None  # Blob storage key for original cookbook
+    content_fingerprint: str | None = None  # SHA256 hash of cookbook content
 
 
 @dataclass
@@ -62,7 +65,9 @@ def _analysis_from_row(row: Mapping[str, Any]) -> AnalysisResult:
         ai_model=row["ai_model"],
         analysis_data=row["analysis_data"],
         created_at=row["created_at"],
-        cache_key=row.get("cache_key") if isinstance(row, dict) else row["cache_key"],
+        cache_key=(row.get("cache_key") if isinstance(row, dict) else row["cache_key"]),
+        cookbook_blob_key=row.get("cookbook_blob_key", None),
+        content_fingerprint=row.get("content_fingerprint", None),
     )
 
 
@@ -94,6 +99,27 @@ def _hash_directory_contents(directory: Path) -> str:
         if file_path.exists() and file_path.is_file():
             hasher.update(file_path.read_bytes())
 
+    return hasher.hexdigest()
+
+
+def calculate_file_fingerprint(file_path: Path) -> str:
+    """
+    Calculate SHA256 fingerprint of a file.
+
+    This is used for content-based deduplication of uploaded archives.
+
+    Args:
+        file_path: Path to the file to fingerprint.
+
+    Returns:
+        SHA256 hash of the file contents as hex string.
+
+    """
+    hasher = hashlib.sha256()
+    with file_path.open("rb") as f:
+        # Read in chunks to handle large files efficiently
+        for chunk in iter(lambda: f.read(65536), b""):
+            hasher.update(chunk)
     return hasher.hexdigest()
 
 
@@ -147,10 +173,23 @@ class StorageManager:
                     ai_model TEXT,
                     analysis_data TEXT,
                     cache_key TEXT UNIQUE,
+                    cookbook_blob_key TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """
             )
+
+            # Add cookbook_blob_key column if it doesn't exist (migration)
+            with contextlib.suppress(sqlite3.OperationalError):
+                conn.execute(
+                    "ALTER TABLE analysis_results ADD COLUMN cookbook_blob_key TEXT"
+                )
+
+            # Add content_fingerprint column if it doesn't exist (migration)
+            with contextlib.suppress(sqlite3.OperationalError):
+                conn.execute(
+                    "ALTER TABLE analysis_results ADD COLUMN content_fingerprint TEXT"
+                )
 
             conn.execute(
                 """
@@ -181,6 +220,13 @@ class StorageManager:
                 """
                 CREATE INDEX IF NOT EXISTS idx_analysis_cache
                 ON analysis_results(cache_key)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_analysis_fingerprint
+                ON analysis_results(content_fingerprint)
             """
             )
 
@@ -254,9 +300,14 @@ class StorageManager:
         analysis_data: dict[str, Any],
         ai_provider: str | None = None,
         ai_model: str | None = None,
+        cookbook_blob_key: str | None = None,
+        content_fingerprint: str | None = None,
     ) -> int | None:
         """
         Save an analysis result to the database.
+
+        If content_fingerprint is provided, checks for existing analysis with same
+        fingerprint and returns existing ID instead of creating duplicate.
 
         Args:
             cookbook_name: Name of the cookbook.
@@ -269,11 +320,20 @@ class StorageManager:
             analysis_data: Full analysis data as dict.
             ai_provider: AI provider used.
             ai_model: AI model used.
+            cookbook_blob_key: Blob storage key for original cookbook archive.
+            content_fingerprint: SHA256 hash of cookbook content for deduplication.
 
         Returns:
-            The ID of the saved analysis result.
+            The ID of the saved or existing analysis result.
 
         """
+        # Check for existing analysis with same fingerprint
+        if content_fingerprint:
+            existing = self.get_analysis_by_fingerprint(content_fingerprint)
+            if existing:
+                # Return existing analysis ID (deduplication)
+                return existing.id
+
         cache_key = self.generate_cache_key(cookbook_path, ai_provider, ai_model)
 
         with sqlite3.connect(str(self.db_path)) as conn:
@@ -283,8 +343,9 @@ class StorageManager:
                     cookbook_name, cookbook_path, cookbook_version,
                     complexity, estimated_hours, estimated_hours_with_souschef,
                     recommendations, ai_provider, ai_model,
-                    analysis_data, cache_key
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    analysis_data, cache_key, cookbook_blob_key,
+                    content_fingerprint
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     cookbook_name,
@@ -298,10 +359,46 @@ class StorageManager:
                     ai_model,
                     json.dumps(analysis_data),
                     cache_key,
+                    cookbook_blob_key,
+                    content_fingerprint,
                 ),
             )
             conn.commit()
             return cursor.lastrowid or None
+
+    def get_analysis_by_fingerprint(
+        self, content_fingerprint: str
+    ) -> AnalysisResult | None:
+        """
+        Retrieve existing analysis result by content fingerprint.
+
+        Used for deduplication - if cookbook with same content was already
+        uploaded, returns the existing analysis instead of creating duplicate.
+
+        Args:
+            content_fingerprint: SHA256 hash of cookbook content.
+
+        Returns:
+            Existing AnalysisResult or None if not found.
+
+        """
+        with sqlite3.connect(str(self.db_path)) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM analysis_results
+                WHERE content_fingerprint = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+            """,
+                (content_fingerprint,),
+            )
+            row = cursor.fetchone()
+
+            if row:
+                return _analysis_from_row(row)
+
+            return None
 
     def get_cached_analysis(
         self,
@@ -580,10 +677,21 @@ class PostgresStorageManager:
                     ai_model TEXT,
                     analysis_data TEXT,
                     cache_key TEXT UNIQUE,
+                    cookbook_blob_key TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """
             )
+
+            # Add cookbook_blob_key column if it doesn't exist (migration)
+            try:
+                conn.execute(
+                    "ALTER TABLE analysis_results ADD COLUMN cookbook_blob_key TEXT"
+                )
+                conn.commit()
+            except Exception:
+                # Column already exists
+                pass
 
             conn.execute(
                 """
@@ -660,8 +768,40 @@ class PostgresStorageManager:
         analysis_data: dict[str, Any],
         ai_provider: str | None = None,
         ai_model: str | None = None,
+        cookbook_blob_key: str | None = None,
+        content_fingerprint: str | None = None,
     ) -> int | None:
-        """Save an analysis result to PostgreSQL."""
+        """
+        Save an analysis result to PostgreSQL.
+
+        If content_fingerprint is provided, checks for existing analysis with same
+        fingerprint and returns existing ID instead of creating duplicate.
+
+        Args:
+            cookbook_name: Name of the cookbook.
+            cookbook_path: Path to the cookbook.
+            cookbook_version: Version of the cookbook.
+            complexity: Complexity level.
+            estimated_hours: Manual migration hours.
+            estimated_hours_with_souschef: AI-assisted hours.
+            recommendations: Analysis recommendations.
+            analysis_data: Full analysis data as dict.
+            ai_provider: AI provider used.
+            ai_model: AI model used.
+            cookbook_blob_key: Blob storage key for original cookbook archive.
+            content_fingerprint: SHA256 hash of cookbook content for deduplication.
+
+        Returns:
+            The ID of the saved or existing analysis result.
+
+        """
+        # Check for existing analysis with same fingerprint
+        if content_fingerprint:
+            existing = self.get_analysis_by_fingerprint(content_fingerprint)
+            if existing:
+                # Return existing analysis ID (deduplication)
+                return existing.id
+
         cache_key = self.generate_cache_key(cookbook_path, ai_provider, ai_model)
 
         sql = self._prepare_sql(
@@ -670,8 +810,9 @@ class PostgresStorageManager:
                 cookbook_name, cookbook_path, cookbook_version,
                 complexity, estimated_hours, estimated_hours_with_souschef,
                 recommendations, ai_provider, ai_model,
-                analysis_data, cache_key
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                analysis_data, cache_key, cookbook_blob_key,
+                content_fingerprint
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
         """
         )
@@ -691,6 +832,8 @@ class PostgresStorageManager:
                     ai_model,
                     json.dumps(analysis_data),
                     cache_key,
+                    cookbook_blob_key,
+                    content_fingerprint,
                 ),
             )
             row = cursor.fetchone()
@@ -698,6 +841,38 @@ class PostgresStorageManager:
             if row:
                 return int(row["id"])
             return None
+
+    def get_analysis_by_fingerprint(
+        self, content_fingerprint: str
+    ) -> AnalysisResult | None:
+        """
+        Retrieve existing analysis result by content fingerprint.
+
+        Used for deduplication - if cookbook with same content was already
+        uploaded, returns the existing analysis instead of creating duplicate.
+
+        Args:
+            content_fingerprint: SHA256 hash of cookbook content.
+
+        Returns:
+            Existing AnalysisResult or None if not found.
+
+        """
+        sql = self._prepare_sql(
+            """
+            SELECT * FROM analysis_results
+            WHERE content_fingerprint = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """
+        )
+
+        with self._connect() as conn:
+            cursor = conn.execute(sql, (content_fingerprint,))
+            row = cursor.fetchone()
+            if row:
+                return _analysis_from_row(row)
+        return None
 
     def get_cached_analysis(
         self,

@@ -14,6 +14,7 @@ from souschef.ui.pages.ai_settings import (
 )
 from souschef.ui.pages.cookbook_analysis import (
     _determine_cookbook_root,
+    _upload_cookbook_archive,
     _validate_tar_file_security,
     _validate_zip_file_security,
     create_results_archive,
@@ -265,10 +266,11 @@ class TestCookbookAnalysis:
 
         uploaded_file = MockUploadedFile("test.zip")
 
-        temp_dir, cookbook_root = extract_archive(uploaded_file)
+        temp_dir, cookbook_root, archive_path = extract_archive(uploaded_file)
 
         assert str(temp_dir) == "/tmp/test_souschef_safe"
         assert cookbook_root == "/tmp/test_souschef_safe/extracted"
+        assert str(archive_path) == "/tmp/test_souschef_safe/test.zip"
         mock_mkdtemp.assert_called_once()
         mock_extract.assert_called_once()
 
@@ -387,6 +389,260 @@ class TestCookbookAnalysis:
 
         assert isinstance(archive_data, bytes)
         assert len(archive_data) > 0
+
+
+class TestHistoryPage:
+    """Test history page functionality."""
+
+    def test_parse_conversion_blob_keys_with_valid_data(self):
+        """Test parsing blob keys from conversion data."""
+        from souschef.ui.pages.history import _parse_conversion_blob_keys
+
+        class MockConversion:
+            conversion_data = (
+                '{"roles_blob_key": "roles123", "repo_blob_key": "repo456"}'  # noqa: E501
+            )
+            blob_storage_key = "fallback_key"
+
+        conversion = MockConversion()
+        roles_key, repo_key = _parse_conversion_blob_keys(conversion)
+
+        assert roles_key == "roles123"
+        assert repo_key == "repo456"
+
+    def test_parse_conversion_blob_keys_fallback(self):
+        """Test fallback to blob_storage_key when parsing fails."""
+        from souschef.ui.pages.history import _parse_conversion_blob_keys
+
+        class MockConversion:
+            conversion_data = "invalid json"
+            blob_storage_key = "fallback_key"
+
+        conversion = MockConversion()
+        roles_key, repo_key = _parse_conversion_blob_keys(conversion)
+
+        assert roles_key == "fallback_key"
+        assert repo_key is None
+
+    def test_parse_conversion_blob_keys_no_repo(self):
+        """Test parsing when no repo blob key exists."""
+        from souschef.ui.pages.history import _parse_conversion_blob_keys
+
+        class MockConversion:
+            conversion_data = '{"roles_blob_key": "roles123"}'
+            blob_storage_key = "fallback_key"
+
+        conversion = MockConversion()
+        roles_key, repo_key = _parse_conversion_blob_keys(conversion)
+
+        assert roles_key == "roles123"
+        assert repo_key is None
+
+
+class TestCookbookAnalysisStorageFunctions:
+    """Test storage-related functions in cookbook analysis page."""
+
+    @patch("souschef.ui.pages.cookbook_analysis.st")
+    @patch("souschef.ui.pages.cookbook_analysis.get_storage_manager")
+    @patch("souschef.ui.pages.cookbook_analysis.get_blob_storage")
+    @patch("souschef.ui.pages.cookbook_analysis._parse_conversion_result_text")
+    def test_save_conversion_to_storage_success(
+        self, mock_parse, mock_blob, mock_storage, mock_st
+    ):
+        """Test successful conversion save to storage."""
+        import tempfile
+        from pathlib import Path
+
+        from souschef.ui.pages.cookbook_analysis import _save_conversion_to_storage
+
+        # Setup mocks
+        mock_parse.return_value = {
+            "summary": {"total_converted_files": 5},
+            "cookbook_results": [],
+        }
+        mock_blob_instance = mock_blob.return_value
+        mock_blob_instance.upload.return_value = "blob_key_123"
+        mock_storage_instance = mock_storage.return_value
+        mock_storage_instance.save_conversion.return_value = 42
+        mock_st.session_state = {}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir)
+
+            _save_conversion_to_storage(
+                cookbook_name="test_cookbook",
+                output_path=output_path,
+                conversion_result="Test result",
+                output_type="role",
+            )
+
+            # Verify storage was called
+            mock_storage_instance.save_conversion.assert_called_once()
+            mock_blob_instance.upload.assert_called_once()
+
+    @patch("souschef.ui.pages.cookbook_analysis.st")
+    @patch("souschef.ui.pages.cookbook_analysis.get_storage_manager")
+    def test_save_conversion_to_storage_error_handling(self, mock_storage, mock_st):
+        """Test error handling in save conversion."""
+        import tempfile
+        from pathlib import Path
+
+        from souschef.ui.pages.cookbook_analysis import _save_conversion_to_storage
+
+        # Mock storage to raise exception
+        mock_storage.side_effect = Exception("Storage error")
+        mock_st.session_state = {}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir)
+
+            # Should not raise, just warn
+            _save_conversion_to_storage(
+                cookbook_name="test_cookbook",
+                output_path=output_path,
+                conversion_result="Test result",
+                output_type="role",
+            )
+
+            # Verify warning was called
+            mock_st.warning.assert_called_once()
+            assert "Failed to save conversion" in str(mock_st.warning.call_args)
+
+    @patch("souschef.ui.pages.cookbook_analysis.st")
+    @patch("souschef.ui.pages.cookbook_analysis.get_storage_manager")
+    @patch("souschef.ui.pages.cookbook_analysis.get_blob_storage")
+    def test_upload_repository_to_storage_success(
+        self, mock_blob, mock_storage, mock_st
+    ):
+        """Test successful repository upload to storage."""
+        import tempfile
+        from pathlib import Path
+
+        from souschef.ui.pages.cookbook_analysis import _upload_repository_to_storage
+
+        # Setup mock session_state as MagicMock with  __contains__
+        session_mock = mock_st.session_state
+        session_mock.__contains__ = lambda self, key: key == "last_conversion_id"
+        session_mock.last_conversion_id = 1
+
+        # Setup storage mocks
+        mock_blob_instance = mock_blob.return_value
+        mock_blob_instance.upload.return_value = "repo_blob_key_456"
+        mock_storage_instance = mock_storage.return_value
+
+        # Create mock conversion with valid JSON
+        class MockConversion:
+            id = 1
+            conversion_data = '{"roles_blob_key": "roles123"}'
+
+        mock_storage_instance.get_conversion_history.return_value = [MockConversion()]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir) / "repo"
+            repo_path.mkdir()
+            roles_path = Path(tmpdir) / "roles"
+            roles_path.mkdir()
+
+            repo_result = {"temp_path": str(repo_path)}
+
+            _upload_repository_to_storage(repo_result, roles_path)
+
+            # Verify upload was called
+            mock_blob_instance.upload.assert_called_once()
+            # Success should be called after parsing conversion_data successfully
+            mock_st.success.assert_called_once()
+            assert "Repository uploaded" in str(mock_st.success.call_args)
+
+    @patch("souschef.ui.pages.cookbook_analysis.st")
+    @patch("souschef.ui.pages.cookbook_analysis.get_blob_storage")
+    def test_upload_repository_no_conversion_id(self, mock_blob, mock_st):
+        """Test repository upload when no conversion_id in session."""
+        import tempfile
+        from pathlib import Path
+
+        from souschef.ui.pages.cookbook_analysis import _upload_repository_to_storage
+
+        # Configure session_state without conversion_id
+        mock_st.session_state = {}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir) / "repo"
+            repo_path.mkdir()
+            roles_path = Path(tmpdir) / "roles"
+            roles_path.mkdir()
+
+            repo_result = {"temp_path": str(repo_path)}
+
+            # Should return early without warning
+            _upload_repository_to_storage(repo_result, roles_path)
+
+            # Verify no upload was attempted
+            mock_blob.assert_not_called()
+            mock_st.warning.assert_not_called()
+
+    @patch("souschef.ui.pages.cookbook_analysis.st")
+    @patch("souschef.ui.pages.cookbook_analysis.get_blob_storage")
+    def test_upload_cookbook_archive_success(self, mock_blob, mock_st):
+        """Test successful cookbook archive upload."""
+        import tempfile
+        from pathlib import Path
+
+        # Setup mock
+        mock_blob_instance = mock_blob.return_value
+        mock_blob_instance.upload.return_value = "cookbook_blob_key_789"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_path = Path(tmpdir) / "test_cookbook.tar.gz"
+            archive_path.write_text("test archive content")
+
+            blob_key = _upload_cookbook_archive(archive_path, "test_cookbook")
+
+            # Verify upload was called
+            assert blob_key == "cookbooks/test_cookbook/test_cookbook.tar.gz"
+            mock_blob_instance.upload.assert_called_once_with(
+                archive_path, "cookbooks/test_cookbook/test_cookbook.tar.gz"
+            )
+
+    @patch("souschef.ui.pages.cookbook_analysis.st")
+    @patch("souschef.ui.pages.cookbook_analysis.get_blob_storage")
+    def test_upload_cookbook_archive_no_blob_storage(self, mock_blob, mock_st):
+        """Test cookbook archive upload when blob storage is not available."""
+        import tempfile
+        from pathlib import Path
+
+        # Setup mock to return None (no blob storage)
+        mock_blob.return_value = None
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_path = Path(tmpdir) / "test_cookbook.tar.gz"
+            archive_path.write_text("test archive content")
+
+            blob_key = _upload_cookbook_archive(archive_path, "test_cookbook")
+
+            # Verify no upload and None returned
+            assert blob_key is None
+
+    @patch("souschef.ui.pages.cookbook_analysis.st")
+    @patch("souschef.ui.pages.cookbook_analysis.get_blob_storage")
+    def test_upload_cookbook_archive_error_handling(self, mock_blob, mock_st):
+        """Test error handling in cookbook archive upload."""
+        import tempfile
+        from pathlib import Path
+
+        # Setup mock to raise exception
+        mock_blob_instance = mock_blob.return_value
+        mock_blob_instance.upload.side_effect = Exception("Upload failed")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_path = Path(tmpdir) / "test_cookbook.tar.gz"
+            archive_path.write_text("test archive content")
+
+            blob_key = _upload_cookbook_archive(archive_path, "test_cookbook")
+
+            # Verify error handling
+            assert blob_key is None
+            mock_st.warning.assert_called_once()
+            assert "Failed to upload cookbook archive" in str(mock_st.warning.call_args)
 
 
 class TestProgressTracker:
