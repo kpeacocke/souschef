@@ -2649,6 +2649,9 @@ def _assess_single_cookbook_with_ai(
         complexity_multiplier = 1 + (complexity_score / 100)
         estimated_effort = round(base_effort * complexity_multiplier, 1)
 
+    # Calculate activity-level breakdown (same as rule-based assessment)
+    activity_breakdown = _calculate_activity_breakdown(metrics, complexity_score)
+
     # Build assessment with AI insights
     assessment = {
         "cookbook_name": cookbook.name,
@@ -2656,6 +2659,7 @@ def _assess_single_cookbook_with_ai(
         "metrics": metrics,
         "complexity_score": complexity_score,
         "estimated_effort_days": estimated_effort,
+        "activity_breakdown": activity_breakdown,
         "challenges": ai_analysis.get("challenges", [])
         if ai_analysis
         else _identify_migration_challenges(metrics, complexity_score),
