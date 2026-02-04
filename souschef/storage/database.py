@@ -760,16 +760,7 @@ class PostgresStorageManager:
                 )
             """
             )
-
-            # Add cookbook_blob_key column if it doesn't exist (migration)
-            try:
-                conn.execute(
-                    "ALTER TABLE analysis_results ADD COLUMN cookbook_blob_key TEXT"
-                )
-                conn.commit()
-            except Exception:
-                # Column may already exist; rollback and continue
-                conn.rollback()
+            conn.commit()
 
             # Add content_fingerprint column if it doesn't exist (migration)
             try:
@@ -797,6 +788,7 @@ class PostgresStorageManager:
                 )
             """
             )
+            conn.commit()
 
             conn.execute(
                 """
