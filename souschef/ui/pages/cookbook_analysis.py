@@ -3950,6 +3950,88 @@ def _display_single_cookbook_details(result):
             st.markdown("**Analysis Recommendations:**")
             st.info(result["recommendations"])
 
+        # Activity breakdown
+        st.divider()
+        activities = result.get("activity_breakdown", [])
+        if activities:
+            _display_cookbook_activity_breakdown(activities)
+
+
+def _display_cookbook_activity_breakdown(activities: list) -> None:
+    """Display activity breakdown from analysis result."""
+    st.subheader("Activity Breakdown Details")
+
+    if not activities:
+        return
+
+    col1, col2 = st.columns([1, 2])
+
+    with col1:
+        st.markdown("### Summary")
+        for activity in activities:
+            # Handle both dict and object formats
+            if isinstance(activity, dict):
+                name = activity.get("activity_type", "Unknown")
+                count = activity.get("count", 0)
+                description = activity.get("description", "")
+                manual_hours = activity.get("manual_hours", 0)
+                ai_hours = activity.get("ai_assisted_hours", 0)
+                time_saved = activity.get("time_saved_hours", 0)
+                efficiency = activity.get("efficiency_gain_percent", 0)
+            else:
+                # It's an ActivityBreakdown object
+                name = activity.activity_type
+                count = activity.count
+                description = activity.description
+                manual_hours = activity.manual_hours
+                ai_hours = activity.ai_assisted_hours
+                time_saved = activity.time_saved_hours
+                efficiency = activity.efficiency_gain_percent
+
+            st.markdown(
+                f"""**{name}** ({count})
+
+*{description}*
+
+Manual: {manual_hours:.1f}h → AI: {ai_hours:.1f}h
+
+**Saved: {time_saved:.1f}h ({efficiency:.0f}%)**"""
+            )
+            st.divider()
+
+    with col2:
+        st.markdown("### Details Table")
+        table_data = []
+        for activity in activities:
+            # Handle both dict and object formats
+            if isinstance(activity, dict):
+                efficiency_pct = activity.get("efficiency_gain_percent", 0)
+                table_data.append(
+                    {
+                        "Activity": activity.get("activity_type", "Unknown"),
+                        "Count": activity.get("count", 0),
+                        "Manual Hours": f"{activity.get('manual_hours', 0):.1f}",
+                        "AI Hours": f"{activity.get('ai_assisted_hours', 0):.1f}",
+                        "Time Saved": f"{activity.get('time_saved_hours', 0):.1f}",
+                        "Efficiency": f"{efficiency_pct:.0f}%",
+                    }
+                )
+            else:
+                # It's an ActivityBreakdown object
+                table_data.append(
+                    {
+                        "Activity": activity.activity_type,
+                        "Count": activity.count,
+                        "Manual Hours": f"{activity.manual_hours:.1f}",
+                        "AI Hours": f"{activity.ai_assisted_hours:.1f}",
+                        "Time Saved": f"{activity.time_saved_hours:.1f}",
+                        "Efficiency": f"{activity.efficiency_gain_percent:.0f}%",
+                    }
+                )
+
+        df = pd.DataFrame(table_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
 
 def _display_failed_cookbook_details(result):
     """Display detailed failure information for a cookbook."""
