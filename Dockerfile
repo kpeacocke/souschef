@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for SousChef UI - Production Ready
 # Optimised for security, robustness, and Docker registry publishing
 
-ARG PYTHON_VERSION=3.13.2
+ARG PYTHON_VERSION=3.13.11
 ARG POETRY_VERSION=1.8.3
 
 # ============================================================================
