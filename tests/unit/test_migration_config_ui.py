@@ -81,6 +81,11 @@ end
     assert "total_manual_hours" in result["summary"]
     assert "total_ai_assisted_hours" in result["summary"]
 
+    if result["activities"]:
+        activity = result["activities"][0]
+        assert "count" in activity
+        assert "description" in activity
+
 
 def test_calculate_activity_breakdown_with_invalid_path():
     """Test activity breakdown with invalid cookbook path."""

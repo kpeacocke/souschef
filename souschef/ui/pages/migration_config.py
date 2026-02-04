@@ -92,8 +92,8 @@ def _display_current_config() -> None:
 
     with col3:
         st.metric(
-            "Python Version",
-            config.python_version,
+            "Target Python Version",
+            config.target_python_version,
         )
 
     # Show full configuration in expander
@@ -276,8 +276,15 @@ def _display_activity_breakdown(breakdown: dict[str, Any]) -> None:
     # Summary metrics
     _display_breakdown_metrics(breakdown)
 
-    # Activity table
-    _display_activity_table(breakdown)
+    col1, col2 = st.columns([1, 2])
+
+    with col1:
+        # Activity narrative summary
+        _display_activity_summary(breakdown)
+
+    with col2:
+        # Activity table
+        _display_activity_table(breakdown)
 
     # Time savings visualisation
     _display_time_savings_chart(breakdown)
@@ -319,6 +326,37 @@ def _display_breakdown_metrics(breakdown: dict[str, Any]) -> None:
         )
 
 
+def _display_activity_summary(breakdown: dict[str, Any]) -> None:
+    """Display a readable activity breakdown summary alongside numbers."""
+    activities = breakdown.get("activities", [])
+
+    if not activities:
+        return
+
+    st.subheader("Activity Summary")
+
+    for activity in activities:
+        name = activity.get("name", "Unknown")
+        count = activity.get("count", 0)
+        description = activity.get("description", "")
+        manual_hours = activity.get("manual_hours", 0)
+        ai_hours = activity.get("ai_assisted_hours", 0)
+        time_saved = activity.get("time_saved", 0)
+        efficiency = activity.get("efficiency_gain_percent", 0)
+
+        # Format as a compact card-like display
+        st.markdown(
+            f"""**{name}** ({count} items)
+
+*{description}*
+
+Manual: {manual_hours:.1f}h → AI: {ai_hours:.1f}h
+
+**Saved: {time_saved:.1f}h ({efficiency:.0f}%)**"""
+        )
+        st.divider()
+
+
 def _display_activity_table(breakdown: dict[str, Any]) -> None:
     """Display activity breakdown as a table."""
     st.subheader("Activity Details")
@@ -335,6 +373,8 @@ def _display_activity_table(breakdown: dict[str, Any]) -> None:
         table_data.append(
             {
                 "Activity": activity.get("name", "Unknown"),
+                "Count": activity.get("count", 0),
+                "Description": activity.get("description", ""),
                 "Manual Hours": f"{activity.get('manual_hours', 0):.1f}",
                 "AI-Assisted Hours": f"{activity.get('ai_assisted_hours', 0):.1f}",
                 "Time Saved": f"{activity.get('time_saved', 0):.1f}",
@@ -431,6 +471,8 @@ def _generate_markdown_report(breakdown: dict[str, Any]) -> str:
     for activity in activities:
         report += f"""### {activity.get("name", "Unknown")}
 
+- **Count**: {activity.get("count", 0)}
+- **Description**: {activity.get("description", "")}
 - **Manual Hours**: {activity.get("manual_hours", 0):.1f}h
 - **AI-Assisted Hours**: {activity.get("ai_assisted_hours", 0):.1f}h
 - **Time Saved**: {activity.get("time_saved", 0):.1f}h

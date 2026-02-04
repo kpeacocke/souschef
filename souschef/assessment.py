@@ -3254,6 +3254,8 @@ def calculate_activity_breakdown(
             activities_list.append(
                 {
                     "name": activity.activity_type,
+                    "count": activity.count,
+                    "description": activity.description,
                     "manual_hours": activity.manual_hours,
                     "ai_assisted_hours": activity.ai_assisted_hours,
                     "time_saved": activity.time_saved_hours,
