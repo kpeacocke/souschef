@@ -30,7 +30,12 @@ class AnsibleTask(BaseModel):
         None, description="List of tags for task categorization"
     )
     become: bool | None = Field(None, description="Whether to use privilege escalation")
-    register: str | None = Field(None, description="Variable name to store task result")
+    register_var: str | None = Field(
+        None,
+        validation_alias="register",
+        serialization_alias="register",
+        description="Variable name to store task result",
+    )
 
 
 class AnsibleHandler(BaseModel):

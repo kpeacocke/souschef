@@ -14,17 +14,17 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview - Chef to Ansible features
 
-SousChef is a complete enterprise-grade migration platform with **35 primary MCP tools** organised across **11 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, and CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade migration platform with **40 primary MCP tools** organised across **12 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, and GitHub Copilot agent control, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### About Tool Counts
 
-**Why 35 tools in the documentation but more in the server?**
+**Why 40 tools in the documentation but more in the server?**
 
-The MCP server provides **38 total tools**. This documentation focuses on the **35 primary user-facing tools** that cover the main migration capabilities. The remaining 3 tools are low-level filesystem operations used internally by the main tools.
+The MCP server provides **43 total tools**. This documentation focuses on the **40 primary user-facing tools** that cover the main migration capabilities. The remaining 3 tools are low-level filesystem operations used internally by the main tools.
 
 As a user, you'll primarily interact with the documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
-> **For developers:** See `souschef/server.py` for the complete list of all 38 registered tools.
+> **For developers:** See `souschef/server.py` for the complete list of all 43 registered tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -45,6 +45,7 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 
 - **[Terraform Provider](terraform-provider/README.md)** - Manage migrations with infrastructure-as-code
 - **[User Guide](docs/user-guide/)** - Complete documentation
+- **[Data Persistence Guide](docs/user-guide/data-persistence.md)** - History, caching, and storage backends
 - **[API Reference](docs/api-reference/)** - Detailed tool documentation
 - **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
 
@@ -184,7 +185,27 @@ Automatically detects and converts:
 - **Cookstyle/Foodcritic** → Lint stages
 - Multiple test suites → Parallel execution strategies
 
-#### Example Usage
+### 11. GitHub Copilot Agent Control
+
+Manage GitHub Copilot agents working on repository issues with full pause/stop/resume capabilities:
+
+- **assign_github_copilot_to_issue** - Assign Copilot agent to implement an issue
+- **pause_github_copilot_agent** - Pause a running agent (can be resumed)
+- **stop_github_copilot_agent** - Stop and cancel an agent assignment
+- **resume_github_copilot_agent** - Resume a paused agent with optional new instructions
+- **check_github_copilot_agent_status** - Check current agent state and activity
+
+**Agent lifecycle management:**
+
+1. **Assign** - Start Copilot working on an issue
+2. **Monitor** - Check status and review progress
+3. **Pause** - Temporarily pause for review or changes
+4. **Resume** - Continue with optional new guidance
+5. **Stop** - Cancel if requirements change
+
+State is tracked via issue labels and comments, providing full visibility and control.
+
+#### Example Usage - CI/CD Pipelines
 
 ```bash
 # Generate Jenkins Declarative pipeline
@@ -199,12 +220,58 @@ souschef generate-gitlab-ci ./mycookbook
 # Generate GitHub Actions workflow
 souschef generate-github-workflow ./mycookbook
 
-# Customize with options
+# Customise with options
 souschef generate-gitlab-ci ./mycookbook --no-cache --no-artifacts
 souschef generate-github-workflow ./mycookbook --workflow-name "My CI" --no-cache
 ```
 
-#### Command Line Usage
+#### Example Usage - GitHub Agent Control
+
+```python
+# From an AI assistant with SousChef MCP
+
+# Assign Copilot to work on an issue
+assign_github_copilot_to_issue(
+    owner="myorg",
+    repo="my-ansible-repo",
+    issue_number=42,
+    base_ref="main",
+    custom_instructions="Focus on idempotency and error handling"
+)
+
+# Check agent status
+check_github_copilot_agent_status(
+    owner="myorg",
+    repo="my-ansible-repo",
+    issue_number=42
+)
+
+# Pause for review
+pause_github_copilot_agent(
+    owner="myorg",
+    repo="my-ansible-repo",
+    issue_number=42,
+    reason="Need to review approach before continuing"
+)
+
+# Resume with new guidance
+resume_github_copilot_agent(
+    owner="myorg",
+    repo="my-ansible-repo",
+    issue_number=42,
+    additional_instructions="Also add role dependencies"
+)
+
+# Stop if no longer needed
+stop_github_copilot_agent(
+    owner="myorg",
+    repo="my-ansible-repo",
+    issue_number=42,
+    reason="Requirements changed - manual implementation needed"
+)
+```
+
+#### Command Line Usage - CI/CD Pipelines
 
 **MCP Tool Usage:**
 
@@ -433,6 +500,7 @@ Interactive web-based interface for Chef-to-Ansible migration planning and visua
 - **Dependency Mapping**: Visual dependency graphs showing cookbook relationships and migration ordering
 - **Validation Reports**: Conversion validation results with syntax checking and best practice compliance
 - **Progress Tracking**: Real-time migration progress with completion metrics and bottleneck identification
+- **History and Persistence**: Stored analysis history, cached results, and downloadable artefacts (SQLite or PostgreSQL, plus S3-compatible storage)
 
 **Launch the UI:**
 
@@ -553,8 +621,59 @@ STREAMLIT_SERVER_HEADLESS=true
 - `SOUSCHEF_AI_MAX_TOKENS` - Maximum tokens to generate (optional, default: 4000)
 - `SOUSCHEF_ALLOWED_HOSTNAMES` - Comma-separated list of allowed hostnames for outbound API requests (optional)
 
+**Persistent Storage Configuration (Docker Compose):**
+
+All persistent storage paths are configurable via environment variables. Add these to your `.env` file to customise where data is stored:
+
+```dotenv
+# Docker Compose Volume Configuration (optional)
+SOUSCHEF_DATA_DIR=./data/souschef       # SQLite database and analysis history
+SOUSCHEF_STORAGE_DIR=./data/storage     # Generated artefacts and conversions
+POSTGRES_DATA_DIR=./data/postgres       # PostgreSQL database files
+MINIO_DATA_DIR=./data/minio             # MinIO object storage data
+```
+
+The storage paths default to `./data/` subdirectories (relative to docker-compose.yml) but can be set to any absolute or relative path. This allows you to:
+- Store data on different volumes or network storage
+- Easily backup and restore data by copying directories
+- Share data between development and production environments
+
+See [Docker Deployment Guide](docs/docker-deployment.md#persistent-storage-configuration) for detailed configuration options.
+
 **Docker Compose (recommended for development):**
 
+```bash
+# Using PostgreSQL (default, production-ready)
+docker compose up
+
+# Or if you prefer SQLite (lightweight, local storage only):
+# 1. Set in .env: SOUSCHEF_DB_BACKEND=sqlite
+# 2. Run normally: docker compose up
+```
+
+**Database Options:**
+
+- **PostgreSQL** (default):
+  - Robust, production-ready database server
+  - Recommended for all deployments
+  - Better concurrency and performance
+  - Data stored in `./data/postgres/`
+
+- **SQLite**:
+  - Lightweight, embedded database
+  - Good for development and testing
+  - Set `SOUSCHEF_DB_BACKEND=sqlite` in .env
+  - Data stored in `./data/souschef/`
+
+**Example with SQLite:**
+```bash
+# In .env, set:
+SOUSCHEF_DB_BACKEND=sqlite
+# Then start normally:
+docker compose up
+```
+
+**Example with PostgreSQL (default):**
 ```yaml
 version: '3.8'
 services:
@@ -569,6 +688,12 @@ services:
       - STREAMLIT_SERVER_ADDRESS=0.0.0.0
       - STREAMLIT_SERVER_PORT=9999
       - STREAMLIT_SERVER_HEADLESS=true
+      - SOUSCHEF_DB_BACKEND=postgres
+      - SOUSCHEF_DB_HOST=postgres
+      - SOUSCHEF_DB_PORT=5432
+      - SOUSCHEF_DB_NAME=souschef
+      - SOUSCHEF_DB_USER=souschef
+      - SOUSCHEF_DB_PASSWORD=souschef
     restart: unless-stopped
 ```
 

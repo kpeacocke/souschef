@@ -1,4 +1,15 @@
 ---
+# SousChef Docker Compose Configuration
+#
+# Database Backend Selection:
+#   - PostgreSQL (default): Robust production-ready database server
+#     $ docker compose up
+#
+#   - SQLite: Lightweight embedded database (set SOUSCHEF_DB_BACKEND=sqlite in .env)
+#     Still uses PostgreSQL service, but data stored locally in SQLite
+#
+# PostgreSQL service is always started. Configure which backend via SOUSCHEF_DB_BACKEND.
+#
 services:
   souschef-ui:
     build:
@@ -21,45 +32,139 @@ services:
       - PYTHONUNBUFFERED=1
       - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true
       - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      # Database configuration
+      - SOUSCHEF_DB_BACKEND=${SOUSCHEF_DB_BACKEND:-postgres}
+      - SOUSCHEF_DB_HOST=${SOUSCHEF_DB_HOST:-postgres}
+      - SOUSCHEF_DB_PORT=${SOUSCHEF_DB_PORT:-5432}
+      - SOUSCHEF_DB_NAME=${SOUSCHEF_DB_NAME:-souschef}
+      - SOUSCHEF_DB_USER=${SOUSCHEF_DB_USER:-souschef}
+      - SOUSCHEF_DB_PASSWORD=${SOUSCHEF_DB_PASSWORD:-souschef}
+      - SOUSCHEF_DB_SSLMODE=${SOUSCHEF_DB_SSLMODE:-disable}
+      # Blob storage configuration (S3-compatible)
+      - SOUSCHEF_STORAGE_BACKEND=${SOUSCHEF_STORAGE_BACKEND:-s3}
+      - SOUSCHEF_S3_BUCKET=${SOUSCHEF_S3_BUCKET:-souschef}
+      - SOUSCHEF_S3_REGION=${SOUSCHEF_S3_REGION:-us-east-1}
+      - SOUSCHEF_S3_ENDPOINT=${SOUSCHEF_S3_ENDPOINT:-http://minio:9000}
+      - SOUSCHEF_S3_ACCESS_KEY=${SOUSCHEF_S3_ACCESS_KEY:-minioadmin}
+      - SOUSCHEF_S3_SECRET_KEY=${SOUSCHEF_S3_SECRET_KEY:-minioadmin}
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
         labels: "service=souschef-ui"
-    # volumes:
-      # Mount local directory for development (optional, read-only)
-      # - ./souschef:/app/souschef:ro
-      # Mount .env for configuration
-      # - ./.env:/app/.env:ro
     healthcheck:
       test: ["CMD", "python", "-m", "souschef.ui.health_check"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
+    mem_limit: 1g
+    cpus: "0.5"
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    user: "1000:1000"
     read_only: true
     tmpfs:
-      - /tmp:noexec,nosuid,size=100m
+      # Temporary filesystems - writable directories for runtime use
+      - /tmp:noexec,nosuid,size=256m
       - /run:noexec,nosuid,size=50m
     networks:
-      - souschef-network
+      - souschef-public
+      - souschef-internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: unless-stopped
     container_name: souschef-ui
 
-networks:
-  souschef-network:
-    driver: bridge
+  postgres:
+    image: postgres:16-alpine
+    container_name: souschef-postgres
+    environment:
+      POSTGRES_DB: souschef
+      POSTGRES_USER: souschef
+      POSTGRES_PASSWORD: souschef
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - souschef-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U souschef -d souschef"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: souschef-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - souschef-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  # SQLite database volume - only needed if SOUSCHEF_DB_BACKEND=sqlite
+  # Data survives container restarts
+  # Configure via SOUSCHEF_DATA_DIR in .env (default: ./data/souschef)
+  # souschef-data:
+  #   driver: local
+  #   driver_opts:
+  #     type: none
+  #     o: bind
+  #     device: ${SOUSCHEF_DATA_DIR:-./data/souschef}
+
+  # Local blob storage volume - only needed if SOUSCHEF_STORAGE_BACKEND=local
+  # Stores generated artefacts and conversions locally
+  # Configure via SOUSCHEF_STORAGE_DIR in .env (default: ./data/storage)
+  # souschef-storage:
+  #   driver: local
+  #   driver_opts:
+  #     type: none
+  #     o: bind
+  #     device: ${SOUSCHEF_STORAGE_DIR:-./data/storage}
+  # PostgreSQL database storage (active by default)
+  # Configure via POSTGRES_DATA_DIR in .env (default: ./data/postgres)
+  postgres-data:
+    driver: local
     driver_opts:
-      com.docker.network.bridge.name: br-souschef
+      type: none
+      o: bind
+      device: ${POSTGRES_DATA_DIR:-./data/postgres}
+  # MinIO object storage
+  # Configure via MINIO_DATA_DIR in .env (default: ./data/minio)
+  minio-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${MINIO_DATA_DIR:-./data/minio}
+
+networks:
+  souschef-public:
+    driver: bridge
+  souschef-internal:
+    driver: bridge
+    internal: true
 

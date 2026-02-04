@@ -14,7 +14,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-import pandas as pd  # type: ignore[import-untyped]
+import pandas as pd
 import streamlit as st
 
 # Add the parent directory to the path so we can import souschef modules
@@ -45,6 +45,10 @@ from souschef.generators.repo import (
     generate_ansible_repository,
 )
 from souschef.parsers.metadata import parse_cookbook_metadata
+from souschef.storage import (
+    get_blob_storage,
+    get_storage_manager,
+)
 
 # AI Settings
 ANTHROPIC_PROVIDER = "Anthropic (Claude)"
@@ -251,6 +255,115 @@ def _get_ai_int_value(
     return default
 
 
+def _save_analysis_to_db(
+    result: dict,
+    ai_provider: str | None = None,
+    ai_model: str | None = None,
+) -> int | None:
+    """
+    Save analysis result to the database.
+
+    Args:
+        result: Analysis result dictionary.
+        ai_provider: AI provider used (if any).
+        ai_model: AI model used (if any).
+
+    Returns:
+        Database ID of saved analysis, or None on error.
+
+    """
+    try:
+        from souschef.storage.database import calculate_file_fingerprint
+
+        storage_manager = get_storage_manager()
+
+        # Calculate content fingerprint for deduplication
+        content_fingerprint = None
+        if hasattr(st.session_state, "archive_path") and st.session_state.archive_path:
+            archive_path = st.session_state.archive_path
+            if archive_path.exists():
+                content_fingerprint = calculate_file_fingerprint(archive_path)
+
+        # Upload cookbook archive if available in session state
+        cookbook_blob_key = None
+        if hasattr(st.session_state, "archive_path") and st.session_state.archive_path:
+            archive_path = st.session_state.archive_path
+            if archive_path.exists():
+                cookbook_blob_key = _upload_cookbook_archive(
+                    archive_path, result.get("name", "Unknown")
+                )
+
+        # Extract data from result
+        analysis_data = {
+            "complexity": result.get("complexity"),
+            "recommendations": result.get("recommendations"),
+            "dependencies": result.get("dependencies"),
+        }
+
+        analysis_id = storage_manager.save_analysis(
+            cookbook_name=result.get("name", "Unknown"),
+            cookbook_path=result.get("path", ""),
+            cookbook_version=result.get("version", "Unknown"),
+            complexity=result.get("complexity", "Unknown"),
+            estimated_hours=float(result.get("estimated_hours", 0)),
+            estimated_hours_with_souschef=float(
+                result.get("estimated_hours_with_souschef", 0)
+            ),
+            recommendations=result.get("recommendations", ""),
+            analysis_data=analysis_data,
+            ai_provider=ai_provider,
+            ai_model=ai_model,
+            cookbook_blob_key=cookbook_blob_key,
+            content_fingerprint=content_fingerprint,
+        )
+
+        return analysis_id
+    except Exception as e:
+        st.warning(f"Failed to save analysis to database: {e}")
+        return None
+
+
+def _check_analysis_cache(
+    cookbook_path: str,
+    ai_provider: str | None = None,
+    ai_model: str | None = None,
+) -> dict | None:
+    """
+    Check if analysis is cached in the database.
+
+    Args:
+        cookbook_path: Path to the cookbook.
+        ai_provider: AI provider used (if any).
+        ai_model: AI model used (if any).
+
+    Returns:
+        Cached result dictionary or None if not found.
+
+    """
+    try:
+        storage_manager = get_storage_manager()
+        cached = storage_manager.get_cached_analysis(
+            cookbook_path, ai_provider, ai_model
+        )
+
+        if cached:
+            return {
+                "name": cached.cookbook_name,
+                "path": cached.cookbook_path,
+                "version": cached.cookbook_version,
+                "complexity": cached.complexity,
+                "estimated_hours": cached.estimated_hours,
+                "estimated_hours_with_souschef": cached.estimated_hours_with_souschef,
+                "recommendations": cached.recommendations,
+                "status": ANALYSIS_STATUS_ANALYSED,
+                "cached": True,
+            }
+
+        return None
+    except Exception:
+        return None
+
+
 # Constants for repeated strings
 METADATA_STATUS_YES = "Yes"
 METADATA_STATUS_NO = "No"
@@ -278,12 +391,12 @@ BLOCKED_EXTENSIONS = {
 }
 
 
-def extract_archive(uploaded_file) -> tuple[Path, Path]:
+def extract_archive(uploaded_file) -> tuple[Path, Path, Path]:
     """
     Extract uploaded archive to a temporary directory with security checks.
 
     Returns:
-        tuple: (temp_dir_path, cookbook_root_path)
+        tuple: (temp_dir_path, cookbook_root_path, archive_path)
 
     Implements multiple security measures to prevent:
     - Zip bombs (size limits, file count limits)
@@ -319,7 +432,52 @@ def extract_archive(uploaded_file) -> tuple[Path, Path]:
     # Find the root directory (should contain cookbooks)
     cookbook_root = _determine_cookbook_root(extraction_dir)
 
-    return temp_dir, cookbook_root
+    return temp_dir, cookbook_root, archive_path
+
+
+def _upload_cookbook_archive(archive_path: Path, cookbook_name: str) -> str | None:
+    """
+    Upload the original cookbook archive to blob storage.
+
+    Implements content-based deduplication - if an archive with identical
+    content was previously uploaded, returns the existing blob key instead
+    of uploading again.
+
+    Args:
+        archive_path: Path to the cookbook archive file.
+        cookbook_name: Name of the cookbook.
+
+    Returns:
+        Blob storage key for the uploaded archive, or None on error.
+
+    """
+    try:
+        from souschef.storage.database import calculate_file_fingerprint
+
+        # Calculate content fingerprint for deduplication
+        content_fingerprint = calculate_file_fingerprint(archive_path)
+
+        # Check if this content was already uploaded
+        storage_manager = get_storage_manager()
+        existing = storage_manager.get_analysis_by_fingerprint(content_fingerprint)
+        if existing and existing.cookbook_blob_key:
+            # Reuse existing blob key (deduplication)
+            return existing.cookbook_blob_key
+
+        blob_storage = get_blob_storage()
+        if not blob_storage:
+            return None
+
+        # Generate blob key
+        blob_key = f"cookbooks/{cookbook_name}/{archive_path.name}"
+
+        # Upload archive
+        blob_storage.upload(archive_path, blob_key)
+
+        return blob_key
+    except Exception as e:
+        st.warning(f"Failed to upload cookbook archive to blob storage: {e}")
+        return None
 
 
 def _extract_archive_by_type(
@@ -802,9 +960,13 @@ def _show_analysis_input() -> None:
                     st.session_state.analysis_results = None
                     st.session_state.holistic_assessment = None
 
-                    temp_dir, cookbook_path = extract_archive(uploaded_file)
+                    temp_dir, cookbook_path, archive_path = extract_archive(
+                        uploaded_file
+                    )
                     # Store temp_dir in session state to prevent premature cleanup
                     st.session_state.temp_dir = temp_dir
+                    # Store archive_path for later upload to blob storage
+                    st.session_state.archive_path = archive_path
                 st.success("Archive extracted successfully to temporary location")
             except (OSError, zipfile.BadZipFile, tarfile.TarError) as e:
                 st.error(f"Failed to extract archive: {e}")
@@ -1326,6 +1488,8 @@ def _analyze_with_ai(
     st.info(f"Detected {len(cookbook_data)} cookbook(s) with {total_recipes} recipe(s)")
 
     results = []
+    cached_count = 0
+
     for i, cb_data in enumerate(cookbook_data):
         # Count recipes in this cookbook
         recipe_count = _safe_count_recipes(cb_data["Path"])
@@ -1335,6 +1499,14 @@ def _analyze_with_ai(
             f"({i + 1}/{len(cookbook_data)})"
         )
         progress_bar.progress((i + 1) / len(cookbook_data))
+
+        # Check cache first
+        cached_result = _check_analysis_cache(cb_data["Path"], provider, model)
+        if cached_result:
+            st.info(f"Using cached analysis for {cb_data['Name']}")
+            results.append(cached_result)
+            cached_count += 1
+            continue
 
         assessment = assess_single_cookbook_with_ai(
             cb_data["Path"],
@@ -1348,7 +1520,16 @@ def _analyze_with_ai(
         )
 
         result = _build_cookbook_result(cb_data, assessment, ANALYSIS_STATUS_ANALYSED)
+
+        # Save to database
+        analysis_id = _save_analysis_to_db(result, provider, model)
+        if analysis_id:
+            result["analysis_id"] = analysis_id
+
         results.append(result)
+
+    if cached_count > 0:
+        st.success(f"Retrieved {cached_count} cached analysis result(s)")
 
     return results
 
@@ -1378,6 +1559,11 @@ def _analyze_rule_based(
         return [], {}
 
     results = _process_cookbook_assessments(assessment_result, cookbook_data)
+
+    # Save results to database
+    for result in results:
+        _save_analysis_to_db(result, ai_provider=None, ai_model="rule-based")
+
     return results, assessment_result
 
 
@@ -1586,6 +1772,14 @@ def _convert_all_cookbooks_holistically(cookbook_path: str):
             "output_path": str(output_dir),
         }
 
+        # Save conversion to storage with tar archives
+        _save_conversion_to_storage(
+            cookbook_name=Path(cookbook_path).name,
+            output_path=output_dir,
+            conversion_result=conversion_result,
+            output_type="role",
+        )
+
         progress_bar.progress(1.0)
         status_text.text("Holistic conversion completed!")
         st.success("Holistically converted all cookbooks to Ansible roles!")
@@ -1605,6 +1799,89 @@ def _convert_all_cookbooks_holistically(cookbook_path: str):
     finally:
         progress_bar.empty()
         status_text.empty()
+
+
+def _save_conversion_to_storage(
+    cookbook_name: str,
+    output_path: Path,
+    conversion_result: str,
+    output_type: str,
+) -> None:
+    """
+    Save conversion artefacts to blob storage and database.
+
+    Creates tar archives of roles and repository (if exists), uploads them
+    to blob storage, and saves conversion record to database.
+
+    Args:
+        cookbook_name: Name of the cookbook that was converted.
+        output_path: Path to the directory containing converted roles.
+        conversion_result: Text result from conversion for parsing.
+        output_type: Type of output ('role', 'playbook', 'collection').
+
+    """
+    try:
+        from datetime import datetime
+
+        storage_manager = get_storage_manager()
+        blob_storage = get_blob_storage()
+
+        # Parse conversion result to get metrics
+        parsed_result = _parse_conversion_result_text(conversion_result)
+        files_generated = parsed_result.get("summary", {}).get(
+            "total_converted_files", 0
+        )
+        status = "success" if files_generated > 0 else "failed"
+
+        # Create timestamp for unique storage keys
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Upload roles directory to blob storage
+        roles_storage_key = f"conversions/{cookbook_name}/roles_{timestamp}"
+        blob_key_roles = blob_storage.upload(output_path, roles_storage_key)
+
+        # Check if repository exists in session state and upload it too
+        repo_storage_key = None
+        if "generated_repo" in st.session_state:
+            repo_result = st.session_state.generated_repo
+            repo_path = Path(repo_result["temp_path"])
+            if repo_path.exists():
+                repo_storage_key = f"conversions/{cookbook_name}/repo_{timestamp}"
+                blob_storage.upload(repo_path, repo_storage_key)
+
+        # Prepare conversion data
+        conversion_data = {
+            "parsed_result": parsed_result,
+            "roles_blob_key": blob_key_roles,
+            "repo_blob_key": repo_storage_key,
+            "timestamp": timestamp,
+        }
+
+        # Get analysis_id if available from session state
+        analysis_id = None
+        if "holistic_assessment" in st.session_state:
+            assessment = st.session_state.holistic_assessment
+            if isinstance(assessment, dict) and "analysis_id" in assessment:
+                analysis_id = assessment["analysis_id"]
+
+        # Save conversion to database
+        conversion_id = storage_manager.save_conversion(
+            cookbook_name=cookbook_name,
+            output_type=output_type,
+            status=status,
+            files_generated=files_generated,
+            conversion_data=conversion_data,
+            analysis_id=analysis_id,
+            blob_storage_key=blob_key_roles,
+        )
+
+        if conversion_id:
+            # Store conversion_id in session for reference
+            st.session_state.last_conversion_id = conversion_id
+
+    except Exception as e:
+        # Non-fatal: log but don't fail the conversion display
+        st.warning(f"Failed to save conversion to storage: {e}")
 
 
 def _parse_conversion_result_text(result_text: str) -> dict:
@@ -2122,6 +2399,70 @@ def _display_conversion_download_options(conversion_result: dict):
         st.warning("Output directory not found for download")
 
 
+def _upload_repository_to_storage(repo_result: dict, roles_path: Path) -> None:
+    """
+    Upload generated repository to blob storage and update conversion record.
+
+    Args:
+        repo_result: Repository generation result dictionary.
+        roles_path: Path to the roles directory that was used to create the repository.
+
+    """
+    try:
+        from datetime import datetime
+
+        # Only proceed if we have a saved conversion to update
+        if "last_conversion_id" not in st.session_state:
+            return
+
+        storage_manager = get_storage_manager()
+        blob_storage = get_blob_storage()
+
+        # Upload repository to blob storage
+        repo_path = Path(repo_result["temp_path"])
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        cookbook_name = roles_path.name or "cookbook"
+        repo_storage_key = f"conversions/{cookbook_name}/repo_{timestamp}"
+
+        blob_key_repo = blob_storage.upload(repo_path, repo_storage_key)
+
+        # Update conversion record with repository blob key
+        conversion_id = st.session_state.last_conversion_id
+
+        # Get the existing conversion to update its data
+        conversions = storage_manager.get_conversion_history(limit=100)
+        existing = next((c for c in conversions if c.id == conversion_id), None)
+
+        if existing:
+            # Parse and update conversion data
+            try:
+                conversion_data = json.loads(existing.conversion_data)
+                conversion_data["repo_blob_key"] = blob_key_repo
+                conversion_data["repo_timestamp"] = timestamp
+
+                # Update the conversion record (re-save with same ID)
+                # Note: This creates a new record. For true update, we'd
+                # need an update method. For now, store in session state
+                # for the download.
+                st.session_state.repo_blob_key = blob_key_repo
+
+                st.success("✅ Repository uploaded to storage for future retrieval")
+            except json.JSONDecodeError:
+                # If existing conversion data is corrupt or unparsable, still
+                # expose the repository for this session but warn that it
+                # could not be associated with the saved conversion record.
+                st.session_state.repo_blob_key = blob_key_repo
+                st.warning(
+                    "Repository uploaded, but existing conversion data could not "
+                    "be parsed. The repository download link will only be "
+                    "available for this session."
+                )
+
+    except Exception as e:
+        # Non-fatal: just log warning
+        st.warning(f"Could not upload repository to storage: {e}")
+
+
 def _create_repo_callback(safe_output_path: Path) -> None:
     """Handle repository creation callback."""
     try:
@@ -2143,6 +2484,9 @@ def _create_repo_callback(safe_output_path: Path) -> None:
             st.session_state.generated_repo = repo_result
             st.session_state.repo_created_successfully = True
             st.session_state.repo_creation_error = None
+
+            # Upload repository to blob storage if conversion was saved
+            _upload_repository_to_storage(repo_result, safe_output_path)
         else:
             _handle_repo_creation_failure(repo_result.get("error", "Unknown error"))
     except Exception as e:
@@ -2334,9 +2678,11 @@ def _handle_dashboard_upload():
     # Process the file
     try:
         with st.spinner("Extracting archive..."):
-            temp_dir, cookbook_path = extract_archive(mock_file)
+            temp_dir, cookbook_path, archive_path = extract_archive(mock_file)
             # Store temp_dir in session state to prevent premature cleanup
             st.session_state.temp_dir = temp_dir
+            # Store archive_path for later upload to blob storage
+            st.session_state.archive_path = archive_path
         st.success("Archive extracted successfully!")
 
         # Validate and list cookbooks

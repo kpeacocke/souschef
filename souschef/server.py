@@ -3012,6 +3012,199 @@ def generate_github_workflow_from_chef(
         )
 
 
+# GitHub Copilot Agent Control Tools
+
+
+@mcp.tool()
+def assign_github_copilot_to_issue(
+    owner: str,
+    repo: str,
+    issue_number: int,
+    base_ref: str = "",
+    custom_instructions: str = "",
+) -> str:
+    """
+    Assign GitHub Copilot agent to work on an issue.
+
+    The agent will analyse the issue, implement changes, and create a pull request.
+    You can pause, stop, or resume the agent using control commands.
+
+    Args:
+        owner: Repository owner (username or organisation).
+        repo: Repository name.
+        issue_number: Issue number to assign Copilot to.
+        base_ref: Git reference (branch) to start from (default: repo default branch).
+        custom_instructions: Optional additional guidance for the agent.
+
+    Returns:
+        Status message with agent assignment confirmation and control commands.
+
+    """
+    from souschef.github import assign_copilot_agent_to_issue
+
+    try:
+        return assign_copilot_agent_to_issue(
+            owner=owner,
+            repo=repo,
+            issue_number=issue_number,
+            base_ref=base_ref,
+            custom_instructions=custom_instructions,
+        )
+    except Exception as e:
+        return format_error_with_context(
+            e, "assigning Copilot agent", f"{owner}/{repo}#{issue_number}"
+        )
+
+
+@mcp.tool()
+def pause_github_copilot_agent(
+    owner: str,
+    repo: str,
+    issue_number: int,
+    reason: str = "",
+) -> str:
+    """
+    Pause a running GitHub Copilot agent.
+
+    The agent will complete its current task before pausing. Use resume command
+    to continue work later.
+
+    Args:
+        owner: Repository owner.
+        repo: Repository name.
+        issue_number: Issue number where agent is working.
+        reason: Optional reason for pausing (will be added to issue comments).
+
+    Returns:
+        Status message confirming the pause request.
+
+    """
+    from souschef.github import pause_copilot_agent
+
+    try:
+        return pause_copilot_agent(
+            owner=owner,
+            repo=repo,
+            issue_number=issue_number,
+            reason=reason,
+        )
+    except Exception as e:
+        return format_error_with_context(
+            e, "pausing Copilot agent", f"{owner}/{repo}#{issue_number}"
+        )
+
+
+@mcp.tool()
+def stop_github_copilot_agent(
+    owner: str,
+    repo: str,
+    issue_number: int,
+    reason: str = "",
+) -> str:
+    """
+    Stop and cancel a GitHub Copilot agent assignment.
+
+    The agent will stop working and will not create a pull request. This action
+    cannot be undone - use pause if you want to resume later.
+
+    Args:
+        owner: Repository owner.
+        repo: Repository name.
+        issue_number: Issue number where agent is working.
+        reason: Optional reason for stopping (will be added to issue comments).
+
+    Returns:
+        Status message confirming the agent has been stopped.
+
+    """
+    from souschef.github import stop_copilot_agent
+
+    try:
+        return stop_copilot_agent(
+            owner=owner,
+            repo=repo,
+            issue_number=issue_number,
+            reason=reason,
+        )
+    except Exception as e:
+        return format_error_with_context(
+            e, "stopping Copilot agent", f"{owner}/{repo}#{issue_number}"
+        )
+
+
+@mcp.tool()
+def resume_github_copilot_agent(
+    owner: str,
+    repo: str,
+    issue_number: int,
+    additional_instructions: str = "",
+) -> str:
+    """
+    Resume a paused GitHub Copilot agent.
+
+    The agent will continue from where it left off. You can optionally provide
+    additional instructions to guide the resumed work.
+
+    Args:
+        owner: Repository owner.
+        repo: Repository name.
+        issue_number: Issue number where agent is paused.
+        additional_instructions: Optional new guidance for the agent.
+
+    Returns:
+        Status message confirming the agent has resumed work.
+
+    """
+    from souschef.github import resume_copilot_agent
+
+    try:
+        return resume_copilot_agent(
+            owner=owner,
+            repo=repo,
+            issue_number=issue_number,
+            additional_instructions=additional_instructions,
+        )
+    except Exception as e:
+        return format_error_with_context(
+            e, "resuming Copilot agent", f"{owner}/{repo}#{issue_number}"
+        )
+
+
+@mcp.tool()
+def check_github_copilot_agent_status(
+    owner: str,
+    repo: str,
+    issue_number: int,
+) -> str:
+    """
+    Check the current status of a GitHub Copilot agent assignment.
+
+    Shows whether the agent is active, paused, stopped, or not assigned,
+    along with recent activity and available control commands.
+
+    Args:
+        owner: Repository owner.
+        repo: Repository name.
+        issue_number: Issue number to check.
+
+    Returns:
+        Detailed status report with current state and available commands.
+
+    """
+    from souschef.github import check_copilot_agent_status
+
+    try:
+        return check_copilot_agent_status(
+            owner=owner,
+            repo=repo,
+            issue_number=issue_number,
+        )
+    except Exception as e:
+        return format_error_with_context(
+            e, "checking Copilot agent status", f"{owner}/{repo}#{issue_number}"
+        )
+
+
 @mcp.tool()
 def generate_ansible_repository(
     output_path: str,

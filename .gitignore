@@ -117,3 +117,6 @@ tests/integration/fixtures/*.tar.gz
 tests/integration/fixtures/*.zip
 tests/integration/fixtures/*.tar.bz2
 tests/integration/fixtures/*.tar.xz
+
+# Docker Compose persistent storage
+data/

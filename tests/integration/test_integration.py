@@ -1309,3 +1309,134 @@ class TestAIRepositoryTypeDetermination:
 
         # Should fall back to heuristics - small simple project
         assert result == RepoType.PLAYBOOKS_ROLES
+
+
+class TestGitHubAgentControlIntegration:
+    """Integration tests for GitHub Copilot agent control."""
+
+    def test_assign_agent_returns_formatted_message(self):
+        """Test that agent assignment returns properly formatted message."""
+        from souschef.github import assign_copilot_agent_to_issue
+
+        with patch("souschef.github.agent_control._add_label_to_issue"):
+            result = assign_copilot_agent_to_issue(
+                owner="testorg",
+                repo="testrepo",
+                issue_number=123,
+                base_ref="main",
+            )
+
+            assert "✅" in result
+            assert "testorg/testrepo" in result
+            assert "#123" in result
+            assert "pause_github_copilot_agent" in result
+            assert "stop_github_copilot_agent" in result
+
+    def test_pause_agent_workflow(self):
+        """Test complete pause workflow."""
+        from souschef.github import pause_copilot_agent
+
+        with (
+            patch("souschef.github.agent_control._add_label_to_issue"),
+            patch("souschef.github.agent_control._remove_label_from_issue"),
+            patch("souschef.github.agent_control._add_comment_to_issue"),
+        ):
+            result = pause_copilot_agent(
+                owner="testorg",
+                repo="testrepo",
+                issue_number=123,
+                reason="Testing pause feature",
+            )
+
+            assert "⏸️" in result
+            assert "Testing pause feature" in result
+            assert "resume" in result.lower()
+
+    def test_stop_agent_workflow(self):
+        """Test complete stop workflow."""
+        from souschef.github import stop_copilot_agent
+
+        with (
+            patch("souschef.github.agent_control._add_label_to_issue"),
+            patch("souschef.github.agent_control._remove_label_from_issue"),
+            patch("souschef.github.agent_control._add_comment_to_issue"),
+        ):
+            result = stop_copilot_agent(
+                owner="testorg",
+                repo="testrepo",
+                issue_number=123,
+                reason="Requirements changed",
+            )
+
+            assert "🛑" in result
+            assert "Requirements changed" in result
+            assert "cancelled" in result
+
+    def test_resume_paused_agent_workflow(self):
+        """Test resume workflow for paused agent."""
+        from souschef.github import resume_copilot_agent
+
+        with (
+            patch(
+                "souschef.github.agent_control._check_agent_labels",
+                return_value="paused",
+            ),
+            patch("souschef.github.agent_control._remove_label_from_issue"),
+            patch("souschef.github.agent_control._add_label_to_issue"),
+            patch("souschef.github.agent_control._add_comment_to_issue"),
+        ):
+            result = resume_copilot_agent(
+                owner="testorg",
+                repo="testrepo",
+                issue_number=123,
+                additional_instructions="Focus on performance",
+            )
+
+            assert "▶️" in result
+            assert "Focus on performance" in result
+            assert "continuing work" in result
+
+    def test_resume_stopped_agent_failure(self):
+        """Test that resuming stopped agent returns error."""
+        from souschef.github import resume_copilot_agent
+
+        with patch(
+            "souschef.github.agent_control._check_agent_labels", return_value="stopped"
+        ):
+            result = resume_copilot_agent(
+                owner="testorg",
+                repo="testrepo",
+                issue_number=123,
+            )
+
+            assert "❌" in result
+            assert "stopped" in result
+            assert "new assignment" in result
+
+    def test_check_status_for_various_states(self):
+        """Test status check for different agent states."""
+        from souschef.github import check_copilot_agent_status
+
+        states = ["active", "paused", "stopped", "not_assigned"]
+
+        for state in states:
+            with (
+                patch(
+                    "souschef.github.agent_control._check_agent_labels",
+                    return_value=state,
+                ),
+                patch(
+                    "souschef.github.agent_control._get_recent_agent_comments",
+                    return_value="Recent activity",
+                ),
+            ):
+                result = check_copilot_agent_status(
+                    owner="testorg",
+                    repo="testrepo",
+                    issue_number=123,
+                )
+
+                # Check that state is reflected in output
+                assert state.replace("_", " ").title() in result
+                assert "#123" in result
+                assert "testorg/testrepo" in result
