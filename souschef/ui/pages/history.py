@@ -137,6 +137,18 @@ def _display_analysis_details(analysis) -> None:
         time_saved = analysis.estimated_hours - analysis.estimated_hours_with_souschef
         st.metric("Time Saved", f"{time_saved:.1f}h")
 
+    st.divider()
+
+    # Display activity breakdown if available
+    try:
+        analysis_data = json.loads(analysis.analysis_data)
+        activities = analysis_data.get("activity_breakdown", [])
+        if activities:
+            _display_analysis_activity_breakdown(activities)
+            st.divider()
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
     # Recommendations
     st.markdown("### Recommendations")
     st.text_area(
@@ -167,6 +179,56 @@ def _display_analysis_details(analysis) -> None:
             st.json(analysis_data)
         except json.JSONDecodeError:
             st.error("Unable to parse analysis data")
+
+
+def _display_analysis_activity_breakdown(activities: list) -> None:
+    """Display activity breakdown from analysis data."""
+    st.subheader("Activity Breakdown Details")
+
+    if not activities:
+        return
+
+    col1, col2 = st.columns([1, 2])
+
+    with col1:
+        st.markdown("### Summary")
+        for activity in activities:
+            name = activity.get("activity_type", "Unknown")
+            count = activity.get("count", 0)
+            description = activity.get("description", "")
+            manual_hours = activity.get("manual_hours", 0)
+            ai_hours = activity.get("ai_assisted_hours", 0)
+            time_saved = activity.get("time_saved_hours", 0)
+            efficiency = activity.get("efficiency_gain_percent", 0)
+
+            st.markdown(
+                f"""**{name}** ({count})
+
+*{description}*
+
+Manual: {manual_hours:.1f}h → AI: {ai_hours:.1f}h
+
+**Saved: {time_saved:.1f}h ({efficiency:.0f}%)**"""
+            )
+            st.divider()
+
+    with col2:
+        st.markdown("### Details Table")
+        table_data = []
+        for activity in activities:
+            table_data.append(
+                {
+                    "Activity": activity.get("activity_type", "Unknown"),
+                    "Count": activity.get("count", 0),
+                    "Manual Hours": f"{activity.get('manual_hours', 0):.1f}",
+                    "AI Hours": f"{activity.get('ai_assisted_hours', 0):.1f}",
+                    "Time Saved": f"{activity.get('time_saved_hours', 0):.1f}",
+                    "Efficiency": f"{activity.get('efficiency_gain_percent', 0):.0f}%",
+                }
+            )
+
+        df = pd.DataFrame(table_data)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
 
 def _display_conversion_actions(analysis, conversions, blob_storage) -> None:
