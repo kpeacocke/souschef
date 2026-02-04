@@ -315,6 +315,13 @@ def parse_chef_migration_assessment(
         )
         roadmap = _create_migration_roadmap(cookbook_assessments)
 
+        effort_metrics = EffortMetrics(overall_metrics.get("estimated_effort_days", 0))
+
+        # Get activity breakdown from first cookbook assessment if available
+        activity_breakdown = []
+        if cookbook_assessments:
+            activity_breakdown = cookbook_assessments[0].get("activity_breakdown", [])
+
         return {
             "migration_scope": migration_scope,
             "target_platform": target_platform,
@@ -323,9 +330,9 @@ def parse_chef_migration_assessment(
             "recommendations": recommendations,
             "roadmap": roadmap,
             "complexity": _get_overall_complexity_level(overall_metrics),
-            "estimated_hours": EffortMetrics(
-                overall_metrics.get("estimated_effort_days", 0)
-            ).estimated_hours,
+            "estimated_hours": effort_metrics.estimated_hours,
+            "estimated_hours_with_souschef": effort_metrics.estimated_hours_with_souschef,
+            "activity_breakdown": activity_breakdown,
         }
 
     except Exception as e:
@@ -2364,14 +2371,16 @@ def assess_single_cookbook_with_ai(
         elif assessment["complexity_score"] > 30:
             complexity_level = "Medium"
 
+        effort_metrics = EffortMetrics(assessment["estimated_effort_days"])
+
         return {
             "complexity": complexity_level,
-            "estimated_hours": EffortMetrics(
-                assessment["estimated_effort_days"]
-            ).estimated_hours,
+            "estimated_hours": effort_metrics.estimated_hours,
+            "estimated_hours_with_souschef": effort_metrics.estimated_hours_with_souschef,
             "recommendations": assessment.get(
                 "ai_insights", "AI-enhanced analysis completed"
             ),
+            "activity_breakdown": assessment.get("activity_breakdown", []),
         }
 
     except Exception as e:
