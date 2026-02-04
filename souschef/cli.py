@@ -1638,6 +1638,135 @@ def configure_migration(
         sys.exit(1)
 
 
+@cli.group()
+def history() -> None:
+    """Manage analysis and conversion history."""
+
+
+@history.command(name="list")
+@click.option(
+    "--type",
+    "history_type",
+    type=click.Choice(["analysis", "conversion", "both"]),
+    default="both",
+    help="Type of history to list",
+)
+@click.option(
+    "--limit",
+    type=int,
+    default=20,
+    help="Maximum number of results to display",
+)
+@click.option(
+    "--cookbook",
+    default=None,
+    help="Filter by cookbook name",
+)
+def history_list(history_type: str, limit: int, cookbook: str | None) -> None:
+    """List analysis and conversion history."""
+    from souschef.storage import get_storage_manager
+
+    storage_manager = get_storage_manager()
+
+    if history_type in ["analysis", "both"]:
+        click.echo("\n" + "=" * 80)
+        click.echo("Analysis History")
+        click.echo("=" * 80)
+
+        analyses = storage_manager.get_analysis_history(
+            cookbook_name=cookbook, limit=limit
+        )
+
+        if not analyses:
+            click.echo("No analysis history found.")
+        else:
+            for a in analyses:
+                time_saved = a.estimated_hours - a.estimated_hours_with_souschef
+                click.echo(
+                    f"ID: {a.id} | {a.cookbook_name} v{a.cookbook_version} | "
+                    f"Complexity: {a.complexity} | "
+                    f"Manual: {a.estimated_hours:.1f}h | "
+                    f"AI: {a.estimated_hours_with_souschef:.1f}h | "
+                    f"Saved: {time_saved:.1f}h | "
+                    f"Date: {a.created_at}"
+                )
+
+    if history_type in ["conversion", "both"]:
+        click.echo("\n" + "=" * 80)
+        click.echo("Conversion History")
+        click.echo("=" * 80)
+
+        conversions = storage_manager.get_conversion_history(
+            cookbook_name=cookbook, limit=limit
+        )
+
+        if not conversions:
+            click.echo("No conversion history found.")
+        else:
+            for c in conversions:
+                click.echo(
+                    f"ID: {c.id} | {c.cookbook_name} | "
+                    f"Type: {c.output_type} | "
+                    f"Status: {c.status} | "
+                    f"Files: {c.files_generated} | "
+                    f"Date: {c.created_at}"
+                )
+
+    click.echo("")
+
+
+@history.command(name="delete")
+@click.option(
+    "--type",
+    "history_type",
+    type=click.Choice(["analysis", "conversion"]),
+    required=True,
+    help="Type of record to delete",
+)
+@click.option(
+    "--id",
+    "record_id",
+    type=int,
+    required=True,
+    help="ID of the record to delete",
+)
+@click.option(
+    "--yes",
+    "-y",
+    is_flag=True,
+    help="Skip confirmation prompt",
+)
+def history_delete(history_type: str, record_id: int, yes: bool) -> None:
+    """Delete an analysis or conversion from history."""
+    from souschef.storage import get_storage_manager
+
+    storage_manager = get_storage_manager()
+
+    # Confirm deletion unless --yes flag is used
+    if not yes and not click.confirm(
+        f"Are you sure you want to delete {history_type} record {record_id}?"
+    ):
+        click.echo("Deletion cancelled.")
+        return
+
+    try:
+        if history_type == "analysis":
+            success = storage_manager.delete_analysis(record_id)
+            msg = "Analysis and associated conversions deleted successfully!"
+        else:
+            success = storage_manager.delete_conversion(record_id)
+            msg = "Conversion deleted successfully!"
+
+        if success:
+            click.echo(f"✅ {msg}")
+        else:
+            click.echo(f"❌ Failed to delete {history_type} record {record_id}.")
+            sys.exit(1)
+    except Exception as e:
+        click.echo(f"❌ Error deleting {history_type}: {e}", err=True)
+        sys.exit(1)
+
+
 def main() -> NoReturn:
     """Run the CLI."""
     configure_logging()

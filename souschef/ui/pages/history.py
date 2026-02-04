@@ -99,7 +99,7 @@ def _show_analysis_history(storage_manager) -> None:
         )
 
     df = pd.DataFrame(df_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     # Expandable details
     st.subheader("Analysis Details")
@@ -117,10 +117,10 @@ def _show_analysis_history(storage_manager) -> None:
 
     if selected_id:
         selected = next(a for a in analyses if a.id == selected_id)
-        _display_analysis_details(selected)
+        _display_analysis_details(selected, storage_manager)
 
 
-def _display_analysis_details(analysis) -> None:
+def _display_analysis_details(analysis, storage_manager) -> None:
     """Display detailed analysis information."""
     col1, col2, col3, col4 = st.columns(4)
 
@@ -160,7 +160,6 @@ def _display_analysis_details(analysis) -> None:
     )
 
     # Check if conversions exist for this analysis
-    storage_manager = get_storage_manager()
     blob_storage = get_blob_storage()
     conversions = storage_manager.get_conversions_by_analysis_id(analysis.id)
 
@@ -171,6 +170,27 @@ def _display_analysis_details(analysis) -> None:
         _display_conversion_actions(analysis, conversions, blob_storage)
     else:
         _display_convert_button(analysis, blob_storage)
+
+    # Delete button
+    st.divider()
+    st.markdown("### Danger Zone")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.warning(
+            "Deleting this analysis will also delete all associated conversions. "
+            "This action cannot be undone."
+        )
+    with col2:
+        if st.button(
+            "Delete Analysis",
+            type="secondary",
+            key=f"delete_analysis_{analysis.id}",
+        ):
+            if storage_manager.delete_analysis(analysis.id):
+                st.success("Analysis deleted successfully!")
+                st.rerun()
+            else:
+                st.error("Failed to delete analysis.")
 
     # Full analysis data
     with st.expander("View Full Analysis Data"):
@@ -228,7 +248,7 @@ Manual: {manual_hours:.1f}h → AI: {ai_hours:.1f}h
             )
 
         df = pd.DataFrame(table_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
 
 
 def _display_conversion_actions(analysis, conversions, blob_storage) -> None:
@@ -804,7 +824,7 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
         )
 
     df = pd.DataFrame(df_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     # Download artifacts
     st.subheader("Download Artefacts")
@@ -837,6 +857,26 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
                     key=f"download_{selected.id}",
                 ):
                     _download_conversion_artefacts(selected, blob_storage)
+
+            # Delete button
+            st.divider()
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.warning(
+                    "Deleting this conversion will remove it from history. "
+                    "This action cannot be undone."
+                )
+            with col2:
+                if st.button(
+                    "Delete Conversion",
+                    type="secondary",
+                    key=f"delete_conversion_{selected.id}",
+                ):
+                    if storage_manager.delete_conversion(selected.id):
+                        st.success("Conversion deleted successfully!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete conversion.")
 
 
 def _download_conversion_artefacts(conversion, blob_storage) -> None:

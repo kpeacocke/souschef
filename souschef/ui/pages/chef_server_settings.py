@@ -390,14 +390,14 @@ def _render_bulk_operations(server_url: str) -> None:
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("Assess ALL Cookbooks", type="primary", use_container_width=True):
+        if st.button("Assess ALL Cookbooks", type="primary", width="stretch"):
             _run_bulk_assessment(server_url)
 
     with col2:
         if st.button(
             "Convert ALL Cookbooks",
             type="secondary",
-            use_container_width=True,
+            width="stretch",
         ):
             _run_bulk_conversion(server_url)
 

@@ -658,6 +658,54 @@ class StorageManager:
             rows = cursor.fetchall()
             return [_conversion_from_row(row) for row in rows]
 
+    def delete_analysis(self, analysis_id: int) -> bool:
+        """
+        Delete an analysis result and its associated conversions.
+
+        Args:
+            analysis_id: ID of the analysis to delete.
+
+        Returns:
+            True if successful, False otherwise.
+
+        """
+        try:
+            with self._connect() as conn:
+                # First delete associated conversions
+                conn.execute(
+                    "DELETE FROM conversion_results WHERE analysis_id = ?",
+                    (analysis_id,),
+                )
+
+                # Then delete the analysis
+                cursor = conn.execute(
+                    "DELETE FROM analysis_results WHERE id = ?", (analysis_id,)
+                )
+
+                return cursor.rowcount > 0
+        except Exception:
+            return False
+
+    def delete_conversion(self, conversion_id: int) -> bool:
+        """
+        Delete a conversion result.
+
+        Args:
+            conversion_id: ID of the conversion to delete.
+
+        Returns:
+            True if successful, False otherwise.
+
+        """
+        try:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    "DELETE FROM conversion_results WHERE id = ?", (conversion_id,)
+                )
+                return cursor.rowcount > 0
+        except Exception:
+            return False
+
     def get_statistics(self) -> dict[str, Any]:
         """
         Get overall statistics.
@@ -1111,6 +1159,56 @@ class PostgresStorageManager:
             cursor = conn.execute(sql, (analysis_id,))
             rows = cursor.fetchall()
             return [_conversion_from_row(row) for row in rows]
+
+    def delete_analysis(self, analysis_id: int) -> bool:
+        """
+        Delete an analysis result and its associated conversions.
+
+        Args:
+            analysis_id: ID of the analysis to delete.
+
+        Returns:
+            True if successful, False otherwise.
+
+        """
+        try:
+            with self._connect() as conn:
+                # First delete associated conversions
+                sql = self._prepare_sql(
+                    "DELETE FROM conversion_results WHERE analysis_id = ?"
+                )
+                conn.execute(sql, (analysis_id,))
+
+                # Then delete the analysis
+                sql = self._prepare_sql("DELETE FROM analysis_results WHERE id = ?")
+                cursor = conn.execute(sql, (analysis_id,))
+
+                # Commit changes
+                conn.commit()
+
+                return bool(cursor.rowcount and cursor.rowcount > 0)
+        except Exception:
+            return False
+
+    def delete_conversion(self, conversion_id: int) -> bool:
+        """
+        Delete a conversion result.
+
+        Args:
+            conversion_id: ID of the conversion to delete.
+
+        Returns:
+            True if successful, False otherwise.
+
+        """
+        try:
+            with self._connect() as conn:
+                sql = self._prepare_sql("DELETE FROM conversion_results WHERE id = ?")
+                cursor = conn.execute(sql, (conversion_id,))
+                conn.commit()
+                return bool(cursor.rowcount and cursor.rowcount > 0)
+        except Exception:
+            return False
 
     def get_statistics(self) -> dict[str, Any]:
         """Get overall statistics from PostgreSQL."""

@@ -4030,7 +4030,7 @@ Manual: {manual_hours:.1f}h → AI: {ai_hours:.1f}h
                 )
 
         df = pd.DataFrame(table_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width="stretch", hide_index=True)
 
 
 def _display_failed_cookbook_details(result):

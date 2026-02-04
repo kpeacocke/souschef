@@ -138,7 +138,7 @@ def main() -> None:
         if st.button(
             "Cookbook Analysis",
             type="primary" if page == NAV_COOKBOOK_ANALYSIS else "secondary",
-            use_container_width=True,
+            width="stretch",
             key="nav_cookbook_analysis",
         ):
             st.session_state.current_page = NAV_COOKBOOK_ANALYSIS
@@ -148,7 +148,7 @@ def main() -> None:
         if st.button(
             "Migration Planning",
             type="primary" if page == NAV_MIGRATION_PLANNING else "secondary",
-            use_container_width=True,
+            width="stretch",
             key="nav_migration_planning",
         ):
             st.session_state.current_page = NAV_MIGRATION_PLANNING
@@ -158,7 +158,7 @@ def main() -> None:
         if st.button(
             "Migration Config",
             type="primary" if page == NAV_MIGRATION_CONFIG else "secondary",
-            use_container_width=True,
+            width="stretch",
             key="nav_migration_config",
         ):
             st.session_state.current_page = NAV_MIGRATION_CONFIG
@@ -168,7 +168,7 @@ def main() -> None:
         if st.button(
             "Dependency Mapping",
             type="primary" if page == NAV_DEPENDENCY_MAPPING else "secondary",
-            use_container_width=True,
+            width="stretch",
             key="nav_dependency_mapping",
         ):
             st.session_state.current_page = NAV_DEPENDENCY_MAPPING
@@ -178,7 +178,7 @@ def main() -> None:
         if st.button(
             "History",
             type="primary" if page == NAV_HISTORY else "secondary",
-            use_container_width=True,
+            width="stretch",
             key="nav_history",
         ):
             st.session_state.current_page = NAV_HISTORY
@@ -188,7 +188,7 @@ def main() -> None:
         if st.button(
             "Validation Reports",
             type="primary" if page == NAV_VALIDATION_REPORTS else "secondary",
-            use_container_width=True,
+            width="stretch",
             key="nav_validation_reports",
         ):
             st.session_state.current_page = NAV_VALIDATION_REPORTS
@@ -198,7 +198,7 @@ def main() -> None:
         if st.button(
             "AI Settings",
             type="primary" if page == NAV_AI_SETTINGS else "secondary",
-            use_container_width=True,
+            width="stretch",
             key="nav_ai_settings",
         ):
             st.session_state.current_page = NAV_AI_SETTINGS
@@ -208,7 +208,7 @@ def main() -> None:
         if st.button(
             "Chef Server",
             type="primary" if page == NAV_CHEF_SERVER_SETTINGS else "secondary",
-            use_container_width=True,
+            width="stretch",
             key="nav_chef_server_settings",
         ):
             st.session_state.current_page = NAV_CHEF_SERVER_SETTINGS
