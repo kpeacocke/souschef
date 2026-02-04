@@ -1708,6 +1708,14 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
 
     """
     if "error" not in assessment:
+        # Calculate hours from effort days or use provided hours
+        estimated_hours = assessment.get("estimated_hours", 0)
+        if estimated_hours == 0 and "estimated_effort_days" in assessment:
+            estimated_hours = assessment["estimated_effort_days"] * 8
+
+        # Calculate AI-assisted hours (50% reduction)
+        estimated_hours_with_souschef = estimated_hours * 0.5
+
         return {
             "name": cb_data["Name"],
             "path": cb_data["Path"],
@@ -1716,7 +1724,8 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
             "description": cb_data["Description"],
             "dependencies": cb_data["Dependencies"],
             "complexity": assessment.get("complexity", "Unknown"),
-            "estimated_hours": assessment.get("estimated_hours", 0),
+            "estimated_hours": estimated_hours,
+            "estimated_hours_with_souschef": estimated_hours_with_souschef,
             "recommendations": assessment.get(
                 "recommendations", "No recommendations available"
             ),
@@ -1731,6 +1740,7 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
         "dependencies": cb_data["Dependencies"],
         "complexity": "Error",
         "estimated_hours": 0,
+        "estimated_hours_with_souschef": 0,
         "recommendations": f"Analysis failed: {assessment['error']}",
         "status": ANALYSIS_STATUS_FAILED,
     }

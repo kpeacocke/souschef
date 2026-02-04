@@ -439,12 +439,18 @@ def show_migration_planning() -> None:
             def _format_analysis(x):
                 if x is None:
                     return "-- Select from history --"
-                return next(
-                    f"{a.cookbook_name} v{a.cookbook_version} - "
-                    f"{a.complexity} complexity ({a.created_at[:10]})"
-                    for a in analyses
-                    if a.id == x
-                )
+                for a in analyses:
+                    if a.id == x:
+                        date_str = (
+                            a.created_at.strftime("%Y-%m-%d")
+                            if hasattr(a.created_at, "strftime")
+                            else str(a.created_at)[:10]
+                        )
+                        return (
+                            f"{a.cookbook_name} v{a.cookbook_version} - "
+                            f"{a.complexity} complexity ({date_str})"
+                        )
+                return "--"
 
             selected_analysis_id = st.selectbox(
                 "Select a previous analysis",
@@ -789,12 +795,18 @@ def show_dependency_mapping() -> None:
             def _format_analysis(x):
                 if x is None:
                     return "-- Select from history --"
-                return next(
-                    f"{a.cookbook_name} v{a.cookbook_version} - "
-                    f"{a.complexity} complexity ({a.created_at[:10]})"
-                    for a in analyses
-                    if a.id == x
-                )
+                for a in analyses:
+                    if a.id == x:
+                        date_str = (
+                            a.created_at.strftime("%Y-%m-%d")
+                            if hasattr(a.created_at, "strftime")
+                            else str(a.created_at)[:10]
+                        )
+                        return (
+                            f"{a.cookbook_name} v{a.cookbook_version} - "
+                            f"{a.complexity} complexity ({date_str})"
+                        )
+                return "--"
 
             selected_analysis_id = st.selectbox(
                 "Select a previous analysis",
@@ -2968,12 +2980,18 @@ def show_validation_reports() -> None:
                 def _format_analysis_vr(x):
                     if x is None:
                         return "-- Select from history --"
-                    return next(
-                        f"{a.cookbook_name} v{a.cookbook_version} - "
-                        f"{a.complexity} complexity ({a.created_at[:10]})"
-                        for a in analyses
-                        if a.id == x
-                    )
+                    for a in analyses:
+                        if a.id == x:
+                            date_str = (
+                                a.created_at.strftime("%Y-%m-%d")
+                                if hasattr(a.created_at, "strftime")
+                                else str(a.created_at)[:10]
+                            )
+                            return (
+                                f"{a.cookbook_name} v{a.cookbook_version} - "
+                                f"{a.complexity} complexity ({date_str})"
+                            )
+                    return "--"
 
                 selected_analysis_id = st.selectbox(
                     "Select a previous analysis",
@@ -3002,12 +3020,18 @@ def show_validation_reports() -> None:
                 def _format_conversion_vr(x):
                     if x is None:
                         return "-- Select from history --"
-                    return next(
-                        f"{c.cookbook_name} - {c.output_type} "
-                        f"({c.status}) - {c.created_at[:10]}"
-                        for c in conversions
-                        if c.id == x
-                    )
+                    for c in conversions:
+                        if c.id == x:
+                            date_str = (
+                                c.created_at.strftime("%Y-%m-%d")
+                                if hasattr(c.created_at, "strftime")
+                                else str(c.created_at)[:10]
+                            )
+                            return (
+                                f"{c.cookbook_name} - {c.output_type} "
+                                f"({c.status}) - {date_str}"
+                            )
+                    return "--"
 
                 selected_conversion_id = st.selectbox(
                     "Select a previous conversion",
