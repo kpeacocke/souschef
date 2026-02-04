@@ -3194,3 +3194,93 @@ def _format_ai_complexity_analysis(assessments: list) -> str:
 • Context-aware migration recommendations"""
 
     return analysis
+
+
+# Public API for UI components
+def calculate_activity_breakdown(
+    cookbook_path: str,
+    migration_config: dict[str, Any],
+    migration_strategy: str = "phased",
+) -> dict[str, Any]:
+    """
+    Calculate activity breakdown for cookbook migration with manual vs AI-assisted effort.
+
+    This is a public wrapper for UI components to access activity breakdown functionality.
+
+    Args:
+        cookbook_path: Path to cookbook(s) to analyse
+        migration_config: Migration configuration dictionary
+        migration_strategy: Migration strategy ("phased", "big_bang", "parallel")
+
+    Returns:
+        Dictionary with activity breakdown including summary and per-activity details
+
+    """
+    try:
+        # Parse cookbook path
+        cookbook = _normalize_path(cookbook_path)
+
+        # If it's a directory, assess it
+        if cookbook.is_dir():
+            assessment = _assess_single_cookbook(cookbook)
+        else:
+            return {"error": f"Invalid cookbook path: {cookbook_path}"}
+
+        # Get metrics and activity breakdown
+        metrics = assessment["metrics"]
+        complexity_score = assessment["complexity_score"]
+        activities = assessment["activity_breakdown"]
+
+        # Calculate totals
+        total_manual_hours = sum(a.manual_hours for a in activities)
+        total_ai_hours = sum(a.ai_assisted_hours for a in activities)
+        time_saved_hours = total_manual_hours - total_ai_hours
+        efficiency_gain_percent = (
+            (time_saved_hours / total_manual_hours * 100)
+            if total_manual_hours > 0
+            else 0
+        )
+
+        # Calculate timeline based on strategy
+        # Use EffortMetrics to get timeline estimation
+        effort_metrics = estimate_effort_for_complexity(
+            complexity_score=complexity_score,
+            resource_count=metrics["recipe_count"],
+        )
+
+        # Format activities list
+        activities_list = []
+        for activity in activities:
+            activities_list.append(
+                {
+                    "name": activity.activity_type,
+                    "manual_hours": activity.manual_hours,
+                    "ai_assisted_hours": activity.ai_assisted_hours,
+                    "time_saved": activity.time_saved_hours,
+                    "efficiency_gain_percent": (
+                        (activity.time_saved_hours / activity.manual_hours * 100)
+                        if activity.manual_hours > 0
+                        else 0
+                    ),
+                }
+            )
+
+        return {
+            "summary": {
+                "total_manual_hours": total_manual_hours,
+                "total_ai_assisted_hours": total_ai_hours,
+                "time_saved_hours": time_saved_hours,
+                "efficiency_gain_percent": efficiency_gain_percent,
+                "timeline_weeks": effort_metrics.estimated_weeks_high,
+            },
+            "activities": activities_list,
+            "migration_strategy": migration_strategy,
+            "cookbook": {
+                "name": assessment["cookbook_name"],
+                "complexity_score": complexity_score,
+                "metrics": metrics,
+            },
+        }
+
+    except Exception as e:
+        return {"error": str(e)}

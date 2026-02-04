@@ -27,6 +27,7 @@ from souschef.ui.pages.ai_settings import show_ai_settings_page
 from souschef.ui.pages.chef_server_settings import show_chef_server_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
+from souschef.ui.pages.migration_config import show_migration_config_page
 
 # Constants
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
@@ -34,6 +35,7 @@ SECTION_COMMUNITY_COOKBOOKS = "Community Cookbooks"
 SECTION_CIRCULAR_DEPENDENCIES = "Circular Dependencies"
 SECTION_MIGRATION_IMPACT_ANALYSIS = "Migration Impact Analysis"
 NAV_MIGRATION_PLANNING = "Migration Planning"
+NAV_MIGRATION_CONFIG = "Migration Config"
 NAV_DEPENDENCY_MAPPING = "Dependency Mapping"
 NAV_VALIDATION_REPORTS = "Validation Reports"
 NAV_AI_SETTINGS = "AI Settings"
@@ -130,7 +132,7 @@ def main() -> None:
     st.subheader("Navigation")
 
     col1, col2, col3, col4 = st.columns(4)
-    col5, col6, col7, _ = st.columns(4)
+    col5, col6, col7, col8 = st.columns(4)
 
     with col1:
         if st.button(
@@ -154,6 +156,16 @@ def main() -> None:
 
     with col3:
         if st.button(
+            "Migration Config",
+            type="primary" if page == NAV_MIGRATION_CONFIG else "secondary",
+            use_container_width=True,
+            key="nav_migration_config",
+        ):
+            st.session_state.current_page = NAV_MIGRATION_CONFIG
+            st.rerun()
+
+    with col4:
+        if st.button(
             "Dependency Mapping",
             type="primary" if page == NAV_DEPENDENCY_MAPPING else "secondary",
             use_container_width=True,
@@ -162,7 +174,7 @@ def main() -> None:
             st.session_state.current_page = NAV_DEPENDENCY_MAPPING
             st.rerun()
 
-    with col4:
+    with col5:
         if st.button(
             "History",
             type="primary" if page == NAV_HISTORY else "secondary",
@@ -172,7 +184,7 @@ def main() -> None:
             st.session_state.current_page = NAV_HISTORY
             st.rerun()
 
-    with col5:
+    with col6:
         if st.button(
             "Validation Reports",
             type="primary" if page == NAV_VALIDATION_REPORTS else "secondary",
@@ -182,7 +194,7 @@ def main() -> None:
             st.session_state.current_page = NAV_VALIDATION_REPORTS
             st.rerun()
 
-    with col6:
+    with col7:
         if st.button(
             "AI Settings",
             type="primary" if page == NAV_AI_SETTINGS else "secondary",
@@ -192,7 +204,7 @@ def main() -> None:
             st.session_state.current_page = NAV_AI_SETTINGS
             st.rerun()
 
-    with col7:
+    with col8:
         if st.button(
             "Chef Server",
             type="primary" if page == NAV_CHEF_SERVER_SETTINGS else "secondary",
@@ -214,6 +226,7 @@ def _route_to_page(page: str) -> None:
         "Dashboard": show_dashboard,
         NAV_COOKBOOK_ANALYSIS: show_cookbook_analysis_page,
         NAV_MIGRATION_PLANNING: show_migration_planning,
+        NAV_MIGRATION_CONFIG: show_migration_config_page,
         NAV_DEPENDENCY_MAPPING: show_dependency_mapping,
         NAV_HISTORY: show_history_page,
         NAV_VALIDATION_REPORTS: show_validation_reports,
