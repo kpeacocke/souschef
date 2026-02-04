@@ -590,13 +590,13 @@ jobs:
 
       - name: Report failures
         if: |
-          needs.validate.result != 'success'
-          || needs.build.result != 'success'
-          || needs.publish-pypi.result != 'success'
-          || needs.create-release.result != 'success'
-          || needs.build-and-push-docker.result != 'success'
-          || needs.scan-docker-image.result != 'success'
-          || needs.test-docker-image.result != 'success'
+          needs.validate.result == 'failure'
+          || needs.build.result == 'failure'
+          || needs.publish-pypi.result == 'failure'
+          || needs.create-release.result == 'failure'
+          || needs.build-and-push-docker.result == 'failure'
+          || needs.scan-docker-image.result == 'failure'
+          || needs.test-docker-image.result == 'failure'
         run: |
           echo "### Release Pipeline Failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
