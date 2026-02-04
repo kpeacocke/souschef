@@ -16,6 +16,11 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from souschef.assessment import assess_single_cookbook_with_ai
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _normalize_path,
+    _safe_join,
+)
 from souschef.core.url_validation import validate_user_provided_url
 from souschef.storage import get_storage_manager
 
@@ -291,7 +296,8 @@ def _get_chef_cookbooks(server_url: str) -> list[dict]:
         return []
 
     try:
-        cookbooks_url = f"{server_url.rstrip('/')}/cookbooks"
+        validated_url = validate_user_provided_url(server_url, strip_path=True)
+        cookbooks_url = f"{validated_url}/cookbooks"
         response = requests.get(
             cookbooks_url,
             timeout=10,
@@ -318,8 +324,8 @@ def _download_cookbook(
         return None
 
     try:
-        # Download cookbook
-        cookbook_url = f"{server_url.rstrip('/')}/cookbooks/{cookbook_name}/{version}"
+        validated_url = validate_user_provided_url(server_url, strip_path=True)
+        cookbook_url = f"{validated_url}/cookbooks/{cookbook_name}/{version}"
         response = requests.get(
             cookbook_url,
             timeout=30,
@@ -329,14 +335,17 @@ def _download_cookbook(
         if response.status_code != 200:
             return None
 
-        # Create cookbook directory
-        cookbook_dir = target_dir / cookbook_name
+        # Create cookbook directory safely
+        normalised_target = _normalize_path(target_dir)
+        cookbook_dir = _ensure_within_base_path(
+            normalised_target / cookbook_name, normalised_target
+        )
         cookbook_dir.mkdir(parents=True, exist_ok=True)
 
         # Download and save files
         # This is simplified - real implementation would download all files
         # For now, we'll create a minimal structure with metadata
-        metadata_path = cookbook_dir / "metadata.rb"
+        metadata_path = _safe_join(cookbook_dir, "metadata.rb")
         metadata_content = f"""name '{cookbook_name}'
 version '{version}'
 """
@@ -591,7 +600,8 @@ def _run_bulk_conversion(server_url: str) -> None:
     successful = 0
     failed = 0
 
-    output_path = Path(output_dir)
+    workspace_root = Path.cwd()
+    output_path = _ensure_within_base_path(_normalize_path(output_dir), workspace_root)
     output_path.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -624,7 +634,9 @@ def _run_bulk_conversion(server_url: str) -> None:
 
                 # Mock conversion for now - real implementation would
                 # convert all recipes
-                cookbook_output_dir = output_path / cookbook_name
+                cookbook_output_dir = _ensure_within_base_path(
+                    output_path / cookbook_name, output_path
+                )
                 cookbook_output_dir.mkdir(parents=True, exist_ok=True)
 
                 # Save conversion result

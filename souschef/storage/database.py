@@ -172,6 +172,7 @@ class StorageManager:
                 conn.execute("SELECT 1")
                 conn.commit()
             except Exception:
+                # Best-effort check; failure is non-fatal and retried later.
                 pass
             finally:
                 if conn is not None:
@@ -191,6 +192,7 @@ class StorageManager:
                 try:
                     conn.execute("PRAGMA optimize")
                 except Exception:
+                    # Optimisation failure should not block cleanup.
                     pass
                 finally:
                     conn.close()
@@ -844,6 +846,7 @@ class PostgresStorageManager:
             content_hash = _hash_directory_contents(cookbook_dir)
             key_parts.append(content_hash)
         except (ValueError, OSError):
+            # Keep cache key stable even if hashing fails.
             pass
 
         combined = "|".join(key_parts)
