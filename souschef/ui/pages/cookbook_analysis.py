@@ -1716,6 +1716,53 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
         # Calculate AI-assisted hours (50% reduction)
         estimated_hours_with_souschef = estimated_hours * 0.5
 
+        # Convert activity_breakdown objects to dicts for serialization
+        activity_breakdown = assessment.get("activity_breakdown", [])
+        if activity_breakdown:
+            activity_list = []
+            for a in activity_breakdown:
+                activity_list.append(
+                    {
+                        "activity_type": (
+                            a.activity_type
+                            if hasattr(a, "activity_type")
+                            else a.get("activity_type")
+                        ),
+                        "count": (a.count if hasattr(a, "count") else a.get("count")),
+                        "manual_hours": (
+                            a.manual_hours
+                            if hasattr(a, "manual_hours")
+                            else a.get("manual_hours")
+                        ),
+                        "ai_assisted_hours": (
+                            a.ai_assisted_hours
+                            if hasattr(a, "ai_assisted_hours")
+                            else a.get("ai_assisted_hours")
+                        ),
+                        "time_saved_hours": (
+                            a.time_saved_hours
+                            if hasattr(a, "time_saved_hours")
+                            else a.get("time_saved_hours")
+                        ),
+                        "efficiency_gain_percent": (
+                            a.efficiency_gain_percent
+                            if hasattr(a, "efficiency_gain_percent")
+                            else a.get("efficiency_gain_percent")
+                        ),
+                        "description": (
+                            a.description
+                            if hasattr(a, "description")
+                            else a.get("description")
+                        ),
+                        "complexity_factor": (
+                            a.complexity_factor
+                            if hasattr(a, "complexity_factor")
+                            else a.get("complexity_factor")
+                        ),
+                    }
+                )
+            activity_breakdown = activity_list
+
         return {
             "name": cb_data["Name"],
             "path": cb_data["Path"],
@@ -1726,6 +1773,7 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
             "complexity": assessment.get("complexity", "Unknown"),
             "estimated_hours": estimated_hours,
             "estimated_hours_with_souschef": estimated_hours_with_souschef,
+            "activity_breakdown": activity_breakdown,
             "recommendations": assessment.get(
                 "recommendations", "No recommendations available"
             ),
@@ -1741,6 +1789,7 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
         "complexity": "Error",
         "estimated_hours": 0,
         "estimated_hours_with_souschef": 0,
+        "activity_breakdown": [],
         "recommendations": f"Analysis failed: {assessment['error']}",
         "status": ANALYSIS_STATUS_FAILED,
     }
