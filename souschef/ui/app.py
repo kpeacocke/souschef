@@ -418,12 +418,52 @@ def show_migration_planning() -> None:
 
     # Import assessment functions
     from souschef.assessment import generate_migration_plan
+    from souschef.storage import get_storage_manager
 
     # Migration planning wizard
     st.markdown("""
     Plan your Chef-to-Ansible migration with this interactive wizard.
     Get detailed timelines, effort estimates, and risk assessments.
     """)
+
+    # Load from History
+    st.subheader("Load from History")
+    storage_manager = get_storage_manager()
+    analyses = storage_manager.get_analysis_history(limit=50)
+
+    if analyses:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+
+            def _format_analysis(x):
+                if x is None:
+                    return "-- Select from history --"
+                return next(
+                    f"{a.cookbook_name} v{a.cookbook_version} - "
+                    f"{a.complexity} complexity ({a.created_at[:10]})"
+                    for a in analyses
+                    if a.id == x
+                )
+
+            selected_analysis_id = st.selectbox(
+                "Select a previous analysis",
+                options=[None] + [a.id for a in analyses],
+                format_func=_format_analysis,
+                key="migration_planning_history_select",
+                help="Load cookbook path from a previous analysis",
+            )
+
+        with col2:
+            if selected_analysis_id and st.button("Load", key="load_from_history_mp"):
+                selected = next(a for a in analyses if a.id == selected_analysis_id)
+                st.session_state.analysis_cookbook_path = selected.cookbook_path
+                st.success(f"Loaded: {selected.cookbook_name}")
+                st.rerun()
+    else:
+        st.info("No analysis history available. Run a cookbook analysis first.")
+
+    st.divider()
 
     # Step 1: Cookbook Selection
     st.subheader("Step 1: Cookbook Selection")
@@ -729,16 +769,56 @@ def show_dependency_mapping() -> None:
 
     # Import assessment functions
     from souschef.assessment import analyse_cookbook_dependencies
+    from souschef.storage import get_storage_manager
 
     st.markdown("""
     Visualise and analyse cookbook dependencies to understand migration order
     and identify potential circular dependencies.
     """)
 
+    # Load from History
+    st.subheader("Load from History")
+    storage_manager = get_storage_manager()
+    analyses = storage_manager.get_analysis_history(limit=50)
+
+    if analyses:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+
+            def _format_analysis(x):
+                if x is None:
+                    return "-- Select from history --"
+                return next(
+                    f"{a.cookbook_name} v{a.cookbook_version} - "
+                    f"{a.complexity} complexity ({a.created_at[:10]})"
+                    for a in analyses
+                    if a.id == x
+                )
+
+            selected_analysis_id = st.selectbox(
+                "Select a previous analysis",
+                options=[None] + [a.id for a in analyses],
+                format_func=_format_analysis,
+                key="dependency_mapping_history_select",
+                help="Load cookbook path from a previous analysis",
+            )
+
+        with col2:
+            if selected_analysis_id and st.button("Load", key="load_from_history_dm"):
+                selected = next(a for a in analyses if a.id == selected_analysis_id)
+                st.session_state.dep_analysis_cookbook_path = selected.cookbook_path
+                st.success(f"Loaded: {selected.cookbook_name}")
+                st.rerun()
+    else:
+        st.info("No analysis history available. Run a cookbook analysis first.")
+
+    st.divider()
+
     # Input method selection
     input_method = st.radio(
         "Choose Input Method",
-        ["Upload Archive", INPUT_METHOD_DIRECTORY_PATH],
+        ["Upload Archive", INPUT_METHOD_DIRECTORY_PATH, "Use History"],
         horizontal=True,
         help="Select how to provide cookbooks for dependency analysis",
         key="dep_input_method",
@@ -753,6 +833,13 @@ def show_dependency_mapping() -> None:
             placeholder="/path/to/your/cookbooks",
             help="Enter the path to your cookbooks directory for dependency analysis",
         )
+    elif input_method == "Use History":
+        # Use path from session state if loaded from history
+        if "dep_analysis_cookbook_path" in st.session_state:
+            cookbook_path = st.session_state.dep_analysis_cookbook_path
+            st.info(f"Using cookbook from history: {cookbook_path}")
+        else:
+            st.warning("Please load a cookbook from history above.")
     else:
         uploaded_file = st.file_uploader(
             "Upload Cookbook Archive",
@@ -2854,10 +2941,102 @@ def show_validation_reports() -> None:
     """Show validation reports and conversion validation."""
     st.header(NAV_VALIDATION_REPORTS)
 
+    from souschef.storage import get_storage_manager
+    from souschef.storage.database import ConversionResult
+
     st.markdown("""
     Validate Chef to Ansible conversions and generate comprehensive
     validation reports for migration quality assurance.
     """)
+
+    # Load from History
+    st.subheader("Load from History")
+    storage_manager = get_storage_manager()
+
+    # Get both analyses and conversions
+    analyses = storage_manager.get_analysis_history(limit=50)
+    conversions = storage_manager.get_conversion_history(limit=50)
+
+    tab1, tab2 = st.tabs(["From Analysis", "From Conversion"])
+
+    with tab1:
+        if analyses:
+            col1, col2 = st.columns([3, 1])
+
+            with col1:
+
+                def _format_analysis_vr(x):
+                    if x is None:
+                        return "-- Select from history --"
+                    return next(
+                        f"{a.cookbook_name} v{a.cookbook_version} - "
+                        f"{a.complexity} complexity ({a.created_at[:10]})"
+                        for a in analyses
+                        if a.id == x
+                    )
+
+                selected_analysis_id = st.selectbox(
+                    "Select a previous analysis",
+                    options=[None] + [a.id for a in analyses],
+                    format_func=_format_analysis_vr,
+                    key="validation_reports_analysis_select",
+                    help="Load cookbook path from a previous analysis",
+                )
+
+            with col2:
+                load_btn = st.button("Load", key="load_analysis_vr")
+                if selected_analysis_id and load_btn:
+                    selected = next(a for a in analyses if a.id == selected_analysis_id)
+                    st.session_state.analysis_cookbook_path = selected.cookbook_path
+                    st.success(f"Loaded: {selected.cookbook_name}")
+                    st.rerun()
+        else:
+            st.info("No analysis history available.")
+
+    with tab2:
+        if conversions:
+            col1, col2 = st.columns([3, 1])
+
+            with col1:
+
+                def _format_conversion_vr(x):
+                    if x is None:
+                        return "-- Select from history --"
+                    return next(
+                        f"{c.cookbook_name} - {c.output_type} "
+                        f"({c.status}) - {c.created_at[:10]}"
+                        for c in conversions
+                        if c.id == x
+                    )
+
+                selected_conversion_id = st.selectbox(
+                    "Select a previous conversion",
+                    options=[None] + [c.id for c in conversions if c.blob_storage_key],
+                    format_func=_format_conversion_vr,
+                    key="validation_reports_conversion_select",
+                    help="Load playbook path from a previous conversion",
+                )
+
+            with col2:
+                load_btn = st.button("Load", key="load_conversion_vr")
+                if selected_conversion_id and load_btn:
+                    selected_conv: ConversionResult = next(
+                        c for c in conversions if c.id == selected_conversion_id
+                    )
+                    # Note: For conversions, download from blob storage
+                    st.session_state.converted_playbooks_path = (
+                        f"conversion_{selected_conv.id}"
+                    )
+                    st.success(f"Loaded conversion: {selected_conv.cookbook_name}")
+                    st.info(
+                        "Note: You may need to specify the actual "
+                        "playbook path after extraction."
+                    )
+                    st.rerun()
+        else:
+            st.info("No conversion history available.")
+
+    st.divider()
 
     # Check for previously analyzed path to pre-fill
     default_path = _get_default_validation_path()
