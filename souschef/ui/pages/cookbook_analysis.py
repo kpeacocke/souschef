@@ -255,6 +255,39 @@ def _get_ai_int_value(
     return default
 
 
+def _serialize_activity_breakdown(activities: list) -> list[dict]:
+    """
+    Serialize ActivityBreakdown objects to dictionaries for JSON storage.
+
+    Args:
+        activities: List of ActivityBreakdown objects or dicts
+
+    Returns:
+        List of serialized activity dictionaries
+
+    """
+    serialized = []
+    for activity in activities:
+        if hasattr(activity, "__dict__"):
+            # It's an ActivityBreakdown object
+            serialized.append(
+                {
+                    "activity_type": activity.activity_type,
+                    "count": activity.count,
+                    "manual_hours": activity.manual_hours,
+                    "ai_assisted_hours": activity.ai_assisted_hours,
+                    "complexity_factor": activity.complexity_factor,
+                    "description": activity.description,
+                    "time_saved_hours": activity.time_saved_hours,
+                    "efficiency_gain_percent": activity.efficiency_gain_percent,
+                }
+            )
+        elif isinstance(activity, dict):
+            # Already a dict
+            serialized.append(activity)
+    return serialized
+
+
 def _save_analysis_to_db(
     result: dict,
     ai_provider: str | None = None,
@@ -298,6 +331,9 @@ def _save_analysis_to_db(
             "complexity": result.get("complexity"),
             "recommendations": result.get("recommendations"),
             "dependencies": result.get("dependencies"),
+            "activity_breakdown": _serialize_activity_breakdown(
+                result.get("activity_breakdown", [])
+            ),
         }
 
         analysis_id = storage_manager.save_analysis(
