@@ -15,6 +15,13 @@ from souschef import __version__
 from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.core.logging import configure_logging
 from souschef.core.path_utils import _normalize_path
+from souschef.migration_config import (
+    DeploymentTarget,
+    MigrationConfig,
+    MigrationStandard,
+    ValidationTool,
+    get_migration_config_from_user,
+)
 from souschef.profiling import (
     generate_cookbook_performance_report,
     profile_function,
@@ -1503,6 +1510,131 @@ def convert_template_ai(erb_path: str, ai: bool, output: str | None) -> None:
             sys.exit(1)
     except Exception as e:
         click.echo(f"❌ Error converting template: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command("configure-migration")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Save configuration to JSON file (default: print to stdout)",
+)
+@click.option(
+    "--deployment-target",
+    type=click.Choice(["app", "awx", "aap", "native"]),
+    help="Target deployment platform (app/awx/aap/native)",
+)
+@click.option(
+    "--migration-standard",
+    type=click.Choice(["standard", "flat", "hybrid"]),
+    help="Migration strategy (standard/flat/hybrid)",
+)
+@click.option(
+    "--inventory-source",
+    help="Inventory source (e.g., chef-server, static-file)",
+)
+@click.option(
+    "--validation-tools",
+    multiple=True,
+    type=click.Choice(["tox-ansible", "molecule", "ansible-lint", "custom"]),
+    help="Validation tools to use (can specify multiple)",
+)
+@click.option(
+    "--python-version",
+    help="Target Python version (e.g., 3.9, 3.10)",
+)
+@click.option(
+    "--ansible-version",
+    help="Target Ansible version (e.g., 2.13, 2.14)",
+)
+@click.option(
+    "--interactive",
+    "-i",
+    is_flag=True,
+    help="Run interactive questionnaire (ignores other options)",
+)
+def configure_migration(
+    output: str | None,
+    deployment_target: str | None,
+    migration_standard: str | None,
+    inventory_source: str | None,
+    validation_tools: tuple[str, ...],
+    python_version: str | None,
+    ansible_version: str | None,
+    interactive: bool,
+) -> None:
+    """
+    Configure Chef to Ansible migration settings.
+
+    Run interactively with --interactive/-i flag, or provide specific
+    configuration options via command-line arguments.
+
+    Examples:
+        # Interactive mode (recommended)
+        souschef configure-migration --interactive
+
+        # Non-interactive with specific options
+        souschef configure-migration --deployment-target awx \
+            --migration-standard standard \
+            --validation-tools ansible-lint \
+            --validation-tools molecule
+
+        # Save configuration to file
+        souschef configure-migration -i --output migration-config.json
+
+    """
+    try:
+        if interactive or not any(
+            [
+                deployment_target,
+                migration_standard,
+                inventory_source,
+                validation_tools,
+                python_version,
+                ansible_version,
+            ]
+        ):
+            # Run interactive questionnaire
+            config = get_migration_config_from_user()
+        else:
+            # Build config from CLI arguments
+            config = MigrationConfig()
+
+            if deployment_target:
+                config.deployment_target = DeploymentTarget(deployment_target)
+            if migration_standard:
+                config.migration_standard = MigrationStandard(migration_standard)
+            if inventory_source:
+                config.inventory_source = inventory_source
+            if validation_tools:
+                config.validation_tools = [
+                    ValidationTool(tool) for tool in validation_tools
+                ]
+            if python_version:
+                config.target_python_version = python_version
+            if ansible_version:
+                config.target_ansible_version = ansible_version
+
+        # Convert to dict for output
+        config_dict = config.to_dict()
+
+        if output:
+            # Save to file
+            output_path = _resolve_output_path(output, Path("migration-config.json"))
+            with output_path.open("w", encoding="utf-8") as f:
+                json.dump(config_dict, f, indent=2)
+            click.echo(f"✅ Configuration saved to: {output_path}")
+        else:
+            # Print to stdout
+            click.echo("\n" + "=" * 60)
+            click.echo("Migration Configuration")
+            click.echo("=" * 60)
+            click.echo(json.dumps(config_dict, indent=2))
+            click.echo("=" * 60)
+
+    except Exception as e:
+        click.echo(f"❌ Error configuring migration: {e}", err=True)
         sys.exit(1)
 
 

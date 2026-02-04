@@ -2453,3 +2453,129 @@ def test_profile_operation_command_error_handling(runner, monkeypatch):
 
     assert result.exit_code != 0
     assert "Error profiling operation" in result.output
+
+
+# Migration configuration command tests
+def test_configure_migration_with_args(runner):
+    """Test configure-migration with CLI arguments (non-interactive mode)."""
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "awx",
+        ],
+    )
+
+    assert result.exit_code == 0
+    # Should output JSON configuration
+    assert "deployment_target" in result.output
+    assert "awx" in result.output
+
+
+def test_configure_migration_cli_args(runner):
+    """Test configure-migration with CLI arguments."""
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "native",
+            "--migration-standard",
+            "flat",
+            "--python-version",
+            "3.11",
+        ],
+    )
+
+    assert result.exit_code == 0
+    # Should contain JSON output
+    assert "deployment_target" in result.output
+    assert "native" in result.output
+    assert "flat" in result.output
+    assert "3.11" in result.output
+
+
+def test_configure_migration_with_output_file(runner, tmp_path):
+    """Test configure-migration with output file."""
+    output_file = tmp_path / "config.json"
+
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "awx",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Configuration saved" in result.output
+    assert output_file.exists()
+
+    # Verify file content is valid JSON
+    config_data = json.loads(output_file.read_text())
+    assert config_data["deployment_target"] == "awx"
+    assert "migration_standard" in config_data
+
+
+def test_configure_migration_multiple_validation_tools(runner):
+    """Test configure-migration with multiple validation tools."""
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "native",  # Add required arg
+            "--validation-tools",
+            "ansible-lint",
+            "--validation-tools",
+            "molecule",
+            "--validation-tools",
+            "tox-ansible",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "ansible-lint" in result.output
+    assert "molecule" in result.output
+    assert "tox-ansible" in result.output
+
+
+def test_configure_migration_all_options(runner, tmp_path):
+    """Test configure-migration with all CLI options."""
+    output_file = tmp_path / "full-config.json"
+
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "aap",
+            "--migration-standard",
+            "hybrid",
+            "--inventory-source",
+            "static-file",
+            "--validation-tools",
+            "molecule",
+            "--python-version",
+            "3.12",
+            "--ansible-version",
+            "2.15",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert output_file.exists()
+
+    config_data = json.loads(output_file.read_text())
+    assert config_data["deployment_target"] == "aap"
+    assert config_data["migration_standard"] == "hybrid"
+    assert config_data["inventory_source"] == "static-file"
+    assert "molecule" in config_data["validation_tools"]
+    assert config_data["target_python_version"] == "3.12"
+    assert config_data["target_ansible_version"] == "2.15"
