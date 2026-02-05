@@ -364,12 +364,16 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub (if configured)
-        if: secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Docker Hub support is available but requires DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets
+      # To enable Docker Hub publishing:
+      # 1. Add DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets to GitHub repo settings
+      # 2. Uncomment the Docker Hub login section below
+      # 3. Update metadata images to include docker.io registry
+      # - name: Login to Docker Hub
+      #   uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Docker image
         id: build
