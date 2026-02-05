@@ -255,6 +255,47 @@ def _get_ai_int_value(
     return default
 
 
+def _serialize_activity_breakdown(activities: list) -> list[dict]:
+    """
+    Serialize ActivityBreakdown objects to dictionaries for JSON storage.
+
+    Args:
+        activities: List of ActivityBreakdown objects or dicts
+
+    Returns:
+        List of serialized activity dictionaries
+
+    """
+
+    def _get_field(item: Any, field: str) -> Any:
+        if hasattr(item, field):
+            return getattr(item, field)
+        if isinstance(item, dict):
+            return item.get(field)
+        return None
+
+    fields = (
+        "activity_type",
+        "count",
+        "manual_hours",
+        "ai_assisted_hours",
+        "writing_hours",
+        "testing_hours",
+        "ai_assisted_writing_hours",
+        "ai_assisted_testing_hours",
+        "complexity_factor",
+        "description",
+        "time_saved_hours",
+        "efficiency_gain_percent",
+    )
+
+    serialized = []
+    for activity in activities:
+        if hasattr(activity, "__dict__") or isinstance(activity, dict):
+            serialized.append({field: _get_field(activity, field) for field in fields})
+    return serialized
+
+
 def _save_analysis_to_db(
     result: dict,
     ai_provider: str | None = None,
@@ -298,6 +339,9 @@ def _save_analysis_to_db(
             "complexity": result.get("complexity"),
             "recommendations": result.get("recommendations"),
             "dependencies": result.get("dependencies"),
+            "activity_breakdown": _serialize_activity_breakdown(
+                result.get("activity_breakdown", [])
+            ),
         }
 
         analysis_id = storage_manager.save_analysis(
@@ -683,7 +727,8 @@ def _extract_tar_securely(
         # Resource consumption controls (S5042): Pre-scan validates all members for
         # size limits (MAX_ARCHIVE_SIZE, MAX_FILE_SIZE), file count (MAX_FILES),
         # depth (MAX_DEPTH), and blocks malicious files before extraction.
-        with tarfile.open(**open_kwargs) as tar_ref:
+        # Security: Validated via _pre_scan_tar_members + _extract_tar_members
+        with tarfile.open(**open_kwargs) as tar_ref:  # NOSONAR
             members = tar_ref.getmembers()
             # Pre-validate all members before allowing extraction
             # This controls resource consumption and prevents
@@ -1672,6 +1717,19 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
 
     """
     if "error" not in assessment:
+        # Calculate hours from effort days or use provided hours
+        estimated_hours = assessment.get("estimated_hours", 0)
+        if estimated_hours == 0 and "estimated_effort_days" in assessment:
+            estimated_hours = assessment["estimated_effort_days"] * 8
+
+        # Calculate AI-assisted hours (50% reduction)
+        estimated_hours_with_souschef = estimated_hours * 0.5
+
+        # Convert activity_breakdown objects to dicts for serialization
+        activity_breakdown = _serialize_activity_breakdown(
+            assessment.get("activity_breakdown", [])
+        )
+
         return {
             "name": cb_data["Name"],
             "path": cb_data["Path"],
@@ -1680,7 +1738,9 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
             "description": cb_data["Description"],
             "dependencies": cb_data["Dependencies"],
             "complexity": assessment.get("complexity", "Unknown"),
-            "estimated_hours": assessment.get("estimated_hours", 0),
+            "estimated_hours": estimated_hours,
+            "estimated_hours_with_souschef": estimated_hours_with_souschef,
+            "activity_breakdown": activity_breakdown,
             "recommendations": assessment.get(
                 "recommendations", "No recommendations available"
             ),
@@ -1695,6 +1755,8 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
         "dependencies": cb_data["Dependencies"],
         "complexity": "Error",
         "estimated_hours": 0,
+        "estimated_hours_with_souschef": 0,
+        "activity_breakdown": [],
         "recommendations": f"Analysis failed: {assessment['error']}",
         "status": ANALYSIS_STATUS_FAILED,
     }
@@ -3913,6 +3975,151 @@ def _display_single_cookbook_details(result):
         if result.get("recommendations"):
             st.markdown("**Analysis Recommendations:**")
             st.info(result["recommendations"])
+
+        # Activity breakdown
+        st.divider()
+        activities = result.get("activity_breakdown", [])
+        if activities:
+            _display_cookbook_activity_breakdown(activities)
+
+
+def _display_cookbook_activity_breakdown(activities: list) -> None:
+    """Display activity breakdown from analysis result."""
+    st.subheader("Activity Breakdown Details")
+
+    if not activities:
+        return
+
+    def _split_write_test(
+        total_hours: float,
+        writing_hours: float,
+        testing_hours: float,
+    ) -> tuple[float, float]:
+        if total_hours <= 0:
+            return 0.0, 0.0
+        if writing_hours > 0 or testing_hours > 0:
+            return writing_hours, testing_hours
+        writing_split = round(total_hours * 0.7, 1)
+        testing_split = round(total_hours - writing_split, 1)
+        return writing_split, testing_split
+
+    col1, col2 = st.columns([1, 2])
+
+    with col1:
+        st.markdown("### Summary")
+        for activity in activities:
+            # Handle both dict and object formats
+            if isinstance(activity, dict):
+                name = activity.get("activity_type", "Unknown")
+                count = activity.get("count", 0)
+                description = activity.get("description", "")
+                manual_hours = activity.get("manual_hours", 0)
+                ai_hours = activity.get("ai_assisted_hours", 0)
+                manual_writing = activity.get("writing_hours", 0)
+                manual_testing = activity.get("testing_hours", 0)
+                ai_writing = activity.get("ai_assisted_writing_hours", 0)
+                ai_testing = activity.get("ai_assisted_testing_hours", 0)
+                time_saved = activity.get("time_saved_hours", 0)
+                efficiency = activity.get("efficiency_gain_percent", 0)
+            else:
+                # It's an ActivityBreakdown object
+                name = activity.activity_type
+                count = activity.count
+                description = activity.description
+                manual_hours = activity.manual_hours
+                ai_hours = activity.ai_assisted_hours
+                manual_writing = activity.writing_hours
+                manual_testing = activity.testing_hours
+                ai_writing = activity.ai_assisted_writing_hours
+                ai_testing = activity.ai_assisted_testing_hours
+                time_saved = activity.time_saved_hours
+                efficiency = activity.efficiency_gain_percent
+
+            manual_writing, manual_testing = _split_write_test(
+                manual_hours,
+                manual_writing,
+                manual_testing,
+            )
+            ai_writing, ai_testing = _split_write_test(
+                ai_hours,
+                ai_writing,
+                ai_testing,
+            )
+
+            st.markdown(
+                f"""**{name}** ({count})
+
+*{description}*
+
+Manual: {manual_hours:.1f}h
+Writing: {manual_writing:.1f}h, Testing: {manual_testing:.1f}h
+AI: {ai_hours:.1f}h
+Writing: {ai_writing:.1f}h, Testing: {ai_testing:.1f}h
+
+**Saved: {time_saved:.1f}h ({efficiency:.0f}%)**"""
+            )
+            st.divider()
+
+    with col2:
+        st.markdown("### Details Table")
+        table_data = []
+        for activity in activities:
+            # Handle both dict and object formats
+            if isinstance(activity, dict):
+                manual_writing, manual_testing = _split_write_test(
+                    activity.get("manual_hours", 0),
+                    activity.get("writing_hours", 0),
+                    activity.get("testing_hours", 0),
+                )
+                ai_writing, ai_testing = _split_write_test(
+                    activity.get("ai_assisted_hours", 0),
+                    activity.get("ai_assisted_writing_hours", 0),
+                    activity.get("ai_assisted_testing_hours", 0),
+                )
+                efficiency_pct = activity.get("efficiency_gain_percent", 0)
+                table_data.append(
+                    {
+                        "Activity": activity.get("activity_type", "Unknown"),
+                        "Count": activity.get("count", 0),
+                        "Manual Hours": f"{activity.get('manual_hours', 0):.1f}",
+                        "AI Hours": f"{activity.get('ai_assisted_hours', 0):.1f}",
+                        "Manual Writing": f"{manual_writing:.1f}",
+                        "Manual Testing": f"{manual_testing:.1f}",
+                        "AI Writing": f"{ai_writing:.1f}",
+                        "AI Testing": f"{ai_testing:.1f}",
+                        "Time Saved": f"{activity.get('time_saved_hours', 0):.1f}",
+                        "Efficiency": f"{efficiency_pct:.0f}%",
+                    }
+                )
+            else:
+                # It's an ActivityBreakdown object
+                manual_writing, manual_testing = _split_write_test(
+                    activity.manual_hours,
+                    activity.writing_hours,
+                    activity.testing_hours,
+                )
+                ai_writing, ai_testing = _split_write_test(
+                    activity.ai_assisted_hours,
+                    activity.ai_assisted_writing_hours,
+                    activity.ai_assisted_testing_hours,
+                )
+                table_data.append(
+                    {
+                        "Activity": activity.activity_type,
+                        "Count": activity.count,
+                        "Manual Hours": f"{activity.manual_hours:.1f}",
+                        "AI Hours": f"{activity.ai_assisted_hours:.1f}",
+                        "Manual Writing": f"{manual_writing:.1f}",
+                        "Manual Testing": f"{manual_testing:.1f}",
+                        "AI Writing": f"{ai_writing:.1f}",
+                        "AI Testing": f"{ai_testing:.1f}",
+                        "Time Saved": f"{activity.time_saved_hours:.1f}",
+                        "Efficiency": f"{activity.efficiency_gain_percent:.0f}%",
+                    }
+                )
+
+        df = pd.DataFrame(table_data)
+        st.dataframe(df, width="stretch", hide_index=True)
 
 
 def _display_failed_cookbook_details(result):

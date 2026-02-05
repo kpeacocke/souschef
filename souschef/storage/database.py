@@ -172,6 +172,7 @@ class StorageManager:
                 conn.execute("SELECT 1")
                 conn.commit()
             except Exception:
+                # Best-effort check; failure is non-fatal and retried later.
                 pass
             finally:
                 if conn is not None:
@@ -191,6 +192,7 @@ class StorageManager:
                 try:
                     conn.execute("PRAGMA optimize")
                 except Exception:
+                    # Optimisation failure should not block cleanup.
                     pass
                 finally:
                     conn.close()
@@ -656,6 +658,58 @@ class StorageManager:
             rows = cursor.fetchall()
             return [_conversion_from_row(row) for row in rows]
 
+    def delete_analysis(self, analysis_id: int) -> bool:
+        """
+        Delete an analysis result and its associated conversions.
+
+        Args:
+            analysis_id: ID of the analysis to delete.
+
+        Returns:
+            True if successful, False otherwise.
+
+        """
+        try:
+            with self._connect() as conn:
+                # First delete associated conversions
+                conn.execute(
+                    "DELETE FROM conversion_results WHERE analysis_id = ?",
+                    (analysis_id,),
+                )
+
+                # Then delete the analysis
+                cursor = conn.execute(
+                    "DELETE FROM analysis_results WHERE id = ?", (analysis_id,)
+                )
+
+                return cursor.rowcount > 0
+        except sqlite3.Error:
+            # Database errors during deletion should not propagate to UI
+            # Return False to indicate deletion failed gracefully
+            return False
+
+    def delete_conversion(self, conversion_id: int) -> bool:
+        """
+        Delete a conversion result.
+
+        Args:
+            conversion_id: ID of the conversion to delete.
+
+        Returns:
+            True if successful, False otherwise.
+
+        """
+        try:
+            with self._connect() as conn:
+                cursor = conn.execute(
+                    "DELETE FROM conversion_results WHERE id = ?", (conversion_id,)
+                )
+                return cursor.rowcount > 0
+        except sqlite3.Error:
+            # Database errors during deletion should not propagate to UI
+            # Return False to indicate deletion failed gracefully
+            return False
+
     def get_statistics(self) -> dict[str, Any]:
         """
         Get overall statistics.
@@ -758,16 +812,7 @@ class PostgresStorageManager:
                 )
             """
             )
-
-            # Add cookbook_blob_key column if it doesn't exist (migration)
-            try:
-                conn.execute(
-                    "ALTER TABLE analysis_results ADD COLUMN cookbook_blob_key TEXT"
-                )
-                conn.commit()
-            except Exception:
-                # Column may already exist; rollback and continue
-                conn.rollback()
+            conn.commit()
 
             # Add content_fingerprint column if it doesn't exist (migration)
             try:
@@ -795,6 +840,7 @@ class PostgresStorageManager:
                 )
             """
             )
+            conn.commit()
 
             conn.execute(
                 """
@@ -844,6 +890,7 @@ class PostgresStorageManager:
             content_hash = _hash_directory_contents(cookbook_dir)
             key_parts.append(content_hash)
         except (ValueError, OSError):
+            # Keep cache key stable even if hashing fails.
             pass
 
         combined = "|".join(key_parts)
@@ -1116,6 +1163,60 @@ class PostgresStorageManager:
             cursor = conn.execute(sql, (analysis_id,))
             rows = cursor.fetchall()
             return [_conversion_from_row(row) for row in rows]
+
+    def delete_analysis(self, analysis_id: int) -> bool:
+        """
+        Delete an analysis result and its associated conversions.
+
+        Args:
+            analysis_id: ID of the analysis to delete.
+
+        Returns:
+            True if successful, False otherwise.
+
+        """
+        try:
+            with self._connect() as conn:
+                # First delete associated conversions
+                sql = self._prepare_sql(
+                    "DELETE FROM conversion_results WHERE analysis_id = ?"
+                )
+                conn.execute(sql, (analysis_id,))
+
+                # Then delete the analysis
+                sql = self._prepare_sql("DELETE FROM analysis_results WHERE id = ?")
+                cursor = conn.execute(sql, (analysis_id,))
+
+                # Commit changes
+                conn.commit()
+
+                return bool(cursor.rowcount and cursor.rowcount > 0)
+        except Exception:
+            # Catch all database-related exceptions (psycopg errors, connection issues)
+            # Return False to indicate deletion failed gracefully
+            return False
+
+    def delete_conversion(self, conversion_id: int) -> bool:
+        """
+        Delete a conversion result.
+
+        Args:
+            conversion_id: ID of the conversion to delete.
+
+        Returns:
+            True if successful, False otherwise.
+
+        """
+        try:
+            with self._connect() as conn:
+                sql = self._prepare_sql("DELETE FROM conversion_results WHERE id = ?")
+                cursor = conn.execute(sql, (conversion_id,))
+                conn.commit()
+                return bool(cursor.rowcount and cursor.rowcount > 0)
+        except Exception:
+            # Catch all database-related exceptions (psycopg errors, connection issues)
+            # Return False to indicate deletion failed gracefully
+            return False
 
     def get_statistics(self) -> dict[str, Any]:
         """Get overall statistics from PostgreSQL."""

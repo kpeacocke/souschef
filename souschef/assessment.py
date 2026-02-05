@@ -8,6 +8,7 @@ generating migration plans, analyzing dependencies, and validating conversions.
 import json
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +44,195 @@ try:
     from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]
 except ImportError:
     APIClient = None
+
+# Activity type constants
+CUSTOM_RESOURCES = "Custom Resources"
+
+
+@dataclass
+class ActivityBreakdown:
+    """Breakdown of migration effort by activity type."""
+
+    activity_type: str
+    """Type of activity (e.g., 'Recipes', 'Templates', 'Attributes')"""
+
+    count: int
+    """Number of items of this type"""
+
+    manual_hours: float
+    """Manual effort in hours without AI assistance"""
+
+    ai_assisted_hours: float
+    """AI-assisted effort in hours with SousChef"""
+
+    complexity_factor: float
+    """Complexity multiplier for this activity type (1.0 = baseline)"""
+
+    description: str
+    """Human-readable description of what this activity entails"""
+
+    writing_hours: float = 0.0
+    """Manual writing effort in hours"""
+
+    testing_hours: float = 0.0
+    """Manual testing effort in hours"""
+
+    ai_assisted_writing_hours: float = 0.0
+    """AI-assisted writing effort in hours"""
+
+    ai_assisted_testing_hours: float = 0.0
+    """AI-assisted testing effort in hours"""
+
+    @property
+    def manual_days(self) -> float:
+        """Convert manual hours to days."""
+        return round(self.manual_hours / 8, 1)
+
+    @property
+    def ai_assisted_days(self) -> float:
+        """Convert AI-assisted hours to days."""
+        return round(self.ai_assisted_hours / 8, 1)
+
+    @property
+    def time_saved_hours(self) -> float:
+        """Hours saved using AI assistance."""
+        return round(self.manual_hours - self.ai_assisted_hours, 1)
+
+    @property
+    def efficiency_gain_percent(self) -> int:
+        """Percentage efficiency gain from AI assistance."""
+        if self.manual_hours == 0:
+            return 0
+        return round((self.time_saved_hours / self.manual_hours) * 100)
+
+    def __str__(self) -> str:
+        """Format activity breakdown as string."""
+        return (
+            f"{self.activity_type} ({self.count} items): "
+            f"{self.manual_hours:.1f}h manual → {self.ai_assisted_hours:.1f}h with AI "
+            f"(save {self.time_saved_hours:.1f}h)"
+        )
+
+
+def _calculate_activity_breakdown(
+    metrics: dict[str, int], complexity_score: int
+) -> list[ActivityBreakdown]:
+    """
+    Calculate detailed breakdown of effort by activity type.
+
+    Args:
+        metrics: Cookbook metrics dictionary with counts
+        complexity_score: Overall complexity score (0-100)
+
+    Returns:
+        List of ActivityBreakdown objects
+
+    """
+    activities = []
+
+    # Base effort rates (hours per item) for manual migration
+    # These are calibrated based on typical migration patterns
+    effort_rates = {
+        "Recipes": 3.0,  # 3 hours per recipe (includes testing, validation)
+        "Templates": 2.0,  # 2 hours per template (ERB→Jinja2 conversion)
+        "Attributes": 1.5,  # 1.5 hours per attribute file (vars extraction)
+        CUSTOM_RESOURCES: 5.0,  # 5 hours per custom resource (complex logic)
+        "Libraries": 4.0,  # 4 hours per library (Ruby→Python or Ansible module)
+        "Handlers": 1.0,  # 1 hour per handler (straightforward)
+        "Files": 0.5,  # 0.5 hours per static file (copy over)
+        "Definitions": 2.5,  # 2.5 hours per definition (macro conversion)
+    }
+
+    # Complexity multiplier adjustment - higher complexity takes longer
+    complexity_multiplier = 1.0 + (complexity_score / 200)  # 0% at 0, +50% at 100
+
+    # SousChef AI assistance efficiency by activity type
+    ai_efficiency = {
+        "Recipes": 0.35,  # AI handles 65% of recipe conversion
+        "Templates": 0.40,  # AI handles 60% of template conversion
+        "Attributes": 0.30,  # AI handles 70% of attribute extraction
+        CUSTOM_RESOURCES: 0.55,  # AI handles 45% (more complex, more manual work)
+        "Libraries": 0.60,  # AI handles 40% (requires significant manual work)
+        "Handlers": 0.25,  # AI handles 75% (simple, highly automatable)
+        "Files": 0.20,  # AI handles 80% (mostly copying)
+        "Definitions": 0.45,  # AI handles 55% (moderate complexity)
+    }
+
+    # Writing vs testing ratios for manual effort by activity type
+    writing_ratios = {
+        "Recipes": 0.70,
+        "Templates": 0.75,
+        "Attributes": 0.80,
+        CUSTOM_RESOURCES: 0.65,
+        "Libraries": 0.65,
+        "Handlers": 0.70,
+        "Files": 0.85,
+        "Definitions": 0.70,
+    }
+
+    activity_descriptions = {
+        "Recipes": "Convert Chef recipes to Ansible playbooks with task mapping and testing",
+        "Templates": "Transform ERB templates to Jinja2 format with variable substitution",
+        "Attributes": "Extract Chef attributes to Ansible variables and inventory structure",
+        CUSTOM_RESOURCES: "Rewrite custom Chef resources as Ansible modules or roles",
+        "Libraries": "Port Ruby libraries to Python or Ansible custom modules",
+        "Handlers": "Convert Chef notification handlers to Ansible handlers",
+        "Files": "Copy static files to Ansible file structure with proper organization",
+        "Definitions": "Transform Chef definitions to Ansible macros or includes",
+    }
+
+    # Map metrics to activity types
+    activity_mapping = {
+        "Recipes": metrics.get("recipe_count", 0),
+        "Templates": metrics.get("template_count", 0),
+        "Attributes": metrics.get("attributes_count", 0),
+        CUSTOM_RESOURCES: metrics.get("custom_resources", 0)
+        + metrics.get("resources_count", 0),
+        "Libraries": metrics.get("libraries_count", 0),
+        "Handlers": metrics.get("resource_count", 0)
+        // 10,  # Estimate: ~10% of resources need handlers
+        "Files": metrics.get("file_count", 0),
+        "Definitions": metrics.get("definition_count", 0),
+    }
+
+    # Calculate breakdown for each activity type
+    for activity_type, count in activity_mapping.items():
+        if count == 0:
+            continue  # Skip activities with no items
+
+        base_rate = effort_rates[activity_type]
+        manual_hours_raw = count * base_rate * complexity_multiplier
+        manual_hours = round(manual_hours_raw, 1)
+        writing_ratio = writing_ratios[activity_type]
+        writing_hours = round(manual_hours * writing_ratio, 1)
+        testing_hours = round(manual_hours - writing_hours, 1)
+
+        ai_assisted_hours = round(
+            manual_hours * ai_efficiency[activity_type],
+            1,
+        )
+        ai_assisted_writing_hours = round(ai_assisted_hours * writing_ratio, 1)
+        ai_assisted_testing_hours = round(
+            ai_assisted_hours - ai_assisted_writing_hours,
+            1,
+        )
+
+        activities.append(
+            ActivityBreakdown(
+                activity_type=activity_type,
+                count=count,
+                manual_hours=manual_hours,
+                ai_assisted_hours=ai_assisted_hours,
+                writing_hours=writing_hours,
+                testing_hours=testing_hours,
+                ai_assisted_writing_hours=ai_assisted_writing_hours,
+                ai_assisted_testing_hours=ai_assisted_testing_hours,
+                complexity_factor=complexity_multiplier,
+                description=activity_descriptions[activity_type],
+            )
+        )
+
+    return activities
 
 
 def _normalize_cookbook_root(cookbook_path: Path | str) -> Path:
@@ -169,6 +359,13 @@ def parse_chef_migration_assessment(
         )
         roadmap = _create_migration_roadmap(cookbook_assessments)
 
+        effort_metrics = EffortMetrics(overall_metrics.get("estimated_effort_days", 0))
+
+        # Get activity breakdown from first cookbook assessment if available
+        activity_breakdown = []
+        if cookbook_assessments:
+            activity_breakdown = cookbook_assessments[0].get("activity_breakdown", [])
+
         return {
             "migration_scope": migration_scope,
             "target_platform": target_platform,
@@ -177,9 +374,9 @@ def parse_chef_migration_assessment(
             "recommendations": recommendations,
             "roadmap": roadmap,
             "complexity": _get_overall_complexity_level(overall_metrics),
-            "estimated_hours": EffortMetrics(
-                overall_metrics.get("estimated_effort_days", 0)
-            ).estimated_hours,
+            "estimated_hours": effort_metrics.estimated_hours,
+            "estimated_hours_with_souschef": effort_metrics.estimated_hours_with_souschef,
+            "activity_breakdown": activity_breakdown,
         }
 
     except Exception as e:
@@ -1187,6 +1384,9 @@ def _assess_single_cookbook(cookbook_path: Path) -> dict:
     )
     estimated_effort = effort_metrics.estimated_days
 
+    # Calculate activity-level breakdown
+    activity_breakdown = _calculate_activity_breakdown(metrics, complexity_score)
+
     # Build assessment
     return {
         "cookbook_name": cookbook.name,
@@ -1194,6 +1394,7 @@ def _assess_single_cookbook(cookbook_path: Path) -> dict:
         "metrics": metrics,
         "complexity_score": complexity_score,
         "estimated_effort_days": estimated_effort,
+        "activity_breakdown": activity_breakdown,
         "challenges": _identify_migration_challenges(metrics, complexity_score),
         "migration_priority": _determine_migration_priority(complexity_score),
         "dependencies": [],
@@ -1221,6 +1422,59 @@ def _format_overall_metrics(metrics: dict) -> str:
 • **Time Saved: {effort_metrics.time_saved:.1f} days ({effort_metrics.efficiency_gain_percent}% faster)**"""
 
 
+def _format_activity_breakdown(activities: list[ActivityBreakdown]) -> str:
+    """
+    Format activity breakdown with time projections.
+
+    Args:
+        activities: List of ActivityBreakdown objects
+
+    Returns:
+        Formatted string with activity details
+
+    """
+    if not activities:
+        return ""
+
+    lines = ["**Activity Breakdown by Component:**"]
+    lines.append("")
+
+    # Calculate totals
+    total_manual_hours = sum(a.manual_hours for a in activities)
+    total_ai_hours = sum(a.ai_assisted_hours for a in activities)
+    total_saved_hours = total_manual_hours - total_ai_hours
+
+    # Sort by manual hours (descending) to show most time-consuming first
+    sorted_activities = sorted(activities, key=lambda x: x.manual_hours, reverse=True)
+
+    # Format each activity
+    for activity in sorted_activities:
+        lines.append(f"• **{activity.activity_type}** ({activity.count} items):")
+        lines.append(
+            f"  - Manual: {activity.manual_hours:.1f}h ({activity.manual_days:.1f} days)"
+        )
+        lines.append(
+            f"  - With AI: {activity.ai_assisted_hours:.1f}h ({activity.ai_assisted_days:.1f} days)"
+        )
+        lines.append(
+            f"  - Save: {activity.time_saved_hours:.1f}h ({activity.efficiency_gain_percent}%)"
+        )
+        lines.append(f"  - {activity.description}")
+        lines.append("")
+
+    # Add summary
+    lines.append("**Total Activity Hours:**")
+    lines.append(
+        f"• Manual: {total_manual_hours:.1f}h ({total_manual_hours / 8:.1f} days)"
+    )
+    lines.append(f"• With AI: {total_ai_hours:.1f}h ({total_ai_hours / 8:.1f} days)")
+    lines.append(
+        f"• Time Saved: {total_saved_hours:.1f}h ({int((total_saved_hours / total_manual_hours) * 100)}% reduction)"
+    )
+
+    return "\n".join(lines)
+
+
 def _format_cookbook_assessments(assessments: list) -> str:
     """Format individual cookbook assessments with manual and AI-assisted estimates."""
     if not assessments:
@@ -1240,12 +1494,22 @@ def _format_cookbook_assessments(assessments: list) -> str:
         priority_icon = _get_priority_icon(assessment["migration_priority"])
         effort_metrics = EffortMetrics(assessment["estimated_effort_days"])
 
-        formatted.append(f"""### {assessment["cookbook_name"]} {priority_icon}
+        # Format basic assessment
+        cookbook_summary = f"""### {assessment["cookbook_name"]} {priority_icon}
 • Complexity Score: {assessment["complexity_score"]:.1f}/100
 • Recipes: {assessment["metrics"]["recipe_count"]} | Resources: {assessment["metrics"]["resource_count"]} | Custom Resources: {assessment["metrics"]["custom_resources"]}
 • Manual Effort: {assessment["estimated_effort_days"]:.1f} days ({effort_metrics.estimated_weeks_range})
 • With SousChef: {effort_metrics.estimated_days_with_souschef:.1f} days ({effort_metrics.estimated_weeks_range_with_souschef}) - Save {effort_metrics.time_saved:.1f} days
-• Migration Challenges: {len(assessment["challenges"])}""")
+• Migration Challenges: {len(assessment["challenges"])}"""
+
+        # Add activity breakdown if available
+        if "activity_breakdown" in assessment and assessment["activity_breakdown"]:
+            activity_summary = _format_activity_breakdown(
+                assessment["activity_breakdown"]
+            )
+            cookbook_summary += f"\n\n{activity_summary}"
+
+        formatted.append(cookbook_summary)
 
     return "\n\n".join(formatted)
 
@@ -2151,14 +2415,16 @@ def assess_single_cookbook_with_ai(
         elif assessment["complexity_score"] > 30:
             complexity_level = "Medium"
 
+        effort_metrics = EffortMetrics(assessment["estimated_effort_days"])
+
         return {
             "complexity": complexity_level,
-            "estimated_hours": EffortMetrics(
-                assessment["estimated_effort_days"]
-            ).estimated_hours,
+            "estimated_hours": effort_metrics.estimated_hours,
+            "estimated_hours_with_souschef": effort_metrics.estimated_hours_with_souschef,
             "recommendations": assessment.get(
                 "ai_insights", "AI-enhanced analysis completed"
             ),
+            "activity_breakdown": assessment.get("activity_breakdown", []),
         }
 
     except Exception as e:
@@ -2427,6 +2693,9 @@ def _assess_single_cookbook_with_ai(
         complexity_multiplier = 1 + (complexity_score / 100)
         estimated_effort = round(base_effort * complexity_multiplier, 1)
 
+    # Calculate activity-level breakdown (same as rule-based assessment)
+    activity_breakdown = _calculate_activity_breakdown(metrics, complexity_score)
+
     # Build assessment with AI insights
     assessment = {
         "cookbook_name": cookbook.name,
@@ -2434,6 +2703,7 @@ def _assess_single_cookbook_with_ai(
         "metrics": metrics,
         "complexity_score": complexity_score,
         "estimated_effort_days": estimated_effort,
+        "activity_breakdown": activity_breakdown,
         "challenges": ai_analysis.get("challenges", [])
         if ai_analysis
         else _identify_migration_challenges(metrics, complexity_score),
@@ -2981,3 +3251,93 @@ def _format_ai_complexity_analysis(assessments: list) -> str:
 • Context-aware migration recommendations"""
 
     return analysis
+
+
+# Public API for UI components
+def calculate_activity_breakdown(
+    cookbook_path: str,
+    migration_strategy: str = "phased",
+) -> dict[str, Any]:
+    """
+    Calculate activity breakdown for cookbook migration with manual vs AI-assisted effort.
+
+    This is a public wrapper for UI components to access activity breakdown functionality.
+
+    Args:
+        cookbook_path: Path to cookbook(s) to analyse
+        migration_strategy: Migration strategy ("phased", "big_bang", "parallel")
+
+    Returns:
+        Dictionary with activity breakdown including summary and per-activity details
+
+    """
+    try:
+        # Parse cookbook path
+        cookbook = _normalize_path(cookbook_path)
+
+        # If it's a directory, assess it
+        if cookbook.is_dir():
+            assessment = _assess_single_cookbook(cookbook)
+        else:
+            return {"error": f"Invalid cookbook path: {cookbook_path}"}
+
+        # Get metrics and activity breakdown
+        metrics = assessment["metrics"]
+        complexity_score = assessment["complexity_score"]
+        activities = assessment["activity_breakdown"]
+
+        # Calculate totals
+        total_manual_hours = sum(a.manual_hours for a in activities)
+        total_ai_hours = sum(a.ai_assisted_hours for a in activities)
+        time_saved_hours = total_manual_hours - total_ai_hours
+        efficiency_gain_percent = (
+            (time_saved_hours / total_manual_hours * 100)
+            if total_manual_hours > 0
+            else 0
+        )
+
+        # Calculate timeline based on strategy
+        # Use EffortMetrics to get timeline estimation
+        effort_metrics = estimate_effort_for_complexity(
+            complexity_score=complexity_score,
+            resource_count=metrics["recipe_count"],
+        )
+
+        # Format activities list
+        activities_list = []
+        for activity in activities:
+            activities_list.append(
+                {
+                    "name": activity.activity_type,
+                    "count": activity.count,
+                    "description": activity.description,
+                    "manual_hours": activity.manual_hours,
+                    "ai_assisted_hours": activity.ai_assisted_hours,
+                    "time_saved": activity.time_saved_hours,
+                    "efficiency_gain_percent": (
+                        (activity.time_saved_hours / activity.manual_hours * 100)
+                        if activity.manual_hours > 0
+                        else 0
+                    ),
+                }
+            )
+
+        return {
+            "summary": {
+                "total_manual_hours": total_manual_hours,
+                "total_ai_assisted_hours": total_ai_hours,
+                "time_saved_hours": time_saved_hours,
+                "efficiency_gain_percent": efficiency_gain_percent,
+                "timeline_weeks": effort_metrics.estimated_weeks_high,
+            },
+            "activities": activities_list,
+            "migration_strategy": migration_strategy,
+            "cookbook": {
+                "name": assessment["cookbook_name"],
+                "complexity_score": complexity_score,
+                "metrics": metrics,
+            },
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
