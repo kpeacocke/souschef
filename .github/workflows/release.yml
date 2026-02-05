@@ -351,6 +351,7 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/mcp-souschef
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/mcp-souschef
           tags: |
             type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
@@ -364,16 +365,11 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Docker Hub support is available but requires DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets
-      # To enable Docker Hub publishing:
-      # 1. Add DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets to GitHub repo settings
-      # 2. Uncomment the Docker Hub login section below
-      # 3. Update metadata images to include docker.io registry
-      # - name: Login to Docker Hub
-      #   uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
-      #   with:
-      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
-      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Docker image
         id: build
