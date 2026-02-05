@@ -86,9 +86,9 @@ services:
     image: postgres:16-alpine
     container_name: souschef-postgres
     environment:
-      POSTGRES_DB: souschef
-      POSTGRES_USER: souschef
-      POSTGRES_PASSWORD: souschef
+      POSTGRES_DB: ${SOUSCHEF_DB_NAME:-souschef}
+      POSTGRES_USER: ${SOUSCHEF_DB_USER:-souschef}
+      POSTGRES_PASSWORD: ${SOUSCHEF_DB_PASSWORD:-souschef}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -97,7 +97,7 @@ services:
       - souschef-internal
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U souschef -d souschef"]
+      test: ["CMD-SHELL", "pg_isready -U ${SOUSCHEF_DB_USER:-souschef} -d ${SOUSCHEF_DB_NAME:-souschef}"]
       interval: 10s
       timeout: 5s
       retries: 5
