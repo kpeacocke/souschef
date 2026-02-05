@@ -33,7 +33,9 @@ jobs:
     outputs:
       tag: ${{ steps.get-tag.outputs.tag }}
       version: ${{ steps.get-tag.outputs.version }}
-      should_release: ${{ steps.decision.outputs.should_release }}
+      tag-exists: ${{ steps.check-tag.outputs.exists }}
+      pypi-exists: ${{ steps.check-pypi.outputs.exists }}
+      docker-exists: ${{ steps.check-docker.outputs.exists }}
 
     steps:
     - name: Checkout repository
@@ -113,25 +115,29 @@ jobs:
           echo "Version $VERSION not found on PyPI"
         fi
 
-    - name: Decide whether to release
-      id: decision
+    - name: Check Docker registry for existing image
+      id: check-docker
       env:
-        TAG_EXISTS: ${{ steps.check-tag.outputs.exists }}
-        PYPI_EXISTS: ${{ steps.check-pypi.outputs.exists }}
+        VERSION: ${{ steps.get-tag.outputs.version }}
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        if [ "$TAG_EXISTS" = "true" ] || [ "$PYPI_EXISTS" = "true" ]; then
-          echo "should_release=false" >> $GITHUB_OUTPUT
-          echo "Skipping release: tag or PyPI version already exists."
+        # Check if the Docker image with this tag exists in GHCR
+        IMAGE="ghcr.io/${{ github.repository_owner }}/mcp-souschef:$VERSION"
+        if docker manifest inspect "$IMAGE" >/dev/null 2>&1 || \
+           curl -fsSL -H "Authorization: Bearer $GHCR_TOKEN" \
+           "https://ghcr.io/v2/${{ github.repository_owner }}/mcp-souschef/manifests/$VERSION" >/dev/null 2>&1; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "Docker image $IMAGE already exists"
         else
-          echo "should_release=true" >> $GITHUB_OUTPUT
-          echo "Proceeding with release."
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "Docker image $IMAGE not found"
         fi
 
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate
-    if: needs.validate.outputs.should_release == 'true'
+    # Always build the package - needed for all downstream jobs
     permissions:
       contents: read
 
@@ -191,7 +197,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [validate, build, create-release]
-    if: needs.validate.outputs.should_release == 'true'
+    # Only skip if version already exists on PyPI
+    if: needs.validate.outputs.pypi-exists != 'true'
     permissions:
       contents: read
       id-token: write  # For trusted publishing
@@ -253,7 +260,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [validate, build]
-    if: needs.validate.outputs.should_release == 'true'
+    # Only skip if tag already exists
+    if: needs.validate.outputs.tag-exists != 'true'
     permissions:
       contents: write
 
@@ -300,7 +308,8 @@ jobs:
   build-and-push-docker:
     runs-on: ubuntu-latest
     needs: [validate, publish-pypi, create-release]
-    if: needs.validate.outputs.should_release == 'true'
+    # Only skip if Docker image already exists
+    if: needs.validate.outputs.docker-exists != 'true'
     timeout-minutes: 30
     permissions:
       contents: read
