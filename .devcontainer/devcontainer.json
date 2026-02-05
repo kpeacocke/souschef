@@ -105,7 +105,6 @@
                 "ms-python.python",
                 "ms-python.vscode-pylance",
                 "charliermarsh.ruff",
-                "GitHub.copilot",
                 "GitHub.copilot-chat",
                 "editorconfig.editorconfig",
                 "redhat.vscode-yaml",
