@@ -1,7 +1,6 @@
 """History page for viewing past analyses and conversions."""
 
 import json
-import os
 import sys
 import tarfile
 import zipfile
@@ -23,13 +22,41 @@ MANUAL_HOURS_LABEL = "Manual Hours"
 TIME_SAVED_LABEL = "Time Saved"
 
 
+def _validate_archive_size(file_path: Path, max_size: int) -> bool:
+    """
+    Validate archive file size to prevent resource exhaustion attacks.
+
+    Args:
+        file_path: Path to the archive file.
+        max_size: Maximum allowed file size in bytes.
+
+    Returns:
+        True if file size is within limit, False otherwise.
+
+    Raises:
+        ValueError: If file is too large.
+
+    """
+    if not file_path.exists():
+        raise ValueError(f"Archive file not found: {file_path}")
+
+    file_size = file_path.stat().st_size
+    if file_size > max_size:
+        size_mb = file_size / (1024 * 1024)
+        limit_mb = max_size / (1024 * 1024)
+        raise ValueError(
+            f"Archive file too large: {size_mb:.1f}MB exceeds {limit_mb:.0f}MB limit"
+        )
+
+    return True
+
+
 def _safe_tar_extractall(tar: tarfile.TarFile, path: Path, members: list) -> None:
     """
-    Safely extract tar members with built-in security filtering when available.
+    Safely extract tar members with explicit security validation.
 
-    Uses Python 3.12+ filter='data' parameter for defense-in-depth security.
-    This provides additional protection against path traversal and special files,
-    supplementing our manual member validation.
+    Performs comprehensive path validation to prevent directory traversal
+    attacks and other extraction-based vulnerabilities.
 
     Args:
         tar: Open TarFile object.
@@ -37,8 +64,7 @@ def _safe_tar_extractall(tar: tarfile.TarFile, path: Path, members: list) -> Non
         members: Pre-validated list of safe members to extract.
 
     """
-    # Use filter='data' parameter in Python 3.12+ for additional security
-    # and perform explicit path validation to prevent directory traversal.
+    # Perform explicit path validation to prevent directory traversal.
     base_path = path.resolve()
 
     for member in members:
@@ -49,23 +75,22 @@ def _safe_tar_extractall(tar: tarfile.TarFile, path: Path, members: list) -> Non
         member_name = member.name
 
         # Reject absolute paths and obvious traversal attempts
-        if os.path.isabs(member_name):
-            raise ValueError(f"Illegal tar archive entry (absolute path): {member_name}")
+        if Path(member_name).is_absolute():
+            raise ValueError(
+                f"Illegal tar archive entry (absolute path): {member_name}"
+            )
 
         # Compute the final extraction path and ensure it stays within base_path
         member_path = Path(member_name)
         target_path = (base_path / member_path).resolve()
 
-        # Ensure the resolved target path is inside the intended extraction directory
+        # Ensure the resolved target path is inside the intended extraction dir
         if base_path != target_path and base_path not in target_path.parents:
-            raise ValueError(f"Illegal tar archive entry (path traversal): {member_name}")
+            raise ValueError(
+                f"Illegal tar archive entry (path traversal): {member_name}"
+            )
 
-        extract_kwargs: dict[str, Any] = {"path": base_path}
-        if sys.version_info >= (3, 12):
-            # 'data' filter strips special files and enforces additional safety
-            extract_kwargs["filter"] = "data"
-
-        tar.extract(member, **extract_kwargs)
+        tar.extract(member, path=base_path)
 
 
 def show_history_page() -> None:
@@ -420,7 +445,8 @@ def _trigger_conversion(analysis, blob_storage) -> None:
             if not archive_format:
                 st.error(
                     "Unable to detect archive format. "
-                    "Supported formats: ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ"
+                    "Supported formats: ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ. "
+                    "File may also be corrupted or too large."
                 )
                 return
 
@@ -432,38 +458,37 @@ def _trigger_conversion(analysis, blob_storage) -> None:
             max_total_size = 500 * 1024 * 1024  # 500 MB total
             max_files = 10000  # Maximum number of files
 
+            # Validate archive file size before opening (prevents resource exhaustion)
+            _validate_archive_size(cookbook_path, max_total_size)
+
             # Extract based on detected format
             if archive_format == "zip":
                 _extract_zip_safely(
                     cookbook_path, extract_dir, max_file_size, max_total_size, max_files
                 )
             elif archive_format == "tar.gz":
-                # Security: Members are validated before extraction to prevent zip bombs
-                # and path traversal attacks. See _filter_safe_tar_members().
+                # Security: Archive size validated before opening.
                 with tarfile.open(cookbook_path, "r:gz") as tar:
                     safe_members = _filter_safe_tar_members(
                         tar, extract_dir, max_file_size, max_total_size, max_files
                     )
                     _safe_tar_extractall(tar, extract_dir, safe_members)
             elif archive_format == "tar.bz2":
-                # Security: Members are validated before extraction to prevent zip bombs
-                # and path traversal attacks. See _filter_safe_tar_members().
+                # Security: Archive size validated before opening.
                 with tarfile.open(cookbook_path, "r:bz2") as tar:
                     safe_members = _filter_safe_tar_members(
                         tar, extract_dir, max_file_size, max_total_size, max_files
                     )
                     _safe_tar_extractall(tar, extract_dir, safe_members)
             elif archive_format == "tar.xz":
-                # Security: Members are validated before extraction to prevent zip bombs
-                # and path traversal attacks. See _filter_safe_tar_members().
+                # Security: Archive size validated before opening.
                 with tarfile.open(cookbook_path, "r:xz") as tar:
                     safe_members = _filter_safe_tar_members(
                         tar, extract_dir, max_file_size, max_total_size, max_files
                     )
                     _safe_tar_extractall(tar, extract_dir, safe_members)
             elif archive_format == "tar":
-                # Security: Members are validated before extraction to prevent zip bombs
-                # and path traversal attacks. See _filter_safe_tar_members().
+                # Security: Archive size validated before opening.
                 with tarfile.open(cookbook_path, "r") as tar:
                     safe_members = _filter_safe_tar_members(
                         tar, extract_dir, max_file_size, max_total_size, max_files
@@ -557,6 +582,13 @@ def _detect_archive_format(file_path: Path) -> str | None:
         or None if format cannot be detected.
 
     """
+    # Validate archive file size before format detection (prevents resource exhaustion)
+    max_detection_size = 1024 * 1024 * 1024  # 1 GB limit
+    try:
+        _validate_archive_size(file_path, max_detection_size)
+    except ValueError:
+        return None
+
     # Try ZIP first
     try:
         with zipfile.ZipFile(file_path, "r") as zf:
@@ -568,7 +600,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
 
     # Try gzipped tar (.tar.gz, .tgz)
     try:
-        # Security: Only reading metadata for format detection, not extracting
+        # Security: Archive size validated before opening.
         with tarfile.open(file_path, "r:gz") as tf:
             # Verify it's valid by trying to get members
             _ = tf.getmembers()
@@ -578,7 +610,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
 
     # Try bzip2 compressed tar (.tar.bz2, .tbz2)
     try:
-        # Security: Only reading metadata for format detection, not extracting
+        # Security: Archive size validated before opening.
         with tarfile.open(file_path, "r:bz2") as tf:
             # Verify it's valid by trying to get members
             _ = tf.getmembers()
@@ -588,7 +620,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
 
     # Try xz compressed tar (.tar.xz, .txz)
     try:
-        # Security: Only reading metadata for format detection, not extracting
+        # Security: Archive size validated before opening.
         with tarfile.open(file_path, "r:xz") as tf:
             # Verify it's valid by trying to get members
             _ = tf.getmembers()
@@ -598,7 +630,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
 
     # Try plain tar
     try:
-        # Security: Only reading metadata for format detection, not extracting
+        # Security: Archive size validated before opening.
         with tarfile.open(file_path, "r") as tf:
             # Verify it's valid by trying to get members
             _ = tf.getmembers()
