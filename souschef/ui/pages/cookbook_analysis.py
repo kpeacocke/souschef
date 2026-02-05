@@ -4047,12 +4047,26 @@ def _display_cookbook_activity_breakdown(activities: list) -> None:
                 time_saved = activity.time_saved_hours
                 efficiency = activity.efficiency_gain_percent
 
+            # Calculate writing vs testing breakdown (60% writing, 40% testing)
+            manual_writing = manual_hours * 0.6
+            manual_testing = manual_hours * 0.4
+            ai_writing = ai_hours * 0.6
+            ai_testing = ai_hours * 0.4
+
             st.markdown(
                 f"""**{name}** ({count})
 
 *{description}*
 
-Manual: {manual_hours:.1f}h → AI: {ai_hours:.1f}h
+**Manual Migration:**
+- Writing/Conversion: {manual_writing:.1f}h
+- Testing/Validation: {manual_testing:.1f}h
+- **Total: {manual_hours:.1f}h**
+
+**With AI Assistance:**
+- Writing/Conversion: {ai_writing:.1f}h
+- Testing/Validation: {ai_testing:.1f}h
+- **Total: {ai_hours:.1f}h**
 
 **Saved: {time_saved:.1f}h ({efficiency:.0f}%)**"""
             )
@@ -4064,27 +4078,40 @@ Manual: {manual_hours:.1f}h → AI: {ai_hours:.1f}h
         for activity in activities:
             # Handle both dict and object formats
             if isinstance(activity, dict):
+                manual_hours = activity.get("manual_hours", 0)
+                ai_hours = activity.get("ai_assisted_hours", 0)
+                time_saved = activity.get("time_saved_hours", 0)
                 efficiency_pct = activity.get("efficiency_gain_percent", 0)
+
                 table_data.append(
                     {
                         "Activity": activity.get("activity_type", "Unknown"),
                         "Count": activity.get("count", 0),
-                        "Manual Hours": f"{activity.get('manual_hours', 0):.1f}",
-                        "AI Hours": f"{activity.get('ai_assisted_hours', 0):.1f}",
-                        "Time Saved": f"{activity.get('time_saved_hours', 0):.1f}",
+                        "Manual Write": f"{manual_hours * 0.6:.1f}h",
+                        "Manual Test": f"{manual_hours * 0.4:.1f}h",
+                        "AI Write": f"{ai_hours * 0.6:.1f}h",
+                        "AI Test": f"{ai_hours * 0.4:.1f}h",
+                        "Total Saved": f"{time_saved:.1f}h",
                         "Efficiency": f"{efficiency_pct:.0f}%",
                     }
                 )
             else:
                 # It's an ActivityBreakdown object
+                manual_hours = activity.manual_hours
+                ai_hours = activity.ai_assisted_hours
+                time_saved = activity.time_saved_hours
+                efficiency_pct = activity.efficiency_gain_percent
+
                 table_data.append(
                     {
                         "Activity": activity.activity_type,
                         "Count": activity.count,
-                        "Manual Hours": f"{activity.manual_hours:.1f}",
-                        "AI Hours": f"{activity.ai_assisted_hours:.1f}",
-                        "Time Saved": f"{activity.time_saved_hours:.1f}",
-                        "Efficiency": f"{activity.efficiency_gain_percent:.0f}%",
+                        "Manual Write": f"{manual_hours * 0.6:.1f}h",
+                        "Manual Test": f"{manual_hours * 0.4:.1f}h",
+                        "AI Write": f"{ai_hours * 0.6:.1f}h",
+                        "AI Test": f"{ai_hours * 0.4:.1f}h",
+                        "Total Saved": f"{time_saved:.1f}h",
+                        "Efficiency": f"{efficiency_pct:.0f}%",
                     }
                 )
 
