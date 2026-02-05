@@ -14,10 +14,6 @@ concurrency:
   group: releases
   cancel-in-progress: false
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false  # Don't cancel releases
-
 env:
   PYTHON_VERSION: "3.12"
 
