@@ -1739,6 +1739,26 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
                             if hasattr(a, "ai_assisted_hours")
                             else a.get("ai_assisted_hours")
                         ),
+                        "writing_hours": (
+                            a.writing_hours
+                            if hasattr(a, "writing_hours")
+                            else a.get("writing_hours")
+                        ),
+                        "testing_hours": (
+                            a.testing_hours
+                            if hasattr(a, "testing_hours")
+                            else a.get("testing_hours")
+                        ),
+                        "ai_assisted_writing_hours": (
+                            a.ai_assisted_writing_hours
+                            if hasattr(a, "ai_assisted_writing_hours")
+                            else a.get("ai_assisted_writing_hours")
+                        ),
+                        "ai_assisted_testing_hours": (
+                            a.ai_assisted_testing_hours
+                            if hasattr(a, "ai_assisted_testing_hours")
+                            else a.get("ai_assisted_testing_hours")
+                        ),
                         "time_saved_hours": (
                             a.time_saved_hours
                             if hasattr(a, "time_saved_hours")
@@ -4023,6 +4043,19 @@ def _display_cookbook_activity_breakdown(activities: list) -> None:
     if not activities:
         return
 
+    def _split_write_test(
+        total_hours: float,
+        writing_hours: float,
+        testing_hours: float,
+    ) -> tuple[float, float]:
+        if total_hours <= 0:
+            return 0.0, 0.0
+        if writing_hours > 0 or testing_hours > 0:
+            return writing_hours, testing_hours
+        writing_split = round(total_hours * 0.7, 1)
+        testing_split = round(total_hours - writing_split, 1)
+        return writing_split, testing_split
+
     col1, col2 = st.columns([1, 2])
 
     with col1:
@@ -4035,6 +4068,10 @@ def _display_cookbook_activity_breakdown(activities: list) -> None:
                 description = activity.get("description", "")
                 manual_hours = activity.get("manual_hours", 0)
                 ai_hours = activity.get("ai_assisted_hours", 0)
+                manual_writing = activity.get("writing_hours", 0)
+                manual_testing = activity.get("testing_hours", 0)
+                ai_writing = activity.get("ai_assisted_writing_hours", 0)
+                ai_testing = activity.get("ai_assisted_testing_hours", 0)
                 time_saved = activity.get("time_saved_hours", 0)
                 efficiency = activity.get("efficiency_gain_percent", 0)
             else:
@@ -4044,29 +4081,33 @@ def _display_cookbook_activity_breakdown(activities: list) -> None:
                 description = activity.description
                 manual_hours = activity.manual_hours
                 ai_hours = activity.ai_assisted_hours
+                manual_writing = activity.writing_hours
+                manual_testing = activity.testing_hours
+                ai_writing = activity.ai_assisted_writing_hours
+                ai_testing = activity.ai_assisted_testing_hours
                 time_saved = activity.time_saved_hours
                 efficiency = activity.efficiency_gain_percent
 
-            # Calculate writing vs testing breakdown (60% writing, 40% testing)
-            manual_writing = manual_hours * 0.6
-            manual_testing = manual_hours * 0.4
-            ai_writing = ai_hours * 0.6
-            ai_testing = ai_hours * 0.4
+            manual_writing, manual_testing = _split_write_test(
+                manual_hours,
+                manual_writing,
+                manual_testing,
+            )
+            ai_writing, ai_testing = _split_write_test(
+                ai_hours,
+                ai_writing,
+                ai_testing,
+            )
 
             st.markdown(
                 f"""**{name}** ({count})
 
 *{description}*
 
-**Manual Migration:**
-- Writing/Conversion: {manual_writing:.1f}h
-- Testing/Validation: {manual_testing:.1f}h
-- **Total: {manual_hours:.1f}h**
-
-**With AI Assistance:**
-- Writing/Conversion: {ai_writing:.1f}h
-- Testing/Validation: {ai_testing:.1f}h
-- **Total: {ai_hours:.1f}h**
+Manual: {manual_hours:.1f}h
+Writing: {manual_writing:.1f}h, Testing: {manual_testing:.1f}h
+AI: {ai_hours:.1f}h
+Writing: {ai_writing:.1f}h, Testing: {ai_testing:.1f}h
 
 **Saved: {time_saved:.1f}h ({efficiency:.0f}%)**"""
             )
@@ -4078,40 +4119,55 @@ def _display_cookbook_activity_breakdown(activities: list) -> None:
         for activity in activities:
             # Handle both dict and object formats
             if isinstance(activity, dict):
-                manual_hours = activity.get("manual_hours", 0)
-                ai_hours = activity.get("ai_assisted_hours", 0)
-                time_saved = activity.get("time_saved_hours", 0)
+                manual_writing, manual_testing = _split_write_test(
+                    activity.get("manual_hours", 0),
+                    activity.get("writing_hours", 0),
+                    activity.get("testing_hours", 0),
+                )
+                ai_writing, ai_testing = _split_write_test(
+                    activity.get("ai_assisted_hours", 0),
+                    activity.get("ai_assisted_writing_hours", 0),
+                    activity.get("ai_assisted_testing_hours", 0),
+                )
                 efficiency_pct = activity.get("efficiency_gain_percent", 0)
-
                 table_data.append(
                     {
                         "Activity": activity.get("activity_type", "Unknown"),
                         "Count": activity.get("count", 0),
-                        "Manual Write": f"{manual_hours * 0.6:.1f}h",
-                        "Manual Test": f"{manual_hours * 0.4:.1f}h",
-                        "AI Write": f"{ai_hours * 0.6:.1f}h",
-                        "AI Test": f"{ai_hours * 0.4:.1f}h",
-                        "Total Saved": f"{time_saved:.1f}h",
+                        "Manual Hours": f"{activity.get('manual_hours', 0):.1f}",
+                        "AI Hours": f"{activity.get('ai_assisted_hours', 0):.1f}",
+                        "Manual Writing": f"{manual_writing:.1f}",
+                        "Manual Testing": f"{manual_testing:.1f}",
+                        "AI Writing": f"{ai_writing:.1f}",
+                        "AI Testing": f"{ai_testing:.1f}",
+                        "Time Saved": f"{activity.get('time_saved_hours', 0):.1f}",
                         "Efficiency": f"{efficiency_pct:.0f}%",
                     }
                 )
             else:
                 # It's an ActivityBreakdown object
-                manual_hours = activity.manual_hours
-                ai_hours = activity.ai_assisted_hours
-                time_saved = activity.time_saved_hours
-                efficiency_pct = activity.efficiency_gain_percent
-
+                manual_writing, manual_testing = _split_write_test(
+                    activity.manual_hours,
+                    activity.writing_hours,
+                    activity.testing_hours,
+                )
+                ai_writing, ai_testing = _split_write_test(
+                    activity.ai_assisted_hours,
+                    activity.ai_assisted_writing_hours,
+                    activity.ai_assisted_testing_hours,
+                )
                 table_data.append(
                     {
                         "Activity": activity.activity_type,
                         "Count": activity.count,
-                        "Manual Write": f"{manual_hours * 0.6:.1f}h",
-                        "Manual Test": f"{manual_hours * 0.4:.1f}h",
-                        "AI Write": f"{ai_hours * 0.6:.1f}h",
-                        "AI Test": f"{ai_hours * 0.4:.1f}h",
-                        "Total Saved": f"{time_saved:.1f}h",
-                        "Efficiency": f"{efficiency_pct:.0f}%",
+                        "Manual Hours": f"{activity.manual_hours:.1f}",
+                        "AI Hours": f"{activity.ai_assisted_hours:.1f}",
+                        "Manual Writing": f"{manual_writing:.1f}",
+                        "Manual Testing": f"{manual_testing:.1f}",
+                        "AI Writing": f"{ai_writing:.1f}",
+                        "AI Testing": f"{ai_testing:.1f}",
+                        "Time Saved": f"{activity.time_saved_hours:.1f}",
+                        "Efficiency": f"{activity.efficiency_gain_percent:.0f}%",
                     }
                 )
 

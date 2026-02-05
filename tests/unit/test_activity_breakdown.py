@@ -160,6 +160,31 @@ class TestCalculateActivityBreakdown:
         expected_manual = 10 * 3.0 * 1.15
         assert activities[0].manual_hours == pytest.approx(expected_manual, rel=0.01)
 
+    def test_writing_testing_split_for_recipes(self):
+        """Test writing/testing split for recipe activity."""
+        metrics = {
+            "recipe_count": 1,
+            "template_count": 0,
+            "attributes_count": 0,
+            "custom_resources": 0,
+            "resource_count": 0,
+            "libraries_count": 0,
+            "file_count": 0,
+            "definition_count": 0,
+        }
+        complexity_score = 0
+
+        activities = _calculate_activity_breakdown(metrics, complexity_score)
+
+        recipe = activities[0]
+        assert recipe.manual_hours == pytest.approx(3.0)
+        assert recipe.writing_hours == pytest.approx(2.1)
+        assert recipe.testing_hours == pytest.approx(0.9)
+
+        assert recipe.ai_assisted_hours == pytest.approx(1.0)
+        assert recipe.ai_assisted_writing_hours == pytest.approx(0.7)
+        assert recipe.ai_assisted_testing_hours == pytest.approx(0.3)
+
     def test_complete_cookbook_breakdown(self):
         """Test breakdown with all component types."""
         metrics = {

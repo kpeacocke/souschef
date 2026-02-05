@@ -68,6 +68,18 @@ class ActivityBreakdown:
     description: str
     """Human-readable description of what this activity entails"""
 
+    writing_hours: float = 0.0
+    """Manual writing effort in hours"""
+
+    testing_hours: float = 0.0
+    """Manual testing effort in hours"""
+
+    ai_assisted_writing_hours: float = 0.0
+    """AI-assisted writing effort in hours"""
+
+    ai_assisted_testing_hours: float = 0.0
+    """AI-assisted testing effort in hours"""
+
     @property
     def manual_days(self) -> float:
         """Convert manual hours to days."""
@@ -143,6 +155,18 @@ def _calculate_activity_breakdown(
         "Definitions": 0.45,  # AI handles 55% (moderate complexity)
     }
 
+    # Writing vs testing ratios for manual effort by activity type
+    writing_ratios = {
+        "Recipes": 0.70,
+        "Templates": 0.75,
+        "Attributes": 0.80,
+        "Custom Resources": 0.65,
+        "Libraries": 0.65,
+        "Handlers": 0.70,
+        "Files": 0.85,
+        "Definitions": 0.70,
+    }
+
     activity_descriptions = {
         "Recipes": "Convert Chef recipes to Ansible playbooks with task mapping and testing",
         "Templates": "Transform ERB templates to Jinja2 format with variable substitution",
@@ -174,15 +198,32 @@ def _calculate_activity_breakdown(
             continue  # Skip activities with no items
 
         base_rate = effort_rates[activity_type]
-        manual_hours = count * base_rate * complexity_multiplier
-        ai_assisted_hours = manual_hours * ai_efficiency[activity_type]
+        manual_hours_raw = count * base_rate * complexity_multiplier
+        manual_hours = round(manual_hours_raw, 1)
+        writing_ratio = writing_ratios[activity_type]
+        writing_hours = round(manual_hours * writing_ratio, 1)
+        testing_hours = round(manual_hours - writing_hours, 1)
+
+        ai_assisted_hours = round(
+            manual_hours * ai_efficiency[activity_type],
+            1,
+        )
+        ai_assisted_writing_hours = round(ai_assisted_hours * writing_ratio, 1)
+        ai_assisted_testing_hours = round(
+            ai_assisted_hours - ai_assisted_writing_hours,
+            1,
+        )
 
         activities.append(
             ActivityBreakdown(
                 activity_type=activity_type,
                 count=count,
-                manual_hours=round(manual_hours, 1),
-                ai_assisted_hours=round(ai_assisted_hours, 1),
+                manual_hours=manual_hours,
+                ai_assisted_hours=ai_assisted_hours,
+                writing_hours=writing_hours,
+                testing_hours=testing_hours,
+                ai_assisted_writing_hours=ai_assisted_writing_hours,
+                ai_assisted_testing_hours=ai_assisted_testing_hours,
                 complexity_factor=complexity_multiplier,
                 description=activity_descriptions[activity_type],
             )
