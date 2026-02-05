@@ -1554,6 +1554,50 @@ def convert_template_ai(erb_path: str, ai: bool, output: str | None) -> None:
     is_flag=True,
     help="Run interactive questionnaire (ignores other options)",
 )
+def _build_config_from_cli_args(
+    deployment_target: str | None,
+    migration_standard: str | None,
+    inventory_source: str | None,
+    validation_tools: tuple[str, ...],
+    python_version: str | None,
+    ansible_version: str | None,
+) -> MigrationConfig:
+    """Build migration config from CLI arguments."""
+    config = MigrationConfig()
+
+    if deployment_target:
+        config.deployment_target = DeploymentTarget(deployment_target)
+    if migration_standard:
+        config.migration_standard = MigrationStandard(migration_standard)
+    if inventory_source:
+        config.inventory_source = inventory_source
+    if validation_tools:
+        config.validation_tools = [ValidationTool(tool) for tool in validation_tools]
+    if python_version:
+        config.target_python_version = python_version
+    if ansible_version:
+        config.target_ansible_version = ansible_version
+
+    return config
+
+
+def _output_migration_config(config_dict: dict, output: str | None) -> None:
+    """Output migration configuration to file or stdout."""
+    if output:
+        # Save to file
+        output_path = _resolve_output_path(output, Path("migration-config.json"))
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(config_dict, f, indent=2)
+        click.echo(f"✅ Configuration saved to: {output_path}")
+    else:
+        # Print to stdout
+        click.echo("\n" + "=" * 60)
+        click.echo("Migration Configuration")
+        click.echo("=" * 60)
+        click.echo(json.dumps(config_dict, indent=2))
+        click.echo("=" * 60)
+
+
 def configure_migration(
     output: str | None,
     deployment_target: str | None,
@@ -1599,39 +1643,18 @@ def configure_migration(
             config = get_migration_config_from_user()
         else:
             # Build config from CLI arguments
-            config = MigrationConfig()
-
-            if deployment_target:
-                config.deployment_target = DeploymentTarget(deployment_target)
-            if migration_standard:
-                config.migration_standard = MigrationStandard(migration_standard)
-            if inventory_source:
-                config.inventory_source = inventory_source
-            if validation_tools:
-                config.validation_tools = [
-                    ValidationTool(tool) for tool in validation_tools
-                ]
-            if python_version:
-                config.target_python_version = python_version
-            if ansible_version:
-                config.target_ansible_version = ansible_version
+            config = _build_config_from_cli_args(
+                deployment_target,
+                migration_standard,
+                inventory_source,
+                validation_tools,
+                python_version,
+                ansible_version,
+            )
 
         # Convert to dict for output
         config_dict = config.to_dict()
-
-        if output:
-            # Save to file
-            output_path = _resolve_output_path(output, Path("migration-config.json"))
-            with output_path.open("w", encoding="utf-8") as f:
-                json.dump(config_dict, f, indent=2)
-            click.echo(f"✅ Configuration saved to: {output_path}")
-        else:
-            # Print to stdout
-            click.echo("\n" + "=" * 60)
-            click.echo("Migration Configuration")
-            click.echo("=" * 60)
-            click.echo(json.dumps(config_dict, indent=2))
-            click.echo("=" * 60)
+        _output_migration_config(config_dict, output)
 
     except Exception as e:
         click.echo(f"❌ Error configuring migration: {e}", err=True)

@@ -266,25 +266,33 @@ def _serialize_activity_breakdown(activities: list) -> list[dict]:
         List of serialized activity dictionaries
 
     """
+
+    def _get_field(item: Any, field: str) -> Any:
+        if hasattr(item, field):
+            return getattr(item, field)
+        if isinstance(item, dict):
+            return item.get(field)
+        return None
+
+    fields = (
+        "activity_type",
+        "count",
+        "manual_hours",
+        "ai_assisted_hours",
+        "writing_hours",
+        "testing_hours",
+        "ai_assisted_writing_hours",
+        "ai_assisted_testing_hours",
+        "complexity_factor",
+        "description",
+        "time_saved_hours",
+        "efficiency_gain_percent",
+    )
+
     serialized = []
     for activity in activities:
-        if hasattr(activity, "__dict__"):
-            # It's an ActivityBreakdown object
-            serialized.append(
-                {
-                    "activity_type": activity.activity_type,
-                    "count": activity.count,
-                    "manual_hours": activity.manual_hours,
-                    "ai_assisted_hours": activity.ai_assisted_hours,
-                    "complexity_factor": activity.complexity_factor,
-                    "description": activity.description,
-                    "time_saved_hours": activity.time_saved_hours,
-                    "efficiency_gain_percent": activity.efficiency_gain_percent,
-                }
-            )
-        elif isinstance(activity, dict):
-            # Already a dict
-            serialized.append(activity)
+        if hasattr(activity, "__dict__") or isinstance(activity, dict):
+            serialized.append({field: _get_field(activity, field) for field in fields})
     return serialized
 
 
@@ -1717,71 +1725,9 @@ def _build_cookbook_result(cb_data: dict, assessment: dict, status: str) -> dict
         estimated_hours_with_souschef = estimated_hours * 0.5
 
         # Convert activity_breakdown objects to dicts for serialization
-        activity_breakdown = assessment.get("activity_breakdown", [])
-        if activity_breakdown:
-            activity_list = []
-            for a in activity_breakdown:
-                activity_list.append(
-                    {
-                        "activity_type": (
-                            a.activity_type
-                            if hasattr(a, "activity_type")
-                            else a.get("activity_type")
-                        ),
-                        "count": (a.count if hasattr(a, "count") else a.get("count")),
-                        "manual_hours": (
-                            a.manual_hours
-                            if hasattr(a, "manual_hours")
-                            else a.get("manual_hours")
-                        ),
-                        "ai_assisted_hours": (
-                            a.ai_assisted_hours
-                            if hasattr(a, "ai_assisted_hours")
-                            else a.get("ai_assisted_hours")
-                        ),
-                        "writing_hours": (
-                            a.writing_hours
-                            if hasattr(a, "writing_hours")
-                            else a.get("writing_hours")
-                        ),
-                        "testing_hours": (
-                            a.testing_hours
-                            if hasattr(a, "testing_hours")
-                            else a.get("testing_hours")
-                        ),
-                        "ai_assisted_writing_hours": (
-                            a.ai_assisted_writing_hours
-                            if hasattr(a, "ai_assisted_writing_hours")
-                            else a.get("ai_assisted_writing_hours")
-                        ),
-                        "ai_assisted_testing_hours": (
-                            a.ai_assisted_testing_hours
-                            if hasattr(a, "ai_assisted_testing_hours")
-                            else a.get("ai_assisted_testing_hours")
-                        ),
-                        "time_saved_hours": (
-                            a.time_saved_hours
-                            if hasattr(a, "time_saved_hours")
-                            else a.get("time_saved_hours")
-                        ),
-                        "efficiency_gain_percent": (
-                            a.efficiency_gain_percent
-                            if hasattr(a, "efficiency_gain_percent")
-                            else a.get("efficiency_gain_percent")
-                        ),
-                        "description": (
-                            a.description
-                            if hasattr(a, "description")
-                            else a.get("description")
-                        ),
-                        "complexity_factor": (
-                            a.complexity_factor
-                            if hasattr(a, "complexity_factor")
-                            else a.get("complexity_factor")
-                        ),
-                    }
-                )
-            activity_breakdown = activity_list
+        activity_breakdown = _serialize_activity_breakdown(
+            assessment.get("activity_breakdown", [])
+        )
 
         return {
             "name": cb_data["Name"],

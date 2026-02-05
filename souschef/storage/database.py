@@ -683,7 +683,9 @@ class StorageManager:
                 )
 
                 return cursor.rowcount > 0
-        except Exception:
+        except sqlite3.Error:
+            # Database errors during deletion should not propagate to UI
+            # Return False to indicate deletion failed gracefully
             return False
 
     def delete_conversion(self, conversion_id: int) -> bool:
@@ -703,7 +705,9 @@ class StorageManager:
                     "DELETE FROM conversion_results WHERE id = ?", (conversion_id,)
                 )
                 return cursor.rowcount > 0
-        except Exception:
+        except sqlite3.Error:
+            # Database errors during deletion should not propagate to UI
+            # Return False to indicate deletion failed gracefully
             return False
 
     def get_statistics(self) -> dict[str, Any]:
@@ -1188,6 +1192,8 @@ class PostgresStorageManager:
 
                 return bool(cursor.rowcount and cursor.rowcount > 0)
         except Exception:
+            # Catch all database-related exceptions (psycopg errors, connection issues)
+            # Return False to indicate deletion failed gracefully
             return False
 
     def delete_conversion(self, conversion_id: int) -> bool:
@@ -1208,6 +1214,8 @@ class PostgresStorageManager:
                 conn.commit()
                 return bool(cursor.rowcount and cursor.rowcount > 0)
         except Exception:
+            # Catch all database-related exceptions (psycopg errors, connection issues)
+            # Return False to indicate deletion failed gracefully
             return False
 
     def get_statistics(self) -> dict[str, Any]:

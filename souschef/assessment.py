@@ -45,6 +45,9 @@ try:
 except ImportError:
     APIClient = None
 
+# Activity type constants
+CUSTOM_RESOURCES = "Custom Resources"
+
 
 @dataclass
 class ActivityBreakdown:
@@ -133,7 +136,7 @@ def _calculate_activity_breakdown(
         "Recipes": 3.0,  # 3 hours per recipe (includes testing, validation)
         "Templates": 2.0,  # 2 hours per template (ERB→Jinja2 conversion)
         "Attributes": 1.5,  # 1.5 hours per attribute file (vars extraction)
-        "Custom Resources": 5.0,  # 5 hours per custom resource (complex logic)
+        CUSTOM_RESOURCES: 5.0,  # 5 hours per custom resource (complex logic)
         "Libraries": 4.0,  # 4 hours per library (Ruby→Python or Ansible module)
         "Handlers": 1.0,  # 1 hour per handler (straightforward)
         "Files": 0.5,  # 0.5 hours per static file (copy over)
@@ -148,7 +151,7 @@ def _calculate_activity_breakdown(
         "Recipes": 0.35,  # AI handles 65% of recipe conversion
         "Templates": 0.40,  # AI handles 60% of template conversion
         "Attributes": 0.30,  # AI handles 70% of attribute extraction
-        "Custom Resources": 0.55,  # AI handles 45% (more complex, more manual work)
+        CUSTOM_RESOURCES: 0.55,  # AI handles 45% (more complex, more manual work)
         "Libraries": 0.60,  # AI handles 40% (requires significant manual work)
         "Handlers": 0.25,  # AI handles 75% (simple, highly automatable)
         "Files": 0.20,  # AI handles 80% (mostly copying)
@@ -160,7 +163,7 @@ def _calculate_activity_breakdown(
         "Recipes": 0.70,
         "Templates": 0.75,
         "Attributes": 0.80,
-        "Custom Resources": 0.65,
+        CUSTOM_RESOURCES: 0.65,
         "Libraries": 0.65,
         "Handlers": 0.70,
         "Files": 0.85,
@@ -171,7 +174,7 @@ def _calculate_activity_breakdown(
         "Recipes": "Convert Chef recipes to Ansible playbooks with task mapping and testing",
         "Templates": "Transform ERB templates to Jinja2 format with variable substitution",
         "Attributes": "Extract Chef attributes to Ansible variables and inventory structure",
-        "Custom Resources": "Rewrite custom Chef resources as Ansible modules or roles",
+        CUSTOM_RESOURCES: "Rewrite custom Chef resources as Ansible modules or roles",
         "Libraries": "Port Ruby libraries to Python or Ansible custom modules",
         "Handlers": "Convert Chef notification handlers to Ansible handlers",
         "Files": "Copy static files to Ansible file structure with proper organization",
@@ -183,7 +186,7 @@ def _calculate_activity_breakdown(
         "Recipes": metrics.get("recipe_count", 0),
         "Templates": metrics.get("template_count", 0),
         "Attributes": metrics.get("attributes_count", 0),
-        "Custom Resources": metrics.get("custom_resources", 0)
+        CUSTOM_RESOURCES: metrics.get("custom_resources", 0)
         + metrics.get("resources_count", 0),
         "Libraries": metrics.get("libraries_count", 0),
         "Handlers": metrics.get("resource_count", 0)
@@ -3253,7 +3256,6 @@ def _format_ai_complexity_analysis(assessments: list) -> str:
 # Public API for UI components
 def calculate_activity_breakdown(
     cookbook_path: str,
-    migration_config: dict[str, Any],
     migration_strategy: str = "phased",
 ) -> dict[str, Any]:
     """
@@ -3263,7 +3265,6 @@ def calculate_activity_breakdown(
 
     Args:
         cookbook_path: Path to cookbook(s) to analyse
-        migration_config: Migration configuration dictionary
         migration_strategy: Migration strategy ("phased", "big_bang", "parallel")
 
     Returns:

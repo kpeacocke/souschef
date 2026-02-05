@@ -360,4 +360,3 @@ class TestCalculateActivityBreakdown:
         assert activity_dict["Handlers"].count == 5  # 50 resource_count //10
         assert activity_dict["Files"].count == 15
         assert activity_dict["Definitions"].count == 1
-        assert activity_dict["Definitions"].count == 1

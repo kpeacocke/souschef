@@ -17,6 +17,8 @@ from souschef.storage import get_blob_storage, get_storage_manager
 
 # Constants
 DOWNLOAD_ARTEFACTS_LABEL = "Download Artefacts"
+MANUAL_HOURS_LABEL = "Manual Hours"
+TIME_SAVED_LABEL = "Time Saved"
 
 
 def show_history_page() -> None:
@@ -89,9 +91,9 @@ def _show_analysis_history(storage_manager) -> None:
                 "Cookbook": analysis.cookbook_name,
                 "Version": analysis.cookbook_version,
                 "Complexity": analysis.complexity,
-                "Manual Hours": f"{analysis.estimated_hours:.1f}",
+                MANUAL_HOURS_LABEL: f"{analysis.estimated_hours:.1f}",
                 "AI Hours": f"{analysis.estimated_hours_with_souschef:.1f}",
-                "Time Saved": f"{time_saved:.1f}h",
+                TIME_SAVED_LABEL: f"{time_saved:.1f}h",
                 "AI Provider": analysis.ai_provider or "Rule-based",
                 "Date": _format_datetime(analysis.created_at),
                 "ID": analysis.id,
@@ -128,14 +130,14 @@ def _display_analysis_details(analysis, storage_manager) -> None:
         st.metric("Complexity", analysis.complexity)
 
     with col2:
-        st.metric("Manual Hours", f"{analysis.estimated_hours:.1f}")
+        st.metric(MANUAL_HOURS_LABEL, f"{analysis.estimated_hours:.1f}")
 
     with col3:
         st.metric("AI-Assisted Hours", f"{analysis.estimated_hours_with_souschef:.1f}")
 
     with col4:
         time_saved = analysis.estimated_hours - analysis.estimated_hours_with_souschef
-        st.metric("Time Saved", f"{time_saved:.1f}h")
+        st.metric(TIME_SAVED_LABEL, f"{time_saved:.1f}h")
 
     st.divider()
 
@@ -147,6 +149,9 @@ def _display_analysis_details(analysis, storage_manager) -> None:
             _display_analysis_activity_breakdown(activities)
             st.divider()
     except (json.JSONDecodeError, AttributeError):
+        # Activity breakdown is a best-effort enhancement; if stored analysis
+        # data is missing or malformed, skip this section so the rest of the
+        # analysis details can still be displayed.
         pass
 
     # Recommendations
@@ -240,9 +245,9 @@ Manual: {manual_hours:.1f}h → AI: {ai_hours:.1f}h
                 {
                     "Activity": activity.get("activity_type", "Unknown"),
                     "Count": activity.get("count", 0),
-                    "Manual Hours": f"{activity.get('manual_hours', 0):.1f}",
+                    MANUAL_HOURS_LABEL: f"{activity.get('manual_hours', 0):.1f}",
                     "AI Hours": f"{activity.get('ai_assisted_hours', 0):.1f}",
-                    "Time Saved": f"{activity.get('time_saved_hours', 0):.1f}",
+                    TIME_SAVED_LABEL: f"{activity.get('time_saved_hours', 0):.1f}",
                     "Efficiency": f"{activity.get('efficiency_gain_percent', 0):.0f}%",
                 }
             )
@@ -765,7 +770,20 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
     """Show conversion history tab."""
     st.subheader("Conversion History")
 
-    # Filters
+    cookbook_filter, status_filter, limit = _get_conversion_filters()
+    conversions = _get_conversion_history(storage_manager, cookbook_filter, limit)
+    conversions = _filter_conversions_by_status(conversions, status_filter)
+
+    if not conversions:
+        st.info("No conversion history found. Start by converting a cookbook!")
+        return
+
+    _display_conversion_table(conversions)
+    _display_conversion_downloads(storage_manager, blob_storage, conversions)
+
+
+def _get_conversion_filters() -> tuple[str, str, int]:
+    """Return filter values for conversion history."""
     col1, col2, col3 = st.columns([2, 1, 1])
 
     with col1:
@@ -790,23 +808,29 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
             key="conversion_limit",
         )
 
-    # Get conversion history
+    return cookbook_filter, status_filter, limit
+
+
+def _get_conversion_history(storage_manager, cookbook_filter: str, limit: int) -> list:
+    """Return conversion history with optional cookbook filtering."""
     if cookbook_filter:
-        conversions = storage_manager.get_conversion_history(
+        return storage_manager.get_conversion_history(
             cookbook_name=cookbook_filter, limit=limit
         )
-    else:
-        conversions = storage_manager.get_conversion_history(limit=limit)
+    return storage_manager.get_conversion_history(limit=limit)
 
-    # Filter by status
-    if status_filter != "All":
-        conversions = [c for c in conversions if c.status == status_filter]
 
-    if not conversions:
-        st.info("No conversion history found. Start by converting a cookbook!")
-        return
+def _filter_conversions_by_status(conversions: list, status_filter: str) -> list:
+    """Filter conversion history by status when requested."""
+    if status_filter == "All":
+        return conversions
+    return [
+        conversion for conversion in conversions if conversion.status == status_filter
+    ]
 
-    # Display as table
+
+def _display_conversion_table(conversions: list) -> None:
+    """Display conversion history in a table."""
     st.write(f"**Total Results:** {len(conversions)}")
 
     df_data = []
@@ -826,7 +850,11 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
     df = pd.DataFrame(df_data)
     st.dataframe(df, width="stretch", hide_index=True)
 
-    # Download artifacts
+
+def _display_conversion_downloads(
+    storage_manager, blob_storage, conversions: list
+) -> None:
+    """Display conversion download and deletion actions."""
     st.subheader("Download Artefacts")
 
     selected_id = st.selectbox(
@@ -840,43 +868,51 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
         key="history_selected_conversion",
     )
 
-    if selected_id:
-        selected = next(c for c in conversions if c.id == selected_id)
-        if selected.blob_storage_key:
-            col1, col2 = st.columns([3, 1])
+    if not selected_id:
+        return
 
-            with col1:
-                st.write(f"**Cookbook:** {selected.cookbook_name}")
-                st.write(f"**Output Type:** {selected.output_type}")
-                st.write(f"**Files Generated:** {selected.files_generated}")
+    selected = next(c for c in conversions if c.id == selected_id)
+    if not selected.blob_storage_key:
+        return
 
-            with col2:
-                if st.button(
-                    DOWNLOAD_ARTEFACTS_LABEL,
-                    type="primary",
-                    key=f"download_{selected.id}",
-                ):
-                    _download_conversion_artefacts(selected, blob_storage)
+    col1, col2 = st.columns([3, 1])
 
-            # Delete button
-            st.divider()
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.warning(
-                    "Deleting this conversion will remove it from history. "
-                    "This action cannot be undone."
-                )
-            with col2:
-                if st.button(
-                    "Delete Conversion",
-                    type="secondary",
-                    key=f"delete_conversion_{selected.id}",
-                ):
-                    if storage_manager.delete_conversion(selected.id):
-                        st.success("Conversion deleted successfully!")
-                        st.rerun()
-                    else:
-                        st.error("Failed to delete conversion.")
+    with col1:
+        st.write(f"**Cookbook:** {selected.cookbook_name}")
+        st.write(f"**Output Type:** {selected.output_type}")
+        st.write(f"**Files Generated:** {selected.files_generated}")
+
+    with col2:
+        if st.button(
+            DOWNLOAD_ARTEFACTS_LABEL,
+            type="primary",
+            key=f"download_{selected.id}",
+        ):
+            _download_conversion_artefacts(selected, blob_storage)
+
+    _display_conversion_deletion(storage_manager, selected)
+
+
+def _display_conversion_deletion(storage_manager, selected) -> None:
+    """Display conversion deletion controls."""
+    st.divider()
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.warning(
+            "Deleting this conversion will remove it from history. "
+            "This action cannot be undone."
+        )
+    with col2:
+        if st.button(
+            "Delete Conversion",
+            type="secondary",
+            key=f"delete_conversion_{selected.id}",
+        ):
+            if storage_manager.delete_conversion(selected.id):
+                st.success("Conversion deleted successfully!")
+                st.rerun()
+            else:
+                st.error("Failed to delete conversion.")
 
 
 def _download_conversion_artefacts(conversion, blob_storage) -> None:

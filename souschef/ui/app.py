@@ -44,6 +44,10 @@ NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
 NAV_HISTORY = "History"
 BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
 INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
+HISTORY_SUBHEADER = "Load from History"
+HISTORY_SELECT_PROMPT = "Select a previous analysis"
+HISTORY_SELECT_PLACEHOLDER = "-- Select from history --"
+HISTORY_SELECT_HELP = "Load cookbook path from a previous analysis"
 MIME_TEXT_MARKDOWN = "text/markdown"
 MIME_APPLICATION_JSON = "application/json"
 ERROR_MSG_ENTER_PATH = "Please enter a path."
@@ -114,6 +118,43 @@ def with_progress_tracking(
     return wrapper
 
 
+def _render_navigation_button(
+    col: Any, label: str, page_key: str, current_page: str
+) -> None:
+    """Render a single navigation button."""
+    with col:
+        if st.button(
+            label,
+            type="primary" if current_page == page_key else "secondary",
+            width="stretch",
+            key=f"nav_{page_key.lower().replace(' ', '_')}",
+        ):
+            st.session_state.current_page = page_key
+            st.rerun()
+
+
+def _display_navigation_section(current_page: str) -> None:
+    """Display the navigation section with all buttons."""
+    st.subheader("Navigation")
+
+    col1, col2, col3, col4 = st.columns(4)
+    col5, col6, col7, col8 = st.columns(4)
+
+    nav_buttons = [
+        (col1, "Cookbook Analysis", NAV_COOKBOOK_ANALYSIS),
+        (col2, "Migration Planning", NAV_MIGRATION_PLANNING),
+        (col3, "Migration Config", NAV_MIGRATION_CONFIG),
+        (col4, "Dependency Mapping", NAV_DEPENDENCY_MAPPING),
+        (col5, "History", NAV_HISTORY),
+        (col6, "Validation Reports", NAV_VALIDATION_REPORTS),
+        (col7, "AI Settings", NAV_AI_SETTINGS),
+        (col8, "Chef Server", NAV_CHEF_SERVER_SETTINGS),
+    ]
+
+    for col, label, page_key in nav_buttons:
+        _render_navigation_button(col, label, page_key, current_page)
+
+
 def main() -> None:
     """Run the main Streamlit application."""
     st.set_page_config(
@@ -129,90 +170,7 @@ def main() -> None:
     page = st.session_state.get("current_page", "Dashboard")
 
     # Navigation section
-    st.subheader("Navigation")
-
-    col1, col2, col3, col4 = st.columns(4)
-    col5, col6, col7, col8 = st.columns(4)
-
-    with col1:
-        if st.button(
-            "Cookbook Analysis",
-            type="primary" if page == NAV_COOKBOOK_ANALYSIS else "secondary",
-            width="stretch",
-            key="nav_cookbook_analysis",
-        ):
-            st.session_state.current_page = NAV_COOKBOOK_ANALYSIS
-            st.rerun()
-
-    with col2:
-        if st.button(
-            "Migration Planning",
-            type="primary" if page == NAV_MIGRATION_PLANNING else "secondary",
-            width="stretch",
-            key="nav_migration_planning",
-        ):
-            st.session_state.current_page = NAV_MIGRATION_PLANNING
-            st.rerun()
-
-    with col3:
-        if st.button(
-            "Migration Config",
-            type="primary" if page == NAV_MIGRATION_CONFIG else "secondary",
-            width="stretch",
-            key="nav_migration_config",
-        ):
-            st.session_state.current_page = NAV_MIGRATION_CONFIG
-            st.rerun()
-
-    with col4:
-        if st.button(
-            "Dependency Mapping",
-            type="primary" if page == NAV_DEPENDENCY_MAPPING else "secondary",
-            width="stretch",
-            key="nav_dependency_mapping",
-        ):
-            st.session_state.current_page = NAV_DEPENDENCY_MAPPING
-            st.rerun()
-
-    with col5:
-        if st.button(
-            "History",
-            type="primary" if page == NAV_HISTORY else "secondary",
-            width="stretch",
-            key="nav_history",
-        ):
-            st.session_state.current_page = NAV_HISTORY
-            st.rerun()
-
-    with col6:
-        if st.button(
-            "Validation Reports",
-            type="primary" if page == NAV_VALIDATION_REPORTS else "secondary",
-            width="stretch",
-            key="nav_validation_reports",
-        ):
-            st.session_state.current_page = NAV_VALIDATION_REPORTS
-            st.rerun()
-
-    with col7:
-        if st.button(
-            "AI Settings",
-            type="primary" if page == NAV_AI_SETTINGS else "secondary",
-            width="stretch",
-            key="nav_ai_settings",
-        ):
-            st.session_state.current_page = NAV_AI_SETTINGS
-            st.rerun()
-
-    with col8:
-        if st.button(
-            "Chef Server",
-            type="primary" if page == NAV_CHEF_SERVER_SETTINGS else "secondary",
-            width="stretch",
-            key="nav_chef_server_settings",
-        ):
-            st.session_state.current_page = NAV_CHEF_SERVER_SETTINGS
-            st.rerun()
+    _display_navigation_section(page)
 
     st.divider()
 
@@ -412,22 +370,54 @@ def show_dashboard() -> None:
     _display_recent_activity()
 
 
-def show_migration_planning() -> None:
-    """Show migration planning interface."""
-    st.header(NAV_MIGRATION_PLANNING)
+def _format_history_analysis(analysis_id, analyses):
+    """Format analysis entry for display."""
+    if analysis_id is None:
+        return HISTORY_SELECT_PLACEHOLDER
+    for a in analyses:
+        if a.id == analysis_id:
+            if isinstance(a.created_at, str):
+                date_str = a.created_at[:10]
+            elif hasattr(a.created_at, "strftime"):
+                date_str = a.created_at.strftime("%Y-%m-%d")
+            else:
+                date_str = str(a.created_at)[:10]
+            return (
+                f"{a.cookbook_name} v{a.cookbook_version} - "
+                f"{a.complexity} complexity ({date_str})"
+            )
+    return "--"
 
-    # Import assessment functions
-    from souschef.assessment import generate_migration_plan
+
+def _render_history_selectbox(analyses):
+    """Render history selection box."""
+
+    def _format_analysis(x):
+        return _format_history_analysis(x, analyses)
+
+    return st.selectbox(
+        HISTORY_SELECT_PROMPT,
+        options=[None] + [a.id for a in analyses],
+        format_func=_format_analysis,
+        key="migration_planning_history_select",
+        help=HISTORY_SELECT_HELP,
+    )
+
+
+def _handle_history_load_button(selected_analysis_id, analyses):
+    """Handle loading analysis from history."""
+    if selected_analysis_id and st.button("Load", key="load_from_history_mp"):
+        selected = next(a for a in analyses if a.id == selected_analysis_id)
+        st.session_state.analysis_cookbook_path = selected.cookbook_path
+        st.success(f"Loaded: {selected.cookbook_name}")
+        st.rerun()
+
+
+def _display_migration_planning_history() -> None:
+    """Display migration planning history section."""
+    st.subheader(HISTORY_SUBHEADER)
     from souschef.storage import get_storage_manager
 
-    # Migration planning wizard
-    st.markdown("""
-    Plan your Chef-to-Ansible migration with this interactive wizard.
-    Get detailed timelines, effort estimates, and risk assessments.
-    """)
-
-    # Load from History
-    st.subheader("Load from History")
     storage_manager = get_storage_manager()
     analyses = storage_manager.get_analysis_history(limit=50)
 
@@ -435,46 +425,18 @@ def show_migration_planning() -> None:
         col1, col2 = st.columns([3, 1])
 
         with col1:
-
-            def _format_analysis(x):
-                if x is None:
-                    return "-- Select from history --"
-                for a in analyses:
-                    if a.id == x:
-                        date_str = (
-                            a.created_at.strftime("%Y-%m-%d")
-                            if hasattr(a.created_at, "strftime")
-                            else str(a.created_at)[:10]
-                        )
-                        return (
-                            f"{a.cookbook_name} v{a.cookbook_version} - "
-                            f"{a.complexity} complexity ({date_str})"
-                        )
-                return "--"
-
-            selected_analysis_id = st.selectbox(
-                "Select a previous analysis",
-                options=[None] + [a.id for a in analyses],
-                format_func=_format_analysis,
-                key="migration_planning_history_select",
-                help="Load cookbook path from a previous analysis",
-            )
+            selected_analysis_id = _render_history_selectbox(analyses)
 
         with col2:
-            if selected_analysis_id and st.button("Load", key="load_from_history_mp"):
-                selected = next(a for a in analyses if a.id == selected_analysis_id)
-                st.session_state.analysis_cookbook_path = selected.cookbook_path
-                st.success(f"Loaded: {selected.cookbook_name}")
-                st.rerun()
+            _handle_history_load_button(selected_analysis_id, analyses)
     else:
         st.info("No analysis history available. Run a cookbook analysis first.")
 
-    st.divider()
 
-    # Step 1: Cookbook Selection
+def _get_cookbook_paths_input() -> str:
+    """Get cookbook paths from user input or previous analysis."""
     st.subheader("Step 1: Cookbook Selection")
 
-    # Check for previously analyzed cookbooks
     uploaded_plan_context = None
     if (
         "analysis_cookbook_path" in st.session_state
@@ -486,7 +448,6 @@ def show_migration_planning() -> None:
     col1, col2 = st.columns([3, 1])
 
     with col1:
-        # Default to analyzed path if available
         default_paths = uploaded_plan_context if uploaded_plan_context else ""
 
         cookbook_paths = st.text_area(
@@ -505,22 +466,28 @@ def show_migration_planning() -> None:
             help="Load example cookbook configurations",
         )
 
-    # Load example configurations
-    if quick_select == "Single Cookbook":
-        cookbook_paths = "/path/to/cookbooks/nginx"
-    elif quick_select == "Multiple Cookbooks":
-        cookbook_paths = (
+    return _apply_quick_select_example(cookbook_paths, quick_select)
+
+
+def _apply_quick_select_example(cookbook_paths: str, quick_select: str) -> str:
+    """Apply quick select example to cookbook paths."""
+    examples = {
+        "Single Cookbook": "/path/to/cookbooks/nginx",
+        "Multiple Cookbooks": (
             "/path/to/cookbooks/nginx,/path/to/cookbooks/apache2,"
             "/path/to/cookbooks/mysql"
-        )
-    elif quick_select == "Full Migration":
-        cookbook_paths = (
+        ),
+        "Full Migration": (
             "/path/to/cookbooks/nginx,/path/to/cookbooks/apache2,"
             "/path/to/cookbooks/mysql,/path/to/cookbooks/postgresql,"
             "/path/to/cookbooks/redis"
-        )
+        ),
+    }
+    return examples.get(quick_select, cookbook_paths)
 
-    # Step 2: Migration Strategy
+
+def _get_migration_strategy_inputs() -> tuple[str, int]:
+    """Get migration strategy and timeline inputs."""
     st.subheader("Step 2: Migration Strategy")
 
     col1, col2 = st.columns(2)
@@ -546,7 +513,12 @@ def show_migration_planning() -> None:
             help="Target timeline for migration completion",
         )
 
-    # Strategy descriptions
+    _display_strategy_details(migration_strategy)
+    return migration_strategy, timeline_weeks
+
+
+def _display_strategy_details(migration_strategy: str) -> None:
+    """Display strategy details in an expander."""
     strategy_descriptions = {
         "phased": """
         **Phased Migration** - Migrate cookbooks in stages based on complexity
@@ -576,7 +548,13 @@ def show_migration_planning() -> None:
     with st.expander("Strategy Details"):
         st.markdown(strategy_descriptions.get(migration_strategy, ""))
 
-    # Step 3: Generate Plan
+
+def _execute_migration_plan_generation(
+    cookbook_paths: str, migration_strategy: str, timeline_weeks: int
+) -> None:
+    """Execute migration plan generation."""
+    from souschef.assessment import generate_migration_plan
+
     st.subheader("Step 3: Generate Migration Plan")
 
     if st.button(
@@ -589,15 +567,12 @@ def show_migration_planning() -> None:
             st.error("Please enter cookbook paths to generate a migration plan.")
             return
 
-        # Create progress tracker
         progress_tracker = ProgressTracker(
             total_steps=7, description="Generating migration plan..."
         )
 
         try:
             progress_tracker.update(1, "Scanning cookbook directories...")
-
-            # Generate migration plan
             plan_result = generate_migration_plan(
                 cookbook_paths.strip(), migration_strategy, timeline_weeks
             )
@@ -608,7 +583,6 @@ def show_migration_planning() -> None:
             progress_tracker.update(5, "Generating timeline estimates...")
             progress_tracker.update(6, "Creating migration phases...")
 
-            # Store results in session state for persistence
             st.session_state.migration_plan = plan_result
             st.session_state.cookbook_paths = cookbook_paths.strip()
             st.session_state.strategy = migration_strategy
@@ -621,7 +595,31 @@ def show_migration_planning() -> None:
         except Exception as e:
             progress_tracker.close()
             st.error(f"Error generating migration plan: {e}")
-            return
+
+
+def show_migration_planning() -> None:
+    """Show migration planning interface."""
+    st.header(NAV_MIGRATION_PLANNING)
+
+    st.markdown("""
+    Plan your Chef-to-Ansible migration with this interactive wizard.
+    Get detailed timelines, effort estimates, and risk assessments.
+    """)
+
+    # Load from History
+    _display_migration_planning_history()
+    st.divider()
+
+    # Step 1: Get cookbook paths
+    cookbook_paths = _get_cookbook_paths_input()
+
+    # Step 2: Get migration strategy
+    migration_strategy, timeline_weeks = _get_migration_strategy_inputs()
+
+    # Step 3: Generate plan
+    _execute_migration_plan_generation(
+        cookbook_paths, migration_strategy, timeline_weeks
+    )
 
     # Display results if available
     if "migration_plan" in st.session_state:
@@ -769,109 +767,104 @@ def display_migration_plan_results() -> None:
     _display_additional_reports()
 
 
-def show_dependency_mapping() -> None:
-    """Show dependency mapping visualization."""
+def _display_dependency_mapping_header() -> None:
+    """Display header and description for dependency mapping."""
     st.header(NAV_DEPENDENCY_MAPPING)
-
-    # Import assessment functions
-    from souschef.assessment import analyse_cookbook_dependencies
-    from souschef.storage import get_storage_manager
-
     st.markdown("""
     Visualise and analyse cookbook dependencies to understand migration order
     and identify potential circular dependencies.
     """)
 
-    # Load from History
-    st.subheader("Load from History")
+
+def _display_dependency_mapping_history() -> None:
+    """Display and handle history selection for dependency mapping."""
+    from souschef.storage import get_storage_manager
+
+    st.subheader(HISTORY_SUBHEADER)
     storage_manager = get_storage_manager()
     analyses = storage_manager.get_analysis_history(limit=50)
 
-    if analyses:
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-
-            def _format_analysis(x):
-                if x is None:
-                    return "-- Select from history --"
-                for a in analyses:
-                    if a.id == x:
-                        date_str = (
-                            a.created_at.strftime("%Y-%m-%d")
-                            if hasattr(a.created_at, "strftime")
-                            else str(a.created_at)[:10]
-                        )
-                        return (
-                            f"{a.cookbook_name} v{a.cookbook_version} - "
-                            f"{a.complexity} complexity ({date_str})"
-                        )
-                return "--"
-
-            selected_analysis_id = st.selectbox(
-                "Select a previous analysis",
-                options=[None] + [a.id for a in analyses],
-                format_func=_format_analysis,
-                key="dependency_mapping_history_select",
-                help="Load cookbook path from a previous analysis",
-            )
-
-        with col2:
-            if selected_analysis_id and st.button("Load", key="load_from_history_dm"):
-                selected = next(a for a in analyses if a.id == selected_analysis_id)
-                st.session_state.dep_analysis_cookbook_path = selected.cookbook_path
-                st.success(f"Loaded: {selected.cookbook_name}")
-                st.rerun()
-    else:
+    if not analyses:
         st.info("No analysis history available. Run a cookbook analysis first.")
+        return
 
-    st.divider()
+    col1, col2 = st.columns([3, 1])
 
-    # Input method selection
-    input_method = st.radio(
-        "Choose Input Method",
-        ["Upload Archive", INPUT_METHOD_DIRECTORY_PATH, "Use History"],
-        horizontal=True,
-        help="Select how to provide cookbooks for dependency analysis",
-        key="dep_input_method",
-    )
+    with col1:
 
-    cookbook_path = None
-    uploaded_file = None
+        def _format_analysis(x):
+            if x is None:
+                return HISTORY_SELECT_PLACEHOLDER
+            for a in analyses:
+                if a.id == x:
+                    date_str = (
+                        a.created_at.strftime("%Y-%m-%d")
+                        if hasattr(a.created_at, "strftime")
+                        else str(a.created_at)[:10]
+                    )
+                    return (
+                        f"{a.cookbook_name} v{a.cookbook_version} - "
+                        f"{a.complexity} complexity ({date_str})"
+                    )
+            return "--"
 
+        selected_analysis_id = st.selectbox(
+            HISTORY_SELECT_PROMPT,
+            options=[None] + [a.id for a in analyses],
+            format_func=_format_analysis,
+            key="dependency_mapping_history_select",
+            help=HISTORY_SELECT_HELP,
+        )
+
+    with col2:
+        if selected_analysis_id and st.button("Load", key="load_from_history_dm"):
+            selected = next(a for a in analyses if a.id == selected_analysis_id)
+            st.session_state.dep_analysis_cookbook_path = selected.cookbook_path
+            st.success(f"Loaded: {selected.cookbook_name}")
+            st.rerun()
+
+
+def _get_cookbook_path_from_input_method(input_method: str) -> str | None:
+    """Get cookbook path based on selected input method."""
     if input_method == INPUT_METHOD_DIRECTORY_PATH:
-        cookbook_path = st.text_input(
+        return st.text_input(
             "Cookbook Directory Path",
             placeholder="/path/to/your/cookbooks",
             help="Enter the path to your cookbooks directory for dependency analysis",
         )
-    elif input_method == "Use History":
-        # Use path from session state if loaded from history
+
+    if input_method == "Use History":
         if "dep_analysis_cookbook_path" in st.session_state:
             cookbook_path = st.session_state.dep_analysis_cookbook_path
             st.info(f"Using cookbook from history: {cookbook_path}")
-        else:
-            st.warning("Please load a cookbook from history above.")
-    else:
-        uploaded_file = st.file_uploader(
-            "Upload Cookbook Archive",
-            type=["zip", "tar.gz", "tgz", "tar"],
-            help="Upload a ZIP or TAR archive containing your Chef cookbooks",
-            key="dep_archive_upload",
-        )
-        if uploaded_file:
-            try:
-                with st.spinner("Extracting archive..."):
-                    # Import the extract function from cookbook_analysis
-                    from souschef.ui.pages.cookbook_analysis import extract_archive
+            return cookbook_path
+        st.warning("Please load a cookbook from history above.")
+        return None
 
-                    cookbook_path = str(extract_archive(uploaded_file))
-                st.success("Archive extracted successfully")
-            except Exception as e:
-                st.error(f"Failed to extract archive: {e}")
-                return
+    # Upload Archive
+    uploaded_file = st.file_uploader(
+        "Upload Cookbook Archive",
+        type=["zip", "tar.gz", "tgz", "tar"],
+        help="Upload a ZIP or TAR archive containing your Chef cookbooks",
+        key="dep_archive_upload",
+    )
+    if uploaded_file:
+        try:
+            with st.spinner("Extracting archive..."):
+                from souschef.ui.pages.cookbook_analysis import extract_archive
 
-    # Analysis options
+                cookbook_path = str(extract_archive(uploaded_file))
+            st.success("Archive extracted successfully")
+            return cookbook_path
+        except Exception as e:
+            st.error(f"Failed to extract archive: {e}")
+            return None
+
+    return None
+
+
+def _get_dependency_analysis_options() -> tuple[str, str]:
+    """Get user-selected analysis depth and visualization type."""
     col1, col2 = st.columns(2)
 
     with col1:
@@ -898,6 +891,68 @@ def show_dependency_mapping() -> None:
             }.get(x, str(x)),
         )
 
+    return dependency_depth, visualization_type
+
+
+def _execute_dependency_analysis(
+    cookbook_path: str, dependency_depth: str, visualization_type: str
+) -> None:
+    """Execute dependency analysis and store results."""
+    from souschef.assessment import analyse_cookbook_dependencies
+
+    if not cookbook_path or not cookbook_path.strip():
+        st.error("Please enter a cookbook directory path.")
+        return
+
+    progress_tracker = ProgressTracker(
+        total_steps=5, description="Analysing cookbook dependencies..."
+    )
+
+    try:
+        progress_tracker.update(1, "Scanning cookbook directory...")
+        analysis_result = analyse_cookbook_dependencies(
+            cookbook_path.strip(), dependency_depth
+        )
+
+        progress_tracker.update(2, "Parsing dependency relationships...")
+        progress_tracker.update(3, "Detecting circular dependencies...")
+        progress_tracker.update(4, "Generating migration recommendations...")
+
+        st.session_state.dep_analysis_result = analysis_result
+        st.session_state.dep_cookbook_path = cookbook_path.strip()
+        st.session_state.dep_depth = dependency_depth
+        st.session_state.dep_viz_type = visualization_type
+
+        progress_tracker.complete("Dependency analysis completed!")
+        st.success("Analysis completed successfully!")
+        st.rerun()
+
+    except Exception as e:
+        progress_tracker.close()
+        st.error(f"Error analyzing dependencies: {e}")
+
+
+def show_dependency_mapping() -> None:
+    """Show dependency mapping visualization."""
+    _display_dependency_mapping_header()
+
+    _display_dependency_mapping_history()
+    st.divider()
+
+    # Input method selection
+    input_method = st.radio(
+        "Choose Input Method",
+        ["Upload Archive", INPUT_METHOD_DIRECTORY_PATH, "Use History"],
+        horizontal=True,
+        help="Select how to provide cookbooks for dependency analysis",
+        key="dep_input_method",
+    )
+
+    cookbook_path = _get_cookbook_path_from_input_method(input_method)
+
+    # Analysis options
+    dependency_depth, visualization_type = _get_dependency_analysis_options()
+
     # Analysis button
     if st.button(
         BUTTON_ANALYSE_DEPENDENCIES,
@@ -905,41 +960,9 @@ def show_dependency_mapping() -> None:
         width="stretch",
         key="dep_analyse_dependencies",
     ):
-        if not cookbook_path or not cookbook_path.strip():
-            st.error("Please enter a cookbook directory path.")
-            return
-
-        # Create progress tracker
-        progress_tracker = ProgressTracker(
-            total_steps=5, description="Analysing cookbook dependencies..."
+        _execute_dependency_analysis(
+            cookbook_path, dependency_depth, visualization_type
         )
-
-        try:
-            progress_tracker.update(1, "Scanning cookbook directory...")
-
-            # Analyse dependencies
-            analysis_result = analyse_cookbook_dependencies(
-                cookbook_path.strip(), dependency_depth
-            )
-
-            progress_tracker.update(2, "Parsing dependency relationships...")
-            progress_tracker.update(3, "Detecting circular dependencies...")
-            progress_tracker.update(4, "Generating migration recommendations...")
-
-            # Store results
-            st.session_state.dep_analysis_result = analysis_result
-            st.session_state.dep_cookbook_path = cookbook_path.strip()
-            st.session_state.dep_depth = dependency_depth
-            st.session_state.dep_viz_type = visualization_type
-
-            progress_tracker.complete("Dependency analysis completed!")
-            st.success("Analysis completed successfully!")
-            st.rerun()
-
-        except Exception as e:
-            progress_tracker.close()
-            st.error(f"Error analyzing dependencies: {e}")
-            return
 
     # Display results if available
     if "dep_analysis_result" in st.session_state:
@@ -2949,12 +2972,159 @@ def _handle_validation_execution(input_path: str, options: Mapping[str, Any]) ->
         st.error(f"Error during validation: {e}")
 
 
+def _format_analysis_for_validation(analysis, analysis_id):
+    """Format analysis entry for validation history display."""
+    if analysis_id is None:
+        return HISTORY_SELECT_PLACEHOLDER
+    for a in analysis:
+        if a.id == analysis_id:
+            date_str = (
+                a.created_at.strftime("%Y-%m-%d")
+                if hasattr(a.created_at, "strftime")
+                else str(a.created_at)[:10]
+            )
+            return (
+                f"{a.cookbook_name} v{a.cookbook_version} - "
+                f"{a.complexity} complexity ({date_str})"
+            )
+    return "--"
+
+
+def _format_conversion_for_validation(conversions, conversion_id):
+    """Format conversion entry for validation history display."""
+    if conversion_id is None:
+        return HISTORY_SELECT_PLACEHOLDER
+    for c in conversions:
+        if c.id == conversion_id:
+            date_str = (
+                c.created_at.strftime("%Y-%m-%d")
+                if hasattr(c.created_at, "strftime")
+                else str(c.created_at)[:10]
+            )
+            return f"{c.cookbook_name} - {c.output_type} ({c.status}) - {date_str}"
+    return "--"
+
+
+def _display_analysis_history_tab(analyses):
+    """Display analysis history tab for validation reports."""
+    if analyses:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            selected_analysis_id = st.selectbox(
+                HISTORY_SELECT_PROMPT,
+                options=[None] + [a.id for a in analyses],
+                format_func=lambda x: _format_analysis_for_validation(analyses, x),
+                key="validation_reports_analysis_select",
+                help=HISTORY_SELECT_HELP,
+            )
+
+        with col2:
+            if st.button("Load", key="load_analysis_vr") and selected_analysis_id:
+                selected = next(a for a in analyses if a.id == selected_analysis_id)
+                st.session_state.analysis_cookbook_path = selected.cookbook_path
+                st.success(f"Loaded: {selected.cookbook_name}")
+                st.rerun()
+    else:
+        st.info("No analysis history available.")
+
+
+def _display_conversion_history_tab(conversions):
+    """Display conversion history tab for validation reports."""
+    if conversions:
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            selected_conversion_id = st.selectbox(
+                "Select a previous conversion",
+                options=[None] + [c.id for c in conversions if c.blob_storage_key],
+                format_func=lambda x: _format_conversion_for_validation(conversions, x),
+                key="validation_reports_conversion_select",
+                help="Load playbook path from a previous conversion",
+            )
+
+        with col2:
+            if st.button("Load", key="load_conversion_vr") and selected_conversion_id:
+                from souschef.storage.database import ConversionResult
+
+                selected_conv: ConversionResult = next(
+                    c for c in conversions if c.id == selected_conversion_id
+                )
+                st.session_state.converted_playbooks_path = (
+                    f"conversion_{selected_conv.id}"
+                )
+                st.success(f"Loaded conversion: {selected_conv.cookbook_name}")
+                st.info(
+                    "Note: You may need to specify the actual "
+                    "playbook path after extraction."
+                )
+                st.rerun()
+    else:
+        st.info("No conversion history available.")
+
+
+def _display_validation_history_tabs():
+    """Display history selection tabs for analyses and conversions."""
+    from souschef.storage import get_storage_manager
+
+    storage_manager = get_storage_manager()
+    analyses = storage_manager.get_analysis_history(limit=50)
+    conversions = storage_manager.get_conversion_history(limit=50)
+
+    tab1, tab2 = st.tabs(["From Analysis", "From Conversion"])
+
+    with tab1:
+        _display_analysis_history_tab(analyses)
+
+    with tab2:
+        _display_conversion_history_tab(conversions)
+
+
+def _collect_validation_inputs() -> tuple[str, str, str, bool, bool, bool]:
+    """Collect all validation input settings from UI."""
+    default_path = _get_default_validation_path()
+    validation_scope, output_format = _render_validation_options_ui()
+    input_path = _render_validation_input_ui(default_path)
+    strict_mode, include_best_practices, generate_recommendations = (
+        _render_validation_settings_ui()
+    )
+    return (
+        input_path,
+        validation_scope,
+        output_format,
+        strict_mode,
+        include_best_practices,
+        generate_recommendations,
+    )
+
+
+def _execute_validation_workflow(
+    input_path: str,
+    validation_scope: str,
+    output_format: str,
+    strict_mode: bool,
+    include_best_practices: bool,
+    generate_recommendations: bool,
+) -> None:
+    """Execute the validation workflow with collected inputs."""
+    if not input_path or not input_path.strip():
+        st.error("Please enter a path to validate.")
+        return
+
+    options = {
+        "strict": strict_mode,
+        "best_practices": include_best_practices,
+        "recommendations": generate_recommendations,
+        "scope": validation_scope,
+        "format": output_format,
+    }
+
+    _handle_validation_execution(input_path, options)
+
+
 def show_validation_reports() -> None:
     """Show validation reports and conversion validation."""
     st.header(NAV_VALIDATION_REPORTS)
-
-    from souschef.storage import get_storage_manager
-    from souschef.storage.database import ConversionResult
 
     st.markdown("""
     Validate Chef to Ansible conversions and generate comprehensive
@@ -2962,133 +3132,33 @@ def show_validation_reports() -> None:
     """)
 
     # Load from History
-    st.subheader("Load from History")
-    storage_manager = get_storage_manager()
-
-    # Get both analyses and conversions
-    analyses = storage_manager.get_analysis_history(limit=50)
-    conversions = storage_manager.get_conversion_history(limit=50)
-
-    tab1, tab2 = st.tabs(["From Analysis", "From Conversion"])
-
-    with tab1:
-        if analyses:
-            col1, col2 = st.columns([3, 1])
-
-            with col1:
-
-                def _format_analysis_vr(x):
-                    if x is None:
-                        return "-- Select from history --"
-                    for a in analyses:
-                        if a.id == x:
-                            date_str = (
-                                a.created_at.strftime("%Y-%m-%d")
-                                if hasattr(a.created_at, "strftime")
-                                else str(a.created_at)[:10]
-                            )
-                            return (
-                                f"{a.cookbook_name} v{a.cookbook_version} - "
-                                f"{a.complexity} complexity ({date_str})"
-                            )
-                    return "--"
-
-                selected_analysis_id = st.selectbox(
-                    "Select a previous analysis",
-                    options=[None] + [a.id for a in analyses],
-                    format_func=_format_analysis_vr,
-                    key="validation_reports_analysis_select",
-                    help="Load cookbook path from a previous analysis",
-                )
-
-            with col2:
-                load_btn = st.button("Load", key="load_analysis_vr")
-                if selected_analysis_id and load_btn:
-                    selected = next(a for a in analyses if a.id == selected_analysis_id)
-                    st.session_state.analysis_cookbook_path = selected.cookbook_path
-                    st.success(f"Loaded: {selected.cookbook_name}")
-                    st.rerun()
-        else:
-            st.info("No analysis history available.")
-
-    with tab2:
-        if conversions:
-            col1, col2 = st.columns([3, 1])
-
-            with col1:
-
-                def _format_conversion_vr(x):
-                    if x is None:
-                        return "-- Select from history --"
-                    for c in conversions:
-                        if c.id == x:
-                            date_str = (
-                                c.created_at.strftime("%Y-%m-%d")
-                                if hasattr(c.created_at, "strftime")
-                                else str(c.created_at)[:10]
-                            )
-                            return (
-                                f"{c.cookbook_name} - {c.output_type} "
-                                f"({c.status}) - {date_str}"
-                            )
-                    return "--"
-
-                selected_conversion_id = st.selectbox(
-                    "Select a previous conversion",
-                    options=[None] + [c.id for c in conversions if c.blob_storage_key],
-                    format_func=_format_conversion_vr,
-                    key="validation_reports_conversion_select",
-                    help="Load playbook path from a previous conversion",
-                )
-
-            with col2:
-                load_btn = st.button("Load", key="load_conversion_vr")
-                if selected_conversion_id and load_btn:
-                    selected_conv: ConversionResult = next(
-                        c for c in conversions if c.id == selected_conversion_id
-                    )
-                    # Note: For conversions, download from blob storage
-                    st.session_state.converted_playbooks_path = (
-                        f"conversion_{selected_conv.id}"
-                    )
-                    st.success(f"Loaded conversion: {selected_conv.cookbook_name}")
-                    st.info(
-                        "Note: You may need to specify the actual "
-                        "playbook path after extraction."
-                    )
-                    st.rerun()
-        else:
-            st.info("No conversion history available.")
+    st.subheader(HISTORY_SUBHEADER)
+    _display_validation_history_tabs()
 
     st.divider()
 
-    # Check for previously analyzed path to pre-fill
-    default_path = _get_default_validation_path()
-
-    # UI Components
-    validation_scope, output_format = _render_validation_options_ui()
-    input_path = _render_validation_input_ui(default_path)
-    strict_mode, include_best_practices, generate_recommendations = (
-        _render_validation_settings_ui()
-    )
+    # Collect validation inputs
+    (
+        input_path,
+        validation_scope,
+        output_format,
+        strict_mode,
+        include_best_practices,
+        generate_recommendations,
+    ) = _collect_validation_inputs()
 
     # Validation button
     if st.button(
         "Run Validation", type="primary", width="stretch", key="run_validation"
     ):
-        if not input_path or not input_path.strip():
-            st.error("Please enter a path to validate.")
-            return
-
-        options = {
-            "strict": strict_mode,
-            "best_practices": include_best_practices,
-            "recommendations": generate_recommendations,
-            "scope": validation_scope,
-            "format": output_format,
-        }
-
-        _handle_validation_execution(input_path, options)
+        _execute_validation_workflow(
+            input_path,
+            validation_scope,
+            output_format,
+            strict_mode,
+            include_best_practices,
+            generate_recommendations,
+        )
 
     # Display results if available
     if "validation_result" in st.session_state:
