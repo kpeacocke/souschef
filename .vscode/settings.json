@@ -521,5 +521,6 @@
     "codeQL.createQuery.qlPackLocation": "/Users/kpeacocke/code/souschef",
     "python-envs.defaultEnvManager": "ms-python.python:venv",
     "python-envs.defaultPackageManager": "ms-python.python:pip",
-    "snyk.advanced.organization": "16296024-d80b-4481-bbf6-92e2a42b462e"
+    "snyk.advanced.organization": "16296024-d80b-4481-bbf6-92e2a42b462e",
+    "trivy.offlineScan": true
 }

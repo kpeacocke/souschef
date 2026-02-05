@@ -67,8 +67,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy dependency files first (for better layer caching)
 COPY pyproject.toml poetry.lock ./
 
-# Upgrade pip to pick up security fixes
-RUN python -m pip install --no-cache-dir --upgrade pip
+# Upgrade pip to pick up security fixes (pip >= 26.0 for CVE-2026-1703 fix)
+RUN python -m pip install --no-cache-dir --upgrade "pip>=26.0"
 
 # Install Poetry with pinned version for reproducibility
 RUN pip install --no-cache-dir --require-hashes \
