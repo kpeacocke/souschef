@@ -9,6 +9,7 @@ if str(app_path) not in sys.path:
 import contextlib
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
 
 import streamlit as st
@@ -378,7 +379,7 @@ def _format_history_analysis(analysis_id, analyses):
         if a.id == analysis_id:
             if isinstance(a.created_at, str):
                 date_str = a.created_at[:10]
-            elif hasattr(a.created_at, "strftime"):
+            elif isinstance(a.created_at, datetime):
                 date_str = a.created_at.strftime("%Y-%m-%d")
             else:
                 date_str = str(a.created_at)[:10]
@@ -799,7 +800,7 @@ def _display_dependency_mapping_history() -> None:
                 if a.id == x:
                     date_str = (
                         a.created_at.strftime("%Y-%m-%d")
-                        if hasattr(a.created_at, "strftime")
+                        if isinstance(a.created_at, datetime)
                         else str(a.created_at)[:10]
                     )
                     return (
@@ -960,9 +961,12 @@ def show_dependency_mapping() -> None:
         width="stretch",
         key="dep_analyse_dependencies",
     ):
-        _execute_dependency_analysis(
-            cookbook_path, dependency_depth, visualization_type
-        )
+        if cookbook_path:
+            _execute_dependency_analysis(
+                cookbook_path, dependency_depth, visualization_type
+            )
+        else:
+            st.error("Please provide a valid cookbook path.")
 
     # Display results if available
     if "dep_analysis_result" in st.session_state:
@@ -2980,7 +2984,7 @@ def _format_analysis_for_validation(analysis, analysis_id):
         if a.id == analysis_id:
             date_str = (
                 a.created_at.strftime("%Y-%m-%d")
-                if hasattr(a.created_at, "strftime")
+                if isinstance(a.created_at, datetime)
                 else str(a.created_at)[:10]
             )
             return (
@@ -2998,7 +3002,7 @@ def _format_conversion_for_validation(conversions, conversion_id):
         if c.id == conversion_id:
             date_str = (
                 c.created_at.strftime("%Y-%m-%d")
-                if hasattr(c.created_at, "strftime")
+                if isinstance(c.created_at, datetime)
                 else str(c.created_at)[:10]
             )
             return f"{c.cookbook_name} - {c.output_type} ({c.status}) - {date_str}"
