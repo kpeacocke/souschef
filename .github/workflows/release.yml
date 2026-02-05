@@ -351,7 +351,6 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/mcp-souschef
-            ${{ secrets.DOCKERHUB_USERNAME != '' && format('docker.io/{0}/mcp-souschef', secrets.DOCKERHUB_USERNAME) || '' }}
           tags: |
             type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
@@ -365,7 +364,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
+      - name: Login to Docker Hub (if configured)
         if: secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
         with:
