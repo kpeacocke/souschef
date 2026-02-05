@@ -390,7 +390,7 @@ jobs:
           status: success
           deployment_id: ${{ steps.docker-deployment.outputs.deployment_id }}
           env: docker
-          env_url: ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}
+          env_url: https://ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}
 
       - name: Update Docker deployment status (failure)
         uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
