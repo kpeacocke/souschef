@@ -1,12 +1,13 @@
 """History page for viewing past analyses and conversions."""
 
 import json
+import os
 import sys
 import tarfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
-import os
+from typing import Any, cast
 
 import pandas as pd
 import streamlit as st
@@ -38,8 +39,6 @@ def _safe_tar_extractall(tar: tarfile.TarFile, path: Path, members: list) -> Non
     """
     # Use filter='data' parameter in Python 3.12+ for additional security
     # and perform explicit path validation to prevent directory traversal.
-    from typing import Any
-
     base_path = path.resolve()
 
     for member in members:
@@ -871,16 +870,23 @@ def _get_conversion_filters() -> tuple[str, str, int]:
     return cookbook_filter, status_filter, limit
 
 
-def _get_conversion_history(storage_manager, cookbook_filter: str, limit: int) -> list:
+def _get_conversion_history(
+    storage_manager, cookbook_filter: str, limit: int
+) -> list[Any]:
     """Return conversion history with optional cookbook filtering."""
     if cookbook_filter:
-        return storage_manager.get_conversion_history(
-            cookbook_name=cookbook_filter, limit=limit
+        return cast(
+            list[Any],
+            storage_manager.get_conversion_history(
+                cookbook_name=cookbook_filter, limit=limit
+            ),
         )
-    return storage_manager.get_conversion_history(limit=limit)
+    return cast(list[Any], storage_manager.get_conversion_history(limit=limit))
 
 
-def _filter_conversions_by_status(conversions: list, status_filter: str) -> list:
+def _filter_conversions_by_status(
+    conversions: list[Any], status_filter: str
+) -> list[Any]:
     """Filter conversion history by status when requested."""
     if status_filter == "All":
         return conversions

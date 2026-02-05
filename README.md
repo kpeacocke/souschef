@@ -3,9 +3,9 @@
 An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
 
 [![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
-[![Python Version](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-83%25-green.svg)](htmlcov/index.html)
+[![Test Coverage](https://img.shields.io/badge/coverage-91%25-green.svg)](htmlcov/index.html)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
@@ -49,27 +49,29 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 - **[API Reference](docs/api-reference/)** - Detailed tool documentation
 - **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
 
-## What's New in v3.4.0-beta
+## What's New in v4.1.0
 
-**Chef Server Integration & AI-Enhanced Template Conversion** - New tools for dynamic inventory and intelligent template conversion:
+**Security Hardening & Type Safety** - Enterprise-grade improvements for production deployments:
+
+- **GitHub Actions Security**: All external actions pinned to commit SHAs for supply chain protection
+- **Type Safety**: Complete mypy type checking (0 errors) with full type hints across 57 source files
+- **Fork Checkout Protection**: Privileged workflows explicitly checkout from main repository, never from forks
+- **Python Support Expansion**: Now supports Python 3.10+ (added support for 3.10 and 3.11)
+- **Code Quality**: Ruff linting with zero warnings, Australian English documentation standards
+- **Test Coverage**: Maintained at 91% with 1700+ passing tests
+
+See [Release Notes](https://github.com/kpeacocke/souschef/releases/tag/v4.1.0) for full details.
+
+## Previous Releases
+
+## What's New in v3.4.0
+
+**Chef Server Integration & AI-Enhanced Template Conversion** - Dynamic inventory and intelligent template conversion:
 
 - **Chef Server Connectivity**: Validate Chef Server connections and query nodes with `validate_chef_server_connection` and `get_chef_nodes`
 - **AI-Enhanced Templates**: Convert ERB to Jinja2 with AI validation using `convert_template_with_ai` for complex Ruby logic
 - **CLI Commands**: New commands `validate-chef-server`, `query-chef-nodes`, and `convert-template-ai` for command-line access
 - **Streamlit UI**: Chef Server Settings page for managing server configuration and validation
-
-## What's New in v3.3.0
-
-**AI-Assisted Effort Estimation** - SousChef now displays realistic migration effort comparisons directly in the Streamlit UI:
-
-- **Manual Migration Estimates**: Full effort without AI assistance
-- **SousChef-Assisted Estimates**: 50% time reduction through automated boilerplate conversion
-- **Time Savings Display**: Instant visual comparison showing hours saved and efficiency gains
-- **Interactive Metrics**: Summary and per-cookbook effort comparisons with clear deltas
-
-Example: A cookbook estimated at 40 hours of manual work shows SousChef-assisted time as 20 hours, saving 20 hours (50%) and reducing team needs from 2 developers to 1.
-
-See the [Assessment Guide](docs/migration-guide/assessment.md#effort-estimation-model) for details on the effort estimation model.
 
 ## Installation
 
@@ -1339,7 +1341,7 @@ The project includes comprehensive test coverage across multiple dimensions:
 
 ### Test Coverage
 
-The project maintains 92% test coverage, exceeding the 90% target. Run coverage with HTML report:
+The project maintains 91% test coverage, exceeding the 90% target. Run coverage with HTML report:
 
 ```bash
 poetry run pytest --cov=souschef --cov-report=html

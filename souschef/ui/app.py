@@ -836,7 +836,7 @@ def _get_cookbook_path_from_input_method(input_method: str) -> str | None:
 
     if input_method == "Use History":
         if "dep_analysis_cookbook_path" in st.session_state:
-            cookbook_path = st.session_state.dep_analysis_cookbook_path
+            cookbook_path: str = st.session_state.dep_analysis_cookbook_path
             st.info(f"Using cookbook from history: {cookbook_path}")
             return cookbook_path
         st.warning("Please load a cookbook from history above.")

@@ -71,9 +71,7 @@ end
 """)
 
     # Call the function
-    result = calculate_activity_breakdown(
-        str(cookbook_dir), {"deployment_target": "awx"}, "phased"
-    )
+    result = calculate_activity_breakdown(str(cookbook_dir), "phased")
 
     # Verify structure
     assert "summary" in result
@@ -89,9 +87,7 @@ end
 
 def test_calculate_activity_breakdown_with_invalid_path():
     """Test activity breakdown with invalid cookbook path."""
-    result = calculate_activity_breakdown(
-        "/nonexistent/path", {"deployment_target": "awx"}, "phased"
-    )
+    result = calculate_activity_breakdown("/nonexistent/path", "phased")
 
     # Should return error
     assert "error" in result

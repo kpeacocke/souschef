@@ -245,13 +245,9 @@ def _generate_and_display_breakdown(
     """Generate and display activity breakdown."""
     try:
         with st.spinner("Calculating activity breakdown..."):
-            # Get migration config
-            config = st.session_state.migration_config
-
             # Calculate breakdown
             breakdown = calculate_activity_breakdown(
                 cookbook_path,
-                config.to_dict(),
                 migration_strategy,
             )
 
