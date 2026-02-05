@@ -9,6 +9,11 @@ on:
       - main
   workflow_dispatch:
 
+# Prevent fork to access secrets (release workflow should only run on main repo)
+concurrency:
+  group: releases
+  cancel-in-progress: false
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false  # Don't cancel releases
@@ -20,7 +25,9 @@ jobs:
   # Skip tests - they already passed in CI before merge to main and in Main Branch Validation
   # This workflow focuses on building and publishing the release
   validate:
-    if: ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    if: |
+      github.repository == 'kpeacocke/souschef'
+      && ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
          || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -36,7 +43,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       with:
-        repository: ${{ github.repository }}  # Explicitly use main repo, not fork
+        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
         ref: main  # Always checkout main branch
         fetch-depth: 0
         fetch-tags: true
@@ -55,7 +62,7 @@ jobs:
       if: github.event_name == 'workflow_run'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        REPO: ${{ github.repository }}
+        REPO: kpeacocke/souschef  # Explicitly hardcode repository
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
       run: |
         echo "Checking CodeQL status for $HEAD_SHA"
@@ -140,7 +147,7 @@ jobs:
         # workflow only runs after CI succeeds on main branch. The tag does not
         # exist yet (created later in create-release), so using the tag reference
         # here would cause checkout failures.
-        repository: ${{ github.repository }}  # Explicitly use main repo, not fork
+        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
         ref: main  # Always checkout main branch, not fork refs
         fetch-depth: 0
         persist-credentials: false  # No credentials needed for build-only job
@@ -258,7 +265,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       with:
-        repository: ${{ github.repository }}
+        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
         ref: main
         fetch-depth: 0
         fetch-tags: true
@@ -314,7 +321,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
-          repository: ${{ github.repository }}  # Explicitly use main repo, not fork
+          repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
           ref: main  # Always checkout main branch
           fetch-depth: 0
           fetch-tags: true
