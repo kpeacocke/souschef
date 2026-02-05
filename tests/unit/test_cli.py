@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-import souschef
 from souschef.cli import cli
 
 # Define the fixtures directory
@@ -1820,7 +1819,7 @@ def test_generate_jenkinsfile_command_error_handling(runner, tmp_path, monkeypat
     def mock_generate(*args, **kwargs):
         raise RuntimeError("Mock generation error")
 
-    monkeypatch.setattr(souschef.cli, "generate_jenkinsfile_from_chef", mock_generate)
+    monkeypatch.setattr("souschef.cli.generate_jenkinsfile_from_chef", mock_generate)
 
     output_file = tmp_path / "Jenkinsfile"
     result = runner.invoke(
@@ -1839,7 +1838,9 @@ def test_generate_gitlab_ci_command_error_handling(runner, tmp_path, monkeypatch
     def mock_generate(*args, **kwargs):
         raise RuntimeError("Mock generation error")
 
-    monkeypatch.setattr(souschef.cli, "generate_gitlab_ci_from_chef", mock_generate)
+    from souschef import cli
+
+    monkeypatch.setattr(cli, "generate_gitlab_ci_from_chef", mock_generate)
 
     output_file = tmp_path / ".gitlab-ci.yml"
     result = runner.invoke(
@@ -1859,7 +1860,7 @@ def test_generate_github_workflow_command_error_handling(runner, tmp_path, monke
         raise RuntimeError("Mock generation error")
 
     monkeypatch.setattr(
-        souschef.cli, "generate_github_workflow_from_chef", mock_generate
+        "souschef.cli.generate_github_workflow_from_chef", mock_generate
     )
 
     output_file = tmp_path / "ci.yml"
@@ -1879,6 +1880,8 @@ def test_convert_recipe_command_conversion_error(runner, tmp_path, monkeypatch):
     # Mock the conversion function to raise an exception
     def mock_generate(*args, **kwargs):
         raise RuntimeError("Mock conversion error")
+
+    import souschef.cli
 
     monkeypatch.setattr(souschef.cli, "generate_playbook_from_recipe", mock_generate)
 
@@ -1904,6 +1907,7 @@ def test_convert_recipe_command_conversion_error(runner, tmp_path, monkeypatch):
 
 def test_assess_cookbook_command_analysis_error(runner, monkeypatch):
     """Test assess-cookbook command when analysis fails."""
+    import souschef.cli
 
     # Mock the analysis function to raise an exception
     def mock_analyze(*args, **kwargs):
@@ -2423,7 +2427,7 @@ def test_profile_command_error_handling(runner, monkeypatch):
         raise RuntimeError("Mock profiling error")
 
     monkeypatch.setattr(
-        souschef.cli, "generate_cookbook_performance_report", mock_generate
+        "souschef.cli.generate_cookbook_performance_report", mock_generate
     )
 
     result = runner.invoke(
@@ -2442,7 +2446,9 @@ def test_profile_operation_command_error_handling(runner, monkeypatch):
     def mock_profile(*args, **kwargs):
         raise RuntimeError("Mock profiling error")
 
-    monkeypatch.setattr(souschef.cli, "profile_function", mock_profile)
+    import souschef.cli as cli_module
+
+    monkeypatch.setattr(cli_module, "profile_function", mock_profile)
 
     recipe_path = FIXTURES_DIR / "recipes" / "default.rb"
 
