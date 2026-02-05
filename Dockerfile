@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for SousChef UI - Production Ready
 # Optimised for security, robustness, and Docker registry publishing
 
-ARG PYTHON_VERSION=3.13.1
+ARG PYTHON_VERSION=3.13.11
 ARG POETRY_VERSION=1.8.3
 
 # ============================================================================
@@ -66,6 +66,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy dependency files first (for better layer caching)
 COPY pyproject.toml poetry.lock ./
+
+# Upgrade pip to pick up security fixes
+RUN python -m pip install --no-cache-dir --upgrade pip
 
 # Install Poetry with pinned version for reproducibility
 RUN pip install --no-cache-dir --require-hashes \

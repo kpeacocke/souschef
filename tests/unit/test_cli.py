@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-import souschef
 from souschef.cli import cli
 
 # Define the fixtures directory
@@ -1820,7 +1819,9 @@ def test_generate_jenkinsfile_command_error_handling(runner, tmp_path, monkeypat
     def mock_generate(*args, **kwargs):
         raise RuntimeError("Mock generation error")
 
-    monkeypatch.setattr(souschef.cli, "generate_jenkinsfile_from_chef", mock_generate)
+    import souschef.cli as cli_module
+
+    monkeypatch.setattr(cli_module, "generate_jenkinsfile_from_chef", mock_generate)
 
     output_file = tmp_path / "Jenkinsfile"
     result = runner.invoke(
@@ -1839,7 +1840,9 @@ def test_generate_gitlab_ci_command_error_handling(runner, tmp_path, monkeypatch
     def mock_generate(*args, **kwargs):
         raise RuntimeError("Mock generation error")
 
-    monkeypatch.setattr(souschef.cli, "generate_gitlab_ci_from_chef", mock_generate)
+    import souschef.cli as cli_module
+
+    monkeypatch.setattr(cli_module, "generate_gitlab_ci_from_chef", mock_generate)
 
     output_file = tmp_path / ".gitlab-ci.yml"
     result = runner.invoke(
@@ -1859,7 +1862,7 @@ def test_generate_github_workflow_command_error_handling(runner, tmp_path, monke
         raise RuntimeError("Mock generation error")
 
     monkeypatch.setattr(
-        souschef.cli, "generate_github_workflow_from_chef", mock_generate
+        "souschef.cli.generate_github_workflow_from_chef", mock_generate
     )
 
     output_file = tmp_path / "ci.yml"
@@ -1879,6 +1882,8 @@ def test_convert_recipe_command_conversion_error(runner, tmp_path, monkeypatch):
     # Mock the conversion function to raise an exception
     def mock_generate(*args, **kwargs):
         raise RuntimeError("Mock conversion error")
+
+    import souschef.cli
 
     monkeypatch.setattr(souschef.cli, "generate_playbook_from_recipe", mock_generate)
 
@@ -1904,6 +1909,7 @@ def test_convert_recipe_command_conversion_error(runner, tmp_path, monkeypatch):
 
 def test_assess_cookbook_command_analysis_error(runner, monkeypatch):
     """Test assess-cookbook command when analysis fails."""
+    import souschef.cli
 
     # Mock the analysis function to raise an exception
     def mock_analyze(*args, **kwargs):
@@ -2085,7 +2091,7 @@ def test_query_chef_nodes_command_success(runner, monkeypatch):
                 "roles": ["webserver"],
                 "environment": "production",
                 "platform": "ubuntu",
-                "ipaddress": "10.0.1.10",
+                "ipaddress": "10.0.1.10",  # NOSONAR - RFC 1918 private IP in test data for Chef node query fixture
                 "fqdn": "web-01.example.com",
             }
         ]
@@ -2123,7 +2129,7 @@ def test_query_chef_nodes_command_json_output(runner, monkeypatch):
                 "roles": ["database"],
                 "environment": "production",
                 "platform": "ubuntu",
-                "ipaddress": "10.0.2.10",
+                "ipaddress": "10.0.2.10",  # NOSONAR - RFC 1918 private IP in test data for Chef node query fixture
                 "fqdn": "db-01.example.com",
             }
         ]
@@ -2423,7 +2429,7 @@ def test_profile_command_error_handling(runner, monkeypatch):
         raise RuntimeError("Mock profiling error")
 
     monkeypatch.setattr(
-        souschef.cli, "generate_cookbook_performance_report", mock_generate
+        "souschef.cli.generate_cookbook_performance_report", mock_generate
     )
 
     result = runner.invoke(
@@ -2442,7 +2448,9 @@ def test_profile_operation_command_error_handling(runner, monkeypatch):
     def mock_profile(*args, **kwargs):
         raise RuntimeError("Mock profiling error")
 
-    monkeypatch.setattr(souschef.cli, "profile_function", mock_profile)
+    import souschef.cli as cli_module
+
+    monkeypatch.setattr(cli_module, "profile_function", mock_profile)
 
     recipe_path = FIXTURES_DIR / "recipes" / "default.rb"
 
@@ -2453,3 +2461,129 @@ def test_profile_operation_command_error_handling(runner, monkeypatch):
 
     assert result.exit_code != 0
     assert "Error profiling operation" in result.output
+
+
+# Migration configuration command tests
+def test_configure_migration_with_args(runner):
+    """Test configure-migration with CLI arguments (non-interactive mode)."""
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "awx",
+        ],
+    )
+
+    assert result.exit_code == 0
+    # Should output JSON configuration
+    assert "deployment_target" in result.output
+    assert "awx" in result.output
+
+
+def test_configure_migration_cli_args(runner):
+    """Test configure-migration with CLI arguments."""
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "native",
+            "--migration-standard",
+            "flat",
+            "--python-version",
+            "3.11",
+        ],
+    )
+
+    assert result.exit_code == 0
+    # Should contain JSON output
+    assert "deployment_target" in result.output
+    assert "native" in result.output
+    assert "flat" in result.output
+    assert "3.11" in result.output
+
+
+def test_configure_migration_with_output_file(runner, tmp_path):
+    """Test configure-migration with output file."""
+    output_file = tmp_path / "config.json"
+
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "awx",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Configuration saved" in result.output
+    assert output_file.exists()
+
+    # Verify file content is valid JSON
+    config_data = json.loads(output_file.read_text())
+    assert config_data["deployment_target"] == "awx"
+    assert "migration_standard" in config_data
+
+
+def test_configure_migration_multiple_validation_tools(runner):
+    """Test configure-migration with multiple validation tools."""
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "native",  # Add required arg
+            "--validation-tools",
+            "ansible-lint",
+            "--validation-tools",
+            "molecule",
+            "--validation-tools",
+            "tox-ansible",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "ansible-lint" in result.output
+    assert "molecule" in result.output
+    assert "tox-ansible" in result.output
+
+
+def test_configure_migration_all_options(runner, tmp_path):
+    """Test configure-migration with all CLI options."""
+    output_file = tmp_path / "full-config.json"
+
+    result = runner.invoke(
+        cli,
+        [
+            "configure-migration",
+            "--deployment-target",
+            "aap",
+            "--migration-standard",
+            "hybrid",
+            "--inventory-source",
+            "static-file",
+            "--validation-tools",
+            "molecule",
+            "--python-version",
+            "3.12",
+            "--ansible-version",
+            "2.15",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert output_file.exists()
+
+    config_data = json.loads(output_file.read_text())
+    assert config_data["deployment_target"] == "aap"
+    assert config_data["migration_standard"] == "hybrid"
+    assert config_data["inventory_source"] == "static-file"
+    assert "molecule" in config_data["validation_tools"]
+    assert config_data["target_python_version"] == "3.12"
+    assert config_data["target_ansible_version"] == "2.15"

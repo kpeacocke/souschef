@@ -6,6 +6,7 @@ import tarfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 import pandas as pd
 import streamlit as st
@@ -17,6 +18,79 @@ from souschef.storage import get_blob_storage, get_storage_manager
 
 # Constants
 DOWNLOAD_ARTEFACTS_LABEL = "Download Artefacts"
+MANUAL_HOURS_LABEL = "Manual Hours"
+TIME_SAVED_LABEL = "Time Saved"
+
+
+def _validate_archive_size(file_path: Path, max_size: int) -> bool:
+    """
+    Validate archive file size to prevent resource exhaustion attacks.
+
+    Args:
+        file_path: Path to the archive file.
+        max_size: Maximum allowed file size in bytes.
+
+    Returns:
+        True if file size is within limit, False otherwise.
+
+    Raises:
+        ValueError: If file is too large.
+
+    """
+    if not file_path.exists():
+        raise ValueError(f"Archive file not found: {file_path}")
+
+    file_size = file_path.stat().st_size
+    if file_size > max_size:
+        size_mb = file_size / (1024 * 1024)
+        limit_mb = max_size / (1024 * 1024)
+        raise ValueError(
+            f"Archive file too large: {size_mb:.1f}MB exceeds {limit_mb:.0f}MB limit"
+        )
+
+    return True
+
+
+def _safe_tar_extractall(tar: tarfile.TarFile, path: Path, members: list) -> None:
+    """
+    Safely extract tar members with explicit security validation.
+
+    Performs comprehensive path validation to prevent directory traversal
+    attacks and other extraction-based vulnerabilities.
+
+    Args:
+        tar: Open TarFile object.
+        path: Directory to extract to.
+        members: Pre-validated list of safe members to extract.
+
+    """
+    # Perform explicit path validation to prevent directory traversal.
+    base_path = path.resolve()
+
+    for member in members:
+        # Skip members without a name
+        if not getattr(member, "name", None):
+            continue
+
+        member_name = member.name
+
+        # Reject absolute paths and obvious traversal attempts
+        if Path(member_name).is_absolute():
+            raise ValueError(
+                f"Illegal tar archive entry (absolute path): {member_name}"
+            )
+
+        # Compute the final extraction path and ensure it stays within base_path
+        member_path = Path(member_name)
+        target_path = (base_path / member_path).resolve()
+
+        # Ensure the resolved target path is inside the intended extraction dir
+        if base_path != target_path and base_path not in target_path.parents:
+            raise ValueError(
+                f"Illegal tar archive entry (path traversal): {member_name}"
+            )
+
+        tar.extract(member, path=base_path)
 
 
 def show_history_page() -> None:
@@ -89,9 +163,9 @@ def _show_analysis_history(storage_manager) -> None:
                 "Cookbook": analysis.cookbook_name,
                 "Version": analysis.cookbook_version,
                 "Complexity": analysis.complexity,
-                "Manual Hours": f"{analysis.estimated_hours:.1f}",
+                MANUAL_HOURS_LABEL: f"{analysis.estimated_hours:.1f}",
                 "AI Hours": f"{analysis.estimated_hours_with_souschef:.1f}",
-                "Time Saved": f"{time_saved:.1f}h",
+                TIME_SAVED_LABEL: f"{time_saved:.1f}h",
                 "AI Provider": analysis.ai_provider or "Rule-based",
                 "Date": _format_datetime(analysis.created_at),
                 "ID": analysis.id,
@@ -99,7 +173,7 @@ def _show_analysis_history(storage_manager) -> None:
         )
 
     df = pd.DataFrame(df_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
     # Expandable details
     st.subheader("Analysis Details")
@@ -117,10 +191,10 @@ def _show_analysis_history(storage_manager) -> None:
 
     if selected_id:
         selected = next(a for a in analyses if a.id == selected_id)
-        _display_analysis_details(selected)
+        _display_analysis_details(selected, storage_manager)
 
 
-def _display_analysis_details(analysis) -> None:
+def _display_analysis_details(analysis, storage_manager) -> None:
     """Display detailed analysis information."""
     col1, col2, col3, col4 = st.columns(4)
 
@@ -128,14 +202,29 @@ def _display_analysis_details(analysis) -> None:
         st.metric("Complexity", analysis.complexity)
 
     with col2:
-        st.metric("Manual Hours", f"{analysis.estimated_hours:.1f}")
+        st.metric(MANUAL_HOURS_LABEL, f"{analysis.estimated_hours:.1f}")
 
     with col3:
         st.metric("AI-Assisted Hours", f"{analysis.estimated_hours_with_souschef:.1f}")
 
     with col4:
         time_saved = analysis.estimated_hours - analysis.estimated_hours_with_souschef
-        st.metric("Time Saved", f"{time_saved:.1f}h")
+        st.metric(TIME_SAVED_LABEL, f"{time_saved:.1f}h")
+
+    st.divider()
+
+    # Display activity breakdown if available
+    try:
+        analysis_data = json.loads(analysis.analysis_data)
+        activities = analysis_data.get("activity_breakdown", [])
+        if activities:
+            _display_analysis_activity_breakdown(activities)
+            st.divider()
+    except (json.JSONDecodeError, AttributeError):
+        # Activity breakdown is a best-effort enhancement; if stored analysis
+        # data is missing or malformed, skip this section so the rest of the
+        # analysis details can still be displayed.
+        pass
 
     # Recommendations
     st.markdown("### Recommendations")
@@ -148,7 +237,6 @@ def _display_analysis_details(analysis) -> None:
     )
 
     # Check if conversions exist for this analysis
-    storage_manager = get_storage_manager()
     blob_storage = get_blob_storage()
     conversions = storage_manager.get_conversions_by_analysis_id(analysis.id)
 
@@ -160,6 +248,27 @@ def _display_analysis_details(analysis) -> None:
     else:
         _display_convert_button(analysis, blob_storage)
 
+    # Delete button
+    st.divider()
+    st.markdown("### Danger Zone")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.warning(
+            "Deleting this analysis will also delete all associated conversions. "
+            "This action cannot be undone."
+        )
+    with col2:
+        if st.button(
+            "Delete Analysis",
+            type="secondary",
+            key=f"delete_analysis_{analysis.id}",
+        ):
+            if storage_manager.delete_analysis(analysis.id):
+                st.success("Analysis deleted successfully!")
+                st.rerun()
+            else:
+                st.error("Failed to delete analysis.")
+
     # Full analysis data
     with st.expander("View Full Analysis Data"):
         try:
@@ -167,6 +276,56 @@ def _display_analysis_details(analysis) -> None:
             st.json(analysis_data)
         except json.JSONDecodeError:
             st.error("Unable to parse analysis data")
+
+
+def _display_analysis_activity_breakdown(activities: list) -> None:
+    """Display activity breakdown from analysis data."""
+    st.subheader("Activity Breakdown Details")
+
+    if not activities:
+        return
+
+    col1, col2 = st.columns([1, 2])
+
+    with col1:
+        st.markdown("### Summary")
+        for activity in activities:
+            name = activity.get("activity_type", "Unknown")
+            count = activity.get("count", 0)
+            description = activity.get("description", "")
+            manual_hours = activity.get("manual_hours", 0)
+            ai_hours = activity.get("ai_assisted_hours", 0)
+            time_saved = activity.get("time_saved_hours", 0)
+            efficiency = activity.get("efficiency_gain_percent", 0)
+
+            st.markdown(
+                f"""**{name}** ({count})
+
+*{description}*
+
+Manual: {manual_hours:.1f}h → AI: {ai_hours:.1f}h
+
+**Saved: {time_saved:.1f}h ({efficiency:.0f}%)**"""
+            )
+            st.divider()
+
+    with col2:
+        st.markdown("### Details Table")
+        table_data = []
+        for activity in activities:
+            table_data.append(
+                {
+                    "Activity": activity.get("activity_type", "Unknown"),
+                    "Count": activity.get("count", 0),
+                    MANUAL_HOURS_LABEL: f"{activity.get('manual_hours', 0):.1f}",
+                    "AI Hours": f"{activity.get('ai_assisted_hours', 0):.1f}",
+                    TIME_SAVED_LABEL: f"{activity.get('time_saved_hours', 0):.1f}",
+                    "Efficiency": f"{activity.get('efficiency_gain_percent', 0):.0f}%",
+                }
+            )
+
+        df = pd.DataFrame(table_data)
+        st.dataframe(df, width="stretch", hide_index=True)
 
 
 def _display_conversion_actions(analysis, conversions, blob_storage) -> None:
@@ -286,7 +445,8 @@ def _trigger_conversion(analysis, blob_storage) -> None:
             if not archive_format:
                 st.error(
                     "Unable to detect archive format. "
-                    "Supported formats: ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ"
+                    "Supported formats: ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ. "
+                    "File may also be corrupted or too large."
                 )
                 return
 
@@ -298,35 +458,42 @@ def _trigger_conversion(analysis, blob_storage) -> None:
             max_total_size = 500 * 1024 * 1024  # 500 MB total
             max_files = 10000  # Maximum number of files
 
+            # Validate archive file size before opening (prevents resource exhaustion)
+            _validate_archive_size(cookbook_path, max_total_size)
+
             # Extract based on detected format
             if archive_format == "zip":
                 _extract_zip_safely(
                     cookbook_path, extract_dir, max_file_size, max_total_size, max_files
                 )
             elif archive_format == "tar.gz":
+                # Security: Archive size validated before opening.
                 with tarfile.open(cookbook_path, "r:gz") as tar:
                     safe_members = _filter_safe_tar_members(
                         tar, extract_dir, max_file_size, max_total_size, max_files
                     )
-                    tar.extractall(extract_dir, members=safe_members)
+                    _safe_tar_extractall(tar, extract_dir, safe_members)
             elif archive_format == "tar.bz2":
+                # Security: Archive size validated before opening.
                 with tarfile.open(cookbook_path, "r:bz2") as tar:
                     safe_members = _filter_safe_tar_members(
                         tar, extract_dir, max_file_size, max_total_size, max_files
                     )
-                    tar.extractall(extract_dir, members=safe_members)
+                    _safe_tar_extractall(tar, extract_dir, safe_members)
             elif archive_format == "tar.xz":
+                # Security: Archive size validated before opening.
                 with tarfile.open(cookbook_path, "r:xz") as tar:
                     safe_members = _filter_safe_tar_members(
                         tar, extract_dir, max_file_size, max_total_size, max_files
                     )
-                    tar.extractall(extract_dir, members=safe_members)
+                    _safe_tar_extractall(tar, extract_dir, safe_members)
             elif archive_format == "tar":
+                # Security: Archive size validated before opening.
                 with tarfile.open(cookbook_path, "r") as tar:
                     safe_members = _filter_safe_tar_members(
                         tar, extract_dir, max_file_size, max_total_size, max_files
                     )
-                    tar.extractall(extract_dir, members=safe_members)
+                    _safe_tar_extractall(tar, extract_dir, safe_members)
 
             # Find the cookbook directory (should be the only directory in extracted/)
             cookbook_dirs = [d for d in extract_dir.iterdir() if d.is_dir()]
@@ -415,6 +582,13 @@ def _detect_archive_format(file_path: Path) -> str | None:
         or None if format cannot be detected.
 
     """
+    # Validate archive file size before format detection (prevents resource exhaustion)
+    max_detection_size = 1024 * 1024 * 1024  # 1 GB limit
+    try:
+        _validate_archive_size(file_path, max_detection_size)
+    except ValueError:
+        return None
+
     # Try ZIP first
     try:
         with zipfile.ZipFile(file_path, "r") as zf:
@@ -426,6 +600,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
 
     # Try gzipped tar (.tar.gz, .tgz)
     try:
+        # Security: Archive size validated before opening.
         with tarfile.open(file_path, "r:gz") as tf:
             # Verify it's valid by trying to get members
             _ = tf.getmembers()
@@ -435,6 +610,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
 
     # Try bzip2 compressed tar (.tar.bz2, .tbz2)
     try:
+        # Security: Archive size validated before opening.
         with tarfile.open(file_path, "r:bz2") as tf:
             # Verify it's valid by trying to get members
             _ = tf.getmembers()
@@ -444,6 +620,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
 
     # Try xz compressed tar (.tar.xz, .txz)
     try:
+        # Security: Archive size validated before opening.
         with tarfile.open(file_path, "r:xz") as tf:
             # Verify it's valid by trying to get members
             _ = tf.getmembers()
@@ -453,6 +630,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
 
     # Try plain tar
     try:
+        # Security: Archive size validated before opening.
         with tarfile.open(file_path, "r") as tf:
             # Verify it's valid by trying to get members
             _ = tf.getmembers()
@@ -683,7 +861,20 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
     """Show conversion history tab."""
     st.subheader("Conversion History")
 
-    # Filters
+    cookbook_filter, status_filter, limit = _get_conversion_filters()
+    conversions = _get_conversion_history(storage_manager, cookbook_filter, limit)
+    conversions = _filter_conversions_by_status(conversions, status_filter)
+
+    if not conversions:
+        st.info("No conversion history found. Start by converting a cookbook!")
+        return
+
+    _display_conversion_table(conversions)
+    _display_conversion_downloads(storage_manager, blob_storage, conversions)
+
+
+def _get_conversion_filters() -> tuple[str, str, int]:
+    """Return filter values for conversion history."""
     col1, col2, col3 = st.columns([2, 1, 1])
 
     with col1:
@@ -708,23 +899,36 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
             key="conversion_limit",
         )
 
-    # Get conversion history
+    return cookbook_filter, status_filter, limit
+
+
+def _get_conversion_history(
+    storage_manager, cookbook_filter: str, limit: int
+) -> list[Any]:
+    """Return conversion history with optional cookbook filtering."""
     if cookbook_filter:
-        conversions = storage_manager.get_conversion_history(
-            cookbook_name=cookbook_filter, limit=limit
+        return cast(
+            list[Any],
+            storage_manager.get_conversion_history(
+                cookbook_name=cookbook_filter, limit=limit
+            ),
         )
-    else:
-        conversions = storage_manager.get_conversion_history(limit=limit)
+    return cast(list[Any], storage_manager.get_conversion_history(limit=limit))
 
-    # Filter by status
-    if status_filter != "All":
-        conversions = [c for c in conversions if c.status == status_filter]
 
-    if not conversions:
-        st.info("No conversion history found. Start by converting a cookbook!")
-        return
+def _filter_conversions_by_status(
+    conversions: list[Any], status_filter: str
+) -> list[Any]:
+    """Filter conversion history by status when requested."""
+    if status_filter == "All":
+        return conversions
+    return [
+        conversion for conversion in conversions if conversion.status == status_filter
+    ]
 
-    # Display as table
+
+def _display_conversion_table(conversions: list) -> None:
+    """Display conversion history in a table."""
     st.write(f"**Total Results:** {len(conversions)}")
 
     df_data = []
@@ -742,9 +946,13 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
         )
 
     df = pd.DataFrame(df_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width="stretch", hide_index=True)
 
-    # Download artifacts
+
+def _display_conversion_downloads(
+    storage_manager, blob_storage, conversions: list
+) -> None:
+    """Display conversion download and deletion actions."""
     st.subheader("Download Artefacts")
 
     selected_id = st.selectbox(
@@ -758,23 +966,51 @@ def _show_conversion_history(storage_manager, blob_storage) -> None:
         key="history_selected_conversion",
     )
 
-    if selected_id:
-        selected = next(c for c in conversions if c.id == selected_id)
-        if selected.blob_storage_key:
-            col1, col2 = st.columns([3, 1])
+    if not selected_id:
+        return
 
-            with col1:
-                st.write(f"**Cookbook:** {selected.cookbook_name}")
-                st.write(f"**Output Type:** {selected.output_type}")
-                st.write(f"**Files Generated:** {selected.files_generated}")
+    selected = next(c for c in conversions if c.id == selected_id)
+    if not selected.blob_storage_key:
+        return
 
-            with col2:
-                if st.button(
-                    DOWNLOAD_ARTEFACTS_LABEL,
-                    type="primary",
-                    key=f"download_{selected.id}",
-                ):
-                    _download_conversion_artefacts(selected, blob_storage)
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        st.write(f"**Cookbook:** {selected.cookbook_name}")
+        st.write(f"**Output Type:** {selected.output_type}")
+        st.write(f"**Files Generated:** {selected.files_generated}")
+
+    with col2:
+        if st.button(
+            DOWNLOAD_ARTEFACTS_LABEL,
+            type="primary",
+            key=f"download_{selected.id}",
+        ):
+            _download_conversion_artefacts(selected, blob_storage)
+
+    _display_conversion_deletion(storage_manager, selected)
+
+
+def _display_conversion_deletion(storage_manager, selected) -> None:
+    """Display conversion deletion controls."""
+    st.divider()
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.warning(
+            "Deleting this conversion will remove it from history. "
+            "This action cannot be undone."
+        )
+    with col2:
+        if st.button(
+            "Delete Conversion",
+            type="secondary",
+            key=f"delete_conversion_{selected.id}",
+        ):
+            if storage_manager.delete_conversion(selected.id):
+                st.success("Conversion deleted successfully!")
+                st.rerun()
+            else:
+                st.error("Failed to delete conversion.")
 
 
 def _download_conversion_artefacts(conversion, blob_storage) -> None:

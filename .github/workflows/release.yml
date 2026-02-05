@@ -9,9 +9,10 @@ on:
       - main
   workflow_dispatch:
 
+# Prevent fork to access secrets (release workflow should only run on main repo)
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false  # Don't cancel releases
+  group: releases
+  cancel-in-progress: false
 
 env:
   PYTHON_VERSION: "3.12"
@@ -20,7 +21,9 @@ jobs:
   # Skip tests - they already passed in CI before merge to main and in Main Branch Validation
   # This workflow focuses on building and publishing the release
   validate:
-    if: ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    if: |
+      github.repository == 'kpeacocke/souschef'
+      && ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
          || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -34,8 +37,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       with:
+        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
+        ref: main  # Always checkout main branch
         fetch-depth: 0
         fetch-tags: true
 
@@ -53,12 +58,12 @@ jobs:
       if: github.event_name == 'workflow_run'
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        REPO: ${{ github.repository }}
+        REPO: kpeacocke/souschef  # Explicitly hardcode repository
         HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
       run: |
         echo "Checking CodeQL status for $HEAD_SHA"
         api_url="https://api.github.com/repos/${REPO}/actions/workflows/codeql.yml/runs?head_sha=${HEAD_SHA}"
-        run_json=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$api_url") || true
+        run_json=$(curl -s --proto '=https' -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" "$api_url") || true
         conclusion=$(echo "$run_json" | jq -r '.workflow_runs[0].conclusion // "none"')
         if [ "$conclusion" != "success" ]; then
           echo "Warning: CodeQL workflow not successful for $HEAD_SHA (conclusion=$conclusion). Proceeding because Main Branch Validation succeeded."
@@ -67,7 +72,7 @@ jobs:
         fi
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
@@ -100,7 +105,7 @@ jobs:
         VERSION: ${{ steps.get-tag.outputs.version }}
       run: |
         set -e
-        exists=$(curl -fsSL https://pypi.org/pypi/souschef/json | jq -r --arg v "$VERSION" '.releases[$v] | if . == null then "false" else "true" end') || exists=false
+        exists=$(curl -fsSL --proto '=https' https://pypi.org/pypi/souschef/json | jq -r --arg v "$VERSION" '.releases[$v] | if . == null then "false" else "true" end') || exists=false
         echo "exists=$exists" >> $GITHUB_OUTPUT
         if [ "$exists" = "true" ]; then
           echo "Version $VERSION already exists on PyPI"
@@ -132,16 +137,19 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       with:
-        # Checkout the exact commit that triggered the workflow. The tag does
-        # not exist yet (created later in create-release), so using the tag
-        # here causes checkout failures.
-        ref: ${{ github.sha }}
+        # Checkout from main branch of main repo (never from fork). Safe because
+        # workflow only runs after CI succeeds on main branch. The tag does not
+        # exist yet (created later in create-release), so using the tag reference
+        # here would cause checkout failures.
+        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
+        ref: main  # Always checkout main branch, not fork refs
         fetch-depth: 0
+        persist-credentials: false  # No credentials needed for build-only job
 
     - name: Set up Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
@@ -153,7 +161,7 @@ jobs:
         virtualenvs-in-project: true
 
     - name: Cache Poetry dependencies
-      uses: actions/cache@v5
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
       with:
         path: .venv
         key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
@@ -173,7 +181,7 @@ jobs:
       run: poetry run twine check dist/*
 
     - name: Upload package artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
       with:
         name: release-packages
         path: dist/
@@ -209,7 +217,7 @@ jobs:
         ref: ${{ needs.validate.outputs.tag }}
 
     - name: Download package artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
       with:
         name: release-packages
         path: dist/
@@ -251,11 +259,13 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       with:
+        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
         ref: main
         fetch-depth: 0
         fetch-tags: true
+        # persist-credentials: true is implicit and needed to push tags
 
     - name: Create git tag and GitHub release
       env:
@@ -274,7 +284,7 @@ jobs:
           --latest
 
     - name: Download package artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131  # v7.0.0
       with:
         name: release-packages
         path: dist/
@@ -305,8 +315,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
+          repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
+          ref: main  # Always checkout main branch
           fetch-depth: 0
           fetch-tags: true
 
@@ -320,13 +332,13 @@ jobs:
           ref: ${{ needs.validate.outputs.tag }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3.12.0
         with:
           platforms: linux/amd64,linux/arm64
 
       - name: Generate build metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5.10.0
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/mcp-souschef
@@ -337,7 +349,7 @@ jobs:
             type=raw,value=latest
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -345,7 +357,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83  # v6.18.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -355,7 +367,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            PYTHON_VERSION=3.13.1
+            PYTHON_VERSION=3.13.11
             POETRY_VERSION=1.8.3
           provenance: true
           sbom: true
@@ -401,14 +413,14 @@ jobs:
 
     steps:
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # v0.33.1
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}
           format: sarif
@@ -417,7 +429,7 @@ jobs:
           exit-code: '0'
 
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@2588666de8825e1e9dc4e2329a4c985457d55b32  # v3.32.1
         if: always()
         with:
           sarif_file: trivy-results.sarif
@@ -439,7 +451,7 @@ jobs:
 
     steps:
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -492,7 +504,7 @@ jobs:
 
     steps:
       - name: Create deployment notification issue
-        uses: actions/github-script@v7
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
         with:
           script: |
             const version = "${{ needs.validate.outputs.version }}";
