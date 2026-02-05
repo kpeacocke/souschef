@@ -3256,6 +3256,7 @@ def _format_ai_complexity_analysis(assessments: list) -> str:
 # Public API for UI components
 def calculate_activity_breakdown(
     cookbook_path: str,
+    migration_config: dict[str, Any],
     migration_strategy: str = "phased",
 ) -> dict[str, Any]:
     """
@@ -3265,6 +3266,7 @@ def calculate_activity_breakdown(
 
     Args:
         cookbook_path: Path to cookbook(s) to analyse
+        migration_config: Migration configuration dictionary with deployment target and settings
         migration_strategy: Migration strategy ("phased", "big_bang", "parallel")
 
     Returns:

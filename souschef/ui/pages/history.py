@@ -6,6 +6,7 @@ import tarfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
+import os
 
 import pandas as pd
 import streamlit as st
@@ -36,13 +37,36 @@ def _safe_tar_extractall(tar: tarfile.TarFile, path: Path, members: list) -> Non
 
     """
     # Use filter='data' parameter in Python 3.12+ for additional security
-    # This strips special files and provides path traversal protection
+    # and perform explicit path validation to prevent directory traversal.
     from typing import Any
 
-    extract_kwargs: dict[str, Any] = {"path": path, "members": members}
-    if sys.version_info >= (3, 12):
-        extract_kwargs["filter"] = "data"
-    tar.extractall(**extract_kwargs)
+    base_path = path.resolve()
+
+    for member in members:
+        # Skip members without a name
+        if not getattr(member, "name", None):
+            continue
+
+        member_name = member.name
+
+        # Reject absolute paths and obvious traversal attempts
+        if os.path.isabs(member_name):
+            raise ValueError(f"Illegal tar archive entry (absolute path): {member_name}")
+
+        # Compute the final extraction path and ensure it stays within base_path
+        member_path = Path(member_name)
+        target_path = (base_path / member_path).resolve()
+
+        # Ensure the resolved target path is inside the intended extraction directory
+        if base_path != target_path and base_path not in target_path.parents:
+            raise ValueError(f"Illegal tar archive entry (path traversal): {member_name}")
+
+        extract_kwargs: dict[str, Any] = {"path": base_path}
+        if sys.version_info >= (3, 12):
+            # 'data' filter strips special files and enforces additional safety
+            extract_kwargs["filter"] = "data"
+
+        tar.extract(member, **extract_kwargs)
 
 
 def show_history_page() -> None:

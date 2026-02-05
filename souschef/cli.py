@@ -1513,47 +1513,6 @@ def convert_template_ai(erb_path: str, ai: bool, output: str | None) -> None:
         sys.exit(1)
 
 
-@cli.command("configure-migration")
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(),
-    help="Save configuration to JSON file (default: print to stdout)",
-)
-@click.option(
-    "--deployment-target",
-    type=click.Choice(["app", "awx", "aap", "native"]),
-    help="Target deployment platform (app/awx/aap/native)",
-)
-@click.option(
-    "--migration-standard",
-    type=click.Choice(["standard", "flat", "hybrid"]),
-    help="Migration strategy (standard/flat/hybrid)",
-)
-@click.option(
-    "--inventory-source",
-    help="Inventory source (e.g., chef-server, static-file)",
-)
-@click.option(
-    "--validation-tools",
-    multiple=True,
-    type=click.Choice(["tox-ansible", "molecule", "ansible-lint", "custom"]),
-    help="Validation tools to use (can specify multiple)",
-)
-@click.option(
-    "--python-version",
-    help="Target Python version (e.g., 3.9, 3.10)",
-)
-@click.option(
-    "--ansible-version",
-    help="Target Ansible version (e.g., 2.13, 2.14)",
-)
-@click.option(
-    "--interactive",
-    "-i",
-    is_flag=True,
-    help="Run interactive questionnaire (ignores other options)",
-)
 def _build_config_from_cli_args(
     deployment_target: str | None,
     migration_standard: str | None,
@@ -1598,6 +1557,47 @@ def _output_migration_config(config_dict: dict, output: str | None) -> None:
         click.echo("=" * 60)
 
 
+@cli.command("configure-migration")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Save configuration to JSON file (default: print to stdout)",
+)
+@click.option(
+    "--deployment-target",
+    type=click.Choice(["app", "awx", "aap", "native"]),
+    help="Target deployment platform (app/awx/aap/native)",
+)
+@click.option(
+    "--migration-standard",
+    type=click.Choice(["standard", "flat", "hybrid"]),
+    help="Migration strategy (standard/flat/hybrid)",
+)
+@click.option(
+    "--inventory-source",
+    help="Inventory source (e.g., chef-server, static-file)",
+)
+@click.option(
+    "--validation-tools",
+    multiple=True,
+    type=click.Choice(["tox-ansible", "molecule", "ansible-lint", "custom"]),
+    help="Validation tools to use (can specify multiple)",
+)
+@click.option(
+    "--python-version",
+    help="Target Python version (e.g., 3.9, 3.10)",
+)
+@click.option(
+    "--ansible-version",
+    help="Target Ansible version (e.g., 2.13, 2.14)",
+)
+@click.option(
+    "--interactive",
+    "-i",
+    is_flag=True,
+    help="Run interactive questionnaire (ignores other options)",
+)
 def configure_migration(
     output: str | None,
     deployment_target: str | None,
