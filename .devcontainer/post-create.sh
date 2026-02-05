@@ -52,6 +52,8 @@ if [ -S /var/run/docker.sock ]; then
     else
         echo "⚠️  Docker socket mounted but not yet accessible"
         echo "    This is normal on first start - restart the container if needed"
+    fi
+fi
 
 # Verify Poetry is available
 if ! command -v poetry &> /dev/null; then

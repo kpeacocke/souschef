@@ -112,6 +112,7 @@
                 "Shopify.ruby-lsp",
                 "snyk-security.snyk-vulnerability-scanner",
                 "SonarSource.sonarlint-vscode",
+                "aquasecurityofficial.trivy-vulnerability-scanner",
                 "Progress.chef",
                 "redhat.ansible",
                 "zbr.vscode-ansible",
