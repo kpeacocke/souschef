@@ -34,13 +34,21 @@ RUN curl -sSL https://install.python-poetry.org | python3 - && \
     curl \
     git \
     gnupg \
+    wget \
+    apt-transport-https \
+    lsb-release \
     build-essential \
     libssl-dev \
     libffi-dev \
     unzip \
     npm \
     docker.io \
-    && rm -rf /var/lib/apt/lists/* && \
+    && \
+    # Install Trivy vulnerability scanner
+    wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | apt-key add - && \
+    echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | tee -a /etc/apt/sources.list.d/trivy.list && \
+    apt-get update && apt-get install -y --no-install-recommends trivy && \
+    rm -rf /var/lib/apt/lists/* && \
     if [ "$SNYK_VERSION" != "skip" ]; then \
     npm install -g snyk && \
     snyk --version; \
