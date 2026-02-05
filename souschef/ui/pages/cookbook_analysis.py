@@ -727,7 +727,8 @@ def _extract_tar_securely(
         # Resource consumption controls (S5042): Pre-scan validates all members for
         # size limits (MAX_ARCHIVE_SIZE, MAX_FILE_SIZE), file count (MAX_FILES),
         # depth (MAX_DEPTH), and blocks malicious files before extraction.
-        with tarfile.open(**open_kwargs) as tar_ref:
+        # Security: Validated via _pre_scan_tar_members + _extract_tar_members
+        with tarfile.open(**open_kwargs) as tar_ref:  # NOSONAR
             members = tar_ref.getmembers()
             # Pre-validate all members before allowing extraction
             # This controls resource consumption and prevents

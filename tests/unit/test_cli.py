@@ -2085,7 +2085,7 @@ def test_query_chef_nodes_command_success(runner, monkeypatch):
                 "roles": ["webserver"],
                 "environment": "production",
                 "platform": "ubuntu",
-                "ipaddress": "10.0.1.10",
+                "ipaddress": "10.0.1.10",  # NOSONAR - RFC 1918 private IP in test data for Chef node query fixture
                 "fqdn": "web-01.example.com",
             }
         ]
@@ -2123,7 +2123,7 @@ def test_query_chef_nodes_command_json_output(runner, monkeypatch):
                 "roles": ["database"],
                 "environment": "production",
                 "platform": "ubuntu",
-                "ipaddress": "10.0.2.10",
+                "ipaddress": "10.0.2.10",  # NOSONAR - RFC 1918 private IP in test data for Chef node query fixture
                 "fqdn": "db-01.example.com",
             }
         ]
