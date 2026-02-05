@@ -1819,7 +1819,9 @@ def test_generate_jenkinsfile_command_error_handling(runner, tmp_path, monkeypat
     def mock_generate(*args, **kwargs):
         raise RuntimeError("Mock generation error")
 
-    monkeypatch.setattr("souschef.cli.generate_jenkinsfile_from_chef", mock_generate)
+    import souschef.cli as cli_module
+
+    monkeypatch.setattr(cli_module, "generate_jenkinsfile_from_chef", mock_generate)
 
     output_file = tmp_path / "Jenkinsfile"
     result = runner.invoke(
@@ -1838,9 +1840,9 @@ def test_generate_gitlab_ci_command_error_handling(runner, tmp_path, monkeypatch
     def mock_generate(*args, **kwargs):
         raise RuntimeError("Mock generation error")
 
-    from souschef import cli
+    import souschef.cli as cli_module
 
-    monkeypatch.setattr(cli, "generate_gitlab_ci_from_chef", mock_generate)
+    monkeypatch.setattr(cli_module, "generate_gitlab_ci_from_chef", mock_generate)
 
     output_file = tmp_path / ".gitlab-ci.yml"
     result = runner.invoke(
