@@ -12,6 +12,28 @@ EOL status verification.
 from dataclasses import dataclass, field
 from datetime import date
 
+# Collection name constants
+ANSIBLE_POSIX = "ansible.posix"
+ANSIBLE_WINDOWS = "ansible.windows"
+ANSIBLE_POSIX_MIN_VERSION = "1.0.0"
+ANSIBLE_WINDOWS_MIN_VERSION = "1.0.0"
+MANAGED_NODES = "managed_node_python"
+CONTROL_NODES = "control_node_python"
+POSIX_1_2_0 = "1.2.0"
+POSIX_1_3_0 = "1.3.0"
+POSIX_1_4_0 = "1.4.0"
+POSIX_1_5_0 = "1.5.0"
+POSIX_1_5_4 = "1.5.4"
+POSIX_1_6_0 = "1.6.0"
+POSIX_1_7_0 = "1.7.0"
+WINDOWS_1_5_0 = "1.5.0"
+WINDOWS_1_9_0 = "1.9.0"
+WINDOWS_1_11_0 = "1.11.0"
+WINDOWS_1_13_0 = "1.13.0"
+WINDOWS_1_14_0 = "1.14.0"
+WINDOWS_2_0_0 = "2.0.0"
+WINDOWS_2_1_0 = "2.1.0"
+
 
 @dataclass
 class AnsibleVersion:
@@ -73,8 +95,8 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "Module paths changed",
         ],
         min_collection_versions={
-            "ansible.posix": "1.0.0",
-            "ansible.windows": "1.0.0",
+            ANSIBLE_POSIX: ANSIBLE_POSIX_MIN_VERSION,
+            ANSIBLE_WINDOWS: ANSIBLE_WINDOWS_MIN_VERSION,
         },
         known_issues=[
             "Collection installation required for many modules",
@@ -94,8 +116,8 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "Performance improvements",
         ],
         min_collection_versions={
-            "ansible.posix": "1.2.0",
-            "ansible.windows": "1.5.0",
+            ANSIBLE_POSIX: POSIX_1_2_0,
+            ANSIBLE_WINDOWS: WINDOWS_1_5_0,
         },
         known_issues=["EOL since November 2022"],
     ),
@@ -120,8 +142,8 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "New ansible-core package name",
         ],
         min_collection_versions={
-            "ansible.posix": "1.3.0",
-            "ansible.windows": "1.9.0",
+            ANSIBLE_POSIX: POSIX_1_3_0,
+            ANSIBLE_WINDOWS: WINDOWS_1_9_0,
         },
         known_issues=[
             "Transition to ansible-core package",
@@ -139,8 +161,8 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "Module deprecations enforced",
         ],
         min_collection_versions={
-            "ansible.posix": "1.4.0",
-            "ansible.windows": "1.11.0",
+            ANSIBLE_POSIX: POSIX_1_4_0,
+            ANSIBLE_WINDOWS: WINDOWS_1_11_0,
         },
         known_issues=["EOL since November 2023"],
     ),
@@ -165,8 +187,8 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "Further module deprecations",
         ],
         min_collection_versions={
-            "ansible.posix": "1.5.0",
-            "ansible.windows": "1.13.0",
+            ANSIBLE_POSIX: POSIX_1_5_0,
+            ANSIBLE_WINDOWS: WINDOWS_1_13_0,
         },
         known_issues=["EOL since May 2024"],
     ),
@@ -191,8 +213,8 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "Enhanced error reporting",
         ],
         min_collection_versions={
-            "ansible.posix": "1.5.4",
-            "ansible.windows": "1.14.0",
+            ANSIBLE_POSIX: POSIX_1_5_4,
+            ANSIBLE_WINDOWS: WINDOWS_1_14_0,
         },
         known_issues=["EOL since November 2024"],
     ),
@@ -217,8 +239,8 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "Latest stable release",
         ],
         min_collection_versions={
-            "ansible.posix": "1.6.0",
-            "ansible.windows": "2.0.0",
+            ANSIBLE_POSIX: POSIX_1_6_0,
+            ANSIBLE_WINDOWS: WINDOWS_2_0_0,
         },
         known_issues=[],
     ),
@@ -234,8 +256,8 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "Continued performance enhancements",
         ],
         min_collection_versions={
-            "ansible.posix": "1.7.0",
-            "ansible.windows": "2.1.0",
+            ANSIBLE_POSIX: POSIX_1_7_0,
+            ANSIBLE_WINDOWS: WINDOWS_2_1_0,
         },
         known_issues=[],
     ),
