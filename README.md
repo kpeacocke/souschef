@@ -5,7 +5,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 [![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-91%25-green.svg)](htmlcov/index.html)
+[![Test Coverage](https://img.shields.io/badge/coverage-79%25-green.svg)](htmlcov/index.html)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
@@ -18,7 +18,7 @@ SousChef is a complete enterprise-grade platform with two major capabilities:
 
 ### 1. Chef to Ansible Migration (40+ tools)
 
-Complete enterprise-grade migration platform with **40 primary MCP tools** organised across **12 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, and GitHub Copilot agent control, SousChef provides everything needed for a successful infrastructure automation migration.
+Complete enterprise-grade migration platform with **45 primary MCP tools** organised across **13 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations and Ansible version upgrades. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, and Ansible upgrade planning, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### 2. Ansible Upgrade Assessment & Planning (NEW - In Development)
 
@@ -39,7 +39,7 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 
 **Why 40 tools in the documentation but more in the server?**
 
-The MCP server provides **43 total tools**. This documentation focuses on the **40 primary user-facing tools** that cover the main migration capabilities. The remaining 3 tools are low-level filesystem operations used internally by the main tools.
+The MCP server provides **48 total tools**. This documentation focuses on the **45 primary user-facing tools** that cover the main migration and upgrade capabilities. The remaining 3 tools are low-level filesystem operations used internally by the main tools.
 
 As a user, you'll primarily interact with the documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
@@ -427,6 +427,75 @@ convert_template_with_ai(
     use_ai_enhancement=True
 )
 ```
+
+### 13. Ansible Upgrade Assessment & Planning
+
+Comprehensive Ansible version upgrade planning based on official Ansible-Python compatibility matrices:
+
+- **detect_python_version** - Detect Python version in specified environment or system
+- **assess_ansible_environment** - Assess current Ansible environment versions and configuration
+- **generate_upgrade_plan** - Generate detailed upgrade plan with breaking changes, pre/post checks, and risk assessment
+- **validate_collection_compatibility** - Validate Ansible collection compatibility against target Ansible versions
+- **generate_upgrade_testing_plan** - Generate comprehensive upgrade testing plan
+
+#### Upgrade Planning Features
+
+- **Version Compatibility Checking**: Validate Ansible and Python version compatibility requirements
+- **EOL Status Tracking**: Track end-of-life dates and security support windows
+- **Safe Upgrade Paths**: Calculate safe upgrade paths with intermediate versions if needed
+- **Breaking Change Analysis**: Identify breaking changes (e.g., collections split in 2.9→2.10)
+- **Collection Validation**: Verify collection versions work with target Ansible releases
+- **Python Impact Assessment**: Assess Python version upgrade requirements for control and managed nodes
+- **Comprehensive Testing Plans**: Generate step-by-step testing procedures for upgrades
+
+#### Upgrade Planning Examples
+
+```bash
+# Detect Python version in environment
+detect_python_version /path/to/venv
+
+# Assess current Ansible environment
+assess_ansible_environment /path/to/ansible/env
+
+# Generate upgrade plan from 2.14 to 2.17
+generate_upgrade_plan 2.14 2.17 /path/to/ansible/env
+
+# Validate collections for target version
+validate_collection_compatibility '{"community.general": "3.0.0"}' 2.17
+
+# Generate testing plan for upgrade
+generate_upgrade_testing_plan /path/to/ansible/env
+```
+
+#### MCP Tool Usage
+
+```python
+# From an AI assistant with SousChef MCP
+
+# Detect Python version
+python_version = detect_python_version("/ansible/venv")
+
+# Assess Ansible environment
+assessment = assess_ansible_environment("/ansible/env")
+
+# Generate upgrade plan
+plan = generate_upgrade_plan(
+    current_version="2.14",
+    target_version="2.17",
+    environment_path="/ansible/env"
+)
+
+# Check collection compatibility
+compatibility = validate_collection_compatibility(
+    collections={"community.general": "3.0.0"},
+    ansible_version="2.17"
+)
+
+# Generate testing plan
+testing_plan = generate_upgrade_testing_plan("/ansible/env")
+```
+
+**See [Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md) for full details and compatibility matrix information.**
 
 ## Migration Workflow
 

@@ -20,9 +20,11 @@ souschef/
 ├── cli.py                   # Command-line interface
 ├── assessment.py            # Migration assessment and planning
 ├── deployment.py            # AWX/AAP integration & deployment strategies
+├── ansible_upgrade.py       # Ansible upgrade planning and assessment
 │
 ├── core/                    # Shared utilities (no business logic)
 │   ├── __init__.py
+│   ├── ansible_versions.py  # Ansible version compatibility data
 │   ├── constants.py         # Shared constants and configuration
 │   ├── errors.py            # Error handling utilities
 │   ├── metrics.py           # Effort/timeline metrics calculations
@@ -32,6 +34,7 @@ souschef/
 │
 ├── parsers/                 # Chef artifact parsing (read-only)
 │   ├── __init__.py
+│   ├── ansible_inventory.py # Parse Ansible environments and inventory
 │   ├── attributes.py        # Parse Chef attributes files
 │   ├── habitat.py           # Parse Habitat plan files
 │   ├── inspec.py            # Parse InSpec profiles
@@ -66,6 +69,7 @@ souschef/
 | `cli.py` | Command-line commands | Adding CLI subcommands, CLI-specific options |
 | `assessment.py` | Migration assessment logic | Adding assessment methods, complexity rules |
 | `deployment.py` | AWX integration & deployment patterns | Deployment strategies, platform-specific logic |
+| `ansible_upgrade.py` | Ansible upgrade planning logic | Adding upgrade planning features, new upgrade workflows |
 
 ## Module Responsibilities
 
@@ -80,35 +84,58 @@ souschef/
 - Path utilities with security checks
 - Ruby/Chef value parsing
 - Metrics calculations
+- Version compatibility data (Ansible-Python matrices)
 
 **What Does NOT Go Here**:
 - Migration planning logic → `assessment.py`
 - Recipe parsing → `parsers/recipe.py`
 - Playbook generation → `converters/playbook.py`
+- Ansible upgrade planning → `ansible_upgrade.py`
+
+**Modules**:
+- `constants.py` - Shared constants and configuration
+- `errors.py` - Error handling utilities
+- `metrics.py` - Effort and timeline calculations
+- `path_utils.py` - Path normalisation and safety checks
+- `ruby_utils.py` - Ruby value parsing and normalisation
+- `validation.py` - General validation utilities
+- `ansible_versions.py` - Ansible and Python version compatibility data (NEW)
 
 **Example**:
 ```python
 # ✅ Belongs in core/
 # - Shared constants
-# - Path normalization
+# - Path normalisation
 # - Error formatting
+# - Version matrices
 HOURS_PER_WORKDAY = 8  # core/metrics.py
 METADATA_FILENAME = "metadata.rb"  # core/constants.py
+ANSIBLE_VERSIONS = {...}  # core/ansible_versions.py
+
+# ✅ Belongs in core/ansible_versions.py
+def get_python_compatibility(ansible_version: str) -> List[str]:
+    """Get compatible Python versions for Ansible version."""
+    return ANSIBLE_VERSIONS[ansible_version].python_versions
+
+def calculate_upgrade_path(from_version: str, to_version: str) -> dict:
+    """Calculate safe upgrade path between versions."""
+    # Uses ANSIBLE_VERSIONS data
 
 # ❌ Does NOT belong in core/
 # - "assess complexity of this cookbook" logic
 # - "convert this recipe to playbook" logic
+# - "generate upgrade plan" logic
 ```
 
-### `parsers/` - Chef Artifact Parsing
+### `parsers/` - Chef and Ansible Artifact Parsing
 
-**Purpose**: Extract structure from Chef files (read-only, no transformation).
+**Purpose**: Extract structure from Chef and Ansible files (read-only, no transformation).
 
 **Principles**:
-- Only **read** and **parse** Chef artifacts
+- Only **read** and **parse** artifacts
 - Extract raw data structures without modification
 - No domain-specific interpretation
-- No conversion to Ansible
+- No conversion between formats (Chef ↔ Ansible)
 
 **What Goes Here**:
 - Recipe resource extraction
@@ -116,11 +143,24 @@ METADATA_FILENAME = "metadata.rb"  # core/constants.py
 - Metadata parsing
 - Template structure analysis
 - Custom resource definition parsing
+- Ansible environment and inventory parsing
+- Ansible configuration parsing
 
 **What Does NOT Go Here**:
 - Complexity scoring → `assessment.py`
 - Ansible conversion → `converters/`
 - Migration planning → `assessment.py`
+- Upgrade planning → `ansible_upgrade.py`
+
+**Modules**:
+- `recipe.py` - Extract resources from Chef recipes
+- `attributes.py` - Parse Chef attribute files
+- `metadata.py` - Parse cookbook metadata.rb
+- `template.py` - Parse ERB templates
+- `resource.py` - Parse custom resource definitions
+- `habitat.py` - Parse Habitat plan files
+- `inspec.py` - Parse InSpec profiles
+- `ansible_inventory.py` - Parse Ansible inventory files and environments (NEW)
 
 **Example**:
 ```python
@@ -130,6 +170,13 @@ def parse_recipe(recipe_path: str) -> dict:
     resources = []
     # Read file, extract resources
     return {"resources": resources}
+
+# ✅ Belongs in parsers/ansible_inventory.py
+def parse_inventory_ini(inventory_path: str) -> dict:
+    """Parse Ansible inventory file in INI format."""
+    groups = {}
+    # Read file, extract groups and hosts
+    return {"groups": groups}
 
 # ❌ Does NOT belong in parsers/
 def assess_recipe_complexity(recipe_path):
@@ -241,6 +288,54 @@ def assess_single_cookbook(cookbook_path):
 - General migration assessment → `assessment.py`
 - Recipe parsing → `parsers/`
 - Playbook generation → `converters/`
+
+### `ansible_upgrade.py` - Ansible Upgrade Planning
+
+**Purpose**: Ansible version upgrade assessment, planning, and validation logic.
+
+**Responsibilities**:
+- Detect Python and Ansible versions in environments
+- Assess Ansible environment configuration
+- Generate detailed upgrade plans with risk assessment
+- Validate collection compatibility against target versions
+- Generate upgrade testing plans
+- Identify breaking changes and required actions
+
+**What Goes Here**:
+- Ansible environment assessment logic
+- Upgrade path calculation
+- Collection compatibility validation
+- Risk assessment for upgrades
+- Testing plan generation
+- Breaking change identification
+
+**What Does NOT Go Here**:
+- Version compatibility data → `core/ansible_versions.py`
+- Ansible environment parsing → `parsers/ansible_inventory.py`
+- Chef migration logic → `assessment.py`
+
+**Dependencies**:
+- `core/ansible_versions.py` - Version compatibility matrices
+- `parsers/ansible_inventory.py` - Parse and detect Ansible versions
+
+**Example**:
+```python
+# ✅ Belongs in ansible_upgrade.py
+def generate_upgrade_plan(current_version, target_version, env_path):
+    """Generate upgrade plan using version data and environment parsing."""
+    versions = get_supported_versions()  # From core/ansible_versions
+    env = assess_ansible_environment(env_path)  # Parse environment
+    return {
+        "upgrade_path": calculate_upgrade_path(current_version, target_version),
+        "pre_upgrade_checklist": generate_checklist(current_version),
+        "upgrade_steps": generate_steps(versions),
+        # ... etc
+    }
+
+# Uses core/ansible_versions for data
+# Uses parsers/ansible_inventory for environment info
+# Combines them for upgrade planning
+```
 
 ### `server.py` - MCP Tool Registration
 
