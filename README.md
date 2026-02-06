@@ -517,7 +517,7 @@ souschef ui
 souschef ui --port 8080
 ```
 
-**Run in Docker:**
+**Run the UI in Docker:**
 
 ```bash
 # Build the image
@@ -530,43 +530,75 @@ docker run -p 9999:9999 souschef-ui
 docker-compose up
 ```
 
-**Run Published Image from GitHub Container Registry:**
-
-SousChef images are automatically published to GitHub Container Registry (GHCR) on each release:
+**Run the MCP server in Docker (for MCP clients):**
 
 ```bash
-# Pull the latest released image
-docker pull ghcr.io/mcp-souschef:latest
+# Build the MCP image
+docker build -f Dockerfile.mcp -t souschef-mcp:latest .
+
+# Run the MCP server over stdio
+docker run -i --rm souschef-mcp:latest
+```
+
+Use the Docker configuration examples for your client:
+
+- [config/claude-desktop-docker.json](config/claude-desktop-docker.json)
+- [config/vscode-copilot-docker.json](config/vscode-copilot-docker.json)
+
+**Run Published Image from GitHub Container Registry:**
+
+SousChef provides two Docker images automatically published to GHCR on each release:
+
+**1. Web UI Image:**
+
+```bash
+# Pull the latest UI image
+docker pull ghcr.io/kpeacocke/mcp-souschef:latest
 
 # Or pull a specific version
-docker pull ghcr.io/mcp-souschef:3.2.0
+docker pull ghcr.io/kpeacocke/mcp-souschef:3.2.0
 
-# Run the image with your .env file
+# Run the UI with your .env file
 docker run -p 9999:9999 \
   --env-file .env \
-  ghcr.io/mcp-souschef:latest
+  ghcr.io/kpeacocke/mcp-souschef:latest
 
 # Or with docker-compose
 cat > docker-compose.override.yml << 'EOF'
 version: '3.8'
 services:
   souschef-ui:
-    image: ghcr.io/mcp-souschef:latest
+    image: ghcr.io/kpeacocke/mcp-souschef:latest
     build: ~
 EOF
 docker-compose up
 ```
 
+**2. MCP Server Image (for AI clients):**
+
+```bash
+# Pull the latest MCP server image
+docker pull ghcr.io/kpeacocke/souschef-mcp:latest
+
+# Run the MCP server over stdio (for MCP clients)
+docker run -i --rm ghcr.io/kpeacocke/souschef-mcp:latest
+```
+
+Use the published MCP image with your AI client:
+
+- [config/claude-desktop-docker-ghcr.json](config/claude-desktop-docker-ghcr.json)
+- [config/vscode-copilot-docker-ghcr.json](config/vscode-copilot-docker-ghcr.json)
+
 **Container Images:**
 
 - **Registry**: GitHub Container Registry (GHCR)
-- **Image Name**: `mcp-souschef`
-- **Full URL**: `ghcr.io/mcp-souschef`
+- **UI Image**: `ghcr.io/kpeacocke/mcp-souschef` (Streamlit web interface)
+- **MCP Server Image**: `ghcr.io/kpeacocke/souschef-mcp` (stdio MCP protocol)
 - **Available Tags**:
   - `latest` - Most recent release
-  - `3.2.0` - Specific version (semver)
-  - `3.2` - Latest patch of a minor version
-  - `3` - Latest patch of a major version
+  - `4.1.2` - Specific version (semver)
+  - `4.1` - Latest patch of a minor version
+  - `4` - Latest patch of a major version
 
 **Why use GHCR?**
 
@@ -787,6 +819,13 @@ All analysis operations include comprehensive progress feedback:
    # Restart Claude Desktop
    ```
 
+   **Claude Desktop (Docker - published image):**
+
+   ```bash
+   cp config/claude-desktop-docker-ghcr.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+   # Restart Claude Desktop
+   ```
+
    **VS Code + GitHub Copilot** (requires VS Code 1.102+):
 
    ```bash
@@ -795,6 +834,18 @@ All analysis operations include comprehensive progress feedback:
 
    # Windows
    copy config\vscode-copilot.json %APPDATA%\Code\User\mcp.json
+
+   # Reload VS Code window, then trust the server when prompted
+   ```
+
+   **VS Code + GitHub Copilot (Docker - published image):**
+
+   ```bash
+   # macOS/Linux
+   cp config/vscode-copilot-docker-ghcr.json ~/.config/Code/User/mcp.json
+
+   # Windows
+   copy config\vscode-copilot-docker-ghcr.json %APPDATA%\Code\User\mcp.json
 
    # Reload VS Code window, then trust the server when prompted
    ```

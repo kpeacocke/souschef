@@ -1,0 +1,34 @@
+# Dockerfile for SousChef MCP server (stdio)
+# Optimised for lightweight, secure container execution
+
+ARG PYTHON_VERSION=3.14.3
+ARG POETRY_VERSION=2.3.2
+
+FROM python:${PYTHON_VERSION}-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r app --gid=1001 \
+    && useradd -r -g app --uid=1001 --create-home --shell /sbin/nologin app
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" \
+    && poetry config virtualenvs.create false
+
+COPY pyproject.toml poetry.lock ./
+RUN poetry install --only main --no-interaction --no-ansi
+
+COPY souschef ./souschef
+
+USER app
+
+CMD ["souschef-mcp"]

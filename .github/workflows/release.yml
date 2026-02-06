@@ -305,7 +305,7 @@ jobs:
         echo "Attaching packages to release $TAG..."
         gh release upload "$TAG" dist/*
 
-  build-and-push-docker:
+  build-and-push-docker-ui:
     runs-on: ubuntu-latest
     needs: [validate, publish-pypi, create-release]
     # Only skip if Docker image already exists
@@ -357,6 +357,9 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
             type=semver,pattern={{major}},value=${{ needs.validate.outputs.version }}
             type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=SousChef UI
+            org.opencontainers.image.description=Web UI for SousChef Chef to Ansible converter
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
@@ -371,20 +374,21 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and push Docker UI image
         id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83  # v6.18.0
         with:
           context: .
+          file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
           build-args: |
-            PYTHON_VERSION=3.13.11
-            POETRY_VERSION=1.8.3
+            PYTHON_VERSION=3.14.3
+            POETRY_VERSION=2.3.2
           provenance: true
           sbom: true
 
@@ -418,11 +422,126 @@ jobs:
           deployment_id: ${{ steps.docker-deployment.outputs.deployment_id }}
           env: docker
 
-  scan-docker-image:
+  build-and-push-docker-mcp:
+    runs-on: ubuntu-latest
+    needs: [validate, publish-pypi, create-release]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      deployments: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      tags: ${{ steps.meta.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+      image-pushed: ${{ steps.build.outputs.digest != '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          repository: kpeacocke/souschef
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Start Docker MCP deployment
+        uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+        id: docker-mcp-deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: docker-mcp
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3.12.0
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Generate build metadata for MCP
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5.10.0
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/souschef-mcp
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/souschef-mcp
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
+            type=semver,pattern={{major}},value=${{ needs.validate.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=SousChef MCP Server
+            org.opencontainers.image.description=MCP server for SousChef Chef to Ansible converter
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker MCP image
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83  # v6.18.0
+        with:
+          context: .
+          file: Dockerfile.mcp
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=mcp
+          cache-to: type=gha,mode=max,scope=mcp
+          build-args: |
+            PYTHON_VERSION=3.14.3
+            POETRY_VERSION=2.3.2
+          provenance: true
+          sbom: true
+
+      - name: Verify MCP image digest
+        run: |
+          DIGEST="${{ steps.build.outputs.digest }}"
+          if [ -z "$DIGEST" ]; then
+            echo "ERROR: MCP image digest is empty"
+            exit 1
+          fi
+          echo "MCP image pushed successfully with digest: $DIGEST"
+
+      - name: Update Docker MCP deployment status (success)
+        uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+        if: success()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: success
+          deployment_id: ${{ steps.docker-mcp-deployment.outputs.deployment_id }}
+          env: docker-mcp
+          env_url: https://ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version }}
+
+      - name: Update Docker MCP deployment status (failure)
+        uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
+        if: failure()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: failure
+          deployment_id: ${{ steps.docker-mcp-deployment.outputs.deployment_id }}
+          env: docker-mcp
+
+  scan-docker-image-ui:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [validate, build-and-push-docker]
-    if: needs.build-and-push-docker.result == 'success' && needs.build-and-push-docker.outputs.image-pushed == 'true'
+    needs: [validate, build-and-push-docker-ui]
+    if: needs.build-and-push-docker-ui.result == 'success' && needs.build-and-push-docker-ui.outputs.image-pushed == 'true'
     permissions:
       packages: read
       security-events: write
@@ -449,7 +568,7 @@ jobs:
         if: always()
         with:
           sarif_file: trivy-results.sarif
-          category: trivy-image-scan
+          category: trivy-ui-image-scan
 
       - name: Display vulnerability report
         if: always()
@@ -457,11 +576,50 @@ jobs:
           echo "Vulnerability scan results:"
           echo "See GitHub Security tab for detailed report"
 
-  test-docker-image:
+  scan-docker-image-mcp:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [validate, build-and-push-docker]
-    if: needs.build-and-push-docker.result == 'success' && needs.build-and-push-docker.outputs.image-pushed == 'true'
+    needs: [validate, build-and-push-docker-mcp]
+    if: needs.build-and-push-docker-mcp.result == 'success' && needs.build-and-push-docker-mcp.outputs.image-pushed == 'true'
+    permissions:
+      packages: read
+      security-events: write
+
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy vulnerability scan on MCP image
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # v0.33.1
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version }}
+          format: sarif
+          output: trivy-results-mcp.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Upload Trivy MCP results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@2588666de8825e1e9dc4e2329a4c985457d55b32  # v3.32.1
+        if: always()
+        with:
+          sarif_file: trivy-results-mcp.sarif
+          category: trivy-mcp-image-scan
+
+      - name: Display MCP vulnerability report
+        if: always()
+        run: |
+          echo "MCP vulnerability scan results:"
+          echo "See GitHub Security tab for detailed report"
+
+  test-docker-image-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [validate, build-and-push-docker-ui]
+    if: needs.build-and-push-docker-ui.result == 'success' && needs.build-and-push-docker-ui.outputs.image-pushed == 'true'
     permissions:
       packages: read
 
@@ -505,15 +663,62 @@ jobs:
             exit 1
           fi
 
+  test-docker-image-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [validate, build-and-push-docker-mcp]
+    if: needs.build-and-push-docker-mcp.result == 'success' && needs.build-and-push-docker-mcp.outputs.image-pushed == 'true'
+    permissions:
+      packages: read
+
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and verify MCP image
+        run: |
+          set -e
+          docker pull "ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version }}"
+          echo "MCP image pulled successfully"
+
+      - name: Test MCP server starts
+        run: |
+          set -e
+          # Test that the MCP server can start and respond
+          # Use timeout to prevent hanging, expect it to wait for stdio input
+          timeout 5 docker run --rm -i \
+            "ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version }}" \
+            </dev/null || EXIT_CODE=$?
+          
+          # Exit code 124 means timeout (expected for stdio server waiting for input)
+          # Exit code 0 means it exited cleanly
+          if [ "${EXIT_CODE:-0}" -eq 124 ] || [ "${EXIT_CODE:-0}" -eq 0 ]; then
+            echo "MCP server test passed (exit code: ${EXIT_CODE:-0})"
+          else
+            echo "MCP server test failed with unexpected exit code: ${EXIT_CODE:-0}"
+            exit 1
+          fi
+
+      - name: Verify MCP entrypoint
+        run: |
+          set -e
+          # Check that souschef-mcp command exists
+          docker run --rm --entrypoint="" \
+            "ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version }}" \
+            which souschef-mcp
+          echo "MCP entrypoint verified"
+
   notify-docker-deployment:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [validate, build-and-push-docker, scan-docker-image, test-docker-image]
+    needs: [validate, build-and-push-docker-ui, build-and-push-docker-mcp, scan-docker-image-ui, scan-docker-image-mcp, test-docker-image-ui, test-docker-image-mcp]
     if: |
       needs.validate.result == 'success'
-      && needs.build-and-push-docker.result == 'success'
-      && needs.scan-docker-image.result == 'success'
-      && needs.test-docker-image.result == 'success'
+      && (needs.build-and-push-docker-ui.result == 'success' || needs.build-and-push-docker-mcp.result == 'success')
     permissions:
       contents: read
       issues: write
@@ -525,9 +730,9 @@ jobs:
           script: |
             const version = "${{ needs.validate.outputs.version }}";
             const registry = "ghcr.io";
-            const imageName = "mcp-souschef";
             const owner = "${{ github.repository_owner }}";
-            const digest = "${{ needs.build-and-push-docker.outputs.image-digest }}";
+            const uiDigest = "${{ needs.build-and-push-docker-ui.outputs.image-digest }}";
+            const mcpDigest = "${{ needs.build-and-push-docker-mcp.outputs.image-digest }}";
             const tag = "${{ needs.validate.outputs.tag }}";
 
             const versionParts = version.split('.');
@@ -536,24 +741,32 @@ jobs:
               : versionParts[0];
             const major = versionParts[0];
 
-            let body = "## Docker Image Published\n\n";
-            body += "**Image:** `" + registry + "/" + owner + "/" + imageName + ":" + version + "`\n\n";
-            body += "**Digest:** " + digest + "\n\n";
-            body += "**Available Tags:**\n";
-            body += "- `" + version + "` (exact version)\n";
-            body += "- `" + majorMinor + "` (minor version)\n";
-            body += "- `" + major + "` (major version)\n";
-            body += "- `latest` (most recent release)\n\n";
-            body += "**Container Registry:** [GitHub Container Registry](https://github.com/${{ github.repository }}/pkgs/container/" + imageName + ")\n\n";
-            body += "**Pull Commands:**\n";
-            body += "```bash\n";
-            body += "# Pull specific version\n";
-            body += "docker pull " + registry + "/" + owner + "/" + imageName + ":" + version + "\n\n";
-            body += "# Pull latest\n";
-            body += "docker pull " + registry + "/" + owner + "/" + imageName + ":latest\n\n";
-            body += "# Pull major version\n";
-            body += "docker pull " + registry + "/" + owner + "/" + imageName + ":" + major + "\n";
-            body += "```\n\n";
+            let body = "## Docker Images Published\n\n";
+            
+            if (uiDigest) {
+              body += "### UI Image (Streamlit)\n\n";
+              body += "**Image:** `" + registry + "/" + owner + "/mcp-souschef:" + version + "`\n\n";
+              body += "**Digest:** " + uiDigest + "\n\n";
+              body += "**Pull Commands:**\n";
+              body += "```bash\n";
+              body += "docker pull " + registry + "/" + owner + "/mcp-souschef:" + version + "\n";
+              body += "docker pull " + registry + "/" + owner + "/mcp-souschef:latest\n";
+              body += "```\n\n";
+            }
+            
+            if (mcpDigest) {
+              body += "### MCP Server Image\n\n";
+              body += "**Image:** `" + registry + "/" + owner + "/souschef-mcp:" + version + "`\n\n";
+              body += "**Digest:** " + mcpDigest + "\n\n";
+              body += "**Pull Commands:**\n";
+              body += "```bash\n";
+              body += "docker pull " + registry + "/" + owner + "/souschef-mcp:" + version + "\n";
+              body += "docker pull " + registry + "/" + owner + "/souschef-mcp:latest\n";
+              body += "```\n\n";
+            }
+            
+            body += "**Available Tags:** `" + version + "`, `" + majorMinor + "`, `" + major + "`, `latest`\n\n";
+            body += "**Container Registry:** [GitHub Container Registry](https://github.com/${{ github.repository }}/packages)\n\n";
             body += "**Security:** Vulnerability scan results available in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)\n\n";
             body += "**Related Release:** " + tag + "\n\n";
             body += "## Build Information\n";
@@ -564,7 +777,7 @@ jobs:
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "Docker Image Published: " + tag,
+              title: "Docker Images Published: " + tag,
               body: body,
               labels: ['deployment', 'docker', 'release']
             });
@@ -572,7 +785,7 @@ jobs:
   release-complete:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [validate, build-package, publish-pypi, create-release, build-and-push-docker, scan-docker-image, test-docker-image, notify-docker-deployment]
+    needs: [validate, build-package, publish-pypi, create-release, build-and-push-docker-ui, build-and-push-docker-mcp, scan-docker-image-ui, scan-docker-image-mcp, test-docker-image-ui, test-docker-image-mcp, notify-docker-deployment]
     if: always()
     permissions:
       contents: read
@@ -588,26 +801,32 @@ jobs:
           - **Build Package:** ${{ needs.build-package.result }}
           - **PyPI Publish:** ${{ needs.publish-pypi.result }}
           - **Create Release:** ${{ needs.create-release.result }}
-          - **Docker Build & Push:** ${{ needs.build-and-push-docker.result }}
-          - **Docker Security Scan:** ${{ needs.scan-docker-image.result }}
-          - **Docker Test:** ${{ needs.test-docker-image.result }}
+          - **Docker UI Build & Push:** ${{ needs.build-and-push-docker-ui.result }}
+          - **Docker MCP Build & Push:** ${{ needs.build-and-push-docker-mcp.result }}
+          - **Docker UI Security Scan:** ${{ needs.scan-docker-image-ui.result }}
+          - **Docker MCP Security Scan:** ${{ needs.scan-docker-image-mcp.result }}
+          - **Docker UI Test:** ${{ needs.test-docker-image-ui.result }}
+          - **Docker MCP Test:** ${{ needs.test-docker-image-mcp.result }}
           - **Docker Notification:** ${{ needs.notify-docker-deployment.result }}
 
           ## Release Information
           - **Version:** ${{ needs.validate.outputs.version || 'N/A' }}
           - **Tag:** ${{ needs.validate.outputs.tag || 'N/A' }}
-          - **Image Digest:** ${{ needs.build-and-push-docker.outputs.image-digest || 'No image pushed' }}
+          - **UI Image Digest:** ${{ needs.build-and-push-docker-ui.outputs.image-digest || 'No image pushed' }}
+          - **MCP Image Digest:** ${{ needs.build-and-push-docker-mcp.outputs.image-digest || 'No image pushed' }}
 
           ## Deployments
           - **PyPI:** https://pypi.org/project/souschef/${{ needs.validate.outputs.version || 'latest' }}/
           - **GitHub Release:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag || 'latest' }}
-          - **Container Image:** ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}
+          - **UI Container Image:** ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}
+          - **MCP Container Image:** ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version || 'latest' }}
 
           ## Next Steps
-          - Both PyPI package and Docker image are deployed
+          - PyPI package and Docker images are deployed
           - See GitHub Release for artifacts and release notes
           - See GitHub Security tab for Docker vulnerability scan results
-          - Pull the Docker image: `docker pull ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}`
+          - Pull the UI image: `docker pull ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}`
+          - Pull the MCP image: `docker pull ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version || 'latest' }}`
 
           ## Workflow Run Details
           - **Workflow:** ${{ github.workflow }}
@@ -622,9 +841,12 @@ jobs:
           || needs.build-package.result == 'failure'
           || needs.publish-pypi.result == 'failure'
           || needs.create-release.result == 'failure'
-          || needs.build-and-push-docker.result == 'failure'
-          || needs.scan-docker-image.result == 'failure'
-          || needs.test-docker-image.result == 'failure'
+          || needs.build-and-push-docker-ui.result == 'failure'
+          || needs.build-and-push-docker-mcp.result == 'failure'
+          || needs.scan-docker-image-ui.result == 'failure'
+          || needs.scan-docker-image-mcp.result == 'failure'
+          || needs.test-docker-image-ui.result == 'failure'
+          || needs.test-docker-image-mcp.result == 'failure'
         run: |
           echo "### Release Pipeline Failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -634,9 +856,12 @@ jobs:
           echo "| Build Package | ${{ needs.build-package.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| PyPI Publish | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Create Release | ${{ needs.create-release.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker Build & Push | ${{ needs.build-and-push-docker.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker Scan | ${{ needs.scan-docker-image.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker Test | ${{ needs.test-docker-image.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker UI Build & Push | ${{ needs.build-and-push-docker-ui.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker MCP Build & Push | ${{ needs.build-and-push-docker-mcp.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker UI Scan | ${{ needs.scan-docker-image-ui.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker MCP Scan | ${{ needs.scan-docker-image-mcp.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker UI Test | ${{ needs.test-docker-image-ui.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker MCP Test | ${{ needs.test-docker-image-mcp.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Please review the failed jobs above."
           exit 1

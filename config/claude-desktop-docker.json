@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "souschef": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "souschef-mcp:latest"],
+      "env": {}
+    }
+  }
+}
