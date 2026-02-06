@@ -4050,6 +4050,320 @@ def _generate_batch_conversion_report(overall_summary: dict, output_dir: Path) -
 
 
 # AWX/AAP deployment wrappers for backward compatibility
+
+
+# ==================== Ansible Upgrade Assessment Tools ====================
+
+
+@mcp.tool()
+def assess_ansible_upgrade_readiness(environment_path: str) -> str:
+    """
+    Assess current Ansible environment for upgrade readiness.
+
+    Scans the Ansible environment, detects current versions, checks compatibility,
+    identifies potential issues, and provides upgrade recommendations.
+
+    Args:
+        environment_path: Path to Ansible environment directory containing
+            playbooks, inventory, and configuration files.
+
+    Returns:
+        JSON string containing assessment results with:
+        - current_version: Detected Ansible version
+        - python_version: Detected Python version
+        - python_compatible: Whether Python is compatible
+        - eol_status: End-of-life information
+        - compatibility_issues: List of detected issues
+        - recommendations: List of recommended actions
+
+    """
+    from souschef.ansible_upgrade import assess_ansible_environment
+
+    try:
+        environment_path = str(_normalize_path(environment_path))
+        result = assess_ansible_environment(environment_path)
+        return json.dumps(result, indent=2, default=str)
+    except Exception as e:
+        return format_error_with_context(
+            e, "assessing Ansible environment", environment_path
+        )
+
+
+@mcp.tool()
+def plan_ansible_upgrade(environment_path: str, target_version: str) -> str:
+    """
+    Generate detailed Ansible upgrade plan.
+
+    Creates a comprehensive upgrade plan including upgrade path, risk assessment,
+    pre/post-upgrade checklists, testing strategy, and rollback procedures.
+
+    Args:
+        environment_path: Path to Ansible environment directory.
+        target_version: Target Ansible version (e.g., "2.16").
+
+    Returns:
+        Markdown-formatted upgrade plan with detailed steps and recommendations.
+
+    """
+    from souschef.ansible_upgrade import generate_upgrade_plan
+    from souschef.parsers.ansible_inventory import detect_ansible_version
+
+    try:
+        environment_path = str(_normalize_path(environment_path))
+
+        # Detect current version
+        current_version = detect_ansible_version()
+        # Extract major.minor (e.g., "2.16.0" → "2.16")
+        version_parts = current_version.split(".")
+        if len(version_parts) >= 2:
+            current_major_minor = f"{version_parts[0]}.{version_parts[1]}"
+        else:
+            current_major_minor = current_version
+
+        # Generate plan
+        plan = generate_upgrade_plan(
+            current_major_minor, target_version, environment_path
+        )
+
+        # Format as markdown
+        markdown = _format_upgrade_plan_markdown(plan)
+        return markdown
+    except Exception as e:
+        return format_error_with_context(
+            e, "generating Ansible upgrade plan", environment_path
+        )
+
+
+@mcp.tool()
+def check_ansible_eol_status(version: str) -> str:
+    """
+    Check if Ansible version is EOL or approaching EOL.
+
+    Provides end-of-life status, security risk assessment, and recommendations
+    for Ansible versions based on official support timelines.
+
+    Args:
+        version: Ansible version string (e.g., "2.9", "2.16").
+
+    Returns:
+        JSON string with EOL status including:
+        - is_eol: Whether version is end-of-life
+        - eol_date: End-of-life date
+        - status: Human-readable status message
+        - security_risk: Risk level (LOW/MEDIUM/HIGH)
+        - days_overdue or days_remaining: Time relative to EOL
+
+    """
+    from souschef.core.ansible_versions import get_eol_status
+
+    try:
+        status = get_eol_status(version)
+        return json.dumps(status, indent=2, default=str)
+    except Exception as e:
+        return format_error_with_context(e, "checking Ansible EOL status", version)
+
+
+@mcp.tool()
+def validate_ansible_collection_compatibility(
+    collections_file: str, target_version: str
+) -> str:
+    """
+    Validate collection compatibility with target Ansible version.
+
+    Checks whether Ansible collections specified in requirements.yml are
+    compatible with the target Ansible version and identifies collections
+    that need updates.
+
+    Args:
+        collections_file: Path to requirements.yml file.
+        target_version: Target Ansible version (e.g., "2.16").
+
+    Returns:
+        JSON string with compatibility report including:
+        - compatible: List of compatible collections
+        - updates_needed: Collections requiring version updates
+        - warnings: List of compatibility warnings
+
+    """
+    from souschef.ansible_upgrade import validate_collection_compatibility
+    from souschef.parsers.ansible_inventory import parse_requirements_yml
+
+    try:
+        collections_file = str(_normalize_path(collections_file))
+        collections = parse_requirements_yml(collections_file)
+        result = validate_collection_compatibility(collections, target_version)
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return format_error_with_context(
+            e, "validating collection compatibility", collections_file
+        )
+
+
+@mcp.tool()
+def generate_ansible_upgrade_test_plan(environment_path: str) -> str:
+    """
+    Generate comprehensive testing plan for Ansible upgrade validation.
+
+    Creates a detailed testing plan covering pre-upgrade baseline establishment,
+    post-upgrade validation, regression testing, and acceptance criteria.
+
+    Args:
+        environment_path: Path to Ansible environment directory.
+
+    Returns:
+        Markdown-formatted testing plan with checklists and procedures.
+
+    """
+    from souschef.ansible_upgrade import generate_upgrade_testing_plan
+
+    try:
+        environment_path = str(_normalize_path(environment_path))
+        return generate_upgrade_testing_plan(environment_path)
+    except Exception as e:
+        return format_error_with_context(
+            e, "generating Ansible upgrade test plan", environment_path
+        )
+
+
+def _format_plan_header(path: dict, plan: dict) -> list[str]:
+    """Format the plan header section."""
+    return [
+        "# Ansible Upgrade Plan",
+        "",
+        f"**From Version:** {path['from_version']}",
+        f"**To Version:** {path['to_version']}",
+        f"**Risk Level:** {path['risk_level']}",
+        f"**Estimated Effort:** {path['estimated_effort_days']} days",
+        f"**Estimated Downtime:** {plan['estimated_downtime_hours']} hours",
+        "",
+    ]
+
+
+def _format_upgrade_path(path: dict) -> list[str]:
+    """Format the upgrade path section."""
+    lines = ["## Upgrade Path", ""]
+    if path["direct_upgrade"]:
+        lines.append(
+            f"✅ Direct upgrade from {path['from_version']} "
+            f"to {path['to_version']} is recommended."
+        )
+    else:
+        lines.append("⚠️  Multi-step upgrade recommended through intermediate versions:")
+        for version in path["intermediate_versions"]:
+            lines.append(f"- {version}")
+    return lines
+
+
+def _format_risk_assessment(path: dict, plan: dict) -> list[str]:
+    """Format the risk assessment section."""
+    lines = ["", "## Risk Assessment", ""]
+
+    if path["risk_factors"]:
+        lines.append("**Risk Factors:**")
+        for factor in path["risk_factors"]:
+            lines.append(f"- {factor}")
+    else:
+        lines.append("✅ No significant risk factors identified.")
+
+    lines.extend(["", "**Mitigation Strategies:**"])
+    for strategy in plan["risk_assessment"]["mitigation"]:
+        lines.append(f"- {strategy}")
+
+    return lines
+
+
+def _format_upgrade_steps(plan: dict) -> list[str]:
+    """Format the upgrade steps section."""
+    lines = ["", "## Upgrade Steps", ""]
+    for step in plan["upgrade_steps"]:
+        step_num = step["step"]
+        action = step["action"]
+        command = step.get("command", "")
+        duration = step.get("duration_minutes", 0)
+
+        lines.append(f"### Step {step_num}: {action}")
+        if command:
+            lines.append(f"```bash\n{command}\n```")
+        lines.append(f"*Estimated duration: {duration} minutes*")
+
+        if "notes" in step and step["notes"]:
+            lines.append("\n**Notes:**")
+            for note in step["notes"]:
+                lines.append(f"- {note}")
+
+        lines.append("")
+
+    return lines
+
+
+def _format_upgrade_plan_markdown(plan: dict) -> str:
+    """
+    Format upgrade plan as markdown.
+
+    Args:
+        plan: Upgrade plan dictionary from generate_upgrade_plan.
+
+    Returns:
+        Markdown-formatted plan.
+
+    """
+    path = plan["upgrade_path"]
+    markdown: list[str] = []
+
+    # Build sections using helper functions
+    markdown.extend(_format_plan_header(path, plan))
+    markdown.extend(_format_upgrade_path(path))
+    markdown.extend(_format_risk_assessment(path, plan))
+
+    markdown.extend(["", "## Pre-Upgrade Checklist", ""])
+    for item in plan["pre_upgrade_checklist"]:
+        markdown.append(f"- [ ] {item}")
+
+    markdown.extend(_format_upgrade_steps(plan))
+
+    markdown.extend(["## Post-Upgrade Validation", ""])
+    for item in plan["post_upgrade_validation"]:
+        markdown.append(f"- [ ] {item}")
+
+    markdown.extend(["", "## Breaking Changes", ""])
+    if path["breaking_changes"]:
+        for change in path["breaking_changes"]:
+            markdown.append(f"- {change}")
+    else:
+        markdown.append("No major breaking changes identified.")
+
+    if path["python_upgrade_needed"]:
+        markdown.extend(
+            [
+                "",
+                "## Python Upgrade Required",
+                "",
+                f"**Current Python:** {', '.join(path['current_python'])}",
+                f"**Required Python:** {', '.join(path['required_python'])}",
+                "",
+                "⚠️  You must upgrade Python on control node before upgrading.",
+            ]
+        )
+
+    if path["collection_updates_needed"]:
+        markdown.extend(["", "## Collection Updates Required", ""])
+        for collection, version in path["collection_updates_needed"].items():
+            markdown.append(f"- {collection} >= {version}")
+
+    markdown.extend(["", "## Rollback Plan", ""])
+    for step in plan["rollback_plan"]["steps"]:
+        markdown.append(f"1. {step}")
+    markdown.append(
+        f"\n*Estimated rollback time: "
+        f"{plan['rollback_plan']['estimated_duration_minutes']} minutes*"
+    )
+
+    return "\n".join(markdown)
+
+
+# ==================== End Ansible Upgrade Tools ====================
+
+
 def main() -> None:
     """
     Run the SousChef MCP server.

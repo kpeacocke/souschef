@@ -1,6 +1,6 @@
-# Chef to Ansible migration - SousChef MCP
+# Chef to Ansible Migration & Ansible Upgrades - SousChef MCP
 
-An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure transformation.
+An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities and Ansible upgrade planning for enterprise infrastructure transformation.
 
 [![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
@@ -12,9 +12,28 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
 
-## Overview - Chef to Ansible features
+## Overview
 
-SousChef is a complete enterprise-grade migration platform with **40 primary MCP tools** organised across **12 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, and GitHub Copilot agent control, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade platform with two major capabilities:
+
+### 1. Chef to Ansible Migration (40+ tools)
+
+Complete enterprise-grade migration platform with **40 primary MCP tools** organised across **12 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, and GitHub Copilot agent control, SousChef provides everything needed for a successful infrastructure automation migration.
+
+### 2. Ansible Upgrade Assessment & Planning (NEW - In Development)
+
+Comprehensive Ansible upgrade analysis and planning tools based on official Ansible-Python compatibility matrices:
+
+- **Version Compatibility Assessment** - Validate Ansible and Python version compatibility
+- **EOL Status Checking** - Track end-of-life dates and security support
+- **Upgrade Path Planning** - Generate detailed upgrade plans with risk assessment
+- **Collection Compatibility** - Validate collection versions against target Ansible releases
+- **Breaking Change Analysis** - Identify and plan for breaking changes (e.g., 2.9 → 2.10 collections split)
+- **Python Upgrade Impact** - Assess Python version upgrade requirements for control and managed nodes
+- **Testing Plan Generation** - Generate comprehensive upgrade testing plans
+
+> **🚧 Feature Status**: Ansible upgrade features are currently in development on the `feature/ansible-upgrades` branch.
+> See [Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md) for full details.
 
 ### About Tool Counts
 
@@ -43,11 +62,17 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 
 ## Quick Links
 
+### Chef to Ansible Migration
 - **[Terraform Provider](terraform-provider/README.md)** - Manage migrations with infrastructure-as-code
 - **[User Guide](docs/user-guide/)** - Complete documentation
 - **[Data Persistence Guide](docs/user-guide/data-persistence.md)** - History, caching, and storage backends
 - **[API Reference](docs/api-reference/)** - Detailed tool documentation
 - **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
+
+### Ansible Upgrades (In Development)
+- **[Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md)** - Complete design and architecture
+- **[Ansible Upgrade Matrix Implementation](docs/ANSIBLE_UPGRADE_MATRIX_IMPLEMENTATION.md)** - PDF data mapping and implementation
+- **[Implementation Roadmap](docs/ANSIBLE_UPGRADE_ROADMAP.md)** - Detailed development timeline
 
 ## What's New in v4.1.0
 
