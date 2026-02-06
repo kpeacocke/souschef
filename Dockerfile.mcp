@@ -4,7 +4,7 @@
 ARG PYTHON_VERSION=3.14.3
 ARG POETRY_VERSION=2.3.2
 
-FROM python:${PYTHON_VERSION}-slim AS runtime
+FROM python:${PYTHON_VERSION}-alpine AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -12,12 +12,16 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONPATH=/app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install runtime and build dependencies (Alpine)
+RUN apk add --no-cache \
     ca-certificates \
     curl \
-    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r app --gid=1001 \
-    && useradd -r -g app --uid=1001 --create-home --shell /sbin/nologin app
+    # Build dependencies for Python packages
+    gcc \
+    musl-dev \
+    libffi-dev \
+    && addgroup -g 1001 -S app \
+    && adduser -u 1001 -S app -G app
 
 WORKDIR /app
 
