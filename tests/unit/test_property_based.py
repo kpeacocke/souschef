@@ -929,3 +929,177 @@ def test_generate_compose_handles_any_path(path_str):
 
     # Should always return a string (compose or error)
     assert isinstance(result, str)
+
+
+# Ansible upgrade property-based tests
+
+
+@given(st.text(min_size=1, max_size=100))
+@settings(max_examples=50)
+def test_get_python_compatibility_raises_for_invalid(version_str):
+    """Test that get_python_compatibility raises or returns for any version."""
+    from souschef.core.ansible_versions import get_python_compatibility
+
+    try:
+        result = get_python_compatibility(version_str, "control")
+        # If it succeeds, should return a list
+        assert isinstance(result, list)
+    except ValueError:
+        # Should raise ValueError for invalid versions, which is expected
+        pass
+
+
+@given(st.text(min_size=1, max_size=50), st.text(min_size=1, max_size=50))
+@settings(max_examples=50)
+def test_is_python_compatible_handles_errors(ansible_ver, python_ver):
+    """Test that is_python_compatible raises or returns bool."""
+    from souschef.core.ansible_versions import is_python_compatible
+
+    try:
+        result = is_python_compatible(ansible_ver, python_ver, "control")
+        # Should return a boolean
+        assert isinstance(result, bool)
+    except ValueError:
+        # Raises ValueError for invalid Ansible versions
+        pass
+
+
+@given(st.text(min_size=1, max_size=100))
+@settings(max_examples=50)
+def test_get_eol_status_handles_any_version(version_str):
+    """Test that get_eol_status handles any version string."""
+    from souschef.core.ansible_versions import get_eol_status
+
+    result = get_eol_status(version_str)
+    # Should always return a dict
+    assert isinstance(result, dict)
+    # Should have either status or error
+    assert "status" in result or "error" in result
+
+
+@given(st.text())
+@settings(max_examples=50, deadline=500)
+def test_parse_ansible_cfg_handles_any_path(path_str):
+    """Test that parse_ansible_cfg handles any file path."""
+    from souschef.parsers.ansible_inventory import parse_ansible_cfg
+
+    try:
+        result = parse_ansible_cfg(path_str)
+        # Should return a dict if successful
+        assert isinstance(result, dict)
+    except (FileNotFoundError, ValueError):
+        # File not found or invalid format is expected for invalid paths
+        pass
+
+
+@given(st.text())
+@settings(max_examples=50, deadline=500)
+def test_parse_inventory_ini_handles_any_path(path_str):
+    """Test that parse_inventory_ini handles any file path."""
+    from souschef.parsers.ansible_inventory import parse_inventory_ini
+
+    try:
+        result = parse_inventory_ini(path_str)
+        # Should return a dict
+        assert isinstance(result, dict)
+    except (FileNotFoundError, IsADirectoryError, ValueError):
+        # File not found, directory, or invalid YAML is expected
+        pass
+
+
+@given(st.text())
+@settings(max_examples=50, deadline=500)
+def test_parse_inventory_yaml_handles_any_path(path_str):
+    """Test that parse_inventory_yaml handles any file path."""
+    from souschef.parsers.ansible_inventory import parse_inventory_yaml
+
+    try:
+        result = parse_inventory_yaml(path_str)
+        # Should return a dict
+        assert isinstance(result, dict)
+    except (FileNotFoundError, IsADirectoryError, ValueError):
+        # File not found, directory, or invalid YAML is expected
+        pass
+
+
+@given(st.text())
+@settings(max_examples=50, deadline=500)
+def test_parse_requirements_yml_handles_any_path(path_str):
+    """Test that parse_requirements_yml handles any file path."""
+    from souschef.parsers.ansible_inventory import parse_requirements_yml
+
+    try:
+        result = parse_requirements_yml(path_str)
+        # Should return a dict
+        assert isinstance(result, dict)
+    except (FileNotFoundError, IsADirectoryError, ValueError):
+        # File not found, directory, or invalid YAML is expected
+        pass
+
+
+@given(st.text())
+@settings(max_examples=50, deadline=500)
+def test_scan_playbook_handles_any_path(path_str):
+    """Test that scan_playbook_for_version_issues handles any file path."""
+    from souschef.parsers.ansible_inventory import scan_playbook_for_version_issues
+
+    try:
+        result = scan_playbook_for_version_issues(path_str)
+        # Should return a dict
+        assert isinstance(result, dict)
+    except (FileNotFoundError, IsADirectoryError, ValueError):
+        # File not found, directory, or invalid YAML is expected
+        pass
+
+
+@given(st.text(min_size=1, max_size=20), st.text(min_size=1, max_size=20))
+@settings(max_examples=50)
+def test_calculate_upgrade_path_handles_errors(from_ver, to_ver):
+    """Test that calculate_upgrade_path handles any version combinations."""
+    from souschef.core.ansible_versions import calculate_upgrade_path
+
+    try:
+        result = calculate_upgrade_path(from_ver, to_ver)
+        # If it succeeds, should return a dict with required keys
+        assert isinstance(result, dict)
+        assert "from_version" in result
+        assert "to_version" in result
+    except ValueError:
+        # Should raise ValueError for invalid versions
+        pass
+
+
+@given(st.text(min_size=1, max_size=20))
+@settings(max_examples=50)
+def test_get_eol_status_always_returns_dict(version_str):
+    """Test that get_eol_status always returns dict."""
+    from souschef.core.ansible_versions import get_eol_status
+
+    result = get_eol_status(version_str)
+    # get_eol_status never raises, always returns dict
+    assert isinstance(result, dict)
+
+
+@given(st.text(min_size=1, max_size=20))
+@settings(max_examples=50)
+def test_get_latest_version_always_succeeds(dummy_input):
+    """Test that get_latest_version always succeeds."""
+    from souschef.core.ansible_versions import get_latest_version
+
+    # get_latest_version takes no parameters and always works
+    result = get_latest_version()
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+@given(st.text(min_size=1, max_size=20))
+@settings(max_examples=50)
+def test_get_supported_versions_always_returns_list(dummy_input):
+    """Test that get_supported_versions always returns list."""
+    from souschef.core.ansible_versions import get_supported_versions
+
+    # get_supported_versions takes no parameters
+    result = get_supported_versions()
+    assert isinstance(result, list)
+    for item in result:
+        assert isinstance(item, str)

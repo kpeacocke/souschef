@@ -1,0 +1,24 @@
+all:
+  children:
+    webservers:
+      hosts:
+        web1.example.com:
+          ansible_host: 192.168.1.10
+          ansible_user: admin
+        web2.example.com:
+          ansible_host: 192.168.1.11
+          ansible_user: admin
+      vars:
+        http_port: 80
+        https_port: 443
+    databases:
+      hosts:
+        db1.example.com:
+          ansible_host: 192.168.1.20
+          postgres_version: 14
+      vars:
+        max_connections: 200
+    loadbalancers:
+      hosts:
+        lb1.example.com:
+          ansible_host: 192.168.1.30
