@@ -7,7 +7,7 @@ ARG POETRY_VERSION=2.3.2
 # ============================================================================
 # Base Stage - Common configuration for all stages
 # ============================================================================
-FROM python:${PYTHON_VERSION}-slim AS base
+FROM python:${PYTHON_VERSION}-alpine AS base
 
 ARG PYTHON_VERSION
 
@@ -20,7 +20,7 @@ LABEL org.opencontainers.image.title="SousChef - MCP AI Chef to Ansible Converte
       org.opencontainers.image.url="https://github.com/kpeacocke/souschef" \
       org.opencontainers.image.documentation="https://kpeacocke.github.io/souschef/" \
       org.opencontainers.image.source="https://github.com/kpeacocke/souschef" \
-      org.opencontainers.image.base.name="python:${PYTHON_VERSION}-slim"
+      org.opencontainers.image.base.name="python:${PYTHON_VERSION}-alpine"
 
 # Set environment variables for Python and Streamlit
 ENV PYTHONUNBUFFERED=1 \
@@ -37,16 +37,17 @@ ENV PYTHONUNBUFFERED=1 \
     STREAMLIT_SERVER_LOGGER_LEVEL=INFO \
     STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
 
-# Install security updates and minimal system dependencies
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+# Install runtime dependencies only (Alpine)
+RUN apk add --no-cache \
     ca-certificates \
     curl \
-    git \
-    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r app --gid=1001 && \
-    useradd -r -g app --uid=1001 --create-home --shell /sbin/nologin app && \
-    mkdir -p /app && \
-    chown -R app:app /app
+    # Runtime libraries (not -dev packages)
+    libffi \
+    libpq \
+    && addgroup -g 1001 -S app \
+    && adduser -u 1001 -S app -G app \
+    && mkdir -p /app \
+    && chown -R app:app /app
 
 # Set work directory
 WORKDIR /app
@@ -59,11 +60,13 @@ FROM base AS builder
 ARG POETRY_VERSION
 ARG PYTHON_VERSION
 
-# Install build dependencies needed for compilation
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    python3-dev \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Install build-time dependencies (not needed in runtime image)
+RUN apk add --no-cache \
+    gcc \
+    git \
+    libffi-dev \
+    musl-dev \
+    postgresql-dev
 
 # Copy dependency files first (for better layer caching)
 COPY pyproject.toml poetry.lock ./
@@ -111,9 +114,9 @@ RUN PYTHON_MAJOR_MINOR=$(echo "${PYTHON_VERSION}" | cut -d. -f1-2) && \
     \
     # Remove test files and compiled artifacts, but KEEP dist-info (required for package discovery) \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
+        -type d -name "tests" -exec rm -rf {} + && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true && \
+        -type d -name "*.egg-info" -exec rm -rf {} + && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
         -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.dist-info/RECORD" \) -delete
 

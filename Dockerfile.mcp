@@ -1,0 +1,80 @@
+# Dockerfile for SousChef MCP server (stdio)
+# Optimised for lightweight, secure container execution
+
+ARG PYTHON_VERSION=3.14.3
+ARG POETRY_VERSION=2.3.2
+
+# ============================================================================
+# Base Stage - Runtime dependencies only
+# ============================================================================
+FROM python:${PYTHON_VERSION}-alpine AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app
+
+# Install runtime libraries only (not -dev packages)
+RUN apk add --no-cache \
+    ca-certificates \
+    curl \
+    libffi \
+    && addgroup -g 1001 -S app \
+    && adduser -u 1001 -S app -G app
+
+WORKDIR /app
+
+# ============================================================================
+# Builder Stage - Install dependencies
+# ============================================================================
+FROM base AS builder
+
+ARG POETRY_VERSION
+ARG PYTHON_VERSION
+
+# Install build-time dependencies
+RUN apk add --no-cache \
+    gcc \
+    libffi-dev \
+    musl-dev
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# Install Poetry
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" \
+    && poetry config virtualenvs.create false
+
+# Install dependencies (--no-root: don't install root package; we rely on PYTHONPATH=/app)
+RUN poetry install --only main --no-root --no-interaction --no-ansi
+
+# Copy site-packages to predictable location
+RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
+    cp -r "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" /tmp/runtime-site-packages
+
+# ============================================================================
+# Production Stage - Minimal runtime image
+# ============================================================================
+FROM base AS production
+
+ARG PYTHON_VERSION
+
+# Copy site-packages from builder
+COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
+
+# Install to final location and cleanup
+RUN PYTHON_MAJOR_MINOR=$(echo "${PYTHON_VERSION}" | cut -d. -f1-2) && \
+    rm -rf "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
+    mv /tmp/site-packages "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
+    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
+        -type d -name "tests" -exec rm -rf {} + && \
+    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
+        -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
+
+# Copy application code
+COPY souschef ./souschef
+
+USER app
+
+CMD ["python", "-m", "souschef.server"]
