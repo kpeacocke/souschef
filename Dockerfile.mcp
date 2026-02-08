@@ -16,10 +16,9 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apk add --no-cache \
     ca-certificates \
     curl \
-    # Build dependencies for Python packages
     gcc \
-    musl-dev \
     libffi-dev \
+    musl-dev \
     && addgroup -g 1001 -S app \
     && adduser -u 1001 -S app -G app
 

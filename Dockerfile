@@ -41,11 +41,11 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apk add --no-cache \
     ca-certificates \
     curl \
-    git \
     # Build dependencies for Python packages
     gcc \
-    musl-dev \
+    git \
     libffi-dev \
+    musl-dev \
     # PostgreSQL client libraries for psycopg
     postgresql-dev \
     && addgroup -g 1001 -S app \
