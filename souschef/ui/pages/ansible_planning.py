@@ -16,7 +16,7 @@ from souschef.core.ansible_versions import ANSIBLE_VERSIONS
 
 def _display_planning_intro() -> None:
     """Render the planning page title and introduction."""
-    st.title("📋 Ansible Upgrade Planning")
+    st.title("Ansible Upgrade Planning")
     st.markdown(
         """
     Plan your Ansible upgrade by selecting source and target versions.
@@ -44,7 +44,7 @@ def _render_planning_inputs() -> tuple[str, str, bool]:
         )
 
     with col3:
-        plan_btn = st.button("📊 Generate Plan", use_container_width=True)
+        plan_btn = st.button("Generate Plan", use_container_width=True)
 
     return current_version, target_version, plan_btn
 
@@ -70,7 +70,7 @@ def _should_generate_plan(
 
 def _display_upgrade_path_section(upgrade_path: dict[str, Any]) -> None:
     """Display the upgrade path details."""
-    st.subheader("🔄 Upgrade Path")
+    st.subheader("Upgrade Path")
     from_ver = upgrade_path.get("from_version", "?")
     to_ver = upgrade_path.get("to_version", "?")
     intermediate = upgrade_path.get("intermediate_versions", [])
@@ -88,11 +88,11 @@ def _display_upgrade_path_section(upgrade_path: dict[str, Any]) -> None:
 def _display_risk_level(risk: str) -> None:
     """Display the risk level with appropriate styling."""
     if risk == "Low":
-        st.info("✅ Risk Level: Low")
+        st.info("Risk Level: Low")
     elif risk == "Medium":
-        st.warning("⚠️ Risk Level: Medium")
+        st.warning("Risk Level: Medium")
     elif risk == "High":
-        st.error("❌ Risk Level: High")
+        st.error("Risk Level: High")
 
 
 def _display_plan_overview_tab(plan: dict[str, Any]) -> None:
@@ -121,7 +121,7 @@ def _truncate_text(text: str, max_length: int = 60) -> str:
 
 def _display_breaking_changes_list(breaking: list[Any]) -> None:
     """Display list of breaking changes in expanders."""
-    st.subheader(f"⚠️ Breaking Changes ({len(breaking)})")
+    st.subheader(f"Breaking Changes ({len(breaking)})")
     for idx, change in enumerate(breaking, 1):
         display_text = _truncate_text(
             str(change) if not isinstance(change, str) else change
@@ -134,7 +134,7 @@ def _display_plan_breaking_tab(plan: dict[str, Any]) -> None:
     """Render breaking change details."""
     breaking = plan.get("breaking_changes", [])
     if not isinstance(breaking, list) or not breaking:
-        st.info("✅ No breaking changes detected")
+        st.info("No breaking changes detected")
         return
 
     _display_breaking_changes_list(breaking)
@@ -142,7 +142,7 @@ def _display_plan_breaking_tab(plan: dict[str, Any]) -> None:
 
 def _display_deprecated_features_list(deprecated: list[Any]) -> None:
     """Display list of deprecated features in expanders."""
-    st.subheader(f"📌 Deprecated Features ({len(deprecated)})")
+    st.subheader(f"Deprecated Features ({len(deprecated)})")
     for idx, feature in enumerate(deprecated, 1):
         if isinstance(feature, str):
             display_text = feature[:60] + ("..." if len(feature) > 60 else "")
@@ -156,7 +156,7 @@ def _display_plan_deprecated_tab(plan: dict[str, Any]) -> None:
     """Render deprecated feature details."""
     deprecated = plan.get("deprecated_features", [])
     if not isinstance(deprecated, list) or not deprecated:
-        st.info("✅ No deprecated features identified")
+        st.info("No deprecated features identified")
         return
 
     _display_deprecated_features_list(deprecated)
@@ -210,14 +210,14 @@ def _display_plan_collections_tab(plan: dict[str, Any]) -> None:
     req = _get_collection_list(impacts, "requires_update")
     may = _get_collection_list(impacts, "may_require_update")
 
-    _display_collection_section("Requires Update", "🔄", req)
-    _display_collection_section("May Require Update", "⚠️", may)
+    _display_collection_section("Requires Update", "", req)
+    _display_collection_section("May Require Update", "", may)
 
 
 def _display_pre_upgrade_checklist(checklist: Any) -> None:
     """Display the pre-upgrade checklist in an expander."""
     if isinstance(checklist, list):
-        with st.expander("📋 Pre-Upgrade Checklist"):
+        with st.expander("Pre-Upgrade Checklist"):
             for item in checklist:
                 st.write(f"☐ {item}")
 
@@ -225,7 +225,7 @@ def _display_pre_upgrade_checklist(checklist: Any) -> None:
 def _display_testing_strategy(testing: Any) -> None:
     """Display the testing strategy in an expander."""
     if isinstance(testing, list):
-        with st.expander("✅ Testing Strategy"):
+        with st.expander("Testing Strategy"):
             for test in testing:
                 st.write(f"• {test}")
 
@@ -233,14 +233,14 @@ def _display_testing_strategy(testing: Any) -> None:
 def _display_post_upgrade_validation(validation: Any) -> None:
     """Display the post-upgrade validation in an expander."""
     if isinstance(validation, list):
-        with st.expander("🔍 Post-Upgrade Validation"):
+        with st.expander("Post-Upgrade Validation"):
             for check in validation:
                 st.write(f"• {check}")
 
 
 def _display_plan_testing_tab(plan: dict[str, Any]) -> None:
     """Render testing strategy details."""
-    st.subheader("🧪 Testing Strategy")
+    st.subheader("Testing Strategy")
 
     if "pre_upgrade_checklist" in plan:
         _display_pre_upgrade_checklist(plan["pre_upgrade_checklist"])
@@ -285,7 +285,7 @@ def _display_plan_export(
 ) -> None:
     """Provide a JSON export for the upgrade plan."""
     st.divider()
-    st.subheader("📥 Export Plan")
+    st.subheader("Export Plan")
 
     plan_json = json.dumps(plan, indent=2, default=str)
     st.download_button(
@@ -299,7 +299,7 @@ def _display_plan_export(
 def _display_planning_help() -> None:
     """Render the planning help section."""
     st.divider()
-    with st.expander("ℹ️ Planning Help"):
+    with st.expander("Planning Help"):
         st.markdown(
             """
         **What is an upgrade plan?**
@@ -339,7 +339,7 @@ def show_ansible_planning_page() -> None:
 
     if _should_generate_plan(plan_btn, current_version, target_version):
         if current_version == target_version:
-            st.warning("⚠️ Current and target versions are the same!")
+            st.warning("Current and target versions are the same!")
         else:
             try:
                 msg = (
@@ -355,7 +355,7 @@ def show_ansible_planning_page() -> None:
                 )
 
                 st.divider()
-                st.subheader("✅ Upgrade Plan Generated")
+                st.subheader("Upgrade Plan Generated")
                 st.markdown(
                     f"Planning upgrade from **Ansible {current_version}** to "
                     f"**Ansible {target_version}**"
@@ -365,7 +365,7 @@ def show_ansible_planning_page() -> None:
                 _display_plan_export(plan, current_version, target_version)
 
             except Exception as e:
-                st.error(f"❌ Error generating upgrade plan: {str(e)}")
+                st.error(f"Error generating upgrade plan: {str(e)}")
                 st.exception(e)
 
     _display_planning_help()

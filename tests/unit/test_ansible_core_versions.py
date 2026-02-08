@@ -6,14 +6,17 @@ from souschef.core.ansible_versions import (
     ANSIBLE_VERSIONS,
     AnsibleVersion,
     calculate_upgrade_path,
+    fetch_ansible_versions_with_ai,
     format_version_display,
     get_aap_compatible_versions,
     get_ansible_core_version,
     get_eol_status,
     get_latest_version,
+    get_latest_version_with_ai,
     get_minimum_python_for_ansible,
     get_named_ansible_version,
     get_python_compatibility,
+    get_python_compatibility_with_ai,
     get_recommended_core_version_for_aap,
     get_supported_versions,
     is_python_compatible,
@@ -32,6 +35,8 @@ class TestAnsibleVersionData:
         """Test that ANSIBLE_VERSIONS contains major versions."""
         assert "2.9" in ANSIBLE_VERSIONS
         assert "2.17" in ANSIBLE_VERSIONS
+        assert "2.19" in ANSIBLE_VERSIONS
+        assert "2.20" in ANSIBLE_VERSIONS
 
     def test_all_versions_are_ansible_version_instances(self):
         """Test all values in ANSIBLE_VERSIONS are AnsibleVersion dataclass."""
@@ -263,7 +268,7 @@ class TestCalculateUpgradePath:
         """Test adjacent versions are direct upgrades."""
         result = calculate_upgrade_path("2.16", "2.17")
         assert result["direct_upgrade"] is True
-        assert len(result["intermediate_versions"]) == 0
+        assert (result.get("intermediate_versions") or []) == []
 
     def test_return_dict_has_required_keys(self):
         """Test return dict has all required keys."""
@@ -291,7 +296,9 @@ class TestCalculateUpgradePath:
         # Large gaps should either be direct with many breaking changes
         # or broken into steps
         assert "breaking_changes" in result
-        assert len(result["breaking_changes"]) > 0
+        breaking_changes = result["breaking_changes"]
+        assert isinstance(breaking_changes, list)
+        assert len(breaking_changes) > 0
 
     def test_risk_level_is_valid(self):
         """Test that risk level is one of expected values."""
@@ -328,7 +335,10 @@ class TestCalculateUpgradePath:
         """Test major upgrade has significant risk factors."""
         result = calculate_upgrade_path("2.9", "2.17")
         # Should have either python upgrade needed or breaking changes
-        assert result["python_upgrade_needed"] or len(result["breaking_changes"]) > 0
+        breaking_changes = result["breaking_changes"]
+        assert result["python_upgrade_needed"] or (
+            isinstance(breaking_changes, list) and len(breaking_changes) > 0
+        )
 
     def test_collection_updates_is_dict(self):
         """Test that collection_updates_needed is a dict."""
@@ -338,7 +348,20 @@ class TestCalculateUpgradePath:
 
 @pytest.mark.parametrize(
     "version",
-    ["2.9", "2.10", "2.11", "2.12", "2.13", "2.14", "2.15", "2.16", "2.17"],
+    [
+        "2.9",
+        "2.10",
+        "2.11",
+        "2.12",
+        "2.13",
+        "2.14",
+        "2.15",
+        "2.16",
+        "2.17",
+        "2.18",
+        "2.19",
+        "2.20",
+    ],
 )
 class TestAllVersionsCompatible:
     """Parameterized tests for all Ansible versions."""
@@ -378,10 +401,10 @@ class TestGetAnsibleCoreVersion:
         result = get_ansible_core_version("99.x")
         assert result is None
 
-    def test_convert_none_raises_error(self):
-        """Test None named version raises AttributeError."""
-        with pytest.raises(AttributeError):
-            get_ansible_core_version(None)
+    def test_convert_empty_string_returns_none(self):
+        """Test empty string returns None."""
+        result = get_ansible_core_version("")
+        assert result is None
 
 
 class TestGetNamedAnsibleVersion:
@@ -432,11 +455,13 @@ class TestGetAapCompatibleVersions:
     def test_get_aap_for_2_19(self):
         """Test getting AAP versions compatible with ansible-core 2.19."""
         result = get_aap_compatible_versions("2.19")
+        assert isinstance(result, list)
         assert result == []
 
     def test_get_aap_for_2_20(self):
         """Test getting AAP versions compatible with ansible-core 2.20."""
         result = get_aap_compatible_versions("2.20")
+        assert isinstance(result, list)
         assert result == []
 
     def test_get_aap_for_old_version_returns_empty(self):
@@ -548,6 +573,7 @@ class TestVersionSchemaMapping:
         """Test converting back and forth preserves values."""
         # Core → Named → Core
         named_result = get_named_ansible_version(core_version)
+        assert named_result is not None
         core_result = get_ansible_core_version(named_result)
         assert core_result == core_version
 
@@ -556,3 +582,111 @@ class TestVersionSchemaMapping:
         result = format_version_display(core_version, include_named=True)
         assert core_version in result
         assert named_version in result
+
+
+class TestAIDrivenVersionFetching:
+    """Test AI-driven version compatibility functions."""
+
+    def test_fetch_ansible_versions_with_ai_no_api_key(self):
+        """Test AI fetch returns None without API key."""
+        result = fetch_ansible_versions_with_ai(api_key="", use_cache=False)
+        assert result is None
+
+    def test_get_python_compatibility_with_ai_fallback(self):
+        """Test AI function falls back to static data without API key."""
+        result = get_python_compatibility_with_ai("2.20", api_key="")
+        # Should fall back to static ANSIBLE_VERSIONS
+        assert isinstance(result, list)
+        assert len(result) > 0
+        # 2.20 control node should support Python 3.12+
+        assert "3.12" in result
+
+    def test_get_python_compatibility_with_ai_managed_nodes(self):
+        """Test AI function works for managed nodes with fallback."""
+        result = get_python_compatibility_with_ai(
+            "2.19", node_type="managed", api_key=""
+        )
+        assert isinstance(result, list)
+        assert len(result) > 0
+        # 2.19 managed nodes support Python 3.8+
+        assert "3.8" in result
+
+    def test_get_latest_version_with_ai_fallback(self):
+        """Test AI latest version falls back to static data."""
+        result = get_latest_version_with_ai(api_key="")
+        assert isinstance(result, str)
+        assert result in ANSIBLE_VERSIONS
+        # Should return 2.20 as latest
+        assert result == "2.20"
+
+    def test_ai_functions_accept_providers(self):
+        """Test AI functions accept different provider parameters."""
+        # Should not raise errors with different providers
+        result1 = fetch_ansible_versions_with_ai(
+            ai_provider="anthropic", api_key="", use_cache=False
+        )
+        result2 = fetch_ansible_versions_with_ai(
+            ai_provider="openai", api_key="", use_cache=False
+        )
+        # Both should return None without keys
+        assert result1 is None
+        assert result2 is None
+
+
+class TestNewVersions:
+    """Test newly added 2.19 and 2.20 versions."""
+
+    def test_2_19_has_correct_named_version(self):
+        """Test 2.19 maps to Named Ansible 12.x."""
+        result = get_named_ansible_version("2.19")
+        assert result == "12.x"
+
+    def test_2_20_has_correct_named_version(self):
+        """Test 2.20 maps to Named Ansible 13.x."""
+        result = get_named_ansible_version("2.20")
+        assert result == "13.x"
+
+    def test_2_19_python_support(self):
+        """Test 2.19 has correct Python support."""
+        control = get_python_compatibility("2.19", "control")
+        managed = get_python_compatibility("2.19", "managed")
+
+        # Control: 3.11-3.13
+        assert set(control) == {"3.11", "3.12", "3.13"}
+        # Managed: 3.8-3.13
+        assert set(managed) == {"3.8", "3.9", "3.10", "3.11", "3.12", "3.13"}
+
+    def test_2_20_python_support(self):
+        """Test 2.20 has correct Python support."""
+        control = get_python_compatibility("2.20", "control")
+        managed = get_python_compatibility("2.20", "managed")
+
+        # Control: 3.12-3.14
+        assert set(control) == {"3.12", "3.13", "3.14"}
+        # Managed: 3.9-3.14
+        assert set(managed) == {"3.9", "3.10", "3.11", "3.12", "3.13", "3.14"}
+
+    def test_2_20_is_latest(self):
+        """Test that 2.20 is correctly identified as latest."""
+        latest = get_latest_version()
+        assert latest == "2.20"
+
+    def test_upgrade_path_to_2_20(self):
+        """Test calculating upgrade path to 2.20."""
+        result = calculate_upgrade_path("2.18", "2.20")
+        assert result["from_version"] == "2.18"
+        assert result["to_version"] == "2.20"
+        assert "python_upgrade_needed" in result
+        assert "breaking_changes" in result
+
+    def test_2_19_eol_status(self):
+        """Test 2.19 EOL status."""
+        result = get_eol_status("2.19")
+        assert "status" in result
+        assert "security_risk" in result
+
+    def test_2_20_eol_status(self):
+        """Test 2.20 EOL status."""
+        result = get_eol_status("2.20")
+        assert "status" in result
+        assert result["status"] == "Supported"

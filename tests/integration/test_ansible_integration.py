@@ -118,21 +118,23 @@ class TestParsingRealFixtures:
 class TestUpgradeWorkflows:
     """Test complete upgrade workflows with fixtures."""
 
-    def test_full_upgrade_assessment_workflow(self, ansible_cfg_path):
+    def test_full_upgrade_assessment_workflow(self, ansible_cfg_path, monkeypatch):
         """Test full upgrade assessment workflow."""
         if not ansible_cfg_path.exists():
             pytest.skip("ansible.cfg fixture not available")
 
         # Assess environment
         env_dir = ansible_cfg_path.parent
-        try:
-            assessment = assess_ansible_environment(str(env_dir))
-            assert isinstance(assessment, dict)
-        except ValueError as e:
-            # Skip if unsupported Ansible version detected
-            if "Unknown Ansible version" in str(e):
-                pytest.skip(f"Fixture has unsupported version: {e}")
-            raise
+
+        def mock_detect_version(*_args, **_kwargs):
+            return "2.14.0"
+
+        monkeypatch.setattr(
+            "souschef.ansible_upgrade.detect_ansible_version", mock_detect_version
+        )
+
+        assessment = assess_ansible_environment(str(env_dir))
+        assert isinstance(assessment, dict)
 
         # Plan upgrade - use supported versions
         plan = generate_upgrade_plan("2.14", "2.17")

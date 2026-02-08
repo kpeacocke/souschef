@@ -158,8 +158,7 @@ def assess_ansible_environment(environment_path: str) -> dict:
 
 def generate_upgrade_plan(
     current_version: str,
-    target_version: str,
-    environment_path: str
+    target_version: str
 ) -> dict:
     """Generate detailed upgrade plan.
 
@@ -242,7 +241,7 @@ def plan_ansible_upgrade(
     from souschef.parsers.ansible_inventory import detect_ansible_version
 
     current_version = detect_ansible_version(environment_path)
-    plan = generate_upgrade_plan(current_version, target_version, environment_path)
+    plan = generate_upgrade_plan(current_version, target_version)
     return format_upgrade_plan_markdown(plan)
 
 @mcp.tool()
@@ -329,7 +328,7 @@ def plan(environment_path: str, target_version: str, output: str):
     from souschef.parsers.ansible_inventory import detect_ansible_version
 
     current = detect_ansible_version(environment_path)
-    plan = generate_upgrade_plan(current, target_version, environment_path)
+    plan = generate_upgrade_plan(current, target_version)
 
     markdown = format_upgrade_plan_markdown(plan)
 

@@ -14,7 +14,7 @@ from souschef.ansible_upgrade import assess_ansible_environment
 
 def _display_assessment_intro() -> None:
     """Render the assessment page title and introduction."""
-    st.title("🔍 Ansible Environment Assessment")
+    st.title("Ansible Environment Assessment")
     st.markdown(
         """
     Assess your current Ansible environment to understand the baseline
@@ -35,14 +35,14 @@ def _render_assessment_inputs() -> tuple[str, bool]:
         )
 
     with col2:
-        detect_btn = st.button("🔍 Assess Environment", use_container_width=True)
+        detect_btn = st.button("Assess Environment", use_container_width=True)
 
     return environment_path, detect_btn
 
 
 def _display_assessment_results(assessment: dict[str, object]) -> None:
     """Display assessment details and export options."""
-    st.subheader("📊 Assessment Results")
+    st.subheader("Assessment Results")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -76,7 +76,7 @@ def _display_assessment_collections(assessment: dict[str, object]) -> None:
 
     collections: list[str] = collections_obj
 
-    st.subheader(f"📦 Installed Collections ({len(collections)} total)")
+    st.subheader(f"Installed Collections ({len(collections)} total)")
 
     col1, col2 = st.columns(2)
     mid = len(collections) // 2
@@ -104,7 +104,7 @@ def _display_assessment_warnings(assessment: dict[str, object]) -> None:
 def _display_assessment_details(assessment: dict[str, object]) -> None:
     """Show additional assessment details."""
     st.divider()
-    st.subheader("📋 Additional Details")
+    st.subheader("Additional Details")
 
     details_col1, details_col2 = st.columns(2)
 
@@ -126,7 +126,7 @@ def _display_assessment_details(assessment: dict[str, object]) -> None:
 def _display_assessment_export(assessment: dict[str, object]) -> None:
     """Provide a JSON export for the assessment results."""
     st.divider()
-    st.subheader("📥 Export Assessment")
+    st.subheader("Export Assessment")
 
     assessment_json = json.dumps(assessment, indent=2, default=str)
     st.download_button(
@@ -140,7 +140,7 @@ def _display_assessment_export(assessment: dict[str, object]) -> None:
 def _display_assessment_help() -> None:
     """Render the assessment help section."""
     st.divider()
-    with st.expander("ℹ️ Assessment Help"):
+    with st.expander("Assessment Help"):
         st.markdown(
             """
         **What is an assessment?**
@@ -191,7 +191,7 @@ def show_ansible_assessment_page() -> None:
             _display_assessment_results(assessment)
 
         except Exception as e:
-            st.error(f"❌ Error assessing environment: {str(e)}")
+            st.error(f"Error assessing environment: {str(e)}")
             st.exception(e)
 
     _display_assessment_help()

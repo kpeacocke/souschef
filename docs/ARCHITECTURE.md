@@ -321,7 +321,7 @@ def assess_single_cookbook(cookbook_path):
 **Example**:
 ```python
 # ✅ Belongs in ansible_upgrade.py
-def generate_upgrade_plan(current_version, target_version, env_path):
+def generate_upgrade_plan(current_version, target_version):
     """Generate upgrade plan using version data and environment parsing."""
     versions = get_supported_versions()  # From core/ansible_versions
     env = assess_ansible_environment(env_path)  # Parse environment

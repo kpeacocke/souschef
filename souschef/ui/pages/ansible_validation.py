@@ -19,7 +19,7 @@ from souschef.parsers.ansible_inventory import parse_requirements_yml
 
 def _display_validation_intro() -> None:
     """Render the validation page title and introduction."""
-    st.title("✅ Ansible Collection Validation")
+    st.title("Ansible Collection Validation")
     st.markdown(
         """
     Validate that your Ansible collections are compatible with
@@ -46,7 +46,7 @@ def _render_validation_inputs() -> tuple[Any, str, bool]:
             help="Target Ansible version to validate against",
         )
 
-    validate_btn = st.button("🔎 Validate Collections", use_container_width=True)
+    validate_btn = st.button("Validate Collections", use_container_width=True)
     return collections_file, target_version, validate_btn
 
 
@@ -74,18 +74,18 @@ def _display_validation_metrics(validation: dict[str, Any]) -> dict[str, Any]:
         updates_needed = []
 
     with col1:
-        st.metric("✅ Compatible", len(compatible))
+        st.metric("Compatible", len(compatible))
 
     with col2:
-        st.metric("⚠️ Incompatible", len(incompatible))
+        st.metric("Incompatible", len(incompatible))
 
     with col3:
-        st.metric("📌 Updates Needed", len(updates_needed))
+        st.metric("Updates Needed", len(updates_needed))
 
     with col4:
         warnings = validation.get("warnings", [])
         warning_count = len(warnings) if isinstance(warnings, list) else 0
-        st.metric("⚠️ Warnings", warning_count)
+        st.metric("Warnings", warning_count)
 
     return {
         "compatible": compatible,
@@ -102,7 +102,7 @@ def _display_validation_summary(
     warnings: list[str],
 ) -> None:
     """Render the summary tab."""
-    st.subheader("📊 Summary")
+    st.subheader("Summary")
 
     total = len(compatible) + len(incompatible) + len(updates_needed)
     if total > 0:
@@ -132,7 +132,7 @@ def _display_validation_summary(
 def _display_validation_compatible_tab(compatible: list[dict[str, str]]) -> None:
     """Render compatible collection details."""
     if compatible:
-        st.subheader("✅ Compatible Collections")
+        st.subheader("Compatible Collections")
         col1, col2 = st.columns(2)
         for idx, item in enumerate(compatible):
             with col1 if idx % 2 == 0 else col2:
@@ -146,7 +146,7 @@ def _display_validation_compatible_tab(compatible: list[dict[str, str]]) -> None
 def _display_validation_requires_tab(updates_needed: list[dict[str, str]]) -> None:
     """Render collections that require updates."""
     if updates_needed:
-        st.subheader("⚠️ Collections Requiring Update")
+        st.subheader("Collections Requiring Update")
         for item in updates_needed:
             collection = item.get("collection", "Unknown")
             current = item.get("current", "?")
@@ -168,7 +168,7 @@ def _display_validation_requires_tab(updates_needed: list[dict[str, str]]) -> No
 def _display_validation_warnings_tab(warnings: list[str]) -> None:
     """Render validation warnings."""
     if warnings:
-        st.subheader("⚠️ Validation Warnings")
+        st.subheader("Validation Warnings")
         for warning in warnings:
             st.warning(warning)
     else:
@@ -178,7 +178,7 @@ def _display_validation_warnings_tab(warnings: list[str]) -> None:
 def _display_validation_incompatible_tab(incompatible: list[dict[str, str]]) -> None:
     """Render incompatible collections."""
     if incompatible:
-        st.error(f"❌ Incompatible Collections ({len(incompatible)})")
+        st.error(f"Incompatible Collections ({len(incompatible)})")
         for item in incompatible:
             collection = item.get("collection", "Unknown")
             version = item.get("version", "*")
@@ -194,7 +194,7 @@ def _display_validation_incompatible_tab(incompatible: list[dict[str, str]]) -> 
         """
         )
     else:
-        st.success("✅ No incompatible collections detected!")
+        st.success("No incompatible collections detected!")
 
 
 def _display_validation_tabs(
@@ -234,7 +234,7 @@ def _display_validation_tabs(
 def _display_validation_export(validation: dict[str, Any], target_version: str) -> None:
     """Provide a JSON export for validation results."""
     st.divider()
-    st.subheader("📥 Export Validation Report")
+    st.subheader("Export Validation Report")
 
     report_json = json.dumps(validation, indent=2, default=str)
     st.download_button(
@@ -248,7 +248,7 @@ def _display_validation_export(validation: dict[str, Any], target_version: str) 
 def _display_validation_help() -> None:
     """Render the validation help section."""
     st.divider()
-    with st.expander("ℹ️ Validation Help"):
+    with st.expander("Validation Help"):
         st.markdown(
             """
         **Requirements File Format:**
@@ -265,10 +265,10 @@ def _display_validation_help() -> None:
 
         **Validation Results:**
 
-        **✅ Compatible** - Collection works with target version
-        **⚠️ Requires Update** - Must update for compatibility
-        **📌 May Update** - Recommended to update
-        **❌ Incompatible** - Cannot be used at all
+        **Compatible** - Collection works with target version
+        **Requires Update** - Must update for compatibility
+        **May Update** - Recommended to update
+        **Incompatible** - Cannot be used at all
 
         **Next Steps:**
 
@@ -292,7 +292,7 @@ def show_ansible_validation_page() -> None:
 
     if validate_btn:
         if not collections_file:
-            st.error("❌ Please upload a requirements file")
+            st.error("Please upload a requirements file")
         else:
             try:
                 tmp_path = _save_uploaded_file(collections_file)
@@ -308,7 +308,7 @@ def show_ansible_validation_page() -> None:
                     )
 
                 st.divider()
-                st.subheader("✅ Validation Results")
+                st.subheader("Validation Results")
 
                 categories = _display_validation_metrics(validation)
                 _display_validation_tabs(
@@ -324,7 +324,7 @@ def show_ansible_validation_page() -> None:
                     Path(tmp_path).unlink()
 
             except Exception as e:
-                st.error(f"❌ Error validating collections: {str(e)}")
+                st.error(f"Error validating collections: {str(e)}")
                 st.exception(e)
 
     _display_validation_help()

@@ -1825,7 +1825,7 @@ def ansible_assess(environment_path: str | None) -> None:
 
     """
     try:
-        click.echo("🔍 Assessing Ansible environment...")
+        click.echo("Assessing Ansible environment...")
         assessment = assess_ansible_environment(environment_path or ".")
 
         click.echo("\n" + "=" * 60)
@@ -1861,14 +1861,14 @@ def ansible_assess(environment_path: str | None) -> None:
             click.echo(f"\nCurrent Version EOL: {eol}")
 
         if "warnings" in assessment:
-            click.echo("\n⚠️  Warnings:")
+            click.echo("\nWarnings:")
             for warning in assessment["warnings"]:
                 click.echo(f"  - {warning}")
 
-        click.echo("\n✅ Assessment complete")
+        click.echo("\nAssessment complete")
 
     except Exception as e:
-        click.echo(f"❌ Error assessing environment: {e}", err=True)
+        click.echo(f"Error assessing environment: {e}", err=True)
         sys.exit(1)
 
 
@@ -1892,20 +1892,20 @@ def _display_upgrade_plan(plan: dict[str, Any]) -> None:
 
     """
     if "upgrade_path" in plan:
-        click.echo("\n🔄 Upgrade Path:")
+        click.echo("\nUpgrade Path:")
         for step in plan["upgrade_path"]:
-            click.echo(f"  → {step}")
+            click.echo(f"  - {step}")
 
     breaking = plan.get("breaking_changes", [])
     if breaking:
-        _display_plan_section("⚠️  Breaking Changes", breaking, "-")
+        _display_plan_section("Breaking Changes", breaking, "-")
 
     deprecated = plan.get("deprecated_features", [])
     if deprecated:
-        _display_plan_section("📌 Deprecated Features", deprecated, "-")
+        _display_plan_section("Deprecated Features", deprecated, "-")
 
     if "collection_impacts" in plan:
-        click.echo("\n📦 Collection Compatibility:")
+        click.echo("\nCollection Compatibility:")
         impacts = plan["collection_impacts"]
         req = len(impacts.get("requires_update", []))
         may = len(impacts.get("may_require_update", []))
@@ -1914,7 +1914,7 @@ def _display_upgrade_plan(plan: dict[str, Any]) -> None:
 
     if "estimated_effort" in plan:
         effort = plan["estimated_effort"]
-        click.echo(f"\n⏱️  Estimated Effort: {effort}")
+        click.echo(f"\nEstimated Effort: {effort}")
 
 
 @ansible.command("plan")
@@ -1941,9 +1941,7 @@ def ansible_plan(current_version: str, target_version: str) -> None:
 
     """
     try:
-        msg = (
-            f"📋 Generating upgrade plan from {current_version} to {target_version}..."
-        )
+        msg = f"Generating upgrade plan from {current_version} to {target_version}..."
         click.echo(msg)
         plan = generate_upgrade_plan(current_version, target_version)
 
@@ -1964,10 +1962,10 @@ def ansible_plan(current_version: str, target_version: str) -> None:
         click.echo("=" * 60)
 
         _display_upgrade_plan(plan)
-        click.echo("\n✅ Plan generated successfully")
+        click.echo("\nPlan generated successfully")
 
     except Exception as e:
-        click.echo(f"❌ Error generating upgrade plan: {e}", err=True)
+        click.echo(f"Error generating upgrade plan: {e}", err=True)
         sys.exit(1)
 
 
@@ -2004,10 +2002,10 @@ def ansible_eol(version: str) -> None:
         click.echo("=" * 60)
 
         if status.get("is_eol"):
-            click.echo("Status: ❌ END OF LIFE")
+            click.echo("Status: END OF LIFE")
             click.echo(f"EOL Date: {status.get('eol_date', 'Unknown')}")
         else:
-            click.echo("Status: ✅ SUPPORTED")
+            click.echo("Status: SUPPORTED")
             click.echo(f"EOL Date: {status.get('eol_date', 'Unknown')}")
 
         if "support_level" in status:
@@ -2041,19 +2039,19 @@ def _display_validation_results(validation: dict[str, Any]) -> None:
     """
     compat = validation.get("compatible", [])
     if compat:
-        _display_collection_section("✅ Compatible Collections", compat)
+        _display_collection_section("Compatible Collections", compat)
 
     requires = validation.get("requires_update", [])
     if requires:
-        _display_collection_section("⚠️  Requires Update", requires)
+        _display_collection_section("Requires Update", requires)
 
     maybe = validation.get("may_require_update", [])
     if maybe:
-        _display_collection_section("📌 May Require Update", maybe)
+        _display_collection_section("May Require Update", maybe)
 
     incompat = validation.get("incompatible", [])
     if incompat:
-        _display_collection_section("❌ Incompatible", incompat)
+        _display_collection_section("Incompatible", incompat)
 
 
 def _parse_collections_file(file_path: str) -> dict[str, str]:
@@ -2197,7 +2195,7 @@ def ansible_validate_collections(collections_file: str, target_version: str) -> 
 
     """
     try:
-        msg = f"🔎 Validating collections for Ansible {target_version}..."
+        msg = f"Validating collections for Ansible {target_version}..."
         click.echo(msg)
         # Parse the YAML file to extract collections and versions
         collections_dict = _parse_collections_file(collections_file)
@@ -2209,10 +2207,10 @@ def ansible_validate_collections(collections_file: str, target_version: str) -> 
         click.echo("=" * 60)
 
         _display_validation_results(validation)
-        click.echo("\n✅ Validation complete")
+        click.echo("\nValidation complete")
 
     except Exception as e:
-        click.echo(f"❌ Error validating collections: {e}", err=True)
+        click.echo(f"Error validating collections: {e}", err=True)
         sys.exit(1)
 
 
@@ -2235,7 +2233,7 @@ def ansible_detect_python(environment_path: str | None) -> None:
 
     """
     try:
-        click.echo("🔍 Detecting Python version...")
+        click.echo("Detecting Python version...")
         python_version = detect_python_version(environment_path)
 
         click.echo("\n" + "=" * 60)
@@ -2249,10 +2247,10 @@ def ansible_detect_python(environment_path: str | None) -> None:
             major_minor = f"{version_parts[0]}.{version_parts[1]}"
             click.echo(f"Major.Minor: {major_minor}")
 
-        click.echo("\n✅ Detection complete")
+        click.echo("\nDetection complete")
 
     except Exception as e:
-        click.echo(f"❌ Error detecting Python version: {e}", err=True)
+        click.echo(f"Error detecting Python version: {e}", err=True)
         sys.exit(1)
 
 

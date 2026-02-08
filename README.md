@@ -493,8 +493,7 @@ assessment = assess_ansible_environment("/ansible/env")
 # Generate upgrade plan
 plan = generate_upgrade_plan(
     current_version="2.14",
-    target_version="2.17",
-    environment_path="/ansible/env"
+    target_version="2.17"
 )
 
 # Check collection compatibility
