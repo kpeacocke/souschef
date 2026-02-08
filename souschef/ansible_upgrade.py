@@ -184,6 +184,25 @@ def _scan_playbooks(env_path: Path, result: dict[str, Any]) -> None:
 def _check_python_compatibility(result: dict[str, Any]) -> None:
     """Check for Python compatibility issues."""
     if result["python_compatible"] or result["current_version"] == "unknown":
+def _get_safe_env_path(environment_path: str) -> Path:
+    """
+    Resolve and validate the environment path against a safe root.
+
+    The safe root is the current working directory of the process. The resolved
+    environment path must be this directory or a descendant of it.
+    """
+    root = Path.cwd().resolve()
+    candidate = Path(environment_path).expanduser().resolve()
+
+    try:
+        # Raises ValueError if candidate is not under root
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"Environment path is outside allowed root: {candidate}") from exc
+
+    return candidate
+
+
         return
 
     version_info = ANSIBLE_VERSIONS.get(result["current_version"])
@@ -198,7 +217,7 @@ def _check_python_compatibility(result: dict[str, Any]) -> None:
     compatible = ", ".join(version_info.control_node_python)
     result["compatibility_issues"].append(
         f"Python {py_major_minor} is not compatible with "
-    root_dir = Path(".").resolve()
+    env_path = _get_safe_env_path(environment_path)
     base_path = Path(".").resolve()
 
     # Ensure the requested environment path is within the allowed root directory
