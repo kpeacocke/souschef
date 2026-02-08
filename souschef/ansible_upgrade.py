@@ -199,6 +199,20 @@ def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
 
     """
     env_path = Path(environment_path).resolve()
+    base_path = Path.cwd().resolve()
+    try:
+        # Python 3.9+: ensure the requested environment is within the allowed base path
+        if not env_path.is_relative_to(base_path) and env_path != base_path:
+            return {
+                "error": f"Environment path is outside the allowed directory: {env_path}"
+            }
+    except AttributeError:
+        # Fallback for Python versions without Path.is_relative_to
+        if env_path != base_path and base_path not in env_path.parents:
+            return {
+                "error": f"Environment path is outside the allowed directory: {env_path}"
+            }
+
     if not env_path.exists():
         return {"error": f"Environment path does not exist: {env_path}"}
     if not env_path.is_dir():
