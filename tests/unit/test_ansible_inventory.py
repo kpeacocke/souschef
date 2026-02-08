@@ -128,7 +128,38 @@ class TestDetectAnsibleVersionWithValidation:
             patch("subprocess.run", side_effect=FileNotFoundError()),
             pytest.raises(FileNotFoundError),
         ):
+            detect_ansible_version()
+
+    def test_ansible_path_not_exist_raises_error(self):
+        """Test that non-existent ansible path raises ValueError."""
+        with (
+            patch("pathlib.Path.exists", return_value=False),
+            pytest.raises(ValueError, match="Ansible executable does not exist"),
+        ):
             detect_ansible_version("/nonexistent/ansible")
+
+    def test_ansible_path_not_file_raises_error(self):
+        """Test that non-file ansible path raises ValueError."""
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_file", return_value=False),
+            pytest.raises(ValueError, match="Ansible path is not a file"),
+        ):
+            detect_ansible_version("/path/to/directory")
+
+    def test_ansible_custom_path(self):
+        """Test detecting Ansible with custom path."""
+        with (
+            patch("subprocess.run") as mock_run,
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
+        ):
+            mock_run.return_value = MagicMock(
+                stdout="ansible [core 2.15.0]\n", returncode=0
+            )
+            result = detect_ansible_version("/custom/path/ansible")
+            assert isinstance(result, str)
+            assert len(result) > 0
 
 
 class TestParseRequirementsYmlWithValidation:

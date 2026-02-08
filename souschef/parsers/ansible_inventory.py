@@ -236,11 +236,21 @@ def detect_ansible_version(ansible_path: str | None = None) -> str:
         Ansible version string (e.g., "2.16.0").
 
     Raises:
+        ValueError: If ansible_path is invalid or not an executable file.
         FileNotFoundError: If ansible executable not found.
         RuntimeError: If version cannot be determined.
 
     """
-    command = [ansible_path or "ansible", "--version"]
+    # Validate ansible_path if provided
+    if ansible_path:
+        ansible_exec = Path(ansible_path).resolve()
+        if not ansible_exec.exists():
+            raise ValueError(f"Ansible executable does not exist: {ansible_exec}")
+        if not ansible_exec.is_file():
+            raise ValueError(f"Ansible path is not a file: {ansible_exec}")
+        command = [str(ansible_exec), "--version"]
+    else:
+        command = ["ansible", "--version"]
 
     try:
         result = subprocess.run(
