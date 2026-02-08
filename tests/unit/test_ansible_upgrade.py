@@ -436,7 +436,9 @@ class TestUpgradeWorkflows:
         """Test assessing environment then planning upgrade."""
         with (
             patch("builtins.open", mock_open(read_data="[defaults]\n")),
-            patch("os.path.exists", return_value=True),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
         ):
             assessment = assess_ansible_environment("/ansible/env")
             assert isinstance(assessment, dict)
