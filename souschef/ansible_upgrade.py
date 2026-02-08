@@ -44,6 +44,14 @@ def detect_python_version(environment_path: str | None = None) -> str:
     python_cmd = "python3"
 
     if environment_path:
+        # Basic validation of the provided path string
+        if "\x00" in environment_path:
+            raise ValueError("Environment path contains null byte, which is not allowed.")
+        # Strip surrounding whitespace to avoid accidental malformed paths
+        environment_path = environment_path.strip()
+        if not environment_path:
+            raise ValueError("Environment path is empty after trimming whitespace.")
+
         # Resolve path to a canonical directory
         env_path = Path(environment_path).resolve()
 
