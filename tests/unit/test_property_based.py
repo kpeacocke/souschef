@@ -1,6 +1,7 @@
 """Property-based tests using Hypothesis."""
 
 import contextlib
+import json
 import tempfile
 from pathlib import Path
 
@@ -816,8 +817,6 @@ pkg_description="Test package"
             # Should parse successfully
             assert not result.startswith("Error")
 
-            import json
-
             plan = json.loads(result)
             assert plan["package"]["name"] == pkg_name
             assert plan["package"]["version"] == pkg_version
@@ -896,8 +895,6 @@ pkg_build_deps=(
 
             # Should parse successfully
             assert not result.startswith("Error")
-
-            import json
 
             plan = json.loads(result)
             # Should have extracted all dependencies

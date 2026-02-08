@@ -23,6 +23,7 @@ Note: Two versioning schemes exist:
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -941,6 +942,109 @@ def _save_ai_cache(versions_data: dict) -> None:
         pass  # Silent fail - caching is optional
 
 
+def _get_ai_prompt() -> str:
+    """Get prompt for AI version data fetching."""
+    return """Please provide the latest Ansible version compatibility \
+matrix in JSON format.
+Include the following versions: 2.15, 2.16, 2.17, 2.18, 2.19, 2.20, \
+and any newer versions.
+
+For each version, provide:
+- control_node_python: List of supported Python versions for control nodes
+- managed_node_python: List of supported Python versions for managed nodes
+- release_date: Release date in YYYY-MM-DD format
+- eol_date: End of life date in YYYY-MM-DD format (if known)
+- major_changes: List of major changes in this version
+- named_version: Named version (e.g., "9.x" for 2.16)
+- aap_versions: List of compatible AAP versions
+
+Use the official Ansible documentation as the source. Return ONLY valid \
+JSON, no markdown formatting.
+
+Example format:
+{
+  "2.20": {
+    "control_node_python": ["3.12", "3.13", "3.14"],
+    "managed_node_python": ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"],
+    "release_date": "2025-11-03",
+    "eol_date": "2027-05-31",
+    "major_changes": ["Python 3.12+ required for control node"],
+    "named_version": "13.x",
+    "aap_versions": []
+  }
+}"""
+
+
+def _call_ai_provider(
+    ai_provider: str, api_key: str, model: str, prompt: str
+) -> str | None:
+    """Call AI provider and return response text."""
+    try:
+        if ai_provider.lower() == "anthropic":
+            import anthropic
+
+            anthropic_client = anthropic.Anthropic(api_key=api_key)
+            anthropic_response = anthropic_client.messages.create(
+                model=model,
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            # Extract text from first content block
+            if anthropic_response.content and len(anthropic_response.content) > 0:
+                first_block = anthropic_response.content[0]
+                # Use getattr for type safety
+                text_content: str | None = getattr(first_block, "text", None)
+                if text_content:
+                    return text_content
+            return None
+
+        if ai_provider.lower() == "openai":
+            import openai
+
+            openai_client = openai.OpenAI(api_key=api_key)
+            openai_response = openai_client.chat.completions.create(
+                model=model or "gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return openai_response.choices[0].message.content or ""
+
+        if ai_provider.lower() == "watson":
+            # Watson implementation would go here
+            return None
+
+        return None
+    except (ImportError, AttributeError, KeyError):
+        return None
+
+
+def _parse_ai_response(ai_response: str) -> dict | None:
+    """Parse and validate AI response JSON."""
+    try:
+        # Remove markdown code fences if present
+        ai_response = ai_response.strip()
+        if ai_response.startswith("```json"):
+            ai_response = ai_response[7:]
+        if ai_response.startswith("```"):
+            ai_response = ai_response[3:]
+        if ai_response.endswith("```"):
+            ai_response = ai_response[:-3]
+
+        versions_data = json.loads(ai_response.strip())
+
+        # Validate structure
+        if not isinstance(versions_data, dict):
+            return None
+
+        # Basic validation - ensure keys are version strings
+        for version_key in versions_data:
+            if not re.match(r"^\d+\.\d+", version_key):
+                return None
+
+        return versions_data
+    except (json.JSONDecodeError, KeyError):
+        return None
+
+
 def fetch_ansible_versions_with_ai(
     ai_provider: str = "anthropic",
     api_key: str = "",
@@ -979,10 +1083,29 @@ def fetch_ansible_versions_with_ai(
         if cached:
             return cached
 
-    # AI implementation would go here
-    # For now, return None to fall back to static data
-    # This can be expanded to actually call AI APIs in future iterations
-    return None
+    # Validate inputs
+    if not api_key:
+        return None
+
+    supported_providers = ["anthropic", "openai", "watson"]
+    if ai_provider not in supported_providers:
+        return None
+
+    # Get prompt and call AI
+    prompt = _get_ai_prompt()
+    ai_response = _call_ai_provider(ai_provider, api_key, model, prompt)
+
+    if not ai_response:
+        return None
+
+    # Parse and validate response
+    versions_data = _parse_ai_response(ai_response)
+
+    if versions_data:
+        # Cache the successful result
+        _save_ai_cache(versions_data)
+
+    return versions_data
 
 
 def get_python_compatibility_with_ai(

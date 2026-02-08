@@ -328,6 +328,12 @@ def parse_requirements_yml(requirements_path: str) -> dict[str, str]:
     if not requirements:
         return {}
 
+    if not isinstance(requirements, dict):
+        raise ValueError(
+            f"Invalid requirements format: expected dict, "
+            f"got {type(requirements).__name__}"
+        )
+
     result: dict[str, str] = {}
     result.update(_parse_collections(requirements))
     result.update(_parse_roles(requirements))
