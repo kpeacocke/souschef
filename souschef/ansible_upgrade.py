@@ -198,7 +198,28 @@ def _check_python_compatibility(result: dict[str, Any]) -> None:
     compatible = ", ".join(version_info.control_node_python)
     result["compatibility_issues"].append(
         f"Python {py_major_minor} is not compatible with "
+    root_dir = Path(".").resolve()
     base_path = Path(".").resolve()
+
+    # Ensure the requested environment path is within the allowed root directory
+    try:
+        # Python 3.9+: use is_relative_to if available
+        is_within_root = env_path.is_relative_to(root_dir)  # type: ignore[attr-defined]
+    except AttributeError:
+        # Fallback for older Python versions
+        try:
+            env_path.relative_to(root_dir)
+            is_within_root = True
+        except ValueError:
+            is_within_root = False
+
+    if not is_within_root:
+        return {
+            "error": (
+                f"Environment path is outside the allowed directory: {env_path}"
+            )
+        }
+
     try:
         env_path = Path(environment_path).resolve()
     except (OSError, RuntimeError) as exc:
