@@ -55,11 +55,30 @@ def detect_python_version(environment_path: str | None = None) -> str:
 
         venv_python = env_path / "bin" / "python3"
         if venv_python.exists():
-            # Resolve to prevent symlink attacks and validate it's a file
+            # Disallow symlinked executables to avoid executing unexpected binaries
+            if venv_python.is_symlink():
+                raise ValueError(f"Python executable must not be a symlink: {venv_python}")
+
+            # Resolve and validate that the executable is a regular file
             resolved_python = venv_python.resolve()
             if not resolved_python.is_file():
                 raise ValueError(f"Python executable is not a file: {resolved_python}")
-            python_cmd = str(resolved_python)
+
+            # Ensure the resolved executable is within the provided environment path
+            try:
+                resolved_env = env_path.resolve()
+                resolved_exec = resolved_python.resolve()
+            except OSError as e:
+                raise ValueError(f"Failed to resolve environment or Python path: {e}") from e
+
+            env_parts = resolved_env.parts
+            exec_parts = resolved_exec.parts
+            if not (len(exec_parts) > len(env_parts) and exec_parts[: len(env_parts)] == env_parts):
+                raise ValueError(
+                    f"Python executable {resolved_exec} is not contained within environment {resolved_env}"
+                )
+
+            python_cmd = str(resolved_exec)
 
     try:
         result = subprocess.run(
