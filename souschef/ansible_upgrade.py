@@ -44,8 +44,12 @@ def detect_python_version(environment_path: str | None = None) -> str:
     python_cmd = "python3"
 
     if environment_path:
-        # Basic validation of the provided path string
+        # Basic validation on the provided environment path string
         if "\x00" in environment_path:
+            raise ValueError("Environment path contains null byte, which is not allowed.")
+
+        # Basic validation of the provided path string
+        env_path = Path(environment_path).expanduser().resolve()
             raise ValueError("Environment path contains null byte, which is not allowed.")
         # Strip surrounding whitespace to avoid accidental malformed paths
         environment_path = environment_path.strip()
@@ -56,6 +60,13 @@ def detect_python_version(environment_path: str | None = None) -> str:
         env_path = Path(environment_path).resolve()
 
         # Validate the path exists and is a directory
+            # Ensure the resolved executable is still within the environment directory
+            try:
+                resolved_python.relative_to(env_path)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Python executable resolves outside the environment directory: {resolved_python}"
+                ) from exc
         if not env_path.exists():
             raise ValueError(f"Environment path does not exist: {env_path}")
         if not env_path.is_dir():
@@ -198,7 +209,11 @@ def _scan_playbooks(env_path: Path, result: dict[str, Any]) -> None:
 def _check_python_compatibility(result: dict[str, Any]) -> None:
     """Check for Python compatibility issues."""
     if result["python_compatible"] or result["current_version"] == "unknown":
-def _get_safe_env_path(environment_path: str) -> Path:
+    # Basic validation of user-supplied path string
+    if "\x00" in environment_path:
+        return {"error": "Environment path contains null byte, which is not allowed."}
+
+    env_path = Path(environment_path).expanduser().resolve()
     """
     Resolve and validate the environment path against a safe root.
 
