@@ -27,16 +27,19 @@ def parse_ansible_cfg(config_path: str) -> dict[str, Any]:
 
     Raises:
         FileNotFoundError: If config file does not exist.
-        ValueError: If config file is invalid.
+        ValueError: If config file is invalid or path is not a file.
 
     """
-    path = Path(config_path)
+    # Validate and resolve path to prevent path traversal
+    path = Path(config_path).resolve()
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
+        raise FileNotFoundError(f"Config file not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Config path is not a file: {path}")
 
     config = configparser.ConfigParser()
     try:
-        config.read(config_path)
+        config.read(str(path))
     except configparser.Error as e:
         raise ValueError(f"Invalid ansible.cfg format: {e}") from e
 
@@ -114,11 +117,15 @@ def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
 
     Raises:
         FileNotFoundError: If inventory file does not exist.
+        ValueError: If path is not a file.
 
     """
-    path = Path(inventory_path)
+    # Validate and resolve path to prevent path traversal
+    path = Path(inventory_path).resolve()
     if not path.exists():
-        raise FileNotFoundError(f"Inventory file not found: {inventory_path}")
+        raise FileNotFoundError(f"Inventory file not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Inventory path is not a file: {path}")
 
     inventory: dict[str, Any] = {"groups": {}, "hosts": {}}
     current_group: tuple[str, str | None] | None = None
@@ -160,12 +167,15 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
 
     Raises:
         FileNotFoundError: If inventory file does not exist.
-        ValueError: If YAML is invalid.
+        ValueError: If YAML is invalid or path is not a file.
 
     """
-    path = Path(inventory_path)
+    # Validate and resolve path to prevent path traversal
+    path = Path(inventory_path).resolve()
     if not path.exists():
-        raise FileNotFoundError(f"Inventory file not found: {inventory_path}")
+        raise FileNotFoundError(f"Inventory file not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Inventory path is not a file: {path}")
 
     try:
         with path.open() as f:
@@ -200,23 +210,28 @@ def parse_inventory_file(inventory_path: str) -> dict[str, Any]:
 
     Raises:
         FileNotFoundError: If inventory file does not exist.
-        ValueError: If file format cannot be determined.
+        ValueError: If file format cannot be determined or path is not a file.
 
     """
-    path = Path(inventory_path)
+    # Validate and resolve path to prevent path traversal
+    path = Path(inventory_path).resolve()
     if not path.exists():
-        raise FileNotFoundError(f"Inventory file not found: {inventory_path}")
+        raise FileNotFoundError(f"Inventory file not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Inventory path is not a file: {path}")
 
     suffix = path.suffix.lower()
 
+    # Pass resolved path as string to sub-parsers
+    resolved_str = str(path)
     if suffix in [".yml", ".yaml"]:
-        return parse_inventory_yaml(inventory_path)
+        return parse_inventory_yaml(resolved_str)
     if suffix in [".ini", ""]:
         try:
-            return parse_inventory_ini(inventory_path)
+            return parse_inventory_ini(resolved_str)
         except (ValueError, configparser.Error):
             try:
-                return parse_inventory_yaml(inventory_path)
+                return parse_inventory_yaml(resolved_str)
             except (ValueError, yaml.YAMLError):
                 raise ValueError(
                     f"Could not parse {inventory_path} as INI or YAML"
@@ -353,6 +368,29 @@ def parse_requirements_yml(requirements_path: str) -> dict[str, str]:
     return result
 
 
+def _validate_playbook_path(playbook_path: str) -> Path:
+    """
+    Validate and resolve playbook path.
+
+    Args:
+        playbook_path: Path to playbook file.
+
+    Returns:
+        Resolved Path object.
+
+    Raises:
+        FileNotFoundError: If playbook does not exist.
+        ValueError: If path is not a file.
+
+    """
+    path = Path(playbook_path).resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Playbook not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Playbook path is not a file: {path}")
+    return path
+
+
 def scan_playbook_for_version_issues(playbook_path: str) -> dict[str, Any]:
     """
     Scan playbook for version-specific syntax issues.
@@ -367,12 +405,11 @@ def scan_playbook_for_version_issues(playbook_path: str) -> dict[str, Any]:
 
     Raises:
         FileNotFoundError: If playbook does not exist.
-        ValueError: If YAML is invalid.
+        ValueError: If YAML is invalid or path is not a file.
 
     """
-    path = Path(playbook_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Playbook not found: {playbook_path}")
+    # Validate and resolve path to prevent path traversal
+    path = _validate_playbook_path(playbook_path)
 
     try:
         with path.open() as f:
