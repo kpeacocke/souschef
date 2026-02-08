@@ -342,9 +342,12 @@ def _assess_upgrade_risk(
     if current.eol_date and current.eol_date < date.today():
         risk_factors.append("Current version is EOL")
 
-    risk_level = (
-        "High" if len(risk_factors) >= 2 else "Medium" if risk_factors else "Low"
-    )
+    if len(risk_factors) >= 2:
+        risk_level = "High"
+    elif risk_factors:
+        risk_level = "Medium"
+    else:
+        risk_level = "Low"
 
     return risk_level, risk_factors
 

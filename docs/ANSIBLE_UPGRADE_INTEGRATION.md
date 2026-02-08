@@ -23,7 +23,7 @@ Following the existing SousChef architecture patterns:
 souschef/
 ├── ansible_upgrade.py       # NEW: Core upgrade assessment logic
 ├── server.py                # ADD: New MCP tools for upgrades
-├── cli.py                   # ADD: New CLI commands for upgrades  
+├── cli.py                   # ADD: New CLI commands for upgrades
 ├── ui/
 │   └── pages/
 │       └── ansible_upgrade.py  # NEW: Web UI for upgrade planning
@@ -56,7 +56,7 @@ class AnsibleVersion:
     control_node_python: List[str]  # Control node requirements
     managed_node_python: List[str]  # Managed node requirements
     major_changes: List[str]  # Breaking changes
-    
+
 @dataclass
 class UpgradePath:
     """Represents a safe upgrade path."""
@@ -78,13 +78,13 @@ ANSIBLE_VERSIONS: Dict[str, AnsibleVersion] = {
 
 def get_python_compatibility(ansible_version: str) -> List[str]:
     """Get compatible Python versions for Ansible version."""
-    
+
 def calculate_upgrade_path(
-    current_version: str, 
+    current_version: str,
     target_version: str
 ) -> UpgradePath:
     """Calculate safe upgrade path between versions."""
-    
+
 def get_eol_status(version: str) -> dict:
     """Check if version is EOL or approaching EOL."""
 ```
@@ -109,16 +109,16 @@ def get_eol_status(version: str) -> dict:
 
 def parse_ansible_cfg(config_path: str) -> dict:
     """Parse ansible.cfg file."""
-    
+
 def parse_inventory_file(inventory_path: str) -> dict:
     """Parse Ansible inventory (INI or YAML)."""
-    
+
 def detect_ansible_version(ansible_path: str) -> str:
     """Detect installed Ansible version from environment."""
-    
+
 def parse_requirements_yml(requirements_path: str) -> dict:
     """Parse collections/roles requirements.yml."""
-    
+
 def scan_playbook_for_version_issues(playbook_path: str) -> dict:
     """Scan playbook for version-specific syntax."""
 ```
@@ -143,7 +143,7 @@ def scan_playbook_for_version_issues(playbook_path: str) -> dict:
 
 def assess_ansible_environment(environment_path: str) -> dict:
     """Assess current Ansible environment for upgrade readiness.
-    
+
     Returns:
         {
             "current_version": "2.9.27",
@@ -155,14 +155,14 @@ def assess_ansible_environment(environment_path: str) -> dict:
             "recommendations": [...]
         }
     """
-    
+
 def generate_upgrade_plan(
     current_version: str,
     target_version: str,
     environment_path: str
 ) -> dict:
     """Generate detailed upgrade plan.
-    
+
     Returns:
         {
             "upgrade_path": UpgradePath,
@@ -174,16 +174,16 @@ def generate_upgrade_plan(
             "risk_assessment": {...}
         }
     """
-    
+
 def validate_collection_compatibility(
     collections: List[str],
     target_ansible_version: str
 ) -> dict:
     """Check if collections are compatible with target version."""
-    
+
 def generate_upgrade_testing_plan(environment_path: str) -> str:
     """Generate testing plan for upgrade validation."""
-    
+
 def assess_python_upgrade_impact(
     current_python: str,
     target_python: str,
@@ -213,10 +213,10 @@ Add new MCP tools:
 @mcp.tool()
 def assess_ansible_upgrade_readiness(environment_path: str) -> str:
     """Assess current Ansible environment for upgrade readiness.
-    
+
     Args:
         environment_path: Path to Ansible environment directory
-        
+
     Returns:
         JSON string with assessment results
     """
@@ -230,17 +230,17 @@ def plan_ansible_upgrade(
     target_version: str
 ) -> str:
     """Generate detailed Ansible upgrade plan.
-    
+
     Args:
         environment_path: Path to Ansible environment
         target_version: Target Ansible version (e.g., "2.16")
-        
+
     Returns:
         Markdown-formatted upgrade plan
     """
     from souschef.ansible_upgrade import generate_upgrade_plan
     from souschef.parsers.ansible_inventory import detect_ansible_version
-    
+
     current_version = detect_ansible_version(environment_path)
     plan = generate_upgrade_plan(current_version, target_version, environment_path)
     return format_upgrade_plan_markdown(plan)
@@ -248,10 +248,10 @@ def plan_ansible_upgrade(
 @mcp.tool()
 def check_ansible_eol_status(version: str) -> str:
     """Check if Ansible version is EOL or approaching EOL.
-    
+
     Args:
         version: Ansible version string (e.g., "2.9")
-        
+
     Returns:
         JSON string with EOL status and recommendations
     """
@@ -265,17 +265,17 @@ def validate_ansible_collection_compatibility(
     target_version: str
 ) -> str:
     """Validate collection compatibility with target Ansible version.
-    
+
     Args:
         collections_file: Path to requirements.yml
         target_version: Target Ansible version
-        
+
     Returns:
         JSON string with compatibility report
     """
     from souschef.ansible_upgrade import validate_collection_compatibility
     from souschef.parsers.ansible_inventory import parse_requirements_yml
-    
+
     collections = parse_requirements_yml(collections_file)
     result = validate_collection_compatibility(collections, target_version)
     return json.dumps(result, indent=2)
@@ -283,10 +283,10 @@ def validate_ansible_collection_compatibility(
 @mcp.tool()
 def generate_ansible_upgrade_test_plan(environment_path: str) -> str:
     """Generate testing plan for Ansible upgrade validation.
-    
+
     Args:
         environment_path: Path to Ansible environment
-        
+
     Returns:
         Markdown-formatted testing plan
     """
@@ -310,9 +310,9 @@ def ansible():
 def assess(environment_path: str, format: str):
     """Assess Ansible environment for upgrade readiness."""
     from souschef.ansible_upgrade import assess_ansible_environment
-    
+
     result = assess_ansible_environment(environment_path)
-    
+
     if format == "json":
         click.echo(json.dumps(result, indent=2, default=str))
     else:
@@ -327,12 +327,12 @@ def plan(environment_path: str, target_version: str, output: str):
     """Generate Ansible upgrade plan."""
     from souschef.ansible_upgrade import generate_upgrade_plan
     from souschef.parsers.ansible_inventory import detect_ansible_version
-    
+
     current = detect_ansible_version(environment_path)
     plan = generate_upgrade_plan(current, target_version, environment_path)
-    
+
     markdown = format_upgrade_plan_markdown(plan)
-    
+
     if output:
         Path(output).write_text(markdown)
         click.echo(f"Plan saved to {output}")
@@ -344,7 +344,7 @@ def plan(environment_path: str, target_version: str, output: str):
 def eol(version: str):
     """Check EOL status of Ansible version."""
     from souschef.core.ansible_versions import get_eol_status
-    
+
     status = get_eol_status(version)
     display_eol_status(status)
 
@@ -355,7 +355,7 @@ def validate_collections(collections_file: str, target_version: str):
     """Validate collection compatibility with Ansible version."""
     from souschef.ansible_upgrade import validate_collection_compatibility
     from souschef.parsers.ansible_inventory import parse_requirements_yml
-    
+
     collections = parse_requirements_yml(collections_file)
     result = validate_collection_compatibility(collections, target_version)
     display_compatibility_results(result)
@@ -374,41 +374,41 @@ from pathlib import Path
 def show_ansible_upgrade_page():
     """Display Ansible upgrade planning page."""
     st.title("🔄 Ansible Upgrade Planning")
-    
+
     # Tabs for different workflows
     tab1, tab2, tab3, tab4 = st.tabs([
         "Environment Assessment",
-        "Upgrade Planning", 
+        "Upgrade Planning",
         "EOL Status",
         "Collection Compatibility"
     ])
-    
+
     with tab1:
         show_environment_assessment()
-    
+
     with tab2:
         show_upgrade_planning()
-    
+
     with tab3:
         show_eol_status()
-        
+
     with tab4:
         show_collection_compatibility()
 
 def show_environment_assessment():
     """Show environment assessment section."""
     st.header("Assess Current Environment")
-    
+
     environment_path = st.text_input(
         "Ansible Environment Path",
         placeholder="/path/to/ansible/project"
     )
-    
+
     if st.button("Assess Environment"):
         with st.spinner("Scanning environment..."):
             from souschef.ansible_upgrade import assess_ansible_environment
             result = assess_ansible_environment(environment_path)
-            
+
             # Display results
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -418,17 +418,17 @@ def show_environment_assessment():
             with col3:
                 eol = result["eol_status"]
                 st.metric(
-                    "EOL Status", 
+                    "EOL Status",
                     "⚠️ EOL" if eol["is_eol"] else "✅ Supported",
                     delta="Action Required" if eol["is_eol"] else None
                 )
-            
+
             # Show issues
             if result["compatibility_issues"]:
                 st.error("⚠️ Compatibility Issues Found")
                 for issue in result["compatibility_issues"]:
                     st.warning(issue)
-            
+
             # Recommendations
             st.subheader("Recommendations")
             for rec in result["recommendations"]:
@@ -437,7 +437,7 @@ def show_environment_assessment():
 def show_upgrade_planning():
     """Show upgrade planning section."""
     st.header("Generate Upgrade Plan")
-    
+
     col1, col2 = st.columns(2)
     with col1:
         environment_path = st.text_input("Environment Path")
@@ -447,7 +447,7 @@ def show_upgrade_planning():
             "Target Version",
             ["2.16", "2.15", "2.14", "2.13", "2.12"]
         )
-    
+
     if st.button("Generate Plan"):
         # Generate and display plan
         pass
@@ -455,13 +455,13 @@ def show_upgrade_planning():
 def show_eol_status():
     """Show EOL status checker."""
     st.header("Check Version EOL Status")
-    
+
     version = st.text_input("Ansible Version", placeholder="2.9")
-    
+
     if st.button("Check Status"):
         from souschef.core.ansible_versions import get_eol_status
         status = get_eol_status(version)
-        
+
         # Display status with visual indicators
         if status["is_eol"]:
             st.error(f"⚠️ Version {version} reached EOL on {status['eol_date']}")
@@ -473,7 +473,7 @@ def show_eol_status():
 def show_collection_compatibility():
     """Show collection compatibility checker."""
     st.header("Validate Collection Compatibility")
-    
+
     collections_file = st.file_uploader(
         "Upload requirements.yml",
         type=["yml", "yaml"]
@@ -482,7 +482,7 @@ def show_collection_compatibility():
         "Target Ansible Version",
         ["2.16", "2.15", "2.14"]
     )
-    
+
     if collections_file and st.button("Validate"):
         # Parse and validate
         pass

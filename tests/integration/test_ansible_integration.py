@@ -178,7 +178,7 @@ class TestUpgradeWorkflows:
         assert isinstance(requirements, dict)
 
         # Test compatibility for a version
-        if isinstance(requirements, dict) and len(requirements) > 0:
+        if len(requirements) > 0:
             # Use first requirement as dict values
             test_collections = {
                 "community.general": "3.0.0",

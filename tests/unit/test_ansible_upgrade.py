@@ -281,7 +281,7 @@ class TestValidateCollectionCompatibility:
         assert isinstance(result, dict)
         if "error" not in result:
             # Should have compatibility status or list
-            assert len(result) >= 0
+            assert len(result) > 0
 
     def test_collection_with_no_version_valid(self):
         """Test collection without version specified."""

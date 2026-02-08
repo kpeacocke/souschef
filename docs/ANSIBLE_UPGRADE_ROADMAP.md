@@ -385,7 +385,7 @@
 ### High Risk Items
 1. **Collections compatibility data**: May need Galaxy API integration
    - Mitigation: Start with manual curated list, add API later
-   
+
 2. **Version detection accuracy**: Different installation methods
    - Mitigation: Support multiple detection methods, allow manual override
 

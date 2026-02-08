@@ -39,23 +39,23 @@ from typing import List, Optional
 @dataclass
 class AnsibleVersion:
     """Ansible version information from compatibility matrix."""
-    
+
     version: str
     release_date: date
     eol_date: Optional[date]
-    
+
     # FROM PDF: Control node Python requirements
     control_node_python: List[str]
-    
-    # FROM PDF: Managed node Python requirements  
+
+    # FROM PDF: Managed node Python requirements
     managed_node_python: List[str]
-    
+
     # FROM PDF: Breaking changes for this version
     major_changes: List[str]
-    
+
     # Collections requirements
     min_collection_versions: dict
-    
+
     # Known issues
     known_issues: List[str]
 
@@ -78,7 +78,7 @@ ANSIBLE_VERSIONS = {
             "No Python 3.9+ support"
         ]
     ),
-    
+
     "2.10": AnsibleVersion(
         version="2.10",
         release_date=date(2020, 9, 22),
@@ -100,7 +100,7 @@ ANSIBLE_VERSIONS = {
             "Import path changes break old playbooks"
         ]
     ),
-    
+
     "2.11": AnsibleVersion(
         version="2.11",
         release_date=date(2021, 4, 26),
@@ -118,7 +118,7 @@ ANSIBLE_VERSIONS = {
         },
         known_issues=[]
     ),
-    
+
     "2.12": AnsibleVersion(
         version="2.12",
         release_date=date(2021, 11, 8),
@@ -138,7 +138,7 @@ ANSIBLE_VERSIONS = {
             "Transition to ansible-core package"
         ]
     ),
-    
+
     "2.13": AnsibleVersion(
         version="2.13",
         release_date=date(2022, 5, 16),
@@ -155,7 +155,7 @@ ANSIBLE_VERSIONS = {
         },
         known_issues=[]
     ),
-    
+
     "2.14": AnsibleVersion(
         version="2.14",
         release_date=date(2022, 11, 7),
@@ -173,7 +173,7 @@ ANSIBLE_VERSIONS = {
         },
         known_issues=[]
     ),
-    
+
     "2.15": AnsibleVersion(
         version="2.15",
         release_date=date(2023, 5, 15),
@@ -191,7 +191,7 @@ ANSIBLE_VERSIONS = {
         },
         known_issues=[]
     ),
-    
+
     "2.16": AnsibleVersion(
         version="2.16",
         release_date=date(2023, 11, 6),
@@ -209,7 +209,7 @@ ANSIBLE_VERSIONS = {
         },
         known_issues=[]
     ),
-    
+
     "2.17": AnsibleVersion(
         version="2.17",
         release_date=date(2024, 5, 20),
@@ -234,18 +234,18 @@ def get_python_compatibility(
     node_type: str = "control"
 ) -> List[str]:
     """Get compatible Python versions from PDF matrix.
-    
+
     Args:
         ansible_version: Ansible version (e.g., "2.16")
         node_type: "control" or "managed"
-        
+
     Returns:
         List of compatible Python versions
     """
     version = ANSIBLE_VERSIONS.get(ansible_version)
     if not version:
         raise ValueError(f"Unknown Ansible version: {ansible_version}")
-    
+
     if node_type == "control":
         return version.control_node_python
     elif node_type == "managed":
@@ -258,17 +258,17 @@ def calculate_upgrade_path(
     target_version: str
 ) -> dict:
     """Calculate upgrade path based on PDF compatibility matrix.
-    
+
     Follows best practices:
     - 2.9 → 2.10: MAJOR (collections split)
     - 2.10 → 2.11: Minor
     - Skip versions at your own risk
     - Python upgrade may be required
-    
+
     Args:
         current_version: Current Ansible version
         target_version: Desired Ansible version
-        
+
     Returns:
         Upgrade path with intermediates, risks, and requirements
     """
@@ -276,15 +276,15 @@ def calculate_upgrade_path(
         raise ValueError(f"Unknown current version: {current_version}")
     if target_version not in ANSIBLE_VERSIONS:
         raise ValueError(f"Unknown target version: {target_version}")
-    
+
     current = ANSIBLE_VERSIONS[current_version]
     target = ANSIBLE_VERSIONS[target_version]
-    
+
     # Determine if direct upgrade is recommended
     current_major = float(current_version)
     target_major = float(target_version)
     version_gap = target_major - current_major
-    
+
     # FROM PDF: Major version jumps should go through intermediates
     intermediate_versions = []
     if version_gap > 0.2:  # More than 2 minor versions
@@ -293,19 +293,19 @@ def calculate_upgrade_path(
             version_num = float(version)
             if current_major < version_num < target_major:
                 intermediate_versions.append(version)
-    
+
     # Collect all breaking changes across the path
     breaking_changes = []
     versions_to_check = intermediate_versions + [target_version]
     for version in versions_to_check:
         breaking_changes.extend(ANSIBLE_VERSIONS[version].major_changes)
-    
+
     # Check Python compatibility
     python_upgrade_needed = not any(
-        py in target.control_node_python 
+        py in target.control_node_python
         for py in current.control_node_python
     )
-    
+
     # Assess risk based on PDF data
     risk_factors = []
     if "2.9" in current_version and version_gap > 0:
@@ -316,9 +316,9 @@ def calculate_upgrade_path(
         risk_factors.append("Python upgrade required")
     if current.eol_date and current.eol_date < date.today():
         risk_factors.append("Current version is EOL")
-    
+
     risk_level = "High" if len(risk_factors) >= 2 else "Medium" if risk_factors else "Low"
-    
+
     # Estimate effort (FROM PDF complexity)
     effort_days = 1.0  # Base
     if "2.9" in current_version:
@@ -326,7 +326,7 @@ def calculate_upgrade_path(
     effort_days += len(intermediate_versions) * 1.5
     if python_upgrade_needed:
         effort_days += 2.0
-    
+
     return {
         "from_version": current_version,
         "to_version": target_version,
@@ -346,9 +346,9 @@ def get_eol_status(version: str) -> dict:
     """Get EOL status from PDF data."""
     if version not in ANSIBLE_VERSIONS:
         return {"error": f"Unknown version: {version}"}
-    
+
     version_info = ANSIBLE_VERSIONS[version]
-    
+
     if not version_info.eol_date:
         return {
             "version": version,
@@ -356,11 +356,11 @@ def get_eol_status(version: str) -> dict:
             "status": "Supported",
             "message": f"Version {version} is currently supported"
         }
-    
+
     today = date.today()
     is_eol = version_info.eol_date < today
     days_diff = abs((version_info.eol_date - today).days)
-    
+
     if is_eol:
         return {
             "version": version,
@@ -401,28 +401,28 @@ Uses the version data to assess real environments:
 ```python
 def assess_ansible_environment(environment_path: str) -> dict:
     """Assess using PDF compatibility matrix."""
-    
+
     # Detect current versions
     ansible_version = detect_ansible_version(environment_path)
     python_version = detect_python_version(environment_path)
-    
+
     # Get version info from PDF data
     version_info = ANSIBLE_VERSIONS.get(ansible_version)
     eol_status = get_eol_status(ansible_version)
-    
+
     # Check Python compatibility (FROM PDF)
     python_compatible = python_version in version_info.control_node_python
-    
+
     # Scan for version-specific issues
     compatibility_issues = []
-    
+
     # FROM PDF: Check for known breaking changes
     if ansible_version == "2.9":
         compatibility_issues.append(
             "Version 2.9 uses legacy module paths. "
             "Upgrade requires collection migration."
         )
-    
+
     # Check collection compatibility
     collections = parse_requirements_yml(environment_path / "requirements.yml")
     for collection, version in collections.items():
@@ -432,10 +432,10 @@ def assess_ansible_environment(environment_path: str) -> dict:
                 f"Collection {collection} {version} incompatible. "
                 f"Requires {min_version}+"
             )
-    
+
     # Generate recommendations based on PDF data
     recommendations = []
-    
+
     if eol_status["is_eol"]:
         recommendations.append(
             f"🚨 URGENT: Upgrade from EOL version {ansible_version}"
@@ -444,7 +444,7 @@ def assess_ansible_environment(environment_path: str) -> dict:
         recommendations.append(
             "Recommended target: Ansible 2.16 (latest stable)"
         )
-    
+
     if not python_compatible:
         recommendations.append(
             f"⚠️  Python {python_version} incompatible with Ansible {ansible_version}"
@@ -452,7 +452,7 @@ def assess_ansible_environment(environment_path: str) -> dict:
         recommendations.append(
             f"Supported Python versions: {', '.join(version_info.control_node_python)}"
         )
-    
+
     return {
         "current_version": ansible_version,
         "python_version": python_version,
@@ -500,13 +500,13 @@ def validate_python_compatibility(
 ) -> dict:
     """Validate Python compatibility from PDF matrix."""
     version = ANSIBLE_VERSIONS[ansible_version]
-    
+
     control_ok = control_python in version.control_node_python
     managed_ok = all(
-        py in version.managed_node_python 
+        py in version.managed_node_python
         for py in managed_pythons
     )
-    
+
     return {
         "control_node_compatible": control_ok,
         "managed_nodes_compatible": managed_ok,
@@ -557,31 +557,31 @@ souschef ansible assess /opt/ansible
 
 def test_version_compatibility_from_pdf():
     """Test version data matches PDF matrix."""
-    
+
     # FROM PDF: Ansible 2.9 supports Python 3.5-3.8
     assert "3.8" in get_python_compatibility("2.9", "control")
     assert "3.9" not in get_python_compatibility("2.9", "control")
-    
+
     # FROM PDF: Ansible 2.16 requires Python 3.10+
     assert "3.10" in get_python_compatibility("2.16", "control")
     assert "3.9" not in get_python_compatibility("2.16", "control")
 
 def test_upgrade_path_2_9_to_2_16():
     """Test upgrade path from EOL 2.9 to latest 2.16."""
-    
+
     path = calculate_upgrade_path("2.9", "2.16")
-    
+
     # FROM PDF: Should include intermediate versions
     assert not path["direct_upgrade"]
     assert "2.10" in path["intermediate_versions"]
-    
+
     # FROM PDF: Should flag collections split
     breaking_changes = "\n".join(path["breaking_changes"])
     assert "collections split" in breaking_changes.lower()
-    
+
     # FROM PDF: Python upgrade needed
     assert path["python_upgrade_needed"]
-    
+
     # Should be high risk due to major changes
     assert path["risk_level"] in ["High", "Medium"]
 ```

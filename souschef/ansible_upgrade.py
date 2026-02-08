@@ -280,16 +280,13 @@ def _generate_recommendations(assessment: dict[str, Any]) -> None:
     assessment["recommendations"] = recommendations
 
 
-def generate_upgrade_plan(
-    current_version: str, target_version: str, environment_path: str
-) -> dict[str, Any]:
+def generate_upgrade_plan(current_version: str, target_version: str) -> dict[str, Any]:
     """
     Generate detailed Ansible upgrade plan.
 
     Args:
         current_version: Current Ansible version (e.g., "2.9").
         target_version: Target Ansible version (e.g., "2.16").
-        environment_path: Path to Ansible environment.
 
     Returns:
         Dictionary containing upgrade plan details.
@@ -441,12 +438,9 @@ def _get_upgrade_notes(from_version: str, to_version: str) -> list[str]:
     return notes
 
 
-def _generate_testing_plan(upgrade_path: dict[str, Any]) -> dict[str, Any]:
+def _generate_testing_plan() -> dict[str, Any]:
     """
     Generate testing plan for upgrade.
-
-    Args:
-        upgrade_path: Upgrade path from calculate_upgrade_path.
 
     Returns:
         Testing plan dictionary.
