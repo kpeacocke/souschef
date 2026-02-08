@@ -47,6 +47,15 @@ def _is_subpath(path: Path, root: Path) -> bool:
         return True
     except ValueError:
         return False
+        # Enforce that the environment path is within a trusted root
+        safe_root = Path.cwd().resolve()
+        try:
+            env_path.relative_to(safe_root)
+        except ValueError:
+            raise ValueError(
+                f"Environment path is outside the allowed root: {env_path}"
+            )
+
 
 
 def detect_python_version(environment_path: str | None = None) -> str:
@@ -57,6 +66,12 @@ def detect_python_version(environment_path: str | None = None) -> str:
         environment_path: Path to environment (looks for python/python3 there).
 
     Returns:
+            try:
+                resolved_python.relative_to(safe_root)
+            except ValueError:
+                raise ValueError(
+                    f"Python executable is outside the allowed root: {resolved_python}"
+                )
         Python version string (e.g., "3.11.2").
 
     Raises:
