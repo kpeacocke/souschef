@@ -341,6 +341,10 @@ def parse_requirements_yml(requirements_path: str) -> dict[str, str]:
 
     """
     path = Path(requirements_path).resolve()
+    # Ensure we are only ever reading a requirements.yml-style file,
+    # not an arbitrary path derived from user input.
+    if path.name != "requirements.yml":
+        raise ValueError(f"Invalid requirements file name: {path.name}")
     if not path.exists():
         raise FileNotFoundError(f"Requirements file not found: {path}")
     if not path.is_file():
