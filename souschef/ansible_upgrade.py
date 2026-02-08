@@ -26,6 +26,29 @@ from souschef.parsers.ansible_inventory import (
 )
 
 
+def _is_subpath(path: Path, root: Path) -> bool:
+    """
+    Return True if ``path`` is located within ``root``.
+
+    This uses ``Path.is_relative_to`` when available (Python 3.9+), and
+    falls back to ``relative_to`` for older versions.
+    """
+    try:
+        # Python 3.9+
+        is_relative_to = getattr(path, "is_relative_to", None)
+        if callable(is_relative_to):
+            return is_relative_to(root)
+    except TypeError:
+        # If root is not suitable for is_relative_to, fall back below
+        pass
+
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
 def detect_python_version(environment_path: str | None = None) -> str:
     """
     Detect Python version in use.
@@ -47,6 +70,13 @@ def detect_python_version(environment_path: str | None = None) -> str:
         # Basic validation on the provided environment path string
         if "\x00" in environment_path:
             raise ValueError("Environment path contains null byte, which is not allowed.")
+        # Ensure the environment path is within the allowed root (current working directory)
+        safe_root = Path.cwd().resolve()
+        if not _is_subpath(env_path, safe_root):
+            raise ValueError(
+                f"Environment path is outside the allowed root directory: {env_path}"
+            )
+
 
         # Basic validation of the provided path string
         env_path = Path(environment_path).expanduser().resolve()
