@@ -114,9 +114,9 @@ RUN PYTHON_MAJOR_MINOR=$(echo "${PYTHON_VERSION}" | cut -d. -f1-2) && \
     \
     # Remove test files and compiled artifacts, but KEEP dist-info (required for package discovery) \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
+        -type d -name "tests" -exec rm -rf {} + && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true && \
+        -type d -name "*.egg-info" -exec rm -rf {} + && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
         -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.dist-info/RECORD" \) -delete
 

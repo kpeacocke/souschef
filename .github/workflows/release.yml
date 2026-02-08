@@ -727,10 +727,10 @@ jobs:
       - name: Verify MCP entrypoint
         run: |
           set -e
-          # Check that souschef-mcp command exists
+          # Test that the MCP server module is accessible
           docker run --rm --entrypoint="" \
             "ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version }}" \
-            which souschef-mcp
+            python -c "import souschef.server; print('MCP server module verified')"
           echo "MCP entrypoint verified"
 
   notify-docker-deployment:

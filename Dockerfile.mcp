@@ -63,15 +63,12 @@ ARG PYTHON_VERSION
 # Copy site-packages from builder
 COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
 
-# Copy console scripts from builder
-COPY --from=builder --chown=root:root /usr/local/bin/souschef-mcp /usr/local/bin/souschef-mcp
-
 # Install to final location and cleanup
 RUN PYTHON_MAJOR_MINOR=$(echo "${PYTHON_VERSION}" | cut -d. -f1-2) && \
     rm -rf "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
     mv /tmp/site-packages "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
-        -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
+        -type d -name "tests" -exec rm -rf {} + && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
         -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
 
@@ -80,4 +77,4 @@ COPY souschef ./souschef
 
 USER app
 
-CMD ["souschef-mcp"]
+CMD ["python", "-m", "souschef.server"]
