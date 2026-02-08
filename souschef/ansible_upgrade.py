@@ -387,7 +387,7 @@ def generate_upgrade_plan(current_version: str, target_version: str) -> dict[str
         "Run smoke tests on critical playbooks",
     ]
 
-    plan["testing_plan"] = _generate_testing_plan(path)
+    plan["testing_plan"] = _generate_testing_plan()
 
     plan["rollback_plan"] = {
         "steps": [

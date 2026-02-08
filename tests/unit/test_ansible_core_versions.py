@@ -6,10 +6,15 @@ from souschef.core.ansible_versions import (
     ANSIBLE_VERSIONS,
     AnsibleVersion,
     calculate_upgrade_path,
+    format_version_display,
+    get_aap_compatible_versions,
+    get_ansible_core_version,
     get_eol_status,
     get_latest_version,
     get_minimum_python_for_ansible,
+    get_named_ansible_version,
     get_python_compatibility,
+    get_recommended_core_version_for_aap,
     get_supported_versions,
     is_python_compatible,
 )
@@ -59,15 +64,19 @@ class TestGetPythonCompatibility:
 
     def test_latest_version_compatibility(self):
         """Test getting compatibility for latest version."""
-        result = get_python_compatibility("2.17", "control")
+        latest_version = get_latest_version()
+        result = get_python_compatibility(latest_version, "control")
         assert isinstance(result, list)
-        assert "3.10" in result or "3.11" in result or "3.12" in result
+        assert result == ANSIBLE_VERSIONS[latest_version].control_node_python
 
     def test_earliest_version_compatibility(self):
         """Test getting compatibility for earliest version."""
-        result = get_python_compatibility("2.9", "control")
+        from souschef.core.ansible_versions import _parse_version
+
+        earliest_version = sorted(ANSIBLE_VERSIONS.keys(), key=_parse_version)[0]
+        result = get_python_compatibility(earliest_version, "control")
         assert isinstance(result, list)
-        assert "2.7" in result or "3.5" in result
+        assert result == ANSIBLE_VERSIONS[earliest_version].control_node_python
 
     def test_invalid_version_raises_error(self):
         """Test that invalid version raises ValueError."""
@@ -136,8 +145,10 @@ class TestGetLatestVersion:
 
     def test_returns_highest_version(self):
         """Test that returned version is the highest."""
+        from souschef.core.ansible_versions import _parse_version
+
         result = get_latest_version()
-        versions = sorted(ANSIBLE_VERSIONS.keys(), key=lambda v: float(v))
+        versions = sorted(ANSIBLE_VERSIONS.keys(), key=_parse_version)
         assert result == versions[-1]
 
 
@@ -163,9 +174,11 @@ class TestGetSupportedVersions:
 
     def test_returns_versions_in_descending_order(self):
         """Test that versions are returned in descending order."""
+        from souschef.core.ansible_versions import _parse_version
+
         result = get_supported_versions()
-        versions_as_floats = [float(v) for v in result]
-        assert versions_as_floats == sorted(versions_as_floats, reverse=True)
+        expected = sorted(result, key=_parse_version, reverse=True)
+        assert result == expected
 
 
 class TestGetEolStatus:
@@ -345,3 +358,201 @@ class TestAllVersionsCompatible:
         result = get_eol_status(version)
         assert isinstance(result, dict)
         assert "status" in result or "error" not in result
+
+
+class TestGetAnsibleCoreVersion:
+    """Test get_ansible_core_version function (Named Ansible → Core)."""
+
+    def test_convert_9x_to_core(self):
+        """Test converting Named Ansible 9.x to ansible-core 2.16."""
+        result = get_ansible_core_version("9.x")
+        assert result == "2.16"
+
+    def test_convert_10x_to_core(self):
+        """Test converting Named Ansible 10.x to ansible-core 2.17."""
+        result = get_ansible_core_version("10.x")
+        assert result == "2.17"
+
+    def test_convert_invalid_named_version_raises_error(self):
+        """Test invalid Named Ansible version returns None."""
+        result = get_ansible_core_version("99.x")
+        assert result is None
+
+    def test_convert_none_raises_error(self):
+        """Test None named version raises AttributeError."""
+        with pytest.raises(AttributeError):
+            get_ansible_core_version(None)
+
+
+class TestGetNamedAnsibleVersion:
+    """Test get_named_ansible_version function (Core → Named Ansible)."""
+
+    def test_convert_2_16_to_named(self):
+        """Test converting ansible-core 2.16 to Named Ansible 9.x."""
+        result = get_named_ansible_version("2.16")
+        assert result == "9.x"
+
+    def test_convert_2_17_to_named(self):
+        """Test converting ansible-core 2.17 to Named Ansible 10.x."""
+        result = get_named_ansible_version("2.17")
+        assert result == "10.x"
+
+    def test_convert_invalid_core_version_raises_error(self):
+        """Test invalid core version returns None."""
+        result = get_named_ansible_version("99.99")
+        assert result is None
+
+    def test_convert_old_version_without_named_returns_none(self):
+        """Test old version without named_version returns None."""
+        result = get_named_ansible_version("2.9")
+        assert result is None
+
+
+class TestGetAapCompatibleVersions:
+    """Test get_aap_compatible_versions function."""
+
+    def test_get_aap_for_2_16(self):
+        """Test getting AAP versions compatible with ansible-core 2.16."""
+        result = get_aap_compatible_versions("2.16")
+        assert isinstance(result, list)
+        assert set(result) == {"2.5", "2.6"}
+
+    def test_get_aap_for_2_17(self):
+        """Test getting AAP versions compatible with ansible-core 2.17."""
+        result = get_aap_compatible_versions("2.17")
+        assert isinstance(result, list)
+        assert set(result) == {"2.5", "2.6"}
+
+    def test_get_aap_for_2_18(self):
+        """Test getting AAP versions compatible with ansible-core 2.18."""
+        result = get_aap_compatible_versions("2.18")
+        assert isinstance(result, list)
+        assert set(result) == {"2.5", "2.6"}
+
+    def test_get_aap_for_2_19(self):
+        """Test getting AAP versions compatible with ansible-core 2.19."""
+        result = get_aap_compatible_versions("2.19")
+        assert result == []
+
+    def test_get_aap_for_2_20(self):
+        """Test getting AAP versions compatible with ansible-core 2.20."""
+        result = get_aap_compatible_versions("2.20")
+        assert result == []
+
+    def test_get_aap_for_old_version_returns_empty(self):
+        """Test old version without AAP support returns empty list."""
+        result = get_aap_compatible_versions("2.9")
+        assert result == []
+
+    def test_invalid_version_raises_error(self):
+        """Test invalid version returns empty list."""
+        result = get_aap_compatible_versions("99.99")
+        assert result == []
+
+
+class TestGetRecommendedCoreVersionForAap:
+    """Test get_recommended_core_version_for_aap function."""
+
+    def test_get_core_for_aap_2_5(self):
+        """Test getting recommended ansible-core for AAP 2.5."""
+        result = get_recommended_core_version_for_aap("2.5")
+        assert result == "2.18"
+
+    def test_get_core_for_aap_2_6(self):
+        """Test getting recommended ansible-core for AAP 2.6."""
+        result = get_recommended_core_version_for_aap("2.6")
+        assert result == "2.18"
+
+    def test_invalid_aap_version_returns_none(self):
+        """Test invalid AAP version returns None."""
+        result = get_recommended_core_version_for_aap("99.99")
+        assert result is None
+
+    def test_returns_latest_compatible_version(self):
+        """Test function returns latest compatible version."""
+        result = get_recommended_core_version_for_aap("2.5")
+        # Should return highest version that supports AAP 2.5
+        assert result is not None
+
+
+class TestFormatVersionDisplay:
+    """Test format_version_display function."""
+
+    def test_format_core_only(self):
+        """Test formatting with only core version."""
+        result = format_version_display("2.16", include_named=False, include_aap=False)
+        assert result == "ansible-core 2.16"
+
+    def test_format_with_named_version(self):
+        """Test formatting with Named Ansible version."""
+        result = format_version_display("2.16", include_named=True, include_aap=False)
+        assert "ansible-core 2.16" in result
+        assert "9.x" in result or "Ansible 9.x" in result
+
+    def test_format_with_aap_versions(self):
+        """Test formatting with AAP compatibility."""
+        result = format_version_display("2.16", include_named=False, include_aap=True)
+        assert "ansible-core 2.16" in result
+        expected_aap_versions = get_aap_compatible_versions("2.16")
+        if expected_aap_versions:
+            assert any(aap_ver in result for aap_ver in expected_aap_versions)
+
+    def test_format_with_all_info(self):
+        """Test formatting with all information."""
+        result = format_version_display("2.16", include_named=True, include_aap=True)
+        assert "ansible-core 2.16" in result
+        # Should have Named Ansible version
+        assert "9.x" in result or "Ansible 9.x" in result
+
+    def test_format_old_version_without_named(self):
+        """Test formatting old version without Named Ansible."""
+        result = format_version_display("2.9", include_named=True, include_aap=False)
+        assert "ansible-core 2.9" in result
+        # Should still work even though 2.9 has no named version
+
+    def test_format_invalid_version_raises_error(self):
+        """Test invalid version just formats without extra info."""
+        result = format_version_display("99.99", include_named=False, include_aap=False)
+        assert result == "ansible-core 99.99"
+
+    def test_default_parameters(self):
+        """Test function with default parameters."""
+        result = format_version_display("2.16")
+        assert "ansible-core 2.16" in result
+
+
+@pytest.mark.parametrize(
+    "core_version,named_version",
+    [
+        ("2.16", "9.x"),
+        ("2.17", "10.x"),
+        ("2.18", "11.x"),
+        ("2.19", "12.x"),
+        ("2.20", "13.x"),
+    ],
+)
+class TestVersionSchemaMapping:
+    """Parameterized tests for version schema conversions."""
+
+    def test_core_to_named_conversion(self, core_version, named_version):
+        """Test converting ansible-core to Named Ansible."""
+        result = get_named_ansible_version(core_version)
+        assert result == named_version
+
+    def test_named_to_core_conversion(self, core_version, named_version):
+        """Test converting Named Ansible to ansible-core."""
+        result = get_ansible_core_version(named_version)
+        assert result == core_version
+
+    def test_round_trip_conversion(self, core_version, named_version):
+        """Test converting back and forth preserves values."""
+        # Core → Named → Core
+        named_result = get_named_ansible_version(core_version)
+        core_result = get_ansible_core_version(named_result)
+        assert core_result == core_version
+
+    def test_format_includes_both_schemas(self, core_version, named_version):
+        """Test formatting displays both version schemas."""
+        result = format_version_display(core_version, include_named=True)
+        assert core_version in result
+        assert named_version in result

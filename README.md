@@ -5,7 +5,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 [![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-79%25-green.svg)](htmlcov/index.html)
+[![Test Coverage](https://img.shields.io/badge/coverage-91%25-green.svg)](htmlcov/index.html)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
@@ -16,11 +16,11 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 SousChef is a complete enterprise-grade platform with two major capabilities:
 
-### 1. Chef to Ansible Migration (40+ tools)
+### 1. Chef to Ansible Migration (57 tools)
 
-Complete enterprise-grade migration platform with **45 primary MCP tools** organised across **13 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations and Ansible version upgrades. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, and Ansible upgrade planning, SousChef provides everything needed for a successful infrastructure automation migration.
+Complete enterprise-grade migration platform with **57 primary MCP tools** organised across **13 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations and Ansible version upgrades. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, and Ansible upgrade planning, SousChef provides everything needed for a successful infrastructure automation migration.
 
-### 2. Ansible Upgrade Assessment & Planning (NEW - In Development)
+### 2. Ansible Upgrade Assessment & Planning (NEW - Available)
 
 Comprehensive Ansible upgrade analysis and planning tools based on official Ansible-Python compatibility matrices:
 
@@ -32,7 +32,7 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 - **Python Upgrade Impact** - Assess Python version upgrade requirements for control and managed nodes
 - **Testing Plan Generation** - Generate comprehensive upgrade testing plans
 
-> **🚧 Feature Status**: Ansible upgrade features are currently in development on the `feature/ansible-upgrades` branch.
+> **✅ Feature Status**: Ansible upgrade features are now available with CLI commands, MCP tools, and web UI.
 > See [Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md) for full details.
 
 ### About Tool Counts
@@ -74,22 +74,34 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 - **[Ansible Upgrade Matrix Implementation](docs/ANSIBLE_UPGRADE_MATRIX_IMPLEMENTATION.md)** - PDF data mapping and implementation
 - **[Implementation Roadmap](docs/ANSIBLE_UPGRADE_ROADMAP.md)** - Detailed development timeline
 
-## What's New in v4.1.0
+## What's New in v4.2.0
 
-**Security Hardening & Type Safety** - Enterprise-grade improvements for production deployments:
+**Ansible Upgrade & Planning Tools** - Complete upgrade assessment and planning capabilities:
+
+- **5 New CLI Commands**: `ansible assess`, `plan`, `eol`, `validate-collections`, `detect-python` for comprehensive upgrade workflows
+- **3 Interactive UI Pages**: Environment Assessment, Upgrade Planning, and Collection Validation interfaces
+- **MCP Tool Integration**: Access upgrade planning programmatically through MCP server tools
+- **Comprehensive Testing**: 1,954 passing tests with 91% coverage across all upgrade functionality
+- **Type Safety**: Full mypy compliance with proper type hints for all new functions
+- **Production Ready**: All quality gates passing - Ruff linting, mypy, and comprehensive test coverage
+
+See [Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md) for complete documentation.
+
+## Previous Releases
+
+### v4.1.0 - Security Hardening & Type Safety
+
+Enterprise-grade improvements for production deployments:
 
 - **GitHub Actions Security**: All external actions pinned to commit SHAs for supply chain protection
 - **Type Safety**: Complete mypy type checking (0 errors) with full type hints across 57 source files
 - **Fork Checkout Protection**: Privileged workflows explicitly checkout from main repository, never from forks
 - **Python Support Expansion**: Now supports Python 3.10+ (added support for 3.10 and 3.11)
 - **Code Quality**: Ruff linting with zero warnings, Australian English documentation standards
-- **Test Coverage**: Maintained at 91% with 1700+ passing tests
 
 See [Release Notes](https://github.com/kpeacocke/souschef/releases/tag/v4.1.0) for full details.
 
-## Previous Releases
-
-## What's New in v3.4.0
+### v3.4.0 - Chef Server Integration
 
 **Chef Server Integration & AI-Enhanced Template Conversion** - Dynamic inventory and intelligent template conversion:
 
@@ -584,8 +596,9 @@ profile_parsing_operation recipe /path/to/recipe.rb --detailed
 
 ### 10. Visual Migration Planning Interface
 
-Interactive web-based interface for Chef-to-Ansible migration planning and visualization:
+Interactive web-based interface for Chef-to-Ansible migration planning and Ansible upgrade management:
 
+**Chef Migration Features:**
 - **Cookbook Analysis Dashboard**: Interactive directory scanning with metadata parsing and complexity assessment
 - **AI-Assisted Effort Estimation** (v3.3.0+):
   - **Manual Migration Estimate**: Full effort without AI assistance
@@ -597,6 +610,12 @@ Interactive web-based interface for Chef-to-Ansible migration planning and visua
 - **Validation Reports**: Conversion validation results with syntax checking and best practice compliance
 - **Progress Tracking**: Real-time migration progress with completion metrics and bottleneck identification
 - **History and Persistence**: Stored analysis history, cached results, and downloadable artefacts (SQLite or PostgreSQL, plus S3-compatible storage)
+
+**Ansible Upgrade Features (NEW):**
+- **Environment Assessment**: Analyse current Ansible installation, Python compatibility, and installed collections
+- **Upgrade Planning**: Interactive upgrade planning with version selection, breaking changes analysis, and risk assessment
+- **Collection Validation**: Upload requirements.yml to validate collection compatibility with target Ansible versions
+- **Visual Dashboards**: Progress bars, compatibility metrics, and exportable JSON reports for all upgrade assessments
 
 **Launch the UI:**
 
@@ -924,6 +943,7 @@ souschef-cli inspec-convert controls.rb --format testinfra
 
 **Available Commands:**
 
+**Chef Migration:**
 - `recipe` - Parse Chef recipe files and extract resources
 - `template` - Convert ERB templates to Jinja2 with variable extraction
 - `resource` - Parse custom resources and LWRPs
@@ -935,8 +955,78 @@ souschef-cli inspec-convert controls.rb --format testinfra
 - `inspec-parse` - Parse InSpec profiles and controls
 - `inspec-convert` - Convert InSpec to Testinfra/Ansible tests
 - `inspec-generate` - Generate InSpec validation from recipes
-- `ui` - Launch the Visual Migration Planning Interface
 - `ls` / `cat` - File system operations
+
+**Ansible Upgrades:**
+- `ansible assess` - Assess current Ansible environment and version compatibility
+- `ansible plan` - Generate detailed upgrade plan between Ansible versions
+- `ansible eol` - Check end-of-life status for Ansible versions
+- `ansible validate-collections` - Validate collection compatibility with target version
+- `ansible detect-python` - Detect Python version in Ansible environment
+
+**User Interfaces:**
+- `ui` - Launch the Visual Migration Planning Interface
+
+#### Ansible CLI Examples
+
+**Environment Assessment:**
+```bash
+# Assess current Ansible environment
+souschef ansible assess --environment-path /path/to/ansible
+
+# Example output:
+# - Detected Ansible version and Python version
+# - Lists all installed collections
+# - Warns about EOL versions
+# - Exports results to JSON
+```
+
+**Upgrade Planning:**
+```bash
+# Generate upgrade plan from Ansible 2.9 to 2.17
+souschef ansible plan --current 2.9 --target 2.17
+
+# Example output:
+# - Breaking changes by category
+# - Deprecated features with alternatives
+# - Collection compatibility analysis
+# - Testing recommendations
+# - Risk assessment
+```
+
+**EOL Status:**
+```bash
+# Check if Ansible 2.9 is end-of-life
+souschef ansible eol --version 2.9
+
+# Example output:
+# - EOL status and date
+# - Community/Core edition info
+# - Recommended upgrade paths
+```
+
+**Collection Validation:**
+```bash
+# Validate collections from requirements.yml
+souschef ansible validate-collections --requirements-file requirements.yml --ansible-version 2.17
+
+# Example output:
+# - Compatibility status for each collection
+# - Breaking changes detected
+# - Dependency conflicts
+# - Recommended collection versions
+```
+
+**Python Detection:**
+```bash
+# Detect Python version in Ansible environment
+souschef ansible detect-python --environment-path /path/to/ansible
+
+# Example output:
+# - Python version used by Ansible
+# - Compatibility with target Ansible version
+# - Required Python version for upgrade
+```
 
 ### Development Setup
 

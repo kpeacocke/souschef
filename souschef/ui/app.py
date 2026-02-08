@@ -25,6 +25,9 @@ R = TypeVar("R")
 from souschef.core import _ensure_within_base_path, _normalize_path
 from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_is_file
 from souschef.ui.pages.ai_settings import show_ai_settings_page
+from souschef.ui.pages.ansible_assessment import show_ansible_assessment_page
+from souschef.ui.pages.ansible_planning import show_ansible_planning_page
+from souschef.ui.pages.ansible_validation import show_ansible_validation_page
 from souschef.ui.pages.chef_server_settings import show_chef_server_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
@@ -43,6 +46,9 @@ NAV_AI_SETTINGS = "AI Settings"
 NAV_CHEF_SERVER_SETTINGS = "Chef Server Settings"
 NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
 NAV_HISTORY = "History"
+NAV_ANSIBLE_ASSESSMENT = "Ansible Assessment"
+NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
+NAV_ANSIBLE_VALIDATION = "Collection Validation"
 BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
 INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
 HISTORY_SUBHEADER = "Load from History"
@@ -140,6 +146,7 @@ def _display_navigation_section(current_page: str) -> None:
 
     col1, col2, col3, col4 = st.columns(4)
     col5, col6, col7, col8 = st.columns(4)
+    col9, col10, col11 = st.columns(3)
 
     nav_buttons = [
         (col1, "Cookbook Analysis", NAV_COOKBOOK_ANALYSIS),
@@ -150,6 +157,9 @@ def _display_navigation_section(current_page: str) -> None:
         (col6, "Validation Reports", NAV_VALIDATION_REPORTS),
         (col7, "AI Settings", NAV_AI_SETTINGS),
         (col8, "Chef Server", NAV_CHEF_SERVER_SETTINGS),
+        (col9, "Ansible Assessment", NAV_ANSIBLE_ASSESSMENT),
+        (col10, "Ansible Upgrade", NAV_ANSIBLE_PLANNING),
+        (col11, "Collection Validation", NAV_ANSIBLE_VALIDATION),
     ]
 
     for col, label, page_key in nav_buttons:
@@ -191,6 +201,9 @@ def _route_to_page(page: str) -> None:
         NAV_VALIDATION_REPORTS: show_validation_reports,
         NAV_AI_SETTINGS: show_ai_settings_page,
         NAV_CHEF_SERVER_SETTINGS: show_chef_server_settings_page,
+        NAV_ANSIBLE_ASSESSMENT: show_ansible_assessment_page,
+        NAV_ANSIBLE_PLANNING: show_ansible_planning_page,
+        NAV_ANSIBLE_VALIDATION: show_ansible_validation_page,
     }
 
     route_func = page_routes.get(page)

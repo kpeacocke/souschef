@@ -1,12 +1,20 @@
 """
 Ansible and Python version compatibility data.
 
-Data source: ansible-python-upgrade-matrix-cheatsheet.pdf
-Last updated: February 2026
+Data sources:
+- ansible.com: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
+- Red Hat AAP Lifecycle: https://access.redhat.com/support/policy/updates/ansible-automation-platform
+- Official porting guides: https://docs.ansible.com/ansible/latest/porting_guides/
+
+Last updated: February 8, 2026 (validated with official documentation)
 
 This module contains the authoritative Ansible-Python compatibility matrix
-and provides utilities for version checking, upgrade path planning, and
-EOL status verification.
+and provides utilities for version checking, upgrade path planning, EOL status
+verification, and AAP (Ansible Automation Platform) integration.
+
+Note: Two versioning schemes exist:
+1. ansible-core (2.x) - The framework/engine
+2. Named Ansible (3.x+) - Community package with collections
 """
 
 from dataclasses import dataclass, field
@@ -41,7 +49,8 @@ class AnsibleVersion:
     Ansible version information from compatibility matrix.
 
     Attributes:
-        version: Ansible version string (e.g., "2.16").
+        version: ansible-core version string (e.g., "2.16").
+        named_version: Named Ansible version (e.g., "9.x") or None for older releases.
         release_date: Date when this version was released.
         eol_date: End-of-life date, or None if still supported.
         control_node_python: Python versions supported on control node.
@@ -49,10 +58,12 @@ class AnsibleVersion:
         major_changes: Breaking changes introduced in this version.
         min_collection_versions: Minimum required versions for collections.
         known_issues: Known issues or warnings for this version.
+        aap_versions: Compatible AAP versions (e.g., ["2.5", "2.6"]).
 
     """
 
     version: str
+    named_version: str | None
     release_date: date
     eol_date: date | None
     control_node_python: list[str]
@@ -60,12 +71,16 @@ class AnsibleVersion:
     major_changes: list[str] = field(default_factory=list)
     min_collection_versions: dict[str, str] = field(default_factory=dict)
     known_issues: list[str] = field(default_factory=list)
+    aap_versions: list[str] = field(default_factory=list)
 
 
-# FROM PDF: Complete Ansible version compatibility matrix
+# FROM ANSIBLE.COM AND RED HAT: Complete Ansible version compatibility matrix
+# Source: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
+# Validated: February 8, 2026
 ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
     "2.9": AnsibleVersion(
         version="2.9",
+        named_version=None,  # Predates Named Ansible versioning
         release_date=date(2019, 10, 31),
         eol_date=date(2022, 5, 23),
         control_node_python=["2.7", "3.5", "3.6", "3.7", "3.8"],
@@ -81,9 +96,11 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "No Python 3.9+ support",
             "EOL since May 2022",
         ],
+        aap_versions=[],
     ),
     "2.10": AnsibleVersion(
         version="2.10",
+        named_version="2.10",  # Transition version
         release_date=date(2020, 9, 22),
         eol_date=date(2022, 5, 23),
         control_node_python=["3.6", "3.7", "3.8", "3.9"],
@@ -103,9 +120,11 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "Import path changes break old playbooks",
             "EOL since May 2022",
         ],
+        aap_versions=[],
     ),
     "2.11": AnsibleVersion(
         version="2.11",
+        named_version="4.x",
         release_date=date(2021, 4, 26),
         eol_date=date(2022, 11, 7),
         control_node_python=["3.6", "3.7", "3.8", "3.9"],
@@ -120,9 +139,11 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             ANSIBLE_WINDOWS: WINDOWS_1_5_0,
         },
         known_issues=["EOL since November 2022"],
+        aap_versions=[],
     ),
     "2.12": AnsibleVersion(
         version="2.12",
+        named_version="5.x",
         release_date=date(2021, 11, 8),
         eol_date=date(2023, 5, 31),
         control_node_python=["3.8", "3.9", "3.10"],
@@ -149,9 +170,11 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "Transition to ansible-core package",
             "EOL since May 2023",
         ],
+        aap_versions=[],
     ),
     "2.13": AnsibleVersion(
         version="2.13",
+        named_version="6.x",
         release_date=date(2022, 5, 16),
         eol_date=date(2023, 11, 6),
         control_node_python=["3.8", "3.9", "3.10"],
@@ -165,9 +188,11 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             ANSIBLE_WINDOWS: WINDOWS_1_11_0,
         },
         known_issues=["EOL since November 2023"],
+        aap_versions=[],
     ),
     "2.14": AnsibleVersion(
         version="2.14",
+        named_version="7.x",
         release_date=date(2022, 11, 7),
         eol_date=date(2024, 5, 20),
         control_node_python=["3.9", "3.10", "3.11"],
@@ -191,9 +216,11 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             ANSIBLE_WINDOWS: WINDOWS_1_13_0,
         },
         known_issues=["EOL since May 2024"],
+        aap_versions=[],
     ),
     "2.15": AnsibleVersion(
         version="2.15",
+        named_version="8.x",
         release_date=date(2023, 5, 15),
         eol_date=date(2024, 11, 4),
         control_node_python=["3.9", "3.10", "3.11"],
@@ -217,11 +244,15 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             ANSIBLE_WINDOWS: WINDOWS_1_14_0,
         },
         known_issues=["EOL since November 2024"],
+        aap_versions=["2.4"],
     ),
     "2.16": AnsibleVersion(
         version="2.16",
+        named_version="9.x",
         release_date=date(2023, 11, 6),
-        eol_date=date(2025, 5, 19),
+        eol_date=date(
+            2025, 7, 31
+        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
         control_node_python=["3.10", "3.11", "3.12"],
         managed_node_python=[
             "2.7",
@@ -234,34 +265,142 @@ ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
             "3.12",
         ],
         major_changes=[
+            "Last version supporting Python 2.7 on managed nodes",
+            "Target node support expanded to 6 most recent Python versions",
             "Python 3.10+ required for control node",
-            "Python 3.12 support added",
-            "Latest stable release",
         ],
         min_collection_versions={
             ANSIBLE_POSIX: POSIX_1_6_0,
             ANSIBLE_WINDOWS: WINDOWS_2_0_0,
         },
-        known_issues=[],
+        known_issues=["Unmaintained (EOL) - upgrade recommended"],
+        aap_versions=["2.5", "2.6"],  # Default version for AAP 2.5 and 2.6
     ),
     "2.17": AnsibleVersion(
         version="2.17",
+        named_version="10.x",
         release_date=date(2024, 5, 20),
-        eol_date=None,
+        eol_date=date(
+            2025, 11, 30
+        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
         control_node_python=["3.10", "3.11", "3.12"],
         managed_node_python=["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"],
         major_changes=[
-            "Python 2.7 removed from managed nodes",
+            "Python 2.7 support removed from managed nodes completely",
             "Python 3.7+ required for managed nodes",
-            "Continued performance enhancements",
+            "Continued deprecation cycle enhancements",
         ],
         min_collection_versions={
             ANSIBLE_POSIX: POSIX_1_7_0,
             ANSIBLE_WINDOWS: WINDOWS_2_1_0,
         },
-        known_issues=[],
+        known_issues=["Unmaintained (EOL) - upgrade recommended"],
+        aap_versions=["2.5", "2.6"],  # Interim EE in AAP 2.5/2.6
+    ),
+    "2.18": AnsibleVersion(
+        version="2.18",
+        named_version="11.x",
+        release_date=date(2024, 11, 4),
+        eol_date=date(
+            2026, 5, 31
+        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
+        control_node_python=["3.11", "3.12", "3.13"],
+        managed_node_python=["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"],
+        major_changes=[
+            "Python 3.11+ required for control node (3.10 no longer supported)",
+            "Windows Server 2025 support (OpenSSH enabled)",
+            "Enhanced PowerShell integration improvements",
+        ],
+        min_collection_versions={
+            ANSIBLE_POSIX: POSIX_1_7_0,
+            ANSIBLE_WINDOWS: WINDOWS_2_1_0,
+        },
+        known_issues=["EOL May 2026 - plan upgrade"],
+        aap_versions=["2.5", "2.6"],  # Latest EE in AAP 2.5/2.6
+    ),
+    "2.19": AnsibleVersion(
+        version="2.19",
+        named_version="12.x",
+        release_date=date(2025, 7, 21),
+        eol_date=date(
+            2026, 11, 30
+        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
+        control_node_python=["3.11", "3.12", "3.13"],
+        managed_node_python=["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"],
+        major_changes=[
+            "BREAKING: Templating system overhaul - conditionals",
+            "  must be boolean (Porting guide 2.19)",
+            "BREAKING: Template trust model inverted - only trusted",
+            "  sources render",
+            "BREAKING: Native Jinja mode now required (was optional)",
+            "BREAKING: Multi-pass templating no longer supported",
+            "BREAKING: Loops no longer leak omit placeholders",
+            "BREAKING: Privilege escalation timeouts now errors",
+            "BREAKING: No implicit conversion of non-string keys",
+        ],
+        min_collection_versions={
+            ANSIBLE_POSIX: POSIX_1_7_0,
+            ANSIBLE_WINDOWS: WINDOWS_2_1_0,
+        },
+        known_issues=[
+            "CRITICAL: Playbook validation required before upgrade",
+            "Use ALLOW_BROKEN_CONDITIONALS for temporary compatibility",
+        ],
+        aap_versions=[],  # No AAP compatibility listed as of Feb 8, 2026
+    ),
+    "2.20": AnsibleVersion(
+        version="2.20",
+        named_version="13.x",
+        release_date=date(2025, 11, 3),
+        eol_date=date(
+            2027, 5, 31
+        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
+        control_node_python=["3.12", "3.13", "3.14"],  # Python 3.14 support!
+        managed_node_python=["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"],
+        major_changes=[
+            "Python 3.12+ required for control node (3.11 no longer supported)",
+            "Python 3.14 support added (latest version)",
+            "BREAKING: Removed quote stripping in PowerShell operations",
+            "BREAKING: Removed smart transport (use ssh/paramiko)",
+            "BREAKING: failed_when exception key renamed to",
+            "  failed_when_suppressed_exception",
+            "BREAKING: include_vars requires list for extensions",
+            "Continued templating improvements from 2.19",
+        ],
+        min_collection_versions={
+            ANSIBLE_POSIX: POSIX_1_7_0,
+            ANSIBLE_WINDOWS: WINDOWS_2_1_0,
+        },
+        known_issues=[
+            "Requires Python 3.12+ - verify all control nodes can upgrade",
+        ],
+        aap_versions=[],  # No AAP compatibility listed as of Feb 8, 2026
     ),
 }
+
+
+def _parse_version(version_str: str) -> tuple[int, ...]:
+    """
+    Parse a version string into a tuple of integers for comparison.
+
+    This handles semantic versioning (e.g., "2.9", "2.10.0", "2.20").
+    Non-numeric suffixes (rc, beta, etc.) are ignored for comparison.
+
+    Args:
+        version_str: Version string (e.g., "2.20", "2.10.0rc1").
+
+    Returns:
+        Tuple of integers for comparison. Example: "2.10.0rc1" -> (2, 10, 0)
+
+    """
+    parts = []
+    for part in version_str.split("."):
+        try:
+            parts.append(int(part))
+        except ValueError:
+            # Stop at non-numeric part (e.g., "2.10rc1" -> (2, 10))
+            break
+    return tuple(parts)
 
 
 def get_python_compatibility(
@@ -547,7 +686,7 @@ def get_latest_version() -> str:
         Latest Ansible version string.
 
     """
-    versions = sorted(ANSIBLE_VERSIONS.keys(), key=lambda v: float(v))
+    versions = sorted(ANSIBLE_VERSIONS.keys(), key=_parse_version)
     return versions[-1]
 
 
@@ -591,3 +730,151 @@ def get_minimum_python_for_ansible(ansible_version: str) -> tuple[str, str]:
     managed_min = sorted(version_info.managed_node_python)[0]
 
     return (control_min, managed_min)
+
+
+def get_ansible_core_version(named_version: str) -> str | None:
+    """
+    Convert Named Ansible version to ansible-core version.
+
+    Args:
+        named_version: Named Ansible version (e.g., "9", "9.x", "13.x").
+
+    Returns:
+        ansible-core version string (e.g., "2.16") or None if not found.
+
+    Examples:
+        >>> get_ansible_core_version("9.x")
+        "2.16"
+        >>> get_ansible_core_version("13")
+        "2.20"
+
+    """
+    # Normalize named version to x.x format
+    normalized = named_version.strip().rstrip(".x")
+
+    for version, info in ANSIBLE_VERSIONS.items():
+        if info.named_version and info.named_version.rstrip(".x") == normalized:
+            return version
+
+    return None
+
+
+def get_named_ansible_version(core_version: str) -> str | None:
+    """
+    Convert ansible-core version to Named Ansible version.
+
+    Args:
+        core_version: ansible-core version (e.g., "2.16", "2.20").
+
+    Returns:
+        Named Ansible version string (e.g., "9.x") or None if predates naming scheme.
+
+    Examples:
+        >>> get_named_ansible_version("2.16")
+        "9.x"
+        >>> get_named_ansible_version("2.9")
+        None  # Predates named versioning
+
+    """
+    if core_version in ANSIBLE_VERSIONS:
+        return ANSIBLE_VERSIONS[core_version].named_version
+
+    return None
+
+
+def get_aap_compatible_versions(ansible_core_version: str) -> list[str]:
+    """
+    Get Ansible Automation Platform versions compatible with ansible-core version.
+
+    Args:
+        ansible_core_version: ansible-core version (e.g., "2.16").
+
+    Returns:
+        List of compatible AAP versions (e.g., ["2.5", "2.6"]) or empty list.
+
+    Examples:
+        >>> get_aap_compatible_versions("2.16")
+        ["2.5", "2.6"]
+        >>> get_aap_compatible_versions("2.15")
+        ["2.4"]
+
+    """
+    if ansible_core_version in ANSIBLE_VERSIONS:
+        return ANSIBLE_VERSIONS[ansible_core_version].aap_versions
+
+    return []
+
+
+def get_recommended_core_version_for_aap(aap_version: str) -> str | None:
+    """
+    Get recommended ansible-core version for AAP version.
+
+    Args:
+        aap_version: AAP version (e.g., "2.5", "2.6").
+
+    Returns:
+        Recommended ansible-core version or None if not found.
+
+    Examples:
+        >>> get_recommended_core_version_for_aap("2.6")
+        "2.16"  # Default for AAP 2.6
+        >>> get_recommended_core_version_for_aap("2.5")
+        "2.16"  # Default for AAP 2.5
+
+    """
+    # Iterate through versions to find those compatible with the AAP version
+    # Return the newest one as the recommendation
+    compatible: list[str] = []
+
+    for version, info in ANSIBLE_VERSIONS.items():
+        if aap_version in info.aap_versions:
+            compatible.append(version)
+
+    if compatible:
+        # Use tuple-based comparison for semantic versioning
+        # Examples: "2.20" > "2.16", "2.10.0" > "2.9.1"
+        return max(compatible, key=_parse_version)
+
+    return None
+
+
+def format_version_display(
+    core_version: str, include_named: bool = True, include_aap: bool = False
+) -> str:
+    """
+    Format version string for display with multiple schemes.
+
+    Args:
+        core_version: ansible-core version (e.g., "2.16").
+        include_named: Include Named Ansible version if available.
+        include_aap: Include AAP compatibility information.
+
+    Returns:
+        Formatted version string for display.
+
+    Examples:
+        >>> format_version_display("2.16")
+        "ansible-core 2.16 (Ansible 9.x)"
+        >>> format_version_display("2.16", include_aap=True)
+        "ansible-core 2.16 (Ansible 9.x, AAP 2.5/2.6)"
+        >>> format_version_display("2.9")
+        "ansible-core 2.9"
+
+    """
+    parts = [f"ansible-core {core_version}"]
+
+    if include_named:
+        named = get_named_ansible_version(core_version)
+        if named:
+            parts.append(f"Ansible {named}")
+
+    if include_aap:
+        aap_versions = get_aap_compatible_versions(core_version)
+        if aap_versions:
+            aap_str = "/".join(aap_versions)
+            parts.append(f"AAP {aap_str}")
+
+    if len(parts) == 1:
+        return parts[0]
+
+    return f"{parts[0]} ({', '.join(parts[1:])})"

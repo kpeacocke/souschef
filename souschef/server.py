@@ -4121,9 +4121,7 @@ def plan_ansible_upgrade(environment_path: str, target_version: str) -> str:
             current_major_minor = current_version
 
         # Generate plan
-        plan = generate_upgrade_plan(
-            current_major_minor, target_version, environment_path
-        )
+        plan = generate_upgrade_plan(current_major_minor, target_version)
 
         # Format as markdown
         markdown = _format_upgrade_plan_markdown(plan)
