@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.14"
 
 jobs:
   # Skip tests - they already passed in CI before merge to main and in Main Branch Validation
@@ -36,6 +36,7 @@ jobs:
       tag-exists: ${{ steps.check-tag.outputs.exists }}
       pypi-exists: ${{ steps.check-pypi.outputs.exists }}
       docker-exists: ${{ steps.check-docker.outputs.exists }}
+      docker-mcp-exists: ${{ steps.check-docker-mcp.outputs.exists }}
 
     steps:
     - name: Checkout repository
@@ -131,6 +132,24 @@ jobs:
         else
           echo "exists=false" >> $GITHUB_OUTPUT
           echo "Docker image $IMAGE not found"
+        fi
+
+    - name: Check Docker registry for existing MCP image
+      id: check-docker-mcp
+      env:
+        VERSION: ${{ steps.get-tag.outputs.version }}
+        GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Check if the MCP Docker image with this tag exists in GHCR
+        IMAGE="ghcr.io/${{ github.repository_owner }}/souschef-mcp:$VERSION"
+        if docker manifest inspect "$IMAGE" >/dev/null 2>&1 || \
+           curl -fsSL -H "Authorization: Bearer $GHCR_TOKEN" \
+           "https://ghcr.io/v2/${{ github.repository_owner }}/souschef-mcp/manifests/$VERSION" >/dev/null 2>&1; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "Docker MCP image $IMAGE already exists"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "Docker MCP image $IMAGE not found"
         fi
 
   build-package:
@@ -327,7 +346,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
-          ref: main  # Always checkout main branch
+          ref: ${{ needs.validate.outputs.tag }}  # Checkout the immutable release tag
           fetch-depth: 0
           fetch-tags: true
 
@@ -425,6 +444,8 @@ jobs:
   build-and-push-docker-mcp:
     runs-on: ubuntu-latest
     needs: [validate, publish-pypi, create-release]
+    # Only skip if Docker MCP image already exists
+    if: needs.validate.outputs.docker-mcp-exists != 'true'
     timeout-minutes: 30
     permissions:
       contents: read
@@ -442,7 +463,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           repository: kpeacocke/souschef
-          ref: main
+          ref: ${{ needs.validate.outputs.tag }}  # Checkout the immutable release tag
           fetch-depth: 0
           fetch-tags: true
 
@@ -693,7 +714,7 @@ jobs:
           timeout 5 docker run --rm -i \
             "ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version }}" \
             </dev/null || EXIT_CODE=$?
-          
+
           # Exit code 124 means timeout (expected for stdio server waiting for input)
           # Exit code 0 means it exited cleanly
           if [ "${EXIT_CODE:-0}" -eq 124 ] || [ "${EXIT_CODE:-0}" -eq 0 ]; then
@@ -719,6 +740,10 @@ jobs:
     if: |
       needs.validate.result == 'success'
       && (needs.build-and-push-docker-ui.result == 'success' || needs.build-and-push-docker-mcp.result == 'success')
+      && (needs.scan-docker-image-ui.result == 'success' || needs.scan-docker-image-ui.result == 'skipped')
+      && (needs.scan-docker-image-mcp.result == 'success' || needs.scan-docker-image-mcp.result == 'skipped')
+      && (needs.test-docker-image-ui.result == 'success' || needs.test-docker-image-ui.result == 'skipped')
+      && (needs.test-docker-image-mcp.result == 'success' || needs.test-docker-image-mcp.result == 'skipped')
     permissions:
       contents: read
       issues: write
@@ -742,7 +767,7 @@ jobs:
             const major = versionParts[0];
 
             let body = "## Docker Images Published\n\n";
-            
+
             if (uiDigest) {
               body += "### UI Image (Streamlit)\n\n";
               body += "**Image:** `" + registry + "/" + owner + "/mcp-souschef:" + version + "`\n\n";
@@ -753,7 +778,7 @@ jobs:
               body += "docker pull " + registry + "/" + owner + "/mcp-souschef:latest\n";
               body += "```\n\n";
             }
-            
+
             if (mcpDigest) {
               body += "### MCP Server Image\n\n";
               body += "**Image:** `" + registry + "/" + owner + "/souschef-mcp:" + version + "`\n\n";
@@ -764,7 +789,7 @@ jobs:
               body += "docker pull " + registry + "/" + owner + "/souschef-mcp:latest\n";
               body += "```\n\n";
             }
-            
+
             body += "**Available Tags:** `" + version + "`, `" + majorMinor + "`, `" + major + "`, `latest`\n\n";
             body += "**Container Registry:** [GitHub Container Registry](https://github.com/${{ github.repository }}/packages)\n\n";
             body += "**Security:** Vulnerability scan results available in [GitHub Security](https://github.com/${{ github.repository }}/security/dependabot)\n\n";

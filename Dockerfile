@@ -37,17 +37,13 @@ ENV PYTHONUNBUFFERED=1 \
     STREAMLIT_SERVER_LOGGER_LEVEL=INFO \
     STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
 
-# Install runtime and build dependencies (Alpine)
+# Install runtime dependencies only (Alpine)
 RUN apk add --no-cache \
     ca-certificates \
     curl \
-    # Build dependencies for Python packages
-    gcc \
-    git \
-    libffi-dev \
-    musl-dev \
-    # PostgreSQL client libraries for psycopg
-    postgresql-dev \
+    # Runtime libraries (not -dev packages)
+    libffi \
+    libpq \
     && addgroup -g 1001 -S app \
     && adduser -u 1001 -S app -G app \
     && mkdir -p /app \
@@ -64,8 +60,13 @@ FROM base AS builder
 ARG POETRY_VERSION
 ARG PYTHON_VERSION
 
-# Build dependencies already installed in base stage (gcc, musl-dev, libffi-dev, postgresql-dev)
-# No additional packages needed for Alpine
+# Install build-time dependencies (not needed in runtime image)
+RUN apk add --no-cache \
+    gcc \
+    git \
+    libffi-dev \
+    musl-dev \
+    postgresql-dev
 
 # Copy dependency files first (for better layer caching)
 COPY pyproject.toml poetry.lock ./
