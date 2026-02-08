@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "souschef": {
+      "type": "stdio",
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "souschef-mcp:latest"]
+    }
+  }
+}

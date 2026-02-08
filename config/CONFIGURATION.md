@@ -9,6 +9,16 @@ This directory contains example MCP server configurations for various MCP client
 - **`claude-desktop.json`** - Claude Desktop configuration using `uvx mcp-souschef`
 - **`vscode-copilot.json`** - VS Code GitHub Copilot configuration using `uvx mcp-souschef`
 
+### Docker Use (Containerised MCP Server)
+
+**Local Build:**
+- **`claude-desktop-docker.json`** - Claude Desktop configuration using a locally built Docker image
+- **`vscode-copilot-docker.json`** - VS Code GitHub Copilot configuration using a locally built Docker image
+
+**Published Image (GHCR):**
+- **`claude-desktop-docker-ghcr.json`** - Claude Desktop configuration using the published GHCR image
+- **`vscode-copilot-docker-ghcr.json`** - VS Code GitHub Copilot configuration using the published GHCR image
+
 ### Development Use (Local Repository)
 
 - **`claude-desktop-dev.json`** - Claude Desktop with local Poetry development setup
@@ -41,6 +51,19 @@ cp config/claude-desktop-dev.json ~/Library/Application\ Support/Claude/claude_d
 code ~/Library/Application\ Support/Claude/claude_desktop_config.json
 ```
 
+**Docker (containerised MCP server):**
+
+```bash
+# Option 1: Use published image from GitHub Container Registry
+cp config/claude-desktop-docker-ghcr.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+# Restart Claude Desktop
+
+# Option 2: Use locally built image
+cp config/claude-desktop-docker.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+docker build -f Dockerfile.mcp -t souschef-mcp:latest .
+# Restart Claude Desktop
+```
+
 ### VS Code GitHub Copilot
 
 **Prerequisites**: VS Code 1.102+ with GitHub Copilot extension installed.
@@ -68,6 +91,19 @@ cp config/vscode-copilot-dev.json ~/.config/Code/User/mcp.json
 code ~/.config/Code/User/mcp.json
 
 # 3. Reload VS Code window and trust the server
+```
+
+**Docker (containerised MCP server):**
+
+```bash
+# Option 1: Use published image from GitHub Container Registry
+cp config/vscode-copilot-docker-ghcr.json ~/.config/Code/User/mcp.json
+# Reload VS Code window and trust the server
+
+# Option 2: Use locally built image
+cp config/vscode-copilot-docker.json ~/.config/Code/User/mcp.json
+docker build -f Dockerfile.mcp -t souschef-mcp:latest .
+# Reload VS Code window and trust the server
 ```
 
 ## Model Provider Support
@@ -189,6 +225,22 @@ The provided VS Code configs work with Copilot:
 - No global installation needed
 - Automatic environment management
 - Always uses latest version
+
+### Using Docker
+
+```json
+{
+  "command": "docker",
+  "args": ["run", "-i", "--rm", "souschef-mcp:latest"]
+}
+```
+
+**Pros:**
+- Fully isolated runtime
+- Consistent behaviour across machines
+
+**Cons:**
+- Requires Docker and a locally built (or pulled) image
 
 ### Using pip/pipx
 

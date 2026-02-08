@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "souschef": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "ghcr.io/kpeacocke/souschef-mcp:latest"],
+      "env": {}
+    }
+  }
+}

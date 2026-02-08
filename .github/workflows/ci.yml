@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.14"
 
 jobs:
   test:
@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
     - name: Checkout repository
@@ -77,7 +77,7 @@ jobs:
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
-      if: matrix.python-version == '3.13'
+      if: matrix.python-version == '3.14'
       with:
         files: ./coverage.xml
         flags: unittests
@@ -86,7 +86,7 @@ jobs:
 
     - name: Upload coverage for SonarCloud
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-      if: matrix.python-version == '3.13'
+      if: matrix.python-version == '3.14'
       with:
         name: coverage-report
         path: coverage.xml
