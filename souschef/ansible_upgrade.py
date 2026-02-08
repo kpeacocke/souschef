@@ -198,6 +198,35 @@ def _check_eol_status(result: dict[str, Any]) -> None:
             "security updates no longer provided"
         )
 
+    # Use the current working directory as the safe root for environment assessments
+    base_root = Path.cwd().resolve()
+
+    # Normalize the provided environment path and ensure it stays within base_root
+    raw_env_path = Path(environment_path)
+    if raw_env_path.is_absolute():
+        candidate_path = raw_env_path
+    else:
+        candidate_path = base_root / raw_env_path
+
+    env_path = candidate_path.resolve()
+
+    def _is_within_base(root: Path, target: Path) -> bool:
+        """
+        Return True if target is within root (or equal to root), False otherwise.
+        """
+        try:
+            target.relative_to(root)
+            return True
+        except ValueError:
+            return False
+
+    if not _is_within_base(base_root, env_path):
+        return {
+            "error": (
+                f"Environment path is outside the allowed root directory: {env_path}. "
+                f"Base root: {base_root}"
+            )
+        }
 
 def _scan_collections(env_path: Path, result: dict[str, Any]) -> None:
     """Scan for and parse requirements.yml."""
