@@ -135,7 +135,7 @@ class TestUpgradeWorkflows:
             raise
 
         # Plan upgrade - use supported versions
-        plan = generate_upgrade_plan("2.14", "2.17", str(env_dir))
+        plan = generate_upgrade_plan("2.14", "2.17")
         assert isinstance(plan, dict)
         assert "upgrade_path" in plan
         assert "estimated_downtime_hours" in plan
@@ -242,7 +242,7 @@ class TestUpgradePlanning:
     )
     def test_generate_upgrade_plans(self, from_version, to_version):
         """Test generating upgrade plans for different version transitions."""
-        plan = generate_upgrade_plan(from_version, to_version, "/test/env")
+        plan = generate_upgrade_plan(from_version, to_version)
         assert isinstance(plan, dict)
         assert "upgrade_path" in plan
         assert "pre_upgrade_checklist" in plan
@@ -263,7 +263,7 @@ class TestUpgradePlanning:
 
     def test_2_9_to_modern_upgrade_special_handling(self):
         """Test that 2.9 upgrades have special collection handling."""
-        plan = generate_upgrade_plan("2.9", "2.14", "/test/env")
+        plan = generate_upgrade_plan("2.9", "2.14")
         assert isinstance(plan, dict)
 
         # Should have collection-related steps for 2.9
@@ -311,7 +311,7 @@ class TestEndToEndScenarios:
         assert isinstance(assessment, dict)
 
         # 3. Plan upgrade
-        plan = generate_upgrade_plan("2.14", "2.17", "/test/env")
+        plan = generate_upgrade_plan("2.14", "2.17")
         assert isinstance(plan, dict)
         assert "upgrade_steps" in plan
         assert len(plan["upgrade_steps"]) > 0
