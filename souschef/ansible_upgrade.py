@@ -141,7 +141,7 @@ def _scan_collections(env_path: Path, result: dict[str, Any]) -> None:
                 result["collections"] = collections
                 break
             except (FileNotFoundError, ValueError):
-                pass
+                continue
 
 
 def _scan_playbooks(env_path: Path, result: dict[str, Any]) -> None:
@@ -198,9 +198,11 @@ def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
         Dictionary containing environment assessment details.
 
     """
-    env_path = Path(environment_path)
+    env_path = Path(environment_path).resolve()
     if not env_path.exists():
-        return {"error": f"Environment path does not exist: {environment_path}"}
+        return {"error": f"Environment path does not exist: {env_path}"}
+    if not env_path.is_dir():
+        return {"error": f"Environment path is not a directory: {env_path}"}
 
     result: dict[str, Any] = {
         "current_version": "unknown",
@@ -215,7 +217,7 @@ def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
     }
 
     _detect_ansible_version_info(result)
-    _detect_python_version_info(environment_path, result)
+    _detect_python_version_info(str(env_path), result)
     _check_eol_status(result)
 
     result["config_paths"] = get_ansible_config_paths()

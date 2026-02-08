@@ -322,12 +322,14 @@ def parse_requirements_yml(requirements_path: str) -> dict[str, str]:
 
     Raises:
         FileNotFoundError: If requirements file does not exist.
-        ValueError: If YAML is invalid.
+        ValueError: If requirements_path is not a file or YAML is invalid.
 
     """
-    path = Path(requirements_path)
+    path = Path(requirements_path).resolve()
     if not path.exists():
-        raise FileNotFoundError(f"Requirements file not found: {requirements_path}")
+        raise FileNotFoundError(f"Requirements file not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Requirements path is not a file: {path}")
 
     try:
         with path.open() as f:
@@ -464,7 +466,7 @@ def _parse_config_for_paths(ansible_cfg: str, paths: dict[str, str | None]) -> N
             paths["collections_path"] = defaults["collections_paths"]
 
     except (ValueError, FileNotFoundError):
-        pass
+        return
 
 
 def get_ansible_config_paths() -> dict[str, str | None]:

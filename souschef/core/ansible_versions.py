@@ -696,7 +696,7 @@ def get_supported_versions() -> list[str]:
         for v, info in ANSIBLE_VERSIONS.items()
         if not info.eol_date or info.eol_date >= today
     ]
-    return sorted(supported, key=lambda v: float(v), reverse=True)
+    return sorted(supported, key=float, reverse=True)
 
 
 def get_minimum_python_for_ansible(ansible_version: str) -> tuple[str, str]:

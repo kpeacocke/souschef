@@ -170,6 +170,15 @@ class TestParseRequirementsYmlWithValidation:
         with pytest.raises(FileNotFoundError):
             parse_requirements_yml("/nonexistent/requirements.yml")
 
+    def test_requirements_path_not_file_raises_error(self):
+        """Test that non-file requirements path raises ValueError."""
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_file", return_value=False),
+            pytest.raises(ValueError, match="Requirements path is not a file"),
+        ):
+            parse_requirements_yml("/path/to/directory")
+
     def test_valid_requirements_file(self, tmp_path):
         """Test parsing valid requirements.yml returns dict."""
         req_file = tmp_path / "requirements.yml"

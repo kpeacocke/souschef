@@ -107,7 +107,12 @@ class TestAssessAnsibleEnvironment:
 
     def test_valid_environment_returns_dict(self):
         """Test assessing valid environment returns dict."""
-        with patch("builtins.open", mock_open(read_data="[defaults]\n")):
+        with (
+            patch("builtins.open", mock_open(read_data="[defaults]\n")),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
+        ):
             result = assess_ansible_environment("/ansible/env")
             assert isinstance(result, dict)
 
@@ -115,7 +120,9 @@ class TestAssessAnsibleEnvironment:
         """Test environment assessment has key information."""
         with (
             patch("builtins.open", mock_open(read_data="[defaults]\n")),
-            patch("os.path.exists", return_value=True),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
         ):
             result = assess_ansible_environment("/ansible/env")
             assert isinstance(result, dict)
@@ -133,7 +140,7 @@ class TestAssessAnsibleEnvironment:
 
     def test_missing_environment_returns_error_dict(self):
         """Test that missing environment returns error dict."""
-        with patch("os.path.exists", return_value=False):
+        with patch("pathlib.Path.exists", return_value=False):
             result = assess_ansible_environment("/nonexistent/env")
             assert isinstance(result, dict)
             assert "error" in result
@@ -143,6 +150,9 @@ class TestAssessAnsibleEnvironment:
         with (
             patch("builtins.open", mock_open(read_data="[defaults]\n")),
             patch("subprocess.run") as mock_run,
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
         ):
             mock_run.return_value = MagicMock(stdout="ansible 2.14.0\n", returncode=0)
             result = assess_ansible_environment("/ansible/env")
@@ -153,6 +163,9 @@ class TestAssessAnsibleEnvironment:
         with (
             patch("builtins.open", mock_open(read_data="[defaults]\n")),
             patch("subprocess.run") as mock_run,
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
         ):
             mock_run.return_value = MagicMock(stdout="Python 3.10.1\n", returncode=0)
             result = assess_ansible_environment("/ansible/env")
@@ -162,7 +175,9 @@ class TestAssessAnsibleEnvironment:
         """Test assessing modern Ansible environment."""
         with (
             patch("builtins.open", mock_open(read_data="[defaults]\n")),
-            patch("os.path.exists", return_value=True),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
         ):
             result = assess_ansible_environment("/ansible/env")
             assert isinstance(result, dict)
@@ -171,7 +186,9 @@ class TestAssessAnsibleEnvironment:
         """Test assessing legacy Ansible environment."""
         with (
             patch("builtins.open", mock_open(read_data="[defaults]\n")),
-            patch("os.path.exists", return_value=True),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
         ):
             result = assess_ansible_environment("/old/ansible")
             assert isinstance(result, dict)
@@ -440,7 +457,12 @@ class TestUpgradeWorkflows:
     def test_full_upgrade_workflow(self):
         """Test full upgrade workflow from assessment to testing plan."""
         # Detect Python
-        with patch("subprocess.run") as mock_run:
+        with (
+            patch("subprocess.run") as mock_run,
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
+        ):
             mock_run.return_value = MagicMock(stdout="Python 3.10.1\n", returncode=0)
             python_version = detect_python_version("/ansible/env")
             assert isinstance(python_version, str)
@@ -448,7 +470,9 @@ class TestUpgradeWorkflows:
         # Assess environment
         with (
             patch("builtins.open", mock_open(read_data="[defaults]\n")),
-            patch("os.path.exists", return_value=True),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
         ):
             assessment = assess_ansible_environment("/ansible/env")
             assert isinstance(assessment, dict)
