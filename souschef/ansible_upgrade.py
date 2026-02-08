@@ -31,36 +31,19 @@ def _is_subpath(path: Path, root: Path) -> bool:
     Return True if ``path`` is located within ``root``.
 
     This uses ``Path.is_relative_to`` when available (Python 3.9+), and
-    falls back to ``relative_to`` for older versions.
+        environment_path: Path to environment (currently unused for interpreter selection).
     """
     try:
         # Python 3.9+
         is_relative_to = getattr(path, "is_relative_to", None)
         if callable(is_relative_to):
-            return is_relative_to(root)
     except TypeError:
         # If root is not suitable for is_relative_to, fall back below
         pass
+    # Always use the system python3 to detect the Python version, rather than
+    # executing a potentially untrusted interpreter from a user-controlled path.
 
     try:
-        path.relative_to(root)
-        return True
-    except ValueError:
-        return False
-        # Enforce that the environment path is within a trusted root
-        safe_root = Path.cwd().resolve()
-        try:
-            env_path.relative_to(safe_root)
-        except ValueError:
-            raise ValueError(
-                f"Environment path is outside the allowed root: {env_path}"
-            )
-
-
-
-def detect_python_version(environment_path: str | None = None) -> str:
-    """
-    Detect Python version in use.
 
     Args:
         environment_path: Path to environment (looks for python/python3 there).
