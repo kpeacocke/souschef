@@ -34,14 +34,22 @@ class TestDetectPythonVersion:
 
     def test_custom_environment_path(self):
         """Test detecting Python in custom environment."""
-        with patch("subprocess.run") as mock_run:
+        with (
+            patch("subprocess.run") as mock_run,
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+        ):
             mock_run.return_value = MagicMock(stdout="Python 3.11.0\n", returncode=0)
             result = detect_python_version("/custom/venv")
             assert isinstance(result, str)
 
     def test_venv_python_path(self):
         """Test detecting Python in virtual environment."""
-        with patch("subprocess.run") as mock_run:
+        with (
+            patch("subprocess.run") as mock_run,
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+        ):
             mock_run.return_value = MagicMock(stdout="Python 3.10.5\n", returncode=0)
             result = detect_python_version("/path/to/venv")
             assert isinstance(result, str)
@@ -63,6 +71,23 @@ class TestDetectPythonVersion:
             with patch("shutil.which", return_value="/usr/bin/python3"):
                 result = detect_python_version()
                 assert isinstance(result, str)
+
+    def test_invalid_environment_path_raises_value_error(self):
+        """Test that invalid environment path raises ValueError."""
+        with (
+            patch("pathlib.Path.exists", return_value=False),
+            pytest.raises(ValueError, match="Environment path does not exist"),
+        ):
+            detect_python_version("/nonexistent/path")
+
+    def test_environment_path_not_directory_raises_value_error(self):
+        """Test that non-directory environment path raises ValueError."""
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=False),
+            pytest.raises(ValueError, match="Environment path is not a directory"),
+        ):
+            detect_python_version("/path/to/file.txt")
 
 
 class TestAssessAnsibleEnvironment:

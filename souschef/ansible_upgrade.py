@@ -37,13 +37,22 @@ def detect_python_version(environment_path: str | None = None) -> str:
         Python version string (e.g., "3.11.2").
 
     Raises:
+        ValueError: If environment_path is invalid or not a directory.
         RuntimeError: If Python version cannot be determined.
 
     """
     python_cmd = "python3"
 
     if environment_path:
-        env_path = Path(environment_path)
+        # Resolve path to prevent path traversal attacks
+        env_path = Path(environment_path).resolve()
+
+        # Validate the path exists and is a directory
+        if not env_path.exists():
+            raise ValueError(f"Environment path does not exist: {env_path}")
+        if not env_path.is_dir():
+            raise ValueError(f"Environment path is not a directory: {env_path}")
+
         venv_python = env_path / "bin" / "python3"
         if venv_python.exists():
             python_cmd = str(venv_python)
