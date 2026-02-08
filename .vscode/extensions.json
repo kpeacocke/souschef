@@ -3,7 +3,6 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
-        "GitHub.copilot",
         "GitHub.copilot-chat",
         "GitHub.vscode-codeql",
         "editorconfig.editorconfig",
