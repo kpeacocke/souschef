@@ -198,7 +198,24 @@ def _check_python_compatibility(result: dict[str, Any]) -> None:
     compatible = ", ".join(version_info.control_node_python)
     result["compatibility_issues"].append(
         f"Python {py_major_minor} is not compatible with "
-        f"Ansible {result['current_version']}. "
+    base_path = Path(".").resolve()
+    try:
+        env_path = Path(environment_path).resolve()
+    except (OSError, RuntimeError) as exc:
+        return {"error": f"Invalid environment path '{environment_path}': {exc}"}
+
+    # Ensure the resolved environment path is within the allowed base directory
+    try:
+        is_within_base = env_path.is_relative_to(base_path)  # type: ignore[attr-defined]
+    except AttributeError:
+        # Python < 3.9 fallback: check parents manually
+        is_within_base = base_path == env_path or base_path in env_path.parents
+
+    if not is_within_base:
+        return {
+            "error": f"Environment path is outside the allowed base directory: {env_path}"
+        }
+
         f"Compatible versions: {compatible}"
     )
 
