@@ -486,21 +486,37 @@ def _find_ansible_cfg() -> str | None:
 
 
 def _parse_config_for_paths(ansible_cfg: str, paths: dict[str, str | None]) -> None:
-    """Parse ansible.cfg to find inventory and paths."""
+    """
+    Parse ansible.cfg to find inventory and paths.
+
+    Resolves all paths read from config to prevent path traversal attacks.
+
+    Args:
+        ansible_cfg: Path to ansible.cfg file (already validated).
+        paths: Dictionary to populate with discovered paths.
+
+    """
     try:
         config = parse_ansible_cfg(ansible_cfg)
         defaults = config.get("defaults", {})
 
         if "inventory" in defaults:
-            inv_path = Path(defaults["inventory"])
-            if inv_path.exists():
+            # Resolve path from config to prevent traversal attacks
+            inv_path = Path(defaults["inventory"]).resolve()
+            if inv_path.exists() and inv_path.is_file():
                 paths["inventory"] = str(inv_path)
 
         if "roles_path" in defaults:
-            paths["roles_path"] = defaults["roles_path"]
+            # Resolve roles path
+            roles_path = Path(defaults["roles_path"]).resolve()
+            if roles_path.exists():
+                paths["roles_path"] = str(roles_path)
 
         if "collections_paths" in defaults:
-            paths["collections_path"] = defaults["collections_paths"]
+            # Resolve collections path
+            collections_path = Path(defaults["collections_paths"]).resolve()
+            if collections_path.exists():
+                paths["collections_path"] = str(collections_path)
 
     except (ValueError, FileNotFoundError):
         return
