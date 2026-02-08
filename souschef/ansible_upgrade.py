@@ -55,7 +55,11 @@ def detect_python_version(environment_path: str | None = None) -> str:
 
         venv_python = env_path / "bin" / "python3"
         if venv_python.exists():
-            python_cmd = str(venv_python)
+            # Resolve to prevent symlink attacks and validate it's a file
+            resolved_python = venv_python.resolve()
+            if not resolved_python.is_file():
+                raise ValueError(f"Python executable is not a file: {resolved_python}")
+            python_cmd = str(resolved_python)
 
     try:
         result = subprocess.run(

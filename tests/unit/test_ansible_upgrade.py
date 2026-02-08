@@ -38,6 +38,7 @@ class TestDetectPythonVersion:
             patch("subprocess.run") as mock_run,
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
         ):
             mock_run.return_value = MagicMock(stdout="Python 3.11.0\n", returncode=0)
             result = detect_python_version("/custom/venv")
@@ -49,6 +50,7 @@ class TestDetectPythonVersion:
             patch("subprocess.run") as mock_run,
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=True),
         ):
             mock_run.return_value = MagicMock(stdout="Python 3.10.5\n", returncode=0)
             result = detect_python_version("/path/to/venv")
@@ -88,6 +90,16 @@ class TestDetectPythonVersion:
             pytest.raises(ValueError, match="Environment path is not a directory"),
         ):
             detect_python_version("/path/to/file.txt")
+
+    def test_python_executable_not_file_raises_value_error(self):
+        """Test that non-file Python executable raises ValueError."""
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.is_dir", return_value=True),
+            patch("pathlib.Path.is_file", return_value=False),
+            pytest.raises(ValueError, match="Python executable is not a file"),
+        ):
+            detect_python_version("/path/to/venv")
 
 
 class TestAssessAnsibleEnvironment:
