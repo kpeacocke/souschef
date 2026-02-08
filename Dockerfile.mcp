@@ -46,8 +46,8 @@ COPY pyproject.toml poetry.lock ./
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" \
     && poetry config virtualenvs.create false
 
-# Install dependencies
-RUN poetry install --only main --no-interaction --no-ansi
+# Install dependencies (--no-root: don't install root package; we rely on PYTHONPATH=/app)
+RUN poetry install --only main --no-root --no-interaction --no-ansi
 
 # Copy site-packages to predictable location
 RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
@@ -62,6 +62,9 @@ ARG PYTHON_VERSION
 
 # Copy site-packages from builder
 COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
+
+# Copy console scripts from builder
+COPY --from=builder --chown=root:root /usr/local/bin/souschef-mcp /usr/local/bin/souschef-mcp
 
 # Install to final location and cleanup
 RUN PYTHON_MAJOR_MINOR=$(echo "${PYTHON_VERSION}" | cut -d. -f1-2) && \
