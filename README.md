@@ -556,7 +556,7 @@ SousChef provides two Docker images automatically published to GHCR on each rele
 docker pull ghcr.io/kpeacocke/mcp-souschef:latest
 
 # Or pull a specific version
-docker pull ghcr.io/kpeacocke/mcp-souschef:3.2.0
+docker pull ghcr.io/kpeacocke/mcp-souschef:4.1.2
 
 # Run the UI with your .env file
 docker run -p 9999:9999 \
