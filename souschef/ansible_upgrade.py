@@ -44,7 +44,7 @@ def detect_python_version(environment_path: str | None = None) -> str:
     python_cmd = "python3"
 
     if environment_path:
-        # Resolve path to prevent path traversal attacks
+        # Resolve path to a canonical directory
         env_path = Path(environment_path).resolve()
 
         # Validate the path exists and is a directory
@@ -53,13 +53,19 @@ def detect_python_version(environment_path: str | None = None) -> str:
         if not env_path.is_dir():
             raise ValueError(f"Environment path is not a directory: {env_path}")
 
-        venv_python = env_path / "bin" / "python3"
-        if venv_python.exists():
-            # Disallow symlinked executables to avoid executing unexpected binaries
-            if venv_python.is_symlink():
-                raise ValueError(f"Python executable must not be a symlink: {venv_python}")
+        # Construct expected Python executable path within the environment
+        venv_python = (env_path / "bin" / "python3").resolve()
 
-            # Resolve and validate that the executable is a regular file
+        # Ensure the resolved executable remains within the environment directory
+        if env_path not in venv_python.parents:
+            raise ValueError(
+                f"Resolved Python executable escapes environment directory: {venv_python}"
+            )
+
+        if venv_python.exists():
+            if not venv_python.is_file():
+                raise ValueError(f"Python executable is not a file: {venv_python}")
+            python_cmd = str(venv_python)
             resolved_python = venv_python.resolve()
             if not resolved_python.is_file():
                 raise ValueError(f"Python executable is not a file: {resolved_python}")
