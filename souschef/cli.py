@@ -13,6 +13,7 @@ import click
 
 from souschef import __version__
 from souschef.ansible_upgrade import (
+    UpgradePlan,
     assess_ansible_environment,
     detect_python_version,
     generate_upgrade_plan,
@@ -80,7 +81,7 @@ def _validate_user_path(path_input: str | None) -> Path:
             raise ValueError(f"Path does not exist: {validated_path}")
 
         return validated_path
-    except (OSError, PermissionError) as e:
+    except OSError as e:
         raise ValueError(f"Invalid path: {e}") from e
 
 
@@ -1023,7 +1024,7 @@ def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> No
             if not parent.exists():
                 msg = f"Output parent directory does not exist: {parent}"
                 raise ValueError(msg)
-        except (OSError, PermissionError) as e:
+        except OSError as e:
             raise ValueError(f"Invalid output path: {e}") from e
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1213,7 +1214,7 @@ def convert_habitat(plan_path: str, output_path: str, base_image: str) -> None:
             if not parent.exists():
                 msg = f"Output parent directory does not exist: {parent}"
                 raise ValueError(msg)
-        except (OSError, PermissionError) as e:
+        except OSError as e:
             raise ValueError(f"Invalid output path: {e}") from e
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1281,7 +1282,7 @@ def convert_inspec(profile_path: str, output_path: str, output_format: str) -> N
             if not parent.exists():
                 msg = f"Output parent directory does not exist: {parent}"
                 raise ValueError(msg)
-        except (OSError, PermissionError) as e:
+        except OSError as e:
             raise ValueError(f"Invalid output path: {e}") from e
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1382,7 +1383,7 @@ def convert_cookbook(
             if not parent.exists():
                 msg = f"Output parent directory does not exist: {parent}"
                 raise ValueError(msg)
-        except (OSError, PermissionError) as e:
+        except OSError as e:
             raise ValueError(f"Invalid output path: {e}") from e
 
         # Load assessment data if provided
@@ -1943,7 +1944,7 @@ def _display_plan_section(title: str, items: list[str], icon: str = "-") -> None
         click.echo(f"  ... and {len(items) - 5} more")
 
 
-def _display_upgrade_plan(plan: dict[str, Any]) -> None:
+def _display_upgrade_plan(plan: UpgradePlan) -> None:
     """
     Display upgrade plan details.
 
@@ -1951,30 +1952,32 @@ def _display_upgrade_plan(plan: dict[str, Any]) -> None:
         plan: Upgrade plan dictionary.
 
     """
-    if "upgrade_path" in plan:
+    upgrade_path = plan.get("upgrade_path")
+    if isinstance(upgrade_path, dict):
         click.echo("\nUpgrade Path:")
-        for step in plan["upgrade_path"]:
-            click.echo(f"  - {step}")
+        from_version = upgrade_path.get("from_version", "unknown")
+        to_version = upgrade_path.get("to_version", "unknown")
+        click.echo(f"  From: {from_version}")
+        click.echo(f"  To: {to_version}")
 
-    breaking = plan.get("breaking_changes", [])
-    if breaking:
-        _display_plan_section("Breaking Changes", breaking, "-")
+        intermediate = upgrade_path.get("intermediate_versions", [])
+        if isinstance(intermediate, list) and intermediate:
+            click.echo("  Intermediate Versions:")
+            for version in intermediate:
+                click.echo(f"    - {version}")
 
-    deprecated = plan.get("deprecated_features", [])
-    if deprecated:
-        _display_plan_section("Deprecated Features", deprecated, "-")
+        breaking = upgrade_path.get("breaking_changes", [])
+        if isinstance(breaking, list) and breaking:
+            _display_plan_section("Breaking Changes", breaking, "-")
 
-    if "collection_impacts" in plan:
-        click.echo("\nCollection Compatibility:")
-        impacts = plan["collection_impacts"]
-        req = len(impacts.get("requires_update", []))
-        may = len(impacts.get("may_require_update", []))
-        click.echo(f"  Requires Update: {req}")
-        click.echo(f"  May Require Update: {may}")
+        collection_updates = upgrade_path.get("collection_updates_needed", {})
+        if isinstance(collection_updates, dict) and collection_updates:
+            click.echo("\nCollection Updates Required:")
+            click.echo(f"  Total: {len(collection_updates)}")
 
-    if "estimated_effort" in plan:
-        effort = plan["estimated_effort"]
-        click.echo(f"\nEstimated Effort: {effort}")
+        effort = upgrade_path.get("estimated_effort_days")
+        if effort is not None:
+            click.echo(f"\nEstimated Effort: {effort} days")
 
 
 @ansible.command("plan")
@@ -2146,7 +2149,7 @@ def _parse_collections_file(file_path: str) -> dict[str, str]:
             raise ValueError(f"File does not exist: {validated}")
         if not validated.is_file():
             raise ValueError(f"Path is not a file: {validated}")
-    except (OSError, PermissionError) as e:
+    except OSError as e:
         raise ValueError(f"Invalid file path: {e}") from e
 
     path = validated

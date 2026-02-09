@@ -12,6 +12,8 @@ from typing import Any
 import yaml
 from mcp.server import FastMCP
 
+from souschef.ansible_upgrade import UpgradePath, UpgradePlan
+
 # Import assessment functions with aliases to avoid name conflicts
 from souschef.assessment import (
     analyse_cookbook_dependencies as _analyse_cookbook_dependencies,
@@ -4229,7 +4231,7 @@ def generate_ansible_upgrade_test_plan(environment_path: str) -> str:
         )
 
 
-def _format_plan_header(path: dict[str, Any], plan: dict[str, Any]) -> list[str]:
+def _format_plan_header(path: UpgradePath, plan: UpgradePlan) -> list[str]:
     """Format the plan header section."""
     return [
         "# Ansible Upgrade Plan",
@@ -4243,7 +4245,7 @@ def _format_plan_header(path: dict[str, Any], plan: dict[str, Any]) -> list[str]
     ]
 
 
-def _format_upgrade_path(path: dict[str, Any]) -> list[str]:
+def _format_upgrade_path(path: UpgradePath) -> list[str]:
     """Format the upgrade path section."""
     lines = ["## Upgrade Path", ""]
     if path["direct_upgrade"]:
@@ -4258,7 +4260,7 @@ def _format_upgrade_path(path: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _format_risk_assessment(path: dict[str, Any], plan: dict[str, Any]) -> list[str]:
+def _format_risk_assessment(path: UpgradePath, plan: UpgradePlan) -> list[str]:
     """Format the risk assessment section."""
     lines = ["", "## Risk Assessment", ""]
 
@@ -4276,7 +4278,7 @@ def _format_risk_assessment(path: dict[str, Any], plan: dict[str, Any]) -> list[
     return lines
 
 
-def _format_upgrade_steps(plan: dict[str, Any]) -> list[str]:
+def _format_upgrade_steps(plan: UpgradePlan) -> list[str]:
     """Format the upgrade steps section."""
     lines = ["", "## Upgrade Steps", ""]
     for step in plan["upgrade_steps"]:
@@ -4300,7 +4302,7 @@ def _format_upgrade_steps(plan: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _format_upgrade_plan_markdown(plan: dict[str, Any]) -> str:
+def _format_upgrade_plan_markdown(plan: UpgradePlan) -> str:
     """
     Format upgrade plan as markdown.
 

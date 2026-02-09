@@ -10,7 +10,7 @@ import streamlit as st
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from souschef.ansible_upgrade import generate_upgrade_plan
+from souschef.ansible_upgrade import UpgradePath, UpgradePlan, generate_upgrade_plan
 from souschef.core.ansible_versions import ANSIBLE_VERSIONS
 
 
@@ -68,7 +68,7 @@ def _should_generate_plan(
     )
 
 
-def _display_upgrade_path_section(upgrade_path: dict[str, Any]) -> None:
+def _display_upgrade_path_section(upgrade_path: UpgradePath) -> None:
     """Display the upgrade path details."""
     st.subheader("Upgrade Path")
     from_ver = upgrade_path.get("from_version", "?")
@@ -95,7 +95,7 @@ def _display_risk_level(risk: str) -> None:
         st.error("Risk Level: High")
 
 
-def _display_plan_overview_tab(plan: dict[str, Any]) -> None:
+def _display_plan_overview_tab(plan: UpgradePlan) -> None:
     """Render the overview tab content."""
     col1, col2 = st.columns(2)
 
@@ -106,11 +106,12 @@ def _display_plan_overview_tab(plan: dict[str, Any]) -> None:
                 _display_upgrade_path_section(upgrade_path)
 
     with col2:
-        if "estimated_effort_days" in plan:
-            effort = plan["estimated_effort_days"]
-            st.metric("Estimated Effort", f"{effort} days")
-        if "upgrade_path" in plan and isinstance(plan["upgrade_path"], dict):
-            risk = plan["upgrade_path"].get("risk_level", "unknown")
+        upgrade_path = plan.get("upgrade_path")
+        if isinstance(upgrade_path, dict):
+            effort = upgrade_path.get("estimated_effort_days")
+            if effort is not None:
+                st.metric("Estimated Effort", f"{effort} days")
+            risk = upgrade_path.get("risk_level", "unknown")
             _display_risk_level(risk)
 
 
@@ -130,7 +131,7 @@ def _display_breaking_changes_list(breaking: list[Any]) -> None:
             st.write(change)
 
 
-def _display_plan_breaking_tab(plan: dict[str, Any]) -> None:
+def _display_plan_breaking_tab(plan: UpgradePlan) -> None:
     """Render breaking change details."""
     breaking = plan.get("breaking_changes", [])
     if not isinstance(breaking, list) or not breaking:
@@ -152,38 +153,28 @@ def _display_deprecated_features_list(deprecated: list[Any]) -> None:
             st.write(feature)
 
 
-def _display_plan_deprecated_tab(plan: dict[str, Any]) -> None:
+def _display_plan_deprecated_tab(plan: UpgradePlan) -> None:
     """Render deprecated feature details."""
     deprecated = plan.get("deprecated_features", [])
     if not isinstance(deprecated, list) or not deprecated:
-        st.info("No deprecated features identified")
+        st.info("No deprecated features detected")
         return
 
     _display_deprecated_features_list(deprecated)
 
 
-def _get_collection_list(impacts: dict[str, Any], key: str) -> list[Any]:
-    """Extract and validate a collection list from impacts."""
-    items = impacts.get(key, [])
-    return items if isinstance(items, list) else []
+def _display_collection_metrics(collection_updates: dict[str, str]) -> None:
+    """Display collection update metrics."""
+    count = len(collection_updates)
 
-
-def _display_collection_metrics(impacts: dict[str, Any]) -> None:
-    """Display collection impact metrics in columns."""
-    req = _get_collection_list(impacts, "requires_update")
-    may = _get_collection_list(impacts, "may_require_update")
-    compat = _get_collection_list(impacts, "compatible")
-
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
-        st.metric("Requires Update", len(req))
+        st.metric("Updates Required", count)
     with col2:
-        st.metric("May Require Update", len(may))
-    with col3:
-        st.metric("Compatible", len(compat))
+        st.metric("Collections Listed", count)
 
 
-def _display_collection_section(title: str, emoji: str, collections: list[Any]) -> None:
+def _display_collection_section(title: str, emoji: str, collections: list[str]) -> None:
     """Display a collection section with title and list."""
     if not collections:
         return
@@ -195,23 +186,24 @@ def _display_collection_section(title: str, emoji: str, collections: list[Any]) 
         st.info(f"... and {len(collections) - 10} more collections")
 
 
-def _display_plan_collections_tab(plan: dict[str, Any]) -> None:
+def _display_plan_collections_tab(plan: UpgradePlan) -> None:
     """Render collection impact details."""
-    if "collection_impacts" not in plan:
+    upgrade_path = plan.get("upgrade_path")
+    if not isinstance(upgrade_path, dict):
         return
 
-    impacts = plan["collection_impacts"]
-    if not isinstance(impacts, dict):
+    collection_updates = upgrade_path.get("collection_updates_needed", {})
+    if not isinstance(collection_updates, dict) or not collection_updates:
+        st.info("No collection updates required.")
         return
 
-    _display_collection_metrics(impacts)
+    _display_collection_metrics(collection_updates)
     st.divider()
 
-    req = _get_collection_list(impacts, "requires_update")
-    may = _get_collection_list(impacts, "may_require_update")
-
-    _display_collection_section("Requires Update", "", req)
-    _display_collection_section("May Require Update", "", may)
+    updates = [
+        f"{name} (required {version}+)" for name, version in collection_updates.items()
+    ]
+    _display_collection_section("Updates Required", "", updates)
 
 
 def _display_pre_upgrade_checklist(checklist: Any) -> None:
@@ -222,12 +214,38 @@ def _display_pre_upgrade_checklist(checklist: Any) -> None:
                 st.write(f"☐ {item}")
 
 
-def _display_testing_strategy(testing: Any) -> None:
+def _display_testing_phases(phases: Any) -> None:
+    """Display testing phases in expanders."""
+    if not isinstance(phases, list):
+        return
+    for phase in phases:
+        if not isinstance(phase, dict):
+            continue
+        title = str(phase.get("phase", "Phase"))
+        steps = phase.get("steps", [])
+        if not isinstance(steps, list):
+            continue
+        with st.expander(title):
+            for step in steps:
+                st.write(f"• {step}")
+
+
+def _display_success_criteria(success: Any) -> None:
+    """Display success criteria in an expander."""
+    if not isinstance(success, list) or not success:
+        return
+    with st.expander("Success Criteria"):
+        for item in success:
+            st.write(f"• {item}")
+
+
+def _display_testing_strategy(testing: dict[str, Any]) -> None:
     """Display the testing strategy in an expander."""
-    if isinstance(testing, list):
-        with st.expander("Testing Strategy"):
-            for test in testing:
-                st.write(f"• {test}")
+    phases = testing.get("phases", [])
+    _display_testing_phases(phases)
+
+    success = testing.get("success_criteria", [])
+    _display_success_criteria(success)
 
 
 def _display_post_upgrade_validation(validation: Any) -> None:
@@ -238,21 +256,21 @@ def _display_post_upgrade_validation(validation: Any) -> None:
                 st.write(f"• {check}")
 
 
-def _display_plan_testing_tab(plan: dict[str, Any]) -> None:
+def _display_plan_testing_tab(plan: UpgradePlan) -> None:
     """Render testing strategy details."""
     st.subheader("Testing Strategy")
 
     if "pre_upgrade_checklist" in plan:
         _display_pre_upgrade_checklist(plan["pre_upgrade_checklist"])
 
-    if "testing_strategy" in plan:
-        _display_testing_strategy(plan["testing_strategy"])
+    if "testing_plan" in plan and isinstance(plan["testing_plan"], dict):
+        _display_testing_strategy(plan["testing_plan"])
 
     if "post_upgrade_validation" in plan:
         _display_post_upgrade_validation(plan["post_upgrade_validation"])
 
 
-def _display_plan_tabs(plan: dict[str, Any]) -> None:
+def _display_plan_tabs(plan: UpgradePlan) -> None:
     """Render the plan output tabs."""
     tabs = st.tabs(
         [
@@ -281,7 +299,7 @@ def _display_plan_tabs(plan: dict[str, Any]) -> None:
 
 
 def _display_plan_export(
-    plan: dict[str, Any], current_version: str, target_version: str
+    plan: UpgradePlan, current_version: str, target_version: str
 ) -> None:
     """Provide a JSON export for the upgrade plan."""
     st.divider()

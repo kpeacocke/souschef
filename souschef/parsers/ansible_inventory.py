@@ -7,6 +7,7 @@ environments.
 """
 
 import configparser
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -256,6 +257,60 @@ def parse_inventory_file(inventory_path: str) -> dict[str, Any]:
     raise ValueError(f"Unknown inventory file format: {suffix}")
 
 
+def _validate_ansible_executable(ansible_path: str) -> Path:
+    """
+    Validate and resolve ansible executable path.
+
+    Args:
+        ansible_path: Path to ansible executable.
+
+    Returns:
+        Resolved Path object.
+
+    Raises:
+        ValueError: If ansible_path is invalid or not an executable file.
+
+    """
+    # lgtm[py/path-injection] - Validated at entry + function level
+    ansible_exec = Path(ansible_path).resolve()  # nosec B108
+    if not ansible_exec.exists():
+        raise ValueError(f"Ansible executable does not exist: {ansible_exec}")
+    if not ansible_exec.is_file():
+        raise ValueError(f"Ansible path is not a file: {ansible_exec}")
+    if ansible_exec.name != "ansible":
+        raise ValueError(
+            f"Ansible executable must be named 'ansible': {ansible_exec.name}"
+        )
+    if not os.access(ansible_exec, os.X_OK):
+        raise ValueError(f"Ansible path is not executable: {ansible_exec}")
+    return ansible_exec
+
+
+def _extract_version_from_output(output: str) -> str:
+    """
+    Extract version string from ansible --version output.
+
+    Args:
+        output: Output from ansible --version command.
+
+    Returns:
+        Version string (e.g., "2.16.0").
+
+    Raises:
+        RuntimeError: If version cannot be parsed from output.
+
+    """
+    match = re.search(r"ansible \[core ([\d.]+)\]", output)
+    if match:
+        return match.group(1)
+
+    match = re.search(r"ansible ([\d.]+)", output)
+    if match:
+        return match.group(1)
+
+    raise RuntimeError(f"Could not parse Ansible version from: {output}")
+
+
 def detect_ansible_version(ansible_path: str | None = None) -> str:
     """
     Detect installed Ansible version from environment.
@@ -275,14 +330,8 @@ def detect_ansible_version(ansible_path: str | None = None) -> str:
         RuntimeError: If version cannot be determined.
 
     """
-    # Validate ansible_path if provided
     if ansible_path:
-        # lgtm[py/path-injection] - Validated at entry + function level
-        ansible_exec = Path(ansible_path).resolve()  # nosec B108
-        if not ansible_exec.exists():
-            raise ValueError(f"Ansible executable does not exist: {ansible_exec}")
-        if not ansible_exec.is_file():
-            raise ValueError(f"Ansible path is not a file: {ansible_exec}")
+        ansible_exec = _validate_ansible_executable(ansible_path)
         command = [str(ansible_exec), "--version"]
     else:
         command = ["ansible", "--version"]
@@ -300,17 +349,7 @@ def detect_ansible_version(ansible_path: str | None = None) -> str:
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Ansible version check failed: {e.stderr}") from e
 
-    output = result.stdout
-
-    match = re.search(r"ansible \[core ([\d.]+)\]", output)
-    if match:
-        return match.group(1)
-
-    match = re.search(r"ansible ([\d.]+)", output)
-    if match:
-        return match.group(1)
-
-    raise RuntimeError(f"Could not parse Ansible version from: {output}")
+    return _extract_version_from_output(result.stdout)
 
 
 def _parse_collections(requirements: dict[str, Any]) -> dict[str, str]:

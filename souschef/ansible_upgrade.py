@@ -10,7 +10,7 @@ import shlex
 import subprocess
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, NotRequired, TypedDict, cast
 
 from packaging.specifiers import SpecifierSet
 from packaging.version import InvalidVersion, Version
@@ -28,6 +28,65 @@ from souschef.parsers.ansible_inventory import (
     parse_requirements_yml,
     scan_playbook_for_version_issues,
 )
+
+
+class UpgradePath(TypedDict):
+    """
+    Structured upgrade path information.
+
+    This mirrors the structure returned by calculate_upgrade_path().
+    """
+
+    from_version: str
+    to_version: str
+    risk_level: str
+    estimated_effort_days: float
+    direct_upgrade: bool
+    intermediate_versions: list[str]
+    risk_factors: list[str]
+    breaking_changes: list[str]
+    python_upgrade_needed: bool
+    current_python: list[str]
+    required_python: list[str]
+    collection_updates_needed: dict[str, str]
+
+
+class UpgradeStep(TypedDict):
+    """Single upgrade step for the plan."""
+
+    step: float
+    action: str
+    command: str
+    duration_minutes: int
+    notes: NotRequired[list[str]]
+
+
+class RollbackPlan(TypedDict):
+    """Rollback plan details."""
+
+    steps: list[str]
+    estimated_duration_minutes: int
+
+
+class RiskAssessment(TypedDict):
+    """Risk assessment details for the upgrade plan."""
+
+    level: str
+    factors: list[str]
+    mitigation: list[str]
+
+
+class UpgradePlan(TypedDict):
+    """Structured upgrade plan details."""
+
+    upgrade_path: UpgradePath
+    pre_upgrade_checklist: list[str]
+    upgrade_steps: list[UpgradeStep]
+    testing_plan: dict[str, Any]
+    post_upgrade_validation: list[str]
+    rollback_plan: RollbackPlan
+    estimated_downtime_hours: float
+    risk_assessment: RiskAssessment
 
 
 def _is_path_within(target: Path, base: Path) -> bool:
@@ -366,7 +425,7 @@ def _generate_recommendations(assessment: dict[str, Any]) -> None:
     assessment["recommendations"] = recommendations
 
 
-def generate_upgrade_plan(current_version: str, target_version: str) -> dict[str, Any]:
+def generate_upgrade_plan(current_version: str, target_version: str) -> UpgradePlan:
     """
     Generate detailed Ansible upgrade plan.
 
@@ -378,17 +437,24 @@ def generate_upgrade_plan(current_version: str, target_version: str) -> dict[str
         Dictionary containing upgrade plan details.
 
     """
-    path = calculate_upgrade_path(current_version, target_version)
+    path = cast(UpgradePath, calculate_upgrade_path(current_version, target_version))
 
-    plan: dict[str, Any] = {
+    plan: UpgradePlan = {
         "upgrade_path": path,
         "pre_upgrade_checklist": [],
         "upgrade_steps": [],
         "testing_plan": {},
         "post_upgrade_validation": [],
-        "rollback_plan": {},
+        "rollback_plan": {
+            "steps": [],
+            "estimated_duration_minutes": 0,
+        },
         "estimated_downtime_hours": 0.0,
-        "risk_assessment": {},
+        "risk_assessment": {
+            "level": "",
+            "factors": [],
+            "mitigation": [],
+        },
     }
 
     plan["pre_upgrade_checklist"] = [
@@ -568,7 +634,7 @@ def _generate_testing_plan() -> dict[str, Any]:
     }
 
 
-def _generate_risk_mitigation(upgrade_path: dict[str, Any]) -> list[str]:
+def _generate_risk_mitigation(upgrade_path: UpgradePath) -> list[str]:
     """
     Generate risk mitigation strategies.
 
@@ -602,6 +668,134 @@ def _generate_risk_mitigation(upgrade_path: dict[str, Any]) -> list[str]:
     return mitigation
 
 
+def _add_collection_entry(
+    result: dict[str, Any],
+    collection: str,
+    version: str,
+    required: str | None = None,
+    update_needed: bool = False,
+    warning: str | None = None,
+) -> None:
+    """
+    Append a collection entry and optional warning to the result.
+
+    Args:
+        result: Compatibility result dictionary to update.
+        collection: Collection name.
+        version: Current collection version.
+        required: Required minimum version, if applicable.
+        update_needed: Whether this collection requires an update.
+        warning: Optional warning message to append.
+
+    """
+    if update_needed and required:
+        result["updates_needed"].append(
+            {
+                "collection": collection,
+                "current": version,
+                "required": required,
+            }
+        )
+    else:
+        result["compatible"].append({"collection": collection, "version": version})
+
+    if warning:
+        result["warnings"].append(warning)
+
+
+def _normalise_collection_version(version: str | None) -> str | None:
+    """
+    Normalise collection version strings.
+
+    Args:
+        version: Raw version string from requirements.yml.
+
+    Returns:
+        Normalised version string, or None for wildcard/empty values.
+
+    """
+    if not version or version == "*":
+        return None
+    return version
+
+
+def _handle_version_specifier(
+    result: dict[str, Any],
+    collection: str,
+    version: str,
+    required: str,
+) -> None:
+    """
+    Handle non-standard version specifiers.
+
+    Args:
+        result: Compatibility result dictionary to update.
+        collection: Collection name.
+        version: Version specifier string.
+        required: Required minimum version.
+
+    """
+    try:
+        specifier = SpecifierSet(version)
+        required_obj = Version(required)
+
+        if required_obj in specifier:
+            _add_collection_entry(result, collection, version)
+        else:
+            warning = (
+                f"Collection {collection} has specifier {version}. "
+                f"Cannot determine compatibility with {required}"
+            )
+            _add_collection_entry(result, collection, version, warning=warning)
+    except Exception:
+        warning = f"Collection {collection} has unparseable version: {version}"
+        _add_collection_entry(result, collection, version, warning=warning)
+
+
+def _assess_collection_version(
+    result: dict[str, Any],
+    collection: str,
+    version: str | None,
+    required: str,
+) -> None:
+    """
+    Compare collection version against required minimum version.
+
+    Args:
+        result: Compatibility result dictionary to update.
+        collection: Collection name.
+        version: Current version string (may be None for wildcard).
+        required: Required minimum version.
+
+    """
+    normalised = _normalise_collection_version(version)
+    if normalised is None:
+        _add_collection_entry(result, collection, version or "*")
+        return
+
+    try:
+        version_obj = Version(normalised)
+        required_obj = Version(required)
+
+        if version_obj >= required_obj:
+            _add_collection_entry(result, collection, normalised)
+        else:
+            warning = (
+                f"Collection {collection} {normalised} incompatible. "
+                f"Requires {required}+"
+            )
+            _add_collection_entry(
+                result,
+                collection,
+                normalised,
+                required=required,
+                update_needed=True,
+                warning=warning,
+            )
+    except InvalidVersion:
+        _handle_version_specifier(result, collection, normalised, required)
+
+
 def validate_collection_compatibility(
     collections: dict[str, str], target_ansible_version: str
 ) -> dict[str, Any]:
@@ -631,66 +825,12 @@ def validate_collection_compatibility(
 
     for collection, version in collections.items():
         if collection in min_versions:
-            required = min_versions[collection]
+            _assess_collection_version(
+                result, collection, version, min_versions[collection]
+            )
+            continue
 
-            # Normalise version strings: treat "*", empty, or None as wildcard
-            if not version or version == "*":
-                # Wildcard version always considered compatible
-                result["compatible"].append(
-                    {"collection": collection, "version": version or "*"}
-                )
-                continue
-
-            # Use semantic versioning for proper comparison
-            try:
-                version_obj = Version(version)
-                required_obj = Version(required)
-
-                if version_obj >= required_obj:
-                    result["compatible"].append(
-                        {"collection": collection, "version": version}
-                    )
-                else:
-                    result["updates_needed"].append(
-                        {
-                            "collection": collection,
-                            "current": version,
-                            "required": required,
-                        }
-                    )
-                    result["warnings"].append(
-                        f"Collection {collection} {version} incompatible. "
-                        f"Requires {required}+"
-                    )
-            except InvalidVersion:
-                # Handle version specifiers like ">=5.0.0" from requirements.yml
-                try:
-                    # Try treating the version as a specifier
-                    specifier = SpecifierSet(version)
-                    required_obj = Version(required)
-
-                    if required_obj in specifier:
-                        result["compatible"].append(
-                            {"collection": collection, "version": version}
-                        )
-                    else:
-                        result["warnings"].append(
-                            f"Collection {collection} has specifier {version}. "
-                            f"Cannot determine compatibility with {required}"
-                        )
-                        result["compatible"].append(
-                            {"collection": collection, "version": version}
-                        )
-                except Exception:
-                    # If we can't parse it at all, warn but don't fail
-                    result["warnings"].append(
-                        f"Collection {collection} has unparseable version: {version}"
-                    )
-                    result["compatible"].append(
-                        {"collection": collection, "version": version}
-                    )
-        else:
-            result["compatible"].append({"collection": collection, "version": version})
+        _add_collection_entry(result, collection, version)
 
     return result
 
