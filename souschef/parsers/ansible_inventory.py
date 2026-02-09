@@ -99,7 +99,7 @@ def _parse_host_entry(line: str, group_name: str, inventory: dict[str, Any]) -> 
 
     if len(parts) > 1:
         var_str = parts[1]
-        for var in re.findall(r"(\w+)=([^\s]+)", var_str):
+        for var in re.findall(r"(\w+)=(\S+)", var_str):
             host_vars[var[0]] = var[1]
 
     inventory["groups"][group_name]["hosts"].append(hostname)
@@ -331,7 +331,10 @@ def detect_ansible_version(ansible_path: str | None = None) -> str:
 
     """
     if ansible_path:
+        # Validate and resolve path; raises ValueError if invalid
         ansible_exec = _validate_ansible_executable(ansible_path)
+        # codeql[py/command-line-injection]: Validated by _validate_ansible_executable
+        # which checks: exists, is_file, filename=='ansible', executable, resolved
         command = [str(ansible_exec), "--version"]
     else:
         command = ["ansible", "--version"]
