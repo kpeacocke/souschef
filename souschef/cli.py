@@ -52,6 +52,38 @@ from souschef.server import (
 )
 
 
+def _validate_user_path(path_input: str | None) -> Path:
+    """
+    Validate and sanitize user-supplied path input.
+
+    Ensures path is safe to use by resolving and validating it exists.
+
+    Args:
+        path_input: User-supplied path string or None.
+
+    Returns:
+        Validated absolute path as Path object.
+
+    Raises:
+        ValueError: If path is invalid or unsafe.
+
+    """
+    if path_input is None:
+        # Use current directory as safe default
+        return Path.cwd()
+
+    try:
+        # Resolve to absolute path and validate it exists
+        validated_path = Path(path_input).resolve()
+
+        if not validated_path.exists():
+            raise ValueError(f"Path does not exist: {validated_path}")
+
+        return validated_path
+    except (OSError, PermissionError) as e:
+        raise ValueError(f"Invalid path: {e}") from e
+
+
 class ConversionResults(TypedDict):
     """Type definition for cookbook conversion results."""
 
@@ -980,8 +1012,20 @@ def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> No
 
     """
     try:
-        cookbook_dir = Path(cookbook_path)
-        output_dir = Path(output_path)
+        # Validate input paths
+        cookbook_dir = _validate_user_path(cookbook_path)
+
+        # Validate output path (doesn't need to exist, but validate parent)
+        try:
+            output_dir = Path(output_path).resolve()
+            # Check parent directory is accessible
+            parent = output_dir.parent
+            if not parent.exists():
+                msg = f"Output parent directory does not exist: {parent}"
+                raise ValueError(msg)
+        except (OSError, PermissionError) as e:
+            raise ValueError(f"Invalid output path: {e}") from e
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Check recipe exists
@@ -1047,14 +1091,8 @@ def assess_cookbook(cookbook_path: str, output_format: str) -> None:
 
     """
     try:
-        cookbook_dir = Path(cookbook_path)
-        if not cookbook_dir.exists():
-            click.echo(
-                f"Error: Cookbook path does not exist: {cookbook_path}",
-                err=True,
-            )
-            sys.exit(1)
-
+        # Validate path before using it
+        cookbook_dir = _validate_user_path(cookbook_path)
         if not cookbook_dir.is_dir():
             click.echo(f"Error: {cookbook_path} is not a directory", err=True)
             sys.exit(1)
@@ -1162,16 +1200,22 @@ def convert_habitat(plan_path: str, output_path: str, base_image: str) -> None:
 
     """
     try:
-        plan_file = Path(plan_path)
-        if not plan_file.exists():
-            click.echo(f"Error: Plan file does not exist: {plan_path}", err=True)
-            sys.exit(1)
-
+        # Validate input paths
+        plan_file = _validate_user_path(plan_path)
         if not plan_file.is_file():
             click.echo(f"Error: {plan_path} is not a file", err=True)
             sys.exit(1)
 
-        output_dir = Path(output_path)
+        # Validate output path
+        try:
+            output_dir = Path(output_path).resolve()
+            parent = output_dir.parent
+            if not parent.exists():
+                msg = f"Output parent directory does not exist: {parent}"
+                raise ValueError(msg)
+        except (OSError, PermissionError) as e:
+            raise ValueError(f"Invalid output path: {e}") from e
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Call server function to convert
@@ -1224,19 +1268,22 @@ def convert_inspec(profile_path: str, output_path: str, output_format: str) -> N
 
     """
     try:
-        profile_dir = Path(profile_path)
-        if not profile_dir.exists():
-            click.echo(
-                f"Error: Profile path does not exist: {profile_path}",
-                err=True,
-            )
-            sys.exit(1)
-
+        # Validate input paths
+        profile_dir = _validate_user_path(profile_path)
         if not profile_dir.is_dir():
             click.echo(f"Error: {profile_path} is not a directory", err=True)
             sys.exit(1)
 
-        output_dir = Path(output_path)
+        # Validate output path
+        try:
+            output_dir = Path(output_path).resolve()
+            parent = output_dir.parent
+            if not parent.exists():
+                msg = f"Output parent directory does not exist: {parent}"
+                raise ValueError(msg)
+        except (OSError, PermissionError) as e:
+            raise ValueError(f"Invalid output path: {e}") from e
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Call server function to convert
@@ -1325,14 +1372,24 @@ def convert_cookbook(
 
     """
     try:
+        # Validate input paths
+        _validate_user_path(cookbook_path)
+
+        # Validate output path
+        try:
+            output_dir = Path(output_path).resolve()
+            parent = output_dir.parent
+            if not parent.exists():
+                msg = f"Output parent directory does not exist: {parent}"
+                raise ValueError(msg)
+        except (OSError, PermissionError) as e:
+            raise ValueError(f"Invalid output path: {e}") from e
+
         # Load assessment data if provided
         assessment_data = ""
         if assessment_file:
-            assessment_path = Path(assessment_file)
-            if assessment_path.exists():
-                assessment_data = assessment_path.read_text()
-            else:
-                click.echo(f"Warning: Assessment file not found: {assessment_file}")
+            assessment_path = _validate_user_path(assessment_file)
+            assessment_data = assessment_path.read_text()
 
         # Call server function
         from souschef.server import convert_cookbook_comprehensive
@@ -1825,8 +1882,11 @@ def ansible_assess(environment_path: str | None) -> None:
 
     """
     try:
+        # Validate path before using it
+        validated_path = _validate_user_path(environment_path or None)
+
         click.echo("Assessing Ansible environment...")
-        assessment = assess_ansible_environment(environment_path or ".")
+        assessment = assess_ansible_environment(validated_path)
 
         click.echo("\n" + "=" * 60)
         click.echo("Ansible Environment Assessment")
@@ -2079,7 +2139,17 @@ def _parse_collections_file(file_path: str) -> dict[str, str]:
         )
         raise ValueError(msg) from e
 
-    path = Path(file_path)
+    # Validate path before using it
+    try:
+        validated = Path(file_path).resolve()
+        if not validated.exists():
+            raise ValueError(f"File does not exist: {validated}")
+        if not validated.is_file():
+            raise ValueError(f"Path is not a file: {validated}")
+    except (OSError, PermissionError) as e:
+        raise ValueError(f"Invalid file path: {e}") from e
+
+    path = validated
     try:
         with path.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
@@ -2197,6 +2267,8 @@ def ansible_validate_collections(collections_file: str, target_version: str) -> 
     try:
         msg = f"Validating collections for Ansible {target_version}..."
         click.echo(msg)
+        # Validate path before using it
+        _validate_user_path(collections_file)
         # Parse the YAML file to extract collections and versions
         collections_dict = _parse_collections_file(collections_file)
         validation = validate_collection_compatibility(collections_dict, target_version)
@@ -2234,7 +2306,11 @@ def ansible_detect_python(environment_path: str | None) -> None:
     """
     try:
         click.echo("Detecting Python version...")
-        python_version = detect_python_version(environment_path)
+        # Validate path only if provided
+        validated_path = (
+            _validate_user_path(environment_path) if environment_path else None
+        )
+        python_version = detect_python_version(validated_path)
 
         click.echo("\n" + "=" * 60)
         click.echo("Python Version Detection")
