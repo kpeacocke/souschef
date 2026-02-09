@@ -225,9 +225,18 @@ Automatically detects and converts:
 - **Cookstyle/Foodcritic** → Lint stages
 - Multiple test suites → Parallel execution strategies
 
-### 11. GitHub Copilot Agent Control
+### 11. GitHub Copilot Agent Control (🚧 Planned)
 
-Manage GitHub Copilot agents working on repository issues with full pause/stop/resume capabilities:
+🚧 **Planned for multi-platform orchestration** - Infrastructure for managing GitHub Copilot agent lifecycles across multiple platform migrations (Puppet, SaltStack, CFEngine → Ansible).
+
+The API structure is stable (serving as specification for implementation), but helper functions currently use stub implementations. Full GitHub API integration will enable:
+
+- **Multi-repo migrations** - Orchestrate migrations across multiple repositories simultaneously
+- **Platform-specific agents** - Assign agents to tackle different platforms in parallel
+- **Progress tracking** - Monitor and control agent states during long-running migrations
+- **Automatic analysis** - Identify migration candidates in GitHub organisations
+
+**Planned capabilities:**
 
 - **assign_github_copilot_to_issue** - Assign Copilot agent to implement an issue
 - **pause_github_copilot_agent** - Pause a running agent (can be resumed)
@@ -235,15 +244,15 @@ Manage GitHub Copilot agents working on repository issues with full pause/stop/r
 - **resume_github_copilot_agent** - Resume a paused agent with optional new instructions
 - **check_github_copilot_agent_status** - Check current agent state and activity
 
-**Agent lifecycle management:**
+**Planned agent lifecycle management:**
 
-1. **Assign** - Start Copilot working on an issue
-2. **Monitor** - Check status and review progress
-3. **Pause** - Temporarily pause for review or changes
-4. **Resume** - Continue with optional new guidance
+1. **Assign** - Start Copilot working on an issue (e.g., "Convert this Puppet module to Ansible")
+2. **Monitor** - Check status and review progress across multiple platforms
+3. **Pause** - Temporarily pause for review or architectural adjustments
+4. **Resume** - Continue with optional new guidance (e.g., "Also add Molecule tests")
 5. **Stop** - Cancel if requirements change
 
-State is tracked via issue labels and comments, providing full visibility and control.
+When implemented, state will be tracked via issue labels and comments, providing full visibility and control across distributed migration workflows.
 
 #### Example Usage - CI/CD Pipelines
 
@@ -265,49 +274,49 @@ souschef generate-gitlab-ci ./mycookbook --no-cache --no-artifacts
 souschef generate-github-workflow ./mycookbook --workflow-name "My CI" --no-cache
 ```
 
-#### Example Usage - GitHub Agent Control
+#### Planned Example Usage - GitHub Agent Control (🚧 Future)
 
 ```python
-# From an AI assistant with SousChef MCP
+# When implemented, from an AI assistant with SousChef MCP
 
-# Assign Copilot to work on an issue
+# Assign Copilot to convert a Puppet module to Ansible
 assign_github_copilot_to_issue(
     owner="myorg",
     repo="my-ansible-repo",
     issue_number=42,
     base_ref="main",
-    custom_instructions="Focus on idempotency and error handling"
+    custom_instructions="Convert this Puppet module to Ansible. Focus on idempotency."
 )
 
-# Check agent status
+# Check status across multiple platform migrations
 check_github_copilot_agent_status(
     owner="myorg",
     repo="my-ansible-repo",
     issue_number=42
 )
 
-# Pause for review
+# Pause for architectural review
 pause_github_copilot_agent(
     owner="myorg",
     repo="my-ansible-repo",
     issue_number=42,
-    reason="Need to review approach before continuing"
+    reason="Need to review module structure before continuing"
 )
 
-# Resume with new guidance
+# Resume with additional guidance
 resume_github_copilot_agent(
     owner="myorg",
     repo="my-ansible-repo",
     issue_number=42,
-    additional_instructions="Also add role dependencies"
+    additional_instructions="Also add Molecule tests and role dependencies"
 )
 
-# Stop if no longer needed
+# Stop and manually implement
 stop_github_copilot_agent(
     owner="myorg",
     repo="my-ansible-repo",
     issue_number=42,
-    reason="Requirements changed - manual implementation needed"
+    reason="Requirements changed - using different pattern"
 )
 ```
 
