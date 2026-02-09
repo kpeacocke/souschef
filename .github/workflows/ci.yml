@@ -310,6 +310,9 @@ jobs:
     - name: Install dependencies
       run: poetry install --no-interaction --all-extras
 
+    - name: Upgrade pip to fix CVE-2026-1703
+      run: poetry run pip install --upgrade pip
+
     - name: Run security checks
       run: |
         # Check for known vulnerabilities in dependencies

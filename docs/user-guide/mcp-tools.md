@@ -1,19 +1,19 @@
 # MCP Tools Reference
 
-SousChef provides **35 specialised MCP tools** for comprehensive Chef-to-Ansible migration. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **45 specialised MCP tools** for comprehensive Chef-to-Ansible migration and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
 
 !!! info "About the Tool Count"
-    **Why 35 tools here but the server shows more?**
+    **Why 45 tools here but the server shows more?**
 
-    The MCP server actually provides **40 total tools** (38 public + 2 internal). This guide documents the **35 primary tools** you'll use for migrations. The remaining 5 are:
+    The MCP server actually provides **48 total tools** (45 public + 3 internal). This guide documents the **45 primary tools** you'll use for migrations and Ansible upgrades. The remaining 3 are:
 
     - **Internal filesystem operations** - Low-level file reading and directory listing used by other tools
     - **Helper utilities** - Supporting functions that other tools call
 
-    Your AI assistant may use these additional tools automatically behind the scenes (e.g., when a tool needs to read a file, it calls the internal file reading tool). You don't need to invoke them directly - just use the 35 documented tools and let your AI assistant handle the rest.
+    Your AI assistant may use these additional tools automatically behind the scenes (e.g., when a tool needs to read a file, it calls the internal file reading tool). You don't need to invoke them directly - just use the 45 documented tools and let your AI assistant handle the rest.
 
 ## Quick Reference by Capability Area
 
@@ -30,6 +30,7 @@ SousChef provides **35 specialised MCP tools** for comprehensive Chef-to-Ansible
 | [CI/CD Pipeline Generation](#ci-cd-pipeline-generation) | 3 tools | Generate Jenkins, GitLab CI, and GitHub Actions |
 | [AWX/AAP Integration](#awx-aap-integration) | 3 tools | Generate AWX job templates, workflows, and inventory |
 | [Chef Server Integration](#chef-server-integration) | 3 tools | Validate Chef Server connections and query dynamic inventory |
+| [Ansible Upgrade Planning](#ansible-upgrade-planning) | 5 tools | Assess Ansible environments and plan version upgrades |
 
 ---
 
@@ -1270,12 +1271,285 @@ Convert ERB templates to Jinja2 with AI-based validation.
 
 ---
 
+## Ansible Upgrade Planning
+
+Comprehensive Ansible version upgrade assessment, planning, and validation tools based on official Ansible–Python compatibility matrices.
+
+### Python version detection (internal capability)
+
+SousChef automatically detects the Python version in your Ansible control-node environments when running the Ansible upgrade planning tools (for example, `assess_ansible_upgrade_readiness` and `plan_ansible_upgrade`).
+
+**What it does**: Transparently inspects the Python interpreter available in the relevant environment (virtual environment, container, or system Python) and derives a semantic version (for example, `3.10.5`) for comparison with Ansible version requirements.
+
+**Why you need this**: Before planning an Ansible upgrade, you need to know what Python version your control nodes are running. Python version directly affects which Ansible versions you can upgrade to — older Python versions may not be supported by newer Ansible releases. The upgrade tools use this internal capability so you do not need a separate MCP tool for Python version checks.
+
+**What you get via the upgrade tools**:
+- The detected Python version (for example, `3.10.5`) considered as part of upgrade readiness
+- Confirmation that Python is available in the specified environment, or clear errors when it is not
+- Compatibility guidance between your Python version and the target Ansible release
+
+**Real-world example**: You are planning to upgrade from Ansible 2.14 to 2.17. You run `assess_ansible_upgrade_readiness` against your control node environment at `/opt/ansible/venv`. Internally, SousChef detects that the environment is running Python `3.9.13` and factors that into the readiness report, including whether Python 3.9 supports Ansible 2.17 according to the compatibility matrix.
+
+This capability is **not** exposed as a standalone MCP tool; instead, it is used internally by the Ansible upgrade planning tools so you can simply ask your AI assistant to assess or plan an upgrade without managing Python checks yourself.
+
+---
+
+### assess_ansible_upgrade_readiness
+
+Assess the current Ansible environment for upgrade readiness.
+
+**What it does**: Analyses your current Ansible installation and detects:
+- Ansible version (for example, 2.14.0)
+- Python version on control node
+- Installed collections and their versions
+- Ansible configuration from ansible.cfg
+- Environment variables and settings
+- Compatibility issues and warnings
+- End-of-life (EOL) status
+
+Returns a comprehensive assessment with all relevant environment information needed for upgrade planning.
+
+**Why you need this**: Before planning an upgrade, you need a complete picture of your current Ansible environment. This tool gathers all that information instantly, providing the baseline needed for creating an upgrade plan.
+
+**What you get**:
+- Current Ansible version and full version string
+- Python version information with compatibility status
+- List of installed collections with versions
+- EOL status and timeline (if applicable)
+- Compatibility issues detected
+- Actionable recommendations for upgrade preparation
+- Warnings about deprecated features or EOL versions
+
+**Real-world example**: Your Ansible environment runs Ansible 2.14.0 with Python 3.10, and has community.general 5.0.0 installed. This tool reports all that information plus warns that Ansible 2.14 reaches EOL in May 2026, helping you plan your upgrade timeline.
+
+**Parameters:**
+- `environment_path` (string, required): Path to Ansible environment directory containing playbooks, inventory, and configuration files
+
+**Returns:**
+- JSON string with environment assessment including versions, installed collections, compatibility issues, and recommendations
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Assess our Ansible environment at /etc/ansible to understand
+    upgrade readiness and identify any compatibility issues
+    ```
+
+=== "CLI"
+    ```bash
+    souschef ansible assess --environment-path /etc/ansible
+    ```
+
+---
+
+### plan_ansible_upgrade
+
+Generate a detailed upgrade plan to move between Ansible versions.
+
+**What it does**: Creates a comprehensive upgrade plan including:
+- Upgrade path from current to target version
+- Breaking changes you need to be aware of
+- Pre-upgrade checklist (backup, compatibility checks)
+- Step-by-step upgrade instructions
+- Testing plan to validate the upgrade
+- Post-upgrade validation steps
+- Risk assessment and estimated downtime
+- Rollback procedures in case of issues
+
+The plan accounts for major version jumps (like 2.9→2.10 where collections were split) and provides intermediate versions if needed.
+
+**Why you need this**: Ansible upgrades can be complex with breaking changes and compatibility issues. Manual planning is error-prone. This tool analyses the specific upgrade path and generates a customised plan for your situation.
+
+**What you get**:
+- Detailed upgrade path with all intermediate steps (markdown formatted)
+- Complete checklist of pre-upgrade verification steps
+- Breaking changes documented for your upgrade path
+- Required actions (collection updates, Python upgrades, config changes)
+- Step-by-step upgrade instructions with commands
+- Comprehensive testing procedure
+- Post-upgrade validation checklist
+- Risk assessment (Low/Medium/High)
+- Estimated downtime and effort
+- Rollback plan if things go wrong
+
+**Real-world example**: You want to upgrade from Ansible 2.14 to 2.17. This tool generates a plan that identifies the collections you'll need to update, breaks down the upgrade into manageable steps, provides a testing procedure to verify everything still works, and gives you a rollback plan if needed.
+
+**Parameters:**
+- `environment_path` (string, required): Path to Ansible environment directory
+- `target_version` (string, required): Target Ansible version to upgrade to (for example, "2.17")
+
+**Returns:**
+- Markdown-formatted upgrade plan with detailed steps and recommendations
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate an upgrade plan from Ansible 2.14 to 2.17 for our
+    environment at /etc/ansible, including all breaking changes
+    and testing procedures
+    ```
+
+=== "CLI"
+    ```bash
+    souschef generate-upgrade-plan 2.14 2.17 /etc/ansible
+    ```
+
+---
+
+### validate_ansible_collection_compatibility
+
+Validate that Ansible collections are compatible with a target Ansible version.
+
+**What it does**: Checks Ansible collections from a requirements.yml file against a target Ansible version to determine compatibility. For each collection, verifies:
+- Minimum Ansible version required
+- Maximum Ansible version supported (if applicable)
+- Known breaking changes in that version
+- Recommended minimum version for the target Ansible release
+
+Returns detailed compatibility information for upgrade planning.
+
+**Why you need this**: When you upgrade Ansible, your installed collections might not be compatible with the new version. This tool identifies compatibility issues before you upgrade, so you can plan collection updates accordingly.
+
+**What you get**:
+- Compatibility status for each collection (compatible, needs update, not supported)
+- Recommended versions for your target Ansible release
+- List of breaking changes in target version
+- Warnings about deprecated collection versions
+- Migration guidance for incompatible collections
+
+**Real-world example**: You want to upgrade to Ansible 2.17 and have community.general 3.0.0 in your requirements.yml. This tool reports that community.general 3.0.0 works with Ansible 2.17, but it's old and you should upgrade to 5.0.0 which has better features and bug fixes for 2.17.
+
+**Parameters:**
+- `collections_file` (string, required): Path to requirements.yml file containing collection specifications
+- `target_version` (string, required): Target Ansible version to check compatibility against (for example, "2.17")
+
+**Returns:**
+- JSON string with compatibility report including:
+  - `compatible`: List of compatible collections
+  - `updates_needed`: Collections requiring version updates
+  - `warnings`: List of compatibility warnings
+  - `current_version`: Current installed version
+  - `compatible`: Boolean indicating if compatible
+  - `recommended_version`: Recommended version for target Ansible
+  - `breaking_changes`: Any breaking changes in target version
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Validate the collections in my requirements.yml file at
+    /etc/ansible/requirements.yml against Ansible 2.17
+    ```
+
+=== "CLI"
+    ```bash
+    souschef ansible validate-collections --collections-file /etc/ansible/requirements.yml --target-version 2.17
+    ```
+
+---
+
+### check_ansible_eol_status
+
+Check if an Ansible version is end-of-life (EOL) or approaching EOL.
+
+**What it does**: Provides end-of-life status, security risk assessment, and recommendations for Ansible versions based on official support timelines. Checks:
+- Whether the version has reached EOL
+- EOL date (past or future)
+- Days remaining until EOL or days since EOL
+- Security risk level (LOW/MEDIUM/HIGH)
+- Recommended actions
+
+**Why you need this**: Running EOL software poses security risks as it no longer receives updates. This tool helps you understand the support status of your Ansible version and plan upgrades before support ends.
+
+**What you get**:
+- Clear EOL status (is_eol: true/false)
+- EOL date for the version
+- Human-readable status message
+- Security risk assessment (LOW/MEDIUM/HIGH)
+- Days remaining until EOL or days overdue since EOL
+- Whether EOL is approaching (within 180 days)
+
+**Real-world example**: You're running Ansible 2.9 and want to know its support status. This tool reports that Ansible 2.9 reached EOL on 2022-05-23, security risk is HIGH, and you're 1,357 days overdue for an upgrade.
+
+**Parameters:**
+- `version` (string, required): Ansible version string (for example, "2.9", "2.16")
+
+**Returns:**
+- JSON string with EOL status including is_eol, eol_date, status message, security_risk, and days_remaining or days_overdue
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Check the EOL status of Ansible 2.9 to understand
+    whether we need to plan an urgent upgrade
+    ```
+
+=== "CLI"
+    ```bash
+    souschef ansible eol --version 2.9
+    ```
+
+---
+
+### generate_ansible_upgrade_test_plan
+
+Generate a comprehensive testing plan for Ansible upgrade validation.
+
+**What it does**: Creates a detailed testing plan covering:
+- Pre-upgrade baseline establishment
+- Post-upgrade validation procedures
+- Regression testing steps
+- Performance testing guidelines
+- Acceptance criteria
+- Sign-off checklist
+
+The plan provides a structured approach to validating that your Ansible upgrade succeeded and everything still works as expected.
+
+**Why you need this**: After upgrading Ansible, you need to verify that playbooks, roles, and collections still function correctly. This tool generates a comprehensive testing checklist to ensure nothing was broken by the upgrade.
+
+**What you get**:
+- Pre-upgrade baseline testing procedures
+- Post-upgrade validation steps with commands
+- Syntax validation checklist
+- Dry-run testing guidance
+- Integration testing procedures
+- Performance comparison guidelines
+- Regression testing steps
+- Acceptance criteria for sign-off
+
+**Real-world example**: You've just upgraded from Ansible 2.14 to 2.17 in your test environment. This tool generates a markdown checklist walking you through baseline capture, syntax checks, dry runs, full playbook execution, and performance validation to ensure the upgrade was successful.
+
+**Parameters:**
+- `environment_path` (string, required): Path to Ansible environment directory
+
+**Returns:**
+- Markdown-formatted testing plan with checklists and procedures
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a comprehensive testing plan for validating our
+    Ansible upgrade at /etc/ansible
+    ```
+
+=== "CLI"
+    ```bash
+    souschef ansible test-plan --environment-path /etc/ansible
+    ```
+
+---
+
 ## Tool Selection
 
-- **Start with analysis**: Use `parse_*` and `analyze_*` tools to understand your Chef infrastructure before converting
+- **Start with assessment**: Use `assess_ansible_upgrade_readiness` to understand your current state (automatically detects Python version)
+- **Plan your upgrade**: Use `plan_ansible_upgrade` to create a detailed upgrade path
+- **Check EOL status**: Use `check_ansible_eol_status` to verify support timeline
+- **Validate collections**: Use `validate_ansible_collection_compatibility` before upgrading
+- **Plan testing**: Use `generate_ansible_upgrade_test_plan` to ensure thorough validation
 - **Validate conversions**: Always use `validate_conversion` after converting resources or recipes
-- **Profile large cookbooks**: Use `profile_cookbook_performance` for cookbooks with many recipes
-- **Check Chef Server**: Use `validate_chef_server_connection` before using it for inventory operations
 
 ### Error Handling
 
@@ -1287,6 +1561,8 @@ All tools provide detailed error messages with suggestions:
 
 ### Workflow Recommendations
 
+#### Chef-to-Ansible Migration Workflow
+
 1. **Discovery**: Use `list_cookbook_structure` and `read_cookbook_metadata`
 2. **Analysis**: Use `assess_chef_migration_complexity` and `analyze_cookbook_dependencies`
 3. **Planning**: Use `generate_migration_plan`
@@ -1294,6 +1570,16 @@ All tools provide detailed error messages with suggestions:
 5. **Validation**: Use `generate_inspec_from_recipe` and `validate_conversion`
 6. **Assessment**: Use `generate_migration_report`
 7. **Chef Server Integration** (optional): Use `validate_chef_server_connection` → `get_chef_nodes` → inventory generation
+
+#### Ansible Upgrade Workflow
+
+1. **Assessment**: Use `assess_ansible_upgrade_readiness` (automatically detects Python version)
+2. **EOL Check**: Use `check_ansible_eol_status` to verify support timeline
+3. **Planning**: Use `plan_ansible_upgrade` for your current → target version
+4. **Compatibility Check**: Use `validate_ansible_collection_compatibility` for installed collections
+5. **Testing Preparation**: Use `generate_ansible_upgrade_test_plan`
+6. **Execute Upgrade**: Follow the plan generated by `plan_ansible_upgrade`
+7. **Validate**: Execute the testing plan from `generate_ansible_upgrade_test_plan`
 
 ---
 

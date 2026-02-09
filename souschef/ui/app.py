@@ -25,6 +25,9 @@ R = TypeVar("R")
 from souschef.core import _ensure_within_base_path, _normalize_path
 from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_is_file
 from souschef.ui.pages.ai_settings import show_ai_settings_page
+from souschef.ui.pages.ansible_assessment import show_ansible_assessment_page
+from souschef.ui.pages.ansible_planning import show_ansible_planning_page
+from souschef.ui.pages.ansible_validation import show_ansible_validation_page
 from souschef.ui.pages.chef_server_settings import show_chef_server_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
@@ -43,6 +46,26 @@ NAV_AI_SETTINGS = "AI Settings"
 NAV_CHEF_SERVER_SETTINGS = "Chef Server Settings"
 NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
 NAV_HISTORY = "History"
+NAV_ANSIBLE_ASSESSMENT = "Ansible Assessment"
+NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
+NAV_ANSIBLE_VALIDATION = "Collection Validation"
+CHEF_FEATURES = {
+    NAV_COOKBOOK_ANALYSIS,
+    NAV_MIGRATION_PLANNING,
+    NAV_MIGRATION_CONFIG,
+    NAV_DEPENDENCY_MAPPING,
+}
+ANSIBLE_FEATURES = {
+    NAV_ANSIBLE_ASSESSMENT,
+    NAV_ANSIBLE_PLANNING,
+    NAV_ANSIBLE_VALIDATION,
+}
+SHARED_FEATURES = {
+    NAV_HISTORY,
+    NAV_VALIDATION_REPORTS,
+    NAV_AI_SETTINGS,
+    NAV_CHEF_SERVER_SETTINGS,
+}
 BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
 INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
 HISTORY_SUBHEADER = "Load from History"
@@ -134,26 +157,46 @@ def _render_navigation_button(
             st.rerun()
 
 
-def _display_navigation_section(current_page: str) -> None:
-    """Display the navigation section with all buttons."""
-    st.subheader("Navigation")
-
-    col1, col2, col3, col4 = st.columns(4)
-    col5, col6, col7, col8 = st.columns(4)
-
-    nav_buttons = [
-        (col1, "Cookbook Analysis", NAV_COOKBOOK_ANALYSIS),
-        (col2, "Migration Planning", NAV_MIGRATION_PLANNING),
-        (col3, "Migration Config", NAV_MIGRATION_CONFIG),
-        (col4, "Dependency Mapping", NAV_DEPENDENCY_MAPPING),
-        (col5, "History", NAV_HISTORY),
-        (col6, "Validation Reports", NAV_VALIDATION_REPORTS),
-        (col7, "AI Settings", NAV_AI_SETTINGS),
-        (col8, "Chef Server", NAV_CHEF_SERVER_SETTINGS),
+def _render_buttons_for_features(features: set[str], current_page: str) -> None:
+    """Render navigation buttons for a given set of features."""
+    all_nav_buttons = [
+        ("Cookbook Analysis", NAV_COOKBOOK_ANALYSIS),
+        ("Migration Planning", NAV_MIGRATION_PLANNING),
+        ("Migration Config", NAV_MIGRATION_CONFIG),
+        ("Dependency Mapping", NAV_DEPENDENCY_MAPPING),
+        ("Ansible Assessment", NAV_ANSIBLE_ASSESSMENT),
+        ("Ansible Upgrade", NAV_ANSIBLE_PLANNING),
+        ("Collection Validation", NAV_ANSIBLE_VALIDATION),
+        ("History", NAV_HISTORY),
+        ("Validation Reports", NAV_VALIDATION_REPORTS),
+        ("AI Settings", NAV_AI_SETTINGS),
+        ("Chef Server", NAV_CHEF_SERVER_SETTINGS),
     ]
 
-    for col, label, page_key in nav_buttons:
-        _render_navigation_button(col, label, page_key, current_page)
+    filtered_buttons = [
+        (label, page_key) for label, page_key in all_nav_buttons if page_key in features
+    ]
+
+    # Display in 3-column grid
+    cols_per_row = 3
+    for i in range(0, len(filtered_buttons), cols_per_row):
+        cols = st.columns(cols_per_row)
+        for j, (label, page_key) in enumerate(filtered_buttons[i : i + cols_per_row]):
+            _render_navigation_button(cols[j], label, page_key, current_page)
+
+
+def _display_navigation_section(current_page: str) -> None:
+    """Display tabbed navigation with feature-specific buttons."""
+    tab_chef, tab_ansible, tab_tools = st.tabs(["Chef", "Ansible", "Tools"])
+
+    with tab_chef:
+        _render_buttons_for_features(CHEF_FEATURES, current_page)
+
+    with tab_ansible:
+        _render_buttons_for_features(ANSIBLE_FEATURES, current_page)
+
+    with tab_tools:
+        _render_buttons_for_features(SHARED_FEATURES, current_page)
 
 
 def main() -> None:
@@ -191,6 +234,9 @@ def _route_to_page(page: str) -> None:
         NAV_VALIDATION_REPORTS: show_validation_reports,
         NAV_AI_SETTINGS: show_ai_settings_page,
         NAV_CHEF_SERVER_SETTINGS: show_chef_server_settings_page,
+        NAV_ANSIBLE_ASSESSMENT: show_ansible_assessment_page,
+        NAV_ANSIBLE_PLANNING: show_ansible_planning_page,
+        NAV_ANSIBLE_VALIDATION: show_ansible_validation_page,
     }
 
     route_func = page_routes.get(page)
