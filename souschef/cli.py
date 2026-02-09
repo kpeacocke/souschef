@@ -1886,7 +1886,7 @@ def ansible_assess(environment_path: str | None) -> None:
         validated_path = _validate_user_path(environment_path or None)
 
         click.echo("Assessing Ansible environment...")
-        assessment = assess_ansible_environment(validated_path)
+        assessment = assess_ansible_environment(str(validated_path))
 
         click.echo("\n" + "=" * 60)
         click.echo("Ansible Environment Assessment")
@@ -2310,7 +2310,9 @@ def ansible_detect_python(environment_path: str | None) -> None:
         validated_path = (
             _validate_user_path(environment_path) if environment_path else None
         )
-        python_version = detect_python_version(validated_path)
+        python_version = detect_python_version(
+            str(validated_path) if validated_path else None
+        )
 
         click.echo("\n" + "=" * 60)
         click.echo("Python Version Detection")
