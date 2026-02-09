@@ -335,6 +335,7 @@ def show_ansible_validation_page() -> None:
                     tmp_dir = Path(tmp_path).parent
                     shutil.rmtree(tmp_dir, ignore_errors=True)
                 except Exception:
+                    # Ignore cleanup errors - temporary directory will be cleaned by OS
                     pass
 
             except Exception as e:
