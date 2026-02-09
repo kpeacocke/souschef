@@ -6,6 +6,7 @@ generating upgrade plans, validating collection compatibility, and creating
 testing strategies for Ansible upgrades.
 """
 
+import shlex
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -24,6 +25,25 @@ from souschef.parsers.ansible_inventory import (
     parse_requirements_yml,
     scan_playbook_for_version_issues,
 )
+
+
+def _is_path_within(target: Path, base: Path) -> bool:
+    """
+    Check if target path is within base path (no traversal).
+
+    Args:
+        target: Path to check.
+        base: Base path that target should be within.
+
+    Returns:
+        True if target is within base, False otherwise.
+
+    """
+    try:
+        target.relative_to(base)
+        return True
+    except ValueError:
+        return False
 
 
 def detect_python_version(environment_path: str | None = None) -> str:
@@ -59,6 +79,9 @@ def detect_python_version(environment_path: str | None = None) -> str:
             resolved_python = venv_python.resolve()
             if not resolved_python.is_file():
                 raise ValueError(f"Python executable is not a file: {resolved_python}")
+            # Verify the resolved path is still within expected bounds
+            if not _is_path_within(resolved_python, env_path):
+                raise ValueError("Python executable path escapes environment directory")
             python_cmd = str(resolved_python)
 
     try:
@@ -137,7 +160,13 @@ def _scan_collections(env_path: Path, result: dict[str, Any]) -> None:
     for req_path in requirements_paths:
         if req_path.exists():
             try:
-                collections = parse_requirements_yml(str(req_path))
+                # Verify requirements path is within env_path (no traversal)
+                resolved_req = req_path.resolve()
+                if not _is_path_within(resolved_req, env_path):
+                    # Skip if path escapes environment directory
+                    continue
+
+                collections = parse_requirements_yml(str(resolved_req))
                 result["collections"] = collections
                 break
             except (FileNotFoundError, ValueError):
@@ -151,7 +180,13 @@ def _scan_playbooks(env_path: Path, result: dict[str, Any]) -> None:
 
     for playbook_path in playbook_paths[:20]:
         try:
-            issues = scan_playbook_for_version_issues(str(playbook_path))
+            # Verify playbook path is within env_path (no traversal)
+            resolved_playbook = playbook_path.resolve()
+            if not _is_path_within(resolved_playbook, env_path):
+                # Skip files that escape the environment directory
+                continue
+
+            issues = scan_playbook_for_version_issues(str(resolved_playbook))
             if issues["warnings"]:
                 playbook_issues.extend(issues["warnings"])
             result["playbooks_scanned"] += 1
@@ -228,7 +263,7 @@ def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
 
     _generate_recommendations(result)
 
-    return result
+    return result  # noqa: RUF100
 
 
 def _generate_recommendations(assessment: dict[str, Any]) -> None:
@@ -595,10 +630,14 @@ def generate_upgrade_testing_plan(environment_path: str) -> str:
         Markdown-formatted testing plan.
 
     """
+    # Validate and resolve path to prevent injection
+    resolved_path = Path(environment_path).resolve()
+    escaped_path = shlex.quote(str(resolved_path))
+
     plan = f"""# Ansible Upgrade Testing Plan
 
 Generated: {date.today().isoformat()}
-Environment: {environment_path}
+Environment: {escaped_path}
 
 ## 1. Pre-Upgrade Testing
 
