@@ -92,7 +92,7 @@ class TestEnhancedErrorMessages:
 
         assert "version" in error.title.lower()
         assert "3.0.0" in error.format_message()
-        assert "2.17" in error.format_message()  # Valid version in suggestions
+        assert "2.20" in error.format_message()  # Valid version in suggestions
 
     def test_invalid_collection_name_error(self):
         """Test invalid collection name error generation."""

@@ -17,7 +17,20 @@ semver_strategy = st.builds(
 
 # Strategy for known Ansible versions (only actual Ansible-core versions)
 ansible_version_strategy = st.sampled_from(
-    ["2.9", "2.10", "2.11", "2.12", "2.13", "2.14", "2.15", "2.16", "2.17"]
+    [
+        "2.9",
+        "2.10",
+        "2.11",
+        "2.12",
+        "2.13",
+        "2.14",
+        "2.15",
+        "2.16",
+        "2.17",
+        "2.18",
+        "2.19",
+        "2.20",
+    ]
 )
 
 # Strategy for Ansible collection names
@@ -72,9 +85,11 @@ def _validate_upgrade_path_ordering(result: dict) -> None:
     if "intermediate_versions" in result:
         intermediates = result["intermediate_versions"]
         if isinstance(intermediates, list) and len(intermediates) > 1:
+            from souschef.core.ansible_versions import _parse_version
+
             for i in range(len(intermediates) - 1):
-                v1 = float(intermediates[i])
-                v2 = float(intermediates[i + 1])
+                v1 = _parse_version(intermediates[i])
+                v2 = _parse_version(intermediates[i + 1])
                 assert v1 < v2, f"Versions not ordered: {v1} >= {v2}"
 
 
@@ -158,9 +173,11 @@ def test_upgrade_path_monotonicity(major, minor_offset):
         if "intermediate_versions" in result:
             intermediates = result["intermediate_versions"]
             if isinstance(intermediates, list) and len(intermediates) > 0:
-                prev = float(from_ver.split(".")[1])
+                from souschef.core.ansible_versions import _parse_version
+
+                prev = _parse_version(from_ver)
                 for ver_str in intermediates:
-                    curr = float(ver_str)
+                    curr = _parse_version(ver_str)
                     assert prev < curr, f"Intermediate not ordered: {prev} >= {curr}"
                     prev = curr
 

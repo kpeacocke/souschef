@@ -2029,7 +2029,7 @@ def _convert_ruby_hash_to_yaml(ruby_hash: str) -> str:
 
         # Convert each pair from Ruby syntax to YAML
         flow_pairs = []
-        for pair in yaml_pairs:
+        for index, pair in enumerate(yaml_pairs, start=1):
             if "=>" in pair:
                 key_part, value_part = pair.split("=>", 1)
                 key = key_part.strip()
@@ -2042,14 +2042,16 @@ def _convert_ruby_hash_to_yaml(ruby_hash: str) -> str:
                 value = _convert_ruby_value_to_yaml(value)
                 flow_pairs.append(f"{key}: {value}")
             else:
-                # Malformed pair, keep as comment
-                flow_pairs.append(f"# TODO: Fix malformed pair: {pair}")
+                # Malformed pair, preserve the raw content in a safe field
+                raw_value = json.dumps(pair.strip())
+                flow_pairs.append(f"unparsed_{index}: {raw_value}")
 
         return "{" + ", ".join(flow_pairs) + "}" if flow_pairs else "{}"
 
     except Exception:
-        # If conversion fails, return as-is with a comment
-        return f"# TODO: Convert Ruby hash: {ruby_hash}"
+        # If conversion fails, preserve the raw hash content as a string
+        raw_value = json.dumps(ruby_hash)
+        return f"{{unparsed: {raw_value}}}"
 
 
 def _convert_ruby_array_to_yaml(ruby_array: str) -> str:
@@ -3008,7 +3010,7 @@ def _handle_command_execution_block(block: str, positive: bool) -> str | None:
                     f"ansible_check_mode or ansible_facts.packages['{pkg}'] is defined"
                 )
             else:
-                condition = "ansible_check_mode or true  # TODO: Review shell command"
+                return _review_guard_condition(block, positive)
             return condition if positive else f"not ({condition})"
 
     return None
@@ -3067,5 +3069,28 @@ def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
         if condition is not None:
             return condition
 
-    # For complex blocks, create a comment indicating manual review needed
-    return f"# TODO: Review Chef block condition: {block[:50]}..."
+    converted = block
+    converted = converted.replace("&&", "and")
+    converted = converted.replace("||", "or")
+    converted = re.sub(r"!\s*(?!=)", "not ", converted)
+    converted = re.sub(r"\bnil\b", "none", converted)
+    converted = re.sub(r"\btrue\b", "true", converted, flags=re.IGNORECASE)
+    converted = re.sub(r"\bfalse\b", "false", converted, flags=re.IGNORECASE)
+
+    if _needs_manual_guard_review(converted):
+        return _review_guard_condition(block, positive)
+
+    return converted if positive else f"not ({converted})"
+
+
+def _needs_manual_guard_review(converted: str) -> bool:
+    """Check if a guard conversion still contains Ruby-specific syntax."""
+    return bool(re.search(r"(::|\bnew\b|\bdo\b|\bend\b|\?|\{|\})", converted))
+
+
+def _review_guard_condition(original: str, positive: bool) -> str:
+    """Return a conservative guard condition with review context."""
+    base = "ansible_check_mode"
+    condition = base if positive else f"not ({base})"
+    compact = " ".join(original.split())
+    return f"{condition}  # REVIEW: manual guard conversion needed: {compact[:80]}"

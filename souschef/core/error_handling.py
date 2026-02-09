@@ -113,7 +113,7 @@ class EnhancedErrorHandler:
         "The specified Ansible version is not supported or recognised. "
         "Check that you are using a valid Ansible-core version.",
         [
-            "Valid versions: 2.9-2.17",
+            "Valid versions: 2.9-2.20",
             "Use 'ansible --version' to check your current version",
             "For version upgrades, refer to the upgrade guide",
         ],

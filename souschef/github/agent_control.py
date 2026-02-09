@@ -23,8 +23,20 @@ IMPLEMENTATION STATUS:
   implementation
 - All tests mock the GitHub integration and document expected behaviour
 
-See souschef/github/agent_control.py for implementation TODOs.
+See souschef/github/agent_control.py for implementation notes.
 """
+
+import os
+from typing import TYPE_CHECKING
+from urllib.parse import quote
+
+if TYPE_CHECKING:
+    import requests as requests_module
+else:
+    try:
+        import requests as requests_module
+    except ImportError:
+        requests_module = None  # type: ignore[assignment]
 
 # Agent state management via labels
 LABEL_AGENT_ACTIVE = "copilot-agent:active"
@@ -35,6 +47,10 @@ LABEL_AGENT_STOPPED = "copilot-agent:stopped"
 COMMENT_PAUSE_REQUEST = "🔸 **Copilot Agent Paused**"
 COMMENT_STOP_REQUEST = "🛑 **Copilot Agent Stopped**"
 COMMENT_RESUME_REQUEST = "▶️ **Copilot Agent Resumed**"
+
+# GitHub API settings
+GITHUB_API_BASE_URL = "https://api.github.com"
+GITHUB_API_TIMEOUT_SECONDS = 10
 
 
 def assign_copilot_agent_to_issue(
@@ -313,7 +329,7 @@ def check_copilot_agent_status(
         status = _check_agent_labels(owner, repo, issue_number)
 
         # Get recent agent-related comments
-        recent_comments = _get_recent_agent_comments()
+        recent_comments = _get_recent_agent_comments(owner, repo, issue_number)
 
         status_emoji = {
             "active": "✅",
@@ -352,25 +368,21 @@ def _check_agent_labels(owner: str, repo: str, issue_number: int) -> str:
         One of: 'active', 'paused', 'stopped', 'not_assigned'
 
     """
-    try:
-        # Check which control labels are present on the issue
-        # This would use GitHub API through MCP
-        # In a full implementation, this would:
-        # 1. Call mcp_github tools to get issue details
-        # 2. Check for our control labels
-        # 3. Return appropriate status
+    # Check which control labels are present on the issue
+    # This would use GitHub API through MCP
+    # In a full implementation, this would:
+    # 1. Call mcp_github tools to get issue details
+    # 2. Check for our control labels
+    # 3. Return appropriate status
 
-        # Priority order: stopped > paused > active > not_assigned
-        if _issue_has_label(owner, repo, issue_number, LABEL_AGENT_STOPPED):
-            return "stopped"
-        if _issue_has_label(owner, repo, issue_number, LABEL_AGENT_PAUSED):
-            return "paused"
-        if _issue_has_label(owner, repo, issue_number, LABEL_AGENT_ACTIVE):
-            return "active"
-        return "not_assigned"
-
-    except Exception:
-        return "not_assigned"
+    # Priority order: stopped > paused > active > not_assigned
+    if _issue_has_label(owner, repo, issue_number, LABEL_AGENT_STOPPED):
+        return "stopped"
+    if _issue_has_label(owner, repo, issue_number, LABEL_AGENT_PAUSED):
+        return "paused"
+    if _issue_has_label(owner, repo, issue_number, LABEL_AGENT_ACTIVE):
+        return "active"
+    return "not_assigned"
 
 
 def _issue_has_label(_owner: str, _repo: str, _issue_number: int, _label: str) -> bool:
@@ -380,7 +392,17 @@ def _issue_has_label(_owner: str, _repo: str, _issue_number: int, _label: str) -
     This function would use GitHub MCP tools to check labels.
     In the MCP architecture, labels can be checked via GitHub API calls.
     """
-    return False
+    response = _github_request(
+        "GET",
+        f"/repos/{_owner}/{_repo}/issues/{_issue_number}/labels",
+    )
+    labels = response.json()
+    if not isinstance(labels, list):
+        return False
+
+    return any(
+        label.get("name") == _label for label in labels if isinstance(label, dict)
+    )
 
 
 def _add_label_to_issue(
@@ -392,7 +414,11 @@ def _add_label_to_issue(
     This function would use GitHub MCP tools to add labels.
     In the MCP architecture, labels can be added via GitHub API calls.
     """
-    pass
+    _github_request(
+        "POST",
+        f"/repos/{_owner}/{_repo}/issues/{_issue_number}/labels",
+        json_data={"labels": [_label]},
+    )
 
 
 def _remove_label_from_issue(
@@ -403,7 +429,12 @@ def _remove_label_from_issue(
 
     This function would use GitHub MCP tools to remove labels.
     """
-    pass
+    label_path = quote(_label, safe="")
+    _github_request(
+        "DELETE",
+        f"/repos/{_owner}/{_repo}/issues/{_issue_number}/labels/{label_path}",
+        allow_not_found=True,
+    )
 
 
 def _add_comment_to_issue(
@@ -416,16 +447,82 @@ def _add_comment_to_issue(
     The activate_comment_management_tools function provides access to these
     tools.
     """
-    pass
+    _github_request(
+        "POST",
+        f"/repos/{_owner}/{_repo}/issues/{_issue_number}/comments",
+        json_data={"body": _body},
+    )
 
 
-def _get_recent_agent_comments() -> str:
+def _get_recent_agent_comments(owner: str, repo: str, issue_number: int) -> str:
     """
     Get recent agent-related comments from the issue.
 
     This function would use GitHub MCP tools to fetch and filter comments.
     """
-    return "No recent activity"
+    response = _github_request(
+        "GET",
+        f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
+        params={"per_page": "10"},
+    )
+    comments = response.json()
+    if not isinstance(comments, list):
+        return "No recent activity"
+
+    markers = (COMMENT_PAUSE_REQUEST, COMMENT_STOP_REQUEST, COMMENT_RESUME_REQUEST)
+    recent = []
+    for comment in comments:
+        if not isinstance(comment, dict):
+            continue
+        body = comment.get("body", "")
+        if any(marker in body for marker in markers):
+            recent.append(body)
+
+    if not recent:
+        return "No recent activity"
+
+    return "\n\n".join(recent[-3:])
+
+
+def _github_request(
+    method: str,
+    path: str,
+    params: dict[str, str] | None = None,
+    json_data: dict[str, object] | None = None,
+    timeout: float | None = None,
+    allow_not_found: bool = False,
+):
+    """Perform a GitHub API request with standard headers and error handling."""
+    if requests_module is None:
+        raise RuntimeError("requests library not installed")
+
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if not token:
+        raise RuntimeError("GitHub token not found in GITHUB_TOKEN or GH_TOKEN")
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "souschef-agent-control",
+    }
+
+    effective_timeout = timeout or GITHUB_API_TIMEOUT_SECONDS
+    response = requests_module.request(
+        method,
+        f"{GITHUB_API_BASE_URL}{path}",
+        headers=headers,
+        params=params,
+        json=json_data,
+        timeout=effective_timeout,
+    )
+    if allow_not_found and response.status_code == 404:
+        return response
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"GitHub API error {response.status_code}: {response.text.strip()}"
+        )
+
+    return response
 
 
 def _format_status_details(status: str) -> str:

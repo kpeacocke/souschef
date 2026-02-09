@@ -169,19 +169,20 @@ def get_python_compatibility(
 
 
 def _calculate_intermediate_versions(
-    current_major: float, target_major: float
+    current_version: str, target_version: str
 ) -> list[str]:
     """Calculate intermediate versions for upgrade path."""
-    version_gap = target_major - current_major
-    intermediate_versions: list[str] = []
+    current_key = _parse_version(current_version)
+    target_key = _parse_version(target_version)
+    if current_key >= target_key:
+        return []
 
-    if version_gap > 0.2:
-        for version in sorted(ANSIBLE_VERSIONS.keys()):
-            version_num = float(version)
-            if current_major < version_num < target_major:
-                intermediate_versions.append(version)
-
-    return intermediate_versions
+    sorted_versions = sorted(ANSIBLE_VERSIONS.keys(), key=_parse_version)
+    return [
+        version
+        for version in sorted_versions
+        if current_key < _parse_version(version) < target_key
+    ]
 
 
 def _collect_breaking_changes(
@@ -200,17 +201,21 @@ def _collect_breaking_changes(
 
 def _assess_upgrade_risk(
     current_version: str,
+    target_version: str,
     current: AnsibleVersion,
-    version_gap: float,
+    intermediate_versions: list[str],
     python_upgrade_needed: bool,
 ) -> tuple[str, list[str]]:
     """Assess risk level and factors for upgrade."""
     risk_factors: list[str] = []
+    is_upgrade = _parse_version(target_version) > _parse_version(current_version)
 
-    if "2.9" in current_version and version_gap > 0:
+    if current_version.startswith("2.9") and is_upgrade:
         risk_factors.append("Upgrading from 2.9 (collections split required)")
-    if version_gap > 0.5:
-        risk_factors.append(f"Large version jump ({version_gap} versions)")
+    if len(intermediate_versions) >= 3:
+        risk_factors.append(
+            f"Large version jump ({len(intermediate_versions)} intermediate versions)"
+        )
     if python_upgrade_needed:
         risk_factors.append("Python upgrade required on control node")
     if current.eol_date and current.eol_date < date.today():
@@ -244,7 +249,12 @@ def _estimate_upgrade_effort(
 
 
 def calculate_upgrade_path(
-    current_version: str, target_version: str
+    current_version: str,
+    target_version: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    use_ai: bool = False,
+    use_cache: bool = True,
 ) -> dict[str, object]:
     """
     Calculate upgrade path based on compatibility matrix.
@@ -258,6 +268,10 @@ def calculate_upgrade_path(
     Args:
         current_version: Current Ansible version.
         target_version: Desired Ansible version.
+        ai_provider: AI provider to use when use_ai is enabled.
+        api_key: API key for AI provider.
+        use_ai: Whether to use AI data for compatibility checks.
+        use_cache: Whether to use cached AI results.
 
     Returns:
         Dictionary with upgrade path details including:
@@ -286,21 +300,37 @@ def calculate_upgrade_path(
     current = ANSIBLE_VERSIONS[current_version]
     target = ANSIBLE_VERSIONS[target_version]
 
-    current_major = float(current_version)
-    target_major = float(target_version)
-    version_gap = target_major - current_major
-
     intermediate_versions = _calculate_intermediate_versions(
-        current_major, target_major
+        current_version, target_version
     )
     breaking_changes = _collect_breaking_changes(intermediate_versions, target_version)
 
-    python_upgrade_needed = not any(
-        py in target.control_node_python for py in current.control_node_python
-    )
+    ai_data: dict | None = None
+    if use_ai and api_key:
+        ai_data = fetch_ansible_versions_with_ai(
+            ai_provider=ai_provider,
+            api_key=api_key,
+            use_cache=use_cache,
+        )
+
+    current_python = current.control_node_python
+    target_python = target.control_node_python
+    if ai_data:
+        current_python = ai_data.get(current_version, {}).get(
+            "control_node_python", current_python
+        )
+        target_python = ai_data.get(target_version, {}).get(
+            "control_node_python", target_python
+        )
+
+    python_upgrade_needed = not any(py in target_python for py in current_python)
 
     risk_level, risk_factors = _assess_upgrade_risk(
-        current_version, current, version_gap, python_upgrade_needed
+        current_version,
+        target_version,
+        current,
+        intermediate_versions,
+        python_upgrade_needed,
     )
     effort_days = _estimate_upgrade_effort(
         current_version, intermediate_versions, python_upgrade_needed
@@ -313,8 +343,8 @@ def calculate_upgrade_path(
         "intermediate_versions": intermediate_versions,
         "breaking_changes": breaking_changes,
         "python_upgrade_needed": python_upgrade_needed,
-        "current_python": current.control_node_python,
-        "required_python": target.control_node_python,
+        "current_python": current_python,
+        "required_python": target_python,
         "risk_level": risk_level,
         "risk_factors": risk_factors,
         "estimated_effort_days": effort_days,
@@ -439,7 +469,7 @@ def get_supported_versions() -> list[str]:
         for v, info in ANSIBLE_VERSIONS.items()
         if not info.eol_date or info.eol_date >= today
     ]
-    return sorted(supported, key=float, reverse=True)
+    return sorted(supported, key=_parse_version, reverse=True)
 
 
 def get_minimum_python_for_ansible(ansible_version: str) -> tuple[str, str]:
@@ -461,8 +491,8 @@ def get_minimum_python_for_ansible(ansible_version: str) -> tuple[str, str]:
 
     version_info = ANSIBLE_VERSIONS[ansible_version]
 
-    control_min = sorted(version_info.control_node_python)[0]
-    managed_min = sorted(version_info.managed_node_python)[0]
+    control_min = min(version_info.control_node_python, key=_parse_version)
+    managed_min = min(version_info.managed_node_python, key=_parse_version)
 
     return (control_min, managed_min)
 
@@ -805,18 +835,11 @@ def fetch_ansible_versions_with_ai(
     Ansible documentation, falling back to cached data if AI is unavailable.
 
     Status:
-        - ✗ Not integrated into calculate_upgrade_path()
+        - ✓ Optional integration into calculate_upgrade_path() when enabled
         - ✗ Not used by default in assessment workflows
         - ✗ Incomplete integration tests
         - ✓ Caching implemented
         - ✓ Multiple provider support (Anthropic, OpenAI)
-
-    TODO (Future Enhancement):
-        - Integrate into primary upgrade path calculation
-        - Add fallback from AI to static data
-        - Implement comprehensive integration tests
-        - Add automatic data freshness checks
-        - Consider making AI-driven data the default
 
     Args:
         ai_provider: AI provider to use (anthropic, openai, watson).
