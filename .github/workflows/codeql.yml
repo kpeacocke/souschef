@@ -82,6 +82,8 @@ jobs:
           category: "/language:python"
           # Upload results even if there are findings
           upload: always
+          # Output SARIF file for artifact upload
+          output: sarif-results
 
       - name: Upload SARIF as artifact
         if: always()

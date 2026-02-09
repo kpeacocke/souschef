@@ -1,8 +1,29 @@
 """
-GitHub Copilot agent control for issue assignments.
+GitHub Copilot agent control for multi-platform orchestration.
 
-Provides pause, stop, and resume capabilities for Copilot agents working on issues.
-State is tracked via GitHub issue comments and labels.
+[PLANNED FEATURE] This module provides infrastructure for managing GitHub
+Copilot agent lifecycles (pause/stop/resume) across multiple platform
+migration tasks. This enables:
+
+- Multi-platform migrations: Orchestrate Puppet, SaltStack, CFEngine to
+  Ansible conversions
+- Parallel workflows: Assign agents to different repositories/platforms
+  simultaneously
+- Progress tracking: Monitor status across distributed migration tasks
+- Repository analysis: Automatically identify and process migration
+  candidates
+
+State will be tracked via GitHub issue comments and labels when fully
+implemented.
+
+IMPLEMENTATION STATUS:
+- Helper functions are currently placeholders (will connect to GitHub API
+  via MCP tools)
+- Core API structure is stable and serves as specification for full
+  implementation
+- All tests mock the GitHub integration and document expected behaviour
+
+See souschef/github/agent_control.py for implementation TODOs.
 """
 
 # Agent state management via labels
@@ -359,8 +380,6 @@ def _issue_has_label(_owner: str, _repo: str, _issue_number: int, _label: str) -
     This function would use GitHub MCP tools to check labels.
     In the MCP architecture, labels can be checked via GitHub API calls.
     """
-    # Placeholder - in full implementation would use MCP GitHub tools
-    # The actual implementation would call the GitHub API through MCP
     return False
 
 
@@ -373,8 +392,6 @@ def _add_label_to_issue(
     This function would use GitHub MCP tools to add labels.
     In the MCP architecture, labels can be added via GitHub API calls.
     """
-    # Placeholder - in full implementation would use MCP GitHub tools
-    # The actual implementation would call the GitHub API through MCP
     pass
 
 
@@ -386,7 +403,6 @@ def _remove_label_from_issue(
 
     This function would use GitHub MCP tools to remove labels.
     """
-    # Placeholder - in full implementation would use MCP GitHub tools
     pass
 
 
@@ -397,10 +413,9 @@ def _add_comment_to_issue(
     Add a comment to an issue.
 
     This function would use GitHub MCP tools to add comments.
-    The activate_comment_management_tools function provides access to these tools.
+    The activate_comment_management_tools function provides access to these
+    tools.
     """
-    # Placeholder - in full implementation would use MCP GitHub tools
-    # Would call something like mcp_github_add_issue_comment
     pass
 
 
@@ -410,10 +425,6 @@ def _get_recent_agent_comments() -> str:
 
     This function would use GitHub MCP tools to fetch and filter comments.
     """
-    # Placeholder - in full implementation would:
-    # 1. Fetch issue comments via MCP GitHub tools
-    # 2. Filter for comments matching our control markers
-    # 3. Format and return recent activity
     return "No recent activity"
 
 

@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+from souschef.core.chef_server import _validate_chef_server_connection
 from souschef.ui.pages.chef_server_settings import (
-    _validate_chef_server_connection,
     show_chef_server_settings_page,
 )
 
@@ -11,7 +11,7 @@ from souschef.ui.pages.chef_server_settings import (
 class TestChefServerValidation:
     """Test Chef Server connection validation."""
 
-    @patch("souschef.ui.pages.chef_server_settings.requests")
+    @patch("souschef.core.chef_server.requests_module")
     def test_validate_connection_success(self, mock_requests):
         """Test successful Chef Server validation."""
         mock_response = MagicMock()
@@ -25,7 +25,7 @@ class TestChefServerValidation:
         assert success is True
         assert "Successfully connected" in message
 
-    @patch("souschef.ui.pages.chef_server_settings.requests")
+    @patch("souschef.core.chef_server.requests_module")
     def test_validate_connection_auth_failure(self, mock_requests):
         """Test authentication failure."""
         mock_response = MagicMock()
@@ -39,7 +39,7 @@ class TestChefServerValidation:
         assert success is False
         assert "Authentication failed" in message
 
-    @patch("souschef.ui.pages.chef_server_settings.requests")
+    @patch("souschef.core.chef_server.requests_module")
     def test_validate_connection_not_found(self, mock_requests):
         """Test endpoint not found."""
         mock_response = MagicMock()
@@ -53,7 +53,7 @@ class TestChefServerValidation:
         assert success is False
         assert "not found" in message
 
-    @patch("souschef.ui.pages.chef_server_settings.requests")
+    @patch("souschef.core.chef_server.requests_module")
     def test_validate_connection_timeout(self, mock_requests):
         """Test connection timeout."""
         from requests.exceptions import Timeout
@@ -67,7 +67,7 @@ class TestChefServerValidation:
         assert success is False
         assert "timeout" in message.lower()
 
-    @patch("souschef.ui.pages.chef_server_settings.requests")
+    @patch("souschef.core.chef_server.requests_module")
     def test_validate_connection_error(self, mock_requests):
         """Test connection error."""
         from requests.exceptions import ConnectionError as RequestsConnectionError
@@ -99,7 +99,7 @@ class TestChefServerValidation:
 
     def test_validate_requests_not_available(self):
         """Test validation when requests library not available."""
-        with patch("souschef.ui.pages.chef_server_settings.requests", None):
+        with patch("souschef.core.chef_server.requests_module", None):
             success, message = _validate_chef_server_connection(
                 "https://chef.example.com", "my-node"
             )
