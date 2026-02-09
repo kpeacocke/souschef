@@ -112,6 +112,7 @@ class TestAssessAnsibleEnvironment:
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
             patch("pathlib.Path.is_file", return_value=True),
+            patch("souschef.parsers.ansible_inventory.os.access", return_value=True),
         ):
             result = assess_ansible_environment("/ansible/env")
             assert isinstance(result, dict)
@@ -123,6 +124,7 @@ class TestAssessAnsibleEnvironment:
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
             patch("pathlib.Path.is_file", return_value=True),
+            patch("souschef.parsers.ansible_inventory.os.access", return_value=True),
         ):
             result = assess_ansible_environment("/ansible/env")
             assert isinstance(result, dict)
@@ -153,6 +155,7 @@ class TestAssessAnsibleEnvironment:
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
             patch("pathlib.Path.is_file", return_value=True),
+            patch("souschef.parsers.ansible_inventory.os.access", return_value=True),
         ):
             mock_run.return_value = MagicMock(stdout="ansible 2.14.0\n", returncode=0)
             result = assess_ansible_environment("/ansible/env")
@@ -166,6 +169,7 @@ class TestAssessAnsibleEnvironment:
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
             patch("pathlib.Path.is_file", return_value=True),
+            patch("souschef.parsers.ansible_inventory.os.access", return_value=True),
         ):
             mock_run.return_value = MagicMock(stdout="Python 3.10.1\n", returncode=0)
             result = assess_ansible_environment("/ansible/env")
@@ -178,6 +182,7 @@ class TestAssessAnsibleEnvironment:
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
             patch("pathlib.Path.is_file", return_value=True),
+            patch("souschef.parsers.ansible_inventory.os.access", return_value=True),
         ):
             result = assess_ansible_environment("/ansible/env")
             assert isinstance(result, dict)
@@ -189,6 +194,7 @@ class TestAssessAnsibleEnvironment:
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
             patch("pathlib.Path.is_file", return_value=True),
+            patch("souschef.parsers.ansible_inventory.os.access", return_value=True),
         ):
             result = assess_ansible_environment("/old/ansible")
             assert isinstance(result, dict)
@@ -439,6 +445,7 @@ class TestUpgradeWorkflows:
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
             patch("pathlib.Path.is_file", return_value=True),
+            patch("souschef.parsers.ansible_inventory.os.access", return_value=True),
         ):
             assessment = assess_ansible_environment("/ansible/env")
             assert isinstance(assessment, dict)
@@ -475,6 +482,7 @@ class TestUpgradeWorkflows:
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.is_dir", return_value=True),
             patch("pathlib.Path.is_file", return_value=True),
+            patch("souschef.parsers.ansible_inventory.os.access", return_value=True),
         ):
             assessment = assess_ansible_environment("/ansible/env")
             assert isinstance(assessment, dict)
