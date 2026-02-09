@@ -50,6 +50,9 @@ def detect_python_version(environment_path: str | None = None) -> str:
     """
     Detect Python version in use.
 
+    Security: This function validates and resolves paths to prevent path traversal.
+    User input should be validated at CLI/MCP layer before calling this function.
+
     Args:
         environment_path: Path to environment (looks for python/python3 there).
 
@@ -222,6 +225,9 @@ def _check_python_compatibility(result: dict[str, Any]) -> None:
 def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
     """
     Assess current Ansible environment for upgrade readiness.
+
+    Security: Path is validated and resolved to prevent traversal attacks.
+    User input should be validated at CLI/MCP layer before calling this function.
 
     Scans the environment, detects versions, checks compatibility,
     and generates recommendations.
@@ -622,6 +628,9 @@ def validate_collection_compatibility(
 def generate_upgrade_testing_plan(environment_path: str) -> str:
     """
     Generate comprehensive testing plan for Ansible upgrade.
+
+    Security: Path is validated, resolved, and escaped to prevent injection.
+    User input should be validated at CLI/MCP layer before calling this function.
 
     Args:
         environment_path: Path to Ansible environment.

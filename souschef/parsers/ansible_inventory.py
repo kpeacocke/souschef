@@ -19,6 +19,9 @@ def parse_ansible_cfg(config_path: str) -> dict[str, Any]:
     """
     Parse ansible.cfg configuration file.
 
+    Security: Path is validated and resolved to prevent traversal attacks.
+    User input should be validated at entry points before calling this function.
+
     Args:
         config_path: Path to ansible.cfg file.
 
@@ -109,6 +112,9 @@ def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
     """
     Parse INI-format Ansible inventory file.
 
+    Security: Path is validated and resolved to prevent traversal attacks.
+    User input should be validated at entry points before calling this function.
+
     Args:
         inventory_path: Path to inventory file.
 
@@ -159,6 +165,9 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
     """
     Parse YAML-format Ansible inventory file.
 
+    Security: Path is validated and resolved to prevent traversal attacks.
+    User input should be validated at entry points before calling this function.
+
     Args:
         inventory_path: Path to inventory YAML file.
 
@@ -199,6 +208,9 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
 def parse_inventory_file(inventory_path: str) -> dict[str, Any]:
     """
     Parse Ansible inventory file (auto-detect format).
+
+    Security: Path is validated and resolved to prevent traversal attacks.
+    User input should be validated at entry points before calling this function.
 
     Supports both INI and YAML formats.
 
@@ -243,6 +255,9 @@ def parse_inventory_file(inventory_path: str) -> dict[str, Any]:
 def detect_ansible_version(ansible_path: str | None = None) -> str:
     """
     Detect installed Ansible version from environment.
+
+    Security: Path is validated and resolved to prevent traversal attacks.
+    User input should be validated at entry points before calling this function.
 
     Args:
         ansible_path: Path to ansible executable, or None to use PATH.
@@ -329,6 +344,10 @@ def parse_requirements_yml(requirements_path: str) -> dict[str, str]:
     """
     Parse Ansible Galaxy requirements.yml file.
 
+    Security: Path is validated, resolved, and filename is restricted to
+    'requirements.yml' only to prevent arbitrary file access.
+    User input should be validated at entry points before calling this function.
+
     Args:
         requirements_path: Path to requirements.yml.
 
@@ -398,6 +417,9 @@ def _validate_playbook_path(playbook_path: str) -> Path:
 def scan_playbook_for_version_issues(playbook_path: str) -> dict[str, Any]:
     """
     Scan playbook for version-specific syntax issues.
+
+    Security: Path is validated and resolved via _validate_playbook_path().
+    User input should be validated at entry points before calling this function.
 
     Detects deprecated syntax, module usage, and compatibility issues.
 
