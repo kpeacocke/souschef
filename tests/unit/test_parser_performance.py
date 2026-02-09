@@ -130,8 +130,8 @@ class TestInventoryParserPerformance:
         """
         Benchmark INI inventory parser on 1000+ hosts.
 
-        Performance baseline: Should parse 1000 hosts in < 100ms.
-        Regression detection: Alerts if parsing time increases > 20%.
+        Performance baseline: Should parse 1000 hosts efficiently.
+        Creates performance baseline for regression detection.
         """
 
         def parse_ini():
@@ -150,8 +150,8 @@ class TestInventoryParserPerformance:
         """
         Benchmark YAML inventory parser on 1000+ hosts with variables.
 
-        Performance baseline: Should parse 1000 hosts with vars in < 200ms.
-        Regression detection: Alerts if parsing time increases > 20%.
+        Performance baseline: Should parse 1000 hosts with vars efficiently.
+        Creates baseline for regression detection.
         """
 
         def parse_yaml():
@@ -188,8 +188,7 @@ class TestRequirementsParserPerformance:
         """
         Benchmark requirements.yml parser on 500+ collections.
 
-        Performance baseline: Should parse 500 collections in < 100ms.
-        Regression detection: Alerts if parsing time increases > 20%.
+        Performance baseline: Creates baseline for regression detection.
         """
 
         def parse_requirements():

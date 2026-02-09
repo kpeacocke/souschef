@@ -15,6 +15,8 @@ from typing import Any
 
 import yaml
 
+from souschef.core.caching import get_cache_manager
+
 
 def parse_ansible_cfg(config_path: str) -> dict[str, Any]:
     """
@@ -128,6 +130,12 @@ def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
         ValueError: If path is not a file.
 
     """
+    # Check cache first
+    cache_manager = get_cache_manager()
+    cached = cache_manager.get_inventory(inventory_path)
+    if cached is not None:
+        return cached
+
     # Validate and resolve path to prevent path traversal
     # lgtm[py/path-injection] - Validated at entry + function level
     path = Path(inventory_path).resolve()  # nosec B108
@@ -161,6 +169,8 @@ def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
                 else:
                     _parse_host_entry(line, group_name, inventory)
 
+    # Cache the result
+    cache_manager.cache_inventory(inventory_path, inventory)
     return inventory
 
 
@@ -182,6 +192,12 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
         ValueError: If YAML is invalid or path is not a file.
 
     """
+    # Check cache first
+    cache_manager = get_cache_manager()
+    cached = cache_manager.get_inventory(inventory_path)
+    if cached is not None:
+        return cached
+
     # Validate and resolve path to prevent path traversal
     # lgtm[py/path-injection] - Validated at entry + function level
     path = Path(inventory_path).resolve()  # nosec B108
@@ -206,6 +222,8 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
             f"got {type(inventory).__name__}"
         )
 
+    # Cache the result
+    cache_manager.cache_inventory(inventory_path, inventory)
     return inventory
 
 

@@ -8,6 +8,8 @@ functionality for various use cases.
 import time
 from typing import Any
 
+import pytest
+
 from souschef.core.caching import (
     CacheEntry,
     CacheManager,
@@ -384,7 +386,7 @@ class TestCacheIntegration:
             cache.set(f"key{i}", f"value{i}" * 10)
 
         stats = cache.stats()
-        assert stats["utilisation_percent"] == 100.0
+        assert stats["utilisation_percent"] == pytest.approx(100.0)
 
         # Add more entries, should maintain size
         for i in range(100, 150):

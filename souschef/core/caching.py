@@ -1,4 +1,5 @@
-"""Caching system for SousChef operations.
+"""
+Caching system for SousChef operations.
 
 Provides in-memory caching with configurable expiration, size limits,
 and support for various cache strategies.
@@ -17,6 +18,17 @@ from typing import Any, Generic, TypeVar
 
 K = TypeVar("K")
 V = TypeVar("V")
+
+# Cache configuration constants
+DEFAULT_MAX_CACHE_SIZE = 1000  # Maximum cached items before eviction
+DEFAULT_TTL_SECONDS = 300.0  # 5 minutes default cache lifetime
+INVENTORY_CACHE_SIZE = 500  # Max inventory entries
+INVENTORY_TTL_SECONDS = 300.0  # 5 minutes for inventory data
+FILE_CACHE_TTL_SECONDS = 600.0  # 10 minutes for file-based cache
+ASSESSMENT_CACHE_SIZE = 200  # Max assessment entries
+ASSESSMENT_TTL_SECONDS = 900.0  # 15 minutes for assessments
+GALAXY_CACHE_SIZE = 1000  # Max Galaxy API response entries
+GALAXY_TTL_SECONDS = 3600.0  # 1 hour for Galaxy data (changes infrequently)
 
 
 @dataclass
@@ -120,15 +132,15 @@ class MemoryCache(CacheBackend[K, V]):
 
     def __init__(
         self,
-        max_size: int = 1000,
+        max_size: int = DEFAULT_MAX_CACHE_SIZE,
         default_ttl_seconds: float | None = None,
     ):
         """
         Initialise memory cache.
 
         Args:
-            max_size: Maximum number of entries.
-            default_ttl_seconds: Default TTL for entries.
+            max_size: Maximum number of entries (default: 1000).
+            default_ttl_seconds: Default TTL for entries (optional).
 
         """
         self.max_size = max_size
@@ -252,13 +264,13 @@ class FileHashCache(CacheBackend[str, V]):
 
     def __init__(
         self,
-        default_ttl_seconds: float | None = None,
+        default_ttl_seconds: float | None = FILE_CACHE_TTL_SECONDS,
     ):
         """
         Initialise file hash cache.
 
         Args:
-            default_ttl_seconds: Default TTL for entries.
+            default_ttl_seconds: Default TTL (default: 600 seconds / 10 min).
 
         """
         self.default_ttl_seconds = default_ttl_seconds
@@ -304,28 +316,28 @@ class FileHashCache(CacheBackend[str, V]):
 
         return f"{file_path}:{file_hash}"
 
-    def get(self, file_path: str) -> V | None:
+    def get(self, key: str) -> V | None:
         """
         Retrieve cached value for file.
 
         Args:
-            file_path: Path to file.
+            key: Path to file.
 
         Returns:
             Cached value or None if not found, expired, or file changed.
 
         """
-        key = self._make_key(file_path)
-        if key is None:
+        cache_key = self._make_key(key)
+        if cache_key is None:
             return None
 
-        if key not in self._cache:
+        if cache_key not in self._cache:
             return None
 
-        entry = self._cache[key]
+        entry = self._cache[cache_key]
 
         if entry.is_expired():
-            del self._cache[key]
+            del self._cache[cache_key]
             return None
 
         entry.touch()
@@ -333,7 +345,7 @@ class FileHashCache(CacheBackend[str, V]):
 
     def set(
         self,
-        file_path: str,
+        key: str,
         value: V,
         ttl_seconds: float | None = None,
     ) -> None:
@@ -341,38 +353,38 @@ class FileHashCache(CacheBackend[str, V]):
         Cache value for file.
 
         Args:
-            file_path: Path to file.
+            key: Path to file.
             value: Value to cache.
             ttl_seconds: Time-to-live in seconds.
 
         """
-        key = self._make_key(file_path)
-        if key is None:
+        cache_key = self._make_key(key)
+        if cache_key is None:
             return
 
         effective_ttl = ttl_seconds or self.default_ttl_seconds
         entry = CacheEntry(value=value, ttl_seconds=effective_ttl)
-        self._cache[key] = entry
-        self._file_hashes[file_path] = key.split(":")[-1]
+        self._cache[cache_key] = entry
+        self._file_hashes[key] = cache_key.split(":")[-1]
 
-    def delete(self, file_path: str) -> bool:
+    def delete(self, key: str) -> bool:
         """
         Remove cached value for file.
 
         Args:
-            file_path: Path to file.
+            key: Path to file.
 
         Returns:
             True if entry was deleted, False if not found.
 
         """
-        key = self._make_key(file_path)
-        if key is None:
+        cache_key = self._make_key(key)
+        if cache_key is None:
             return False
 
-        if key in self._cache:
-            del self._cache[key]
-            self._file_hashes.pop(file_path, None)
+        if cache_key in self._cache:
+            del self._cache[cache_key]
+            self._file_hashes.pop(key, None)
             return True
 
         return False
@@ -437,7 +449,7 @@ class JSONSerializableCache(MemoryCache[str, str]):
 
         try:
             return json.loads(json_str)
-        except (json.JSONDecodeError, ValueError):
+        except json.JSONDecodeError:
             return None
 
     def set_json(
@@ -466,21 +478,21 @@ class CacheManager:
     """Manages multiple cache backends for different use cases."""
 
     def __init__(self):
-        """Initialise cache manager."""
+        """Initialise cache manager with pre-configured backends."""
         self.inventory_cache: MemoryCache[str, dict[str, Any]] = MemoryCache(
-            max_size=500, default_ttl_seconds=300
+            max_size=INVENTORY_CACHE_SIZE, default_ttl_seconds=INVENTORY_TTL_SECONDS
         )
 
         self.file_cache: FileHashCache[dict[str, Any]] = FileHashCache(
-            default_ttl_seconds=600
+            default_ttl_seconds=FILE_CACHE_TTL_SECONDS
         )
 
         self.assessment_cache: JSONSerializableCache = JSONSerializableCache(
-            max_size=200, default_ttl_seconds=900
+            max_size=ASSESSMENT_CACHE_SIZE, default_ttl_seconds=ASSESSMENT_TTL_SECONDS
         )
 
         self.galaxy_cache: JSONSerializableCache = JSONSerializableCache(
-            max_size=1000, default_ttl_seconds=3600
+            max_size=GALAXY_CACHE_SIZE, default_ttl_seconds=GALAXY_TTL_SECONDS
         )
 
     def get_inventory(self, path: str) -> dict[str, Any] | None:

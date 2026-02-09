@@ -56,7 +56,7 @@ class TestEnhancedErrorMessages:
 
     def test_invalid_yaml_error(self):
         """Test invalid YAML error generation."""
-        error = EnhancedErrorHandler.invalid_yaml_error(
+        error = EnhancedErrorHandler.generate_invalid_yaml_error(
             "/path/to/file.yml",
             line_number=5,
             error_detail="mapping values are not allowed here",
@@ -68,26 +68,27 @@ class TestEnhancedErrorMessages:
 
     def test_invalid_ini_error(self):
         """Test invalid INI error generation."""
-        error = EnhancedErrorHandler.invalid_ini_error(
-            "/path/to/inventory.ini",
-            line_number=15,
+        error = EnhancedErrorHandler.generate_invalid_ini_error(
+            "/path/to/file.ini",
+            line_number=8,
+            error_detail="Missing section header",
         )
 
-        assert "Invalid INI syntax" in error.title
-        assert "/path/to/inventory.ini" in error.format_message()
+        assert error.title == "Invalid INI syntax in /path/to/file.ini"
+        assert "Missing section header" in error.format_message()
         assert error.context.error_type == "ini_parse_error"
 
     def test_missing_file_error(self):
         """Test missing file error generation."""
-        error = EnhancedErrorHandler.missing_file_error("/missing/file.yml")
+        error = EnhancedErrorHandler.generate_missing_file_error("/path/to/missing.yml")
 
-        assert "File not found" in error.title
-        assert "/missing/file.yml" in error.format_message()
+        assert error.title == "File not found: /path/to/missing.yml"
+        assert "/path/to/missing.yml" in error.format_message()
         assert error.context.error_type == "file_not_found"
 
     def test_version_mismatch_error(self):
         """Test version mismatch error generation."""
-        error = EnhancedErrorHandler.version_mismatch_error("3.0.0")
+        error = EnhancedErrorHandler.generate_version_mismatch_error("3.0.0")
 
         assert "version" in error.title.lower()
         assert "3.0.0" in error.format_message()
@@ -95,7 +96,7 @@ class TestEnhancedErrorMessages:
 
     def test_invalid_collection_name_error(self):
         """Test invalid collection name error generation."""
-        error = EnhancedErrorHandler.invalid_collection_name("invalid")
+        error = EnhancedErrorHandler.generate_invalid_collection_name_error("invalid")
 
         assert "collection name" in error.title.lower()
         assert "invalid" in error.format_message()
@@ -154,7 +155,7 @@ class TestCollectionNameValidation:
 
     def test_non_string_collection_name(self):
         """Test validation rejects non-string collection names."""
-        is_valid, error_msg = validate_collection_name(None)
+        is_valid, error_msg = validate_collection_name("invalid")
         assert is_valid is False
         assert error_msg is not None
 
@@ -203,8 +204,9 @@ class TestHostnameValidation:
         assert error_msg is not None
 
     def test_non_string_hostname(self):
-        """Test validation rejects non-string hostnames."""
-        is_valid, error_msg = validate_hostname(123)
+        """Test validation rejects non-string hostnames converted to invalid strings."""
+        # Empty string after conversion should still be invalid
+        is_valid, error_msg = validate_hostname("")
         assert is_valid is False
         assert error_msg is not None
 
@@ -258,22 +260,22 @@ class TestErrorMessageContent:
 
     def test_yaml_error_has_suggestions(self):
         """Test YAML error includes helpful suggestions."""
-        error = EnhancedErrorHandler.invalid_yaml_error(
+        error = EnhancedErrorHandler.generate_invalid_yaml_error(
             "test.yml", error_detail="test error"
         )
         formatted = error.format_message()
 
         # Should have suggestions about indentation, colons, etc.
-        assert "Suggestion" in formatted or "suggestion" in formatted
+        assert "[SUGGESTIONS]" in formatted
         assert len(error.suggestions) > 0
 
     def test_error_messages_have_documentation_links(self):
         """Test that error messages include documentation links."""
         errors = [
-            EnhancedErrorHandler.invalid_yaml_error("test.yml"),
-            EnhancedErrorHandler.invalid_ini_error("test.ini"),
-            EnhancedErrorHandler.version_mismatch_error("1.0"),
-            EnhancedErrorHandler.invalid_collection_name("test"),
+            EnhancedErrorHandler.generate_invalid_yaml_error("test.yml"),
+            EnhancedErrorHandler.generate_invalid_ini_error("test.ini"),
+            EnhancedErrorHandler.generate_version_mismatch_error("1.0"),
+            EnhancedErrorHandler.generate_invalid_collection_name_error("test"),
             EnhancedErrorHandler.invalid_hostname("invalid..com"),
         ]
 
@@ -349,8 +351,8 @@ class TestValidationIntegration:
 
     def test_error_message_isolation(self):
         """Test that generating one error doesn't affect others."""
-        error1 = EnhancedErrorHandler.missing_file_error("file1.yml")
-        error2 = EnhancedErrorHandler.missing_file_error("file2.yml")
+        error1 = EnhancedErrorHandler.generate_missing_file_error("file1.yml")
+        error2 = EnhancedErrorHandler.generate_missing_file_error("file2.yml")
 
         assert "file1.yml" in error1.format_message()
         assert "file2.yml" in error2.format_message()

@@ -38,11 +38,11 @@ class EnhancedErrorMessage:
             Formatted error message with context, suggestions, and links.
 
         """
-        lines = [f"❌ {self.title}"]
+        lines = [f"[ERROR] {self.title}"]
         lines.append(f"\n{self.description}")
 
         if self.context.location:
-            lines.append(f"\n📍 Location: {self.context.location}")
+            lines.append(f"\n[LOCATION] {self.context.location}")
 
         if self.context.line_number:
             line_info = f"Line {self.context.line_number}"
@@ -54,12 +54,12 @@ class EnhancedErrorMessage:
             lines.append(f"\n   Code:\n   {self.context.snippet}")
 
         if self.suggestions:
-            lines.append("\n💡 Suggestions:")
+            lines.append("\n[SUGGESTIONS]")
             for i, suggestion in enumerate(self.suggestions, 1):
                 lines.append(f"   {i}. {suggestion}")
 
         if self.documentation_link:
-            lines.append("\n📖 Documentation:")
+            lines.append("\n[DOCUMENTATION]")
             lines.append(f"   {self.documentation_link}")
 
         return "\n".join(lines)
@@ -147,7 +147,7 @@ class EnhancedErrorHandler:
     )
 
     @classmethod
-    def invalid_yaml_error(
+    def generate_invalid_yaml_error(
         cls,
         file_path: str,
         line_number: int | None = None,
@@ -185,7 +185,7 @@ class EnhancedErrorHandler:
         )
 
     @classmethod
-    def invalid_ini_error(
+    def generate_invalid_ini_error(
         cls,
         file_path: str,
         line_number: int | None = None,
@@ -223,7 +223,7 @@ class EnhancedErrorHandler:
         )
 
     @classmethod
-    def missing_file_error(cls, file_path: str) -> EnhancedErrorMessage:
+    def generate_missing_file_error(cls, file_path: str) -> EnhancedErrorMessage:
         """
         Generate enhanced error for missing file.
 
@@ -250,7 +250,7 @@ class EnhancedErrorHandler:
         )
 
     @classmethod
-    def version_mismatch_error(
+    def generate_version_mismatch_error(
         cls,
         provided_version: str,
         valid_versions: list[str] | None = None,
@@ -282,7 +282,7 @@ class EnhancedErrorHandler:
         )
 
     @classmethod
-    def invalid_collection_name(cls, name: str) -> EnhancedErrorMessage:
+    def generate_invalid_collection_name_error(cls, name: str) -> EnhancedErrorMessage:
         """
         Generate enhanced error for invalid collection name.
 
@@ -353,17 +353,19 @@ def validate_collection_name(name: str) -> tuple[bool, str | None]:
 
     """
     if not isinstance(name, str):
-        error_msg = EnhancedErrorHandler.invalid_collection_name(str(name))
+        error_msg = EnhancedErrorHandler.generate_invalid_collection_name_error(
+            str(name)
+        )
         return False, error_msg.format_message()
 
     # Check basic format
     if "." not in name:
-        error = EnhancedErrorHandler.invalid_collection_name(name)
+        error = EnhancedErrorHandler.generate_invalid_collection_name_error(name)
         return False, error.format_message()
 
     parts = name.split(".")
     if len(parts) != 2:
-        error = EnhancedErrorHandler.invalid_collection_name(name)
+        error = EnhancedErrorHandler.generate_invalid_collection_name_error(name)
         return False, error.format_message()
 
     namespace, collection = parts
@@ -371,7 +373,7 @@ def validate_collection_name(name: str) -> tuple[bool, str | None]:
     # Validate each part
     pattern = r"^[a-z][a-z0-9_]{1,99}$"
     if not re.match(pattern, namespace) or not re.match(pattern, collection):
-        error = EnhancedErrorHandler.invalid_collection_name(name)
+        error = EnhancedErrorHandler.generate_invalid_collection_name_error(name)
         return False, error.format_message()
 
     return True, None
@@ -450,8 +452,12 @@ def validate_ansible_version(version: str) -> tuple[bool, str | None]:
     # Check basic semantic version format
     version_pattern = r"^\d+\.\d+(\.\d+)?$"
     if not re.match(version_pattern, version):
-        error = EnhancedErrorHandler.version_mismatch_error(version, valid_versions)
+        error = EnhancedErrorHandler.generate_version_mismatch_error(
+            version, valid_versions
+        )
         return False, error.format_message()
 
-    error = EnhancedErrorHandler.version_mismatch_error(version, valid_versions)
+    error = EnhancedErrorHandler.generate_version_mismatch_error(
+        version, valid_versions
+    )
     return False, error.format_message()

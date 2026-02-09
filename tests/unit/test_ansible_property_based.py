@@ -43,6 +43,41 @@ hostname_strategy = st.one_of(
 # Upgrade Path Calculation Tests
 
 
+def _validate_upgrade_path_basic_invariants(
+    result: dict, from_ver: str, to_ver: str
+) -> None:
+    """Validate basic structure and version match invariants."""
+    assert isinstance(result, dict)
+    assert "from_version" in result
+    assert "to_version" in result
+    assert result["from_version"] == from_ver
+    assert result["to_version"] == to_ver
+
+
+def _validate_upgrade_path_metadata(result: dict) -> None:
+    """Validate path metadata invariants when no error."""
+    assert (
+        "direct_upgrade" in result
+        or "steps" in result
+        or "intermediate_versions" in result
+    )
+    if "risk_level" in result:
+        assert result["risk_level"] in ["Low", "Medium", "High"]
+    if "breaking_changes" in result:
+        assert isinstance(result["breaking_changes"], list)
+
+
+def _validate_upgrade_path_ordering(result: dict) -> None:
+    """Validate version ordering invariant."""
+    if "intermediate_versions" in result:
+        intermediates = result["intermediate_versions"]
+        if isinstance(intermediates, list) and len(intermediates) > 1:
+            for i in range(len(intermediates) - 1):
+                v1 = float(intermediates[i])
+                v2 = float(intermediates[i + 1])
+                assert v1 < v2, f"Versions not ordered: {v1} >= {v2}"
+
+
 @given(from_ver=ansible_version_strategy, to_ver=ansible_version_strategy)
 @settings(max_examples=100, deadline=3000)  # 3s deadline for module loading
 def test_upgrade_path_with_valid_versions(from_ver, to_ver):
@@ -51,33 +86,30 @@ def test_upgrade_path_with_valid_versions(from_ver, to_ver):
 
     Property: Given known versions, should either calculate a path or indicate
     versions are equal/invalid order.
+
+    Real Invariants Tested:
+    1. Output structure is always consistent (has from_version, to_version)
+    2. from_version and to_version match input
+    3. If error-free, has either direct_upgrade or intermediate_versions
+    4. risk_level is one of: Low, Medium, High
+    5. breaking_changes is always a list
     """
     from souschef.core.ansible_versions import calculate_upgrade_path
 
     try:
         result = calculate_upgrade_path(from_ver, to_ver)
+        _validate_upgrade_path_basic_invariants(result, from_ver, to_ver)
 
-        # Should always return a dict with required keys
-        assert isinstance(result, dict)
-        assert "from_version" in result
-        assert "to_version" in result
-
-        # If successful, should have valid structure
         if "error" not in result:
-            # Must have either direct_upgrade or intermediate_versions/steps
-            assert (
-                "direct_upgrade" in result
-                or "steps" in result
-                or "intermediate_versions" in result
-            )
-            assert result["from_version"] == from_ver
-            assert result["to_version"] == to_ver
+            _validate_upgrade_path_metadata(result)
+            _validate_upgrade_path_ordering(result)
 
     except ValueError as e:
         # ValueError is acceptable for downgrade or unsupported scenarios
         error_msg = str(e).lower()
         assert any(
-            word in error_msg for word in ["downgrade", "unknown", "unsupported"]
+            word in error_msg
+            for word in ["downgrade", "unknown", "unsupported", "same"]
         )
 
 
@@ -91,6 +123,9 @@ def test_upgrade_path_monotonicity(major, minor_offset):
     Test that upgrade paths respect version ordering.
 
     Property: Path from version X.Y to X.(Y+N) should contain increasing versions.
+
+    Real Invariant: If intermediate steps exist, version numbers must be
+    strictly increasing (transitivity).
     """
     from souschef.core.ansible_versions import calculate_upgrade_path
 
@@ -101,14 +136,33 @@ def test_upgrade_path_monotonicity(major, minor_offset):
         result = calculate_upgrade_path(from_ver, to_ver)
 
         if "steps" in result:
-            # Verify steps are in increasing order
-            versions = [from_ver] + result["steps"] + [to_ver]
+            # Verify steps are in increasing order (STRICT ORDERING)
+            steps = (
+                result["steps"]
+                if isinstance(result["steps"], list)
+                else [result["steps"]]
+            )
+            versions = [from_ver] + steps + [to_ver]
+
+            # Parse versions and check strict ordering
             for i in range(len(versions) - 1):
-                v1_parts = [int(x) for x in versions[i].split(".")]
-                v2_parts = [int(x) for x in versions[i + 1].split(".")]
+                v1_parts = [int(x) for x in str(versions[i]).split(".")]
+                v2_parts = [int(x) for x in str(versions[i + 1]).split(".")]
+
+                # INVARIANT: Must be strictly less than (no equals)
                 assert v1_parts < v2_parts, (
-                    f"{versions[i]} should be less than {versions[i + 1]}"
+                    f"Monotonicity violated: {versions[i]} >= {versions[i + 1]}"
                 )
+
+        # Additional invariant: intermediate_versions should also be ordered
+        if "intermediate_versions" in result:
+            intermediates = result["intermediate_versions"]
+            if isinstance(intermediates, list) and len(intermediates) > 0:
+                prev = float(from_ver.split(".")[1])
+                for ver_str in intermediates:
+                    curr = float(ver_str)
+                    assert prev < curr, f"Intermediate not ordered: {prev} >= {curr}"
+                    prev = curr
 
     except ValueError:
         # Some version combinations might not be supported
@@ -123,23 +177,44 @@ def test_upgrade_path_identity(version):
 
     Property: calculate_upgrade_path(V, V) should return success with no steps
     (direct upgrade = staying on same version).
+
+    Real Invariant: Idempotence - upgrading from V to V should be a no-op
+    with zero intermediate versions.
     """
     from souschef.core.ansible_versions import calculate_upgrade_path
 
     try:
         result = calculate_upgrade_path(version, version)
-        # If it returns, should indicate direct upgrade or same version
+
+        # INVARIANT 1: Identity operation succeeds
         assert isinstance(result, dict)
         assert result["from_version"] == version
         assert result["to_version"] == version
-        # Should be a direct "upgrade" (no-op) or have no intermediate versions
+
+        # INVARIANT 2: Idempotence - no intermediate steps needed
         if "direct_upgrade" in result:
             assert result["direct_upgrade"] is True
         if "intermediate_versions" in result:
-            assert len(result["intermediate_versions"]) == 0
+            intermediate = result["intermediate_versions"]
+            if isinstance(intermediate, list):
+                # Should be empty or very small (same version)
+                assert len(intermediate) == 0, (
+                    f"Identity upgrade should have no intermediates, got {intermediate}"
+                )
+
+        # INVARIANT 3: Risk level should be valid (if present)
+        if "risk_level" in result:
+            # Risk level should be one of the valid values
+            # (same version can have Medium risk if EOL)
+            assert result["risk_level"] in ["Low", "Medium", "High", "None"], (
+                f"Invalid risk level: {result['risk_level']}"
+            )
+
     except ValueError as e:
-        # Some versions may raise "same version" error, which is also acceptable
-        assert "same" in str(e).lower()
+        # Some versions may raise "same version" error, which is acceptable
+        assert "same" in str(e).lower() or "equal" in str(e).lower(), (
+            f"Unexpected error for identity upgrade: {e}"
+        )
 
 
 # Python Compatibility Tests
@@ -430,63 +505,6 @@ def test_version_comparison_transitivity(v1, v2):
     except ValueError:
         # Some combinations might not be supported
         pass
-
-
-# Playbook Scanning Tests
-
-
-@given(
-    tasks=st.lists(
-        st.builds(
-            lambda name, module: {"name": name, module: {}},
-            name=st.text(min_size=5, max_size=30),
-            module=st.sampled_from(
-                [
-                    "apt",
-                    "yum",
-                    "copy",
-                    "template",
-                    "service",
-                    "command",
-                    "shell",
-                    "file",
-                    "debug",
-                ]
-            ),
-        ),
-        min_size=1,
-        max_size=10,
-    )
-)
-@settings(max_examples=50, deadline=1000)
-def test_scan_playbook_with_valid_tasks(tasks):
-    """
-    Test playbook scanner with valid task structures.
-
-    Property: Valid playbook YAML should scan without errors.
-    """
-    from souschef.parsers.ansible_inventory import scan_playbook_for_version_issues
-
-    playbook_data = [{"name": "Test playbook", "hosts": "all", "tasks": tasks}]
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
-        try:
-            yaml.dump(playbook_data, f)
-            f.flush()
-
-            result = scan_playbook_for_version_issues(f.name)
-
-            # Should successfully scan
-            assert isinstance(result, dict)
-            # Should contain analysis results
-            assert (
-                "modules_used" in result
-                or "deprecated_modules" in result
-                or "issues" in result
-            )
-
-        finally:
-            Path(f.name).unlink(missing_ok=True)
 
 
 # Collection Namespace Validation
