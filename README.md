@@ -16,11 +16,11 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 SousChef is a complete enterprise-grade platform with two major capabilities:
 
-### 1. Chef to Ansible Migration (57 tools)
+### 1. Chef to Ansible Migration (38 tools)
 
-Complete enterprise-grade migration platform with **57 primary MCP tools** organised across **13 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations and Ansible version upgrades. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, and Ansible upgrade planning, SousChef provides everything needed for a successful infrastructure automation migration.
+Complete enterprise-grade migration platform with **38 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
 
-### 2. Ansible Upgrade Assessment & Planning (NEW - Available)
+### 2. Ansible Upgrade Assessment & Planning (5 tools)
 
 Comprehensive Ansible upgrade analysis and planning tools based on official Ansible-Python compatibility matrices:
 
@@ -37,13 +37,13 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 
 ### About Tool Counts
 
-**Why 40 tools in the documentation but more in the server?**
+**Why 43 tools in the documentation but more in the server?**
 
-The MCP server provides **48 total tools**. This documentation focuses on the **45 primary user-facing tools** that cover the main migration and upgrade capabilities. The remaining 3 tools are low-level filesystem operations used internally by the main tools.
+The MCP server provides **48 total tools**. This documentation focuses on the **43 primary user-facing tools** (38 migration + 5 upgrade tools) that cover the main capabilities. The remaining 5 are low-level filesystem operations used internally by the main tools.
 
 As a user, you'll primarily interact with the documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
-> **For developers:** See `souschef/server.py` for the complete list of all 43 registered tools.
+> **For developers:** See `souschef/server.py` for the complete list of all 48 registered tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -56,7 +56,7 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 - **Local Models** (Ollama, llama.cpp, etc.)
 - **Custom Enterprise Models**
 
-**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 35 specialized tools. The model calls these tools to help with your migration.
+**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 43 specialized tools. The model calls these tools to help with your migration and upgrade planning.
 
 > See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
 
@@ -69,14 +69,15 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 - **[API Reference](docs/api-reference/)** - Detailed tool documentation
 - **[Migration Guide](docs/migration-guide/)** - Step-by-step migration process
 
-### Ansible Upgrades (In Development)
+### Ansible Upgrades
 - **[Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md)** - Complete design and architecture
 - **[Ansible Upgrade Matrix Implementation](docs/ANSIBLE_UPGRADE_MATRIX_IMPLEMENTATION.md)** - PDF data mapping and implementation
 - **[Implementation Roadmap](docs/ANSIBLE_UPGRADE_ROADMAP.md)** - Detailed development timeline
+- **[User Guide](docs/user-guide/ansible-upgrades.md)** - Comprehensive usage guide
 
-## What's New in v4.2.0
+## What's New in v5.0.0
 
-**Ansible Upgrade & Planning Tools** - Complete upgrade assessment and planning capabilities:
+**Major Release: Ansible Upgrade & Planning Tools** - Complete upgrade assessment and planning capabilities:
 
 - **5 New CLI Commands**: `ansible assess`, `plan`, `eol`, `validate-collections`, `detect-python` for comprehensive upgrade workflows
 - **3 Interactive UI Pages**: Environment Assessment, Upgrade Planning, and Collection Validation interfaces
