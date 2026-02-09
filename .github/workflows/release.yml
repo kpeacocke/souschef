@@ -218,21 +218,15 @@ jobs:
     needs: [validate, build-package, create-release]
     # Only skip if version already exists on PyPI
     if: needs.validate.outputs.pypi-exists != 'true'
+    environment:
+      name: pypi
+      url: https://pypi.org/project/souschef/
     permissions:
       contents: read
-      id-token: write  # For trusted publishing
+      id-token: write  # Required for PyPI Trusted Publishing (OIDC)
       deployments: write  # For deployment status updates
 
     steps:
-    - name: Verify PyPI token configured
-      env:
-        PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        if [ -z "$PYPI_API_TOKEN" ]; then
-          echo "PYPI_API_TOKEN secret is not configured; aborting publish."
-          exit 1
-        fi
-
     - name: Start deployment
       uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
       id: deployment
@@ -251,8 +245,7 @@ jobs:
     - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # v1.13.0
       with:
-        password: ${{ secrets.PYPI_API_TOKEN }}
-        attestations: false
+        attestations: true
 
     - name: Update deployment status (success)
       uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
@@ -337,8 +330,6 @@ jobs:
       deployments: write  # For deployment status updates
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
-      tags: ${{ steps.meta.outputs.tags }}
-      labels: ${{ steps.meta.outputs.labels }}
       image-pushed: ${{ steps.build.outputs.digest != '' }}
 
     steps:
@@ -454,8 +445,6 @@ jobs:
       deployments: write
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
-      tags: ${{ steps.meta.outputs.tags }}
-      labels: ${{ steps.meta.outputs.labels }}
       image-pushed: ${{ steps.build.outputs.digest != '' }}
 
     steps:
@@ -585,7 +574,7 @@ jobs:
           exit-code: '0'
 
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@2588666de8825e1e9dc4e2329a4c985457d55b32  # v3.32.1
+        uses: github/codeql-action/upload-sarif@6bc82e05fd0ea64601dd4b465378bbcf57de0314  # v4
         if: always()
         with:
           sarif_file: trivy-results.sarif
@@ -624,7 +613,7 @@ jobs:
           exit-code: '0'
 
       - name: Upload Trivy MCP results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@2588666de8825e1e9dc4e2329a4c985457d55b32  # v3.32.1
+        uses: github/codeql-action/upload-sarif@6bc82e05fd0ea64601dd4b465378bbcf57de0314  # v4
         if: always()
         with:
           sarif_file: trivy-results-mcp.sarif

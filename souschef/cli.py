@@ -1460,7 +1460,7 @@ def validate_chef_server(server_url: str, node_name: str) -> None:
     reachable and properly configured.
     """
     click.echo("🔍 Validating Chef Server connection...")
-    from souschef.ui.pages.chef_server_settings import _validate_chef_server_connection
+    from souschef.core.chef_server import _validate_chef_server_connection
 
     success, message = _validate_chef_server_connection(server_url, node_name)
 
