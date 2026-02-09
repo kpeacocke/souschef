@@ -103,7 +103,7 @@ You can monitor progress in the issue comments.
 - Use `check_github_copilot_agent_status` to view current state
 """
 
-    except Exception as e:
+    except RuntimeError as e:
         return f"Error assigning Copilot agent: {e}"
 
 
@@ -221,7 +221,7 @@ The agent will not resume automatically.
 
 The agent has been stopped and will not create a pull request."""
 
-    except Exception as e:
+    except RuntimeError as e:
         return f"Error stopping Copilot agent: {e}"
 
 
@@ -304,7 +304,7 @@ The agent will continue from where it paused.
 
 The agent will continue working on the issue."""
 
-    except Exception as e:
+    except RuntimeError as e:
         return f"Error resuming Copilot agent: {e}"
 
 
@@ -353,11 +353,28 @@ def check_copilot_agent_status(
 {_get_available_commands(status)}
 """
 
-    except Exception as e:
+    except RuntimeError as e:
         return f"Error checking agent status: {e}"
 
 
 # Helper functions
+
+
+def _validate_github_token() -> str:
+    """
+    Validate GitHub token is configured.
+
+    Returns:
+        GitHub token from environment.
+
+    Raises:
+        RuntimeError: If token not found in GITHUB_TOKEN or GH_TOKEN.
+
+    """
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if not token:
+        raise RuntimeError("GitHub token not configured in GITHUB_TOKEN or GH_TOKEN")
+    return token
 
 
 def _check_agent_labels(owner: str, repo: str, issue_number: int) -> str:
@@ -366,6 +383,9 @@ def _check_agent_labels(owner: str, repo: str, issue_number: int) -> str:
 
     Returns:
         One of: 'active', 'paused', 'stopped', 'not_assigned'
+
+    Raises:
+        RuntimeError: If GitHub API fails or token is not configured.
 
     """
     # Check which control labels are present on the issue
@@ -496,9 +516,7 @@ def _github_request(
     if requests_module is None:
         raise RuntimeError("requests library not installed")
 
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if not token:
-        raise RuntimeError("GitHub token not found in GITHUB_TOKEN or GH_TOKEN")
+    token = _validate_github_token()
 
     headers = {
         "Authorization": f"Bearer {token}",

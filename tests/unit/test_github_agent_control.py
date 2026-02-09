@@ -64,7 +64,7 @@ class TestAssignCopilotAgent:
 
     @patch(
         "souschef.github.agent_control._add_label_to_issue",
-        side_effect=Exception("API error"),
+        side_effect=RuntimeError("API error"),
     )
     def test_assign_copilot_handles_errors(self, mock_add_label):
         """Test error handling during assignment."""
@@ -126,7 +126,7 @@ class TestPauseCopilotAgent:
 
     @patch(
         "souschef.github.agent_control._add_label_to_issue",
-        side_effect=Exception("Label error"),
+        side_effect=RuntimeError("Label error"),
     )
     def test_pause_agent_handles_errors(self, mock_add_label):
         """Test error handling during pause."""
@@ -331,7 +331,7 @@ class TestCheckCopilotAgentStatus:
 
     @patch(
         "souschef.github.agent_control._check_agent_labels",
-        side_effect=Exception("Status error"),
+        side_effect=RuntimeError("Status error"),
     )
     def test_check_status_handles_errors(self, mock_check):
         """Test error handling during status check."""

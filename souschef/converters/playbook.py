@@ -2042,14 +2042,19 @@ def _convert_ruby_hash_to_yaml(ruby_hash: str) -> str:
                 value = _convert_ruby_value_to_yaml(value)
                 flow_pairs.append(f"{key}: {value}")
             else:
-                # Malformed pair, preserve the raw content in a safe field
+                # Malformed pair, preserve the raw content in a safe field.
+                # These unparsed fields indicate Ruby syntax that couldn't be
+                # converted automatically. Review and manually convert these
+                # key-value pairs to valid YAML.
                 raw_value = json.dumps(pair.strip())
                 flow_pairs.append(f"unparsed_{index}: {raw_value}")
 
         return "{" + ", ".join(flow_pairs) + "}" if flow_pairs else "{}"
 
     except Exception:
-        # If conversion fails, preserve the raw hash content as a string
+        # If conversion fails, preserve the raw hash content as a string.
+        # This indicates the Ruby hash syntax could not be parsed automatically.
+        # Manual review required to convert to valid YAML key-value pairs.
         raw_value = json.dumps(ruby_hash)
         return f"{{unparsed: {raw_value}}}"
 
@@ -3085,7 +3090,10 @@ def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
 
 def _needs_manual_guard_review(converted: str) -> bool:
     """Check if a guard conversion still contains Ruby-specific syntax."""
-    return bool(re.search(r"(::|\bnew\b|\bdo\b|\bend\b|\?|\{|\})", converted))
+    # Match Ruby-specific patterns: namespace (::), class creation (new),
+    # blocks (do/end), ternary operators (?:), and object/hash literals ({}).
+    # Avoid matching question marks in other contexts (comments, etc.).
+    return bool(re.search(r"(::|\bnew\b|\bdo\b|\bend\b|\?\s+[^:\s]|\{|\})", converted))
 
 
 def _review_guard_condition(original: str, positive: bool) -> str:
