@@ -4111,8 +4111,14 @@ def plan_ansible_upgrade(environment_path: str, target_version: str) -> str:
     try:
         environment_path = str(_normalize_path(environment_path))
 
-        # Detect current version
-        current_version = detect_ansible_version()
+        # Detect current version - look for ansible in the environment first
+        env_path = Path(environment_path)
+        ansible_executable = env_path / "bin" / "ansible"
+        if ansible_executable.exists():
+            current_version = detect_ansible_version(str(ansible_executable))
+        else:
+            # Fall back to system PATH ansible
+            current_version = detect_ansible_version()
         # Extract major.minor (e.g., "2.16.0" → "2.16")
         version_parts = current_version.split(".")
         if len(version_parts) >= 2:
@@ -4223,7 +4229,7 @@ def generate_ansible_upgrade_test_plan(environment_path: str) -> str:
         )
 
 
-def _format_plan_header(path: dict, plan: dict) -> list[str]:
+def _format_plan_header(path: dict[str, Any], plan: dict[str, Any]) -> list[str]:
     """Format the plan header section."""
     return [
         "# Ansible Upgrade Plan",
@@ -4237,7 +4243,7 @@ def _format_plan_header(path: dict, plan: dict) -> list[str]:
     ]
 
 
-def _format_upgrade_path(path: dict) -> list[str]:
+def _format_upgrade_path(path: dict[str, Any]) -> list[str]:
     """Format the upgrade path section."""
     lines = ["## Upgrade Path", ""]
     if path["direct_upgrade"]:
@@ -4252,7 +4258,7 @@ def _format_upgrade_path(path: dict) -> list[str]:
     return lines
 
 
-def _format_risk_assessment(path: dict, plan: dict) -> list[str]:
+def _format_risk_assessment(path: dict[str, Any], plan: dict[str, Any]) -> list[str]:
     """Format the risk assessment section."""
     lines = ["", "## Risk Assessment", ""]
 
@@ -4270,7 +4276,7 @@ def _format_risk_assessment(path: dict, plan: dict) -> list[str]:
     return lines
 
 
-def _format_upgrade_steps(plan: dict) -> list[str]:
+def _format_upgrade_steps(plan: dict[str, Any]) -> list[str]:
     """Format the upgrade steps section."""
     lines = ["", "## Upgrade Steps", ""]
     for step in plan["upgrade_steps"]:
@@ -4294,7 +4300,7 @@ def _format_upgrade_steps(plan: dict) -> list[str]:
     return lines
 
 
-def _format_upgrade_plan_markdown(plan: dict) -> str:
+def _format_upgrade_plan_markdown(plan: dict[str, Any]) -> str:
     """
     Format upgrade plan as markdown.
 

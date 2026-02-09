@@ -1,7 +1,7 @@
 """Ansible Collection Validation Page for SousChef UI."""
 
-import contextlib
 import json
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -51,10 +51,20 @@ def _render_validation_inputs() -> tuple[Any, str, bool]:
 
 
 def _save_uploaded_file(collections_file: Any) -> str:
-    """Persist the uploaded file and return its temporary path."""
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".yml") as tmp_file:
-        tmp_file.write(collections_file.getbuffer())
-        return tmp_file.name
+    """
+    Persist the uploaded file and return its temporary path.
+
+    Saves the file as requirements.yml in a temporary directory to satisfy
+    parse_requirements_yml() filename validation.
+
+    Returns:
+        Path to the saved requirements.yml file.
+
+    """
+    tmp_dir = tempfile.mkdtemp()
+    requirements_path = Path(tmp_dir) / "requirements.yml"
+    requirements_path.write_bytes(collections_file.getbuffer().tobytes())
+    return str(requirements_path)
 
 
 def _display_validation_metrics(validation: dict[str, Any]) -> dict[str, Any]:
@@ -320,8 +330,12 @@ def show_ansible_validation_page() -> None:
                 )
                 _display_validation_export(validation, target_version)
 
-                with contextlib.suppress(Exception):
-                    Path(tmp_path).unlink()
+                # Clean up temporary directory
+                try:
+                    tmp_dir = Path(tmp_path).parent
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+                except Exception:
+                    pass
 
             except Exception as e:
                 st.error(f"Error validating collections: {str(e)}")

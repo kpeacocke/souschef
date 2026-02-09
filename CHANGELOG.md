@@ -40,12 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **ansible-upgrades:** Comprehensive Ansible upgrade and planning system
   - 5 new CLI commands: `assess`, `plan`, `eol`, `validate-collections`, `detect-python`
   - 3 new UI pages: Environment Assessment, Upgrade Planning, Collection Validation
-  - 19 MCP tools for Ansible version management and upgrade planning
+  - 5 new MCP tools for Ansible version management and upgrade planning
   - Breaking change analysis between Ansible versions
   - Collection compatibility validation with requirements.yml support
   - EOL status checking for Ansible versions
   - Python version detection and compatibility verification
-  - Security audit integration for detected vulnerabilities
   - Risk assessment with automated recommendations
   - Comprehensive testing strategy generation
 
@@ -53,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * **converters:** Replace Chef Server API placeholder with working implementation
 * **server:** Update tool count from 35 to 38 public tools (40 total with internal utilities)
-* **server:** Add 19 Ansible upgrade tools: 57 public tools total (59 with internal utilities)
+* **server:** Add 5 Ansible upgrade MCP tools: 43 public tools total (45 with internal utilities)
 * **readme:** Add section 12 "Chef Server Integration & Dynamic Inventory"
 * **ui:** Replace "not yet implemented" message with full local model support
 

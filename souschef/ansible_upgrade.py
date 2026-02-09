@@ -12,6 +12,9 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from packaging.specifiers import SpecifierSet
+from packaging.version import InvalidVersion, Version
+
 from souschef.core.ansible_versions import (
     ANSIBLE_VERSIONS,
     calculate_upgrade_path,
@@ -109,10 +112,30 @@ def detect_python_version(environment_path: str | None = None) -> str:
         raise RuntimeError(f"Could not detect Python version: {e}") from e
 
 
-def _detect_ansible_version_info(result: dict[str, Any]) -> None:
-    """Detect and populate Ansible version information."""
+def _detect_ansible_version_info(
+    environment_path: str | None, result: dict[str, Any]
+) -> None:
+    """
+    Detect and populate Ansible version information.
+
+    Args:
+        environment_path: Path to environment, or None to use system PATH.
+        result: Dictionary to populate with version info.
+
+    """
     try:
-        ansible_version = detect_ansible_version()
+        # Look for ansible in the environment first
+        if environment_path:
+            env_path = Path(environment_path)
+            ansible_executable = env_path / "bin" / "ansible"
+            if ansible_executable.exists():
+                ansible_version = detect_ansible_version(str(ansible_executable))
+            else:
+                # Fall back to system PATH ansible
+                ansible_version = detect_ansible_version()
+        else:
+            ansible_version = detect_ansible_version()
+
         version_parts = ansible_version.split(".")
         if len(version_parts) >= 2:
             major_minor = f"{version_parts[0]}.{version_parts[1]}"
@@ -177,6 +200,7 @@ def _scan_collections(env_path: Path, result: dict[str, Any]) -> None:
                 result["collections"] = collections
                 break
             except (FileNotFoundError, ValueError):
+                # Skip requirements files that don't exist or can't be parsed
                 continue
 
 
@@ -263,7 +287,7 @@ def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
         "recommendations": [],
     }
 
-    _detect_ansible_version_info(result)
+    _detect_ansible_version_info(str(env_path), result)
     _detect_python_version_info(str(env_path), result)
     _check_eol_status(result)
 
@@ -275,7 +299,7 @@ def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
 
     _generate_recommendations(result)
 
-    return result  # noqa: RUF100
+    return result
 
 
 def _generate_recommendations(assessment: dict[str, Any]) -> None:
@@ -609,22 +633,62 @@ def validate_collection_compatibility(
         if collection in min_versions:
             required = min_versions[collection]
 
-            if version == "*" or version >= required:
+            # Normalise version strings: treat "*", empty, or None as wildcard
+            if not version or version == "*":
+                # Wildcard version always considered compatible
                 result["compatible"].append(
-                    {"collection": collection, "version": version}
+                    {"collection": collection, "version": version or "*"}
                 )
-            else:
-                result["updates_needed"].append(
-                    {
-                        "collection": collection,
-                        "current": version,
-                        "required": required,
-                    }
-                )
-                result["warnings"].append(
-                    f"Collection {collection} {version} incompatible. "
-                    f"Requires {required}+"
-                )
+                continue
+
+            # Use semantic versioning for proper comparison
+            try:
+                version_obj = Version(version)
+                required_obj = Version(required)
+
+                if version_obj >= required_obj:
+                    result["compatible"].append(
+                        {"collection": collection, "version": version}
+                    )
+                else:
+                    result["updates_needed"].append(
+                        {
+                            "collection": collection,
+                            "current": version,
+                            "required": required,
+                        }
+                    )
+                    result["warnings"].append(
+                        f"Collection {collection} {version} incompatible. "
+                        f"Requires {required}+"
+                    )
+            except InvalidVersion:
+                # Handle version specifiers like ">=5.0.0" from requirements.yml
+                try:
+                    # Try treating the version as a specifier
+                    specifier = SpecifierSet(version)
+                    required_obj = Version(required)
+
+                    if required_obj in specifier:
+                        result["compatible"].append(
+                            {"collection": collection, "version": version}
+                        )
+                    else:
+                        result["warnings"].append(
+                            f"Collection {collection} has specifier {version}. "
+                            f"Cannot determine compatibility with {required}"
+                        )
+                        result["compatible"].append(
+                            {"collection": collection, "version": version}
+                        )
+                except Exception:
+                    # If we can't parse it at all, warn but don't fail
+                    result["warnings"].append(
+                        f"Collection {collection} has unparseable version: {version}"
+                    )
+                    result["compatible"].append(
+                        {"collection": collection, "version": version}
+                    )
         else:
             result["compatible"].append({"collection": collection, "version": version})
 

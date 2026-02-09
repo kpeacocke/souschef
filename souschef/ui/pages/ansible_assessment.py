@@ -54,8 +54,12 @@ def _display_assessment_results(assessment: dict[str, object]) -> None:
         st.metric("Python Version", str(python_ver))
 
     with col3:
-        eol = assessment.get("eol_date", "Unknown")
-        st.metric("EOL Date", str(eol))
+        eol_status = assessment.get("eol_status", {})
+        if isinstance(eol_status, dict):
+            eol_date = eol_status.get("eol_date", "N/A")
+        else:
+            eol_date = "Unknown"
+        st.metric("EOL Date", str(eol_date))
 
     st.divider()
 
@@ -67,14 +71,14 @@ def _display_assessment_results(assessment: dict[str, object]) -> None:
 
 def _display_assessment_collections(assessment: dict[str, object]) -> None:
     """Show installed collection details if present."""
-    if "installed_collections" not in assessment:
+    collections_obj = assessment.get("collections")
+    if not collections_obj or not isinstance(collections_obj, dict):
         return
 
-    collections_obj = assessment["installed_collections"]
-    if not isinstance(collections_obj, list):
-        return
-
-    collections: list[str] = collections_obj
+    # collections_obj is a dict mapping collection names to versions
+    collections: list[str] = [
+        f"{name} ({version})" for name, version in collections_obj.items()
+    ]
 
     st.subheader(f"Installed Collections ({len(collections)} total)")
 
@@ -91,14 +95,14 @@ def _display_assessment_collections(assessment: dict[str, object]) -> None:
 
 
 def _display_assessment_warnings(assessment: dict[str, object]) -> None:
-    """Render any warnings from the assessment."""
-    warnings = assessment.get("warnings")
-    if not warnings or not isinstance(warnings, list):
+    """Render any compatibility issues from the assessment."""
+    issues = assessment.get("compatibility_issues")
+    if not issues or not isinstance(issues, list):
         return
 
-    st.warning("**Warnings:**")
-    for warning in warnings:
-        st.write(f"- {warning}")
+    st.warning("**Compatibility Issues:**")
+    for issue in issues:
+        st.write(f"- {issue}")
 
 
 def _display_assessment_details(assessment: dict[str, object]) -> None:
@@ -109,18 +113,20 @@ def _display_assessment_details(assessment: dict[str, object]) -> None:
     details_col1, details_col2 = st.columns(2)
 
     with details_col1:
-        if "full_version" in assessment:
-            st.write(f"**Full Version:** {assessment['full_version']}")
-        if "config_paths" in assessment:
-            config_paths = assessment["config_paths"]
-            if isinstance(config_paths, list):
-                st.write(f"**Config Paths:** {', '.join(str(p) for p in config_paths)}")
+        if "current_version_full" in assessment:
+            st.write(f"**Full Version:** {assessment['current_version_full']}")
+        eol_status = assessment.get("eol_status", {})
+        if isinstance(eol_status, dict) and eol_status:
+            status = eol_status.get("status", "Unknown")
+            st.write(f"**Status:** {status}")
 
     with details_col2:
-        if "support_status" in assessment:
-            st.write(f"**Support Status:** {assessment['support_status']}")
-        if "version_type" in assessment:
-            st.write(f"**Version Type:** {assessment['version_type']}")
+        eol_status = assessment.get("eol_status", {})
+        if isinstance(eol_status, dict):
+            risk = eol_status.get("security_risk", "N/A")
+            st.write(f"**Security Risk:** {risk}")
+        playbooks = assessment.get("playbooks_scanned", 0)
+        st.write(f"**Playbooks Scanned:** {playbooks}")
 
 
 def _display_assessment_export(assessment: dict[str, object]) -> None:
