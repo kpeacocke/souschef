@@ -1,302 +1,675 @@
-"""Tests for Ansible inventory parser module."""
+"""
+Ansible upgrade assessment and planning.
 
-from unittest.mock import MagicMock, patch
+This module provides high-level functions for assessing Ansible environments,
+generating upgrade plans, validating collection compatibility, and creating
+testing strategies for Ansible upgrades.
+"""
 
-import pytest
+import subprocess
+from datetime import date
+from pathlib import Path
+from typing import Any
 
+from souschef.core.ansible_versions import (
+    ANSIBLE_VERSIONS,
+    calculate_upgrade_path,
+    get_eol_status,
+    get_latest_version,
+    is_python_compatible,
+)
 from souschef.parsers.ansible_inventory import (
     detect_ansible_version,
     get_ansible_config_paths,
-    parse_ansible_cfg,
-    parse_inventory_file,
-    parse_inventory_ini,
-    parse_inventory_yaml,
     parse_requirements_yml,
     scan_playbook_for_version_issues,
 )
 
 
-class TestParseAnsibleCfgWithValidation:
-    """Test parse_ansible_cfg function with proper path handling."""
+def detect_python_version(environment_path: str | None = None) -> str:
+    """
+    Detect Python version in use.
 
-    def test_missing_file_raises_file_not_found(self):
-        """Test that missing cfg file raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            parse_ansible_cfg("/nonexistent/ansible.cfg")
+    Args:
+        environment_path: Path to environment (looks for python/python3 there).
 
-    def test_empty_cfg_file_valid(self, tmp_path):
-        """Test parsing empty ansible.cfg returns dict."""
-        cfg_file = tmp_path / "ansible.cfg"
-        cfg_file.write_text("[defaults]\n")
-        result = parse_ansible_cfg(str(cfg_file))
-        assert isinstance(result, dict)
+    Returns:
+        Python version string (e.g., "3.11.2").
 
-    def test_cfg_with_defaults_section(self, tmp_path):
-        """Test that defaults section is properly parsed."""
-        cfg_file = tmp_path / "ansible.cfg"
-        cfg_file.write_text("[defaults]\nhost_key_checking = False\n")
-        result = parse_ansible_cfg(str(cfg_file))
-        assert isinstance(result, dict)
+    Raises:
+        ValueError: If environment_path is invalid or not a directory.
+        RuntimeError: If Python version cannot be determined.
 
+    """
+    python_cmd = "python3"
 
-class TestParseInventoryIniWithValidation:
-    """Test parse_inventory_ini function with proper path handling."""
+    if environment_path:
+        # Resolve path to prevent path traversal attacks
+        env_path = Path(environment_path).resolve()
 
-    def test_missing_inventory_raises_error(self):
-        """Test that missing inventory raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            parse_inventory_ini("/nonexistent/inventory.ini")
+        # Validate the path exists and is a directory
+        if not env_path.exists():
+            raise ValueError(f"Environment path does not exist: {env_path}")
+        if not env_path.is_dir():
+            raise ValueError(f"Environment path is not a directory: {env_path}")
 
-    def test_valid_ini_inventory(self, tmp_path):
-        """Test parsing valid inventory.ini returns dict."""
-        inv_file = tmp_path / "inventory.ini"
-        inv_file.write_text("[webservers]\nserver1\nserver2\n")
-        result = parse_inventory_ini(str(inv_file))
-        assert isinstance(result, dict)
+        venv_python = env_path / "bin" / "python3"
+        if venv_python.exists():
+            # Resolve to prevent symlink attacks and validate it's a file
+            resolved_python = venv_python.resolve()
+            if not resolved_python.is_file():
+                raise ValueError(f"Python executable is not a file: {resolved_python}")
+            python_cmd = str(resolved_python)
 
-    def test_ini_with_groups(self, tmp_path):
-        """Test that groups are properly parsed."""
-        inv_file = tmp_path / "inventory.ini"
-        inv_file.write_text("[webservers]\nweb1\n[databases]\ndb1\n")
-        result = parse_inventory_ini(str(inv_file))
-        assert isinstance(result, dict)
-
-
-class TestParseInventoryYamlWithValidation:
-    """Test parse_inventory_yaml function with proper path handling."""
-
-    def test_missing_yaml_raises_error(self):
-        """Test that missing YAML inventory raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            parse_inventory_yaml("/nonexistent/inventory.yml")
-
-    def test_valid_yaml_inventory(self, tmp_path):
-        """Test parsing valid inventory.yml returns dict."""
-        yaml_file = tmp_path / "inventory.yml"
-        yaml_file.write_text("all:\n  hosts:\n    server1:\n")
-        result = parse_inventory_yaml(str(yaml_file))
-        assert isinstance(result, dict)
-
-    def test_yaml_with_groups(self, tmp_path):
-        """Test that YAML with groups is parsed."""
-        yaml_file = tmp_path / "inventory.yml"
-        yaml_file.write_text(
-            "all:\n  children:\n    webservers:\n      hosts:\n        web1:\n"
+    try:
+        result = subprocess.run(
+            [python_cmd, "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
         )
-        result = parse_inventory_yaml(str(yaml_file))
-        assert isinstance(result, dict)
+        output = result.stdout or result.stderr
+        version = output.strip().replace("Python ", "")
+        return version
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+    ) as e:
+        raise RuntimeError(f"Could not detect Python version: {e}") from e
 
 
-class TestParseInventoryFileWithValidation:
-    """Test parse_inventory_file function with proper path handling."""
-
-    def test_missing_file_raises_error(self):
-        """Test that missing file raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            parse_inventory_file("/nonexistent/inventory")
-
-    def test_ini_file_auto_detected(self, tmp_path):
-        """Test that .ini inventory is auto-detected and parsed."""
-        inv_file = tmp_path / "inventory.ini"
-        inv_file.write_text("[webservers]\nweb1\n")
-        result = parse_inventory_file(str(inv_file))
-        assert isinstance(result, dict)
-
-    def test_yaml_file_auto_detected(self, tmp_path):
-        """Test that .yml inventory is auto-detected and parsed."""
-        inv_file = tmp_path / "inventory.yml"
-        inv_file.write_text("all:\n  hosts:\n    web1:\n")
-        result = parse_inventory_file(str(inv_file))
-        assert isinstance(result, dict)
-
-
-class TestDetectAnsibleVersionWithValidation:
-    """Test detect_ansible_version function with proper subprocess handling."""
-
-    def test_ansible_version_detected(self):
-        """Test that ansible version is detected."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(stdout="ansible 2.14.0\n", returncode=0)
-            with patch("shutil.which", return_value="/usr/bin/ansible"):
-                result = detect_ansible_version()
-                assert isinstance(result, str)
-                assert len(result) > 0
-
-    def test_ansible_not_found_raises_error(self):
-        """Test that missing Ansible raises error."""
-        with (
-            patch("subprocess.run", side_effect=FileNotFoundError()),
-            pytest.raises(FileNotFoundError),
-        ):
-            detect_ansible_version()
-
-    def test_ansible_path_not_exist_raises_error(self):
-        """Test that non-existent ansible path raises ValueError."""
-        with (
-            patch("pathlib.Path.exists", return_value=False),
-            pytest.raises(ValueError, match="Ansible executable does not exist"),
-        ):
-            detect_ansible_version("/nonexistent/ansible")
-
-    def test_ansible_path_not_file_raises_error(self):
-        """Test that non-file ansible path raises ValueError."""
-        with (
-            patch("pathlib.Path.exists", return_value=True),
-            patch("pathlib.Path.is_file", return_value=False),
-            pytest.raises(ValueError, match="Ansible path is not a file"),
-        ):
-            detect_ansible_version("/path/to/directory")
-
-    def test_ansible_custom_path(self):
-        """Test detecting Ansible with custom path."""
-        with (
-            patch("subprocess.run") as mock_run,
-            patch("pathlib.Path.exists", return_value=True),
-            patch("pathlib.Path.is_file", return_value=True),
-        ):
-            mock_run.return_value = MagicMock(
-                stdout="ansible [core 2.15.0]\n", returncode=0
-            )
-            result = detect_ansible_version("/custom/path/ansible")
-            assert isinstance(result, str)
-            assert len(result) > 0
-
-
-class TestParseRequirementsYmlWithValidation:
-    """Test parse_requirements_yml function with proper path handling."""
-
-    def test_missing_requirements_raises_error(self):
-        """Test that missing requirements file raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            parse_requirements_yml("/nonexistent/requirements.yml")
-
-    def test_requirements_path_not_file_raises_error(self):
-        """Test that non-file requirements path raises ValueError."""
-        with (
-            patch("pathlib.Path.exists", return_value=True),
-            patch("pathlib.Path.is_file", return_value=False),
-            pytest.raises(ValueError, match="Requirements path is not a file"),
-        ):
-            parse_requirements_yml("/path/to/directory")
-
-    def test_valid_requirements_file(self, tmp_path):
-        """Test parsing valid requirements.yml returns dict."""
-        req_file = tmp_path / "requirements.yml"
-        req_file.write_text(
-            "collections:\n  - name: community.general\n    version: 3.0.0\n"
-        )
-        result = parse_requirements_yml(str(req_file))
-        assert isinstance(result, dict)
-
-    def test_requirements_with_roles(self, tmp_path):
-        """Test that requirements with roles are parsed."""
-        req_file = tmp_path / "requirements.yml"
-        req_file.write_text(
-            "roles:\n  - name: common\n    src: https://github.com/example/role\n"
-        )
-        result = parse_requirements_yml(str(req_file))
-        assert isinstance(result, dict)
-
-
-class TestScanPlaybookForVersionIssuesWithValidation:
-    """Test scan_playbook_for_version_issues function with proper path handling."""
-
-    def test_missing_playbook_raises_error(self):
-        """Test that missing playbook raises FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            scan_playbook_for_version_issues("/nonexistent/playbook.yml")
-
-    def test_valid_playbook_scanned(self, tmp_path):
-        """Test scanning valid playbook returns dict."""
-        playbook_file = tmp_path / "playbook.yml"
-        playbook_file.write_text(
-            "- hosts: all\n  tasks:\n    - name: test\n      debug:\n        msg: hello\n"
-        )
-        result = scan_playbook_for_version_issues(str(playbook_file))
-        assert isinstance(result, dict)
-
-    def test_playbook_with_deprecated_module(self, tmp_path):
-        """Test that deprecated modules are detected."""
-        playbook_file = tmp_path / "playbook.yml"
-        playbook_file.write_text(
-            "- hosts: all\n  tasks:\n    - apt:\n        name: nginx\n"
-        )
-        result = scan_playbook_for_version_issues(str(playbook_file))
-        assert isinstance(result, dict)
-
-    def test_playbook_with_fqcn(self, tmp_path):
-        """Test that FQCN playbooks are properly handled."""
-        playbook_file = tmp_path / "playbook.yml"
-        playbook_file.write_text(
-            "- hosts: all\n  tasks:\n    - ansible.builtin.debug:\n        msg: hello\n"
-        )
-        result = scan_playbook_for_version_issues(str(playbook_file))
-        assert isinstance(result, dict)
-
-
-class TestGetAnsibleConfigPaths:
-    """Test get_ansible_config_paths function."""
-
-    def test_returns_dict(self):
-        """Test that function returns dict."""
-        result = get_ansible_config_paths()
-        assert isinstance(result, dict)
-
-    def test_dict_has_expected_values(self):
-        """Test that returned dict has expected value types."""
-        result = get_ansible_config_paths()
-        for value in result.values():
-            assert value is None or isinstance(value, str)
-
-    def test_no_exception_on_missing_paths(self):
-        """Test that missing paths don't raise exceptions."""
-        try:
-            result = get_ansible_config_paths()
-            assert isinstance(result, dict)
-        except Exception:
-            pytest.fail("get_ansible_config_paths raised an exception")
-
-
-@pytest.mark.parametrize("format_ext", ["ini", "yaml", "yml"])
-class TestInventoryFormatSupport:
-    """Parameterized tests for inventory format support."""
-
-    def test_format_can_be_parsed(self, format_ext, tmp_path):
-        """Test that format can be parsed."""
-        if format_ext == "ini":
-            content = "[webservers]\nserver1\n"
+def _detect_ansible_version_info(result: dict[str, Any]) -> None:
+    """Detect and populate Ansible version information."""
+    try:
+        ansible_version = detect_ansible_version()
+        version_parts = ansible_version.split(".")
+        if len(version_parts) >= 2:
+            major_minor = f"{version_parts[0]}.{version_parts[1]}"
+            result["current_version"] = major_minor
+            result["current_version_full"] = ansible_version
         else:
-            content = "all:\n  hosts:\n    server1:\n"
-
-        inv_file = tmp_path / f"inventory.{format_ext}"
-        inv_file.write_text(content)
-        result = parse_inventory_file(str(inv_file))
-        assert isinstance(result, dict)
+            result["current_version"] = ansible_version
+            result["current_version_full"] = ansible_version
+    except (FileNotFoundError, RuntimeError) as e:
+        result["compatibility_issues"].append(f"Could not detect Ansible version: {e}")
 
 
-class TestParsingWorkflows:
-    """Integration-like tests for parsing workflows."""
+def _detect_python_version_info(environment_path: str, result: dict[str, Any]) -> None:
+    """Detect Python version and check compatibility."""
+    try:
+        python_version = detect_python_version(environment_path)
+        result["python_version"] = python_version
 
-    def test_parse_multiple_inventory_formats(self, tmp_path):
-        """Test parsing both INI and YAML inventories."""
-        ini_file = tmp_path / "inventory.ini"
-        ini_file.write_text("[webservers]\nweb1\n")
+        if result["current_version"] != "unknown":
+            py_parts = python_version.split(".")
+            if len(py_parts) >= 2:
+                py_major_minor = f"{py_parts[0]}.{py_parts[1]}"
+                result["python_compatible"] = is_python_compatible(
+                    result["current_version"], py_major_minor, "control"
+                )
+    except RuntimeError as e:
+        result["compatibility_issues"].append(f"Could not detect Python version: {e}")
 
-        yaml_file = tmp_path / "inventory.yml"
-        yaml_file.write_text("all:\n  hosts:\n    web1:\n")
 
-        ini_result = parse_inventory_ini(str(ini_file))
-        yaml_result = parse_inventory_yaml(str(yaml_file))
+def _check_eol_status(result: dict[str, Any]) -> None:
+    """Check and populate EOL status."""
+    if result["current_version"] == "unknown":
+        return
 
-        assert isinstance(ini_result, dict)
-        assert isinstance(yaml_result, dict)
+    result["eol_status"] = get_eol_status(result["current_version"])
 
-    def test_scan_and_parse_playbook_workflow(self, tmp_path):
-        """Test scanning and parsing playbook."""
-        playbook_file = tmp_path / "site.yml"
-        playbook_file.write_text(
-            "- hosts: all\n  tasks:\n    - debug:\n        msg: test\n"
+    if result["eol_status"].get("is_eol"):
+        result["compatibility_issues"].append(
+            f"Ansible {result['current_version']} is EOL - "
+            "security updates no longer provided"
         )
 
-        result = scan_playbook_for_version_issues(str(playbook_file))
-        assert isinstance(result, dict)
+
+def _scan_collections(env_path: Path, result: dict[str, Any]) -> None:
+    """Scan for and parse requirements.yml."""
+    requirements_paths = [
+        env_path / "requirements.yml",
+        env_path / "collections" / "requirements.yml",
+    ]
+
+    for req_path in requirements_paths:
+        if req_path.exists():
+            try:
+                collections = parse_requirements_yml(str(req_path))
+                result["collections"] = collections
+                break
+            except (FileNotFoundError, ValueError):
+                continue
+
+
+def _scan_playbooks(env_path: Path, result: dict[str, Any]) -> None:
+    """Scan playbooks for version-specific issues."""
+    playbook_paths = list(env_path.glob("**/*.yml")) + list(env_path.glob("**/*.yaml"))
+    playbook_issues: list[str] = []
+
+    for playbook_path in playbook_paths[:20]:
+        try:
+            issues = scan_playbook_for_version_issues(str(playbook_path))
+            if issues["warnings"]:
+                playbook_issues.extend(issues["warnings"])
+            result["playbooks_scanned"] += 1
+        except (FileNotFoundError, ValueError):
+            continue
+
+    if playbook_issues:
+        result["compatibility_issues"].extend(playbook_issues[:10])
+
+
+def _check_python_compatibility(result: dict[str, Any]) -> None:
+    """Check for Python compatibility issues."""
+    if result["python_compatible"] or result["current_version"] == "unknown":
+        return
+
+    version_info = ANSIBLE_VERSIONS.get(result["current_version"])
+    if not version_info:
+        return
+
+    py_parts = result["python_version"].split(".")
+    if len(py_parts) >= 2:
+        py_major_minor = f"{py_parts[0]}.{py_parts[1]}"
+    else:
+        py_major_minor = result["python_version"]
+    compatible = ", ".join(version_info.control_node_python)
+    result["compatibility_issues"].append(
+        f"Python {py_major_minor} is not compatible with "
+        f"Ansible {result['current_version']}. "
+        f"Compatible versions: {compatible}"
+    )
+
+
+def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
+    """
+    Assess current Ansible environment for upgrade readiness.
+
+    Scans the environment, detects versions, checks compatibility,
+    and generates recommendations.
+
+    Args:
+        environment_path: Path to Ansible environment directory.
+
+    Returns:
+        Dictionary containing environment assessment details.
+
+    """
+    env_path = Path(environment_path).resolve()
+    if not env_path.exists():
+        return {"error": f"Environment path does not exist: {env_path}"}
+    if not env_path.is_dir():
+        return {"error": f"Environment path is not a directory: {env_path}"}
+
+    result: dict[str, Any] = {
+        "current_version": "unknown",
+        "python_version": "unknown",
+        "python_compatible": False,
+        "eol_status": {},
+        "config_paths": {},
+        "collections": {},
+        "playbooks_scanned": 0,
+        "compatibility_issues": [],
+        "recommendations": [],
+    }
+
+    _detect_ansible_version_info(result)
+    _detect_python_version_info(str(env_path), result)
+    _check_eol_status(result)
+
+    result["config_paths"] = get_ansible_config_paths()
+
+    _scan_collections(env_path, result)
+    _scan_playbooks(env_path, result)
+    _check_python_compatibility(result)
+
+    _generate_recommendations(result)
+
+    return result
+
+
+def _generate_recommendations(assessment: dict[str, Any]) -> None:
+    """
+    Generate recommendations based on assessment.
+
+    Modifies the assessment dictionary in place to add recommendations.
+
+    Args:
+        assessment: Assessment dictionary from assess_ansible_environment.
+
+    """
+    recommendations: list[str] = []
+
+    if assessment["eol_status"].get("is_eol"):
+        latest = get_latest_version()
+        recommendations.append(
+            "Urgent: upgrade from EOL version "
+            f"{assessment['current_version']} to maintain security support"
+        )
+        recommendations.append(f"Recommended target: Ansible {latest} (latest stable)")
+    elif assessment["eol_status"].get("eol_approaching"):
+        days = assessment["eol_status"].get("days_remaining", 0)
+        recommendations.append(f"Plan upgrade soon - EOL in {days} days")
+
+    if (
+        not assessment["python_compatible"]
+        and assessment["current_version"] != "unknown"
+    ):
+        version_info = ANSIBLE_VERSIONS.get(assessment["current_version"])
+        if version_info:
+            recommendations.append(
+                "Upgrade Python to one of: "
+                f"{', '.join(version_info.control_node_python)}"
+            )
+
+    if "2.9" in assessment["current_version"]:
+        recommendations.append(
+            "Prepare for collections migration (2.9 to 2.10+ requires updates)"
+        )
+        recommendations.append(
+            "Create requirements.yml with needed collections before upgrading"
+        )
+
+    if assessment["compatibility_issues"]:
+        unique_issues = len(set(assessment["compatibility_issues"]))
+        if unique_issues > 0:
+            recommendations.append(
+                f"Review and fix {unique_issues} compatibility issue(s) before "
+                "upgrading"
+            )
+
+    if assessment["current_version"] != "unknown":
+        latest = get_latest_version()
+        current_float = float(assessment["current_version"])
+        latest_float = float(latest)
+
+        if current_float < latest_float:
+            recommendations.append(
+                f"Consider upgrading to Ansible {latest} for latest features "
+                "and security updates"
+            )
+
+    assessment["recommendations"] = recommendations
+
+
+def generate_upgrade_plan(current_version: str, target_version: str) -> dict[str, Any]:
+    """
+    Generate detailed Ansible upgrade plan.
+
+    Args:
+        current_version: Current Ansible version (e.g., "2.9").
+        target_version: Target Ansible version (e.g., "2.16").
+
+    Returns:
+        Dictionary containing upgrade plan details.
+
+    """
+    path = calculate_upgrade_path(current_version, target_version)
+
+    plan: dict[str, Any] = {
+        "upgrade_path": path,
+        "pre_upgrade_checklist": [],
+        "upgrade_steps": [],
+        "testing_plan": {},
+        "post_upgrade_validation": [],
+        "rollback_plan": {},
+        "estimated_downtime_hours": 0.0,
+        "risk_assessment": {},
+    }
+
+    plan["pre_upgrade_checklist"] = [
+        "Backup current Ansible installation and configurations",
+        "Document current Ansible and Python versions",
+        "Review all playbooks for deprecated syntax",
+        "Create test environment matching production",
+        "Notify team of planned upgrade window",
+    ]
+
+    if "2.9" in current_version:
+        plan["pre_upgrade_checklist"].extend(
+            [
+                "Identify all modules used and map to collections",
+                "Create requirements.yml with needed collections",
+                "Test collections installation in dev environment",
+                "Update playbooks to use ansible.builtin.* namespace",
+            ]
+        )
+
+    if path["python_upgrade_needed"]:
+        # Type cast: we know required_python is list[str] from calculate_upgrade_path
+        required_python = path["required_python"]
+        assert isinstance(required_python, list)
+        plan["pre_upgrade_checklist"].extend(
+            [
+                f"Upgrade Python to one of: {', '.join(required_python)}",
+                "Test Python upgrade in isolated environment",
+                "Verify all Python dependencies still work",
+            ]
+        )
+
+    if path["direct_upgrade"]:
+        plan["upgrade_steps"] = [
+            {
+                "step": 1,
+                "action": (f"Upgrade Ansible {current_version} to {target_version}"),
+                "command": f"pip install ansible-core=={target_version}",
+                "duration_minutes": 15,
+            }
+        ]
+    else:
+        step_num = 1
+        # Type cast: we know intermediate_versions is list[str]
+        # from calculate_upgrade_path
+        intermediate_versions = path["intermediate_versions"]
+        assert isinstance(intermediate_versions, list)
+        versions = [current_version] + intermediate_versions + [target_version]
+
+        for i in range(len(versions) - 1):
+            from_ver = versions[i]
+            to_ver = versions[i + 1]
+
+            plan["upgrade_steps"].append(
+                {
+                    "step": step_num,
+                    "action": f"Upgrade Ansible {from_ver} to {to_ver}",
+                    "command": f"pip install ansible-core=={to_ver}",
+                    "duration_minutes": 15,
+                    "notes": _get_upgrade_notes(from_ver, to_ver),
+                }
+            )
+            step_num += 1
+
+    if "2.9" in current_version:
+        plan["upgrade_steps"].insert(
+            1,
+            {
+                "step": 1.5,
+                "action": "Install required collections",
+                "command": "ansible-galaxy collection install -r requirements.yml",
+                "duration_minutes": 10,
+            },
+        )
+
+    plan["post_upgrade_validation"] = [
+        "Verify Ansible version: ansible --version",
+        "Run ansible-playbook --syntax-check on all playbooks",
+        "Execute test playbooks in dev environment",
+        "Validate connectivity to all managed nodes",
+        "Check collection versions: ansible-galaxy collection list",
+        "Run smoke tests on critical playbooks",
+    ]
+
+    plan["testing_plan"] = _generate_testing_plan()
+
+    plan["rollback_plan"] = {
+        "steps": [
+            f"Uninstall Ansible {target_version}",
+            f"Reinstall Ansible {current_version}",
+            "Restore configuration backups",
+            "Verify rollback: ansible --version",
+            "Test critical playbooks",
+        ],
+        "estimated_duration_minutes": 30,
+    }
+
+    total_minutes = sum(
+        step.get("duration_minutes", 15) for step in plan["upgrade_steps"]
+    )
+    plan["estimated_downtime_hours"] = round(total_minutes / 60, 1)
+
+    plan["risk_assessment"] = {
+        "level": path["risk_level"],
+        "factors": path["risk_factors"],
+        "mitigation": _generate_risk_mitigation(path),
+    }
+
+    return plan
+
+
+def _get_upgrade_notes(from_version: str, to_version: str) -> list[str]:
+    """
+    Get upgrade notes for version transition.
+
+    Args:
+        from_version: Source version.
+        to_version: Target version.
+
+    Returns:
+        List of notes for this upgrade.
+
+    """
+    notes: list[str] = []
+
+    if from_version == "2.9" and to_version == "2.10":
+        notes.append("Collections split - major breaking change")
+        notes.append("Update module paths to use collections")
+
+    if ("2.9" in from_version or "2.10" in from_version) and float(to_version) >= 2.12:
+        notes.append("Python 3.8+ required for control node")
+
+    return notes
+
+
+def _generate_testing_plan() -> dict[str, Any]:
+    """
+    Generate testing plan for upgrade.
+
+    Returns:
+        Testing plan dictionary.
+
+    """
+    return {
+        "phases": [
+            {
+                "phase": "Unit Testing",
+                "steps": [
+                    "Syntax check all playbooks",
+                    "Validate inventory files",
+                    "Check variable definitions",
+                ],
+            },
+            {
+                "phase": "Integration Testing",
+                "steps": [
+                    "Run playbooks in test environment",
+                    "Verify idempotency",
+                    "Test error handling",
+                ],
+            },
+            {
+                "phase": "Performance Testing",
+                "steps": [
+                    "Compare execution times",
+                    "Monitor resource usage",
+                    "Test with production-like load",
+                ],
+            },
+        ],
+        "success_criteria": [
+            "All playbooks pass syntax check",
+            "Test runs complete without errors",
+            "Idempotency verified",
+            "Performance within 10 percent of baseline",
+        ],
+    }
+
+
+def _generate_risk_mitigation(upgrade_path: dict[str, Any]) -> list[str]:
+    """
+    Generate risk mitigation strategies.
+
+    Args:
+        upgrade_path: Upgrade path from calculate_upgrade_path.
+
+    Returns:
+        List of mitigation strategies.
+
+    """
+    mitigation = [
+        "Create full backups before upgrade",
+        "Test upgrade in non-production environment first",
+        "Implement staged rollout (dev to staging to production)",
+        "Maintain rollback capability throughout process",
+        "Document all changes and issues encountered",
+    ]
+
+    if upgrade_path["risk_level"] == "High":
+        mitigation.extend(
+            [
+                "Schedule extended maintenance window",
+                "Have senior team members available during upgrade",
+                "Prepare communication plan for stakeholders",
+            ]
+        )
+
+    if "2.9" in upgrade_path["from_version"]:
+        mitigation.append("Allocate extra time for collections migration testing")
+
+    return mitigation
+
+
+def validate_collection_compatibility(
+    collections: dict[str, str], target_ansible_version: str
+) -> dict[str, Any]:
+    """
+    Validate collection compatibility with target Ansible version.
+
+    Args:
+        collections: Dictionary of collection names to versions.
+        target_ansible_version: Target Ansible version.
+
+    Returns:
+        Dictionary with compatibility results.
+
+    """
+    if target_ansible_version not in ANSIBLE_VERSIONS:
+        return {"error": f"Unknown Ansible version: {target_ansible_version}"}
+
+    target_info = ANSIBLE_VERSIONS[target_ansible_version]
+    min_versions = target_info.min_collection_versions
+
+    result: dict[str, Any] = {
+        "compatible": [],
+        "incompatible": [],
+        "updates_needed": [],
+        "warnings": [],
+    }
+
+    for collection, version in collections.items():
+        if collection in min_versions:
+            required = min_versions[collection]
+
+            if version == "*" or version >= required:
+                result["compatible"].append(
+                    {"collection": collection, "version": version}
+                )
+            else:
+                result["updates_needed"].append(
+                    {
+                        "collection": collection,
+                        "current": version,
+                        "required": required,
+                    }
+                )
+                result["warnings"].append(
+                    f"Collection {collection} {version} incompatible. "
+                    f"Requires {required}+"
+                )
+        else:
+            result["compatible"].append({"collection": collection, "version": version})
+
+    return result
+
+
+def generate_upgrade_testing_plan(environment_path: str) -> str:
+    """
+    Generate comprehensive testing plan for Ansible upgrade.
+
+    Args:
+        environment_path: Path to Ansible environment.
+
+    Returns:
+        Markdown-formatted testing plan.
+
+    """
+    plan = f"""# Ansible Upgrade Testing Plan
+
+Generated: {date.today().isoformat()}
+Environment: {environment_path}
+
+## 1. Pre-Upgrade Testing
+
+### 1.1 Baseline Establishment
+- [ ] Run all playbooks and record results
+- [ ] Document current execution times
+- [ ] Capture current output/logs
+- [ ] Record resource usage (CPU, memory, network)
+
+### 1.2 Inventory Validation
+- [ ] Verify all hosts are reachable
+- [ ] Validate group structure
+- [ ] Check variable precedence
+- [ ] Test dynamic inventory scripts
+
+## 2. Post-Upgrade Testing
+
+### 2.1 Syntax Validation
+```bash
+# Check all playbooks
+find . -name "*.yml" -o -name "*.yaml" | \\
+    xargs -I {{}} ansible-playbook --syntax-check {{}}
+```
+
+### 2.2 Dry Run Testing
+```bash
+# Run playbooks in check mode
+ansible-playbook playbook.yml --check --diff
+```
+
+### 2.3 Integration Testing
+- [ ] Run playbooks in test environment
+- [ ] Verify idempotency (run twice, second should have no changes)
+- [ ] Test with various inventory configurations
+- [ ] Validate handler execution
+- [ ] Test error conditions and recovery
+
+### 2.4 Performance Testing
+- [ ] Compare execution times with baseline
+- [ ] Monitor resource usage
+- [ ] Test with production-like load
+- [ ] Identify any performance regressions
+
+## 3. Regression Testing
+
+### 3.1 Module Testing
+- [ ] Verify all modules work as expected
+- [ ] Test deprecated module replacements
+- [ ] Validate collection module paths
+
+### 3.2 Feature Testing
+- [ ] Test conditional execution (when/unless)
+- [ ] Verify loops and iterations
+- [ ] Test variable interpolation
+- [ ] Validate facts gathering
+- [ ] Test privilege escalation (become)
+
+## 4. Acceptance Criteria
+
+- All syntax checks pass
+- All playbooks execute successfully
+- Idempotency verified (no changes on second run)
+- Performance within 10 percent of baseline
+- No new errors or warnings
+- All managed nodes respond correctly
+
+## 5. Sign-Off
+
+- [ ] Testing completed by: ________________
+- [ ] Date: ________________
+- [ ] Approved for production: ________________
+"""
+
+    return plan

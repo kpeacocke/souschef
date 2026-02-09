@@ -26,35 +26,14 @@ from souschef.parsers.ansible_inventory import (
 )
 
 
-def _is_subpath(path: Path, root: Path) -> bool:
+def detect_python_version(environment_path: str | None = None) -> str:
     """
-    Return True if ``path`` is located within ``root``.
-
-    This uses ``Path.is_relative_to`` when available (Python 3.9+), and
-        environment_path: Path to environment (currently unused for interpreter selection).
-    """
-    try:
-        # Python 3.9+
-        is_relative_to = getattr(path, "is_relative_to", None)
-        if callable(is_relative_to):
-    except TypeError:
-        # If root is not suitable for is_relative_to, fall back below
-        pass
-    # Always use the system python3 to detect the Python version, rather than
-    # executing a potentially untrusted interpreter from a user-controlled path.
-
-    try:
+    Detect Python version in use.
 
     Args:
         environment_path: Path to environment (looks for python/python3 there).
 
     Returns:
-            try:
-                resolved_python.relative_to(safe_root)
-            except ValueError:
-                raise ValueError(
-                    f"Python executable is outside the allowed root: {resolved_python}"
-                )
         Python version string (e.g., "3.11.2").
 
     Raises:
@@ -65,73 +44,22 @@ def _is_subpath(path: Path, root: Path) -> bool:
     python_cmd = "python3"
 
     if environment_path:
-        # Basic validation on the provided environment path string
-        if "\x00" in environment_path:
-            raise ValueError("Environment path contains null byte, which is not allowed.")
-        # Ensure the environment path is within the allowed root (current working directory)
-        safe_root = Path.cwd().resolve()
-        if not _is_subpath(env_path, safe_root):
-            raise ValueError(
-                f"Environment path is outside the allowed root directory: {env_path}"
-            )
-
-
-        # Basic validation of the provided path string
-        env_path = Path(environment_path).expanduser().resolve()
-            raise ValueError("Environment path contains null byte, which is not allowed.")
-        # Strip surrounding whitespace to avoid accidental malformed paths
-        environment_path = environment_path.strip()
-        if not environment_path:
-            raise ValueError("Environment path is empty after trimming whitespace.")
-
-        # Resolve path to a canonical directory
+        # Resolve path to prevent path traversal attacks
         env_path = Path(environment_path).resolve()
 
         # Validate the path exists and is a directory
-            # Ensure the resolved executable is still within the environment directory
-            try:
-                resolved_python.relative_to(env_path)
-            except ValueError as exc:
-                raise ValueError(
-                    f"Python executable resolves outside the environment directory: {resolved_python}"
-                ) from exc
         if not env_path.exists():
             raise ValueError(f"Environment path does not exist: {env_path}")
         if not env_path.is_dir():
             raise ValueError(f"Environment path is not a directory: {env_path}")
 
-        # Construct expected Python executable path within the environment
-        venv_python = (env_path / "bin" / "python3").resolve()
-
-        # Ensure the resolved executable remains within the environment directory
-        if env_path not in venv_python.parents:
-            raise ValueError(
-                f"Resolved Python executable escapes environment directory: {venv_python}"
-            )
-
+        venv_python = env_path / "bin" / "python3"
         if venv_python.exists():
-            if not venv_python.is_file():
-                raise ValueError(f"Python executable is not a file: {venv_python}")
-            python_cmd = str(venv_python)
+            # Resolve to prevent symlink attacks and validate it's a file
             resolved_python = venv_python.resolve()
             if not resolved_python.is_file():
                 raise ValueError(f"Python executable is not a file: {resolved_python}")
-
-            # Ensure the resolved executable is within the provided environment path
-            try:
-                resolved_env = env_path.resolve()
-                resolved_exec = resolved_python.resolve()
-            except OSError as e:
-                raise ValueError(f"Failed to resolve environment or Python path: {e}") from e
-
-            env_parts = resolved_env.parts
-            exec_parts = resolved_exec.parts
-            if not (len(exec_parts) > len(env_parts) and exec_parts[: len(env_parts)] == env_parts):
-                raise ValueError(
-                    f"Python executable {resolved_exec} is not contained within environment {resolved_env}"
-                )
-
-            python_cmd = str(resolved_exec)
+            python_cmd = str(resolved_python)
 
     try:
         result = subprocess.run(
@@ -198,35 +126,6 @@ def _check_eol_status(result: dict[str, Any]) -> None:
             "security updates no longer provided"
         )
 
-    # Use the current working directory as the safe root for environment assessments
-    base_root = Path.cwd().resolve()
-
-    # Normalize the provided environment path and ensure it stays within base_root
-    raw_env_path = Path(environment_path)
-    if raw_env_path.is_absolute():
-        candidate_path = raw_env_path
-    else:
-        candidate_path = base_root / raw_env_path
-
-    env_path = candidate_path.resolve()
-
-    def _is_within_base(root: Path, target: Path) -> bool:
-        """
-        Return True if target is within root (or equal to root), False otherwise.
-        """
-        try:
-            target.relative_to(root)
-            return True
-        except ValueError:
-            return False
-
-    if not _is_within_base(base_root, env_path):
-        return {
-            "error": (
-                f"Environment path is outside the allowed root directory: {env_path}. "
-                f"Base root: {base_root}"
-            )
-        }
 
 def _scan_collections(env_path: Path, result: dict[str, Any]) -> None:
     """Scan for and parse requirements.yml."""
@@ -266,29 +165,6 @@ def _scan_playbooks(env_path: Path, result: dict[str, Any]) -> None:
 def _check_python_compatibility(result: dict[str, Any]) -> None:
     """Check for Python compatibility issues."""
     if result["python_compatible"] or result["current_version"] == "unknown":
-    # Basic validation of user-supplied path string
-    if "\x00" in environment_path:
-        return {"error": "Environment path contains null byte, which is not allowed."}
-
-    env_path = Path(environment_path).expanduser().resolve()
-    """
-    Resolve and validate the environment path against a safe root.
-
-    The safe root is the current working directory of the process. The resolved
-    environment path must be this directory or a descendant of it.
-    """
-    root = Path.cwd().resolve()
-    candidate = Path(environment_path).expanduser().resolve()
-
-    try:
-        # Raises ValueError if candidate is not under root
-        candidate.relative_to(root)
-    except ValueError as exc:
-        raise ValueError(f"Environment path is outside allowed root: {candidate}") from exc
-
-    return candidate
-
-
         return
 
     version_info = ANSIBLE_VERSIONS.get(result["current_version"])
@@ -303,45 +179,7 @@ def _check_python_compatibility(result: dict[str, Any]) -> None:
     compatible = ", ".join(version_info.control_node_python)
     result["compatibility_issues"].append(
         f"Python {py_major_minor} is not compatible with "
-    env_path = _get_safe_env_path(environment_path)
-    base_path = Path(".").resolve()
-
-    # Ensure the requested environment path is within the allowed root directory
-    try:
-        # Python 3.9+: use is_relative_to if available
-        is_within_root = env_path.is_relative_to(root_dir)  # type: ignore[attr-defined]
-    except AttributeError:
-        # Fallback for older Python versions
-        try:
-            env_path.relative_to(root_dir)
-            is_within_root = True
-        except ValueError:
-            is_within_root = False
-
-    if not is_within_root:
-        return {
-            "error": (
-                f"Environment path is outside the allowed directory: {env_path}"
-            )
-        }
-
-    try:
-        env_path = Path(environment_path).resolve()
-    except (OSError, RuntimeError) as exc:
-        return {"error": f"Invalid environment path '{environment_path}': {exc}"}
-
-    # Ensure the resolved environment path is within the allowed base directory
-    try:
-        is_within_base = env_path.is_relative_to(base_path)  # type: ignore[attr-defined]
-    except AttributeError:
-        # Python < 3.9 fallback: check parents manually
-        is_within_base = base_path == env_path or base_path in env_path.parents
-
-    if not is_within_base:
-        return {
-            "error": f"Environment path is outside the allowed base directory: {env_path}"
-        }
-
+        f"Ansible {result['current_version']}. "
         f"Compatible versions: {compatible}"
     )
 
@@ -361,20 +199,6 @@ def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
 
     """
     env_path = Path(environment_path).resolve()
-    base_path = Path.cwd().resolve()
-    try:
-        # Python 3.9+: ensure the requested environment is within the allowed base path
-        if not env_path.is_relative_to(base_path) and env_path != base_path:
-            return {
-                "error": f"Environment path is outside the allowed directory: {env_path}"
-            }
-    except AttributeError:
-        # Fallback for Python versions without Path.is_relative_to
-        if env_path != base_path and base_path not in env_path.parents:
-            return {
-                "error": f"Environment path is outside the allowed directory: {env_path}"
-            }
-
     if not env_path.exists():
         return {"error": f"Environment path does not exist: {env_path}"}
     if not env_path.is_dir():
