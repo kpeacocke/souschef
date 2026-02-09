@@ -152,6 +152,11 @@ __all__ = [
 from souschef.converters.template import (
     convert_template_with_ai as _convert_template_with_ai,
 )
+
+# Import Chef Server validation functions for MCP exposure
+from souschef.core.chef_server import (
+    _validate_chef_server_connection,
+)
 from souschef.deployment import (  # noqa: F401, codeql[py/unused-import]
     _analyse_cookbook_for_awx,
     _analyse_cookbooks_directory,
@@ -263,11 +268,6 @@ from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
     _strip_ruby_comments,
 )
 from souschef.parsers.template import parse_template as _parse_template
-
-# Import UI helper functions for MCP exposure
-from souschef.ui.pages.chef_server_settings import (
-    _validate_chef_server_connection,
-)
 
 # Backward compatibility re-exports without underscore prefix (for tests)
 # noinspection PyUnusedLocal

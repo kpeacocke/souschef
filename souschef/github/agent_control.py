@@ -1,8 +1,29 @@
 """
-GitHub Copilot agent control for issue assignments.
+GitHub Copilot agent control for multi-platform orchestration.
 
-Provides pause, stop, and resume capabilities for Copilot agents working on issues.
-State is tracked via GitHub issue comments and labels.
+[PLANNED FEATURE] This module provides infrastructure for managing GitHub
+Copilot agent lifecycles (pause/stop/resume) across multiple platform
+migration tasks. This enables:
+
+- Multi-platform migrations: Orchestrate Puppet, SaltStack, CFEngine to
+  Ansible conversions
+- Parallel workflows: Assign agents to different repositories/platforms
+  simultaneously
+- Progress tracking: Monitor status across distributed migration tasks
+- Repository analysis: Automatically identify and process migration
+  candidates
+
+State will be tracked via GitHub issue comments and labels when fully
+implemented.
+
+IMPLEMENTATION STATUS:
+- Helper functions are currently placeholders (will connect to GitHub API
+  via MCP tools)
+- Core API structure is stable and serves as specification for full
+  implementation
+- All tests mock the GitHub integration and document expected behaviour
+
+See souschef/github/agent_control.py for implementation TODOs.
 """
 
 # Agent state management via labels
@@ -358,9 +379,15 @@ def _issue_has_label(_owner: str, _repo: str, _issue_number: int, _label: str) -
 
     This function would use GitHub MCP tools to check labels.
     In the MCP architecture, labels can be checked via GitHub API calls.
+
+    TODO: Implement GitHub API integration for label checks.
+    Use mcp_github tools (list_issues, get_issue_details) to fetch label
+    state. This enables multi-platform orchestration to track agent states
+    across repos.
     """
-    # Placeholder - in full implementation would use MCP GitHub tools
-    # The actual implementation would call the GitHub API through MCP
+    # TODO: Connect to GitHub API via MCP tools to check labels
+    # Implementation will call mcp_github_search_pull_requests or similar
+    # to get issue state
     return False
 
 
@@ -372,9 +399,13 @@ def _add_label_to_issue(
 
     This function would use GitHub MCP tools to add labels.
     In the MCP architecture, labels can be added via GitHub API calls.
+
+    TODO: Implement GitHub API integration for label addition.
+    This is critical for multi-platform orchestration state tracking.
     """
-    # Placeholder - in full implementation would use MCP GitHub tools
-    # The actual implementation would call the GitHub API through MCP
+    # TODO: Connect to GitHub API via MCP tools to add labels
+    # Implementation will use mcp_github tools to update issue labels
+    # Enables tracking agent states (active/paused/stopped) across migrations
     pass
 
 
@@ -385,8 +416,12 @@ def _remove_label_from_issue(
     Remove a label from an issue.
 
     This function would use GitHub MCP tools to remove labels.
+
+    TODO: Implement GitHub API integration for label removal.
+    Needed for state transitions in multi-platform migration orchestration.
     """
-    # Placeholder - in full implementation would use MCP GitHub tools
+    # TODO: Connect to GitHub API via MCP tools to remove labels
+    # Implementation will use mcp_github tools to update issue state
     pass
 
 
@@ -397,10 +432,16 @@ def _add_comment_to_issue(
     Add a comment to an issue.
 
     This function would use GitHub MCP tools to add comments.
-    The activate_comment_management_tools function provides access to these tools.
+    The activate_comment_management_tools function provides access to these
+    tools.
+
+    TODO: Implement GitHub API integration for comment addition.
+    Essential for providing feedback and status updates during multi-platform
+    migrations.
     """
-    # Placeholder - in full implementation would use MCP GitHub tools
-    # Would call something like mcp_github_add_issue_comment
+    # TODO: Connect to GitHub API via MCP tools to add comments
+    # Implementation will use activate_comment_management_tools to post updates
+    # Provides audit trail for multi-platform orchestration decisions
     pass
 
 
@@ -409,11 +450,15 @@ def _get_recent_agent_comments() -> str:
     Get recent agent-related comments from the issue.
 
     This function would use GitHub MCP tools to fetch and filter comments.
+
+    TODO: Implement GitHub API integration for comment retrieval.
+    Enables visibility into agent progress across multi-platform migrations.
     """
-    # Placeholder - in full implementation would:
-    # 1. Fetch issue comments via MCP GitHub tools
-    # 2. Filter for comments matching our control markers
-    # 3. Format and return recent activity
+    # TODO: Connect to GitHub API via MCP tools to fetch comments
+    # Implementation will:
+    # 1. Fetch issue comments via mcp_github tools
+    # 2. Filter for comments matching control markers (COMMENT_PAUSE_REQUEST, etc.)
+    # 3. Return recent activity for status reporting in orchestrated migrations
     return "No recent activity"
 
 
