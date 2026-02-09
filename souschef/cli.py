@@ -7,12 +7,20 @@ Provides easy access to Chef cookbook parsing and conversion tools.
 import json
 import sys
 from pathlib import Path
-from typing import NoReturn, TypedDict
+from typing import Any, NoReturn, TypedDict
 
 import click
 
 from souschef import __version__
+from souschef.ansible_upgrade import (
+    UpgradePlan,
+    assess_ansible_environment,
+    detect_python_version,
+    generate_upgrade_plan,
+    validate_collection_compatibility,
+)
 from souschef.converters.playbook import generate_playbook_from_recipe
+from souschef.core.ansible_versions import format_version_display, get_eol_status
 from souschef.core.logging import configure_logging
 from souschef.core.path_utils import _normalize_path
 from souschef.migration_config import (
@@ -43,6 +51,38 @@ from souschef.server import (
     read_cookbook_metadata,
     read_file,
 )
+
+
+def _validate_user_path(path_input: str | None) -> Path:
+    """
+    Validate and sanitize user-supplied path input.
+
+    Ensures path is safe to use by resolving and validating it exists.
+
+    Args:
+        path_input: User-supplied path string or None.
+
+    Returns:
+        Validated absolute path as Path object.
+
+    Raises:
+        ValueError: If path is invalid or unsafe.
+
+    """
+    if path_input is None:
+        # Use current directory as safe default
+        return Path.cwd()
+
+    try:
+        # Resolve to absolute path and validate it exists
+        validated_path = Path(path_input).resolve()
+
+        if not validated_path.exists():
+            raise ValueError(f"Path does not exist: {validated_path}")
+
+        return validated_path
+    except OSError as e:
+        raise ValueError(f"Invalid path: {e}") from e
 
 
 class ConversionResults(TypedDict):
@@ -973,8 +1013,20 @@ def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> No
 
     """
     try:
-        cookbook_dir = Path(cookbook_path)
-        output_dir = Path(output_path)
+        # Validate input paths
+        cookbook_dir = _validate_user_path(cookbook_path)
+
+        # Validate output path (doesn't need to exist, but validate parent)
+        try:
+            output_dir = Path(output_path).resolve()
+            # Check parent directory is accessible
+            parent = output_dir.parent
+            if not parent.exists():
+                msg = f"Output parent directory does not exist: {parent}"
+                raise ValueError(msg)
+        except OSError as e:
+            raise ValueError(f"Invalid output path: {e}") from e
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Check recipe exists
@@ -1040,14 +1092,8 @@ def assess_cookbook(cookbook_path: str, output_format: str) -> None:
 
     """
     try:
-        cookbook_dir = Path(cookbook_path)
-        if not cookbook_dir.exists():
-            click.echo(
-                f"Error: Cookbook path does not exist: {cookbook_path}",
-                err=True,
-            )
-            sys.exit(1)
-
+        # Validate path before using it
+        cookbook_dir = _validate_user_path(cookbook_path)
         if not cookbook_dir.is_dir():
             click.echo(f"Error: {cookbook_path} is not a directory", err=True)
             sys.exit(1)
@@ -1155,16 +1201,22 @@ def convert_habitat(plan_path: str, output_path: str, base_image: str) -> None:
 
     """
     try:
-        plan_file = Path(plan_path)
-        if not plan_file.exists():
-            click.echo(f"Error: Plan file does not exist: {plan_path}", err=True)
-            sys.exit(1)
-
+        # Validate input paths
+        plan_file = _validate_user_path(plan_path)
         if not plan_file.is_file():
             click.echo(f"Error: {plan_path} is not a file", err=True)
             sys.exit(1)
 
-        output_dir = Path(output_path)
+        # Validate output path
+        try:
+            output_dir = Path(output_path).resolve()
+            parent = output_dir.parent
+            if not parent.exists():
+                msg = f"Output parent directory does not exist: {parent}"
+                raise ValueError(msg)
+        except OSError as e:
+            raise ValueError(f"Invalid output path: {e}") from e
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Call server function to convert
@@ -1217,19 +1269,22 @@ def convert_inspec(profile_path: str, output_path: str, output_format: str) -> N
 
     """
     try:
-        profile_dir = Path(profile_path)
-        if not profile_dir.exists():
-            click.echo(
-                f"Error: Profile path does not exist: {profile_path}",
-                err=True,
-            )
-            sys.exit(1)
-
+        # Validate input paths
+        profile_dir = _validate_user_path(profile_path)
         if not profile_dir.is_dir():
             click.echo(f"Error: {profile_path} is not a directory", err=True)
             sys.exit(1)
 
-        output_dir = Path(output_path)
+        # Validate output path
+        try:
+            output_dir = Path(output_path).resolve()
+            parent = output_dir.parent
+            if not parent.exists():
+                msg = f"Output parent directory does not exist: {parent}"
+                raise ValueError(msg)
+        except OSError as e:
+            raise ValueError(f"Invalid output path: {e}") from e
+
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Call server function to convert
@@ -1318,14 +1373,24 @@ def convert_cookbook(
 
     """
     try:
+        # Validate input paths
+        _validate_user_path(cookbook_path)
+
+        # Validate output path
+        try:
+            output_dir = Path(output_path).resolve()
+            parent = output_dir.parent
+            if not parent.exists():
+                msg = f"Output parent directory does not exist: {parent}"
+                raise ValueError(msg)
+        except OSError as e:
+            raise ValueError(f"Invalid output path: {e}") from e
+
         # Load assessment data if provided
         assessment_data = ""
         if assessment_file:
-            assessment_path = Path(assessment_file)
-            if assessment_path.exists():
-                assessment_data = assessment_path.read_text()
-            else:
-                click.echo(f"Warning: Assessment file not found: {assessment_file}")
+            assessment_path = _validate_user_path(assessment_file)
+            assessment_data = assessment_path.read_text()
 
         # Call server function
         from souschef.server import convert_cookbook_comprehensive
@@ -1787,6 +1852,486 @@ def history_delete(history_type: str, record_id: int, yes: bool) -> None:
             sys.exit(1)
     except Exception as e:
         click.echo(f"❌ Error deleting {history_type}: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.group()
+def ansible() -> None:
+    """
+    Manage Ansible upgrade planning and validation.
+
+    Provides tools to assess Ansible environments, plan upgrades,
+    validate collection compatibility, and generate testing strategies.
+    """
+
+
+@ansible.command("assess")
+@click.option(
+    "--environment-path",
+    type=click.Path(exists=True),
+    help="Path to Ansible environment or venv (detects current if not provided)",
+)
+def ansible_assess(environment_path: str | None) -> None:
+    """
+    Assess the current Ansible environment.
+
+    Analyses the Ansible version, Python version, installed collections,
+    and environment configuration to provide a baseline for upgrade planning.
+
+    Example:
+        souschef ansible assess --environment-path /opt/ansible/venv
+
+    """
+    try:
+        # Validate path before using it
+        validated_path = _validate_user_path(environment_path or None)
+
+        click.echo("Assessing Ansible environment...")
+        assessment = assess_ansible_environment(str(validated_path))
+
+        click.echo("\n" + "=" * 60)
+        click.echo("Ansible Environment Assessment")
+        click.echo("=" * 60)
+        current = assessment.get("current_version", "Unknown")
+
+        # Try to format with both version schemas if it's a valid version
+        try:
+            version_display = format_version_display(
+                current, include_named=True, include_aap=False
+            )
+            click.echo(f"\nCurrent Ansible Version: {version_display}")
+        except (ValueError, KeyError):
+            click.echo(f"\nCurrent Ansible Version: {current}")
+
+        full_version = assessment.get("current_version_full", "Unknown")
+        click.echo(f"Full Version: {full_version}")
+        python_ver = assessment.get("python_version", "Unknown")
+        click.echo(f"Python Version: {python_ver}")
+
+        if "installed_collections" in assessment:
+            collections = assessment["installed_collections"]
+            click.echo(f"\nInstalled Collections: {len(collections)}")
+            for collection in collections[:10]:
+                click.echo(f"  - {collection}")
+            if len(collections) > 10:
+                remaining = len(collections) - 10
+                click.echo(f"  ... and {remaining} more")
+
+        if "eol_date" in assessment:
+            eol = assessment["eol_date"]
+            click.echo(f"\nCurrent Version EOL: {eol}")
+
+        if "warnings" in assessment:
+            click.echo("\nWarnings:")
+            for warning in assessment["warnings"]:
+                click.echo(f"  - {warning}")
+
+        click.echo("\nAssessment complete")
+
+    except Exception as e:
+        click.echo(f"Error assessing environment: {e}", err=True)
+        sys.exit(1)
+
+
+def _display_plan_section(title: str, items: list[str], icon: str = "-") -> None:
+    """Display a section of plan items."""
+    if not items:
+        return
+    click.echo(f"\n{title}:")
+    for item in items[:5]:
+        click.echo(f"  {icon} {item}")
+    if len(items) > 5:
+        click.echo(f"  ... and {len(items) - 5} more")
+
+
+def _display_upgrade_plan(plan: UpgradePlan) -> None:
+    """
+    Display upgrade plan details.
+
+    Args:
+        plan: Upgrade plan dictionary.
+
+    """
+    upgrade_path = plan.get("upgrade_path")
+    if isinstance(upgrade_path, dict):
+        click.echo("\nUpgrade Path:")
+        from_version = upgrade_path.get("from_version", "unknown")
+        to_version = upgrade_path.get("to_version", "unknown")
+        click.echo(f"  From: {from_version}")
+        click.echo(f"  To: {to_version}")
+
+        intermediate = upgrade_path.get("intermediate_versions", [])
+        if isinstance(intermediate, list) and intermediate:
+            click.echo("  Intermediate Versions:")
+            for version in intermediate:
+                click.echo(f"    - {version}")
+
+        breaking = upgrade_path.get("breaking_changes", [])
+        if isinstance(breaking, list) and breaking:
+            _display_plan_section("Breaking Changes", breaking, "-")
+
+        collection_updates = upgrade_path.get("collection_updates_needed", {})
+        if isinstance(collection_updates, dict) and collection_updates:
+            click.echo("\nCollection Updates Required:")
+            click.echo(f"  Total: {len(collection_updates)}")
+
+        effort = upgrade_path.get("estimated_effort_days")
+        if effort is not None:
+            click.echo(f"\nEstimated Effort: {effort} days")
+
+
+@ansible.command("plan")
+@click.option(
+    "--current-version",
+    required=True,
+    help="Current Ansible version (e.g., '2.9', '2.10', '5.0')",
+)
+@click.option(
+    "--target-version",
+    required=True,
+    help="Target Ansible version (e.g., '6.0', '7.0')",
+)
+def ansible_plan(current_version: str, target_version: str) -> None:
+    """
+    Generate an Ansible upgrade plan.
+
+    Creates a detailed upgrade plan including breaking changes, deprecated
+    features, collection compatibility issues, and recommended testing
+    strategies for moving between Ansible versions.
+
+    Example:
+        souschef ansible plan --current-version 5.0 --target-version 7.0
+
+    """
+    try:
+        msg = f"Generating upgrade plan from {current_version} to {target_version}..."
+        click.echo(msg)
+        plan = generate_upgrade_plan(current_version, target_version)
+
+        # Try to format versions with Named Ansible schema
+        try:
+            current_display = format_version_display(
+                current_version, include_named=True, include_aap=False
+            )
+            target_display = format_version_display(
+                target_version, include_named=True, include_aap=False
+            )
+            title = f"Upgrade Plan: {current_display} → {target_display}"
+        except (ValueError, KeyError):
+            title = f"Upgrade Plan: {current_version} → {target_version}"
+
+        click.echo("\n" + "=" * 60)
+        click.echo(title)
+        click.echo("=" * 60)
+
+        _display_upgrade_plan(plan)
+        click.echo("\nPlan generated successfully")
+
+    except Exception as e:
+        click.echo(f"Error generating upgrade plan: {e}", err=True)
+        sys.exit(1)
+
+
+@ansible.command("eol")
+@click.option(
+    "--version",
+    required=True,
+    help="Ansible version to check (e.g., '5.0', '6.0')",
+)
+def ansible_eol(version: str) -> None:
+    """
+    Check Ansible version end-of-life (EOL) status.
+
+    Shows when a specific Ansible version reaches end-of-life and whether
+    it's still supported. Useful for planning upgrade timelines.
+
+    Example:
+        souschef ansible eol --version 5.0
+
+    """
+    try:
+        status = get_eol_status(version)
+
+        # Try to format with both version schemas
+        try:
+            version_display = format_version_display(
+                version, include_named=True, include_aap=False
+            )
+        except (ValueError, KeyError):
+            version_display = version
+
+        click.echo("\n" + "=" * 60)
+        click.echo(f"{version_display} EOL Status")
+        click.echo("=" * 60)
+
+        if status.get("is_eol"):
+            click.echo("Status: END OF LIFE")
+            click.echo(f"EOL Date: {status.get('eol_date', 'Unknown')}")
+        else:
+            click.echo("Status: SUPPORTED")
+            click.echo(f"EOL Date: {status.get('eol_date', 'Unknown')}")
+
+        if "support_level" in status:
+            click.echo(f"Support Level: {status['support_level']}")
+
+        click.echo("")
+
+    except Exception as e:
+        click.echo(f"❌ Error checking EOL status: {e}", err=True)
+        sys.exit(1)
+
+
+def _display_collection_section(title: str, collections: list[str]) -> None:
+    """Display a section of collections."""
+    if not collections:
+        return
+    click.echo(f"\n{title}: {len(collections)}")
+    for collection in collections[:5]:
+        click.echo(f"  - {collection}")
+    if len(collections) > 5:
+        click.echo(f"  ... and {len(collections) - 5} more")
+
+
+def _display_validation_results(validation: dict[str, Any]) -> None:
+    """
+    Display collection validation results.
+
+    Args:
+        validation: Validation result dictionary.
+
+    """
+    compat = validation.get("compatible", [])
+    if compat:
+        _display_collection_section("Compatible Collections", compat)
+
+    requires = validation.get("requires_update", [])
+    if requires:
+        _display_collection_section("Requires Update", requires)
+
+    maybe = validation.get("may_require_update", [])
+    if maybe:
+        _display_collection_section("May Require Update", maybe)
+
+    incompat = validation.get("incompatible", [])
+    if incompat:
+        _display_collection_section("Incompatible", incompat)
+
+
+def _parse_collections_file(file_path: str) -> dict[str, str]:
+    """
+    Parse a collections file (requirements.yml).
+
+    Extracts collection names and versions from a requirements.yml file.
+
+    Args:
+        file_path: Path to the requirements.yml or similar collections file.
+
+    Returns:
+        Dictionary mapping collection names to their versions.
+
+    Raises:
+        ValueError: If the file cannot be parsed or is missing required data.
+
+    """
+    try:
+        import yaml
+    except ImportError as e:
+        msg = (
+            "PyYAML is required to parse collections files. "
+            "Install with: pip install pyyaml"
+        )
+        raise ValueError(msg) from e
+
+    # Validate path before using it
+    try:
+        validated = Path(file_path).resolve()
+        if not validated.exists():
+            raise ValueError(f"File does not exist: {validated}")
+        if not validated.is_file():
+            raise ValueError(f"Path is not a file: {validated}")
+    except OSError as e:
+        raise ValueError(f"Invalid file path: {e}") from e
+
+    path = validated
+    try:
+        with path.open(encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except OSError as e:
+        raise ValueError(f"Cannot read collections file: {e}") from e
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML in collections file: {e}") from e
+
+    if not data:
+        raise ValueError("Collections file is empty")
+
+    collections_dict = _extract_collections_from_data(data)
+
+    if not collections_dict:
+        msg = (
+            "No collections found in file. "
+            "Expected 'collections' key with list of collections."
+        )
+        raise ValueError(msg)
+
+    return collections_dict
+
+
+def _extract_collections_from_data(data: Any) -> dict[str, str]:
+    """
+    Extract collections from parsed YAML data.
+
+    Args:
+        data: Parsed YAML data structure.
+
+    Returns:
+        Dictionary mapping collection names to versions.
+
+    """
+    collections_dict: dict[str, str] = {}
+
+    # Handle the 'collections' key with a list of collection definitions
+    if not isinstance(data.get("collections"), list):
+        return collections_dict
+
+    for item in data["collections"]:
+        if isinstance(item, dict):
+            _add_dict_collections(item, collections_dict)
+        elif isinstance(item, str):
+            _add_string_collections(item, collections_dict)
+
+    return collections_dict
+
+
+def _add_dict_collections(
+    item: dict[str, Any], collections_dict: dict[str, str]
+) -> None:
+    """
+    Add collections from a dictionary item.
+
+    Args:
+        item: Dictionary item from collections list.
+        collections_dict: Dictionary to add collections to.
+
+    """
+    for name, version in item.items():
+        if not isinstance(name, str):
+            continue
+        if isinstance(version, str):
+            collections_dict[name] = version
+        elif version is None:
+            # Handle cases where version is null/unspecified
+            collections_dict[name] = "*"
+
+
+def _add_string_collections(item: str, collections_dict: dict[str, str]) -> None:
+    """
+    Add collections from a string item.
+
+    Args:
+        item: String item from collections list.
+        collections_dict: Dictionary to add collections to.
+
+    """
+    # Handle simple string format "namespace.name:version"
+    if ":" in item:
+        name, version = item.split(":", 1)
+        collections_dict[name] = version
+    else:
+        # No version specified, use wildcard
+        collections_dict[item] = "*"
+
+
+@ansible.command("validate-collections")
+@click.option(
+    "--collections-file",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to requirements.yml or similar collections file",
+)
+@click.option(
+    "--target-version",
+    required=True,
+    help="Target Ansible version (e.g., '6.0', '7.0')",
+)
+def ansible_validate_collections(collections_file: str, target_version: str) -> None:
+    r"""
+    Validate collection compatibility for target Ansible version.
+
+    Analyses a collections file (requirements.yml) and checks if installed
+    collections are compatible with the target Ansible version, identifying
+    collections that need updates or may have breaking changes.
+
+    Example:
+        souschef ansible validate-collections \
+            --collections-file requirements.yml \
+            --target-version 7.0
+
+    """
+    try:
+        msg = f"Validating collections for Ansible {target_version}..."
+        click.echo(msg)
+        # Validate path before using it
+        _validate_user_path(collections_file)
+        # Parse the YAML file to extract collections and versions
+        collections_dict = _parse_collections_file(collections_file)
+        validation = validate_collection_compatibility(collections_dict, target_version)
+
+        click.echo("\n" + "=" * 60)
+        title = f"Collection Compatibility Report - Ansible {target_version}"
+        click.echo(title)
+        click.echo("=" * 60)
+
+        _display_validation_results(validation)
+        click.echo("\nValidation complete")
+
+    except Exception as e:
+        click.echo(f"Error validating collections: {e}", err=True)
+        sys.exit(1)
+
+
+@ansible.command("detect-python")
+@click.option(
+    "--environment-path",
+    type=click.Path(exists=True),
+    help="Path to Ansible environment or venv (detects current if not provided)",
+)
+def ansible_detect_python(environment_path: str | None) -> None:
+    """
+    Detect Python version in Ansible environment.
+
+    Identifies the Python version being used by Ansible, which is critical
+    for planning upgrades as newer Ansible versions may require newer
+    Python versions.
+
+    Example:
+        souschef ansible detect-python --environment-path /opt/ansible/venv
+
+    """
+    try:
+        click.echo("Detecting Python version...")
+        # Validate path only if provided
+        validated_path = (
+            _validate_user_path(environment_path) if environment_path else None
+        )
+        python_version = detect_python_version(
+            str(validated_path) if validated_path else None
+        )
+
+        click.echo("\n" + "=" * 60)
+        click.echo("Python Version Detection")
+        click.echo("=" * 60)
+        click.echo(f"\nPython Version: {python_version}")
+
+        # Parse version for additional info
+        version_parts = python_version.split(".")
+        if len(version_parts) >= 2:
+            major_minor = f"{version_parts[0]}.{version_parts[1]}"
+            click.echo(f"Major.Minor: {major_minor}")
+
+        click.echo("\nDetection complete")
+
+    except Exception as e:
+        click.echo(f"Error detecting Python version: {e}", err=True)
         sys.exit(1)
 
 

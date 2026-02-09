@@ -1,13 +1,13 @@
 # Multi-stage Dockerfile for SousChef UI - Production Ready
 # Optimised for security, robustness, and Docker registry publishing
 
-ARG PYTHON_VERSION=3.13.11
-ARG POETRY_VERSION=1.8.3
+ARG PYTHON_VERSION=3.14.3
+ARG POETRY_VERSION=2.3.2
 
 # ============================================================================
 # Base Stage - Common configuration for all stages
 # ============================================================================
-FROM python:${PYTHON_VERSION}-slim AS base
+FROM python:${PYTHON_VERSION}-alpine AS base
 
 ARG PYTHON_VERSION
 
@@ -20,7 +20,7 @@ LABEL org.opencontainers.image.title="SousChef - MCP AI Chef to Ansible Converte
       org.opencontainers.image.url="https://github.com/kpeacocke/souschef" \
       org.opencontainers.image.documentation="https://kpeacocke.github.io/souschef/" \
       org.opencontainers.image.source="https://github.com/kpeacocke/souschef" \
-      org.opencontainers.image.base.name="python:${PYTHON_VERSION}-slim"
+      org.opencontainers.image.base.name="python:${PYTHON_VERSION}-alpine"
 
 # Set environment variables for Python and Streamlit
 ENV PYTHONUNBUFFERED=1 \
@@ -37,16 +37,17 @@ ENV PYTHONUNBUFFERED=1 \
     STREAMLIT_SERVER_LOGGER_LEVEL=INFO \
     STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
 
-# Install security updates and minimal system dependencies
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+# Install runtime dependencies only (Alpine)
+RUN apk add --no-cache \
     ca-certificates \
     curl \
-    git \
-    && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r app --gid=1001 && \
-    useradd -r -g app --uid=1001 --create-home --shell /sbin/nologin app && \
-    mkdir -p /app && \
-    chown -R app:app /app
+    # Runtime libraries (not -dev packages)
+    libffi \
+    libpq \
+    && addgroup -g 1001 -S app \
+    && adduser -u 1001 -S app -G app \
+    && mkdir -p /app \
+    && chown -R app:app /app
 
 # Set work directory
 WORKDIR /app
@@ -57,12 +58,15 @@ WORKDIR /app
 FROM base AS builder
 
 ARG POETRY_VERSION
+ARG PYTHON_VERSION
 
-# Install build dependencies needed for compilation
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    python3-dev \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Install build-time dependencies (not needed in runtime image)
+RUN apk add --no-cache \
+    gcc \
+    git \
+    libffi-dev \
+    musl-dev \
+    postgresql-dev
 
 # Copy dependency files first (for better layer caching)
 COPY pyproject.toml poetry.lock ./
@@ -80,22 +84,41 @@ RUN poetry config virtualenvs.create false
 
 # Install production dependencies with all required extras
 # Use --no-interaction for automated environments
+# --only=main installs only main dependencies (excludes dev), --extras specifies optional packages
 RUN poetry install \
     --only=main \
     --extras "ui ai storage" \
-    --no-dev \
     --no-interaction \
     --no-root && \
     poetry cache clear pypi --all || true
+
+# Copy site-packages to a predictable location for the runtime stage
+# This avoids glob expansion issues in COPY commands
+RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
+    cp -r "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" /tmp/runtime-site-packages
 
 # ============================================================================
 # Runtime Stage - Minimal production image
 # ============================================================================
 FROM base AS production
 
-# Copy installed Python packages from builder (more efficient than copying site-packages)
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+ARG PYTHON_VERSION
+
+# Copy site-packages from builder (at predictable location, no glob expansion)
+COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
+
+# Install to final location
+RUN PYTHON_MAJOR_MINOR=$(echo "${PYTHON_VERSION}" | cut -d. -f1-2) && \
+    rm -rf "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
+    mv /tmp/site-packages "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
+    \
+    # Remove test files and compiled artifacts, but KEEP dist-info (required for package discovery) \
+    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
+        -type d -name "tests" -exec rm -rf {} + && \
+    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
+        -type d -name "*.egg-info" -exec rm -rf {} + && \
+    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
+        -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.dist-info/RECORD" \) -delete
 
 # Copy application code (keep root-owned for security)
 COPY souschef/ ./souschef/

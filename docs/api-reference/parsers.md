@@ -19,6 +19,7 @@ The following parsers are available:
 - **Metadata Parser** (`souschef.parsers.metadata`) - Parse cookbook metadata
 - **InSpec Parser** (`souschef.parsers.inspec`) - Parse InSpec profiles
 - **Habitat Parser** (`souschef.parsers.habitat`) - Parse Habitat plans
+- **Ansible Inventory Parser** (`souschef.parsers.ansible_inventory`) - Parse Ansible inventory files and environments (NEW)
 
 For usage examples and patterns, see the [Examples Guide](../user-guide/examples.md).
 

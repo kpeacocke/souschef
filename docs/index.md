@@ -1,26 +1,38 @@
 # SousChef Documentation
 
-An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration capabilities for enterprise infrastructure and application transformation.
+An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration and Ansible upgrade planning capabilities for enterprise infrastructure and application transformation.
 
 [![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
-[![Python Version](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](https://github.com/kpeacocke/souschef/tree/main/htmlcov)
+[![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](https://github.com/kpeacocke/souschef/tree/main/htmlcov)
 
 ## Overview
 
-SousChef is a complete enterprise-grade migration platform with **32 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, SousChef provides everything needed for a successful infrastructure automation migration.
+SousChef is a complete enterprise-grade platform with two major capabilities:
+
+### 1. Chef to Ansible Migration (38 tools)
+
+Complete enterprise-grade migration platform with **38 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and Chef Server integration, SousChef provides everything needed for a successful infrastructure automation migration.
+
+### 2. Ansible Upgrade Assessment & Planning (5 tools)
+
+Comprehensive Ansible upgrade analysis and planning tools based on official Ansible-Python compatibility matrices:
+
+- **Version Compatibility Assessment** - Validate Ansible and Python version compatibility
+- **EOL Status Checking** - Track end-of-life dates and security support
+- **Upgrade Path Planning** - Generate detailed upgrade plans with risk assessment
+- **Collection Compatibility** - Validate collection versions against target Ansible releases
+- **Breaking Change Analysis** - Identify and plan for breaking changes (e.g., 2.9 → 2.10 collections split)
+- **Python Upgrade Impact** - Assess Python version upgrade requirements for control and managed nodes
+- **Testing Plan Generation** - Generate comprehensive upgrade testing plans
 
 !!! info "About Tool Counts"
-    **Why 32 tools in the documentation but more in the server?**
+    **Why 43 tools in the documentation but more in the server?**
 
-    The MCP server actually provides **37 total tools** (35 public + 2 internal). This documentation focuses on the **32 primary user-facing tools** that cover the main migration capabilities. The remaining 5 are:
+    The MCP server provides **48 total tools**. This documentation focuses on the **43 primary user-facing tools** (38 migration + 5 upgrade tools) that cover the main capabilities. The remaining 5 are low-level filesystem operations used internally by the main tools.
 
-    - **Low-level filesystem operations** (`_read_file_internal`, `_list_directory_internal`) - Used internally by other tools
-    - **Helper utilities** - Supporting functions for the main tools
-    - **Deprecated tools** - Maintained for backward compatibility
-
-    As a user, you'll primarily interact with the 32 documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
+    As a user, you'll primarily interact with the documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -34,7 +46,7 @@ SousChef is a complete enterprise-grade migration platform with **32 primary MCP
 - :material-domain: **Custom Enterprise Models**
 
 !!! tip "How it works"
-    You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 24 specialized tools. The model calls these tools to help with your migration.
+    You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 43 specialized tools. The model calls these tools to help with your migration and upgrade planning.
 
 ## Core Capabilities
 
@@ -57,6 +69,11 @@ Comprehensive validation framework and InSpec integration for ensuring migration
 Modernise Habitat applications to containerised deployments with Docker and Compose.
 
 [Learn more about Habitat conversion →](user-guide/mcp-tools.md#habitat){ .md-button }
+
+### :material-update: Ansible Upgrade Assessment & Planning
+Comprehensive Ansible upgrade planning based on official compatibility matrices and EOL tracking.
+
+[Learn more about Ansible upgrades →](user-guide/ansible-upgrades.md){ .md-button }
 
 ### :material-web: Visual Migration Planning Interface
 Interactive web-based interface for Chef-to-Ansible migration planning and visualisation.

@@ -1,0 +1,23 @@
+---
+- name: Legacy playbook
+  hosts: all
+  tasks:
+    - name: Use old style include
+      include: other_tasks.yml
+
+    - name: Old apt module without FQCN
+      apt:
+        name: nginx
+        state: present
+
+    - name: Old yum module
+      yum:
+        name: httpd
+        state: latest
+
+    - name: Old style action
+      action: command echo "hello"
+
+    - name: Deprecated bare variable
+      debug:
+        msg: "{{ ansible_local }}"

@@ -1,0 +1,16 @@
+collections:
+  - name: community.general
+    version: ">=5.0.0"
+  - name: ansible.posix
+    version: "1.5.0"
+  - name: community.postgresql
+    version: ">=2.0.0"
+
+roles:
+  - name: geerlingguy.apache
+    version: "3.1.4"
+  - name: geerlingguy.postgresql
+    version: "3.3.0"
+  - src: git+https://github.com/user/custom-role.git
+    version: main
+    name: custom_role
