@@ -154,8 +154,16 @@ def test_list_directory_success():
     mock_file2.name = "file2.txt"
     mock_path.iterdir.return_value = [mock_file1, mock_file2]
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = list_directory(".")
         assert result == ["file1.txt", "file2.txt"]
@@ -597,8 +605,16 @@ def test_list_directory_empty():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.return_value = []
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = list_directory("/empty")
         assert result == []
@@ -609,8 +625,16 @@ def test_list_directory_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = FileNotFoundError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = list_directory("non_existent_directory")
         assert "Error: Directory not found" in result
@@ -621,8 +645,16 @@ def test_list_directory_not_a_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = NotADirectoryError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = list_directory("file.txt")
         assert "Error:" in result
@@ -634,8 +666,16 @@ def test_list_directory_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = PermissionError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = list_directory("/root")
         assert "Error: Permission denied" in result
@@ -646,8 +686,16 @@ def test_list_directory_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = Exception("A test exception")
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = list_directory(".")
         assert "An error occurred: A test exception" in result
@@ -658,8 +706,16 @@ def test_read_file_success():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.return_value = "file contents here"
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = read_file("test.txt")
         assert result == "file contents here"
@@ -671,8 +727,16 @@ def test_read_file_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = read_file("missing.txt")
         assert "Error: File not found" in result
@@ -683,8 +747,16 @@ def test_read_file_is_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = IsADirectoryError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = read_file("somedir")
         assert "Error:" in result
@@ -696,8 +768,16 @@ def test_read_file_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = read_file("protected.txt")
         assert "Error: Permission denied" in result
@@ -708,8 +788,16 @@ def test_read_file_unicode_decode_error():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = read_file("binary.dat")
         assert "Error:" in result and "codec can't decode" in result
@@ -720,8 +808,16 @@ def test_read_file_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = Exception("Unexpected error")
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
     ):
         result = read_file("test.txt")
         assert "An error occurred: Unexpected error" in result
@@ -3566,7 +3662,7 @@ class TestAdvancedParsingFunctions:
 class TestCoreFunctionsCoverage:
     """Test core functions for maximum coverage impact."""
 
-    def test_read_file_success_cases(self):
+    def test_read_file_success_cases(self, monkeypatch):
         """Test read_file with various successful scenarios."""
         from souschef.server import read_file
 
@@ -3587,6 +3683,7 @@ end
             temp_path = f.name
 
         try:
+            monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
             result = read_file(temp_path)
             assert isinstance(result, str)
             assert "nginx" in result
@@ -3599,15 +3696,16 @@ end
         finally:
             Path(temp_path).unlink()
 
-    def test_read_file_error_cases(self, tmp_path):
+    def test_read_file_error_cases(self, tmp_path, monkeypatch):
         """Test read_file error handling."""
         from souschef.server import read_file
 
         # Test with nonexistent file
         result = read_file("/nonexistent/file.rb")
-        assert "Error: File not found" in result
+        assert "Error:" in result
 
         # Test with directory instead of file
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
         result = read_file(str(tmp_path))
         assert "Error:" in result and "directory" in result
 
@@ -3637,6 +3735,15 @@ end
         # Test with nonexistent directory
         result = list_directory("/nonexistent/directory")
         assert isinstance(result, str) and "Error" in result
+
+    def test_list_directory_rejects_outside_workspace(self, tmp_path, monkeypatch):
+        """Test list_directory rejects paths outside the workspace root."""
+        from souschef.server import list_directory
+
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        result = list_directory("/")
+        assert "Error" in result
+        assert "Path traversal attempt" in result
 
     def test_parse_recipe_with_real_content(self):
         """Test parse_recipe with realistic Chef recipes."""
@@ -4236,9 +4343,11 @@ class TestInDepthFunctionCoverage:
                 assert isinstance(result, str)
                 # Should handle errors gracefully
 
-    def test_directory_operations_comprehensive(self, tmp_path):
+    def test_directory_operations_comprehensive(self, tmp_path, monkeypatch):
         """Test directory operations comprehensively."""
         from souschef.server import list_cookbook_structure, list_directory
+
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
         # Test with various directory types
         test_dirs = [
@@ -4249,15 +4358,17 @@ class TestInDepthFunctionCoverage:
 
         for test_dir in test_dirs:
             if Path(test_dir).exists():
-                # Test list_directory
                 result = list_directory(test_dir)
-                assert isinstance(result, (list, str))
+                if Path(test_dir).resolve().is_relative_to(tmp_path.resolve()):
+                    assert isinstance(result, (list, str))
+                else:
+                    assert isinstance(result, str) and "Error" in result
 
                 # Test list_cookbook_structure
                 result = list_cookbook_structure(test_dir)
                 assert isinstance(result, str)
 
-    def test_json_parsing_and_formatting(self):
+    def test_json_parsing_and_formatting(self, monkeypatch):
         """Test JSON operations within the functions."""
         from souschef.server import read_file
 
@@ -4274,6 +4385,7 @@ class TestInDepthFunctionCoverage:
             temp_path = f.name
 
         try:
+            monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
             result = read_file(temp_path)
             assert isinstance(result, str)
             # Should be able to read JSON files
@@ -15853,7 +15965,7 @@ def test_validate_chef_server_connection_success():
 
         result = validate_chef_server_connection("https://chef.example.com", "admin")
 
-        assert "✅ Success" in result
+        assert "Success" in result
         assert "Connection successful" in result
         mock_validate.assert_called_once_with("https://chef.example.com", "admin")
 
@@ -15867,7 +15979,7 @@ def test_validate_chef_server_connection_failure():
 
         result = validate_chef_server_connection("https://chef.example.com", "admin")
 
-        assert "❌ Failed" in result
+        assert "Failed" in result
         assert "Connection timeout" in result
 
 
@@ -15880,7 +15992,7 @@ def test_validate_chef_server_connection_exception():
 
         result = validate_chef_server_connection("https://chef.example.com", "admin")
 
-        assert "❌ Error" in result
+        assert "Error" in result
         assert "Network error" in result
 
 

@@ -9,6 +9,29 @@ def _trusted_workspace_root() -> Path:
     return Path.cwd().resolve()
 
 
+def _get_workspace_root() -> Path:
+    """
+    Resolve the workspace root for filesystem containment checks.
+
+    The workspace root defaults to the current working directory. If the
+    `SOUSCHEF_WORKSPACE_ROOT` environment variable is set, its value is
+    normalised and used instead.
+
+    Raises:
+        ValueError: If the workspace root is invalid or not a directory.
+
+    """
+    env_root = os.getenv("SOUSCHEF_WORKSPACE_ROOT")
+    base_path = _normalize_path(env_root) if env_root else _trusted_workspace_root()
+
+    if not base_path.exists():
+        raise ValueError(f"Workspace root does not exist: {base_path}")
+    if not base_path.is_dir():
+        raise ValueError(f"Workspace root is not a directory: {base_path}")
+
+    return base_path
+
+
 def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
     """
     Ensure a path stays within a trusted base directory.

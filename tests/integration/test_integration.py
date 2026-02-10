@@ -144,20 +144,22 @@ def test_read_various_files(file_path, expected_content):
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    def test_empty_directory(self, tmp_path):
+    def test_empty_directory(self, tmp_path, monkeypatch):
         """Test listing an empty directory."""
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
         result = list_directory(str(empty_dir))
         assert result == []
 
-    def test_directory_with_hidden_files(self, tmp_path):
+    def test_directory_with_hidden_files(self, tmp_path, monkeypatch):
         """Test listing directory with hidden files."""
         test_dir = tmp_path / "test"
         test_dir.mkdir()
         (test_dir / ".hidden").write_text("hidden")
         (test_dir / "visible.txt").write_text("visible")
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
         result = list_directory(str(test_dir))
         assert ".hidden" in result

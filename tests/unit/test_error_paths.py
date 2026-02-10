@@ -33,10 +33,11 @@ class TestFileErrorHandling:
         assert "Error:" in result
         assert "directory" in result.lower()
 
-    def test_read_file_is_directory_error(self, tmp_path):
+    def test_read_file_is_directory_error(self, tmp_path, monkeypatch):
         """Test read_file when path is a directory."""
         directory = tmp_path / "test_dir"
         directory.mkdir()
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
         result = read_file(str(directory))
 
