@@ -1,5 +1,9 @@
 """Constants used throughout SousChef."""
 
+from pathlib import Path
+
+import tomllib
+
 __all__ = [
     "VERSION",
     "ANSIBLE_SERVICE_MODULE",
@@ -42,8 +46,21 @@ __all__ = [
     "ACTION_TO_STATE",
 ]
 
+
+def _load_version() -> str:
+    """Load the project version from pyproject.toml."""
+    pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    try:
+        with pyproject_path.open("rb") as pyproject_file:
+            data = tomllib.load(pyproject_file)
+        version = data.get("tool", {}).get("poetry", {}).get("version")
+        return str(version) if version else "unknown"
+    except OSError:
+        return "unknown"
+
+
 # Version
-VERSION = "2.6.0"
+VERSION = _load_version()
 
 # Ansible module names
 ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"
