@@ -44,6 +44,7 @@ def _resolve_version_data_file() -> Path:
 
     """
     module_path = Path(__file__).resolve()
+    cwd = Path.cwd()
     candidates = [
         # Repository layout: <repo>/data/ansible_versions.json
         module_path.parents[2] / "data" / _VERSION_DATA_FILENAME,
@@ -51,6 +52,10 @@ def _resolve_version_data_file() -> Path:
         module_path.parents[1] / "data" / _VERSION_DATA_FILENAME,
         # Workspace root fallback: <workspace>/data/ansible_versions.json
         module_path.parents[3] / "data" / _VERSION_DATA_FILENAME,
+        # Current working directory fallback (CI runs from repo root).
+        cwd / "data" / _VERSION_DATA_FILENAME,
+        # Parent of working directory fallback.
+        cwd.parent / "data" / _VERSION_DATA_FILENAME,
     ]
 
     for candidate in candidates:
