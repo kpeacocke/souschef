@@ -488,10 +488,10 @@ def _get_recent_agent_comments(owner: str, repo: str, issue_number: int) -> str:
         params={"per_page": "10"},
     )
     if response is None:
-        return "No recent activity"
+        return "No recent activity (issue not found)"
     comments = response.json()
     if not isinstance(comments, list):
-        return "No recent activity"
+        return "No recent activity (unexpected response)"
 
     markers = (COMMENT_PAUSE_REQUEST, COMMENT_STOP_REQUEST, COMMENT_RESUME_REQUEST)
     recent = []
@@ -503,7 +503,7 @@ def _get_recent_agent_comments(owner: str, repo: str, issue_number: int) -> str:
             recent.append(body)
 
     if not recent:
-        return "No recent activity"
+        return "No recent activity (no agent markers)"
 
     return "\n\n".join(recent[-3:])
 
