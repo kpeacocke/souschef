@@ -471,7 +471,8 @@ class JSONSerializableCache(MemoryCache[str, str]):
             json_str = json.dumps(obj)
             self.set(key, json_str, ttl_seconds)
         except (TypeError, ValueError):
-            pass
+            # Not JSON-serialisable; skip caching rather than raising.
+            return
 
 
 class CacheManager:

@@ -408,6 +408,7 @@ def validate_hostname(hostname: str) -> tuple[bool, str | None]:
             if all(0 <= int(part) <= 255 for part in parts):
                 return True, None
         except ValueError:
+            # Non-numeric octet; fall through to DNS validation.
             pass
 
     # DNS name pattern (simplified)
