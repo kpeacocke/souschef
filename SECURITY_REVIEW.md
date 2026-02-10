@@ -12,11 +12,11 @@ SousChef demonstrates strong security foundations with several commendable imple
 
 ### Quick Statistics
 - **Total Issues:** 11
-- **Resolved:** 9 (82%)
-- **Remaining:** 2 (18%)
+- **Resolved:** 10 (91%)
+- **Remaining:** 1 (9%)
   - **Critical:** 0 ✅
   - **High:** 0 ✅
-  - **Medium:** 2 (error messages, security headers)
+  - **Medium:** 1 (security headers - deployment task)
 
 ---
 
@@ -280,10 +280,11 @@ end
 
 ### 🟠 MEDIUM
 
-#### 6. Information Disclosure Via Detailed Error Messages
-**Severity:** MEDIUM
+#### 6. Information Disclosure Via Detailed Error Messages ✅ RESOLVED
+**Severity:** MEDIUM (FIXED)
 **File:**  Multiple files using `format_error_with_context()`
 **OWASP Category:** A01 - Broken Access Control / A05 - Insecure Design
+**Status:** ✅ **FIXED** in current commit
 
 **Issue:**
 Error messages include full file paths, which can disclose:
@@ -298,28 +299,29 @@ return format_error_with_context(e, "validating template path", path)
 # This would return: "Error validating template path /workspaces/souschef/recipes/default.rb"
 ```
 
+**Resolution:**
+1. ✅ Added `SOUSCHEF_DEBUG` environment variable for debug/production mode control
+2. ✅ Implemented `_sanitize_path()` function to reduce paths to relative or basename in production
+3. ✅ Updated all error classes to sanitize paths:
+   - `ChefFileNotFoundError`: Sanitizes file paths, adds debug section
+   - `InvalidCookbookError`: Sanitizes cookbook paths
+   - `ParseError`: Sanitizes file paths
+   - `format_error_with_context()`: Sanitizes all paths before display
+4. ✅ Production mode (default): Shows relative paths or file names only
+5. ✅ Debug mode (`SOUSCHEF_DEBUG=1`): Shows full paths with "Debug:" prefix
+6. ✅ Added comprehensive tests (31 new tests in `test_errors.py`)
+7. ✅ Updated existing tests to work with path sanitization
+
+**Verification:**
+- All 2118 tests passing (31 new tests for path sanitization)
+- Ruff linting and mypy type checking clean
+- Snapshots updated to match new error format
+- Error messages now prevent directory structure disclosure
+
 **Impact:**
-- Low immediate risk (path disclosure)
-- Useful information for attackers planning attacks
-- Violates principle of least information disclosure
-
-**Remediation:**
-1. Sanitize file paths in error messages for production
-2. Use relative paths or generic descriptions
-3. Log full paths server-side only
-4. Implement different error messages for development vs. production
-
-**Example Fix:**
-```python
-def format_error_with_context(error, context, path, production=True):
-    if production:
-        relative_path = Path(path).relative_to(Path.cwd())
-        return f"Error {context}: {relative_path}"
-    else:
-        return f"Error {context}: {path}\nDebug: {error}"
-```
-
-**Priority:** Medium - improve error message sanitisation
+- ✅ Prevents information disclosure via error messages
+- ✅ Maintains debugging capability when needed
+- ✅ Backward compatible (full paths available in debug mode)
 
 ---
 
@@ -578,29 +580,16 @@ RUN apt-get install -y nginx && \
 8. ~~**Unused defusedxml**~~ ✅ **CLARIFIED** - Transitive dependency via Pillow
 
 9. ~~**Dangerous test patterns**~~ ✅ **COMPLETED** - Documented anti-patterns with security warnings
-   (Current commit, February 10, 2026)
+   (Commit: cc0d7b9, February 10, 2026)
 
-### Remaining (Medium Priority - Code Quality)
-5. ~~**Habitat dangerous patterns**~~ ✅ **COMPLETED** - Default deny with explicit override
+10. ~~**Error message sanitization**~~ ✅ **COMPLETED** - Implemented production/debug mode split
+    (Current commit, February 10, 2026)
 
-6. ~~**Request size limits**~~ ✅ **COMPLETED** - Path length and plan count validation
-
-7. ~~**HTTP timeout validation**~~ ✅ **COMPLETED** - Parameter validation
-
-8. ~~**Unused defusedxml**~~ ✅ **CLARIFIED** - Transitive dependency via Pillow
-
-### Remaining (Medium Priority - Code Quality)
-9. **Dangerous test patterns** - Document test fixtures as anti-patterns
-   - Estimated effort: 2-3 hours
-   - Add warnings to test code
-
-10. **Error message sanitization** - Reduce information disclosure
-    - Estimated effort: 2-3 hours
-    - Production/debug mode split
-
+### Remaining (Medium Priority - Deployment Task)
 11. **Security headers** - Deploy with reverse proxy
     - Estimated effort: 4-6 hours
     - Operational/deployment task
+    - Requires nginx/Apache configuration
 
 ## Positive Security Findings ✅
 

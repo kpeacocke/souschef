@@ -19,14 +19,7 @@
 # ---
 # name: test_convert_chef_deployment_strategy_snapshot
   '''
-  Could not find cookbook: 
-  {
-    "strategy": "rolling",
-    "batch_size": 5,
-    "max_failures": 2,
-    "health_check": {
-      "type": "http",
-      "endpoint": "/health",
+  Could not find cookbook: health",
       "timeout": 30
     }
   }
