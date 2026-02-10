@@ -120,3 +120,5 @@ tests/integration/fixtures/*.tar.xz
 
 # Docker Compose persistent storage
 data/
+# But track ansible version compatibility data
+!data/ansible_versions.json
