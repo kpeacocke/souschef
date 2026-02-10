@@ -639,82 +639,83 @@ souschef ui
 souschef ui --port 8080
 ```
 
-**Run the UI in Docker:**
+## Docker Images Overview
+
+SousChef provides **two complementary Docker images** for different use cases:
+
+| Image | Purpose | Use When | Docker File |
+|-------|---------|----------|-------------|
+| **souschef** | Web UI (Streamlit) | You want an interactive web dashboard for Chef-to-Ansible migration planning and execution | `Dockerfile` |
+| **souschef-mcp** | MCP Server (stdio protocol) | You want to use SousChef with Claude Desktop, VS Code GitHub Copilot, or other MCP-compatible AI tools | `Dockerfile.mcp` |
+
+### Building Docker Images Locally
+
+**Build the Web UI:**
 
 ```bash
-# Build the image
-docker build -t souschef-ui .
+# Build the Streamlit web UI image
+docker build -t souschef .
 
-# Run the container
-docker run -p 9999:9999 souschef-ui
+# Run the UI on port 9999
+docker run -p 9999:9999 souschef
 
-# Or use docker-compose
+# Or use docker-compose for full stack (with database and storage)
 docker-compose up
 ```
 
-**Run the MCP server in Docker (for MCP clients):**
+**Build the MCP Server:**
 
 ```bash
-# Build the MCP image
+# Build the MCP server image
 docker build -f Dockerfile.mcp -t souschef-mcp:latest .
 
-# Run the MCP server over stdio
+# Run the MCP server over stdio (for AI clients)
 docker run -i --rm souschef-mcp:latest
 ```
 
-Use the Docker configuration examples for your client:
+Use the Docker configuration examples to connect your MCP client:
 
-- [config/claude-desktop-docker.json](config/claude-desktop-docker.json)
-- [config/vscode-copilot-docker.json](config/vscode-copilot-docker.json)
+- [config/claude-desktop-docker.json](config/claude-desktop-docker.json) - Claude Desktop configuration
+- [config/vscode-copilot-docker.json](config/vscode-copilot-docker.json) - VS Code GitHub Copilot configuration
 
-**Run Published Image from GitHub Container Registry:**
+### Using Published Docker Images
 
-SousChef provides two Docker images automatically published to GHCR on each release:
+SousChef publishes both Docker images to GHCR on each release with:
 
-**1. Web UI Image:**
+**1. SousChef Web UI (`souschef`):**
+
+The interactive Streamlit web dashboard for Chef-to-Ansible migration planning and execution.
 
 ```bash
-# Pull the latest UI image
-docker pull ghcr.io/kpeacocke/mcp-souschef:latest
-
-# Or pull a specific version
-docker pull ghcr.io/kpeacocke/mcp-souschef:4.1.2
-
-# Run the UI with your .env file
+# Pull and run the UI
+docker pull ghcr.io/kpeacocke/souschef:latest
 docker run -p 9999:9999 \
   --env-file .env \
-  ghcr.io/kpeacocke/mcp-souschef:latest
+  ghcr.io/kpeacocke/souschef:latest
 
-# Or with docker-compose
-cat > docker-compose.override.yml << 'EOF'
-version: '3.8'
-services:
-  souschef-ui:
-    image: ghcr.io/kpeacocke/mcp-souschef:latest
-    build: ~
-EOF
-docker-compose up
+# Visit http://localhost:9999 in your browser
 ```
 
-**2. MCP Server Image (for AI clients):**
+**2. SousChef MCP Server (`souschef-mcp`):**
+
+The headless MCP server for integration with AI assistants and automation tools.
 
 ```bash
-# Pull the latest MCP server image
+# Pull and run the MCP server
 docker pull ghcr.io/kpeacocke/souschef-mcp:latest
-
-# Run the MCP server over stdio (for MCP clients)
 docker run -i --rm ghcr.io/kpeacocke/souschef-mcp:latest
 ```
 
-Use the published MCP image with your AI client:
+Use this with:
 
-- [config/claude-desktop-docker-ghcr.json](config/claude-desktop-docker-ghcr.json)
-- [config/vscode-copilot-docker-ghcr.json](config/vscode-copilot-docker-ghcr.json)
+- [Claude Desktop](https://claude.ai/download) via `config/claude-desktop-docker-ghcr.json`
+- [VS Code GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) via `config/vscode-copilot-docker-ghcr.json`
+- Other MCP-compatible tools via stdio protocol
 
 **Container Images:**
 
 - **Registry**: GitHub Container Registry (GHCR)
-- **UI Image**: `ghcr.io/kpeacocke/mcp-souschef` (Streamlit web interface)
+- **UI Image**: `ghcr.io/kpeacocke/souschef` (Streamlit web interface)
 - **MCP Server Image**: `ghcr.io/kpeacocke/souschef-mcp` (stdio MCP protocol)
 - **Available Tags**:
   - `latest` - Most recent release

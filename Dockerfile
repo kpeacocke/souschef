@@ -12,8 +12,8 @@ FROM python:${PYTHON_VERSION}-alpine AS base
 ARG PYTHON_VERSION
 
 # Metadata for Docker registry and CI/CD
-LABEL org.opencontainers.image.title="SousChef - MCP AI Chef to Ansible Converter" \
-      org.opencontainers.image.description="AI-powered Model Context Protocol server and web UI for converting Chef cookbooks to Ansible playbooks" \
+LABEL org.opencontainers.image.title="SousChef" \
+      org.opencontainers.image.description="Web UI for converting Chef cookbooks to Ansible playbooks" \
       org.opencontainers.image.authors="SousChef Contributors" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.vendor="SousChef Project" \

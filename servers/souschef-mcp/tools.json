@@ -1,0 +1,190 @@
+[
+  {
+    "name": "list_directory",
+    "description": "List contents of a directory to explore cookbook structure"
+  },
+  {
+    "name": "read_file",
+    "description": "Read the contents of a file to examine Chef code"
+  },
+  {
+    "name": "read_cookbook_metadata",
+    "description": "Read and parse a cookbook's metadata.rb file"
+  },
+  {
+    "name": "list_cookbook_structure",
+    "description": "List and describe the structure of a Chef cookbook"
+  },
+  {
+    "name": "parse_recipe",
+    "description": "Parse a Chef recipe file and extract resources and logic"
+  },
+  {
+    "name": "parse_attributes",
+    "description": "Parse a Chef attributes file and extract variable definitions"
+  },
+  {
+    "name": "parse_cookbook_metadata",
+    "description": "Parse cookbook metadata including dependencies and requirements"
+  },
+  {
+    "name": "parse_template",
+    "description": "Parse an ERB template file from a Chef cookbook"
+  },
+  {
+    "name": "parse_custom_resource",
+    "description": "Parse a Chef custom resource definition file"
+  },
+  {
+    "name": "parse_habitat_plan",
+    "description": "Parse a Habitat plan.sh file for containerisation analysis"
+  },
+  {
+    "name": "parse_inspec_profile",
+    "description": "Parse an InSpec profile for compliance testing"
+  },
+  {
+    "name": "convert_resource_to_task",
+    "description": "Convert a Chef resource to an Ansible task"
+  },
+  {
+    "name": "convert_chef_environment_to_inventory_group",
+    "description": "Convert Chef environment definitions to Ansible inventory groups"
+  },
+  {
+    "name": "convert_chef_databag_to_vars",
+    "description": "Convert Chef data bag files to Ansible variables"
+  },
+  {
+    "name": "convert_template_with_ai",
+    "description": "Convert Chef ERB templates to Ansible Jinja2 templates with AI assistance"
+  },
+  {
+    "name": "convert_inspec_to_test",
+    "description": "Convert InSpec tests to Ansible test playbooks"
+  },
+  {
+    "name": "convert_cookbook_comprehensive",
+    "description": "Comprehensively convert an entire Chef cookbook to Ansible playbooks"
+  },
+  {
+    "name": "convert_all_cookbooks_comprehensive",
+    "description": "Convert multiple Chef cookbooks to a complete Ansible repository"
+  },
+  {
+    "name": "assess_chef_migration_complexity",
+    "description": "Assess the complexity and effort required to migrate Chef to Ansible"
+  },
+  {
+    "name": "validate_conversion",
+    "description": "Validate that Chef to Ansible conversion was successful and functionally equivalent"
+  },
+  {
+    "name": "generate_migration_plan",
+    "description": "Generate a detailed migration plan for Chef to Ansible conversion"
+  },
+  {
+    "name": "generate_migration_report",
+    "description": "Generate a comprehensive migration report with findings and recommendations"
+  },
+  {
+    "name": "parse_chef_migration_assessment",
+    "description": "Parse and analyse a Chef migration assessment document"
+  },
+  {
+    "name": "analyse_cookbook_dependencies",
+    "description": "Analyse cookbook dependencies to understand the dependency graph"
+  },
+  {
+    "name": "analyse_chef_search_patterns",
+    "description": "Analyse Chef search patterns in recipes for Ansible inventory mapping"
+  },
+  {
+    "name": "analyse_chef_databag_usage",
+    "description": "Analyse Chef data bag usage patterns across cookbooks"
+  },
+  {
+    "name": "analyse_chef_environment_usage",
+    "description": "Analyse Chef environment usage patterns for Ansible group mapping"
+  },
+  {
+    "name": "get_chef_nodes",
+    "description": "Retrieve Chef node information and attributes"
+  },
+  {
+    "name": "generate_ansible_repository",
+    "description": "Generate a complete Ansible repository structure from Chef cookbooks"
+  },
+  {
+    "name": "generate_inventory_from_chef_environments",
+    "description": "Generate an Ansible inventory file from Chef environments"
+  },
+  {
+    "name": "generate_github_workflow_from_chef",
+    "description": "Generate GitHub Actions workflows from Chef automation patterns"
+  },
+  {
+    "name": "generate_gitlab_ci_from_chef",
+    "description": "Generate GitLab CI/CD pipelines from Chef automation patterns"
+  },
+  {
+    "name": "generate_jenkinsfile_from_chef",
+    "description": "Generate Jenkinsfiles from Chef automation patterns"
+  },
+  {
+    "name": "generate_inspec_from_recipe",
+    "description": "Generate InSpec tests from Chef recipe logic"
+  },
+  {
+    "name": "validate_chef_server_connection",
+    "description": "Validate connection to a Chef server for data extraction"
+  },
+  {
+    "name": "validate_ansible_collection_compatibility",
+    "description": "Validate Ansible collection compatibility and requirements"
+  },
+  {
+    "name": "profile_cookbook_performance",
+    "description": "Profile a cookbook's performance characteristics and complexity"
+  },
+  {
+    "name": "profile_parsing_operation",
+    "description": "Profile parsing operations to measure performance and identify bottlenecks"
+  },
+  {
+    "name": "check_ansible_eol_status",
+    "description": "Check Ansible version end-of-life status and compatibility"
+  },
+  {
+    "name": "assess_ansible_upgrade_readiness",
+    "description": "Assess readiness to upgrade Ansible versions"
+  },
+  {
+    "name": "plan_ansible_upgrade",
+    "description": "Plan an Ansible version upgrade with compatibility checks"
+  },
+  {
+    "name": "generate_ansible_upgrade_test_plan",
+    "description": "Generate a test plan for Ansible version upgrades"
+  },
+  {
+    "name": "assign_github_copilot_to_issue",
+    "description": "Assign GitHub Copilot agent to work on an issue"
+  },
+  {
+    "name": "check_github_copilot_agent_status",
+    "description": "Check the status of GitHub Copilot agents"
+  },
+  {
+    "name": "pause_github_copilot_agent",
+    "description": "Pause a running GitHub Copilot agent"
+  },
+  {
+    "name": "resume_github_copilot_agent",
+    "description": "Resume a paused GitHub Copilot agent"
+  },
+  {
+    "name": "stop_github_copilot_agent",
+    "description": "Stop a GitHub Copilot agent"
+  }
+]
