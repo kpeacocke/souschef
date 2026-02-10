@@ -44,17 +44,17 @@ def _handle_chef_server_response(
 
     """
     if response.status_code == 200:
-        return True, f"✅ Successfully connected to Chef Server at {server_url}"
+        return True, f"Successfully connected to Chef Server at {server_url}"
     if response.status_code == 401:
         return (
             False,
-            "❌ Authentication failed - check your Chef Server credentials",
+            "Authentication failed - check your Chef Server credentials",
         )
     if response.status_code == 404:
-        return False, "❌ Chef Server search endpoint not found"
+        return False, "Chef Server search endpoint not found"
     return (
         False,
-        f"❌ Connection failed with status code {response.status_code}",
+        f"Connection failed with status code {response.status_code}",
     )
 
 
@@ -98,8 +98,8 @@ def _validate_chef_server_connection(
         return _handle_chef_server_response(response, server_url)
 
     except Timeout:
-        return False, f"❌ Connection timeout - could not reach {server_url}"
+        return False, f"Connection timeout - could not reach {server_url}"
     except ConnectionError:
-        return False, f"❌ Connection error - Chef Server not reachable at {server_url}"
+        return False, f"Connection error - Chef Server not reachable at {server_url}"
     except Exception as e:
-        return False, f"❌ Unexpected error: {e}"
+        return False, f"Unexpected error: {e}"

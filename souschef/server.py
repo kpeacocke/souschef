@@ -2581,10 +2581,10 @@ def validate_chef_server_connection(
     """
     try:
         success, message = _validate_chef_server_connection(server_url, node_name)
-        result = "✅ Success" if success else "❌ Failed"
+        result = "Success" if success else "Failed"
         return f"{result}: {message}"
     except Exception as e:
-        return f"❌ Error validating Chef Server connection: {e}"
+        return f"Error validating Chef Server connection: {e}"
 
 
 @mcp.tool()

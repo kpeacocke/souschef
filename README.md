@@ -850,7 +850,7 @@ services:
       - SOUSCHEF_DB_PORT=5432
       - SOUSCHEF_DB_NAME=souschef
       - SOUSCHEF_DB_USER=souschef
-      - SOUSCHEF_DB_PASSWORD=souschef
+      - SOUSCHEF_DB_PASSWORD=change-me
     restart: unless-stopped
 ```
 
