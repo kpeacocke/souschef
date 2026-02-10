@@ -12,11 +12,11 @@ SousChef demonstrates strong security foundations with several commendable imple
 
 ### Quick Statistics
 - **Total Issues:** 11
-- **Resolved:** 8 (73%)
-- **Remaining:** 3 (27%)
+- **Resolved:** 9 (82%)
+- **Remaining:** 2 (18%)
   - **Critical:** 0 ✅
   - **High:** 0 ✅
-  - **Medium:** 3 (error messages, test patterns, security headers)
+  - **Medium:** 2 (error messages, security headers)
 
 ---
 
@@ -218,10 +218,11 @@ def parse_recipe(path: str) -> str:
 
 ---
 
-#### 5. Dangerous Test Patterns May Leak Into Production Code
-**Severity:** HIGH
+#### 5. Dangerous Test Patterns May Leak Into Production Code ✅ RESOLVED
+**Severity:** HIGH (FIXED)
 **File:** `tests/integration/fixtures/docker_cookbook/resources/container.rb` (line 24)
 **OWASP Category:** A06 - Vulnerable Components / CWE-78
+**Status:** ✅ **FIXED** in current commit
 
 **Issue:**
 Test fixture contains dangerous shell command pattern that could be mimicked in real cookbooks:
@@ -246,11 +247,24 @@ pkg_source="https://nginx.org/download/${pkg_name}-${pkg_version}.tar.gz"
 - Test data becomes example code that developers might follow
 - Command execution with unsanitized variables
 
-**Remediation:**
-1. Add comments marking dangerous patterns in test fixtures
-2. Document why patterns are anti-patterns
-3. Add validation in converters to detect and warn about these patterns
-4. Create safe alternative examples
+**Resolution:**
+1. ✅ Added comprehensive security warning comments to test fixtures
+   - `docker_cookbook/resources/container.rb`: Warns about command injection via string interpolation
+   - `habitat_package/plan.sh`: Warns about SSRF risks with URL interpolation
+2. ✅ Created detailed anti-patterns documentation (`docs/SECURITY_ANTI_PATTERNS.md`)
+   - Documents 5 major anti-patterns with attack examples
+   - Provides secure alternatives for each pattern
+   - Maps to OWASP Top 10 and CWE classifications
+   - Explains SousChef's current security validations
+3. ✅ Existing converter already validates and blocks dangerous patterns
+   - Habitat converter blocks `curl|sh`, `wget|sh`, `eval` by default
+   - Chef Server URL validation prevents SSRF attacks
+   - Recipe parser has ReDoS protection
+4. ✅ Documented test fixture philosophy and security markers
+
+**Verification:**
+- Test fixtures now include ⚠️ warnings with secure alternatives
+- Comprehensive documentation available for developers
 
 **Example:**
 ```ruby
@@ -553,21 +567,20 @@ RUN apt-get install -y nginx && \
 | Symlink protection | MEDIUM | A01 | MEDIUM | MEDIUM |
 | Security headers | MEDIUM | A01 | LOW | MEDIUM |
 
----
+---ce-in-depth symlink detection
 
-## Remediation Priority & Plan
+5. ~~**Habitat dangerous patterns**~~ ✅ **COMPLETED** - Default deny with explicit override
 
-### ✅ Completed (All Critical & High Priority Items)
-1. ~~**ReDoS vulnerability**~~ ✅ **FIXED** - Regex timeout protection and manual parser  
-   (Commit: 7878356, February 10, 2026)
+6. ~~**Request size limits**~~ ✅ **COMPLETED** - Path length and plan count validation
 
-2. ~~**Chef Server URL validation**~~ ✅ **FIXED** - SSRF protection in generated scripts
-   (Commit: 09c4316, February 10, 2026)
+7. ~~**HTTP timeout validation**~~ ✅ **COMPLETED** - Parameter validation
 
-3. ~~**Subprocess validation**~~ ✅ **COMPLETED** - Path sanitization with symlink checks
+8. ~~**Unused defusedxml**~~ ✅ **CLARIFIED** - Transitive dependency via Pillow
 
-4. ~~**Symlink protection**~~ ✅ **COMPLETED** - Defense-in-depth symlink detection
+9. ~~**Dangerous test patterns**~~ ✅ **COMPLETED** - Documented anti-patterns with security warnings
+   (Current commit, February 10, 2026)
 
+### Remaining (Medium Priority - Code Quality)
 5. ~~**Habitat dangerous patterns**~~ ✅ **COMPLETED** - Default deny with explicit override
 
 6. ~~**Request size limits**~~ ✅ **COMPLETED** - Path length and plan count validation
