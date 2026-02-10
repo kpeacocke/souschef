@@ -28,10 +28,37 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-# Version data location
-_VERSION_DATA_FILE = (
-    Path(__file__).parent.parent.parent / "data" / "ansible_versions.json"
-)
+# Ansible version data file name
+_VERSION_DATA_FILENAME = "ansible_versions.json"
+
+
+def _resolve_version_data_file() -> Path:
+    """
+    Resolve the path to the Ansible version data file.
+
+    Returns:
+        Path to ansible_versions.json.
+
+    Raises:
+        FileNotFoundError: If no candidate path exists.
+
+    """
+    module_path = Path(__file__).resolve()
+    candidates = [
+        # Repository layout: <repo>/data/ansible_versions.json
+        module_path.parents[2] / "data" / _VERSION_DATA_FILENAME,
+        # Alternate package layout: <repo>/souschef/data/ansible_versions.json
+        module_path.parents[1] / "data" / _VERSION_DATA_FILENAME,
+        # Workspace root fallback: <workspace>/data/ansible_versions.json
+        module_path.parents[3] / "data" / _VERSION_DATA_FILENAME,
+    ]
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    attempted = ", ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError("Ansible version data file not found. Tried: " + attempted)
 
 
 @dataclass
@@ -77,7 +104,8 @@ def _load_version_data() -> dict[str, AnsibleVersion]:
 
     """
     try:
-        with _VERSION_DATA_FILE.open() as f:
+        version_data_file = _resolve_version_data_file()
+        with version_data_file.open() as f:
             data = json.load(f)
 
         versions: dict[str, AnsibleVersion] = {}
