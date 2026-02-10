@@ -1270,14 +1270,14 @@ import os
 import sys
 import argparse
 import ipaddress
-from urllib.parse import urlparse, urlunparse
 from typing import Dict, List, Any
+from urllib.parse import urlparse, urlunparse
 
 # Search query to group mappings
 SEARCH_QUERIES = {queries_json}
 
 def validate_chef_server_url(server_url: str) -> str:
-    """Validate Chef Server URL to avoid unsafe requests."""
+    """Validate Chef Server URL to prevent SSRF attacks."""
     url_value = str(server_url).strip()
     if not url_value:
         raise ValueError("Chef Server URL is required")
@@ -1292,26 +1292,24 @@ def validate_chef_server_url(server_url: str) -> str:
     if not parsed.hostname:
         raise ValueError("Chef Server URL must include a hostname")
 
+    # Prevent SSRF: block private/local hostnames
     hostname = parsed.hostname.lower()
     local_suffixes = (".localhost", ".local", ".localdomain", ".internal")
     if hostname == "localhost" or hostname.endswith(local_suffixes):
         raise ValueError("Chef Server URL must use a public hostname")
 
+    # Prevent SSRF: block private IP ranges
     try:
-        ip_address = ipaddress.ip_address(hostname)
+        ip_addr = ipaddress.ip_address(hostname)
+        if (ip_addr.is_private or ip_addr.is_loopback or
+            ip_addr.is_link_local or ip_addr.is_reserved or
+            ip_addr.is_multicast or ip_addr.is_unspecified):
+            raise ValueError("Chef Server URL must use a public IP address")
     except ValueError:
-        ip_address = None
+        # Not an IP address, continue with domain validation
+        pass
 
-    if ip_address and (
-        ip_address.is_private
-        or ip_address.is_loopback
-        or ip_address.is_link_local
-        or ip_address.is_reserved
-        or ip_address.is_multicast
-        or ip_address.is_unspecified
-    ):
-        raise ValueError("Chef Server URL must use a public hostname")
-
+    # Strip params, query, fragment for security
     cleaned = parsed._replace(params="", query="", fragment="")
     return urlunparse(cleaned).rstrip("/")
 
