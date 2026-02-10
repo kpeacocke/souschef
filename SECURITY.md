@@ -82,16 +82,53 @@ The following are typically out of scope:
 - Issues in third-party Chef cookbooks being parsed
 - Vulnerabilities in generated Ansible playbooks (user responsibility to review)
 - Infrastructure security (deployment environments)
-- Denial of service through resource exhaustion with extremely large cookbooks
 
 ## Security Features
 
-SousChef includes several built-in security considerations:
+SousChef implements multiple layers of security protection:
 
-- **Path Traversal Protection**: File operations are validated to prevent directory traversal
-- **Input Sanitization**: Chef cookbook parsing includes input validation
-- **Error Handling**: Sensitive information is not leaked in error messages
-- **Dependency Management**: Regular security updates for all dependencies
+### Path Security (CWE-22, CWE-61)
+
+- **Path Traversal Protection**: File operations are validated against base paths to prevent directory traversal attacks
+- **Symlink Detection**: Defense-in-depth protection detects and blocks symbolic link attacks by checking the entire path ancestry
+- **Path Length Validation**: Maximum path length of 4096 characters prevents buffer-based attacks
+- **Path Normalisation**: All file paths are normalised before use to prevent bypass attempts
+
+### Input Validation
+
+- **Chef Cookbook Parsing**: Comprehensive input validation for all Chef artifacts (recipes, attributes, metadata, templates)
+- **Request Size Limits**: 
+  - Maximum 4096 characters for file paths
+  - Maximum 20 Habitat plan paths per request
+  - Maximum 8192 characters for plan path lists
+- **Resource Exhaustion Prevention**: Request size limits prevent denial-of-service attacks
+
+### HTTP Client Security (CWE-400)
+
+- **Timeout Limits**: HTTP requests limited to 1-300 seconds to prevent hung connections
+- **Retry Limits**: Maximum 0-10 retry attempts to prevent retry storms
+- **Backoff Validation**: Backoff factor limited to 0.1-10 seconds to prevent DoS amplification
+
+### Command Injection Prevention (CWE-78)
+
+- **Habitat Pattern Blocking**: Default deny for dangerous shell patterns in Habitat plan conversion:
+  - Shell piping: `curl|sh`, `wget|sh`
+  - Code evaluation: `eval`
+  - Command substitution with untrusted input
+- **Explicit Override**: Dangerous patterns require explicit `allow_dangerous_patterns=True` parameter
+- **Variable Sanitisation**: Habitat variables are safely replaced with container paths
+
+### Error Handling
+
+- **Information Disclosure Prevention**: Sensitive information is not leaked in error messages
+- **Safe Error Propagation**: Errors are caught and wrapped with safe, user-friendly messages
+- **Stack Trace Protection**: Stack traces are logged but not exposed to end users
+
+### Dependency Management
+
+- **Regular Security Updates**: All dependencies are regularly audited and updated
+- **Vulnerability Scanning**: Automated security scanning with Snyk and CodeQL
+- **Dependency Pinning**: Lock files ensure reproducible builds with known-good versions
 
 ## Contact
 
