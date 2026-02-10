@@ -164,6 +164,7 @@ def test_list_directory_success():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory(".")
         assert result == ["file1.txt", "file2.txt"]
@@ -615,6 +616,7 @@ def test_list_directory_empty():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory("/empty")
         assert result == []
@@ -635,6 +637,7 @@ def test_list_directory_not_found():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory("non_existent_directory")
         assert "Error: Directory not found" in result
@@ -655,6 +658,7 @@ def test_list_directory_not_a_directory():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory("file.txt")
         assert "Error:" in result
@@ -676,6 +680,7 @@ def test_list_directory_permission_denied():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory("/root")
         assert "Error: Permission denied" in result
@@ -696,6 +701,7 @@ def test_list_directory_other_exception():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory(".")
         assert "An error occurred: A test exception" in result
@@ -716,6 +722,7 @@ def test_read_file_success():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("test.txt")
         assert result == "file contents here"
@@ -737,6 +744,7 @@ def test_read_file_not_found():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("missing.txt")
         assert "Error: File not found" in result
@@ -757,6 +765,7 @@ def test_read_file_is_directory():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("somedir")
         assert "Error:" in result
@@ -778,6 +787,7 @@ def test_read_file_permission_denied():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("protected.txt")
         assert "Error: Permission denied" in result
@@ -798,6 +808,7 @@ def test_read_file_unicode_decode_error():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("binary.dat")
         assert "Error:" in result and "codec can't decode" in result
@@ -818,6 +829,7 @@ def test_read_file_other_exception():
             "souschef.filesystem.operations._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("test.txt")
         assert "An error occurred: Unexpected error" in result

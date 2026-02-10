@@ -296,3 +296,36 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
         results.append(validated_item)
 
     return results
+
+
+def _check_symlink_safety(path_obj: Path, base_path: Path) -> None:
+    """
+    Verify that a path doesn't use symlinks to escape the workspace.
+
+    This is a defense-in-depth check that detects symlink attacks after
+    resolution has already prevented actual traversal. This helps identify
+    attack attempts and provides security signals.
+
+    Args:
+        path_obj: Path to check (must already be resolved).
+        base_path: Trusted workspace base directory.
+
+    Raises:
+        ValueError: If symlinks are detected in the resolved path ancestry.
+
+    """
+    # Check if the unresolved path contains components that are symlinks
+    # by iterating through each level of the path
+    try:
+        current = path_obj
+        while current != current.parent:  # Until we reach root
+            if current.is_symlink():
+                msg = (
+                    f"Symlink detected in path {path_obj}: {current} -> "
+                    f"{current.resolve()}"
+                )
+                raise ValueError(msg)
+            current = current.parent
+    except (OSError, RuntimeError):
+        # Path might not exist yet or be inaccessible
+        pass

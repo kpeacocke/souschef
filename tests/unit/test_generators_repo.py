@@ -3,7 +3,7 @@
 import io
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import hypothesis
 from hypothesis import given, settings
@@ -733,14 +733,15 @@ class TestExceptionPaths:
         """Test repository generation handles permission errors."""
         output_dir = tmp_path / "output_repo"
 
-        # Patch mkdir to raise PermissionError
-        with patch("souschef.generators.repo.Path") as mock_path_cls:
-            mock_instance = mock_path_cls.return_value
-            mock_instance.mkdir.side_effect = PermissionError(
+        # Patch _normalize_path to return a mock that raises PermissionError on mkdir
+        with patch("souschef.generators.repo._normalize_path") as mock_normalize:
+            mock_path = MagicMock()
+            mock_path.exists.return_value = False
+            mock_path.mkdir.side_effect = PermissionError(
                 "Permission denied: cannot create directory"
             )
-            mock_instance.exists.return_value = False
-            mock_instance.__str__.return_value = str(output_dir)
+            mock_path.__str__.return_value = str(output_dir)
+            mock_normalize.return_value = mock_path
 
             result = generate_ansible_repository(
                 output_path=str(output_dir),

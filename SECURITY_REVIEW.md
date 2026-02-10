@@ -1,8 +1,8 @@
 # SousChef Security Hardening Review
 
-**Date:** February 10, 2026  
-**Scope:** Comprehensive security assessment of SousChef codebase  
-**Status:** Security issues identified and recommendations provided  
+**Date:** February 10, 2026
+**Scope:** Comprehensive security assessment of SousChef codebase
+**Status:** Security issues identified and recommendations provided
 
 ---
 
@@ -40,8 +40,8 @@ SousChef demonstrates strong security foundations with several commendable imple
 ### 🔴 CRITICAL
 
 #### 1. ReDoS Vulnerability in Recipe Parser
-**Severity:** CRITICAL  
-**File:** `souschef/parsers/recipe.py` (lines 87, 167-174)  
+**Severity:** CRITICAL
+**File:** `souschef/parsers/recipe.py` (lines 87, 167-174)
 **OWASP Category:** A02 - Cryptographic Failures / Algorithmic Complexity Attacks
 
 **Issue:**
@@ -74,8 +74,8 @@ rf"([^e]|e[^n]|en[^d]){{0,{MAX_CASE_BODY_LENGTH}}}^end"
 ### 🔴 HIGH
 
 #### 2. Missing Input Validation on Chef Server URL
-**Severity:** HIGH  
-**File:** `souschef/core/chef_server.py` (lines ~50-100)  
+**Severity:** HIGH
+**File:** `souschef/core/chef_server.py` (lines ~50-100)
 **OWASP Category:** A03 - Injection
 
 **Issue:**
@@ -110,8 +110,8 @@ def _validate_chef_server_connection(server_url: str, node_name: str) -> tuple[b
 ---
 
 #### 3. Subprocess Command Execution Without Input Validation
-**Severity:** HIGH  
-**File:** `souschef/generators/repo.py` (lines 556-595)  
+**Severity:** HIGH
+**File:** `souschef/generators/repo.py` (lines 556-595)
 **OWASP Category:** A06 - Vulnerable and Outdated Components / CWE-78
 
 **Issue:**
@@ -131,7 +131,7 @@ result = subprocess.run(
 - Symlink attacks (following symlinks to unintended files)
 - File descriptor exhaustion with large outputs
 
-**Current Protection:** 
+**Current Protection:**
 - ✅ Using list form (prevents shell injection)
 - ✅ Capture output (prevents output manipulation)
 - ❌ No path normalization before subprocess call
@@ -156,8 +156,8 @@ result = subprocess.run([cmd, normalized_path], capture_output=True)
 ---
 
 #### 4. Missing Rate Limiting / DOS Protections
-**Severity:** HIGH  
-**File:** `souschef/server.py` (global MCP server)  
+**Severity:** HIGH
+**File:** `souschef/server.py` (global MCP server)
 **OWASP Category:** A01 - Broken Access Control / A05 - Insecure Design
 
 **Issue:**
@@ -196,10 +196,10 @@ def parse_recipe(path: str) -> str:
 2. Implement execution timeout decorator:
    ```python
    import signal
-   
+
    def timeout_handler(signum, frame):
        raise TimeoutError("Tool execution exceeded maximum time")
-   
+
    def timeout(seconds):
        def decorator(func):
            def wrapper(*args, **kwargs):
@@ -221,8 +221,8 @@ def parse_recipe(path: str) -> str:
 ---
 
 #### 5. Dangerous Test Patterns May Leak Into Production Code
-**Severity:** HIGH  
-**File:** `tests/integration/fixtures/docker_cookbook/resources/container.rb` (line 24)  
+**Severity:** HIGH
+**File:** `tests/integration/fixtures/docker_cookbook/resources/container.rb` (line 24)
 **OWASP Category:** A06 - Vulnerable Components / CWE-78
 
 **Issue:**
@@ -269,8 +269,8 @@ end
 ### 🟠 MEDIUM
 
 #### 6. Information Disclosure Via Detailed Error Messages
-**Severity:** MEDIUM  
-**File:**  Multiple files using `format_error_with_context()`  
+**Severity:** MEDIUM
+**File:**  Multiple files using `format_error_with_context()`
 **OWASP Category:** A01 - Broken Access Control / A05 - Insecure Design
 
 **Issue:**
@@ -312,8 +312,8 @@ def format_error_with_context(error, context, path, production=True):
 ---
 
 #### 7. Unused Dependency (defusedxml) Unclear Purpose
-**Severity:** MEDIUM  
-**File:** `poetry.lock` (line 1110-1118)  
+**Severity:** MEDIUM
+**File:** `poetry.lock` (line 1110-1118)
 **OWASP Category:** A06 - Vulnerable and Outdated Components
 
 **Issue:**
@@ -342,8 +342,8 @@ souschef/poetry.lock
 ---
 
 #### 8. HTTPClient Timeout Configuration Not Validated
-**Severity:** MEDIUM  
-**File:** `souschef/core/http_client.py` (lines 115-180)  
+**Severity:** MEDIUM
+**File:** `souschef/core/http_client.py` (lines 115-180)
 **OWASP Category:** A05 - Insecure Design
 
 **Issue:**
@@ -373,8 +373,8 @@ def __init__(self, base_url: str, ..., timeout: int = 60, ...):
 ---
 
 #### 9. Dangerous Pattern in Habitat Conversion: Shell Pipes
-**Severity:** MEDIUM  
-**File:** `souschef/converters/habitat.py` (lines 400-430)  
+**Severity:** MEDIUM
+**File:** `souschef/converters/habitat.py` (lines 400-430)
 **OWASP Category:** A02 - Cryptographic Failures / Command Injection
 
 **Issue:**
@@ -423,7 +423,7 @@ def _validate_habitat_callback_safety(callback_content: str, allow_dangerous: bo
         (r"wget.*\|.*sh", "Piping wget output to shell - allows arbitrary code execution"),
         (r"eval", "Use of eval - allows arbitrary code execution"),
     ]
-    
+
     for pattern, description in dangerous_patterns:
         if re.search(pattern, callback_content):
             if not allow_dangerous:
@@ -438,8 +438,8 @@ def _validate_habitat_callback_safety(callback_content: str, allow_dangerous: bo
 ---
 
 #### 10. Missing Symlink Attack Protection in File Operations
-**Severity:** MEDIUM  
-**File:** `souschef/filesystem/operations.py` (lines 20-70)  
+**Severity:** MEDIUM
+**File:** `souschef/filesystem/operations.py` (lines 20-70)
 **OWASP Category:** A01 - Broken Access Control / CWE-59
 
 **Issue:**
@@ -470,15 +470,15 @@ def read_file(path: str) -> str:
 def list_directory(path: str) -> list[str] | str:
     path_obj = Path(_normalize_path(path))
     workspace_root = _get_workspace_root()
-    
+
     # Resolve to catch symlink attacks
     resolved_path = path_obj.resolve()
     workspace_resolved = workspace_root.resolve()
-    
+
     # Check resolved path is within workspace
     if not _is_path_within(resolved_path, workspace_resolved):
         return f"Error: Path contains symlinks that escape workspace"
-    
+
     return [f.name for f in path_obj.iterdir()]
 ```
 
@@ -493,8 +493,8 @@ def list_directory(path: str) -> list[str] | str:
 ---
 
 #### 11. Missing Content-Security Headers in Streamlit UI
-**Severity:** MEDIUM  
-**File:** `souschef/ui/app.py` (configuration)  
+**Severity:** MEDIUM
+**File:** `souschef/ui/app.py` (configuration)
 **OWASP Category:** A01 - Broken Access Control / A04 - Insecure Design
 
 **Issue:**
