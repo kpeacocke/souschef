@@ -1280,6 +1280,7 @@ def _convert_ruby_literal(value: str) -> Any:
         else:
             return float(value)
     except ValueError:
+        # Value cannot be converted to int or float; return as string
         pass
 
     # Return as string if no conversion applies

@@ -11910,13 +11910,14 @@ class TestComplexChefBlocks:
         assert "ansible_check_mode" in result or "ansible_facts" in result
 
     def test_convert_chef_block_complex_unhandled(self):
-        """Test that complex unhandled blocks get TODO comment."""
+        """Test that complex unhandled blocks return a safe expression."""
         from souschef.server import _convert_chef_block_to_ansible
 
         block = 'Chef::SomeComplexClass.new.method_call("arg")'
         result = _convert_chef_block_to_ansible(block)
 
-        assert "TODO" in result
+        assert "ansible_check_mode" in result
+        assert "review" in result.lower()
 
 
 class TestDeploymentPatternFormatting:

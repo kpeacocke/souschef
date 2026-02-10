@@ -15,6 +15,8 @@ from typing import Any
 
 import yaml
 
+from souschef.core.caching import get_cache_manager
+
 
 def parse_ansible_cfg(config_path: str) -> dict[str, Any]:
     """
@@ -110,6 +112,21 @@ def _parse_host_entry(line: str, group_name: str, inventory: dict[str, Any]) -> 
     inventory["hosts"][hostname]["vars"].update(host_vars)
 
 
+def _process_group_line(
+    line: str,
+    group_name: str,
+    group_type: str | None,
+    inventory: dict[str, Any],
+) -> None:
+    """Process a line within a group section."""
+    if group_type == "vars":
+        _parse_group_var(line, group_name, inventory)
+    elif group_type == "children":
+        _parse_child_group(line, group_name, inventory)
+    else:
+        _parse_host_entry(line, group_name, inventory)
+
+
 def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
     """
     Parse INI-format Ansible inventory file.
@@ -136,6 +153,13 @@ def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
     if not path.is_file():
         raise ValueError(f"Inventory path is not a file: {path}")
 
+    # Check cache first using resolved path to avoid duplicate entries
+    cache_manager = get_cache_manager()
+    resolved_path_str = str(path)
+    cached = cache_manager.get_inventory(resolved_path_str)
+    if cached is not None:
+        return cached
+
     inventory: dict[str, Any] = {"groups": {}, "hosts": {}}
     current_group: tuple[str, str | None] | None = None
 
@@ -153,14 +177,10 @@ def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
 
             if current_group:
                 group_name, group_type = current_group
+                _process_group_line(line, group_name, group_type, inventory)
 
-                if group_type == "vars":
-                    _parse_group_var(line, group_name, inventory)
-                elif group_type == "children":
-                    _parse_child_group(line, group_name, inventory)
-                else:
-                    _parse_host_entry(line, group_name, inventory)
-
+    # Cache the result using resolved path
+    cache_manager.cache_inventory(resolved_path_str, inventory)
     return inventory
 
 
@@ -190,6 +210,13 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
     if not path.is_file():
         raise ValueError(f"Inventory path is not a file: {path}")
 
+    # Check cache first using resolved path to avoid duplicate entries
+    cache_manager = get_cache_manager()
+    resolved_path_str = str(path)
+    cached = cache_manager.get_inventory(resolved_path_str)
+    if cached is not None:
+        return cached
+
     try:
         with path.open() as f:
             inventory = yaml.safe_load(f)
@@ -206,6 +233,8 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
             f"got {type(inventory).__name__}"
         )
 
+    # Cache the result using resolved path
+    cache_manager.cache_inventory(resolved_path_str, inventory)
     return inventory
 
 

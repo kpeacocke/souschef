@@ -28,27 +28,33 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-# Collection name constants
-ANSIBLE_POSIX = "ansible.posix"
-ANSIBLE_WINDOWS = "ansible.windows"
-ANSIBLE_POSIX_MIN_VERSION = "1.0.0"
-ANSIBLE_WINDOWS_MIN_VERSION = "1.0.0"
-MANAGED_NODES = "managed_node_python"
-CONTROL_NODES = "control_node_python"
-POSIX_1_2_0 = "1.2.0"
-POSIX_1_3_0 = "1.3.0"
-POSIX_1_4_0 = "1.4.0"
-POSIX_1_5_0 = "1.5.0"
-POSIX_1_5_4 = "1.5.4"
-POSIX_1_6_0 = "1.6.0"
-POSIX_1_7_0 = "1.7.0"
-WINDOWS_1_5_0 = "1.5.0"
-WINDOWS_1_9_0 = "1.9.0"
-WINDOWS_1_11_0 = "1.11.0"
-WINDOWS_1_13_0 = "1.13.0"
-WINDOWS_1_14_0 = "1.14.0"
-WINDOWS_2_0_0 = "2.0.0"
-WINDOWS_2_1_0 = "2.1.0"
+# Ansible version data file name
+_VERSION_DATA_FILENAME = "ansible_versions.json"
+
+
+def _resolve_version_data_file() -> Path:
+    """
+    Resolve the path to the Ansible version data file.
+
+    Returns:
+        Path to ansible_versions.json.
+
+    Raises:
+        FileNotFoundError: If the package data file cannot be found.
+
+    """
+    # File is packaged at souschef/data/ansible_versions.json
+    # This module is at souschef/core/ansible_versions.py, so go up one level
+    module_path = Path(__file__).resolve()
+    version_file = module_path.parents[1] / "data" / _VERSION_DATA_FILENAME
+
+    if version_file.is_file():
+        return version_file
+
+    raise FileNotFoundError(
+        f"Ansible version data file not found at {version_file}. "
+        "Please ensure souschef/data/ansible_versions.json exists."
+    )
 
 
 @dataclass
@@ -82,293 +88,54 @@ class AnsibleVersion:
     aap_versions: list[str] = field(default_factory=list)
 
 
-# FROM ANSIBLE.COM AND RED HAT: Complete Ansible version compatibility matrix
-# Source: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
-# Validated: February 8, 2026
-ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = {
-    "2.9": AnsibleVersion(
-        version="2.9",
-        named_version=None,  # Predates Named Ansible versioning
-        release_date=date(2019, 10, 31),
-        eol_date=date(2022, 5, 23),
-        control_node_python=["2.7", "3.5", "3.6", "3.7", "3.8"],
-        managed_node_python=["2.6", "2.7", "3.5", "3.6", "3.7", "3.8"],
-        major_changes=[
-            "Last version before collections split",
-            "Many modules now deprecated",
-            "No longer receives security updates",
-        ],
-        min_collection_versions={},
-        known_issues=[
-            "Security vulnerabilities - upgrade immediately",
-            "No Python 3.9+ support",
-            "EOL since May 2022",
-        ],
-        aap_versions=[],
-    ),
-    "2.10": AnsibleVersion(
-        version="2.10",
-        named_version="2.10",  # Transition version
-        release_date=date(2020, 9, 22),
-        eol_date=date(2022, 5, 23),
-        control_node_python=["3.6", "3.7", "3.8", "3.9"],
-        managed_node_python=["2.6", "2.7", "3.5", "3.6", "3.7", "3.8", "3.9"],
-        major_changes=[
-            "Major: collections split from core",
-            "ansible.builtin namespace introduced",
-            "Requires explicit collection installation",
-            "Module paths changed",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: ANSIBLE_POSIX_MIN_VERSION,
-            ANSIBLE_WINDOWS: ANSIBLE_WINDOWS_MIN_VERSION,
-        },
-        known_issues=[
-            "Collection installation required for many modules",
-            "Import path changes break old playbooks",
-            "EOL since May 2022",
-        ],
-        aap_versions=[],
-    ),
-    "2.11": AnsibleVersion(
-        version="2.11",
-        named_version="4.x",
-        release_date=date(2021, 4, 26),
-        eol_date=date(2022, 11, 7),
-        control_node_python=["3.6", "3.7", "3.8", "3.9"],
-        managed_node_python=["2.6", "2.7", "3.5", "3.6", "3.7", "3.8", "3.9"],
-        major_changes=[
-            "Improved collection support",
-            "Better error messages",
-            "Performance improvements",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_2_0,
-            ANSIBLE_WINDOWS: WINDOWS_1_5_0,
-        },
-        known_issues=["EOL since November 2022"],
-        aap_versions=[],
-    ),
-    "2.12": AnsibleVersion(
-        version="2.12",
-        named_version="5.x",
-        release_date=date(2021, 11, 8),
-        eol_date=date(2023, 5, 31),
-        control_node_python=["3.8", "3.9", "3.10"],
-        managed_node_python=[
-            "2.6",
-            "2.7",
-            "3.5",
-            "3.6",
-            "3.7",
-            "3.8",
-            "3.9",
-            "3.10",
-        ],
-        major_changes=[
-            "Python 3.8+ required for control node",
-            "Python 2.6/2.7 deprecated for managed nodes",
-            "New ansible-core package name",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_3_0,
-            ANSIBLE_WINDOWS: WINDOWS_1_9_0,
-        },
-        known_issues=[
-            "Transition to ansible-core package",
-            "EOL since May 2023",
-        ],
-        aap_versions=[],
-    ),
-    "2.13": AnsibleVersion(
-        version="2.13",
-        named_version="6.x",
-        release_date=date(2022, 5, 16),
-        eol_date=date(2023, 11, 6),
-        control_node_python=["3.8", "3.9", "3.10"],
-        managed_node_python=["2.7", "3.5", "3.6", "3.7", "3.8", "3.9", "3.10"],
-        major_changes=[
-            "Continued collection evolution",
-            "Module deprecations enforced",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_4_0,
-            ANSIBLE_WINDOWS: WINDOWS_1_11_0,
-        },
-        known_issues=["EOL since November 2023"],
-        aap_versions=[],
-    ),
-    "2.14": AnsibleVersion(
-        version="2.14",
-        named_version="7.x",
-        release_date=date(2022, 11, 7),
-        eol_date=date(2024, 5, 20),
-        control_node_python=["3.9", "3.10", "3.11"],
-        managed_node_python=[
-            "2.7",
-            "3.5",
-            "3.6",
-            "3.7",
-            "3.8",
-            "3.9",
-            "3.10",
-            "3.11",
-        ],
-        major_changes=[
-            "Python 3.9+ required for control node",
-            "Python 3.11 support added",
-            "Further module deprecations",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_5_0,
-            ANSIBLE_WINDOWS: WINDOWS_1_13_0,
-        },
-        known_issues=["EOL since May 2024"],
-        aap_versions=[],
-    ),
-    "2.15": AnsibleVersion(
-        version="2.15",
-        named_version="8.x",
-        release_date=date(2023, 5, 15),
-        eol_date=date(2024, 11, 4),
-        control_node_python=["3.9", "3.10", "3.11"],
-        managed_node_python=[
-            "2.7",
-            "3.5",
-            "3.6",
-            "3.7",
-            "3.8",
-            "3.9",
-            "3.10",
-            "3.11",
-        ],
-        major_changes=[
-            "Performance improvements",
-            "Better collection tooling",
-            "Enhanced error reporting",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_5_4,
-            ANSIBLE_WINDOWS: WINDOWS_1_14_0,
-        },
-        known_issues=["EOL since November 2024"],
-        aap_versions=["2.4"],
-    ),
-    "2.16": AnsibleVersion(
-        version="2.16",
-        named_version="9.x",
-        release_date=date(2023, 11, 6),
-        eol_date=date(
-            2025, 7, 31
-        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
-        control_node_python=["3.10", "3.11", "3.12"],
-        managed_node_python=[
-            "2.7",
-            "3.6",
-            "3.7",
-            "3.8",
-            "3.9",
-            "3.10",
-            "3.11",
-            "3.12",
-        ],
-        major_changes=[
-            "Last version supporting Python 2.7 on managed nodes",
-            "Target node support expanded to 6 most recent Python versions",
-            "Python 3.10+ required for control node",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_6_0,
-            ANSIBLE_WINDOWS: WINDOWS_2_0_0,
-        },
-        known_issues=["Unmaintained (EOL) - upgrade recommended"],
-        aap_versions=["2.5", "2.6"],  # Default version for AAP 2.5 and 2.6
-    ),
-    "2.17": AnsibleVersion(
-        version="2.17",
-        named_version="10.x",
-        release_date=date(2024, 5, 20),
-        eol_date=date(
-            2025, 11, 30
-        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
-        control_node_python=["3.10", "3.11", "3.12"],
-        managed_node_python=["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"],
-        major_changes=[
-            "Python 2.7 support removed from managed nodes completely",
-            "Python 3.7+ required for managed nodes",
-            "Continued deprecation cycle enhancements",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_7_0,
-            ANSIBLE_WINDOWS: WINDOWS_2_1_0,
-        },
-        known_issues=["Unmaintained (EOL) - upgrade recommended"],
-        aap_versions=["2.5", "2.6"],  # Interim EE in AAP 2.5/2.6
-    ),
-    "2.18": AnsibleVersion(
-        version="2.18",
-        named_version="11.x",
-        release_date=date(2024, 11, 4),
-        eol_date=date(
-            2026, 5, 31
-        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
-        control_node_python=["3.11", "3.12", "3.13"],
-        managed_node_python=["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"],
-        major_changes=[
-            "Python 3.11+ required for control node (3.10 no longer supported)",
-            "Windows Server 2025 support (OpenSSH enabled)",
-            "Enhanced PowerShell integration improvements",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_7_0,
-            ANSIBLE_WINDOWS: WINDOWS_2_1_0,
-        },
-        known_issues=["Current stable release - EOL May 2026"],
-        aap_versions=["2.5", "2.6"],  # Latest EE in AAP 2.5/2.6
-    ),
-    "2.19": AnsibleVersion(
-        version="2.19",
-        named_version="12.x",
-        release_date=date(2025, 7, 21),
-        eol_date=date(
-            2026, 11, 30
-        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
-        control_node_python=["3.11", "3.12", "3.13"],
-        managed_node_python=["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"],
-        major_changes=[
-            "Significant templating changes for security and performance",
-            "Improved error reporting for templating issues",
-            "See porting guide for playbook compatibility updates",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_7_0,
-            ANSIBLE_WINDOWS: WINDOWS_2_1_0,
-        },
-        known_issues=["Security fixes only after Nov 2025 - EOL Nov 2026"],
-        aap_versions=[],  # Not yet integrated into AAP as of Feb 2026
-    ),
-    "2.20": AnsibleVersion(
-        version="2.20",
-        named_version="13.x",
-        release_date=date(2025, 11, 3),
-        eol_date=date(
-            2027, 5, 31
-        ),  # Official: https://docs.ansible.com/ansible/latest/reference_appendices/release_and_maintenance.html
-        control_node_python=["3.12", "3.13", "3.14"],
-        managed_node_python=["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"],
-        major_changes=[
-            "Python 3.12+ required for control node (3.11 no longer supported)",
-            "Python 3.14 support added (latest at time of release)",
-            "Continued templating engine enhancements",
-        ],
-        min_collection_versions={
-            ANSIBLE_POSIX: POSIX_1_7_0,
-            ANSIBLE_WINDOWS: WINDOWS_2_1_0,
-        },
-        known_issues=["Latest stable release - EOL May 2027"],
-        aap_versions=[],  # Not yet integrated into AAP as of Feb 2026
-    ),
-}
+def _load_version_data() -> dict[str, AnsibleVersion]:
+    """
+    Load Ansible version data from external JSON file.
+
+    This replaces the previous hardcoded version matrix, making it easier
+    to maintain and update version information without code changes.
+
+    Returns:
+        Dictionary mapping version strings to AnsibleVersion objects.
+
+    """
+    try:
+        version_data_file = _resolve_version_data_file()
+        with version_data_file.open() as f:
+            data = json.load(f)
+
+        versions: dict[str, AnsibleVersion] = {}
+        for version_key, version_data in data["versions"].items():
+            release_date_str = version_data["release_date"]
+            eol_date_str = version_data.get("eol_date")
+
+            versions[version_key] = AnsibleVersion(
+                version=version_key,
+                named_version=version_data.get("named_version"),
+                release_date=datetime.strptime(release_date_str, "%Y-%m-%d").date(),
+                eol_date=(
+                    datetime.strptime(eol_date_str, "%Y-%m-%d").date()
+                    if eol_date_str
+                    else None
+                ),
+                control_node_python=version_data["control_node_python"],
+                managed_node_python=version_data["managed_node_python"],
+                major_changes=version_data.get("major_changes", []),
+                min_collection_versions=version_data.get("min_collection_versions", {}),
+                known_issues=version_data.get("known_issues", []),
+                aap_versions=version_data.get("aap_versions", []),
+            )
+
+        return versions
+    except (FileNotFoundError, KeyError, ValueError) as e:
+        # Fallback to empty dict if data file not found
+        # In production, you'd want to handle this more gracefully
+        raise RuntimeError(f"Failed to load Ansible version data: {e}") from e
+
+
+# Load version data from external JSON file
+# This makes it easier to update version information without code changes
+ANSIBLE_VERSIONS: dict[str, AnsibleVersion] = _load_version_data()
 
 
 def _parse_version(version_str: str) -> tuple[int, ...]:
@@ -426,19 +193,20 @@ def get_python_compatibility(
 
 
 def _calculate_intermediate_versions(
-    current_major: float, target_major: float
+    current_version: str, target_version: str
 ) -> list[str]:
     """Calculate intermediate versions for upgrade path."""
-    version_gap = target_major - current_major
-    intermediate_versions: list[str] = []
+    current_key = _parse_version(current_version)
+    target_key = _parse_version(target_version)
+    if current_key >= target_key:
+        return []
 
-    if version_gap > 0.2:
-        for version in sorted(ANSIBLE_VERSIONS.keys()):
-            version_num = float(version)
-            if current_major < version_num < target_major:
-                intermediate_versions.append(version)
-
-    return intermediate_versions
+    sorted_versions = sorted(ANSIBLE_VERSIONS.keys(), key=_parse_version)
+    return [
+        version
+        for version in sorted_versions
+        if current_key < _parse_version(version) < target_key
+    ]
 
 
 def _collect_breaking_changes(
@@ -457,17 +225,21 @@ def _collect_breaking_changes(
 
 def _assess_upgrade_risk(
     current_version: str,
+    target_version: str,
     current: AnsibleVersion,
-    version_gap: float,
+    intermediate_versions: list[str],
     python_upgrade_needed: bool,
 ) -> tuple[str, list[str]]:
     """Assess risk level and factors for upgrade."""
     risk_factors: list[str] = []
+    is_upgrade = _parse_version(target_version) > _parse_version(current_version)
 
-    if "2.9" in current_version and version_gap > 0:
+    if current_version.startswith("2.9") and is_upgrade:
         risk_factors.append("Upgrading from 2.9 (collections split required)")
-    if version_gap > 0.5:
-        risk_factors.append(f"Large version jump ({version_gap} versions)")
+    if len(intermediate_versions) >= 3:
+        risk_factors.append(
+            f"Large version jump ({len(intermediate_versions)} intermediate versions)"
+        )
     if python_upgrade_needed:
         risk_factors.append("Python upgrade required on control node")
     if current.eol_date and current.eol_date < date.today():
@@ -501,7 +273,12 @@ def _estimate_upgrade_effort(
 
 
 def calculate_upgrade_path(
-    current_version: str, target_version: str
+    current_version: str,
+    target_version: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    use_ai: bool = False,
+    use_cache: bool = True,
 ) -> dict[str, object]:
     """
     Calculate upgrade path based on compatibility matrix.
@@ -515,6 +292,10 @@ def calculate_upgrade_path(
     Args:
         current_version: Current Ansible version.
         target_version: Desired Ansible version.
+        ai_provider: AI provider to use when use_ai is enabled.
+        api_key: API key for AI provider.
+        use_ai: Whether to use AI data for compatibility checks.
+        use_cache: Whether to use cached AI results.
 
     Returns:
         Dictionary with upgrade path details including:
@@ -543,21 +324,37 @@ def calculate_upgrade_path(
     current = ANSIBLE_VERSIONS[current_version]
     target = ANSIBLE_VERSIONS[target_version]
 
-    current_major = float(current_version)
-    target_major = float(target_version)
-    version_gap = target_major - current_major
-
     intermediate_versions = _calculate_intermediate_versions(
-        current_major, target_major
+        current_version, target_version
     )
     breaking_changes = _collect_breaking_changes(intermediate_versions, target_version)
 
-    python_upgrade_needed = not any(
-        py in target.control_node_python for py in current.control_node_python
-    )
+    ai_data: dict | None = None
+    if use_ai and api_key:
+        ai_data = fetch_ansible_versions_with_ai(
+            ai_provider=ai_provider,
+            api_key=api_key,
+            use_cache=use_cache,
+        )
+
+    current_python = current.control_node_python
+    target_python = target.control_node_python
+    if ai_data:
+        current_python = ai_data.get(current_version, {}).get(
+            "control_node_python", current_python
+        )
+        target_python = ai_data.get(target_version, {}).get(
+            "control_node_python", target_python
+        )
+
+    python_upgrade_needed = not any(py in target_python for py in current_python)
 
     risk_level, risk_factors = _assess_upgrade_risk(
-        current_version, current, version_gap, python_upgrade_needed
+        current_version,
+        target_version,
+        current,
+        intermediate_versions,
+        python_upgrade_needed,
     )
     effort_days = _estimate_upgrade_effort(
         current_version, intermediate_versions, python_upgrade_needed
@@ -570,8 +367,8 @@ def calculate_upgrade_path(
         "intermediate_versions": intermediate_versions,
         "breaking_changes": breaking_changes,
         "python_upgrade_needed": python_upgrade_needed,
-        "current_python": current.control_node_python,
-        "required_python": target.control_node_python,
+        "current_python": current_python,
+        "required_python": target_python,
         "risk_level": risk_level,
         "risk_factors": risk_factors,
         "estimated_effort_days": effort_days,
@@ -696,7 +493,7 @@ def get_supported_versions() -> list[str]:
         for v, info in ANSIBLE_VERSIONS.items()
         if not info.eol_date or info.eol_date >= today
     ]
-    return sorted(supported, key=float, reverse=True)
+    return sorted(supported, key=_parse_version, reverse=True)
 
 
 def get_minimum_python_for_ansible(ansible_version: str) -> tuple[str, str]:
@@ -718,8 +515,8 @@ def get_minimum_python_for_ansible(ansible_version: str) -> tuple[str, str]:
 
     version_info = ANSIBLE_VERSIONS[ansible_version]
 
-    control_min = sorted(version_info.control_node_python)[0]
-    managed_min = sorted(version_info.managed_node_python)[0]
+    control_min = min(version_info.control_node_python, key=_parse_version)
+    managed_min = min(version_info.managed_node_python, key=_parse_version)
 
     return (control_min, managed_min)
 
@@ -1052,10 +849,21 @@ def fetch_ansible_versions_with_ai(
     use_cache: bool = True,
 ) -> dict[str, dict] | None:
     """
-    Fetch latest Ansible version compatibility data using AI.
+    [EXPERIMENTAL] Fetch latest Ansible version compatibility data using AI.
+
+    ⚠️  WARNING: This is an experimental feature not fully integrated into
+    the upgrade workflow. The static version matrix loaded from JSON is the
+    current production implementation.
 
     This function queries AI to fetch the latest version information from
     Ansible documentation, falling back to cached data if AI is unavailable.
+
+    Status:
+        - ✓ Optional integration into calculate_upgrade_path() when enabled
+        - ✗ Not used by default in assessment workflows
+        - ✗ Incomplete integration tests
+        - ✓ Caching implemented
+        - ✓ Multiple provider support (Anthropic, OpenAI)
 
     Args:
         ai_provider: AI provider to use (anthropic, openai, watson).
@@ -1068,6 +876,7 @@ def fetch_ansible_versions_with_ai(
         AI and cache are unavailable.
 
     Example:
+        >>> # Manual invocation required - not automatic
         >>> data = fetch_ansible_versions_with_ai(
         ...     ai_provider="anthropic",
         ...     api_key="sk-..."
@@ -1116,7 +925,10 @@ def get_python_compatibility_with_ai(
     use_cache: bool = True,
 ) -> list[str]:
     """
-    Get compatible Python versions using AI-enhanced lookup with static fallback.
+    [EXPERIMENTAL] Get Python compatibility using AI with static fallback.
+
+    ⚠️  WARNING: Experimental AI feature. Always falls back to static data
+    from ANSIBLE_VERSIONS if AI unavailable.
 
     This function tries to fetch the latest compatibility data from AI,
     falling back to the static ANSIBLE_VERSIONS matrix if AI is unavailable.
@@ -1164,7 +976,9 @@ def get_latest_version_with_ai(
     use_cache: bool = True,
 ) -> str:
     """
-    Get the latest Ansible version using AI with static fallback.
+    [EXPERIMENTAL] Get the latest Ansible version using AI with static fallback.
+
+    ⚠️  WARNING: Experimental AI feature. Falls back to static data if unavailable.
 
     Args:
         api_key: API key for the AI provider.
@@ -1174,6 +988,7 @@ def get_latest_version_with_ai(
         Latest Ansible version string.
 
     Example:
+        >>> # Tries AI first, falls back to static ANSIBLE_VERSIONS
         >>> latest = get_latest_version_with_ai(api_key="...")
         >>> print(latest)
         "2.20"

@@ -596,6 +596,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
             _ = zf.namelist()
             return "zip"
     except (zipfile.BadZipFile, OSError):
+        # Not a ZIP file; try other formats
         pass
 
     # Try gzipped tar (.tar.gz, .tgz)
@@ -606,6 +607,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
             _ = tf.getmembers()
             return "tar.gz"
     except (tarfile.ReadError, OSError):
+        # Not gzipped tar; try other formats
         pass
 
     # Try bzip2 compressed tar (.tar.bz2, .tbz2)
@@ -616,6 +618,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
             _ = tf.getmembers()
             return "tar.bz2"
     except (tarfile.ReadError, OSError):
+        # Not bzip2 compressed tar; try other formats
         pass
 
     # Try xz compressed tar (.tar.xz, .txz)
@@ -626,6 +629,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
             _ = tf.getmembers()
             return "tar.xz"
     except (tarfile.ReadError, OSError):
+        # Not xz compressed tar; try other formats
         pass
 
     # Try plain tar
@@ -636,6 +640,7 @@ def _detect_archive_format(file_path: Path) -> str | None:
             _ = tf.getmembers()
             return "tar"
     except (tarfile.ReadError, OSError):
+        # Not plain tar; return None indicating no valid archive format detected
         pass
 
     return None

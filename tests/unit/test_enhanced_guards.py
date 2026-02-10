@@ -219,7 +219,8 @@ class TestChefBlockConversion:
         block = "`pgrep nginx`.length > 0"
         result = _convert_chef_block_to_ansible(block, positive=True)
 
-        assert "ansible" in result.lower() or "TODO" in result
+        assert "ansible_check_mode" in result
+        assert "review" in result.lower()
 
     def test_convert_with_negative_flag(self) -> None:
         """Test block conversion with negative flag."""
