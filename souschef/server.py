@@ -297,6 +297,56 @@ mcp = FastMCP("souschef")
 # File constants
 METADATA_RB = "metadata.rb"
 
+# Request size limits
+_MAX_PATH_LENGTH = 4096
+_MAX_PLAN_PATHS = 20
+_MAX_PLAN_PATHS_LENGTH = 8192
+
+
+def _validate_path_length(path: str, label: str) -> None:
+    """
+    Validate path input length to prevent resource exhaustion.
+
+    Args:
+        path: Path input to validate.
+        label: Label used in error messages.
+
+    Raises:
+        ValueError: If the path length exceeds limits.
+
+    """
+    if len(path) > _MAX_PATH_LENGTH:
+        raise ValueError(
+            f"{label} exceeds maximum length of {_MAX_PATH_LENGTH} characters"
+        )
+
+
+def _validate_plan_paths(plan_paths: str) -> None:
+    """
+    Validate Habitat plan path list length and count.
+
+    Args:
+        plan_paths: Comma-separated list of plan paths.
+
+    Raises:
+        ValueError: If the input length or path count exceeds limits.
+
+    """
+    if len(plan_paths) > _MAX_PLAN_PATHS_LENGTH:
+        raise ValueError(
+            f"Plan paths exceed maximum length of {_MAX_PLAN_PATHS_LENGTH} characters"
+        )
+
+    paths = [path.strip() for path in plan_paths.split(",") if path.strip()]
+    if len(paths) > _MAX_PLAN_PATHS:
+        raise ValueError(
+            f"Too many Habitat plan paths: {len(paths)} (max {_MAX_PLAN_PATHS})"
+        )
+
+    for path in paths:
+        _validate_path_length(path, "Plan path")
+
+
 # File constants
 METADATA_RB = "metadata.rb"
 
@@ -316,6 +366,7 @@ def parse_template(path: str) -> str:
 
     """
     try:
+        _validate_path_length(path, "Template path")
         path = str(_normalize_path(path))
     except ValueError as e:
         return format_error_with_context(e, "validating template path", path)
@@ -335,6 +386,7 @@ def parse_custom_resource(path: str) -> str:
 
     """
     try:
+        _validate_path_length(path, "Resource path")
         path = str(_normalize_path(path))
     except ValueError as e:
         return format_error_with_context(e, "validating resource path", path)
@@ -354,6 +406,7 @@ def list_directory(path: str) -> list[str] | str:
 
     """
     try:
+        _validate_path_length(path, "Directory path")
         path = str(_normalize_path(path))
     except ValueError as e:
         return format_error_with_context(e, "validating directory path", path)
@@ -374,6 +427,7 @@ def read_file(path: str) -> str:
 
     """
     try:
+        _validate_path_length(path, "File path")
         path = str(_normalize_path(path))
     except ValueError as e:
         return format_error_with_context(e, "validating file path", path)
@@ -394,6 +448,7 @@ def read_cookbook_metadata(path: str) -> str:
 
     """
     try:
+        _validate_path_length(path, "Metadata path")
         path = str(_normalize_path(path))
     except ValueError as e:
         return format_error_with_context(e, "validating metadata path", path)
@@ -413,6 +468,7 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
 
     """
     try:
+        _validate_path_length(path, "Metadata path")
         path = str(_normalize_path(path))
     except ValueError as e:
         return {"error": str(e)}
@@ -432,6 +488,7 @@ def parse_recipe(path: str) -> str:
 
     """
     try:
+        _validate_path_length(path, "Recipe path")
         path = str(_normalize_path(path))
     except ValueError as e:
         return format_error_with_context(e, "validating recipe path", path)
@@ -465,6 +522,7 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
 
     """
     try:
+        _validate_path_length(path, "Attributes path")
         path = str(_normalize_path(path))
     except ValueError as e:
         return format_error_with_context(e, "validating attributes path", path)
@@ -484,6 +542,7 @@ def list_cookbook_structure(path: str) -> str:
 
     """
     try:
+        _validate_path_length(path, "Cookbook path")
         path = str(_normalize_path(path))
     except ValueError as e:
         return format_error_with_context(e, "validating cookbook path", path)
@@ -2655,6 +2714,7 @@ def convert_template_with_ai(
 
     """
     try:
+        _validate_path_length(erb_path, "Template path")
         if use_ai_enhancement:
             result = _convert_template_with_ai(erb_path, ai_service=None)
         else:
@@ -2693,13 +2753,19 @@ def parse_habitat_plan(plan_path: str) -> str:
         JSON string with parsed plan metadata
 
     """
-    plan_path = str(_normalize_path(plan_path))
+    try:
+        _validate_path_length(plan_path, "Plan path")
+        plan_path = str(_normalize_path(plan_path))
+    except ValueError as e:
+        return format_error_with_context(e, "validating plan path", plan_path)
     return _parse_habitat_plan(plan_path)
 
 
 # Habitat conversion tools - re-export for backward compatibility
 def convert_habitat_to_dockerfile(
-    plan_path: str, base_image: str = "ubuntu:22.04"
+    plan_path: str,
+    base_image: str = "ubuntu:22.04",
+    allow_dangerous_patterns: bool = False,
 ) -> str:
     """
     Convert a Habitat plan to Dockerfile.
@@ -2707,12 +2773,19 @@ def convert_habitat_to_dockerfile(
     Args:
         plan_path: Path to the Habitat plan.sh file.
         base_image: Base Docker image to use.
+        allow_dangerous_patterns: Whether to allow dangerous shell patterns.
 
     Returns:
         Generated Dockerfile content.
 
     """
-    return _convert_habitat_to_dockerfile(plan_path, base_image)
+    try:
+        _validate_path_length(plan_path, "Plan path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating plan path", plan_path)
+    return _convert_habitat_to_dockerfile(
+        plan_path, base_image, allow_dangerous_patterns
+    )
 
 
 def generate_compose_from_habitat(
@@ -2729,6 +2802,10 @@ def generate_compose_from_habitat(
         Generated Docker Compose YAML content.
 
     """
+    try:
+        _validate_plan_paths(plan_paths)
+    except ValueError as e:
+        return format_error_with_context(e, "validating plan paths", plan_paths)
     return _generate_compose_from_habitat(plan_paths, network_name)
 
 

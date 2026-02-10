@@ -734,7 +734,10 @@ class TestExceptionPaths:
         output_dir = tmp_path / "output_repo"
 
         # Patch _normalize_path to return a mock that raises PermissionError on mkdir
-        with patch("souschef.generators.repo._normalize_path") as mock_normalize:
+        with (
+            patch("souschef.generators.repo._normalize_path") as mock_normalize,
+            patch("souschef.generators.repo._check_symlink_safety"),
+        ):
             mock_path = MagicMock()
             mock_path.exists.return_value = False
             mock_path.mkdir.side_effect = PermissionError(

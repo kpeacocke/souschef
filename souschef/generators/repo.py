@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import _check_symlink_safety, _normalize_path
 
 # Constants
 HOSTS_FILE = "hosts.yml"
@@ -663,6 +663,7 @@ def generate_ansible_repository(
     try:
         # Validate and normalise the output path
         repo_path = _normalize_path(output_path)
+        _check_symlink_safety(repo_path, Path.cwd())
     except ValueError as e:
         return {
             "success": False,

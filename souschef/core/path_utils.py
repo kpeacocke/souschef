@@ -298,7 +298,7 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
     return results
 
 
-def _check_symlink_safety(path_obj: Path, base_path: Path) -> None:
+def _check_symlink_safety(path_obj: Path, base_path: Path | None = None) -> None:
     """
     Verify that a path doesn't use symlinks to escape the workspace.
 
@@ -308,7 +308,7 @@ def _check_symlink_safety(path_obj: Path, base_path: Path) -> None:
 
     Args:
         path_obj: Path to check (must already be resolved).
-        base_path: Trusted workspace base directory.
+        base_path: Unused, reserved for future checks.
 
     Raises:
         ValueError: If symlinks are detected in the resolved path ancestry.
