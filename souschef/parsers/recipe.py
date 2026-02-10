@@ -1,6 +1,8 @@
 """Chef recipe parser."""
 
 import re
+import signal
+from contextlib import contextmanager
 from typing import Any
 
 from souschef.core.constants import (
@@ -20,6 +22,52 @@ MAX_CONDITION_LENGTH = 200
 
 # Maximum length for case statement body content
 MAX_CASE_BODY_LENGTH = 2000
+
+# Maximum time in seconds for regex operations (ReDoS protection)
+REGEX_TIMEOUT_SECONDS = 5
+
+
+class RegexTimeoutError(Exception):
+    """Raised when regex operation exceeds timeout."""
+
+    pass
+
+
+@contextmanager
+def _regex_timeout(seconds: int = REGEX_TIMEOUT_SECONDS):
+    """
+    Context manager to impose timeout on regex operations.
+
+    This protects against ReDoS (Regular Expression Denial of Service) attacks
+    by limiting how long a regex operation can run.
+
+    Args:
+        seconds: Maximum time allowed for regex operation.
+
+    Raises:
+        RegexTimeoutError: If regex operation exceeds timeout.
+
+    Note:
+        Uses signal.SIGALRM which is Unix-specific. On Windows, timeout is not enforced
+        but code will still function (with potential ReDoS vulnerability).
+
+    """
+
+    def _timeout_handler(signum: int, frame: Any) -> None:
+        raise RegexTimeoutError("Regex operation exceeded timeout")
+
+    # Only set alarm on Unix-like systems (signal.SIGALRM not available on Windows)
+    try:
+        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+    except (AttributeError, ValueError):
+        # Windows or signal not available - proceed without timeout
+        yield
 
 
 def parse_recipe(path: str) -> str:
@@ -64,6 +112,9 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
     """
     Extract Chef resources from recipe content.
 
+    Uses a manual parser to avoid ReDoS vulnerabilities from regex backtracking
+    with nested do...end blocks.
+
     Args:
         content: Raw content of recipe file.
 
@@ -79,49 +130,105 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
     if len(clean_content) > 1_000_000:
         return resources
 
-    # Match Chef resource declarations with various patterns:
-    # 1. Standard: package 'nginx' do ... end
-    # 2. With parentheses: package('nginx') do ... end
-    # 3. Multi-line strings: package 'nginx' do\n  content <<-EOH\n  ...\n  EOH\nend
-    # Use atomic groups and possessive quantifiers where available
-    # Simpler pattern to avoid catastrophic backtracking
-    pattern = (
-        r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do\s*"
-        r"(.*?)(?=\n\s*end(?:\s|$))"
-    )
+    try:
+        with _regex_timeout():
+            # First, find all resource declarations (just the header line)
+            # Pattern: resource_type 'name' do OR resource_type('name') do
+            header_pattern = r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do(?:\s|$)"
 
-    for match in re.finditer(pattern, clean_content, re.DOTALL):
-        resource_body = match.group(3)
-        # Skip if body is too large (prevent resource exhaustion)
-        if len(resource_body) > MAX_RESOURCE_BODY_LENGTH:
-            continue
+            for match in re.finditer(header_pattern, clean_content):
+                resource_type = match.group(1)
+                resource_name = match.group(2)
+                start_pos = match.end()
 
-        resource_type = match.group(1)
-        resource_name = match.group(2)
+                # Manually find matching 'end' keyword for this 'do'
+                # This avoids regex backtracking issues
+                end_pos = _find_matching_end(clean_content, start_pos)
+                if end_pos == -1:
+                    continue
 
-        resource = {
-            "type": resource_type,
-            "name": resource_name,
-        }
+                resource_body = clean_content[start_pos:end_pos]
 
-        # Extract action
-        action_match = re.search(r"action\s+:(\w+)", resource_body)
-        if action_match:
-            resource["action"] = action_match.group(1)
+                # Skip if body is too large (prevent resource exhaustion)
+                if len(resource_body) > MAX_RESOURCE_BODY_LENGTH:
+                    continue
 
-        # Extract common properties
-        properties = {}
-        for prop_match in re.finditer(r"(\w+)\s+['\"]([^'\"]+)['\"]", resource_body):
-            prop_name = prop_match.group(1)
-            if prop_name not in ["action"]:
-                properties[prop_name] = prop_match.group(2)
+                resource = {
+                    "type": resource_type,
+                    "name": resource_name,
+                }
 
-        if properties:
-            resource["properties"] = str(properties)
+                # Extract action
+                action_match = re.search(r"action\s+:(\w+)", resource_body)
+                if action_match:
+                    resource["action"] = action_match.group(1)
 
-        resources.append(resource)
+                # Extract common properties
+                properties = {}
+                for prop_match in re.finditer(
+                    r"(\w+)\s+['\"]([^'\"]+)['\"]", resource_body
+                ):
+                    prop_name = prop_match.group(1)
+                    if prop_name not in ["action"]:
+                        properties[prop_name] = prop_match.group(2)
+
+                if properties:
+                    resource["properties"] = str(properties)
+
+                resources.append(resource)
+
+    except RegexTimeoutError:
+        # Return partial results if timeout occurs
+        return resources
 
     return resources
+
+
+def _find_matching_end(content: str, start_pos: int) -> int:
+    """
+    Find the position of the matching 'end' keyword for a 'do' block.
+
+    This manual parser counts nested do...end blocks to find the correct
+    closing 'end', avoiding regex backtracking issues.
+
+    Args:
+        content: The content to search.
+        start_pos: Position after the opening 'do' keyword.
+
+    Returns:
+        Position of the matching 'end' keyword, or -1 if not found.
+
+    """
+    depth = 1
+    pos = start_pos
+    max_search = min(len(content), start_pos + MAX_RESOURCE_BODY_LENGTH + 1000)
+
+    # Simple word boundary regex for 'do' and 'end' keywords
+    do_pattern = re.compile(r"\bdo\b")
+    end_pattern = re.compile(r"\bend\b")
+
+    while pos < max_search and depth > 0:
+        # Find next 'do' or 'end' keyword
+        do_match = do_pattern.search(content, pos, max_search)
+        end_match = end_pattern.search(content, pos, max_search)
+
+        # If no more keywords found, block is incomplete
+        if not end_match:
+            return -1
+
+        # Check which keyword comes first
+        if do_match and do_match.start() < end_match.start():
+            # Found nested 'do'
+            depth += 1
+            pos = do_match.end()
+        else:
+            # Found 'end'
+            depth -= 1
+            if depth == 0:
+                return end_match.start()
+            pos = end_match.end()
+
+    return -1
 
 
 def _extract_include_recipes(content: str) -> list[dict[str, str]]:
@@ -139,17 +246,22 @@ def _extract_include_recipes(content: str) -> list[dict[str, str]]:
     # Strip comments first
     clean_content = _strip_ruby_comments(content)
 
-    # Match include_recipe calls: include_recipe 'recipe_name'
-    pattern = r"include_recipe\s+['\"]([^'\"]+)['\"]"
+    try:
+        with _regex_timeout():
+            # Match include_recipe calls: include_recipe 'recipe_name'
+            pattern = r"include_recipe\s+['\"]([^'\"]+)['\"]"
 
-    for match in re.finditer(pattern, clean_content):
-        recipe_name = match.group(1)
-        include_recipes.append(
-            {
-                "type": "include_recipe",
-                "name": recipe_name,
-            }
-        )
+            for match in re.finditer(pattern, clean_content):
+                recipe_name = match.group(1)
+                include_recipes.append(
+                    {
+                        "type": "include_recipe",
+                        "name": recipe_name,
+                    }
+                )
+    except RegexTimeoutError:
+        # Return partial results if timeout occurs
+        pass
 
     return include_recipes
 
@@ -157,6 +269,8 @@ def _extract_include_recipes(content: str) -> list[dict[str, str]]:
 def _extract_conditionals(content: str) -> list[dict[str, Any]]:
     """
     Extract Ruby conditionals from recipe code.
+
+    Uses timeout protection and manual parsing for nested blocks to prevent ReDoS.
 
     Args:
         content: Ruby code content.
@@ -171,53 +285,66 @@ def _extract_conditionals(content: str) -> list[dict[str, Any]]:
     if len(content) > 1_000_000:
         return conditionals
 
-    # Match case/when statements with simpler, non-backtracking pattern
-    # Limit case body size to prevent resource exhaustion
-    case_pattern = (
-        rf"case\s+([^\n]{{1,{MAX_CONDITION_LENGTH}}})\n"
-        r"(.*?)(?=\n\s*end(?:\s|$))"
-    )
-    for match in re.finditer(case_pattern, content, re.DOTALL):
-        case_body = match.group(2)
-        # Skip if body is too large
-        if len(case_body) > MAX_CASE_BODY_LENGTH:
-            continue
+    try:
+        with _regex_timeout():
+            # Match case/when statements with manual block parsing
+            # Find case headers first
+            case_header_pattern = rf"case\s+([^\n]{{1,{MAX_CONDITION_LENGTH}}})\n"
 
-        case_expr = match.group(1).strip()
-        when_clauses = re.findall(
-            rf"when\s+['\"]?([^'\"\n]{{1,{MAX_CONDITION_LENGTH}}})['\"]?\s*(?:\n|$)",
-            case_body,
-        )
-        conditionals.append(
-            {
-                "type": "case",
-                "expression": case_expr,
-                "branches": when_clauses,
-            }
-        )
+            for match in re.finditer(case_header_pattern, content):
+                case_expr = match.group(1).strip()
+                start_pos = match.end()
 
-    # Match if/elsif/else statements
-    if_pattern = r"if\s+([^\n]+)\n?"
-    for match in re.finditer(if_pattern, content):
-        condition = match.group(1).strip()
-        if condition and not condition.startswith(("elsif", "end")):
-            conditionals.append(
-                {
-                    "type": "if",
-                    "condition": condition,
-                }
-            )
+                # Find matching 'end' for this case block
+                end_pos = _find_matching_end(content, start_pos)
+                if end_pos == -1:
+                    continue
 
-    # Match unless statements
-    unless_pattern = r"unless\s+([^\n]+)\n?"
-    for match in re.finditer(unless_pattern, content):
-        condition = match.group(1).strip()
-        conditionals.append(
-            {
-                "type": "unless",
-                "condition": condition,
-            }
-        )
+                case_body = content[start_pos:end_pos]
+
+                # Skip if body is too large
+                if len(case_body) > MAX_CASE_BODY_LENGTH:
+                    continue
+
+                # Extract when clauses from the body
+                when_clauses = re.findall(
+                    rf"when\s+['\"]?([^'\"\n]{{1,{MAX_CONDITION_LENGTH}}})['\"]?\s*(?:\n|$)",
+                    case_body,
+                )
+                conditionals.append(
+                    {
+                        "type": "case",
+                        "expression": case_expr,
+                        "branches": when_clauses,
+                    }
+                )
+
+            # Match if/elsif/else statements (single line conditions only)
+            if_pattern = r"if\s+([^\n]+)\n?"
+            for match in re.finditer(if_pattern, content):
+                condition = match.group(1).strip()
+                if condition and not condition.startswith(("elsif", "end")):
+                    conditionals.append(
+                        {
+                            "type": "if",
+                            "condition": condition,
+                        }
+                    )
+
+            # Match unless statements
+            unless_pattern = r"unless\s+([^\n]+)\n?"
+            for match in re.finditer(unless_pattern, content):
+                condition = match.group(1).strip()
+                conditionals.append(
+                    {
+                        "type": "unless",
+                        "condition": condition,
+                    }
+                )
+
+    except RegexTimeoutError:
+        # Return partial results if timeout occurs
+        return conditionals
 
     return conditionals
 
