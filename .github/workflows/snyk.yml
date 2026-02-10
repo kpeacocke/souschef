@@ -70,7 +70,7 @@ jobs:
 
         # Check for rate limit by exit code (2) or message
         # Snyk exits with 2 for rate limits; also check for "test limit"/"rate limit" messages
-        if [ $EXIT_CODE -eq 2 ] || grep -qiE "(test limit|rate limit|monthly limit)" snyk-sca-output.log; then
+        if [ $EXIT_CODE -eq 2 ] || grep -qiE "(test limit|rate limit|monthly limit|tests per month)" snyk-sca-output.log; then
           echo "⚠️ Snyk SCA test limit reached. Skipping scan for this run."
           echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
           exit 0
@@ -128,7 +128,7 @@ jobs:
 
         # Check for rate limit by exit code (2) or message
         # Snyk exits with 2 for rate limits; also check for "test limit"/"rate limit" messages
-        if [ $EXIT_CODE -eq 2 ] || grep -qiE "(test limit|rate limit|monthly limit)" snyk-code-output.log; then
+        if [ $EXIT_CODE -eq 2 ] || grep -qiE "(test limit|rate limit|monthly limit|tests per month)" snyk-code-output.log; then
           echo "⚠️ Snyk Code test limit reached. Skipping scan for this run."
           echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
           exit 0
@@ -185,7 +185,7 @@ jobs:
 
         # Check for rate limit by exit code (2) or message
         # Snyk exits with 2 for rate limits; also check for "test limit"/"rate limit" messages
-        if [ $EXIT_CODE -eq 2 ] || grep -qiE "(test limit|rate limit|monthly limit)" snyk-iac-output.log; then
+        if [ $EXIT_CODE -eq 2 ] || grep -qiE "(test limit|rate limit|monthly limit|tests per month)" snyk-iac-output.log; then
           echo "⚠️ Snyk IaC test limit reached. Skipping scan for this run."
           echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
           exit 0
@@ -265,7 +265,7 @@ jobs:
 
         # Check for rate limit by exit code (2) or message
         # Snyk exits with 2 for rate limits; also check for "test limit"/"rate limit" messages
-        if [ $EXIT_CODE -eq 2 ] || grep -qiE "(test limit|rate limit|monthly limit)" snyk-monitor-output.log; then
+        if [ $EXIT_CODE -eq 2 ] || grep -qiE "(test limit|rate limit|monthly limit|tests per month)" snyk-monitor-output.log; then
           echo "⚠️ Snyk monitoring limit reached. Skipping for this run."
           echo "rate_limit_hit=true" >> $GITHUB_OUTPUT
           exit 0
