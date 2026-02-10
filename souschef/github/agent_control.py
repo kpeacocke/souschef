@@ -416,6 +416,8 @@ def _issue_has_label(_owner: str, _repo: str, _issue_number: int, _label: str) -
         "GET",
         f"/repos/{_owner}/{_repo}/issues/{_issue_number}/labels",
     )
+    if response is None:
+        return False
     labels = response.json()
     if not isinstance(labels, list):
         return False
@@ -485,6 +487,8 @@ def _get_recent_agent_comments(owner: str, repo: str, issue_number: int) -> str:
         f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
         params={"per_page": "10"},
     )
+    if response is None:
+        return "No recent activity"
     comments = response.json()
     if not isinstance(comments, list):
         return "No recent activity"
@@ -511,8 +515,15 @@ def _github_request(
     json_data: dict[str, object] | None = None,
     timeout: float | None = None,
     allow_not_found: bool = False,
-):
-    """Perform a GitHub API request with standard headers and error handling."""
+) -> requests_module.Response | None:
+    """
+    Perform a GitHub API request with standard headers and error handling.
+
+    Returns:
+        Response object for successful requests, or None when allow_not_found is
+        True and the response status is 404.
+
+    """
     if requests_module is None:
         raise RuntimeError("requests library not installed")
 
@@ -534,7 +545,7 @@ def _github_request(
         timeout=effective_timeout,
     )
     if allow_not_found and response.status_code == 404:
-        return response
+        return None
     if response.status_code >= 400:
         raise RuntimeError(
             f"GitHub API error {response.status_code}: {response.text.strip()}"
