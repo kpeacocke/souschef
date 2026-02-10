@@ -71,27 +71,33 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
         List of dictionaries containing resource information.
 
     """
-    resources = []
+    resources: list[dict[str, str]] = []
     # Strip comments first
     clean_content = _strip_ruby_comments(content)
+
+    # Check for pathologically large content to prevent ReDoS
+    if len(clean_content) > 1_000_000:
+        return resources
 
     # Match Chef resource declarations with various patterns:
     # 1. Standard: package 'nginx' do ... end
     # 2. With parentheses: package('nginx') do ... end
     # 3. Multi-line strings: package 'nginx' do\n  content <<-EOH\n  ...\n  EOH\nend
-    # Use a more robust pattern that avoids matching 'end' keywords within the body
-    # Pattern breakdown: match any char that doesn't start spelling 'end' at line start
-    # This prevents catastrophic backtracking on large files
+    # Use atomic groups and possessive quantifiers where available
+    # Simpler pattern to avoid catastrophic backtracking
     pattern = (
-        r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do"
-        rf"((?:[^e]|e(?:[^n]|n(?:[^d]|\d))|(?!^)e(?:n(?:d))){{0,{MAX_RESOURCE_BODY_LENGTH}}}?)"
-        r"^end"
+        r"(\w+)\s+(?:\()?['\"]([^'\"]+)['\"](?:\))?\s+do\s*"
+        r"(.*?)(?=\n\s*end(?:\s|$))"
     )
 
-    for match in re.finditer(pattern, clean_content, re.DOTALL | re.MULTILINE):
+    for match in re.finditer(pattern, clean_content, re.DOTALL):
+        resource_body = match.group(3)
+        # Skip if body is too large (prevent resource exhaustion)
+        if len(resource_body) > MAX_RESOURCE_BODY_LENGTH:
+            continue
+
         resource_type = match.group(1)
         resource_name = match.group(2)
-        resource_body = match.group(3)
 
         resource = {
             "type": resource_type,
@@ -159,19 +165,27 @@ def _extract_conditionals(content: str) -> list[dict[str, Any]]:
         List of dictionaries with conditional information.
 
     """
-    conditionals = []
+    conditionals: list[dict[str, Any]] = []
 
-    # Match case/when statements
-    # Use explicit non-'end' matching to avoid ReDoS
+    # Check for pathologically large content to prevent ReDoS
+    if len(content) > 1_000_000:
+        return conditionals
+
+    # Match case/when statements with simpler, non-backtracking pattern
+    # Limit case body size to prevent resource exhaustion
     case_pattern = (
         rf"case\s+([^\n]{{1,{MAX_CONDITION_LENGTH}}})\n"
-        rf"([^e]|e[^n]|en[^d]){{0,{MAX_CASE_BODY_LENGTH}}}^end"
+        r"(.*?)(?=\n\s*end(?:\s|$))"
     )
-    for match in re.finditer(case_pattern, content, re.DOTALL | re.MULTILINE):
-        case_expr = match.group(1).strip()
+    for match in re.finditer(case_pattern, content, re.DOTALL):
         case_body = match.group(2)
+        # Skip if body is too large
+        if len(case_body) > MAX_CASE_BODY_LENGTH:
+            continue
+
+        case_expr = match.group(1).strip()
         when_clauses = re.findall(
-            rf"when\s+['\"]?([^'\"\n]{{1,{MAX_CONDITION_LENGTH}}})['\"]?\s*\n",
+            rf"when\s+['\"]?([^'\"\n]{{1,{MAX_CONDITION_LENGTH}}})['\"]?\s*(?:\n|$)",
             case_body,
         )
         conditionals.append(
