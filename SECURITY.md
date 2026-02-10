@@ -97,7 +97,7 @@ SousChef implements multiple layers of security protection:
 ### Input Validation
 
 - **Chef Cookbook Parsing**: Comprehensive input validation for all Chef artifacts (recipes, attributes, metadata, templates)
-- **Request Size Limits**: 
+- **Request Size Limits**:
   - Maximum 4096 characters for file paths
   - Maximum 20 Habitat plan paths per request
   - Maximum 8192 characters for plan path lists
@@ -138,4 +138,4 @@ For general security questions or concerns, please:
 2. Review this security policy
 3. Contact the maintainer at krpeacocke@gmail.com
 
-Thank you for helping keep SousChef secure! 
+Thank you for helping keep SousChef secure!
