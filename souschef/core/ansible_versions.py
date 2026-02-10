@@ -40,30 +40,21 @@ def _resolve_version_data_file() -> Path:
         Path to ansible_versions.json.
 
     Raises:
-        FileNotFoundError: If no candidate path exists.
+        FileNotFoundError: If the package data file cannot be found.
 
     """
+    # File is packaged at souschef/data/ansible_versions.json
+    # This module is at souschef/core/ansible_versions.py, so go up one level
     module_path = Path(__file__).resolve()
-    cwd = Path.cwd()
-    candidates = [
-        # Repository layout: <repo>/data/ansible_versions.json
-        module_path.parents[2] / "data" / _VERSION_DATA_FILENAME,
-        # Alternate package layout: <repo>/souschef/data/ansible_versions.json
-        module_path.parents[1] / "data" / _VERSION_DATA_FILENAME,
-        # Workspace root fallback: <workspace>/data/ansible_versions.json
-        module_path.parents[3] / "data" / _VERSION_DATA_FILENAME,
-        # Current working directory fallback (CI runs from repo root).
-        cwd / "data" / _VERSION_DATA_FILENAME,
-        # Parent of working directory fallback.
-        cwd.parent / "data" / _VERSION_DATA_FILENAME,
-    ]
+    version_file = module_path.parents[1] / "data" / _VERSION_DATA_FILENAME
 
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
+    if version_file.is_file():
+        return version_file
 
-    attempted = ", ".join(str(candidate) for candidate in candidates)
-    raise FileNotFoundError("Ansible version data file not found. Tried: " + attempted)
+    raise FileNotFoundError(
+        f"Ansible version data file not found at {version_file}. "
+        "Please ensure souschef/data/ansible_versions.json exists."
+    )
 
 
 @dataclass
