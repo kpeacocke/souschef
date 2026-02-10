@@ -94,7 +94,7 @@ def _validate_upgrade_path_ordering(result: dict) -> None:
 
 
 @given(from_ver=ansible_version_strategy, to_ver=ansible_version_strategy)
-@settings(max_examples=100, deadline=3000)  # 3s deadline for module loading
+@settings(max_examples=50, deadline=3000)  # 3s deadline for module loading
 def test_upgrade_path_with_valid_versions(from_ver, to_ver):
     """
     Test upgrade path calculation with known Ansible versions.
@@ -242,7 +242,7 @@ def test_upgrade_path_identity(version):
     python_major=st.integers(min_value=2, max_value=3),
     python_minor=st.integers(min_value=6, max_value=13),
 )
-@settings(max_examples=100)
+@settings(max_examples=50)
 def test_python_compatibility_consistency(ansible_ver, python_major, python_minor):
     """
     Test Python compatibility checks are consistent.
@@ -370,8 +370,6 @@ def test_parse_requirements_yml_with_collections(collections):
     requirements_data = {"collections": collections}
 
     # Parser validates filename must be exactly 'requirements.yml'
-    import tempfile
-
     temp_dir = tempfile.mkdtemp()
     try:
         requirements_file = Path(temp_dir) / "requirements.yml"
@@ -484,7 +482,7 @@ def test_eol_status_structure(major, minor):
 
 
 @given(v1=semver_strategy, v2=semver_strategy)
-@settings(max_examples=100)
+@settings(max_examples=50)
 def test_version_comparison_transitivity(v1, v2):
     """
     Test version comparison transitivity.

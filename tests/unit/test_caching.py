@@ -72,9 +72,11 @@ class TestMemoryCache:
         """Test deleting cache entry."""
         cache: MemoryCache[str, str] = MemoryCache()
         cache.set("key1", "value1")
-        assert cache.delete("key1") is True
+        delete_result = cache.delete("key1")
+        assert delete_result is True
         assert cache.get("key1") is None
-        assert cache.delete("key1") is False  # Already deleted
+        second_delete_result = cache.delete("key1")
+        assert second_delete_result is False  # Already deleted
 
     def test_memory_cache_clear(self):
         """Test clearing all cache entries."""
@@ -179,8 +181,30 @@ class TestFileHashCache:
 
         test_data = {"key": "value"}
         cache.set(str(test_file), test_data)
-        assert cache.delete(str(test_file)) is True
+        delete_result = cache.delete(str(test_file))
+        assert delete_result is True
         assert cache.get(str(test_file)) is None
+
+    def test_file_hash_cache_delete_after_file_change(self, tmp_path):
+        """Test deleting cached entry after file content has changed."""
+        cache: FileHashCache[dict[str, Any]] = FileHashCache()
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("original content")
+
+        # Cache the file with original content
+        test_data = {"key": "original"}
+        cache.set(str(test_file), test_data)
+
+        # Change file content
+        test_file.write_text("modified content")
+
+        # Delete should still work using the stored hash
+        delete_result = cache.delete(str(test_file))
+        assert delete_result is True
+
+        # Verify the old cache entry is gone
+        assert cache.size() == 0
+        assert str(test_file) not in cache._file_hashes
 
     def test_file_hash_cache_is_file_changed(self, tmp_path):
         """Test file change detection."""
@@ -200,6 +224,36 @@ class TestFileHashCache:
         # Change file
         test_file.write_text("content2")
         assert cache.is_file_changed(str(test_file)) is True
+
+    def test_file_hash_cache_cleans_up_old_entries(self, tmp_path):
+        """Test that old cache entries are removed when file changes."""
+        cache: FileHashCache[dict[str, Any]] = FileHashCache()
+        test_file = tmp_path / "test.txt"
+
+        # Cache original content
+        test_file.write_text("content1")
+        cache.set(str(test_file), {"version": 1})
+        assert cache.size() == 1
+        assert cache.get(str(test_file)) == {"version": 1}
+
+        # Change file and cache again - old entry should be cleaned up
+        test_file.write_text("content2")
+        cache.set(str(test_file), {"version": 2})
+        assert cache.size() == 1  # Still only 1 entry, old one was removed
+        assert cache.get(str(test_file)) == {"version": 2}
+
+        # Change file multiple times - verify no memory leak
+        for i in range(3, 10):
+            test_file.write_text(f"content{i}")
+            cache.set(str(test_file), {"version": i})
+            assert cache.size() == 1  # Always exactly 1 entry for this file
+            assert cache.get(str(test_file)) == {"version": i}
+
+        # Verify cleanup happens on get() as well
+        test_file.write_text("final_content")
+        result = cache.get(str(test_file))
+        assert result is None  # Cache miss because content changed
+        assert cache.size() == 0  # Old entry was cleaned up during get()
 
 
 class TestJSONSerializableCache:

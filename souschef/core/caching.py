@@ -185,7 +185,7 @@ class MemoryCache(CacheBackend[K, V]):
             ttl_seconds: Time-to-live in seconds.
 
         """
-        effective_ttl = ttl_seconds or self.default_ttl_seconds
+        effective_ttl = self.default_ttl_seconds if ttl_seconds is None else ttl_seconds
 
         if len(self._cache) >= self.max_size:
             self._evict_oldest()
@@ -329,7 +329,20 @@ class FileHashCache(CacheBackend[str, V]):
         """
         cache_key = self._make_key(key)
         if cache_key is None:
+            # File doesn't exist; clean up any old cached entry
+            if key in self._file_hashes:
+                old_cache_key = f"{key}:{self._file_hashes[key]}"
+                self._cache.pop(old_cache_key, None)
+                del self._file_hashes[key]
             return None
+
+        # If file hash has changed, remove old cache entry
+        if key in self._file_hashes:
+            old_hash = self._file_hashes[key]
+            old_cache_key = f"{key}:{old_hash}"
+            current_hash = cache_key.split(":")[-1]
+            if old_hash != current_hash and old_cache_key in self._cache:
+                del self._cache[old_cache_key]
 
         if cache_key not in self._cache:
             return None
@@ -362,6 +375,14 @@ class FileHashCache(CacheBackend[str, V]):
         if cache_key is None:
             return
 
+        # If file hash has changed since last cache, remove old entry
+        if key in self._file_hashes:
+            old_hash = self._file_hashes[key]
+            old_cache_key = f"{key}:{old_hash}"
+            current_hash = cache_key.split(":")[-1]
+            if old_hash != current_hash and old_cache_key in self._cache:
+                del self._cache[old_cache_key]
+
         effective_ttl = ttl_seconds or self.default_ttl_seconds
         entry = CacheEntry(value=value, ttl_seconds=effective_ttl)
         self._cache[cache_key] = entry
@@ -378,13 +399,16 @@ class FileHashCache(CacheBackend[str, V]):
             True if entry was deleted, False if not found.
 
         """
-        cache_key = self._make_key(key)
-        if cache_key is None:
+        # Use stored hash to delete the cached entry regardless of current file content
+        if key not in self._file_hashes:
             return False
+
+        stored_hash = self._file_hashes[key]
+        cache_key = f"{key}:{stored_hash}"
 
         if cache_key in self._cache:
             del self._cache[cache_key]
-            self._file_hashes.pop(key, None)
+            del self._file_hashes[key]
             return True
 
         return False

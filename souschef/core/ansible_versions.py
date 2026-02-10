@@ -882,7 +882,7 @@ def fetch_ansible_versions_with_ai(
         ...     api_key="sk-..."
         ... )
         >>> if data:
-        ...     print(data["2.20"]["control_node_python" ])
+        ...     print(data["2.20"]["control_node_python"])
         ["3.12", "3.13", "3.14"]
 
     """

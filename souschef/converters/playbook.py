@@ -1370,6 +1370,7 @@ def build_inventory() -> Dict[str, Any]:
                     "ansible_host": node.get("ipaddress", hostname)
                 }}
         except Exception:
+            # Silently skip unprocessable nodes; partial inventory is acceptable
             pass
 
     return inventory
@@ -2165,12 +2166,14 @@ def _convert_primitive_value(ruby_value: str) -> str:
         int(ruby_value)
         return ruby_value
     except ValueError:
+        # Not an integer; continue to check for float
         pass
 
     try:
         float(ruby_value)
         return ruby_value
     except ValueError:
+        # Not a float; continue to check other types
         pass
 
     # Handle booleans

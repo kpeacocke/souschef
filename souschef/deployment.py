@@ -773,6 +773,7 @@ def _analyse_metadata_dependencies(cookbook_path: Path) -> list[str]:
                 content = f.read()
             return _extract_cookbook_dependencies(content)
         except Exception:
+            # Metadata file may not be valid; return empty dependencies
             pass
     return []
 

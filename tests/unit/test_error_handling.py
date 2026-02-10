@@ -155,7 +155,7 @@ class TestCollectionNameValidation:
 
     def test_non_string_collection_name(self):
         """Test validation rejects non-string collection names."""
-        is_valid, error_msg = validate_collection_name("invalid")
+        is_valid, error_msg = validate_collection_name("123")
         assert is_valid is False
         assert error_msg is not None
 
@@ -217,15 +217,9 @@ class TestAnsibleVersionValidation:
     @pytest.mark.parametrize(
         "valid_version",
         [
-            "2.9",
-            "2.10",
-            "2.11",
-            "2.12",
-            "2.13",
-            "2.14",
-            "2.15",
-            "2.16",
-            "2.17",
+            "2.18",
+            "2.19",
+            "2.20",
         ],
     )
     def test_valid_ansible_versions(self, valid_version):
@@ -239,7 +233,8 @@ class TestAnsibleVersionValidation:
         [
             "3.0",  # Unsupported version
             "2.8",  # Too old
-            "2.18",  # Not yet released
+            "2.17",  # EOL (end of life)
+            "2.9",  # EOL (end of life)
             "1.0",  # Way too old
             "foo",  # Invalid format
             "2.9.0.1",  # Too many parts
@@ -251,8 +246,6 @@ class TestAnsibleVersionValidation:
         is_valid, error_msg = validate_ansible_version(invalid_version)
         assert is_valid is False
         assert error_msg is not None
-        if invalid_version in ["2.18"]:
-            assert "not supported" in error_msg or "version" in error_msg
 
 
 class TestErrorMessageContent:
@@ -338,13 +331,13 @@ class TestValidationIntegration:
     def test_version_validation_consistency(self):
         """Test that version validation is consistent."""
         # All valid versions should consistently pass
-        valid = ["2.9", "2.17"]
+        valid = ["2.18", "2.19", "2.20"]
         for ver in valid:
             is_valid, _ = validate_ansible_version(ver)
             assert is_valid
 
         # All invalid versions should consistently fail
-        invalid = ["1.0", "3.0", "foo"]
+        invalid = ["1.0", "2.9", "2.17", "3.0", "foo"]
         for ver in invalid:
             is_valid, _ = validate_ansible_version(ver)
             assert not is_valid

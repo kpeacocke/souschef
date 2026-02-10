@@ -27,16 +27,9 @@ See souschef/github/agent_control.py for implementation notes.
 """
 
 import os
-from typing import TYPE_CHECKING
 from urllib.parse import quote
 
-if TYPE_CHECKING:
-    import requests as requests_module
-else:
-    try:
-        import requests as requests_module
-    except ImportError:
-        requests_module = None  # type: ignore[assignment]
+import requests
 
 # Agent state management via labels
 LABEL_AGENT_ACTIVE = "copilot-agent:active"
@@ -515,7 +508,7 @@ def _github_request(
     json_data: dict[str, object] | None = None,
     timeout: float | None = None,
     allow_not_found: bool = False,
-) -> requests_module.Response | None:
+) -> requests.Response | None:
     """
     Perform a GitHub API request with standard headers and error handling.
 
@@ -524,9 +517,6 @@ def _github_request(
         True and the response status is 404.
 
     """
-    if requests_module is None:
-        raise RuntimeError("requests library not installed")
-
     token = _validate_github_token()
 
     headers = {
@@ -536,14 +526,18 @@ def _github_request(
     }
 
     effective_timeout = timeout or GITHUB_API_TIMEOUT_SECONDS
-    response = requests_module.request(
-        method,
-        f"{GITHUB_API_BASE_URL}{path}",
-        headers=headers,
-        params=params,
-        json=json_data,
-        timeout=effective_timeout,
-    )
+    try:
+        response = requests.request(
+            method,
+            f"{GITHUB_API_BASE_URL}{path}",
+            headers=headers,
+            params=params,
+            json=json_data,
+            timeout=effective_timeout,
+        )
+    except Exception as e:
+        raise RuntimeError(f"GitHub API request failed: {e}") from e
+
     if allow_not_found and response.status_code == 404:
         return None
     if response.status_code >= 400:

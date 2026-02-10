@@ -8,6 +8,8 @@ to help users understand and resolve issues quickly.
 import re
 from dataclasses import dataclass
 
+from souschef.core.ansible_versions import get_supported_versions
+
 
 @dataclass
 class ErrorContext:
@@ -44,9 +46,9 @@ class EnhancedErrorMessage:
         if self.context.location:
             lines.append(f"\n[LOCATION] {self.context.location}")
 
-        if self.context.line_number:
+        if self.context.line_number is not None:
             line_info = f"Line {self.context.line_number}"
-            if self.context.column_number:
+            if self.context.column_number is not None:
                 line_info += f", Column {self.context.column_number}"
             lines.append(f"   {line_info}")
 
@@ -268,6 +270,15 @@ class EnhancedErrorHandler:
         """
         title, description, suggestions, doc_link = cls.VERSION_MISMATCH_ERROR
 
+        if valid_versions:
+            newest = valid_versions[0]
+            oldest = valid_versions[-1]
+            suggestions = [
+                f"Valid versions: {oldest}-{newest}",
+                "Use 'ansible --version' to check your current version",
+                "For version upgrades, refer to the upgrade guide",
+            ]
+
         error_context = ErrorContext(
             error_type="version_mismatch",
             location=f"Version: {provided_version}",
@@ -434,17 +445,7 @@ def validate_ansible_version(version: str) -> tuple[bool, str | None]:
         Tuple of (is_valid, error_message).
 
     """
-    valid_versions = [
-        "2.9",
-        "2.10",
-        "2.11",
-        "2.12",
-        "2.13",
-        "2.14",
-        "2.15",
-        "2.16",
-        "2.17",
-    ]
+    valid_versions = get_supported_versions()
 
     # Check if version is in valid list
     if version in valid_versions:
