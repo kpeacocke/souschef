@@ -93,10 +93,15 @@ def _is_private_hostname(hostname: str) -> bool:
     # Resolve hostname to all A/AAAA records and check if ANY resolve to private IPs
     try:
         socket.setdefaulttimeout(10)  # Limit DNS resolution to 10 seconds
-        addrinfo = socket.getaddrinfo(
-            hostname, 443, socket.AF_UNSPEC, socket.SOCK_STREAM
-        )
-        socket.setdefaulttimeout(None)
+        try:
+            addrinfo = socket.getaddrinfo(
+                hostname,
+                443,
+                socket.AF_UNSPEC,
+                socket.SOCK_STREAM,
+            )
+        finally:
+            socket.setdefaulttimeout(None)
 
         if not addrinfo:
             # Cannot resolve - allow it (fail open, DNS may work at runtime)

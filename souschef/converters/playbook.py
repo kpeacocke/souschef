@@ -15,6 +15,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from souschef.converters.resource import (
     _convert_chef_resource_to_ansible,
@@ -1272,7 +1273,7 @@ import argparse
 import socket
 import ipaddress
 from typing import Dict, List, Any
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, urlencode
 
 # Search query to group mappings
 SEARCH_QUERIES = {queries_json}
@@ -1302,9 +1303,14 @@ def validate_chef_server_url(server_url: str) -> str:
     # Prevent SSRF: block literal private IP addresses
     try:
         ip_addr = ipaddress.ip_address(hostname)
-        if (ip_addr.is_private or ip_addr.is_loopback or
-            ip_addr.is_link_local or ip_addr.is_reserved or
-            ip_addr.is_multicast or ip_addr.is_unspecified):
+        if (
+            ip_addr.is_private
+            or ip_addr.is_loopback
+            or ip_addr.is_link_local
+            or ip_addr.is_reserved
+            or ip_addr.is_multicast
+            or ip_addr.is_unspecified
+        ):
             raise ValueError("Chef Server URL must use a public IP address")
         # If it's a literal public IP, it's allowed
         return urlunparse(parsed._replace(params="", query="", fragment="")).rstrip("/")
@@ -1319,10 +1325,15 @@ def validate_chef_server_url(server_url: str) -> str:
         # Limit to 10 seconds to prevent hanging on slow DNS
         socket.setdefaulttimeout(10)
         # getaddrinfo returns (family, type, proto, canonname, sockaddr)
-        addrinfo = socket.getaddrinfo(
-            hostname, 443, socket.AF_UNSPEC, socket.SOCK_STREAM
-        )
-        socket.setdefaulttimeout(None)
+        try:
+            addrinfo = socket.getaddrinfo(
+                hostname,
+                443,
+                socket.AF_UNSPEC,
+                socket.SOCK_STREAM,
+            )
+        finally:
+            socket.setdefaulttimeout(None)
 
         if not addrinfo:
             # Cannot resolve - allow it (fail open, DNS may work at runtime)
@@ -1330,12 +1341,17 @@ def validate_chef_server_url(server_url: str) -> str:
         else:
             # Check ALL resolved addresses - reject if ANY are problematic
             dangerous_addresses = []
-            for family, socktype, proto, canonname, sockaddr in addrinfo:
+            for _family, _socktype, _proto, _canonname, sockaddr in addrinfo:
                 ip_str = sockaddr[0]  # IPv4 or IPv6 address
                 ip_addr = ipaddress.ip_address(ip_str)
-                if (ip_addr.is_private or ip_addr.is_loopback or
-                    ip_addr.is_link_local or ip_addr.is_reserved or
-                    ip_addr.is_multicast or ip_addr.is_unspecified):
+                if (
+                    ip_addr.is_private
+                    or ip_addr.is_loopback
+                    or ip_addr.is_link_local
+                    or ip_addr.is_reserved
+                    or ip_addr.is_multicast
+                    or ip_addr.is_unspecified
+                ):
                     dangerous_addresses.append(ip_str)
 
             if dangerous_addresses:
@@ -1346,11 +1362,8 @@ def validate_chef_server_url(server_url: str) -> str:
                 )
                 raise ValueError(msg)
 
-    except socket.gaierror:
-        # DNS resolution failed - allow it (fail open, assume public)
-        pass
-    except socket.timeout:
-        # DNS resolution timeout - allow it (fail open)
+    except OSError:
+        # DNS resolution failed/timeout - allow it (fail open, assume public)
         pass
 
     # Strip params, query, fragment for security
@@ -1470,7 +1483,8 @@ def get_chef_nodes(search_query: str) -> list[dict[str, Any]]:
     try:
         # Using Chef Server REST API search endpoint
         # Search endpoint: GET /search/node?q=<query>
-        search_url = f"{chef_server_url}/search/node?q={search_query}"
+        query_params = urlencode({"q": search_query})
+        search_url = f"{chef_server_url}/search/node?{query_params}"
 
         # Note: Proper authentication requires Chef API signing
         # For unauthenticated access, this may work on open Chef servers

@@ -5,7 +5,9 @@ These tests ensure that the conversion logic produces consistent output
 and helps prevent regressions in the generated Ansible playbooks and templates.
 """
 
+import os
 import tempfile
+from pathlib import Path
 
 from souschef.server import (
     convert_chef_databag_to_vars,
@@ -85,7 +87,7 @@ def test_convert_execute_resource_to_task_snapshot(snapshot):
     assert result == snapshot
 
 
-def test_parse_simple_recipe_snapshot(snapshot):
+def test_parse_simple_recipe_snapshot(snapshot, monkeypatch):
     """Snapshot test for simple recipe parsing."""
     recipe = """
 package 'nginx' do
@@ -103,7 +105,7 @@ end
     assert result == snapshot
 
 
-def test_parse_recipe_with_notifies_snapshot(snapshot):
+def test_parse_recipe_with_notifies_snapshot(snapshot, monkeypatch):
     """Snapshot test for recipe with notifies."""
     recipe = """
 template '/etc/nginx/nginx.conf' do
@@ -127,7 +129,7 @@ end
     assert result == snapshot
 
 
-def test_parse_recipe_with_guards_snapshot(snapshot):
+def test_parse_recipe_with_guards_snapshot(snapshot, monkeypatch):
     """Snapshot test for recipe with guard conditions."""
     recipe = """
 package 'postgresql' do
@@ -149,7 +151,7 @@ end
     assert result == snapshot
 
 
-def test_parse_erb_template_snapshot(snapshot):
+def test_parse_erb_template_snapshot(snapshot, monkeypatch):
     """Snapshot test for ERB template parsing."""
     template = """
 server {
@@ -170,16 +172,25 @@ server {
 }
 """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".erb", delete=False) as f:
-        f.write(template)
-        f.flush()
-        result = parse_template(f.name)
-        # Parse result and exclude the original_file path which changes each run
-        import json
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+        try:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(f.name).parent)
+            f.write(template)
+            f.flush()
+            result = parse_template(f.name)
+            # Parse result and exclude the original_file path which changes each run
+            import json
 
-        result_dict = json.loads(result)
-        result_dict.pop("original_file", None)
-        result = json.dumps(result_dict, indent=2)
-    assert result == snapshot
+            result_dict = json.loads(result)
+            result_dict.pop("original_file", None)
+            result = json.dumps(result_dict, indent=2)
+            assert result == snapshot
+        finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+            Path(f.name).unlink()
 
 
 def test_convert_chef_search_to_inventory_snapshot(snapshot):
@@ -231,7 +242,7 @@ cookbook 'postgresql', '~> 3.1'
     assert result == snapshot
 
 
-def test_convert_inspec_to_testinfra_snapshot(snapshot):
+def test_convert_inspec_to_testinfra_snapshot(snapshot, monkeypatch):
     """Snapshot test for InSpec to TestInfra conversion."""
     inspec_code = """
 describe package('nginx') do
@@ -259,7 +270,7 @@ end
     assert result == snapshot
 
 
-def test_convert_inspec_to_molecule_snapshot(snapshot):
+def test_convert_inspec_to_molecule_snapshot(snapshot, monkeypatch):
     """Snapshot test for InSpec to Molecule conversion."""
     inspec_code = """
 describe package('postgresql') do
@@ -297,7 +308,7 @@ def test_convert_chef_deployment_strategy_snapshot(snapshot):
     assert result == snapshot
 
 
-def test_parse_recipe_with_multiple_actions_snapshot(snapshot):
+def test_parse_recipe_with_multiple_actions_snapshot(snapshot, monkeypatch):
     """Snapshot test for recipe with multiple resource actions."""
     recipe = """
 service 'apache2' do
@@ -323,7 +334,7 @@ end
     assert result == snapshot
 
 
-def test_parse_recipe_with_variables_snapshot(snapshot):
+def test_parse_recipe_with_variables_snapshot(snapshot, monkeypatch):
     """Snapshot test for recipe with node attributes."""
     recipe = """
 nginx_port = node['nginx']['port'] || 80
@@ -350,7 +361,7 @@ end
     assert result == snapshot
 
 
-def test_parse_complex_erb_template_snapshot(snapshot):
+def test_parse_complex_erb_template_snapshot(snapshot, monkeypatch):
     """Snapshot test for complex ERB template with loops and conditionals."""
     template = """
 # <%= @description %>
@@ -378,16 +389,25 @@ cert = <%= server['ssl_cert'] %>
 <% end -%>
 """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".erb", delete=False) as f:
-        f.write(template)
-        f.flush()
-        result = parse_template(f.name)
-        # Parse result and exclude the original_file path which changes each run
-        import json
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+        try:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(f.name).parent)
+            f.write(template)
+            f.flush()
+            result = parse_template(f.name)
+            # Parse result and exclude the original_file path which changes each run
+            import json
 
-        result_dict = json.loads(result)
-        result_dict.pop("original_file", None)
-        result = json.dumps(result_dict, indent=2)
-    assert result == snapshot
+            result_dict = json.loads(result)
+            result_dict.pop("original_file", None)
+            result = json.dumps(result_dict, indent=2)
+            assert result == snapshot
+        finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+            Path(f.name).unlink()
 
 
 def test_convert_user_resource_to_task_snapshot(snapshot):
@@ -423,7 +443,7 @@ def test_convert_cron_resource_to_task_snapshot(snapshot):
     assert result == snapshot
 
 
-def test_parse_recipe_with_include_recipe_snapshot(snapshot):
+def test_parse_recipe_with_include_recipe_snapshot(snapshot, monkeypatch):
     """Snapshot test for recipe with include_recipe statements."""
     recipe = """
 include_recipe 'nginx::default'

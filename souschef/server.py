@@ -109,7 +109,9 @@ from souschef.core.constants import (  # noqa: F401, codeql[py/unused-import]
 from souschef.core.errors import format_error_with_context
 from souschef.core.logging import configure_logging
 from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
+    _check_symlink_safety,
     _ensure_within_base_path,
+    _get_workspace_root,
     _normalize_path,
     _safe_join,
     _validated_candidate,
@@ -348,6 +350,44 @@ def _validate_plan_paths(plan_paths: str) -> None:
         _validate_path_length(path, _PLAN_PATH_LABEL)
 
 
+def _normalise_workspace_path(path: str, label: str) -> Path:
+    """
+    Normalise and validate a user path against the workspace root.
+
+    Args:
+        path: User-provided path value.
+        label: Label used in error messages.
+
+    Returns:
+        Normalised, workspace-contained path.
+
+    Raises:
+        ValueError: If the path is invalid or escapes the workspace.
+
+    """
+    _validate_path_length(path, label)
+    candidate = _normalize_path(path)
+    _check_symlink_safety(candidate, Path(path))
+    workspace_root = _get_workspace_root()
+    return _ensure_within_base_path(candidate, workspace_root)
+
+
+def _normalise_plan_paths(plan_paths: str) -> list[str]:
+    """
+    Normalise Habitat plan paths and enforce workspace containment.
+
+    Args:
+        plan_paths: Comma-separated list of plan paths.
+
+    Returns:
+        List of normalised plan paths.
+
+    """
+    _validate_plan_paths(plan_paths)
+    paths = [path.strip() for path in plan_paths.split(",") if path.strip()]
+    return [str(_normalise_workspace_path(path, _PLAN_PATH_LABEL)) for path in paths]
+
+
 # Validation Framework Classes
 
 
@@ -364,11 +404,10 @@ def parse_template(path: str) -> str:
 
     """
     try:
-        _validate_path_length(path, "Template path")
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "Template path")
     except ValueError as e:
         return format_error_with_context(e, "validating template path", path)
-    return _parse_template(path)
+    return _parse_template(str(safe_path))
 
 
 @mcp.tool()
@@ -384,11 +423,10 @@ def parse_custom_resource(path: str) -> str:
 
     """
     try:
-        _validate_path_length(path, "Resource path")
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "Resource path")
     except ValueError as e:
         return format_error_with_context(e, "validating resource path", path)
-    return _parse_custom_resource(path)
+    return _parse_custom_resource(str(safe_path))
 
 
 @mcp.tool()
@@ -404,11 +442,10 @@ def list_directory(path: str) -> list[str] | str:
 
     """
     try:
-        _validate_path_length(path, "Directory path")
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "Directory path")
     except ValueError as e:
         return format_error_with_context(e, "validating directory path", path)
-    result: list[str] | str = _list_directory(path)
+    result: list[str] | str = _list_directory(str(safe_path))
     return result
 
 
@@ -425,11 +462,10 @@ def read_file(path: str) -> str:
 
     """
     try:
-        _validate_path_length(path, "File path")
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "File path")
     except ValueError as e:
         return format_error_with_context(e, "validating file path", path)
-    result: str = _read_file(path)
+    result: str = _read_file(str(safe_path))
     return result
 
 
@@ -446,11 +482,10 @@ def read_cookbook_metadata(path: str) -> str:
 
     """
     try:
-        _validate_path_length(path, "Metadata path")
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "Metadata path")
     except ValueError as e:
         return format_error_with_context(e, "validating metadata path", path)
-    return _read_cookbook_metadata(path)
+    return _read_cookbook_metadata(str(safe_path))
 
 
 @mcp.tool()
@@ -466,11 +501,10 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
 
     """
     try:
-        _validate_path_length(path, "Metadata path")
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "Metadata path")
     except ValueError as e:
         return {"error": str(e)}
-    return _parse_cookbook_metadata(path)
+    return _parse_cookbook_metadata(str(safe_path))
 
 
 @mcp.tool()
@@ -486,11 +520,10 @@ def parse_recipe(path: str) -> str:
 
     """
     try:
-        _validate_path_length(path, "Recipe path")
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "Recipe path")
     except ValueError as e:
         return format_error_with_context(e, "validating recipe path", path)
-    return _parse_recipe(path)
+    return _parse_recipe(str(safe_path))
 
 
 @mcp.tool()
@@ -520,11 +553,10 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
 
     """
     try:
-        _validate_path_length(path, "Attributes path")
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "Attributes path")
     except ValueError as e:
         return format_error_with_context(e, "validating attributes path", path)
-    return _parse_attributes(path, resolve_precedence)
+    return _parse_attributes(str(safe_path), resolve_precedence)
 
 
 @mcp.tool()
@@ -540,11 +572,10 @@ def list_cookbook_structure(path: str) -> str:
 
     """
     try:
-        _validate_path_length(path, "Cookbook path")
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "Cookbook path")
     except ValueError as e:
         return format_error_with_context(e, "validating cookbook path", path)
-    return _list_cookbook_structure(path)
+    return _list_cookbook_structure(str(safe_path))
 
 
 @mcp.tool()
@@ -683,10 +714,10 @@ def parse_inspec_profile(path: str) -> str:
 
     """
     try:
-        path = str(_normalize_path(path))
+        safe_path = _normalise_workspace_path(path, "InSpec path")
     except ValueError as e:
         return format_error_with_context(e, "validating InSpec path", path)
-    return _parse_inspec(path)
+    return _parse_inspec(str(safe_path))
 
 
 @mcp.tool()
@@ -703,10 +734,10 @@ def convert_inspec_to_test(inspec_path: str, output_format: str = "testinfra") -
 
     """
     try:
-        inspec_path = str(_normalize_path(inspec_path))
+        safe_path = _normalise_workspace_path(inspec_path, "InSpec path")
     except ValueError as e:
         return format_error_with_context(e, "validating InSpec path", inspec_path)
-    return _convert_inspec_test(inspec_path, output_format)
+    return _convert_inspec_test(str(safe_path), output_format)
 
 
 def _extract_resources_from_parse_result(parse_result: str) -> list[dict[str, Any]]:
@@ -762,10 +793,10 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:
     """
     try:
         # Validate and normalize path
-        recipe_path = str(_normalize_path(recipe_path))
+        safe_path = _normalise_workspace_path(recipe_path, "Recipe path")
 
         # First parse the recipe
-        recipe_result: str = parse_recipe(recipe_path)
+        recipe_result: str = parse_recipe(str(safe_path))
 
         if recipe_result.startswith(ERROR_PREFIX):
             return recipe_result
@@ -779,7 +810,7 @@ def generate_inspec_from_recipe(recipe_path: str) -> str:
         # Generate InSpec controls
         controls = [
             "# InSpec controls generated from Chef recipe",
-            f"# Source: {recipe_path}",
+            f"# Source: {safe_path}",
             "",
         ]
 
@@ -2752,11 +2783,10 @@ def parse_habitat_plan(plan_path: str) -> str:
 
     """
     try:
-        _validate_path_length(plan_path, _PLAN_PATH_LABEL)
-        plan_path = str(_normalize_path(plan_path))
+        safe_path = _normalise_workspace_path(plan_path, _PLAN_PATH_LABEL)
     except ValueError as e:
         return format_error_with_context(e, "validating plan path", plan_path)
-    return _parse_habitat_plan(plan_path)
+    return _parse_habitat_plan(str(safe_path))
 
 
 # Habitat conversion tools - re-export for backward compatibility
@@ -2778,11 +2808,11 @@ def convert_habitat_to_dockerfile(
 
     """
     try:
-        _validate_path_length(plan_path, _PLAN_PATH_LABEL)
+        safe_path = _normalise_workspace_path(plan_path, _PLAN_PATH_LABEL)
     except ValueError as e:
         return format_error_with_context(e, "validating plan path", plan_path)
     return _convert_habitat_to_dockerfile(
-        plan_path, base_image, allow_dangerous_patterns
+        str(safe_path), base_image, allow_dangerous_patterns
     )
 
 
@@ -2801,10 +2831,10 @@ def generate_compose_from_habitat(
 
     """
     try:
-        _validate_plan_paths(plan_paths)
+        normalised_paths = _normalise_plan_paths(plan_paths)
     except ValueError as e:
         return format_error_with_context(e, "validating plan paths", plan_paths)
-    return _generate_compose_from_habitat(plan_paths, network_name)
+    return _generate_compose_from_habitat(",".join(normalised_paths), network_name)
 
 
 # Playbook converter wrappers for backward compatibility

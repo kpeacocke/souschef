@@ -919,7 +919,7 @@ All analysis operations include comprehensive progress feedback:
 
 ### Prerequisites
 
-- Python 3.14+
+- Python 3.10+
 - [Poetry](https://python-poetry.org/) for dependency management
 - MCP-compatible client (Claude Desktop, VS Code 1.102+ with GitHub Copilot, etc.)
 

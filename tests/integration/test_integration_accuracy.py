@@ -453,7 +453,7 @@ class TestDeploymentStrategyConversion:
 class TestRecipeParsingAccuracy:
     """Test that recipe parsing produces accurate results."""
 
-    def test_parse_simple_recipe_accuracy(self):
+    def test_parse_simple_recipe_accuracy(self, monkeypatch):
         """Test parsing a simple recipe produces correct structure."""
         recipe_content = """
 package 'nginx' do
@@ -467,6 +467,8 @@ end
         with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
             f.write(recipe_content)
             temp_path = f.name
+
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
 
         try:
             result = parse_recipe(temp_path)
@@ -484,7 +486,7 @@ end
         finally:
             Path(temp_path).unlink(missing_ok=True)
 
-    def test_parse_recipe_with_guards_accuracy(self):
+    def test_parse_recipe_with_guards_accuracy(self, monkeypatch):
         """Test parsing recipe with guard conditions."""
         recipe_content = """
 file '/etc/myapp/config.yml' do
@@ -496,6 +498,8 @@ end
             f.write(recipe_content)
             temp_path = f.name
 
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+
         try:
             result = parse_recipe(temp_path)
 
@@ -506,7 +510,7 @@ end
         finally:
             Path(temp_path).unlink(missing_ok=True)
 
-    def test_parse_recipe_with_notifies_accuracy(self):
+    def test_parse_recipe_with_notifies_accuracy(self, monkeypatch):
         """Test parsing recipe with notification actions."""
         recipe_content = """
 template '/etc/nginx/nginx.conf' do
@@ -517,6 +521,8 @@ end
         with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
             f.write(recipe_content)
             temp_path = f.name
+
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
 
         try:
             result = parse_recipe(temp_path)
@@ -589,7 +595,13 @@ search_results.each do |server|
   log "Found server: #{server['hostname']}"
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+        with (
+            patch("souschef.parsers.recipe._normalize_path") as mock_norm,
+            patch(
+                "souschef.server._normalise_workspace_path",
+                return_value=Path("/fake/path/recipe.rb"),
+            ),
+        ):
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -631,7 +643,13 @@ service 'app' do
   subscribes :restart, 'template[/etc/app/config.conf]', :delayed
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+        with (
+            patch("souschef.parsers.recipe._normalize_path") as mock_norm,
+            patch(
+                "souschef.server._normalise_workspace_path",
+                return_value=Path("/fake/path/recipe.rb"),
+            ),
+        ):
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -657,7 +675,13 @@ package 'postgresql' do
   action :upgrade
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+        with (
+            patch("souschef.parsers.recipe._normalize_path") as mock_norm,
+            patch(
+                "souschef.server._normalise_workspace_path",
+                return_value=Path("/fake/path/recipe.rb"),
+            ),
+        ):
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -677,7 +701,13 @@ service 'nginx' do
   only_if 'test -f /etc/nginx/nginx.conf'
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+        with (
+            patch("souschef.parsers.recipe._normalize_path") as mock_norm,
+            patch(
+                "souschef.server._normalise_workspace_path",
+                return_value=Path("/fake/path/recipe.rb"),
+            ),
+        ):
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True
@@ -697,7 +727,13 @@ package 'apache2' do
   not_if 'which apache2'
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
+        with (
+            patch("souschef.parsers.recipe._normalize_path") as mock_norm,
+            patch(
+                "souschef.server._normalise_workspace_path",
+                return_value=Path("/fake/path/recipe.rb"),
+            ),
+        ):
             mock_path = MagicMock()
             mock_path.read_text.return_value = recipe_content
             mock_path.exists.return_value = True

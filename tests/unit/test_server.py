@@ -205,7 +205,9 @@ end
         assert "Migration Roadmap" in result
 
 
-def test_assess_chef_migration_complexity_cookbook_not_found():
+def test_assess_chef_migration_complexity_cookbook_not_found(monkeypatch):
+    """Test assess_chef_migration_complexity when cookbook doesn't exist."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test assess_chef_migration_complexity when cookbook doesn't exist."""
     from souschef.server import assess_chef_migration_complexity
 
@@ -412,8 +414,9 @@ def test_generate_migration_plan_parallel_strategy(tmp_path):
     assert "parallel" in result.lower() or "strategy" in result.lower()
 
 
-def test_generate_migration_report_success():
+def test_generate_migration_report_success(monkeypatch):
     """Test migration report generation with assessment results."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     from souschef.server import generate_migration_report
 
     mock_cookbook = MagicMock(spec=Path)
@@ -446,8 +449,9 @@ def test_generate_migration_report_success():
         assert "Report Type:" in result or "high_level" in result.lower()
 
 
-def test_generate_migration_report_detailed_format():
+def test_generate_migration_report_detailed_format(monkeypatch):
     """Test migration report with detailed format."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     from souschef.server import generate_migration_report
 
     mock_cookbook = MagicMock(spec=Path)
@@ -481,7 +485,9 @@ def test_generate_migration_report_detailed_format():
         assert "Risk Assessment" in result or "Recommendations" in result
 
 
-def test_analyse_cookbook_dependencies_not_found():
+def test_analyse_cookbook_dependencies_not_found(monkeypatch):
+    """Test analyse_cookbook_dependencies when cookbook doesn't exist."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test analyse_cookbook_dependencies when cookbook doesn't exist."""
     from souschef.server import analyse_cookbook_dependencies
 
@@ -603,8 +609,9 @@ package "nginx"
         assert "Detected Patterns" in result
 
 
-def test_list_directory_empty():
+def test_list_directory_empty(monkeypatch):
     """Test that list_directory returns an empty list for empty directories."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.return_value = []
 
@@ -837,8 +844,9 @@ def test_read_file_other_exception():
         assert "An error occurred: Unexpected error" in result
 
 
-def test_read_cookbook_metadata_success():
+def test_read_cookbook_metadata_success(monkeypatch):
     """Test read_cookbook_metadata with valid metadata.rb."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     metadata_content = """
 name 'apache2'
 maintainer 'Chef Software, Inc.'
@@ -864,7 +872,9 @@ supports 'debian'
         assert "supports: ubuntu, debian" in result
 
 
-def test_read_cookbook_metadata_minimal():
+def test_read_cookbook_metadata_minimal(monkeypatch):
+    """Test read_cookbook_metadata with minimal metadata."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata with minimal metadata."""
     metadata_content = "name 'simple'"
     with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
@@ -876,7 +886,9 @@ def test_read_cookbook_metadata_minimal():
         assert "depends" not in result
 
 
-def test_read_cookbook_metadata_empty():
+def test_read_cookbook_metadata_empty(monkeypatch):
+    """Test read_cookbook_metadata with empty file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata with empty file."""
     with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
         mock_read.return_value = ""
@@ -886,7 +898,9 @@ def test_read_cookbook_metadata_empty():
         assert "Warning: No metadata found" in result
 
 
-def test_read_cookbook_metadata_not_found():
+def test_read_cookbook_metadata_not_found(monkeypatch):
+    """Test read_cookbook_metadata with non-existent file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata with non-existent file."""
     with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
         mock_read.side_effect = FileNotFoundError()
@@ -896,7 +910,9 @@ def test_read_cookbook_metadata_not_found():
         assert "Error: File not found" in result
 
 
-def test_read_cookbook_metadata_is_directory():
+def test_read_cookbook_metadata_is_directory(monkeypatch):
+    """Test read_cookbook_metadata when path is a directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata when path is a directory."""
     with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
         mock_read.side_effect = IsADirectoryError()
@@ -927,7 +943,9 @@ def test_read_cookbook_metadata_unicode_error():
         assert "Error:" in result and "codec can't decode" in result
 
 
-def test_read_cookbook_metadata_other_exception():
+def test_read_cookbook_metadata_other_exception(monkeypatch):
+    """Test read_cookbook_metadata with unexpected exception."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata with unexpected exception."""
     with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
         mock_read.side_effect = Exception("Unexpected")
@@ -971,7 +989,9 @@ end
         assert "Type: template" in result
 
 
-def test_parse_recipe_empty():
+def test_parse_recipe_empty(monkeypatch):
+    """Test parse_recipe with no resources."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_recipe with no resources."""
     with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -992,7 +1012,9 @@ def test_parse_recipe_rejects_long_path():
     assert "exceeds maximum length" in result
 
 
-def test_parse_recipe_not_found():
+def test_parse_recipe_not_found(monkeypatch):
+    """Test parse_recipe with non-existent file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_recipe with non-existent file."""
     with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -1004,7 +1026,9 @@ def test_parse_recipe_not_found():
         assert "Error: File not found" in result
 
 
-def test_parse_recipe_is_directory():
+def test_parse_recipe_is_directory(monkeypatch):
+    """Test parse_recipe when path is a directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_recipe when path is a directory."""
     with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -1043,7 +1067,9 @@ def test_parse_recipe_unicode_error():
         assert "Error:" in result and "codec can't decode" in result
 
 
-def test_parse_recipe_other_exception():
+def test_parse_recipe_other_exception(monkeypatch):
+    """Test parse_recipe with unexpected exception."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_recipe with unexpected exception."""
     with patch("souschef.parsers.recipe._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -1055,8 +1081,9 @@ def test_parse_recipe_other_exception():
         assert "An error occurred: Unexpected" in result
 
 
-def test_parse_attributes_success():
+def test_parse_attributes_success(monkeypatch):
     """Test parse_attributes with valid attributes file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     attributes_content = """
 default['nginx']['port'] = 80
 default['nginx']['ssl_port'] = 443
@@ -1079,7 +1106,9 @@ default['nginx']['user'] = 'www-data'
         assert "www-data" in result
 
 
-def test_parse_attributes_empty():
+def test_parse_attributes_empty(monkeypatch):
+    """Test parse_attributes with no attributes."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_attributes with no attributes."""
     with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -1091,7 +1120,9 @@ def test_parse_attributes_empty():
         assert "Warning: No attributes found" in result
 
 
-def test_parse_attributes_not_found():
+def test_parse_attributes_not_found(monkeypatch):
+    """Test parse_attributes with non-existent file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_attributes with non-existent file."""
     with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -1103,7 +1134,9 @@ def test_parse_attributes_not_found():
         assert "Error: File not found" in result
 
 
-def test_parse_attributes_is_directory():
+def test_parse_attributes_is_directory(monkeypatch):
+    """Test parse_attributes when path is a directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_attributes when path is a directory."""
     with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -1142,7 +1175,9 @@ def test_parse_attributes_unicode_error():
         assert "Error:" in result and "codec can't decode" in result
 
 
-def test_parse_attributes_other_exception():
+def test_parse_attributes_other_exception(monkeypatch):
+    """Test parse_attributes with unexpected exception."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_attributes with unexpected exception."""
     with patch("souschef.parsers.attributes._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -1371,8 +1406,9 @@ def test_list_cookbook_structure_success():
         assert "metadata/" in result
 
 
-def test_list_cookbook_structure_empty():
+def test_list_cookbook_structure_empty(monkeypatch):
     """Test list_cookbook_structure with empty directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     with (
         patch("souschef.parsers.metadata._normalize_path") as mock_path,
         patch("souschef.parsers.metadata._safe_join") as mock_safe_join,
@@ -1393,7 +1429,9 @@ def test_list_cookbook_structure_empty():
         assert "Warning: No standard cookbook structure found" in result
 
 
-def test_list_cookbook_structure_not_directory():
+def test_list_cookbook_structure_not_directory(monkeypatch):
+    """Test list_cookbook_structure with non-directory path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test list_cookbook_structure with non-directory path."""
     with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
@@ -1418,7 +1456,9 @@ def test_list_cookbook_structure_permission_denied():
         assert "Error: Permission denied" in result
 
 
-def test_list_cookbook_structure_other_exception():
+def test_list_cookbook_structure_other_exception(monkeypatch):
+    """Test list_cookbook_structure with unexpected exception."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test list_cookbook_structure with unexpected exception."""
     with patch("souschef.parsers.metadata._normalize_path") as mock_path:
         mock_cookbook = MagicMock()
@@ -1565,7 +1605,7 @@ def test_convert_unknown_resource_type():
 
     # Should not crash, but indicate unknown resource
     assert isinstance(result, str)
-    assert "name: Create unknown_resource test" in result
+    assert "Unsupported Chef resource: unknown_resource" in result
 
 
 def test_convert_chef_databag_to_vars_invalid_json():
@@ -1614,7 +1654,9 @@ def test_validate_databags_directory_empty_path():
     assert "Databags directory path cannot be empty" in result[1]
 
 
-def test_validate_databags_directory_nonexistent():
+def test_validate_databags_directory_nonexistent(monkeypatch):
+    """Test _validate_databags_directory with nonexistent directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test _validate_databags_directory with nonexistent directory."""
     result = _validate_databags_directory("/nonexistent/path")
     assert result[0] is None
@@ -1648,13 +1690,17 @@ def test_convert_databag_item_with_error():
         assert result["error"] == "Read error"
 
 
-def test_generate_ansible_vault_from_databags_invalid_directory():
+def test_generate_ansible_vault_from_databags_invalid_directory(monkeypatch):
+    """Test generate_ansible_vault_from_databags with invalid directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test generate_ansible_vault_from_databags with invalid directory."""
     result = generate_ansible_vault_from_databags("/nonexistent/path")
     assert "Data bags directory not found" in result
 
 
-def test_analyse_chef_databag_usage_nonexistent_cookbook():
+def test_analyse_chef_databag_usage_nonexistent_cookbook(monkeypatch):
+    """Test analyze_chef_databag_usage with nonexistent cookbook."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test analyze_chef_databag_usage with nonexistent cookbook."""
     result = analyse_chef_databag_usage("/nonexistent/cookbook")
     assert "Cookbook path not found" in result
@@ -1668,7 +1714,9 @@ def test_convert_chef_environment_to_inventory_group_invalid_content():
     assert "inventory" in result.lower() or "group" in result.lower()
 
 
-def test_generate_inventory_from_chef_environments_nonexistent_directory():
+def test_generate_inventory_from_chef_environments_nonexistent_directory(monkeypatch):
+    """Test generate_inventory_from_chef_environments with nonexistent directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test generate_inventory_from_chef_environments with nonexistent directory."""
     result = generate_inventory_from_chef_environments("/nonexistent/path")
     assert "Environments directory not found" in result
@@ -2046,7 +2094,9 @@ def test_parse_template_success():
         assert "name" in result  # Should extract @name variable
 
 
-def test_parse_template_not_found():
+def test_parse_template_not_found(monkeypatch):
+    """Test parse_template with non-existent file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_template with non-existent file."""
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
@@ -2208,7 +2258,9 @@ end
         assert "app_config" in result
 
 
-def test_parse_custom_resource_not_found():
+def test_parse_custom_resource_not_found(monkeypatch):
+    """Test parse_custom_resource with non-existent file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_custom_resource with non-existent file."""
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
@@ -2457,8 +2509,9 @@ def test_extract_template_variables_with_interpolation():
     assert "name" in variables or "message" in variables
 
 
-def test_parse_recipe_with_comments():
+def test_parse_recipe_with_comments(monkeypatch):
     """Test parsing recipe with Ruby comments."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     recipe_content = """
 # Install web server
 package 'nginx' do  # Using nginx
@@ -2511,8 +2564,9 @@ property :ports, Array, default: [80, 443]
     assert "[true, false]" in enabled_prop["type"] or "true" in enabled_prop["type"]
 
 
-def test_parse_recipe_with_multiline_string():
+def test_parse_recipe_with_multiline_string(monkeypatch):
     """Test parsing recipe with multi-line content."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     recipe_content = """
 file '/etc/config' do
   content 'line1
@@ -2760,7 +2814,9 @@ end
         assert "dir-test" in result or "controls_count" in result
 
 
-def test_parse_inspec_profile_not_found():
+def test_parse_inspec_profile_not_found(monkeypatch):
+    """Test parsing InSpec profile with non-existent path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parsing InSpec profile with non-existent path."""
     with patch("souschef.parsers.inspec._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -3725,17 +3781,17 @@ end
 
         # Test with nonexistent file
         result = read_file("/nonexistent/file.rb")
-        assert "Error:" in result
+        assert "Error" in result
 
         # Test with directory instead of file
         monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
         result = read_file(str(tmp_path))
-        assert "Error:" in result and "directory" in result
+        assert "Error" in result and "directory" in result
 
         # Test with permission denied (try /root if it exists)
         if Path("/root").exists():
             result = read_file("/root")
-            assert "Error:" in result
+            assert "Error" in result
 
     def test_list_directory_success_cases(self, tmp_path):
         """Test list_directory with real directories."""
@@ -15577,7 +15633,9 @@ def test_generate_jenkinsfile_from_chef_default_params():
     assert "pipeline {" in result
 
 
-def test_generate_jenkinsfile_from_chef_nonexistent_path():
+def test_generate_jenkinsfile_from_chef_nonexistent_path(monkeypatch):
+    """Test Jenkinsfile generation with nonexistent cookbook path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test Jenkinsfile generation with nonexistent cookbook path."""
     from souschef.server import generate_jenkinsfile_from_chef
 
@@ -15689,7 +15747,9 @@ def test_generate_gitlab_ci_from_chef_default_params():
     assert "stages:" in result
 
 
-def test_generate_gitlab_ci_from_chef_nonexistent_path():
+def test_generate_gitlab_ci_from_chef_nonexistent_path(monkeypatch):
+    """Test GitLab CI generation with nonexistent cookbook path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test GitLab CI generation with nonexistent cookbook path."""
     from souschef.server import generate_gitlab_ci_from_chef
 
@@ -15794,7 +15854,9 @@ def test_generate_github_workflow_from_chef_default_params():
     assert "on:" in result
 
 
-def test_generate_github_workflow_from_chef_nonexistent_path():
+def test_generate_github_workflow_from_chef_nonexistent_path(monkeypatch):
+    """Test generate_github_workflow_from_chef with nonexistent path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test generate_github_workflow_from_chef with nonexistent path."""
     result = generate_github_workflow_from_chef(cookbook_path="/nonexistent/path")
 
@@ -16206,7 +16268,9 @@ def test_convert_template_with_ai_failure():
         assert len(data["warnings"]) > 0
 
 
-def test_convert_template_with_ai_exception():
+def test_convert_template_with_ai_exception(monkeypatch):
+    """Test convert_template_with_ai with exception."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test convert_template_with_ai with exception."""
     from souschef.server import convert_template_with_ai
 

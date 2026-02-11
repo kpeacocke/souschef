@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -57,15 +58,21 @@ def test_validate_user_provided_url_handles_any_input(raw_url):
 def test_parse_recipe_handles_any_content(content):
     """Test that parse_recipe doesn't crash on any file content."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
-
-            result = parse_recipe(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_recipe(temp_path)
             # Should always return a string
             assert isinstance(result, str)
         finally:
-            Path(f.name).unlink(missing_ok=True)
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+            Path(temp_path).unlink(missing_ok=True)
 
 
 @given(st.text())
@@ -73,15 +80,23 @@ def test_parse_recipe_handles_any_content(content):
 def test_parse_attributes_handles_any_content(content):
     """Test that parse_attributes doesn't crash on any file content."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
-
-            result = parse_attributes(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_attributes(temp_path)
             # Should always return a string
             assert isinstance(result, str)
         finally:
-            Path(f.name).unlink(missing_ok=True)
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+            Path(temp_path).unlink(missing_ok=True)
 
 
 @given(
@@ -108,11 +123,15 @@ def test_parse_attributes_with_generated_attributes(precedence, key1, key2, valu
     attr_content = f"{precedence}['{key1}']['{key2}'] = {value}\n"
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(attr_content)
             f.flush()
-
-            result = parse_attributes(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_attributes(temp_path)
 
             # Should parse successfully
             assert precedence in result
@@ -120,7 +139,11 @@ def test_parse_attributes_with_generated_attributes(precedence, key1, key2, valu
             assert key2 in result
             assert str(value) in result
         finally:
-            Path(f.name).unlink(missing_ok=True)
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+            Path(temp_path).unlink(missing_ok=True)
 
 
 @given(
@@ -151,17 +174,25 @@ def test_parse_attributes_all_precedence_levels(precedence, key, value):
     attr_content = f"{precedence}['{key}'] = {value}\n"
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(attr_content)
             f.flush()
+            temp_path = f.name
 
-            result = parse_attributes(f.name, resolve_precedence=True)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_attributes(temp_path, resolve_precedence=True)
 
             # Should parse and recognize the precedence level
             assert precedence in result
             assert str(value) in result
             assert "Resolved Attributes" in result
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink(missing_ok=True)
 
 
@@ -225,17 +256,25 @@ def test_parse_recipe_with_generated_resources(resource_type, resource_name):
     recipe_content = f"{resource_type} '{resource_name}' do\n  action :create\nend\n"
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(recipe_content)
             f.flush()
+            temp_path = f.name
 
-            result = parse_recipe(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_recipe(temp_path)
 
             # Should find the resource
             assert "Resource 1:" in result
             assert f"Type: {resource_type}" in result
             assert f"Name: {resource_name}" in result
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink(missing_ok=True)
 
 
@@ -267,14 +306,22 @@ def test_convert_erb_to_jinja2_doesnt_crash(content):
 def test_parse_template_handles_any_content(content):
     """Test that parse_template doesn't crash on any file content."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".erb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
+            temp_path = f.name
 
-            result = parse_template(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_template(temp_path)
             # Should always return a string (JSON or error)
             assert isinstance(result, str)
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink(missing_ok=True)
 
 
@@ -367,14 +414,22 @@ def test_erb_conditional_conversion(condition):
 def test_parse_custom_resource_handles_any_content(content):
     """Test that parse_custom_resource doesn't crash on any file content."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
+            temp_path = f.name
 
-            result = parse_custom_resource(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_custom_resource(temp_path)
             # Should always return a string
             assert isinstance(result, str)
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink(missing_ok=True)
 
 
@@ -514,14 +569,22 @@ def test_extract_property_with_defaults(default_val):
 def test_parse_inspec_profile_handles_any_content(content):
     """Test that parse_inspec_profile doesn't crash on any file content."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
+            temp_path = f.name
 
-            result = parse_inspec_profile(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_inspec_profile(temp_path)
             # Should always return a string (JSON or error)
             assert isinstance(result, str)
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink()
 
 
@@ -590,17 +653,25 @@ end
 def test_convert_inspec_to_test_handles_any_content(content):
     """Test that convert_inspec_to_test handles any file content without crashing."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
+            temp_path = f.name
 
-            result_testinfra = convert_inspec_to_test(f.name, "testinfra")
-            result_ansible = convert_inspec_to_test(f.name, "ansible_assert")
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result_testinfra = convert_inspec_to_test(temp_path, "testinfra")
+            result_ansible = convert_inspec_to_test(temp_path, "ansible_assert")
 
             # Should always return strings
             assert isinstance(result_testinfra, str)
             assert isinstance(result_ansible, str)
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink()
 
 
@@ -621,11 +692,15 @@ end
 """
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(simple_control)
             f.flush()
+            temp_path = f.name
 
-            result = convert_inspec_to_test(f.name, format_type)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = convert_inspec_to_test(temp_path, format_type)
 
             # Should always return a string
             assert isinstance(result, str)
@@ -650,6 +725,10 @@ end
                 # Invalid format should return error
                 assert result.startswith("Error:")
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink()
 
 
@@ -658,15 +737,23 @@ end
 def test_generate_inspec_from_recipe_handles_any_content(content):
     """Test that generate_inspec_from_recipe handles any recipe content."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
+            temp_path = f.name
 
-            result = generate_inspec_from_recipe(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = generate_inspec_from_recipe(temp_path)
 
             # Should always return a string
             assert isinstance(result, str)
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink()
 
 
@@ -695,11 +782,15 @@ end
 """
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(chef_content)
             f.flush()
+            temp_path = f.name
 
-            result = generate_inspec_from_recipe(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = generate_inspec_from_recipe(temp_path)
 
             # Should generate InSpec content
             assert isinstance(result, str)
@@ -714,6 +805,10 @@ end
                     f"describe {resource_type}(" in result or "describe file(" in result
                 )
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink()
 
 
@@ -769,14 +864,22 @@ def test_parse_habitat_plan_handles_any_content(content):
     from souschef.server import parse_habitat_plan
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
+            temp_path = f.name
 
-            result = parse_habitat_plan(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_habitat_plan(temp_path)
             # Should always return a string (JSON or error)
             assert isinstance(result, str)
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink(missing_ok=True)
 
 
@@ -808,11 +911,15 @@ pkg_description="Test package"
     from souschef.server import parse_habitat_plan
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
+            temp_path = f.name
 
-            result = parse_habitat_plan(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_habitat_plan(temp_path)
 
             # Should parse successfully
             assert not result.startswith("Error")
@@ -821,6 +928,10 @@ pkg_description="Test package"
             assert plan["package"]["name"] == pkg_name
             assert plan["package"]["version"] == pkg_version
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink(missing_ok=True)
 
 
@@ -842,17 +953,25 @@ pkg_svc_run="./start.sh"
 """
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
+            temp_path = f.name
 
-            result = convert_habitat_to_dockerfile(f.name, base_image)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = convert_habitat_to_dockerfile(temp_path, base_image)
 
             # Should generate Dockerfile with correct base image
             assert isinstance(result, str)
             if not result.startswith("Error"):
                 assert f"FROM {base_image}" in result
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink(missing_ok=True)
 
 
@@ -887,11 +1006,15 @@ pkg_build_deps=(
 """
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+        temp_path = f.name
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
+            temp_path = f.name
 
-            result = parse_habitat_plan(f.name)
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
+            result = parse_habitat_plan(temp_path)
 
             # Should parse successfully
             assert not result.startswith("Error")
@@ -901,6 +1024,10 @@ pkg_build_deps=(
             for dep in dependencies:
                 assert dep in str(plan["dependencies"]["build"])
         finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(f.name).unlink(missing_ok=True)
 
 

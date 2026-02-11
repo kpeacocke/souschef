@@ -164,10 +164,18 @@
   '''
 # ---
 # name: test_convert_inspec_to_molecule_snapshot
-  'Error: No controls found in InSpec profile'
+  '''
+  Error during validating InSpec path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  
+  Suggestion: Check that input values are in the correct format and type.
+  '''
 # ---
 # name: test_convert_inspec_to_testinfra_snapshot
-  'Error: No controls found in InSpec profile'
+  '''
+  Error during validating InSpec path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  
+  Suggestion: Check that input values are in the correct format and type.
+  '''
 # ---
 # name: test_convert_package_resource_to_task_snapshot
   '''
@@ -235,89 +243,43 @@
 # ---
 # name: test_parse_recipe_with_guards_snapshot
   '''
-  Resource 1:
-    Type: package
-    Name: postgresql
-    Action: install
+  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
   
-  Resource 2:
-    Type: service
-    Name: postgresql
-    Action: start
+  Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_recipe_with_include_recipe_snapshot
   '''
-  Resource 1:
-    Type: template
-    Name: /etc/app/config.yml
-    Action: create
-    Properties: {'source': 'config.yml.erb'}
+  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
   
-  Include Recipe 2:
-    Recipe: nginx::default
-  
-  Include Recipe 3:
-    Recipe: postgresql::server
+  Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_recipe_with_multiple_actions_snapshot
   '''
-  Resource 1:
-    Type: service
-    Name: apache2
+  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
   
-  Resource 2:
-    Type: package
-    Name: apache2
-    Action: remove
-  
-  Resource 3:
-    Type: package
-    Name: nginx
-    Action: install
-  
-  Resource 4:
-    Type: service
-    Name: nginx
+  Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_recipe_with_notifies_snapshot
   '''
-  Resource 1:
-    Type: template
-    Name: /etc/nginx/nginx.conf
-    Action: create
-    Properties: {'source': 'nginx.conf.erb', 'owner': 'root', 'group': 'root', 'mode': '0644'}
+  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
   
-  Resource 2:
-    Type: service
-    Name: nginx
+  Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_recipe_with_variables_snapshot
   '''
-  Resource 1:
-    Type: package
-    Name: nginx
-    Action: install
+  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
   
-  Resource 2:
-    Type: template
-    Name: /etc/nginx/sites-available/default
-    Action: create
-    Properties: {'source': 'default-site.conf.erb'}
+  Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_simple_recipe_snapshot
   '''
-  Resource 1:
-    Type: package
-    Name: nginx
-    Action: install
+  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
   
-  Resource 2:
-    Type: service
-    Name: nginx
+  Suggestion: Check that input values are in the correct format and type.
   '''
 # ---

@@ -75,23 +75,48 @@ def _strip_ruby_comments(content: str) -> str:
         Content with comments removed.
 
     """
-    # Remove single-line comments but preserve strings
-    lines = []
+    lines: list[str] = []
+
     for line in content.split("\n"):
-        # Skip if line is only a comment
-        if line.strip().startswith("#"):
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
             continue
-        # Remove inline comments (simple approach - doesn't handle # in strings)
-        comment_pos = line.find("#")
-        if comment_pos > 0:
-            # Check if # is inside a string by counting quotes before it
-            before_comment = line[:comment_pos]
-            single_quotes = before_comment.count("'") - before_comment.count("\\'")
-            double_quotes = before_comment.count('"') - before_comment.count('\\"')
-            # If odd number of quotes, # is inside a string
-            if single_quotes % 2 == 0 and double_quotes % 2 == 0:
-                line = line[:comment_pos]
-        lines.append(line)
+
+        in_single = False
+        in_double = False
+        escaped = False
+        output_chars: list[str] = []
+
+        for char in line:
+            if escaped:
+                output_chars.append(char)
+                escaped = False
+                continue
+
+            if char == "\\":
+                output_chars.append(char)
+                escaped = True
+                continue
+
+            if char == "'" and not in_double:
+                in_single = not in_single
+                output_chars.append(char)
+                continue
+
+            if char == '"' and not in_single:
+                in_double = not in_double
+                output_chars.append(char)
+                continue
+
+            if char == "#" and not in_single and not in_double:
+                break
+
+            output_chars.append(char)
+
+        cleaned_line = "".join(output_chars).rstrip()
+        if cleaned_line:
+            lines.append(cleaned_line)
+
     return "\n".join(lines)
 
 

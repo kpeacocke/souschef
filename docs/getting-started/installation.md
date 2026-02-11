@@ -6,7 +6,7 @@ This guide will help you install SousChef and configure it with your preferred M
 
 Before installing SousChef, ensure you have:
 
-- **Python 3.14+** installed on your system
+- **Python 3.10+** installed on your system
 - **pip** or **Poetry** for package management
 - An **MCP-compatible client** such as:
     - Claude Desktop
@@ -158,7 +158,7 @@ poetry shell
 
 ### Python Version Issues
 
-SousChef requires Python 3.14+. Check your version:
+SousChef requires Python 3.10+. Check your version:
 
 ```bash
 python3 --version
@@ -170,12 +170,12 @@ If you need to install or upgrade Python, visit [python.org/downloads](https://w
 
 ### macOS
 
-- Python 3.14+ can be installed via Homebrew: `brew install python@3.14`
+- Python 3.10+ can be installed via Homebrew: `brew install python@3.10`
 - Claude Desktop config location: `~/Library/Application Support/Claude/`
 
 ### Linux
 
-- Python 3.14+ may need to be compiled from source or installed via third-party repositories
+- Python 3.10+ may need to be compiled from source or installed via third-party repositories
 - Config locations vary by distribution and desktop environment
 
 ### Windows
