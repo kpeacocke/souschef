@@ -4052,9 +4052,9 @@ def _display_cookbook_activity_breakdown(activities: list) -> None:
 *{description}*
 
 Manual: {manual_hours:.1f}h
-Writing: {manual_writing:.1f}h, Testing: {manual_testing:.1f}h
+  Writing: {manual_writing:.1f}h, Testing: {manual_testing:.1f}h
 AI: {ai_hours:.1f}h
-Writing: {ai_writing:.1f}h, Testing: {ai_testing:.1f}h
+  Writing: {ai_writing:.1f}h, Testing: {ai_testing:.1f}h
 
 **Saved: {time_saved:.1f}h ({efficiency:.0f}%)**"""
             )
