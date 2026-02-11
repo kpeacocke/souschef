@@ -10,7 +10,6 @@ import json
 import re
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from souschef.core.constants import (
     CHEF_RECIPE_PREFIX,
@@ -28,6 +27,7 @@ from souschef.core.metrics import (
     categorize_complexity,
 )
 from souschef.core.path_utils import _safe_join
+from souschef.core.url_validation import validate_user_provided_url
 
 # Maximum length for attribute values in Chef attribute parsing
 # Prevents ReDoS attacks from extremely long attribute declarations
@@ -259,24 +259,26 @@ def generate_awx_inventory_source_from_chef(
                 "(e.g., https://chef.example.com)"
             )
 
-        parsed_url = urlparse(chef_server_url)
-        if parsed_url.scheme != "https" or not parsed_url.netloc:
+        try:
+            validated_url = validate_user_provided_url(
+                chef_server_url,
+                strip_path=True,
+            )
+        except ValueError as exc:
             return (
-                f"Error: Invalid Chef server URL: {chef_server_url}\n\n"
-                "Suggestion: URL must use HTTPS protocol with a valid host "
+                f"Error: Invalid Chef server URL: {exc}\n\n"
+                "Suggestion: URL must use HTTPS with a public hostname "
                 "(e.g., https://chef.example.com)"
             )
 
         # Generate inventory source configuration
-        inventory_source = _generate_chef_inventory_source(
-            chef_server_url, sync_schedule
-        )
+        inventory_source = _generate_chef_inventory_source(validated_url, sync_schedule)
 
         # Generate custom inventory script
-        custom_script = _generate_chef_inventory_script(chef_server_url)
+        custom_script = _generate_chef_inventory_script(validated_url)
 
         return f"""# AWX/AAP Inventory Source Configuration
-# Chef Server Integration: {chef_server_url}
+# Chef Server Integration: {validated_url}
 
 ## Inventory Source JSON:
 ```json
@@ -302,7 +304,7 @@ def generate_awx_inventory_source_from_chef(
 - chef_client_pem: Chef client PEM file content
 
 ## Environment Variables:
-- CHEF_SERVER_URL: {chef_server_url}
+- CHEF_SERVER_URL: {validated_url}
 - CHEF_NODE_NAME: ${{{{chef_node_name}}}}
 - CHEF_CLIENT_KEY: ${{{{chef_client_key}}}}
 """

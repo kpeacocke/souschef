@@ -64,6 +64,67 @@ def parse_template(path: str) -> str:
         return f"An error occurred: {e}"
 
 
+def _is_comment_line(line: str) -> bool:
+    """Check if a line is a full-line comment."""
+    return line.lstrip().startswith("#")
+
+
+def _process_line_char(
+    char: str,
+    in_single: bool,
+    in_double: bool,
+    escaped: bool,
+    output_chars: list[str],
+) -> tuple[bool, bool, bool, bool]:
+    """
+    Process a single character in a line, handling quotes and escapes.
+
+    Returns:
+        Tuple of (should_break, in_single, in_double, escaped).
+
+    """
+    if escaped:
+        output_chars.append(char)
+        return (False, in_single, in_double, False)
+
+    if char == "\\":
+        output_chars.append(char)
+        return (False, in_single, in_double, True)
+
+    if char == "'" and not in_double:
+        in_single = not in_single
+        output_chars.append(char)
+        return (False, in_single, in_double, False)
+
+    if char == '"' and not in_single:
+        in_double = not in_double
+        output_chars.append(char)
+        return (False, in_single, in_double, False)
+
+    if char == "#" and not in_single and not in_double:
+        return (True, in_single, in_double, False)
+
+    output_chars.append(char)
+    return (False, in_single, in_double, False)
+
+
+def _strip_line_comments(line: str) -> str:
+    """Remove inline comments from a single line."""
+    in_single = False
+    in_double = False
+    escaped = False
+    output_chars: list[str] = []
+
+    for char in line:
+        should_break, in_single, in_double, escaped = _process_line_char(
+            char, in_single, in_double, escaped, output_chars
+        )
+        if should_break:
+            break
+
+    return "".join(output_chars).rstrip()
+
+
 def _strip_ruby_comments(content: str) -> str:
     """
     Remove Ruby comments from code.
@@ -75,23 +136,16 @@ def _strip_ruby_comments(content: str) -> str:
         Content with comments removed.
 
     """
-    # Remove single-line comments but preserve strings
-    lines = []
+    lines: list[str] = []
+
     for line in content.split("\n"):
-        # Skip if line is only a comment
-        if line.strip().startswith("#"):
+        if _is_comment_line(line):
             continue
-        # Remove inline comments (simple approach - doesn't handle # in strings)
-        comment_pos = line.find("#")
-        if comment_pos > 0:
-            # Check if # is inside a string by counting quotes before it
-            before_comment = line[:comment_pos]
-            single_quotes = before_comment.count("'") - before_comment.count("\\'")
-            double_quotes = before_comment.count('"') - before_comment.count('\\"')
-            # If odd number of quotes, # is inside a string
-            if single_quotes % 2 == 0 and double_quotes % 2 == 0:
-                line = line[:comment_pos]
-        lines.append(line)
+
+        cleaned_line = _strip_line_comments(line)
+        if cleaned_line:
+            lines.append(cleaned_line)
+
     return "\n".join(lines)
 
 

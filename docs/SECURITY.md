@@ -122,7 +122,7 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
    cd ~/souschef-workspace
 
    # Set explicit workspace root
-   export SOUSCHEF_WORKSPACE=$(pwd)
+   export SOUSCHEF_WORKSPACE_ROOT=$(pwd)
    ```
 
 2. **Least Privilege**

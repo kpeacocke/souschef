@@ -23,6 +23,18 @@ property :cpu_shares, Integer
 
 action :run do
   # Pull image if needed
+  # ⚠️ SECURITY WARNING - TEST FIXTURE ONLY - ANTI-PATTERN EXAMPLE
+  # This code demonstrates INSECURE string interpolation in shell commands.
+  # String interpolation can lead to command injection if user-controlled values
+  # (like image names from web requests) are used without proper validation.
+  #
+  # SECURE ALTERNATIVE: Use array form for commands:
+  #   execute "pull-docker-image-#{new_resource.image}" do
+  #     command ["docker", "pull", "#{new_resource.image}:#{new_resource.tag}"]
+  #   end
+  #
+  # This test fixture is intentionally insecure to verify the converter
+  # can handle real-world Chef code patterns. DO NOT copy this pattern.
   execute "pull-docker-image-#{new_resource.image}" do
     command "docker pull #{new_resource.image}:#{new_resource.tag}"
     not_if "docker images | grep -q #{new_resource.image}"

@@ -566,7 +566,7 @@ generate_awx_inventory_source_from_chef https://chef.example.com production web_
 parse_habitat_plan /path/to/plan.sh
 
 # Convert to Dockerfile
-convert_habitat_to_dockerfile /path/to/plan.sh ubuntu:22.04
+convert_habitat_to_dockerfile /path/to/plan.sh ubuntu:22.04 false
 
 # Generate docker-compose for multiple services
 generate_compose_from_habitat "/path/to/plan1.sh,/path/to/plan2.sh" my_network
@@ -850,7 +850,7 @@ services:
       - SOUSCHEF_DB_PORT=5432
       - SOUSCHEF_DB_NAME=souschef
       - SOUSCHEF_DB_USER=souschef
-      - SOUSCHEF_DB_PASSWORD=souschef
+      - SOUSCHEF_DB_PASSWORD=change-me
     restart: unless-stopped
 ```
 
@@ -919,7 +919,7 @@ All analysis operations include comprehensive progress feedback:
 
 ### Prerequisites
 
-- Python 3.14+
+- Python 3.10+
 - [Poetry](https://python-poetry.org/) for dependency management
 - MCP-compatible client (Claude Desktop, VS Code 1.102+ with GitHub Copilot, etc.)
 
@@ -1305,14 +1305,16 @@ parse_habitat_plan("/path/to/habitat/plan.sh")
 - Planning port mappings for docker-compose configurations
 - Analyzing service dependencies and orchestration needs
 
-#### `convert_habitat_to_dockerfile(plan_path: str, base_image: str = "ubuntu:22.04")`
+#### `convert_habitat_to_dockerfile(plan_path: str, base_image: str = "ubuntu:22.04", allow_dangerous_patterns: bool = False)`
 
 Convert a Chef Habitat plan to a production-ready Dockerfile with security validation.
+
+Dangerous shell patterns (for example, curl or wget piped to sh) are blocked by default. Set `allow_dangerous_patterns=True` only for trusted plans after review.
 
 **Example:**
 
 ```python
-convert_habitat_to_dockerfile("/path/to/habitat/plan.sh", "ubuntu:22.04")
+convert_habitat_to_dockerfile("/path/to/habitat/plan.sh", "ubuntu:22.04", False)
 # Returns:
 # # Dockerfile generated from Habitat plan
 # # Original plan: plan.sh

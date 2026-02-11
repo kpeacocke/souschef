@@ -161,7 +161,7 @@ ENTRYPOINT ["python", "-m", "streamlit", "run"]
 CMD ["souschef/ui/app.py", \
      "--server.address", "0.0.0.0", \
      "--server.port", "9999", \
-     "--client.showErrorDetails", "true", \
+    "--client.showErrorDetails", "false", \
      "--logger.level", "info", \
      "--server.headless", "true", \
      "--server.runOnSave", "false", \

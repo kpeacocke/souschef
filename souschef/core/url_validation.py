@@ -2,6 +2,7 @@
 
 import ipaddress
 import os
+import socket
 from collections.abc import Iterable
 from urllib.parse import urlparse, urlunparse
 
@@ -51,32 +52,81 @@ def _is_private_hostname(hostname: str) -> bool:
     """
     Determine whether a hostname resolves to a private or local address.
 
-    This check only validates IP literals and well-known local hostnames.
+    Performs DNS resolution to prevent DNS rebinding attacks.
 
     Args:
         hostname: Hostname to inspect.
 
     Returns:
-        True if the hostname is private or local.
+        True if the hostname is private, local, or resolves to any private addresses.
 
     """
     local_suffixes = (".localhost", ".local", ".localdomain", ".internal")
     if hostname in {"localhost"} or hostname.endswith(local_suffixes):
         return True
 
+    # Check if it's a literal IP address
     try:
         ip_address = ipaddress.ip_address(hostname)
+        return bool(
+            ip_address.is_private
+            or ip_address.is_loopback
+            or ip_address.is_link_local
+            or ip_address.is_reserved
+            or ip_address.is_multicast
+            or ip_address.is_unspecified
+        )
     except ValueError:
+        pass  # Not a literal IP, proceed to DNS resolution
+
+    # Skip DNS resolution for single-label hostnames (e.g., 'localhost', 'chef')
+    # These should be caught by earlier checks or by the non-FQDN validation
+    if "." not in hostname:
         return False
 
-    return bool(
-        ip_address.is_private
-        or ip_address.is_loopback
-        or ip_address.is_link_local
-        or ip_address.is_reserved
-        or ip_address.is_multicast
-        or ip_address.is_unspecified
-    )
+    # RFC 2606: Skip DNS resolution for reserved test domains
+    test_domains = (".example.com", ".example.org", ".example.net", ".test")
+    if any(hostname.endswith(suffix) for suffix in test_domains):
+        # Allow reserved test domains without DNS resolution
+        return False
+
+    # Resolve hostname to all A/AAAA records and check if ANY resolve to private IPs
+    try:
+        socket.setdefaulttimeout(10)  # Limit DNS resolution to 10 seconds
+        try:
+            addrinfo = socket.getaddrinfo(
+                hostname,
+                443,
+                socket.AF_UNSPEC,
+                socket.SOCK_STREAM,
+            )
+        finally:
+            socket.setdefaulttimeout(None)
+
+        if not addrinfo:
+            # Cannot resolve - allow it (fail open, DNS may work at runtime)
+            return False
+
+        # Check ALL resolved addresses - if ANY are private/reserved, reject
+        for _family, _socktype, _proto, _canonname, sockaddr in addrinfo:
+            ip_str = sockaddr[0]
+            ip_address = ipaddress.ip_address(ip_str)
+            if (
+                ip_address.is_private
+                or ip_address.is_loopback
+                or ip_address.is_link_local
+                or ip_address.is_reserved
+                or ip_address.is_multicast
+                or ip_address.is_unspecified
+            ):
+                return True
+
+        return False  # All resolved addresses are public
+
+    except OSError:
+        # DNS resolution failed/timeout - allow it (fail open, assume public)
+        # The hostname may resolve correctly at runtime
+        return False
 
 
 def _is_ip_literal(hostname: str) -> bool:

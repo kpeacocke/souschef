@@ -660,6 +660,16 @@ class TestGenerateAWXInventorySource:
         assert "chef.example.com" in result
         assert "#!/usr/bin/env python" in result or "#!" in result
 
+    def test_generate_awx_inventory_source_rejects_private_url(self):
+        """Test inventory source rejects private or insecure URLs."""
+        from souschef.deployment import generate_awx_inventory_source_from_chef
+
+        result = generate_awx_inventory_source_from_chef(
+            chef_server_url="http://localhost:8000",
+        )
+
+        assert "Invalid Chef server URL" in result
+
 
 class TestGenerateAWXWorkflow:
     """Test AWX workflow generation."""

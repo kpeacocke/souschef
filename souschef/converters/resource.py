@@ -307,12 +307,15 @@ def _convert_chef_resource_to_ansible(
 
     # Handle unknown resource types
     if ansible_module is None:
-        # Return a task with just a comment for unknown resources
         return {
-            "name": f"Create {resource_type} {resource_name}",
-            "# Unknown": f"{resource_type}:",
-            "resource_name": resource_name,
-            "state": "present",
+            "name": f"Unsupported Chef resource: {resource_type} {resource_name}",
+            "ansible.builtin.debug": {
+                "msg": (
+                    "Unsupported Chef resource encountered. "
+                    f"Type: {resource_type}, Name: {resource_name}, "
+                    f"Action: {action}"
+                )
+            },
         }
 
     # Start building the task
@@ -415,10 +418,6 @@ def _format_ansible_task(task: dict[str, Any]) -> str:
 
     for key, value in task.items():
         if key == "name":
-            continue
-        if key == "# Unknown":
-            # Handle unknown resources with a comment
-            result.append(f"  # {value}")
             continue
         if isinstance(value, dict):
             result.extend(_format_dict_value(key, value))

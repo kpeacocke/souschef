@@ -9,6 +9,29 @@ def _trusted_workspace_root() -> Path:
     return Path.cwd().resolve()
 
 
+def _get_workspace_root() -> Path:
+    """
+    Resolve the workspace root for filesystem containment checks.
+
+    The workspace root defaults to the current working directory. If the
+    `SOUSCHEF_WORKSPACE_ROOT` environment variable is set, its value is
+    normalised and used instead.
+
+    Raises:
+        ValueError: If the workspace root is invalid or not a directory.
+
+    """
+    env_root = os.getenv("SOUSCHEF_WORKSPACE_ROOT")
+    base_path = _normalize_path(env_root) if env_root else _trusted_workspace_root()
+
+    if not base_path.exists():
+        raise ValueError(f"Workspace root does not exist: {base_path}")
+    if not base_path.is_dir():
+        raise ValueError(f"Workspace root is not a directory: {base_path}")
+
+    return base_path
+
+
 def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
     """
     Ensure a path stays within a trusted base directory.
@@ -273,3 +296,49 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
         results.append(validated_item)
 
     return results
+
+
+def _check_symlink_safety(path_obj: Path, base_path: Path | None = None) -> None:
+    """
+    Verify that a path does not use symlinks to escape the workspace.
+
+    This helper performs a best-effort check for symlink usage in the ancestry
+    of a path.
+
+    Containment is primarily enforced elsewhere via normalisation with
+    ``resolve()`` and ``relative_to()``. This function is intended as an
+    additional security signal to detect suspicious use of symlinks.
+
+    Args:
+        path_obj: Normalised candidate path. This is often a resolved path,
+            meaning symlink components in the original user input may already
+            have been collapsed.
+        base_path: Optional original, *unresolved* path to inspect for
+            symlink components. When provided, this path is preferred for
+            the symlink walk so that symlinks present in the user-supplied
+            path can be detected before resolution.
+
+    Raises:
+        ValueError: If symlinks are detected in the inspected path ancestry.
+
+    """
+    # Prefer checking the unresolved/original path when provided, falling
+    # back to the (typically resolved) candidate path.
+    target: Path = base_path if base_path is not None else path_obj
+
+    # Check if the chosen path contains components that are symlinks by
+    # iterating through each level of the path.
+    try:
+        current = target
+        while current != current.parent:  # Until we reach filesystem root
+            if current.is_symlink():
+                msg = (
+                    f"Symlink detected in path {target}: {current} -> "
+                    f"{current.resolve()}"
+                )
+                raise ValueError(msg)
+            current = current.parent
+    except (FileNotFoundError, PermissionError, NotADirectoryError):
+        # Path might not exist yet or be inaccessible; in that case we cannot
+        # reliably inspect symlink ancestry, so we treat this as a no-op.
+        return

@@ -154,6 +154,26 @@ class HTTPClient:
                 "Use HTTPS for secure communication with the API.",
             )
 
+        # Validate timeout is within acceptable range
+        if not 1 <= timeout <= 300:
+            raise SousChefError(
+                f"Invalid timeout value: {timeout}",
+                "Timeout must be between 1 and 300 seconds",
+            )
+
+        # Validate retry configuration
+        if not 0 <= max_retries <= 10:
+            raise SousChefError(
+                f"Invalid max_retries value: {max_retries}",
+                "max_retries must be between 0 and 10",
+            )
+
+        if not 0.1 <= backoff_factor <= 10:
+            raise SousChefError(
+                f"Invalid backoff_factor value: {backoff_factor}",
+                "backoff_factor must be between 0.1 and 10",
+            )
+
         self.api_key = api_key
         self.timeout = timeout
         self.user_agent = user_agent

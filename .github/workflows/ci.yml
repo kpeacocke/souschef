@@ -167,10 +167,14 @@ jobs:
     - name: Run mutation testing on core modules
       run: |
         # Run mutation testing on core validation module with limited scope
-        MUTMUT=1 timeout 480 poetry run mutmut run --paths-to-mutate souschef/core/validation.py --test-command "poetry run pytest tests/unit/test_server.py::TestValidationFramework -x --tb=line" --runner pytest || true
+        MUTMUT=1 timeout 480 poetry run mutmut run
 
-        # Show results
+        # Show results and fail on surviving mutants
         poetry run mutmut results | head -20
+        if poetry run mutmut results | grep -q "survived"; then
+          echo "::error::Mutation testing found surviving mutants"
+          exit 1
+        fi
 
   test-terraform-provider:
     runs-on: ubuntu-latest

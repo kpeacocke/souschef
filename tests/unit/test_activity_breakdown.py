@@ -182,8 +182,10 @@ class TestCalculateActivityBreakdown:
         assert recipe.testing_hours == pytest.approx(0.9)
 
         assert recipe.ai_assisted_hours == pytest.approx(1.0)
-        assert recipe.ai_assisted_writing_hours == pytest.approx(0.7)
-        assert recipe.ai_assisted_testing_hours == pytest.approx(0.3)
+        # AI-assisted: more testing-focused (80% testing), less writing (20% writing)
+        # Ratio of 0.20 ensures consistent 20% writing split across different effort levels
+        assert recipe.ai_assisted_writing_hours == pytest.approx(0.2)
+        assert recipe.ai_assisted_testing_hours == pytest.approx(0.8)
 
     def test_complete_cookbook_breakdown(self):
         """Test breakdown with all component types."""

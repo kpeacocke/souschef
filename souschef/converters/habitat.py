@@ -17,7 +17,9 @@ from souschef.parsers.habitat import parse_habitat_plan
 
 
 def convert_habitat_to_dockerfile(
-    plan_path: str, base_image: str = "ubuntu:22.04"
+    plan_path: str,
+    base_image: str = "ubuntu:22.04",
+    allow_dangerous_patterns: bool = False,
 ) -> str:
     """
     Convert a Chef Habitat plan to a Dockerfile.
@@ -32,6 +34,7 @@ def convert_habitat_to_dockerfile(
     Args:
         plan_path: Path to the plan.sh file.
         base_image: Base Docker image (default: ubuntu:22.04).
+        allow_dangerous_patterns: Whether to allow dangerous shell patterns.
 
     Returns:
         Dockerfile content as a string.
@@ -51,7 +54,7 @@ def convert_habitat_to_dockerfile(
         plan: dict[str, Any] = json.loads(plan_json)
         lines = _build_dockerfile_header(plan, validated_path, base_image)
         _add_dockerfile_deps(lines, plan)
-        _add_dockerfile_build(lines, plan)
+        _add_dockerfile_build(lines, plan, allow_dangerous_patterns)
         _add_dockerfile_runtime(lines, plan)
         return "\n".join(lines)
     except Exception as e:
@@ -394,8 +397,61 @@ def _add_dockerfile_deps(lines: list[str], plan: dict[str, Any]) -> None:
             lines.append("")
 
 
+def _check_dangerous_patterns(line: str, allow_dangerous_patterns: bool) -> bool:
+    """
+    Check if a line contains dangerous patterns.
+
+    Args:
+        line: The line to check.
+        allow_dangerous_patterns: Whether to allow dangerous patterns.
+
+    Returns:
+        True if a dangerous pattern was found and warnings/errors applied.
+
+    Raises:
+        ValueError: If dangerous pattern found and not allowed.
+
+    """
+    dangerous_patterns = [
+        r"curl.*\|.*sh",  # Piping curl to shell
+        r"wget.*\|.*sh",  # Piping wget to shell
+        r"eval",  # eval commands
+        r"\$\(curl",  # Command substitution with curl
+        r"\$\(wget",  # Command substitution with wget
+    ]
+
+    for pattern in dangerous_patterns:
+        if re.search(pattern, line, re.IGNORECASE):
+            if not allow_dangerous_patterns:
+                msg = f"Dangerous command pattern detected in Habitat callback: {line}"
+                raise ValueError(msg)
+            return True
+    return False
+
+
+def _replace_habitat_vars(line: str) -> str:
+    """
+    Replace Habitat variables with container paths.
+
+    Args:
+        line: The line to process.
+
+    Returns:
+        The line with variables replaced.
+
+    """
+    return (
+        line.replace("$pkg_prefix", "/usr/local")
+        .replace("$pkg_svc_config_path", "/etc/app")
+        .replace("$pkg_svc_data_path", "/var/lib/app")
+        .replace("$pkg_svc_var_path", "/var/run/app")
+    )
+
+
 def _process_callback_lines(
-    callback_content: str, replace_vars: bool = False
+    callback_content: str,
+    replace_vars: bool = False,
+    allow_dangerous_patterns: bool = False,
 ) -> list[str]:
     """
     Process callback lines for Dockerfile.
@@ -408,65 +464,70 @@ def _process_callback_lines(
     Args:
         callback_content: Raw callback content to process.
         replace_vars: Whether to replace Habitat variables with paths.
+        allow_dangerous_patterns: Whether to allow dangerous shell patterns.
 
     Returns:
         List of processed RUN commands.
 
     """
     processed = []
-    # Patterns that might indicate malicious or dangerous commands
-    dangerous_patterns = [
-        r"curl.*\|.*sh",  # Piping curl to shell
-        r"wget.*\|.*sh",  # Piping wget to shell
-        r"eval",  # eval commands
-        r"\$\(curl",  # Command substitution with curl
-        r"\$\(wget",  # Command substitution with wget
-    ]
 
     for line in callback_content.split("\n"):
         line = line.strip()
-        if line and not line.startswith("#"):
-            # Perform variable replacement BEFORE validation
-            if replace_vars:
-                line = (
-                    line.replace("$pkg_prefix", "/usr/local")
-                    .replace("$pkg_svc_config_path", "/etc/app")
-                    .replace("$pkg_svc_data_path", "/var/lib/app")
-                    .replace("$pkg_svc_var_path", "/var/run/app")
-                )
+        if not line or line.startswith("#"):
+            continue
 
-            # Check for potentially dangerous patterns AFTER replacement
-            for pattern in dangerous_patterns:
-                if re.search(pattern, line, re.IGNORECASE):
-                    # Add a warning comment but still include the command
-                    # Users should review their Dockerfiles before building
-                    processed.append(
-                        "# WARNING: Potentially dangerous command pattern detected"
-                    )
-                    break
+        # Perform variable replacement BEFORE validation
+        if replace_vars:
+            line = _replace_habitat_vars(line)
 
-            processed.append(f"RUN {line}")
+        # Check for potentially dangerous patterns AFTER replacement
+        has_dangerous = _check_dangerous_patterns(line, allow_dangerous_patterns)
+        if has_dangerous:
+            # Add a warning comment but still include the command
+            # Users should review their Dockerfiles before building
+            processed.append(
+                "# WARNING: Potentially dangerous command pattern detected"
+            )
+
+        processed.append(f"RUN {line}")
     return processed
 
 
-def _add_dockerfile_build(lines: list[str], plan: dict[str, Any]) -> None:
+def _add_dockerfile_build(
+    lines: list[str],
+    plan: dict[str, Any],
+    allow_dangerous_patterns: bool,
+) -> None:
     """Add build and install steps to Dockerfile."""
     if "do_build" in plan["callbacks"]:
         lines.append("# Build steps")
         lines.extend(
-            _process_callback_lines(plan["callbacks"]["do_build"], replace_vars=True)
+            _process_callback_lines(
+                plan["callbacks"]["do_build"],
+                replace_vars=True,
+                allow_dangerous_patterns=allow_dangerous_patterns,
+            )
         )
         lines.append("")
     if "do_install" in plan["callbacks"]:
         lines.append("# Install steps")
         lines.extend(
-            _process_callback_lines(plan["callbacks"]["do_install"], replace_vars=True)
+            _process_callback_lines(
+                plan["callbacks"]["do_install"],
+                replace_vars=True,
+                allow_dangerous_patterns=allow_dangerous_patterns,
+            )
         )
         lines.append("")
     if "do_init" in plan["callbacks"]:
         lines.append("# Initialization steps")
         lines.extend(
-            _process_callback_lines(plan["callbacks"]["do_init"], replace_vars=True)
+            _process_callback_lines(
+                plan["callbacks"]["do_init"],
+                replace_vars=True,
+                allow_dangerous_patterns=allow_dangerous_patterns,
+            )
         )
         lines.append("")
 

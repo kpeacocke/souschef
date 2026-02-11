@@ -11,6 +11,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from souschef.core.path_utils import _check_symlink_safety, _normalize_path
+
 # Constants
 HOSTS_FILE = "hosts.yml"
 
@@ -603,6 +605,26 @@ def _init_git_repo(repo_path: Path) -> str:
         return "Git not found - skipped repository initialisation"
 
 
+def _create_repo_structure(repo_path: Path, repo_type: RepoType, org_name: str) -> None:
+    """
+    Create repository structure based on type.
+
+    Args:
+        repo_path: Path to repository root
+        repo_type: Type of repository to create
+        org_name: Organisation name for the repository
+
+    """
+    if repo_type == RepoType.INVENTORY_FIRST:
+        _create_inventory_first_structure(repo_path)
+    elif repo_type == RepoType.PLAYBOOKS_ROLES:
+        _create_playbooks_roles_structure(repo_path)
+    elif repo_type == RepoType.COLLECTION:
+        _create_collection_structure(repo_path, org_name)
+    elif repo_type == RepoType.MONO_REPO:
+        _create_mono_repo_structure(repo_path)
+
+
 def generate_ansible_repository(
     output_path: str,
     repo_type: RepoType | str,
@@ -638,7 +660,17 @@ def generate_ansible_repository(
                 f"Valid types: {[t.value for t in RepoType]}",
             }
 
-    repo_path = Path(output_path)
+    try:
+        # Check for symlinks before normalisation to detect attacks
+        _check_symlink_safety(_normalize_path(output_path), Path(output_path))
+
+        # Validate and normalise the output path
+        repo_path = _normalize_path(output_path)
+    except ValueError as e:
+        return {
+            "success": False,
+            "error": f"Invalid output path: {e}",
+        }
 
     # Check if path already exists
     if repo_path.exists():
@@ -660,14 +692,7 @@ def generate_ansible_repository(
         _create_readme(repo_path, repo_type, org_name)
 
         # Create structure based on repo type
-        if repo_type == RepoType.INVENTORY_FIRST:
-            _create_inventory_first_structure(repo_path)
-        elif repo_type == RepoType.PLAYBOOKS_ROLES:
-            _create_playbooks_roles_structure(repo_path)
-        elif repo_type == RepoType.COLLECTION:
-            _create_collection_structure(repo_path, org_name)
-        elif repo_type == RepoType.MONO_REPO:
-            _create_mono_repo_structure(repo_path)
+        _create_repo_structure(repo_path, repo_type, org_name)
 
         # Collect created files
         files_created = [

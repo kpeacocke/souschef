@@ -1,5 +1,23 @@
 #!/bin/bash
 # Habitat plan for nginx web server
+#
+# ⚠️ SECURITY WARNING - TEST FIXTURE ONLY
+# This Habitat plan uses variable interpolation in URL construction:
+#   pkg_source="https://nginx.org/download/${pkg_name}-${pkg_version}.tar.gz"
+#
+# While SAFE in this context (hardcoded local variables), this pattern
+# becomes DANGEROUS if copied with user-controlled variables:
+#   BAD: pkg_source="${user_provided_url}/${pkg_name}.tar.gz"
+#   RISK: SSRF attacks, arbitrary file downloads, DNS rebinding
+#
+# SECURE ALTERNATIVE:
+#   1. Validate all URL components against allowlist
+#   2. Use URL parsing library to validate structure
+#   3. Block private IP ranges and local domains
+#   4. Verify HTTPS-only for external sources
+#
+# This test fixture represents real-world Habitat plans. The converter
+# should validate URLs in generated Docker builds.
 
 pkg_name=nginx
 pkg_origin=core
