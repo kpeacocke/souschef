@@ -633,3 +633,269 @@ class TestMutantSurvivorTargets:
         assert "INFO" in repr_str
         assert "Location" not in repr_str
         assert "Consider" in repr_str
+
+
+class TestEdgeCasesMutations:
+    """Additional edge case tests targeting remaining survivors."""
+
+    def test_task_naming_exactly_9_chars_short_warning(self):
+        """Task name of 9 chars should trigger short warning."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_task_naming("- name: abcdefghi\n  cmd: test")
+        short_results = [r for r in engine.results if "short" in r.message.lower()]
+        assert len(short_results) > 0
+
+    def test_task_naming_exactly_11_chars_no_warning(self):
+        """Task name of 11 chars should NOT trigger short warning."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_task_naming("- name: abcdefghijk\n  cmd: test")
+        short_results = [r for r in engine.results if "short" in r.message.lower()]
+        assert len(short_results) == 0
+
+    def test_variable_references_exactly_4_parts(self):
+        """Exactly 4 parts should not trigger nesting warning."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_variable_references("{{ a.b.c.d }}")
+        nesting_results = [r for r in engine.results if "nesting" in r.message.lower()]
+        assert len(nesting_results) == 0
+
+    def test_variable_references_exactly_6_parts(self):
+        """Exactly 6 parts (more than 5) should trigger nesting warning."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_variable_references("{{ a.b.c.d.e.f }}")
+        nesting_results = [r for r in engine.results if "nesting" in r.message.lower()]
+        assert len(nesting_results) > 0
+
+    def test_inspec_conversion_ruby_content(self):
+        """Test InSpec Ruby code is validated."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_inspec_conversion(
+            "describe command('ls') do\n  its('exit_status') { should eq 0 }\nend"
+        )
+        # Should not have errors for valid Ruby
+        assert not any(
+            "error" in r.message.lower()
+            for r in engine.results
+            if "ruby" in r.message.lower()
+        )
+
+    def test_get_summary_only_errors(self):
+        """Summary with only errors (no warnings/info)."""
+        from souschef.core.validation import (
+            ValidationCategory,
+            ValidationEngine,
+            ValidationLevel,
+        )
+
+        engine = ValidationEngine()
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "E1")
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "E2")
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "E3")
+
+        summary = engine.get_summary()
+        assert summary["errors"] == 3
+        assert summary["warnings"] == 0
+        assert summary["info"] == 0
+
+    def test_get_summary_only_warnings(self):
+        """Summary with only warnings (no errors/info)."""
+        from souschef.core.validation import (
+            ValidationCategory,
+            ValidationEngine,
+            ValidationLevel,
+        )
+
+        engine = ValidationEngine()
+        engine._add_result(
+            ValidationLevel.WARNING, ValidationCategory.BEST_PRACTICE, "W1"
+        )
+        engine._add_result(
+            ValidationLevel.WARNING, ValidationCategory.BEST_PRACTICE, "W2"
+        )
+
+        summary = engine.get_summary()
+        assert summary["errors"] == 0
+        assert summary["warnings"] == 2
+        assert summary["info"] == 0
+
+    def test_get_summary_only_info(self):
+        """Summary with only info (no errors/warnings)."""
+        from souschef.core.validation import (
+            ValidationCategory,
+            ValidationEngine,
+            ValidationLevel,
+        )
+
+        engine = ValidationEngine()
+        engine._add_result(ValidationLevel.INFO, ValidationCategory.BEST_PRACTICE, "I1")
+
+        summary = engine.get_summary()
+        assert summary["errors"] == 0
+        assert summary["warnings"] == 0
+        assert summary["info"] == 1
+
+    def test_validation_engine_add_result_appends(self):
+        """Test that add_result appends to existing results."""
+        from souschef.core.validation import (
+            ValidationCategory,
+            ValidationEngine,
+            ValidationLevel,
+        )
+
+        engine = ValidationEngine()
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "First")
+        engine._add_result(
+            ValidationLevel.WARNING, ValidationCategory.BEST_PRACTICE, "Second"
+        )
+
+        assert len(engine.results) == 2
+        assert engine.results[0].message == "First"
+        assert engine.results[1].message == "Second"
+
+    def test_format_summary_recipe_type(self):
+        """Test recipe conversion type in summary."""
+        from souschef.core.validation import _format_validation_results_summary
+
+        summary = _format_validation_results_summary(
+            "recipe", {"errors": 1, "warnings": 0, "info": 0}
+        )
+        assert "recipe" in summary.lower()
+
+    def test_format_summary_template_type(self):
+        """Test template conversion type in summary."""
+        from souschef.core.validation import _format_validation_results_summary
+
+        summary = _format_validation_results_summary(
+            "template", {"errors": 0, "warnings": 1, "info": 0}
+        )
+        assert "template" in summary.lower()
+
+    def test_module_usage_file_with_state(self):
+        """Test file module with state parameter doesn't trigger creates warning."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_module_usage("ansible.builtin.file: state=touch path=/tmp")
+        creates_results = [r for r in engine.results if "creates" in r.message.lower()]
+        assert len(creates_results) == 0
+
+    def test_ansible_module_copy_known(self):
+        """Test copy module is recognized as known."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_ansible_module_exists(
+            "ansible.builtin.copy: src=test dest=/tmp"
+        )
+        assert len(engine.results) == 0
+
+    def test_ansible_module_template_known(self):
+        """Test template module is recognized as known."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_ansible_module_exists("ansible.builtin.template: src=test.j2")
+        assert len(engine.results) == 0
+
+    def test_idempotency_handler_notify_ok(self):
+        """Test handler notify task is exempt from idempotency check."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_idempotency(
+            "- notify: restart\n  ansible.builtin.command: echo test"
+        )
+        idempotent_results = [
+            r for r in engine.results if "idempotent" in r.message.lower()
+        ]
+        assert len(idempotent_results) == 0
+
+    def test_playbook_structure_with_all_elements(self):
+        """Test playbook with all proper elements passes."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_playbook_structure(
+            "---\n- hosts: all\n  tasks:\n    - name: Test\n      cmd: echo"
+        )
+        assert len(engine.results) == 0
+
+    def test_jinja2_syntax_nested_braces(self):
+        """Test Jinja2 with nested dict syntax."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_jinja2_syntax("{{ {'key': 'value'} }}")
+        assert len(engine.results) == 0
+
+    def test_python_syntax_with_imports(self):
+        """Test Python code with imports."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_python_syntax("import sys\nimport os\nprint(sys.version)")
+        assert len(engine.results) == 0
+
+    def test_python_syntax_with_functions(self):
+        """Test Python with function definitions."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_python_syntax("def func(x):\n    return x * 2")
+        assert len(engine.results) == 0
+
+    def test_validation_result_level_values(self):
+        """Test ValidationLevel enum values are correct."""
+        from souschef.core.validation import ValidationLevel
+
+        assert ValidationLevel.ERROR.value == "error"
+        assert ValidationLevel.WARNING.value == "warning"
+        assert ValidationLevel.INFO.value == "info"
+
+    def test_validation_category_values(self):
+        """Test ValidationCategory enum values are correct."""
+        from souschef.core.validation import ValidationCategory
+
+        assert ValidationCategory.SYNTAX.value == "syntax"
+        assert ValidationCategory.SEMANTIC.value == "semantic"
+        assert ValidationCategory.BEST_PRACTICE.value == "best_practice"
+        assert ValidationCategory.SECURITY.value == "security"
+        assert ValidationCategory.PERFORMANCE.value == "performance"
+
+    def test_ansible_variable_exact_match_facts(self):
+        """Test ansible_facts is recognized as builtin."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_variable_usage("{{ ansible_facts }}")
+        ansible_results = [r for r in engine.results if "ansible_" in r.message.lower()]
+        assert len(ansible_results) == 0
+
+    def test_handler_multiple_notifies(self):
+        """Test multiple handler notifies."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_handler_definitions(
+            "notify: handler1\nnotify: handler2\nhandlers:\n- name: handler1\n- name: handler2"
+        )
+        assert len(engine.results) == 0
+
+    def test_playbook_roles_without_tasks(self):
+        """Test playbook with roles but no tasks is valid."""
+        from souschef.core.validation import ValidationEngine
+
+        engine = ValidationEngine()
+        engine._validate_playbook_structure("---\n- hosts: all\n  roles:\n    - role1")
+        task_results = [r for r in engine.results if "tasks" in r.message.lower()]
+        assert len(task_results) == 0
