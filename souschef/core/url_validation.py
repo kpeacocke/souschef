@@ -118,7 +118,7 @@ def _is_private_hostname(hostname: str) -> bool:
 
         return False  # All resolved addresses are public
 
-    except (TimeoutError, OSError):
+    except OSError:
         # DNS resolution failed/timeout - allow it (fail open, assume public)
         # The hostname may resolve correctly at runtime
         return False

@@ -70,6 +70,71 @@ def _regex_timeout(seconds: int = REGEX_TIMEOUT_SECONDS):
         yield
 
 
+def _extract_action(resource_body: str) -> str | None:
+    """
+    Extract action from resource body.
+
+    Args:
+        resource_body: The resource block content.
+
+    Returns:
+        Action name or None if not found.
+
+    """
+    action_match = re.search(r"action\s+:(\w+)", resource_body)
+    return action_match.group(1) if action_match else None
+
+
+def _extract_properties(resource_body: str) -> dict[str, str]:
+    """
+    Extract common properties from resource body.
+
+    Args:
+        resource_body: The resource block content.
+
+    Returns:
+        Dictionary of property names and values.
+
+    """
+    properties = {}
+    for prop_match in re.finditer(r"(\w+)\s+['\"]([^'\"]+)['\"]", resource_body):
+        prop_name = prop_match.group(1)
+        if prop_name != "action":
+            properties[prop_name] = prop_match.group(2)
+    return properties
+
+
+def _build_resource(
+    resource_type: str, resource_name: str, resource_body: str
+) -> dict[str, str]:
+    """
+    Build a resource dictionary from extracted components.
+
+    Args:
+        resource_type: Type of the resource.
+        resource_name: Name of the resource instance.
+        resource_body: The resource block content.
+
+    Returns:
+        Dictionary with resource type, name, action, and properties.
+
+    """
+    resource: dict[str, str] = {
+        "type": resource_type,
+        "name": resource_name,
+    }
+
+    action = _extract_action(resource_body)
+    if action:
+        resource["action"] = action
+
+    properties = _extract_properties(resource_body)
+    if properties:
+        resource["properties"] = str(properties)
+
+    return resource
+
+
 def parse_recipe(path: str) -> str:
     """
     Parse a Chef recipe file and extract resources.
@@ -153,28 +218,7 @@ def _extract_resources(content: str) -> list[dict[str, str]]:
                 if len(resource_body) > MAX_RESOURCE_BODY_LENGTH:
                     continue
 
-                resource = {
-                    "type": resource_type,
-                    "name": resource_name,
-                }
-
-                # Extract action
-                action_match = re.search(r"action\s+:(\w+)", resource_body)
-                if action_match:
-                    resource["action"] = action_match.group(1)
-
-                # Extract common properties
-                properties = {}
-                for prop_match in re.finditer(
-                    r"(\w+)\s+['\"]([^'\"]+)['\"]", resource_body
-                ):
-                    prop_name = prop_match.group(1)
-                    if prop_name not in ["action"]:
-                        properties[prop_name] = prop_match.group(2)
-
-                if properties:
-                    resource["properties"] = str(properties)
-
+                resource = _build_resource(resource_type, resource_name, resource_body)
                 resources.append(resource)
 
     except RegexTimeoutError:
