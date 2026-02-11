@@ -26,6 +26,9 @@ def _sanitize_path(path: str | Path) -> str:
     In production mode, returns a relative path without exposing
     system-specific details. In debug mode, returns the full path.
 
+    Non-path inputs (JSON, URLs, newlines) are replaced with a generic
+    placeholder to prevent confusing or leaking information.
+
     Args:
         path: The file path to sanitize.
 
@@ -38,19 +41,33 @@ def _sanitize_path(path: str | Path) -> str:
         return str(path)
 
     # Production mode: sanitize to prevent information disclosure
+    path_str = str(path)
+
+    # Guard against non-path inputs: JSON, URLs, newlines, etc.
+    if any(
+        [
+            "\n" in path_str or "\r" in path_str,  # Multiline input
+            path_str.startswith("{") or path_str.startswith("["),  # JSON-like
+            "://" in path_str,  # URL scheme
+        ]
+    ):
+        # Non-path input detected, use generic placeholder
+        return "<resource>"
+
     try:
-        path_obj = Path(path)
+        path_obj = Path(path_str)
 
         # Try to make relative to current working directory
         try:
             rel_path = path_obj.relative_to(Path.cwd())
             return str(rel_path)
         except ValueError:
-            # Path is not relative to cwd, use basename only
-            return path_obj.name
+            # Path is not relative to cwd, use generic placeholder
+            # instead of basename to avoid confusing truncation
+            return "<file>"
 
     except Exception:
-        # If any error during sanitization, return generic placeholder
+        # If any error during sanitisation, return generic placeholder
         return "<file>"
 
 

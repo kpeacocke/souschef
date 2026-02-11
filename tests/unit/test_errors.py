@@ -64,14 +64,13 @@ class TestPathSanitization:
                 os.chdir(original_cwd)
 
     def test_sanitize_path_outside_cwd_production_mode(self) -> None:
-        """Test that paths outside cwd are reduced to basename in production."""
+        """Test that paths outside cwd return generic placeholder in production."""
         with patch.dict(os.environ, {}, clear=True):
             # Path far from cwd
             test_path = "/etc/passwd"
             sanitized = _sanitize_path(test_path)
-            # Should only show basename
-            assert sanitized == "passwd"
-            assert "/" not in sanitized
+            # Should return generic placeholder to avoid confusing truncation
+            assert sanitized == "<file>"
 
     def test_sanitize_path_debug_mode(self, tmp_path: Path) -> None:
         """Test that full paths are shown in debug mode."""
@@ -107,6 +106,42 @@ class TestPathSanitization:
             mock_path.side_effect = Exception("Path error")
             sanitized = _sanitize_path("any_path")
             assert sanitized == "<file>"
+
+    def test_sanitize_path_rejects_json_objects(self) -> None:
+        """Test that JSON objects are treated as non-path inputs."""
+        with patch.dict(os.environ, {}, clear=True):
+            json_input = '{"error": "file not found"}'
+            sanitized = _sanitize_path(json_input)
+            assert sanitized == "<resource>"
+
+    def test_sanitize_path_rejects_json_arrays(self) -> None:
+        """Test that JSON arrays are treated as non-path inputs."""
+        with patch.dict(os.environ, {}, clear=True):
+            json_input = '["file1.txt", "file2.txt"]'
+            sanitized = _sanitize_path(json_input)
+            assert sanitized == "<resource>"
+
+    def test_sanitize_path_rejects_multiline_input(self) -> None:
+        """Test that multiline input is treated as non-path."""
+        with patch.dict(os.environ, {}, clear=True):
+            multiline = "file1.txt\nfile2.txt"
+            sanitized = _sanitize_path(multiline)
+            assert sanitized == "<resource>"
+
+    def test_sanitize_path_rejects_urls(self) -> None:
+        """Test that URLs with schemes are treated as non-path inputs."""
+        with patch.dict(os.environ, {}, clear=True):
+            url = "http://example.com/path/to/file"
+            sanitized = _sanitize_path(url)
+            assert sanitized == "<resource>"
+
+    def test_sanitize_path_accepts_relative_paths_with_slashes(self) -> None:
+        """Test that relative paths with slashes are still processed normally."""
+        with patch.dict(os.environ, {}, clear=True):
+            relative_path = "config/recipes/default.rb"
+            sanitized = _sanitize_path(relative_path)
+            # Should not be replaced with <resource> just for having slashes
+            assert sanitized != "<resource>"
 
 
 class TestErrorMessageSanitization:
@@ -167,8 +202,8 @@ class TestErrorMessageSanitization:
 
             # Should not contain full absolute path
             assert str(tmp_path) not in error_msg or "Debug:" in error_msg
-            # Should mention the file
-            assert "default.rb" in error_msg
+            # Should mention file info (either filename or generic placeholder)
+            assert "default.rb" in error_msg or "<file>" in error_msg
             # Should mention line number
             assert "42" in error_msg
 

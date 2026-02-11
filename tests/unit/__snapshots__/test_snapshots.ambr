@@ -19,11 +19,7 @@
 # ---
 # name: test_convert_chef_deployment_strategy_snapshot
   '''
-  Could not find cookbook: health",
-      "timeout": 30
-    }
-  }
-  
+  Could not find cookbook: <resource>
   
   Suggestion: Check that the path exists and you have read permissions. For cookbooks, ensure you're pointing to the cookbook root directory containing metadata.rb.
   '''
