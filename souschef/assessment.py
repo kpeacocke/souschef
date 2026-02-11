@@ -159,6 +159,7 @@ def _calculate_activity_breakdown(
     }
 
     # Writing vs testing ratios for manual effort by activity type
+    # (Developer spends this % on writing code/config, remainder on testing)
     writing_ratios = {
         "Recipes": 0.70,
         "Templates": 0.75,
@@ -168,6 +169,19 @@ def _calculate_activity_breakdown(
         "Handlers": 0.70,
         "Files": 0.85,
         "Definitions": 0.70,
+    }
+
+    # Writing vs testing ratios for AI-assisted effort by activity type
+    # (AI generates code, human spends more time testing/validating)
+    ai_writing_ratios = {
+        "Recipes": 0.25,  # AI generates recipes → human validates (75% testing)
+        "Templates": 0.20,  # AI converts templates → human verifies (80% testing)
+        "Attributes": 0.30,  # AI extracts attributes → human reviews (70% testing)
+        CUSTOM_RESOURCES: 0.55,  # Complex → limited automation, closer to manual ratio
+        "Libraries": 0.40,  # AI converts libraries → human adapts (60% testing)
+        "Handlers": 0.25,  # AI generates handlers → human verifies (75% testing)
+        "Files": 0.15,  # AI copies files → human organizes (85% testing)
+        "Definitions": 0.35,  # AI converts macros → human tests (65% testing)
     }
 
     activity_descriptions = {
@@ -211,7 +225,9 @@ def _calculate_activity_breakdown(
             manual_hours * ai_efficiency[activity_type],
             1,
         )
-        ai_assisted_writing_hours = round(ai_assisted_hours * writing_ratio, 1)
+        # AI-assisted work has different writing ratio: more testing, less writing
+        ai_write_ratio = ai_writing_ratios[activity_type]
+        ai_assisted_writing_hours = round(ai_assisted_hours * ai_write_ratio, 1)
         ai_assisted_testing_hours = round(
             ai_assisted_hours - ai_assisted_writing_hours,
             1,
