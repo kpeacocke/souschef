@@ -2129,3 +2129,386 @@ class TestLogicalOperatorMutations:
             "- name: T\n  ansible.builtin.file:\n    creates: /tmp/a"
         )
         assert len([r for r in e3.results if "creates" in r.message]) > 0
+
+
+class TestZeroSurvivorsKiller:
+    """Target remaining mutation survivors with precise behaviour checks."""
+
+    def test_task_naming_empty_string_with_quotes_warns(self):
+        """Test empty quoted name triggers empty-name warning."""
+        engine = ValidationEngine()
+        engine._validate_task_naming("- name: ''\n  ansible.builtin.debug: {}")
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.level == ValidationLevel.WARNING
+        assert result.category == ValidationCategory.BEST_PRACTICE
+        assert "empty" in result.message.lower()
+
+    def test_task_naming_9_vs_10_boundary(self):
+        """Test boundary at 10 characters uses < not <=."""
+        e1 = ValidationEngine()
+        e1._validate_task_naming("- name: 123456789\n  ansible.builtin.debug: {}")
+        assert any("short" in r.message for r in e1.results)
+
+        e2 = ValidationEngine()
+        e2._validate_task_naming("- name: 1234567890\n  ansible.builtin.debug: {}")
+        assert not any("short" in r.message for r in e2.results)
+
+    def test_playbook_structure_missing_hosts_is_error(self):
+        """Test missing hosts generates error result."""
+        engine = ValidationEngine()
+        engine._validate_playbook_structure("- tasks: []")
+        hosts = [r for r in engine.results if "hosts" in r.message.lower()]
+        assert len(hosts) == 1
+        assert hosts[0].level == ValidationLevel.ERROR
+        assert hosts[0].category == ValidationCategory.SYNTAX
+
+    def test_playbook_structure_missing_tasks_or_roles_is_warning(self):
+        """Test missing tasks/roles generates warning result."""
+        engine = ValidationEngine()
+        engine._validate_playbook_structure("- hosts: all")
+        issues = [r for r in engine.results if "tasks" in r.message.lower()]
+        assert len(issues) == 1
+        assert issues[0].level == ValidationLevel.WARNING
+        assert issues[0].category == ValidationCategory.SYNTAX
+
+    def test_playbook_structure_both_missing_generates_two_results(self):
+        """Test missing both hosts and tasks/roles yields two results."""
+        engine = ValidationEngine()
+        engine._validate_playbook_structure("nothing")
+        assert len(engine.results) == 2
+
+    def test_module_usage_requires_file_and_creates(self):
+        """Test module usage requires both file and creates."""
+        e1 = ValidationEngine()
+        e1._validate_module_usage(
+            "- name: x\n  ansible.builtin.file:\n    path: /tmp/a"
+        )
+        assert len(e1.results) == 0
+
+        e2 = ValidationEngine()
+        e2._validate_module_usage(
+            "- name: x\n  ansible.builtin.shell:\n    creates: /tmp/a"
+        )
+        assert len(e2.results) == 0
+
+        e3 = ValidationEngine()
+        e3._validate_module_usage(
+            "- name: x\n  ansible.builtin.file:\n    creates: /tmp/a"
+        )
+        assert len(e3.results) == 1
+        assert e3.results[0].level == ValidationLevel.WARNING
+
+    def test_variable_references_depth_threshold(self):
+        """Test variable depth uses > 5 for warnings."""
+        e1 = ValidationEngine()
+        e1._validate_variable_references("{{ a.b.c.d.e }}")
+        assert len([r for r in e1.results if "nesting" in r.message.lower()]) == 0
+
+        e2 = ValidationEngine()
+        e2._validate_variable_references("{{ a.b.c.d.e.f }}")
+        assert len([r for r in e2.results if "nesting" in r.message.lower()]) == 1
+
+    def test_variable_usage_ansible_prefix_rules(self):
+        """Test ansible_ prefix whitelist behaviour."""
+        e1 = ValidationEngine()
+        e1._validate_variable_usage("{{ ansible_facts }}")
+        assert len([r for r in e1.results if "ansible_" in r.message]) == 0
+
+        e2 = ValidationEngine()
+        e2._validate_variable_usage("{{ ansible_unknown_var }}")
+        assert len([r for r in e2.results if "ansible_" in r.message]) == 1
+
+    def test_idempotency_shell_and_command_require_changed_when(self):
+        """Test shell/command require changed_when while others do not."""
+        e1 = ValidationEngine()
+        e1._validate_idempotency("- name: x\n  ansible.builtin.shell: /bin/test")
+        assert len(e1.results) == 1
+
+        e2 = ValidationEngine()
+        e2._validate_idempotency(
+            "- name: x\n  ansible.builtin.shell: /bin/test\n  changed_when: true"
+        )
+        assert len(e2.results) == 0
+
+        e3 = ValidationEngine()
+        e3._validate_idempotency("- name: x\n  ansible.builtin.command: /bin/test")
+        assert len(e3.results) == 1
+
+        e4 = ValidationEngine()
+        e4._validate_idempotency("- name: x\n  ansible.builtin.package:\n    name: vim")
+        assert len(e4.results) == 0
+
+    def test_resource_dependencies_requires_service_and_state(self):
+        """Test service and state are both required for dependency warning."""
+        e1 = ValidationEngine()
+        e1._validate_resource_dependencies(
+            "- name: x\n  ansible.builtin.service:\n    name: nginx"
+        )
+        assert len(e1.results) == 0
+
+        e2 = ValidationEngine()
+        e2._validate_resource_dependencies(
+            "- name: x\n  ansible.builtin.service:\n    name: nginx\n    state: started"
+        )
+        assert len(e2.results) == 1
+        assert e2.results[0].level == ValidationLevel.INFO
+
+    def test_yaml_syntax_invalid_indentation_is_error(self):
+        """Test invalid YAML produces error result."""
+        engine = ValidationEngine()
+        engine._validate_yaml_syntax("- name: bad\n  - indent")
+        assert len(engine.results) == 1
+        assert engine.results[0].level == ValidationLevel.ERROR
+
+    def test_jinja2_syntax_invalid_template_is_error(self):
+        """Test invalid Jinja2 produces error result."""
+        engine = ValidationEngine()
+        engine._validate_jinja2_syntax("{{")
+        assert len(engine.results) == 1
+        assert engine.results[0].level == ValidationLevel.ERROR
+
+    def test_python_syntax_invalid_code_is_error(self):
+        """Test invalid Python produces error result."""
+        engine = ValidationEngine()
+        engine._validate_python_syntax("def broken(")
+        assert len(engine.results) == 1
+        assert engine.results[0].level == ValidationLevel.ERROR
+
+    def test_ansible_module_exists_known_and_unknown(self):
+        """Test known module passes and unknown module warns."""
+        e1 = ValidationEngine()
+        e1._validate_ansible_module_exists("ansible.builtin.debug: {}")
+        assert len([r for r in e1.results if "module" in r.message]) == 0
+
+        e2 = ValidationEngine()
+        e2._validate_ansible_module_exists("ansible.builtin.unknown_module: {}")
+        assert len([r for r in e2.results if "module" in r.message]) == 1
+
+    def test_inspec_conversion_routing_python(self):
+        """Test InSpec Python content routes to Python validator."""
+        engine = ValidationEngine()
+        with patch.object(engine, "_validate_python_syntax") as python_val:
+            engine._validate_inspec_conversion("import pytest\n")
+            python_val.assert_called_once()
+
+
+class TestExactMessagesAndSuggestions:
+    """Ensure exact messages and suggestions to kill string mutations."""
+
+    def test_ansible_module_exists_unknown_message_and_suggestion(self):
+        """Test unknown module message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_ansible_module_exists("ansible.builtin.unknown_mod: {}")
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.message == "Unknown Ansible module: unknown_mod"
+        assert result.suggestion == "Verify module name and Ansible version support"
+
+    def test_handler_definitions_message_and_suggestion(self):
+        """Test handler missing message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_handler_definitions("notify: restart")
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.category == ValidationCategory.SEMANTIC
+        assert (
+            result.message == "Tasks reference handlers but no handlers section found"
+        )
+        assert result.suggestion == "Add handlers section or remove notify directives"
+
+    def test_module_usage_message_and_suggestion(self):
+        """Test module usage message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_module_usage(
+            "- name: file\n  ansible.builtin.file:\n    creates: /tmp/a"
+        )
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.category == ValidationCategory.BEST_PRACTICE
+        assert result.message == "Using 'creates' with file module is unusual"
+        assert result.suggestion == "Consider using appropriate state parameter"
+
+    def test_task_naming_empty_message_and_suggestion(self):
+        """Test empty task name message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_task_naming("- name: ''\n  ansible.builtin.debug: {}")
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.category == ValidationCategory.BEST_PRACTICE
+        assert result.message == "Task has empty name"
+        assert result.suggestion == "Provide descriptive task name"
+
+    def test_task_naming_short_message_and_suggestion(self):
+        """Test short task name message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_task_naming("- name: short\n  ansible.builtin.debug: {}")
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.category == ValidationCategory.BEST_PRACTICE
+        assert result.message == "Task name is very short"
+        assert result.suggestion == "Consider more descriptive task name"
+
+    def test_playbook_hosts_message_and_suggestion(self):
+        """Test missing hosts message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_playbook_structure("- tasks: []")
+        result = [r for r in engine.results if "hosts" in r.message][0]
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.message == "Playbook missing 'hosts' directive"
+        assert result.suggestion == "Add hosts directive to specify target hosts"
+
+    def test_playbook_tasks_roles_message_and_suggestion(self):
+        """Test missing tasks/roles message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_playbook_structure("- hosts: all")
+        result = [r for r in engine.results if "tasks" in r.message][0]
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.message == "Playbook has no tasks or roles"
+        assert result.suggestion == "Add tasks or roles to the playbook"
+
+    def test_variable_usage_message_and_suggestion(self):
+        """Test ansible_ prefix warning message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_variable_usage("{{ ansible_unknown_var }}")
+        result = engine.results[0]
+        assert result.category == ValidationCategory.SEMANTIC
+        assert result.message == "Variable 'ansible_unknown_var' uses ansible_ prefix"
+        assert result.suggestion == "Verify this is an Ansible built-in variable"
+
+    def test_variable_references_message_and_suggestion(self):
+        """Test deep nesting message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_variable_references("{{ a.b.c.d.e.f }}")
+        result = engine.results[0]
+        assert result.category == ValidationCategory.BEST_PRACTICE
+        assert result.message == "Deep variable nesting: a.b.c.d.e.f"
+        assert result.suggestion == "Consider flattening variable structure"
+
+    def test_idempotency_message_and_suggestion(self):
+        """Test idempotency message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_idempotency("- name: x\n  ansible.builtin.shell: /bin/test")
+        result = engine.results[0]
+        assert result.category == ValidationCategory.BEST_PRACTICE
+        assert (
+            result.message
+            == "Command/shell task without changed_when may report incorrect changes"
+        )
+        assert result.suggestion == 'Add changed_when: "false" or appropriate condition'
+
+    def test_resource_dependencies_message_and_suggestion(self):
+        """Test resource dependency message and suggestion are exact."""
+        engine = ValidationEngine()
+        engine._validate_resource_dependencies(
+            "- name: x\n  ansible.builtin.service:\n    name: nginx\n    state: started"
+        )
+        result = engine.results[0]
+        assert result.category == ValidationCategory.SEMANTIC
+        assert (
+            result.message
+            == "Service task should have dependency on package installation"
+        )
+        assert result.suggestion == "Consider adding handler or dependency chain"
+
+    def test_jinja2_error_suggestion_exact(self):
+        """Test Jinja2 error suggestion is exact."""
+        engine = ValidationEngine()
+        engine._validate_jinja2_syntax("{{")
+        result = engine.results[0]
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.suggestion == "Check template syntax and variable references"
+
+    def test_python_error_suggestion_exact(self):
+        """Test Python error suggestion is exact."""
+        engine = ValidationEngine()
+        engine._validate_python_syntax("def broken(")
+        result = engine.results[0]
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.suggestion == "Check Python code syntax"
+
+    def test_yaml_error_suggestion_exact(self):
+        """Test YAML error suggestion is exact."""
+        engine = ValidationEngine()
+        engine._validate_yaml_syntax("- name: bad\n  - indent")
+        result = engine.results[0]
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.suggestion == "Check YAML indentation and structure"
+
+    def test_inspec_yaml_requires_package_and_service(self):
+        """Test InSpec YAML branch requires both package and service."""
+        engine = ValidationEngine()
+        with patch.object(engine, "_validate_yaml_syntax") as yaml_val:
+            engine._validate_inspec_conversion("package:\n  nginx")
+            yaml_val.assert_not_called()
+
+        engine2 = ValidationEngine()
+        with patch.object(engine2, "_validate_yaml_syntax") as yaml_val:
+            engine2._validate_inspec_conversion("package:\n  nginx\nservice:\n  nginx")
+            yaml_val.assert_called_once()
+
+    def test_inspec_ruby_passes_result_string(self):
+        """Test InSpec Ruby branch passes the result string."""
+        engine = ValidationEngine()
+        with patch.object(engine, "_validate_ruby_syntax") as ruby_val:
+            engine._validate_inspec_conversion("require 'serverspec'\n")
+            ruby_val.assert_called_once_with("require 'serverspec'\n")
+
+    def test_get_summary_counts_multiple_info_results(self):
+        """Test info count increments for multiple info results."""
+        engine = ValidationEngine()
+        engine._add_result(ValidationLevel.INFO, ValidationCategory.SYNTAX, "i1")
+        engine._add_result(ValidationLevel.INFO, ValidationCategory.SYNTAX, "i2")
+        summary = engine.get_summary()
+        assert summary["info"] == 2
+
+    def test_format_summary_total_issues_not_zero_with_warnings(self):
+        """Test total issues uses sum not subtraction."""
+        summary = _format_validation_results_summary(
+            "test", {"errors": 1, "warnings": 1, "info": 0}
+        )
+        assert "All validation checks passed" not in summary
+
+
+class TestRubySyntaxValidation:
+    """Validate Ruby syntax checks and exact messages."""
+
+    def test_ruby_empty_content_is_error(self):
+        """Test empty Ruby content triggers error with exact suggestion."""
+        engine = ValidationEngine()
+        engine._validate_ruby_syntax("\n\n")
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.level == ValidationLevel.ERROR
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.message == "Empty Ruby content"
+        assert result.suggestion == "Ensure the conversion produced valid Ruby code"
+
+    def test_ruby_balanced_blocks_no_error(self):
+        """Test balanced do/end blocks produce no results."""
+        engine = ValidationEngine()
+        engine._validate_ruby_syntax("describe 'x' do\n  it { should eq 1 }\nend")
+        assert len(engine.results) == 0
+
+    def test_ruby_unbalanced_blocks_message_and_suggestion(self):
+        """Test unbalanced blocks produce exact message and suggestion."""
+        engine = ValidationEngine()
+        engine._validate_ruby_syntax("describe 'x' do\n  it { should eq 1 }")
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.level == ValidationLevel.ERROR
+        assert result.category == ValidationCategory.SYNTAX
+        assert result.message == "Unbalanced Ruby blocks: 1 'do' but 0 'end'"
+        assert (
+            result.suggestion
+            == "Check that all 'do' blocks have matching 'end' keywords"
+        )
+
+    def test_ruby_extra_end_block_message(self):
+        """Test more end than do produces exact message."""
+        engine = ValidationEngine()
+        engine._validate_ruby_syntax("end")
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.message == "Unbalanced Ruby blocks: 0 'do' but 1 'end'"
