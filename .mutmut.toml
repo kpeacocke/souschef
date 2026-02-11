@@ -1,4 +1,9 @@
-paths_to_mutate = "souschef/core/"
-tests_dir = "tests/"
+paths_to_mutate = ["souschef/core/validation.py"]
 backup = false
-test_command = "MUTMUT=1 poetry run pytest -x --tb=short"
+also_copy = [
+    "souschef/",
+]
+pytest_add_cli_args_test_selection = [
+    "tests/unit/test_server.py::TestValidationFramework",
+    "tests/unit/test_validation_comprehensive.py",
+]

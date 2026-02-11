@@ -13876,6 +13876,20 @@ class TestValidationFramework:
         assert "[performance]" in result_str
         assert "Performance tip" in result_str
 
+    def test_validation_result_repr_includes_optional_fields(self):
+        """Test ValidationResult includes location and suggestion details."""
+        result = ValidationResult(
+            level=ValidationLevel.ERROR,
+            category=ValidationCategory.SYNTAX,
+            message="Broken syntax",
+            location="line 2",
+            suggestion="Fix indentation",
+        )
+
+        result_str = repr(result)
+        assert "Location: line 2" in result_str
+        assert "Suggestion: Fix indentation" in result_str
+
     def test_validation_engine_creation(self):
         """Test ValidationEngine initialization."""
         engine = ValidationEngine()
@@ -13974,6 +13988,673 @@ def test_nginx(host):
 
         # Should pass validation
         assert isinstance(results, list)
+
+    @pytest.mark.parametrize(
+        "conversion_type,method_name",
+        [
+            ("resource", "_validate_resource_conversion"),
+            ("recipe", "_validate_recipe_conversion"),
+            ("template", "_validate_template_conversion"),
+            ("inspec", "_validate_inspec_conversion"),
+        ],
+    )
+    def test_validation_engine_routes_conversion(self, conversion_type, method_name):
+        """Test conversion routing to the expected validator."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, method_name) as validator:
+            engine.validate_conversion(conversion_type, "content")
+            validator.assert_called_once_with("content")
+
+    def test_validation_engine_unknown_conversion_type(self):
+        """Test unknown conversion type yields warning result."""
+        engine = ValidationEngine()
+
+        results = engine.validate_conversion("unknown", "content")
+        assert len(results) == 1
+        assert results[0].level == ValidationLevel.WARNING
+        assert results[0].category == ValidationCategory.SYNTAX
+        assert "Unknown conversion type" in results[0].message
+
+    def test_validation_engine_add_result_records_details(self):
+        """Test _add_result stores optional details correctly."""
+        engine = ValidationEngine()
+
+        engine._add_result(
+            ValidationLevel.WARNING,
+            ValidationCategory.SECURITY,
+            "Potential issue",
+            location="task 3",
+            suggestion="Review defaults",
+        )
+
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.level == ValidationLevel.WARNING
+        assert result.category == ValidationCategory.SECURITY
+        assert result.message == "Potential issue"
+        assert result.location == "task 3"
+        assert result.suggestion == "Review defaults"
+
+    def test_validate_yaml_syntax_invalid_content(self):
+        """Test invalid YAML content adds a syntax error."""
+        engine = ValidationEngine()
+
+        engine._validate_yaml_syntax("- name: bad\n  - indent")
+
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid YAML syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_ansible_module_exists_unknown_module(self):
+        """Test unknown Ansible module yields a warning."""
+        engine = ValidationEngine()
+
+        engine._validate_ansible_module_exists(
+            "- name: Custom\n  ansible.builtin.unknown: {}"
+        )
+
+        assert any(
+            result.level == ValidationLevel.WARNING
+            and "Unknown Ansible module" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_ansible_module_exists_known_module(self):
+        """Test known Ansible module does not add warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_ansible_module_exists(
+            "- name: Debug\n  ansible.builtin.debug: {}"
+        )
+
+        assert engine.results == []
+
+    def test_validate_idempotency_requires_changed_when(self):
+        """Test command tasks without changed_when trigger warning."""
+        engine = ValidationEngine()
+
+        engine._validate_idempotency(
+            "- name: Run command\n  ansible.builtin.command: /bin/test"
+        )
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "changed_when" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_idempotency_with_changed_when(self):
+        """Test command tasks with changed_when do not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_idempotency(
+            "- name: Run command\n  ansible.builtin.command: /bin/test\n  changed_when: false"
+        )
+
+        assert engine.results == []
+
+    def test_validate_resource_dependencies_service_task(self):
+        """Test service tasks yield dependency info."""
+        engine = ValidationEngine()
+
+        engine._validate_resource_dependencies(
+            "- name: Start service\n  ansible.builtin.service:\n    state: started"
+        )
+
+        assert any(
+            result.level == ValidationLevel.INFO
+            and "Service task should have dependency" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_task_naming_empty_and_short(self):
+        """Test task naming checks for empty and short names."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming("- name: ''\n  ansible.builtin.debug: {}")
+        assert any(
+            result.level == ValidationLevel.WARNING and "empty name" in result.message
+            for result in engine.results
+        )
+
+        engine.results = []
+        engine._validate_task_naming("- name: test\n  ansible.builtin.debug: {}")
+        assert any(
+            result.level == ValidationLevel.INFO and "very short" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_task_naming_long_name(self):
+        """Test descriptive task names do not trigger warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming(
+            "- name: Install nginx package\n  ansible.builtin.package: {}"
+        )
+
+        assert engine.results == []
+
+    def test_validate_module_usage_warns_on_creates(self):
+        """Test creates with file module yields warning."""
+        engine = ValidationEngine()
+
+        engine._validate_module_usage(
+            "- name: Touch file\n  ansible.builtin.file:\n    creates: /tmp/a"
+        )
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "creates" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_variable_usage_ansible_prefix(self):
+        """Test ansible_ prefixed variables yield info message."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_usage("{{ ansible_custom_var }}")
+
+        assert any(
+            result.level == ValidationLevel.INFO and "ansible_" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_variable_usage_known_builtins(self):
+        """Test known built-in variables do not trigger warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_usage("{{ ansible_facts }}")
+
+        assert engine.results == []
+
+    def test_validate_handler_definitions_missing_handlers(self):
+        """Test notify without handlers yields warning."""
+        engine = ValidationEngine()
+
+        engine._validate_handler_definitions("notify: restart service")
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "no handlers" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_handler_definitions_with_handlers(self):
+        """Test handlers present avoids warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_handler_definitions(
+            "notify: restart\nhandlers:\n  - name: restart"
+        )
+
+        assert engine.results == []
+
+    def test_validate_playbook_structure_missing_hosts(self):
+        """Test missing hosts directive yields error."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("tasks:\n  - name: Task")
+
+        assert any(
+            result.level == ValidationLevel.ERROR and "hosts" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_playbook_structure_missing_tasks_and_roles(self):
+        """Test missing tasks and roles yields warning."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("hosts: all")
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "no tasks" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_playbook_structure_complete(self):
+        """Test playbook with hosts and tasks does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("hosts: all\n\ntasks:\n  - name: Task")
+
+        assert engine.results == []
+
+    def test_validate_jinja2_syntax_invalid_template(self, monkeypatch):
+        """Test invalid template yields syntax error with mocked Jinja2."""
+        import sys
+        import types
+
+        class DummyEnvironment:
+            last_autoescape = None
+
+            def __init__(self, autoescape=True):
+                self.autoescape = autoescape
+                DummyEnvironment.last_autoescape = autoescape
+
+            def parse(self, _template):
+                raise ValueError("bad template")
+
+        dummy_module = types.ModuleType("jinja2")
+        dummy_module.Environment = DummyEnvironment
+        monkeypatch.setitem(sys.modules, "jinja2", dummy_module)
+
+        engine = ValidationEngine()
+        engine._validate_jinja2_syntax("{{")
+
+        assert DummyEnvironment.last_autoescape is True
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid Jinja2 syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_variable_references_deep_nesting(self):
+        """Test deep variable nesting yields info."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_references("{{ a.b.c.d.e.f }}")
+
+        assert any(
+            result.level == ValidationLevel.INFO
+            and "Deep variable nesting" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_python_syntax_invalid_code(self):
+        """Test invalid Python code yields syntax error."""
+        engine = ValidationEngine()
+
+        engine._validate_python_syntax("def broken(:\n    pass")
+
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid Python syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_inspec_conversion_python_branch(self):
+        """Test InSpec conversion routes to Python validation."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, "_validate_python_syntax") as python_validator:
+            engine._validate_inspec_conversion("import pytest\n")
+            python_validator.assert_called_once()
+
+    def test_validate_inspec_conversion_ruby_branch(self):
+        """Test InSpec conversion routes to Ruby validation."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, "_validate_ruby_syntax") as ruby_validator:
+            engine._validate_inspec_conversion("require 'serverspec'\n")
+            ruby_validator.assert_called_once()
+
+    def test_validate_inspec_conversion_yaml_branch(self):
+        """Test InSpec conversion routes to YAML validation."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, "_validate_yaml_syntax") as yaml_validator:
+            engine._validate_inspec_conversion("---\npackage:\n  nginx")
+            yaml_validator.assert_called_once()
+
+    def test_validation_summary_formatting(self):
+        """Test summary formatting for different outcome states."""
+        from souschef.core.validation import _format_validation_results_summary
+
+        summary = _format_validation_results_summary(
+            "resource", {"errors": 0, "warnings": 0, "info": 0}
+        )
+        assert "All validation checks passed" in summary
+        assert "Errors: 0" in summary
+
+        failed = _format_validation_results_summary(
+            "recipe", {"errors": 1, "warnings": 0, "info": 0}
+        )
+        assert "Status:" in failed
+        assert "Failed" in failed
+
+        warned = _format_validation_results_summary(
+            "recipe", {"errors": 0, "warnings": 1, "info": 0}
+        )
+        assert "Warning" in warned
+
+        info_only = _format_validation_results_summary(
+            "template", {"errors": 0, "warnings": 0, "info": 2}
+        )
+        assert "Passed with info" in info_only
+
+    def test_validate_ansible_module_exists_known_modules(self):
+        """Test a range of known modules does not trigger warnings."""
+        engine = ValidationEngine()
+        known_modules = [
+            "package",
+            "apt",
+            "yum",
+            "dnf",
+            "service",
+            "systemd",
+            "template",
+            "file",
+            "copy",
+            "command",
+            "shell",
+            "user",
+            "group",
+            "cron",
+            "lineinfile",
+            "blockinfile",
+            "assert",
+            "debug",
+            "set_fact",
+            "include_tasks",
+            "import_tasks",
+        ]
+
+        for module_name in known_modules:
+            engine.results = []
+            engine._validate_ansible_module_exists(
+                f"- name: Test\n  ansible.builtin.{module_name}:"
+            )
+            assert engine.results == []
+
+    def test_validate_ansible_module_exists_no_match(self):
+        """Test tasks without module line do not add warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_ansible_module_exists("- name: Task without module")
+
+        assert engine.results == []
+
+    def test_validate_task_naming_missing_name(self):
+        """Test tasks without name do not add naming warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming("ansible.builtin.debug: {}")
+
+        assert engine.results == []
+
+    def test_validate_playbook_structure_with_roles(self):
+        """Test playbook with roles avoids tasks/roles warning."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("hosts: all\nroles:\n  - web")
+
+        assert engine.results == []
+
+    def test_validate_variable_usage_builtins(self):
+        """Test allowed built-in variables do not trigger info messages."""
+        engine = ValidationEngine()
+        allowed = [
+            "ansible_facts",
+            "ansible_check_mode",
+            "ansible_host",
+            "ansible_port",
+        ]
+
+        for var_name in allowed:
+            engine.results = []
+            engine._validate_variable_usage(f"{{{{ {var_name} }}}}")
+            assert engine.results == []
+
+    def test_validate_idempotency_shell_without_changed_when(self):
+        """Test shell tasks without changed_when trigger warning."""
+        engine = ValidationEngine()
+
+        engine._validate_idempotency(
+            "- name: Run shell\n  ansible.builtin.shell: echo test"
+        )
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "changed_when" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_module_usage_no_creates(self):
+        """Test file module without creates does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_module_usage(
+            "- name: Touch file\n  ansible.builtin.file:\n    path: /tmp/a"
+        )
+
+        assert engine.results == []
+
+    def test_validate_module_usage_non_file_with_creates(self):
+        """Test creates on non-file module does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_module_usage(
+            "- name: Package\n  ansible.builtin.package:\n    creates: /tmp/a"
+        )
+
+        assert engine.results == []
+
+    def test_validate_jinja2_syntax_valid_template(self, monkeypatch):
+        """Test valid template does not add errors with mocked Jinja2."""
+        import sys
+        import types
+
+        class DummyEnvironment:
+            last_autoescape = None
+
+            def __init__(self, autoescape=True):
+                self.autoescape = autoescape
+                DummyEnvironment.last_autoescape = autoescape
+
+            def parse(self, _template):
+                return None
+
+        dummy_module = types.ModuleType("jinja2")
+        dummy_module.Environment = DummyEnvironment
+        monkeypatch.setitem(sys.modules, "jinja2", dummy_module)
+
+        engine = ValidationEngine()
+        engine._validate_jinja2_syntax("{{ value }}")
+
+        assert DummyEnvironment.last_autoescape is True
+        assert engine.results == []
+
+    def test_validate_variable_references_shallow(self):
+        """Test shallow variable references do not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_references("{{ a.b.c }}")
+
+        assert engine.results == []
+
+    def test_validate_yaml_syntax_valid_content(self):
+        """Test valid YAML does not add errors."""
+        engine = ValidationEngine()
+
+        engine._validate_yaml_syntax("- name: ok\n  value: 1")
+
+        assert engine.results == []
+
+    def test_validate_python_syntax_valid_code(self):
+        """Test valid Python code does not add errors."""
+        engine = ValidationEngine()
+
+        engine._validate_python_syntax("def ok():\n    return 1")
+
+        assert engine.results == []
+
+    def test_validate_inspec_conversion_yaml_branch_with_package_service(self):
+        """Test InSpec conversion routes to YAML validation on package/service."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, "_validate_yaml_syntax") as yaml_validator:
+            engine._validate_inspec_conversion("package:\n  nginx\nservice:\n  nginx")
+            yaml_validator.assert_called_once()
+
+    def test_validate_resource_dependencies_no_state(self):
+        """Test service task without state does not add results."""
+        engine = ValidationEngine()
+
+        engine._validate_resource_dependencies(
+            "- name: Start service\n  ansible.builtin.service:"
+        )
+
+        assert engine.results == []
+
+    def test_validate_handler_definitions_without_notify(self):
+        """Test content without notify does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_handler_definitions("tasks:\n  - name: Task")
+
+        assert engine.results == []
+
+    def test_validation_summary_empty_results(self):
+        """Test summary returns zeros when no results."""
+        engine = ValidationEngine()
+
+        summary = engine.get_summary()
+        assert summary == {"errors": 0, "warnings": 0, "info": 0}
+
+    def test_validation_result_repr_location_only(self):
+        """Test representation includes location without suggestion."""
+        result = ValidationResult(
+            level=ValidationLevel.WARNING,
+            category=ValidationCategory.SEMANTIC,
+            message="Detail",
+            location="line 5",
+        )
+
+        result_str = repr(result)
+        assert "Location: line 5" in result_str
+        assert "Suggestion:" not in result_str
+
+    def test_validate_task_naming_boundary_length(self):
+        """Test boundary length name does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming("- name: tenletters\n  ansible.builtin.debug: {}")
+
+        assert engine.results == []
+
+    def test_validate_task_naming_whitespace_only(self):
+        """Test whitespace-only task name yields short-name info."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming("- name: '   '\n  ansible.builtin.debug: {}")
+
+        assert any(
+            result.level == ValidationLevel.INFO and "very short" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_playbook_structure_with_tasks_only(self):
+        """Test hosts and tasks avoids structure warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("hosts: all\n\ntasks:\n  - name: Task")
+
+        assert engine.results == []
+
+    def test_validate_playbook_structure_missing_hosts_and_tasks(self):
+        """Test missing hosts and tasks yields errors and warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("name: play")
+
+        assert any(
+            result.level == ValidationLevel.ERROR and "hosts" in result.message
+            for result in engine.results
+        )
+        assert any(
+            result.level == ValidationLevel.WARNING and "no tasks" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_variable_usage_non_ansible(self):
+        """Test non-ansible variables do not trigger info messages."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_usage("{{ app_version }}")
+
+        assert engine.results == []
+
+    def test_validate_variable_references_includes_variable_name(self):
+        """Test deep nesting warning includes the variable path."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_references("{{ a.b.c.d.e.f }}")
+
+        assert any(
+            result.level == ValidationLevel.INFO and "a.b.c.d.e.f" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_idempotency_shell_with_changed_when(self):
+        """Test shell task with changed_when does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_idempotency(
+            "- name: Run shell\n  ansible.builtin.shell: echo ok\n  changed_when: false"
+        )
+
+        assert engine.results == []
+
+    def test_validate_resource_dependencies_non_service(self):
+        """Test non-service tasks do not add dependency info."""
+        engine = ValidationEngine()
+
+        engine._validate_resource_dependencies(
+            "- name: Install\n  ansible.builtin.package:\n    name: nginx"
+        )
+
+        assert engine.results == []
+
+    def test_validate_handler_definitions_notify_with_handlers(self):
+        """Test notify with handlers avoids warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_handler_definitions(
+            "notify: restart\nhandlers:\n  - name: restart\n    ansible.builtin.service:"
+        )
+
+        assert engine.results == []
+
+    def test_validate_yaml_syntax_error_message_includes_details(self):
+        """Test YAML error includes details in message."""
+        engine = ValidationEngine()
+
+        engine._validate_yaml_syntax("- name: bad\n  - invalid")
+
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid YAML syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_python_syntax_error_message_includes_details(self):
+        """Test Python syntax error includes details in message."""
+        engine = ValidationEngine()
+
+        engine._validate_python_syntax("def broken(:")
+
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid Python syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_inspec_conversion_no_match(self):
+        """Test InSpec conversion with no recognised markers does nothing."""
+        engine = ValidationEngine()
+
+        engine._validate_inspec_conversion("describe package('nginx')")
+
+        assert engine.results == []
+
+    def test_validation_summary_multiple_errors(self):
+        """Test summary counts multiple errors correctly."""
+        engine = ValidationEngine()
+
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "E1")
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "E2")
+
+        summary = engine.get_summary()
+        assert summary["errors"] == 2
 
     def test_validation_engine_get_summary(self):
         """Test ValidationEngine summary generation."""
