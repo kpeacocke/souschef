@@ -675,6 +675,22 @@ def test_convert_inspec_to_test_handles_any_content(content):
             Path(f.name).unlink()
 
 
+def _validate_format_result(result, format_type):
+    """Validate conversion result based on format type."""
+    if result.startswith("Error:"):
+        return
+
+    format_validators = {
+        "testinfra": lambda r: "import pytest" in r,
+        "ansible_assert": lambda r: "---" in r,
+        "serverspec": lambda r: "require 'serverspec'" in r,
+        "goss": lambda r: "test-pkg" in r or "package" in r,
+    }
+
+    if format_type in format_validators:
+        assert format_validators[format_type](result)
+
+
 @given(
     format_type=st.sampled_from(
         ["testinfra", "ansible_assert", "serverspec", "goss", "invalid_format"]
@@ -705,25 +721,11 @@ end
             # Should always return a string
             assert isinstance(result, str)
 
-            if format_type == "testinfra":
-                # Valid testinfra should contain pytest imports
-                if "Error:" not in result:
-                    assert "import pytest" in result
-            elif format_type == "ansible_assert":
-                # Valid ansible should contain YAML
-                if "Error:" not in result:
-                    assert "---" in result
-            elif format_type == "serverspec":
-                # Valid serverspec should contain serverspec require
-                if "Error:" not in result:
-                    assert "require 'serverspec'" in result
-            elif format_type == "goss":
-                # Valid goss should be YAML/JSON format
-                if "Error:" not in result:
-                    assert "test-pkg" in result or "package" in result
-            else:
+            if format_type == "invalid_format":
                 # Invalid format should return error
                 assert result.startswith("Error:")
+            else:
+                _validate_format_result(result, format_type)
         finally:
             if old_root is None:
                 os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)

@@ -64,6 +64,67 @@ def parse_template(path: str) -> str:
         return f"An error occurred: {e}"
 
 
+def _is_comment_line(line: str) -> bool:
+    """Check if a line is a full-line comment."""
+    return line.lstrip().startswith("#")
+
+
+def _process_line_char(
+    char: str,
+    in_single: bool,
+    in_double: bool,
+    escaped: bool,
+    output_chars: list[str],
+) -> tuple[bool, bool, bool, bool]:
+    """
+    Process a single character in a line, handling quotes and escapes.
+
+    Returns:
+        Tuple of (should_break, in_single, in_double, escaped).
+
+    """
+    if escaped:
+        output_chars.append(char)
+        return (False, in_single, in_double, False)
+
+    if char == "\\":
+        output_chars.append(char)
+        return (False, in_single, in_double, True)
+
+    if char == "'" and not in_double:
+        in_single = not in_single
+        output_chars.append(char)
+        return (False, in_single, in_double, False)
+
+    if char == '"' and not in_single:
+        in_double = not in_double
+        output_chars.append(char)
+        return (False, in_single, in_double, False)
+
+    if char == "#" and not in_single and not in_double:
+        return (True, in_single, in_double, False)
+
+    output_chars.append(char)
+    return (False, in_single, in_double, False)
+
+
+def _strip_line_comments(line: str) -> str:
+    """Remove inline comments from a single line."""
+    in_single = False
+    in_double = False
+    escaped = False
+    output_chars: list[str] = []
+
+    for char in line:
+        should_break, in_single, in_double, escaped = _process_line_char(
+            char, in_single, in_double, escaped, output_chars
+        )
+        if should_break:
+            break
+
+    return "".join(output_chars).rstrip()
+
+
 def _strip_ruby_comments(content: str) -> str:
     """
     Remove Ruby comments from code.
@@ -78,42 +139,10 @@ def _strip_ruby_comments(content: str) -> str:
     lines: list[str] = []
 
     for line in content.split("\n"):
-        stripped = line.lstrip()
-        if stripped.startswith("#"):
+        if _is_comment_line(line):
             continue
 
-        in_single = False
-        in_double = False
-        escaped = False
-        output_chars: list[str] = []
-
-        for char in line:
-            if escaped:
-                output_chars.append(char)
-                escaped = False
-                continue
-
-            if char == "\\":
-                output_chars.append(char)
-                escaped = True
-                continue
-
-            if char == "'" and not in_double:
-                in_single = not in_single
-                output_chars.append(char)
-                continue
-
-            if char == '"' and not in_single:
-                in_double = not in_double
-                output_chars.append(char)
-                continue
-
-            if char == "#" and not in_single and not in_double:
-                break
-
-            output_chars.append(char)
-
-        cleaned_line = "".join(output_chars).rstrip()
+        cleaned_line = _strip_line_comments(line)
         if cleaned_line:
             lines.append(cleaned_line)
 
