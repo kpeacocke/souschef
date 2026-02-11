@@ -300,32 +300,45 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
 
 def _check_symlink_safety(path_obj: Path, base_path: Path | None = None) -> None:
     """
-    Verify that a path doesn't use symlinks to escape the workspace.
+    Verify that a path does not use symlinks to escape the workspace.
 
-    This is a defense-in-depth check that detects symlink attacks after
-    resolution has already prevented actual traversal. This helps identify
-    attack attempts and provides security signals.
+    This helper performs a best-effort check for symlink usage in the ancestry
+    of a path.
+
+    Containment is primarily enforced elsewhere via normalisation with
+    ``resolve()`` and ``relative_to()``. This function is intended as an
+    additional security signal to detect suspicious use of symlinks.
 
     Args:
-        path_obj: Path to check (must already be resolved).
-        base_path: Unused, reserved for future checks.
+        path_obj: Normalised candidate path. This is often a resolved path,
+            meaning symlink components in the original user input may already
+            have been collapsed.
+        base_path: Optional original, *unresolved* path to inspect for
+            symlink components. When provided, this path is preferred for
+            the symlink walk so that symlinks present in the user-supplied
+            path can be detected before resolution.
 
     Raises:
-        ValueError: If symlinks are detected in the resolved path ancestry.
+        ValueError: If symlinks are detected in the inspected path ancestry.
 
     """
-    # Check if the unresolved path contains components that are symlinks
-    # by iterating through each level of the path
+    # Prefer checking the unresolved/original path when provided, falling
+    # back to the (typically resolved) candidate path.
+    target: Path = base_path if base_path is not None else path_obj
+
+    # Check if the chosen path contains components that are symlinks by
+    # iterating through each level of the path.
     try:
-        current = path_obj
-        while current != current.parent:  # Until we reach root
+        current = target
+        while current != current.parent:  # Until we reach filesystem root
             if current.is_symlink():
                 msg = (
-                    f"Symlink detected in path {path_obj}: {current} -> "
+                    f"Symlink detected in path {target}: {current} -> "
                     f"{current.resolve()}"
                 )
                 raise ValueError(msg)
             current = current.parent
-    except (OSError, RuntimeError):
-        # Path might not exist yet or be inaccessible
-        pass
+    except (FileNotFoundError, PermissionError, NotADirectoryError):
+        # Path might not exist yet or be inaccessible; in that case we cannot
+        # reliably inspect symlink ancestry, so we treat this as a no-op.
+        return

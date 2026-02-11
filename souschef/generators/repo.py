@@ -661,9 +661,11 @@ def generate_ansible_repository(
             }
 
     try:
+        # Check for symlinks before normalisation to detect attacks
+        _check_symlink_safety(_normalize_path(output_path), Path(output_path))
+
         # Validate and normalise the output path
         repo_path = _normalize_path(output_path)
-        _check_symlink_safety(repo_path, Path.cwd())
     except ValueError as e:
         return {
             "success": False,
