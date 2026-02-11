@@ -37,7 +37,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
@@ -100,7 +100,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
@@ -139,7 +139,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
@@ -184,7 +184,7 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Go
       uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
@@ -233,7 +233,7 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
@@ -287,7 +287,7 @@ jobs:
       security-events: write
 
     steps:
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         fetch-depth: 0  # Need full history for TruffleHog
 
@@ -338,7 +338,7 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
@@ -386,7 +386,7 @@ jobs:
       contents: read
 
     steps:
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Set up Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
