@@ -79,6 +79,11 @@ def _is_private_hostname(hostname: str) -> bool:
     except ValueError:
         pass  # Not a literal IP, proceed to DNS resolution
 
+    # Skip DNS resolution for single-label hostnames (e.g., 'localhost', 'chef')
+    # These should be caught by earlier checks or by the non-FQDN validation
+    if "." not in hostname:
+        return False
+
     # RFC 2606: Skip DNS resolution for reserved test domains
     test_domains = (".example.com", ".example.org", ".example.net", ".test")
     if any(hostname.endswith(suffix) for suffix in test_domains):
