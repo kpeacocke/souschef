@@ -153,15 +153,15 @@ yamllint = ">=1.38.0"
 
 [[package]]
 name = "anthropic"
-version = "0.76.0"
+version = "0.79.0"
 description = "The official Python library for the anthropic API"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "extra == \"ai\" or extra == \"all\""
 files = [
-    {file = "anthropic-0.76.0-py3-none-any.whl", hash = "sha256:81efa3113901192af2f0fe977d3ec73fdadb1e691586306c4256cd6d5ccc331c"},
-    {file = "anthropic-0.76.0.tar.gz", hash = "sha256:e0cae6a368986d5cf6df743dfbb1b9519e6a9eee9c6c942ad8121c0b34416ffe"},
+    {file = "anthropic-0.79.0-py3-none-any.whl", hash = "sha256:04cbd473b6bbda4ca2e41dd670fe2f829a911530f01697d0a1e37321eb75f3cf"},
+    {file = "anthropic-0.79.0.tar.gz", hash = "sha256:8707aafb3b1176ed6c13e2b1c9fb3efddce90d17aee5d8b83a86c70dcdcca871"},
 ]
 
 [package.dependencies]
@@ -349,19 +349,19 @@ testing = ["pytest (>=6,!=7.0.0)", "pytest-xdist (>=2)"]
 
 [[package]]
 name = "boto3"
-version = "1.42.39"
+version = "1.42.44"
 description = "The AWS SDK for Python"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "extra == \"all\" or extra == \"storage\""
 files = [
-    {file = "boto3-1.42.39-py3-none-any.whl", hash = "sha256:d9d6ce11df309707b490d2f5f785b761cfddfd6d1f665385b78c9d8ed097184b"},
-    {file = "boto3-1.42.39.tar.gz", hash = "sha256:d03f82363314759eff7f84a27b9e6428125f89d8119e4588e8c2c1d79892c956"},
+    {file = "boto3-1.42.44-py3-none-any.whl", hash = "sha256:32e995b0d56e19422cff22f586f698e8924c792eb00943de9c517ff4607e4e18"},
+    {file = "boto3-1.42.44.tar.gz", hash = "sha256:d5601ea520d30674c1d15791a1f98b5c055e973c775e1d9952ccc09ee5913c4e"},
 ]
 
 [package.dependencies]
-botocore = ">=1.42.39,<1.43.0"
+botocore = ">=1.42.44,<1.43.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.16.0,<0.17.0"
 
@@ -370,15 +370,15 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.42.39"
+version = "1.42.44"
 description = "Low-level, data-driven core of boto 3."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "extra == \"all\" or extra == \"storage\""
 files = [
-    {file = "botocore-1.42.39-py3-none-any.whl", hash = "sha256:9e0d0fed9226449cc26fcf2bbffc0392ac698dd8378e8395ce54f3ec13f81d58"},
-    {file = "botocore-1.42.39.tar.gz", hash = "sha256:0f00355050821e91a5fe6d932f7bf220f337249b752899e3e4cf6ed54326249e"},
+    {file = "botocore-1.42.44-py3-none-any.whl", hash = "sha256:ba406b9243a20591ee87d53abdb883d46416705cebccb639a7f1c923f9dd82df"},
+    {file = "botocore-1.42.44.tar.gz", hash = "sha256:47ba27360f2afd2c2721545d8909217f7be05fdee16dd8fc0b09589535a0701c"},
 ]
 
 [package.dependencies]
@@ -3074,15 +3074,15 @@ markers = {main = "python_version >= \"3.11\" and (extra == \"all\" or extra == 
 
 [[package]]
 name = "openai"
-version = "2.16.0"
+version = "2.17.0"
 description = "The official Python library for the openai API"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
 markers = "extra == \"ai\" or extra == \"all\""
 files = [
-    {file = "openai-2.16.0-py3-none-any.whl", hash = "sha256:5f46643a8f42899a84e80c38838135d7038e7718333ce61396994f887b09a59b"},
-    {file = "openai-2.16.0.tar.gz", hash = "sha256:42eaa22ca0d8ded4367a77374104d7a2feafee5bd60a107c3c11b5243a11cd12"},
+    {file = "openai-2.17.0-py3-none-any.whl", hash = "sha256:4f393fd886ca35e113aac7ff239bcd578b81d8f104f5aedc7d3693eb2af1d338"},
+    {file = "openai-2.17.0.tar.gz", hash = "sha256:47224b74bd20f30c6b0a6a329505243cb2f26d5cf84d9f8d0825ff8b35e9c999"},
 ]
 
 [package.dependencies]
@@ -5021,15 +5021,15 @@ full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart 
 
 [[package]]
 name = "streamlit"
-version = "1.53.1"
+version = "1.54.0"
 description = "A faster way to build and share data apps"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
 markers = "extra == \"all\" or extra == \"ui\""
 files = [
-    {file = "streamlit-1.53.1-py3-none-any.whl", hash = "sha256:9534d151feea485b69200dd36448f95f418c511e8c81186ceb57133bdf1443f7"},
-    {file = "streamlit-1.53.1.tar.gz", hash = "sha256:ae656af3b68b4bb2d669fa977606096f2021bcbaa14a454a290f8e0a37bab277"},
+    {file = "streamlit-1.54.0-py3-none-any.whl", hash = "sha256:a7b67d6293a9f5f6b4d4c7acdbc4980d7d9f049e78e404125022ecb1712f79fc"},
+    {file = "streamlit-1.54.0.tar.gz", hash = "sha256:09965e6ae7eb0357091725de1ce2a3f7e4be155c2464c505c40a3da77ab69dd8"},
 ]
 
 [package.dependencies]
