@@ -347,9 +347,6 @@ def _validate_plan_paths(plan_paths: str) -> None:
         _validate_path_length(path, "Plan path")
 
 
-# File constants
-METADATA_RB = "metadata.rb"
-
 # Validation Framework Classes
 
 
