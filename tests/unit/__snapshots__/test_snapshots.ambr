@@ -165,14 +165,14 @@
 # ---
 # name: test_convert_inspec_to_molecule_snapshot
   '''
-  Error during validating InSpec path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  Error during validating InSpec path for <file>: Path traversal attempt: escapes <workspace>
   
   Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_convert_inspec_to_testinfra_snapshot
   '''
-  Error during validating InSpec path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  Error during validating InSpec path for <file>: Path traversal attempt: escapes <workspace>
   
   Suggestion: Check that input values are in the correct format and type.
   '''
@@ -243,42 +243,42 @@
 # ---
 # name: test_parse_recipe_with_guards_snapshot
   '''
-  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  Error during validating recipe path for <file>: Path traversal attempt: escapes <workspace>
   
   Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_recipe_with_include_recipe_snapshot
   '''
-  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  Error during validating recipe path for <file>: Path traversal attempt: escapes <workspace>
   
   Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_recipe_with_multiple_actions_snapshot
   '''
-  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  Error during validating recipe path for <file>: Path traversal attempt: escapes <workspace>
   
   Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_recipe_with_notifies_snapshot
   '''
-  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  Error during validating recipe path for <file>: Path traversal attempt: escapes <workspace>
   
   Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_recipe_with_variables_snapshot
   '''
-  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  Error during validating recipe path for <file>: Path traversal attempt: escapes <workspace>
   
   Suggestion: Check that input values are in the correct format and type.
   '''
 # ---
 # name: test_parse_simple_recipe_snapshot
   '''
-  Error during validating recipe path for <file>: Path traversal attempt: escapes /workspaces/souschef
+  Error during validating recipe path for <file>: Path traversal attempt: escapes <workspace>
   
   Suggestion: Check that input values are in the correct format and type.
   '''

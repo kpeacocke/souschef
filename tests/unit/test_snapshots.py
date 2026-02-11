@@ -102,6 +102,9 @@ end
         f.write(recipe)
         f.flush()
         result = parse_recipe(f.name)
+        # Normalize workspace path for cross-environment snapshots
+        workspace_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT", str(Path.cwd()))
+        result = result.replace(workspace_root, "<workspace>")
     assert result == snapshot
 
 
@@ -126,6 +129,9 @@ end
         f.write(recipe)
         f.flush()
         result = parse_recipe(f.name)
+        # Normalize workspace path for cross-environment snapshots
+        workspace_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT", str(Path.cwd()))
+        result = result.replace(workspace_root, "<workspace>")
     assert result == snapshot
 
 
@@ -148,6 +154,9 @@ end
         f.write(recipe)
         f.flush()
         result = parse_recipe(f.name)
+        # Normalize workspace path for cross-environment snapshots
+        workspace_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT", str(Path.cwd()))
+        result = result.replace(workspace_root, "<workspace>")
     assert result == snapshot
 
 
@@ -267,6 +276,9 @@ end
         f.write(inspec_code)
         f.flush()
         result = convert_inspec_to_test(f.name, "testinfra")
+        # Normalize workspace path for cross-environment snapshots
+        workspace_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT", str(Path.cwd()))
+        result = result.replace(workspace_root, "<workspace>")
     assert result == snapshot
 
 
@@ -285,6 +297,9 @@ end
         f.write(inspec_code)
         f.flush()
         result = convert_inspec_to_test(f.name, "molecule")
+        # Normalize workspace path for cross-environment snapshots
+        workspace_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT", str(Path.cwd()))
+        result = result.replace(workspace_root, "<workspace>")
     assert result == snapshot
 
 
@@ -331,6 +346,9 @@ end
         f.write(recipe)
         f.flush()
         result = parse_recipe(f.name)
+        # Normalize workspace path for cross-environment snapshots
+        workspace_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT", str(Path.cwd()))
+        result = result.replace(workspace_root, "<workspace>")
     assert result == snapshot
 
 
@@ -358,6 +376,9 @@ end
         f.write(recipe)
         f.flush()
         result = parse_recipe(f.name)
+        # Normalize workspace path for cross-environment snapshots
+        workspace_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT", str(Path.cwd()))
+        result = result.replace(workspace_root, "<workspace>")
     assert result == snapshot
 
 
@@ -458,6 +479,9 @@ end
         f.write(recipe)
         f.flush()
         result = parse_recipe(f.name)
+        # Normalize workspace path for cross-environment snapshots
+        workspace_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT", str(Path.cwd()))
+        result = result.replace(workspace_root, "<workspace>")
     assert result == snapshot
 
 
