@@ -134,6 +134,9 @@ source = [
 
 [tool.mutmut]
 backup = false
+paths_to_mutate = "souschef/core/validation.py"
+test_command = "poetry run pytest tests/unit/test_server.py::TestValidationFramework -x --tb=line"
+runner = "pytest"
 
 [tool.mypy]
 python_version = "3.13"
