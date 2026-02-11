@@ -1269,6 +1269,7 @@ import json
 import os
 import sys
 import argparse
+import socket
 import ipaddress
 from typing import Dict, List, Any
 from urllib.parse import urlparse, urlunparse
@@ -1277,7 +1278,7 @@ from urllib.parse import urlparse, urlunparse
 SEARCH_QUERIES = {queries_json}
 
 def validate_chef_server_url(server_url: str) -> str:
-    """Validate Chef Server URL to prevent SSRF attacks."""
+    """Validate Chef Server URL to prevent SSRF attacks, including DNS rebinding."""
     url_value = str(server_url).strip()
     if not url_value:
         raise ValueError("Chef Server URL is required")
@@ -1298,15 +1299,58 @@ def validate_chef_server_url(server_url: str) -> str:
     if hostname == "localhost" or hostname.endswith(local_suffixes):
         raise ValueError("Chef Server URL must use a public hostname")
 
-    # Prevent SSRF: block private IP ranges
+    # Prevent SSRF: block literal private IP addresses
     try:
         ip_addr = ipaddress.ip_address(hostname)
         if (ip_addr.is_private or ip_addr.is_loopback or
             ip_addr.is_link_local or ip_addr.is_reserved or
             ip_addr.is_multicast or ip_addr.is_unspecified):
             raise ValueError("Chef Server URL must use a public IP address")
-    except ValueError:
-        # Not an IP address, continue with domain validation
+        # If it's a literal public IP, it's allowed
+        return urlunparse(parsed._replace(params="", query="", fragment="")).rstrip("/")
+    except ValueError as e:
+        # If it's already a validation error (private IP), propagate it
+        if "must use" in str(e):
+            raise
+        # Otherwise it's not an IP, so resolve via DNS
+
+    # Prevent DNS rebinding: resolve hostname and check all A/AAAA records
+    try:
+        # Limit to 10 seconds to prevent hanging on slow DNS
+        socket.setdefaulttimeout(10)
+        # getaddrinfo returns (family, type, proto, canonname, sockaddr)
+        addrinfo = socket.getaddrinfo(
+            hostname, 443, socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
+        socket.setdefaulttimeout(None)
+
+        if not addrinfo:
+            # Cannot resolve - allow it (fail open, DNS may work at runtime)
+            pass
+        else:
+            # Check ALL resolved addresses - reject if ANY are problematic
+            dangerous_addresses = []
+            for family, socktype, proto, canonname, sockaddr in addrinfo:
+                ip_str = sockaddr[0]  # IPv4 or IPv6 address
+                ip_addr = ipaddress.ip_address(ip_str)
+                if (ip_addr.is_private or ip_addr.is_loopback or
+                    ip_addr.is_link_local or ip_addr.is_reserved or
+                    ip_addr.is_multicast or ip_addr.is_unspecified):
+                    dangerous_addresses.append(ip_str)
+
+            if dangerous_addresses:
+                addr_list = ", ".join(dangerous_addresses)
+                msg = (
+                    f"Hostname {{hostname}} resolves to problematic "
+                    f"addresses: {{addr_list}}"
+                )
+                raise ValueError(msg)
+
+    except socket.gaierror:
+        # DNS resolution failed - allow it (fail open, assume public)
+        pass
+    except socket.timeout:
+        # DNS resolution timeout - allow it (fail open)
         pass
 
     # Strip params, query, fragment for security
