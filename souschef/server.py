@@ -301,6 +301,7 @@ METADATA_RB = "metadata.rb"
 _MAX_PATH_LENGTH = 4096
 _MAX_PLAN_PATHS = 20
 _MAX_PLAN_PATHS_LENGTH = 8192
+_PLAN_PATH_LABEL = "Plan path"
 
 
 def _validate_path_length(path: str, label: str) -> None:
@@ -344,7 +345,7 @@ def _validate_plan_paths(plan_paths: str) -> None:
         )
 
     for path in paths:
-        _validate_path_length(path, "Plan path")
+        _validate_path_length(path, _PLAN_PATH_LABEL)
 
 
 # Validation Framework Classes
@@ -2751,7 +2752,7 @@ def parse_habitat_plan(plan_path: str) -> str:
 
     """
     try:
-        _validate_path_length(plan_path, "Plan path")
+        _validate_path_length(plan_path, _PLAN_PATH_LABEL)
         plan_path = str(_normalize_path(plan_path))
     except ValueError as e:
         return format_error_with_context(e, "validating plan path", plan_path)
@@ -2777,7 +2778,7 @@ def convert_habitat_to_dockerfile(
 
     """
     try:
-        _validate_path_length(plan_path, "Plan path")
+        _validate_path_length(plan_path, _PLAN_PATH_LABEL)
     except ValueError as e:
         return format_error_with_context(e, "validating plan path", plan_path)
     return _convert_habitat_to_dockerfile(
