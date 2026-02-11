@@ -174,7 +174,7 @@ def _calculate_activity_breakdown(
     # Writing vs testing ratios for AI-assisted effort by activity type
     # (AI generates code, human spends more time testing/validating)
     ai_writing_ratios = {
-        "Recipes": 0.25,  # AI generates recipes → human validates (75% testing)
+        "Recipes": 0.20,  # AI generates recipes → human validates (80% testing)
         "Templates": 0.20,  # AI converts templates → human verifies (80% testing)
         "Attributes": 0.30,  # AI extracts attributes → human reviews (70% testing)
         CUSTOM_RESOURCES: 0.55,  # Complex → limited automation, closer to manual ratio

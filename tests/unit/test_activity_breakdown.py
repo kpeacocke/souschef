@@ -183,7 +183,7 @@ class TestCalculateActivityBreakdown:
 
         assert recipe.ai_assisted_hours == pytest.approx(1.0)
         # AI-assisted: more testing-focused (80% testing), less writing (20% writing)
-        # Note: 1.0 * 0.25 = 0.25, but round(0.25, 1) = 0.2 (banker's rounding)
+        # Ratio of 0.20 ensures consistent 20% writing split across different effort levels
         assert recipe.ai_assisted_writing_hours == pytest.approx(0.2)
         assert recipe.ai_assisted_testing_hours == pytest.approx(0.8)
 
