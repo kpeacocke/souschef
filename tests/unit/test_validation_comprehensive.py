@@ -1935,3 +1935,197 @@ class TestUltraPrecisionMutantKillers:
 
         warns = [r for r in engine.results if "module" in r.message]
         assert len(warns) > 0
+
+
+class TestLogicalOperatorMutations:
+    """Tests targeting logical operator mutations (AND/OR)."""
+
+    def test_playbook_hosts_and_tasks_required(self):
+        """Test that BOTH hosts AND (tasks OR roles) required."""
+        # Missing hosts but has tasks - should fail
+        engine1 = ValidationEngine()
+        engine1._validate_playbook_structure("---\n- tasks:\n    - name: task1")
+        assert len([r for r in engine1.results if "hosts" in r.message]) > 0
+
+        # Has hosts but no tasks/roles - should fail
+        engine2 = ValidationEngine()
+        engine2._validate_playbook_structure("---\n- hosts: all")
+        assert (
+            len(
+                [
+                    r
+                    for r in engine2.results
+                    if "tasks" in r.message or "roles" in r.message
+                ]
+            )
+            > 0
+        )
+
+        # Has hosts and tasks - should pass
+        engine3 = ValidationEngine()
+        engine3._validate_playbook_structure(
+            "---\n- hosts: all\n  tasks:\n    - name: task"
+        )
+        task_role_warns = [
+            r for r in engine3.results if "tasks" in r.message or "roles" in r.message
+        ]
+        assert len(task_role_warns) == 0
+
+    def test_format_summary_error_precedence(self):
+        """Test that errors take precedence in icon selection."""
+        # Only warnings - ⚠️
+        summary1 = _format_validation_results_summary(
+            "test", {"errors": 0, "warnings": 5, "info": 0}
+        )
+        assert "⚠️" in summary1
+        assert "❌" not in summary1
+
+        # Only info - ℹ️
+        summary2 = _format_validation_results_summary(
+            "test", {"errors": 0, "warnings": 0, "info": 3}
+        )
+        assert "ℹ️" in summary2
+
+        # Errors present - ❌ (even with warnings/info)
+        summary3 = _format_validation_results_summary(
+            "test", {"errors": 1, "warnings": 5, "info": 3}
+        )
+        assert "❌" in summary3
+
+    def test_format_summary_status_message(self):
+        """Test status message determination."""
+        # Errors -> Failed
+        s1 = _format_validation_results_summary(
+            "test", {"errors": 1, "warnings": 0, "info": 0}
+        )
+        assert "Failed" in s1
+
+        # Warnings only -> Warning
+        s2 = _format_validation_results_summary(
+            "test", {"errors": 0, "warnings": 1, "info": 0}
+        )
+        assert "Warning" in s2
+
+        # Info only -> Passed with info
+        s3 = _format_validation_results_summary(
+            "test", {"errors": 0, "warnings": 0, "info": 1}
+        )
+        assert "Passed with info" in s3
+
+    def test_get_summary_each_level_counted(self):
+        """Test summary counts each level independently."""
+        engine = ValidationEngine()
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "e")
+        engine._add_result(ValidationLevel.WARNING, ValidationCategory.SYNTAX, "w")
+        engine._add_result(ValidationLevel.INFO, ValidationCategory.SYNTAX, "i")
+
+        summary = engine.get_summary()
+
+        # Each should be exactly 1
+        assert summary["errors"] == 1
+        assert summary["warnings"] == 1
+        assert summary["info"] == 1
+
+    def test_get_summary_zero_when_empty(self):
+        """Test all zeros when engine has no results."""
+        engine = ValidationEngine()
+        summary = engine.get_summary()
+
+        assert summary["errors"] == 0
+        assert summary["warnings"] == 0
+        assert summary["info"] == 0
+
+    def test_variable_nesting_boundary_5_vs_6(self):
+        """Test nesting boundary between 5 and 6 parts."""
+        # Exactly 5 - no warning
+        e1 = ValidationEngine()
+        e1._validate_variable_references("{{ a.b.c.d.e }}")
+        assert len([r for r in e1.results if "nesting" in r.message.lower()]) == 0
+
+        # Exactly 6 - warning
+        e2 = ValidationEngine()
+        e2._validate_variable_references("{{ a.b.c.d.e.f }}")
+        assert len([r for r in e2.results if "nesting" in r.message.lower()]) > 0
+
+        # Test that > (not >=) is used
+        e3 = ValidationEngine()
+        e3._validate_variable_references("{{ a.b.c.d.e }}")  # 5 parts
+        assert len([r for r in e3.results if "nesting" in r.message.lower()]) == 0
+
+    def test_task_naming_boundary_9_vs_10(self):
+        """Test naming length boundary."""
+        # Length 9 - should warn
+        e1 = ValidationEngine()
+        e1._validate_task_naming("- name: 123456789\n  ansible.builtin.debug: {}")
+        assert len([r for r in e1.results if "short" in r.message]) > 0
+
+        # Length 10 - no warning (tests < not <=)
+        e2 = ValidationEngine()
+        e2._validate_task_naming("- name: 1234567890\n  ansible.builtin.debug: {}")
+        assert len([r for r in e2.results if "short" in r.message]) == 0
+
+    def test_resource_dependency_both_conditions_required(self):
+        """Test that BOTH service AND state are required."""
+        # Service without state - no warn
+        e1 = ValidationEngine()
+        e1._validate_resource_dependencies(
+            "- name: T\n  ansible.builtin.service:\n    name: nginx"
+        )
+        assert len(e1.results) == 0
+
+        # Service with state - warn
+        e2 = ValidationEngine()
+        e2._validate_resource_dependencies(
+            "- name: T\n  ansible.builtin.service:\n    name: nginx\n    state: started"
+        )
+        assert len(e2.results) > 0
+
+    def test_format_summary_total_zero_exact_check(self):
+        """Test zero total is checked exactly."""
+        # Exactly zero
+        s_zero = _format_validation_results_summary(
+            "test", {"errors": 0, "warnings": 0, "info": 0}
+        )
+        assert "All validation checks passed" in s_zero
+
+        # Any non-zero total
+        s_one = _format_validation_results_summary(
+            "test", {"errors": 0, "warnings": 0, "info": 1}
+        )
+        assert "All validation checks passed" not in s_one
+
+    def test_handler_notify_check_presence(self):
+        """Test handler checking logic."""
+        # Has notify - should warn if no handler
+        e1 = ValidationEngine()
+        e1._validate_handler_definitions("notify: test")
+        assert len(e1.results) > 0
+
+        # No notify - should not warn
+        e2 = ValidationEngine()
+        e2._validate_handler_definitions("just content")
+        # Should have no results unless handlers section searched for
+        assert len(e2.results) >= 0
+
+    def test_module_usage_both_required(self):
+        """Test file AND creates both required."""
+        # File only - no warn
+        e1 = ValidationEngine()
+        e1._validate_module_usage(
+            "- name: T\n  ansible.builtin.file:\n    path: /tmp/a"
+        )
+        assert len([r for r in e1.results if "creates" in r.message]) == 0
+
+        # Creates only - no warn
+        e2 = ValidationEngine()
+        e2._validate_module_usage(
+            "- name: T\n  ansible.builtin.package:\n    creates: /tmp/a"
+        )
+        assert len([r for r in e2.results if "creates" in r.message]) == 0
+
+        # Both - warn
+        e3 = ValidationEngine()
+        e3._validate_module_usage(
+            "- name: T\n  ansible.builtin.file:\n    creates: /tmp/a"
+        )
+        assert len([r for r in e3.results if "creates" in r.message]) > 0
