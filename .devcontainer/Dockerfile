@@ -1,3 +1,10 @@
+# Build Docker MCP CLI plugin
+FROM golang:1.25-bookworm AS docker-mcp-builder
+WORKDIR /src/mcp-gateway
+COPY mcp-gateway/ ./
+RUN mkdir -p /root/.docker/cli-plugins && \
+    make docker-mcp
+
 # Use the official Python devcontainer as base
 FROM mcr.microsoft.com/devcontainers/python:3.13
 
@@ -27,13 +34,22 @@ RUN apt-get update && \
     libssl-dev \
     libffi-dev \
     unzip \
-    npm \
-    docker.io && \
+    npm && \
     # Install Poetry
     curl -sSL https://install.python-poetry.org | python3 - && \
     ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
     poetry config virtualenvs.in-project true && \
     # Clean up APT cache
+    rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI (docker-ce-cli)
+RUN install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.gpg && \
+    chmod a+r /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends docker-ce-cli && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Trivy vulnerability scanner
@@ -70,6 +86,11 @@ RUN if [ "$SNYK_VERSION" != "skip" ]; then \
     ln -s /opt/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner && \
     rm /tmp/sonar-scanner.zip; \
     fi
+
+# Install Docker MCP CLI plugin
+RUN mkdir -p /usr/local/lib/docker/cli-plugins
+COPY --from=docker-mcp-builder /src/mcp-gateway/dist/docker-mcp /usr/local/lib/docker/cli-plugins/docker-mcp
+RUN chmod +x /usr/local/lib/docker/cli-plugins/docker-mcp
 
 # Set the working directory
 WORKDIR /workspaces/souschef

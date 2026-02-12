@@ -11,6 +11,9 @@
     },
     "workspaceFolder": "/workspaces/souschef",
     "shutdownAction": "stopContainer",
+    "remoteEnv": {
+        "DOCKER_MCP_IN_CONTAINER": "1"
+    },
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
             "installZsh": true,
@@ -32,7 +35,7 @@
             "installGems": "chef"
         },
         "ghcr.io/devcontainers/features/java:1": {
-            "version": "17",
+l fa            "version": "17",
             "installMaven": false,
             "installGradle": false
         },
