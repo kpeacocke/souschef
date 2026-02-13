@@ -16,10 +16,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Generic, TypeVar
-
-K = TypeVar("K")
-V = TypeVar("V")
+from typing import Any
 
 # Cache configuration constants
 DEFAULT_MAX_CACHE_SIZE = 1000  # Maximum cached items before eviction
@@ -34,7 +31,7 @@ GALAXY_TTL_SECONDS = 3600.0  # 1 hour for Galaxy data (changes infrequently)
 
 
 @dataclass
-class CacheEntry(Generic[V]):
+class CacheEntry[V]:
     """Single cache entry with metadata."""
 
     value: V
@@ -63,7 +60,7 @@ class CacheEntry(Generic[V]):
         self.access_count += 1
 
 
-class CacheBackend(ABC, Generic[K, V]):
+class CacheBackend[K, V](ABC):
     """Abstract base class for cache backends."""
 
     @abstractmethod
@@ -124,7 +121,7 @@ class CacheBackend(ABC, Generic[K, V]):
         """
 
 
-class MemoryCache(CacheBackend[K, V]):
+class MemoryCache[K, V](CacheBackend[K, V]):
     """
     In-memory cache with TTL and size limits.
 
@@ -256,7 +253,7 @@ class MemoryCache(CacheBackend[K, V]):
         }
 
 
-class FileHashCache(CacheBackend[str, V]):
+class FileHashCache[V](CacheBackend[str, V]):
     """
     File content hash-based cache.
 
