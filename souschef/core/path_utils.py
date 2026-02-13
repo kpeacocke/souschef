@@ -212,8 +212,8 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     safe_dir: Path = _validated_candidate(_normalize_path(dir_path), safe_base)
 
     results: list[Path] = []
-    for result in safe_dir.glob(pattern):  # nosonar
-        # Validate each glob result stays within base
+    for result in safe_dir.glob(pattern):  # noqa # NOSONAR: S6549
+        # Validated: pattern checked above, result checked below for containment
         validated_result: Path = _validated_candidate(Path(result), safe_base)
         results.append(validated_result)
 

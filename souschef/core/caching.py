@@ -8,6 +8,8 @@ Enables fast retrieval of parsed inventories, assessments, and API
 responses while maintaining cache freshness.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import time

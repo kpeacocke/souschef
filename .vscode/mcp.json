@@ -1,15 +1,20 @@
 {
-    "mcpServers": {
-        "souschef": {
-            "type": "stdio",
-            "command": "/workspaces/souschef/.venv/bin/python",
-            "args": [
-                "-m",
-                "souschef.server"
-            ],
-            "env": {
-                "PYTHONPATH": "/workspaces/souschef"
-            }
-        }
-    }
+	"servers": {
+		"souschef": {
+			"type": "stdio",
+			"command": "/workspaces/souschef/.venv/bin/python",
+			"args": [
+				"-m",
+				"souschef.server"
+			],
+			"env": {
+				"PYTHONPATH": "/workspaces/souschef"
+			}
+		},
+		"MCP_DOCKER": {
+			"type": "sse",
+			"url": "http://host.docker.internal:3000"
+		}
+	},
+	"inputs": []
 }

@@ -1,3 +1,19 @@
+# Build Docker MCP CLI plugin from docker/mcp-gateway source
+FROM golang:1.25-bookworm AS docker-mcp-builder
+WORKDIR /src
+RUN apt-get update && apt-get install -y make git && rm -rf /var/lib/apt/lists/*
+# Create the target directory that the Makefile expects
+RUN mkdir -p /root/.docker/cli-plugins
+# Retry logic for git clone to handle transient network issues
+RUN for i in 1 2 3; do \
+    if git clone --depth 1 https://github.com/docker/mcp-gateway.git; then \
+      cd mcp-gateway && make docker-mcp && exit 0; \
+    else \
+      echo "Clone attempt $i failed, retrying..."; \
+      sleep $((i * 5)); \
+    fi; \
+  done; exit 1
+
 # Use the official Python devcontainer as base
 FROM mcr.microsoft.com/devcontainers/python:3.13
 
@@ -27,14 +43,30 @@ RUN apt-get update && \
     libssl-dev \
     libffi-dev \
     unzip \
-    npm \
-    docker.io && \
+    npm && \
     # Install Poetry
     curl -sSL https://install.python-poetry.org | python3 - && \
     ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
     poetry config virtualenvs.in-project true && \
     # Clean up APT cache
     rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI (docker-ce-cli) and docker-mcp plugin
+RUN install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.gpg && \
+    chmod a+r /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends docker-ce-cli && \
+    mkdir -p /usr/local/lib/docker/cli-plugins && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install docker-mcp plugin from builder stage (system-wide location for all users)
+COPY --from=docker-mcp-builder /src/mcp-gateway/dist/docker-mcp /usr/local/lib/docker/cli-plugins/docker-mcp
+RUN chmod +x /usr/local/lib/docker/cli-plugins/docker-mcp
+
+
 
 # Install Trivy vulnerability scanner
 RUN apt-get update && \
