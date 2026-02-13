@@ -1,6 +1,5 @@
 go 1.25.5
 
 use (
-	./mcp-gateway
 	./terraform-provider
 )
