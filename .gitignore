@@ -66,6 +66,7 @@ ENV/
 .devcontainer/*
 !.devcontainer/devcontainer.json
 !.devcontainer/post-create.sh
+!.devcontainer/post-start.sh
 !.devcontainer/Dockerfile
 
 # macOS
