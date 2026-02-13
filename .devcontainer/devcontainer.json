@@ -125,7 +125,7 @@
             ]
         }
     },
-    "onCreateCommand": "echo '✅ Container created - Poetry and tools available'",
+    "onCreateCommand": "echo 'Container created - Poetry and development tools available'",
     "postCreateCommand": "chmod +x .devcontainer/post-create.sh && .devcontainer/post-create.sh",
     "postStartCommand": "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true && bash .devcontainer/post-start.sh",
     "remoteUser": "vscode",
