@@ -14,6 +14,9 @@
     "remoteEnv": {
         "DOCKER_MCP_IN_CONTAINER": "1"
     },
+    "runArgs": [
+        "--env-file=${localWorkspaceFolder}/.env.devcontainer"
+    ],
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
             "installZsh": true,
@@ -124,6 +127,7 @@ l fa            "version": "17",
     },
     "onCreateCommand": "echo '✅ Container created - Poetry and tools available'",
     "postCreateCommand": "chmod +x .devcontainer/post-create.sh && .devcontainer/post-create.sh",
+    "postStartCommand": "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true && bash .devcontainer/post-start.sh",
     "remoteUser": "vscode",
     "mounts": [
         {

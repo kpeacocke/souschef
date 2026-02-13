@@ -79,6 +79,18 @@ poetry install
 echo "🪝 Installing pre-commit hooks..."
 poetry run pre-commit install
 
+# Build Docker MCP Gateway CLI plugin
+echo "🔧 Building Docker MCP Gateway..."
+cd /workspaces/souschef/mcp-gateway
+make docker-mcp 2>&1 | tail -3 || echo "ℹ️  Gateway build may be in progress"
+mkdir -p "$HOME/.docker/cli-plugins/"
+cp -f bin/docker-mcp "$HOME/.docker/cli-plugins/" 2>/dev/null || true
+cd /workspaces/souschef
+
+# Initialize MCP Catalog (needed for gateway)
+echo "📋 Initializing MCP Catalog..."
+docker mcp catalog init 2>/dev/null || echo "ℹ️  Catalog initialization will run on container start"
+
 # Set up Go environment for terraform-provider
 echo "🐹 Setting up Go dependencies..."
 cd /workspaces/souschef/terraform-provider
@@ -103,4 +115,10 @@ echo "🧪 Running quick verification tests..."
 poetry run pytest -q --co -q 2>/dev/null || echo "⚠️  Test discovery completed"
 
 echo "✅ SousChef development environment ready!"
+echo ""
+echo "📌 Gateway will start automatically on container restart."
+echo "   To check gateway status: tail -f /tmp/gateway.log"
+echo "   To list servers: docker mcp server ls"
+echo "   To stop gateway: pkill -f docker-mcp"
+echo "   To restart gateway: docker mcp gateway run --verbose > /tmp/gateway.log 2>&1 &"
 

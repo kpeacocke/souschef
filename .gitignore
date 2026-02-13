@@ -111,6 +111,8 @@ site/
 # Environment files (but keep examples)
 .env
 !.env.example
+.env.devcontainer
+!.env.devcontainer.example
 
 # Test artifacts
 tests/integration/fixtures/*.tar.gz
