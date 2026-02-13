@@ -101,7 +101,8 @@ def _parse_host_entry(line: str, group_name: str, inventory: dict[str, Any]) -> 
 
     if len(parts) > 1:
         var_str = parts[1]
-        for var in re.findall(r"(\w+)=(\S+)", var_str):
+        # Use atomic grouping-style regex to prevent ReDoS via catastrophic backtracking
+        for var in re.findall(r"(\w+)=([\w\-.:/]+)", var_str):
             host_vars[var[0]] = var[1]
 
     inventory["groups"][group_name]["hosts"].append(hostname)
