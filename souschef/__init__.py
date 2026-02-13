@@ -2,7 +2,11 @@
 
 from pathlib import Path
 
-import tomllib
+# tomllib is available in Python 3.11+, use tomli backport for earlier versions
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[import-not-found]
 
 
 # Read version from pyproject.toml
