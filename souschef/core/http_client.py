@@ -225,6 +225,56 @@ class HTTPClient:
 
         return headers
 
+    def _handle_request_error(
+        self,
+        error: Exception,
+        url: str,
+        timeout_value: int,
+        response: requests.Response | None = None,
+    ) -> None:
+        """
+        Handle common request exceptions with appropriate error messages.
+
+        Args:
+            error: The exception that occurred.
+            url: The URL that was requested.
+            timeout_value: The timeout value used for the request.
+            response: The response object if available.
+
+        Raises:
+            HTTPError: For HTTP-specific errors with status codes.
+            SousChefError: For other request failures.
+
+        """
+        if isinstance(error, RequestsHTTPError):
+            if response is not None:
+                raise HTTPError(
+                    response.status_code,
+                    str(error),
+                    response.text,
+                ) from error
+            else:
+                raise SousChefError(
+                    f"HTTP request failed: {error}",
+                    "Check the API endpoint and your network connection.",
+                ) from error
+        elif isinstance(error, RequestsTimeout):
+            raise SousChefError(
+                f"Request timed out after {timeout_value} seconds",
+                "The API service may be slow or unresponsive. Try increasing "
+                "the timeout value or try again later.",
+            ) from error
+        elif isinstance(error, RequestsConnectionError):
+            raise SousChefError(
+                f"Failed to connect to {url}",
+                "Check your network connection and verify the base URL is correct.",
+            ) from error
+        elif isinstance(error, RequestException):
+            raise SousChefError(
+                f"Request failed: {error}",
+                "Check the API documentation and your request parameters.",
+            ) from error
+
     def post(
         self,
         endpoint: str,
@@ -274,34 +324,14 @@ class HTTPClient:
                     "Check the API documentation and endpoint.",
                 )
             return json_response
-        except RequestsHTTPError as e:
-            if response is not None:
-                raise HTTPError(
-                    response.status_code,
-                    str(e),
-                    response.text,
-                ) from e
-            else:
-                raise SousChefError(
-                    f"HTTP request failed: {e}",
-                    "Check the API endpoint and your network connection.",
-                ) from e
-        except RequestsTimeout as e:
-            raise SousChefError(
-                f"Request timed out after {timeout_value} seconds",
-                "The API service may be slow or unresponsive. Try increasing "
-                "the timeout value or try again later.",
-            ) from e
-        except RequestsConnectionError as e:
-            raise SousChefError(
-                f"Failed to connect to {url}",
-                "Check your network connection and verify the base URL is correct.",
-            ) from e
-        except RequestException as e:
-            raise SousChefError(
-                f"Request failed: {e}",
-                "Check the API documentation and your request parameters.",
-            ) from e
+        except (
+            RequestsHTTPError,
+            RequestsTimeout,
+            RequestsConnectionError,
+            RequestException,
+        ) as e:
+            self._handle_request_error(e, url, timeout_value, response)
+            raise  # Unreachable, but makes type checker happy
 
     def get(
         self,
@@ -352,34 +382,14 @@ class HTTPClient:
                     "Check the API documentation and endpoint.",
                 )
             return json_response
-        except RequestsHTTPError as e:
-            if response is not None:
-                raise HTTPError(
-                    response.status_code,
-                    str(e),
-                    response.text,
-                ) from e
-            else:
-                raise SousChefError(
-                    f"HTTP request failed: {e}",
-                    "Check the API endpoint and your network connection.",
-                ) from e
-        except RequestsTimeout as e:
-            raise SousChefError(
-                f"Request timed out after {timeout_value} seconds",
-                "The API service may be slow or unresponsive. Try increasing "
-                "the timeout value or try again later.",
-            ) from e
-        except RequestsConnectionError as e:
-            raise SousChefError(
-                f"Failed to connect to {url}",
-                "Check your network connection and verify the base URL is correct.",
-            ) from e
-        except RequestException as e:
-            raise SousChefError(
-                f"Request failed: {e}",
-                "Check the API documentation and your request parameters.",
-            ) from e
+        except (
+            RequestsHTTPError,
+            RequestsTimeout,
+            RequestsConnectionError,
+            RequestException,
+        ) as e:
+            self._handle_request_error(e, url, timeout_value, response)
+            raise  # Unreachable, but makes type checker happy
 
     def close(self) -> None:
         """Close the HTTP session."""
