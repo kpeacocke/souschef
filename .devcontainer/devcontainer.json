@@ -38,7 +38,7 @@
             "installGems": "chef"
         },
         "ghcr.io/devcontainers/features/java:1": {
-l fa            "version": "17",
+            "version": "17",
             "installMaven": false,
             "installGradle": false
         },
