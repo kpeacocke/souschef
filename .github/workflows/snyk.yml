@@ -60,7 +60,6 @@ jobs:
 
     - name: Run Snyk dependency vulnerability scan
       id: snyk-sca-scan
-      continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
@@ -75,7 +74,10 @@ jobs:
           exit 0
         fi
 
-        exit $EXIT_CODE
+        # Always exit 0 to prevent workflow failure - findings are reported in SARIF
+        # Exit code 0 = no vulns, 1 = vulns found, 2+ = errors
+        # We want to report all findings but not fail the workflow
+        exit 0
 
     - name: Create empty SARIF if missing
       if: always()
@@ -116,7 +118,6 @@ jobs:
 
     - name: Run Snyk Code analysis (SAST)
       id: snyk-code-scan
-      continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
@@ -132,8 +133,8 @@ jobs:
           exit 0
         fi
 
-        # Exit with whatever code Snyk returned (vulnerabilities or other issues)
-        exit $EXIT_CODE
+        # Always exit 0 to prevent workflow failure - findings are reported in SARIF
+        exit 0
 
     - name: Create empty SARIF if missing or rate limited
       if: always()
@@ -172,7 +173,6 @@ jobs:
 
     - name: Scan Infrastructure as Code files
       id: snyk-iac-scan
-      continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
@@ -188,7 +188,8 @@ jobs:
           exit 0
         fi
 
-        exit $EXIT_CODE
+        # Always exit 0 to prevent workflow failure - findings are reported in SARIF
+        exit 0
 
     - name: Create empty SARIF if missing
       if: always()
@@ -252,7 +253,6 @@ jobs:
 
     - name: Register project with Snyk monitoring
       id: snyk-monitor
-      continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
@@ -267,7 +267,8 @@ jobs:
           exit 0
         fi
 
-        exit $EXIT_CODE
+        # Always exit 0 - monitoring endpoint success is informational
+        exit 0
 
     - name: Add rate limit notice for monitoring
       if: steps.snyk-monitor.outputs.rate_limit_hit == 'true'
