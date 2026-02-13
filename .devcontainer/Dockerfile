@@ -16,79 +16,60 @@ ARG SONAR_SCANNER_VERSION=latest
 # Set shell options for safer piping
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Remove problematic Yarn repository that has signing issues and add the GPG key
+# Install all dependencies in single RUN to minimize layers
 RUN rm -f /etc/apt/sources.list.d/yarn.list && \
     rm -f /etc/apt/sources.list.d/yarn.sources && \
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys FF7CB5667B542092084BBDC562D54FD4003F6525 2>/dev/null || true
-
-# Update package lists and install system dependencies
-RUN apt-get update && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys \
+    FF7CB5667B542092084BBDC562D54FD4003F6525 2>/dev/null || true && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
+    apt-transport-https \
+    build-essential \
     curl \
     git \
     gnupg \
-    wget \
-    apt-transport-https \
-    lsb-release \
-    build-essential \
-    libssl-dev \
     libffi-dev \
+    libssl-dev \
+    lsb-release \
+    npm \
     unzip \
-    npm && \
-    # Install Poetry
+    wget && \
     curl -sSL https://install.python-poetry.org | python3 - && \
     ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
     poetry config virtualenvs.in-project true && \
-    # Clean up APT cache
-    rm -rf /var/lib/apt/lists/*
-
-# Install Docker CLI (docker-ce-cli)
-RUN install -m 0755 -d /etc/apt/keyrings && \
+    install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.gpg && \
     chmod a+r /etc/apt/keyrings/docker.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] " \
+    "https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
     | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends docker-ce-cli && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Trivy vulnerability scanner
-RUN apt-get update && \
     curl -fsSL https://aquasecurity.github.io/trivy-repo/deb/public.key -o /etc/apt/trusted.gpg.d/trivy.gpg && \
-    TRIVY_SUITE="$(lsb_release -sc)" && \
-    if [ "$TRIVY_SUITE" = "trixie" ]; then TRIVY_SUITE="bookworm"; fi && \
-    echo "deb [signed-by=/etc/apt/trusted.gpg.d/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb ${TRIVY_SUITE} main" | tee -a /etc/apt/sources.list.d/trivy.list && \
+    echo "deb [signed-by=/etc/apt/trusted.gpg.d/trivy.gpg] " \
+    "https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc | sed 's/trixie/bookworm/') main" | \
+    tee -a /etc/apt/sources.list.d/trivy.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends trivy && \
+    apt-get install -y --no-install-recommends docker-ce-cli trivy && \
+    if [ "${SNYK_VERSION}" != "skip" ]; then npm install -g snyk; fi && \
+    if [ "${CODEQL_VERSION}" != "skip" ]; then \
+        ARCH="$(uname -m)"; \
+        if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then \
+            curl -L https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip -o /tmp/codeql.zip && \
+            unzip /tmp/codeql.zip -d /opt && \
+            ln -s /opt/codeql/codeql /usr/local/bin/codeql && \
+            rm /tmp/codeql.zip; \
+        fi; \
+    fi && \
+    if [ "${SONAR_SCANNER_VERSION}" != "skip" ]; then \
+        SCANNER_VERSION="${SONAR_SCANNER_VERSION}"; \
+        if [ "$SCANNER_VERSION" = "latest" ]; then SCANNER_VERSION="6.2.1.4610"; fi; \
+        curl -L https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-"${SCANNER_VERSION}"-linux-x64.zip -o /tmp/sonar-scanner.zip && \
+        unzip /tmp/sonar-scanner.zip -d /opt && \
+        mv /opt/sonar-scanner-"${SCANNER_VERSION}"-linux-x64 /opt/sonar-scanner && \
+        ln -s /opt/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner && \
+        rm /tmp/sonar-scanner.zip; \
+    fi && \
+    mkdir -p /usr/local/lib/docker/cli-plugins && \
     rm -rf /var/lib/apt/lists/*
-
-# Install development tools (Snyk, CodeQL, SonarScanner)
-RUN if [ "$SNYK_VERSION" != "skip" ]; then \
-    npm install -g snyk && \
-    snyk --version; \
-    fi && \
-    if [ "$CODEQL_VERSION" != "skip" ]; then \
-    ARCH=$(uname -m); \
-    if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then \
-        curl -L https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip -o /tmp/codeql.zip && \
-        unzip /tmp/codeql.zip -d /opt && \
-        ln -s /opt/codeql/codeql /usr/local/bin/codeql && \
-        rm /tmp/codeql.zip; \
-    fi; \
-    fi && \
-    if [ "$SONAR_SCANNER_VERSION" != "skip" ]; then \
-    if [ "$SONAR_SCANNER_VERSION" = "latest" ]; then \
-        SONAR_SCANNER_VERSION="6.2.1.4610"; \
-    fi; \
-    curl -L https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-linux-x64.zip -o /tmp/sonar-scanner.zip && \
-    unzip /tmp/sonar-scanner.zip -d /opt && \
-    mv /opt/sonar-scanner-${SONAR_SCANNER_VERSION}-linux-x64 /opt/sonar-scanner && \
-    ln -s /opt/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner && \
-    rm /tmp/sonar-scanner.zip; \
-    fi
-
-# Install Docker MCP CLI plugin
-RUN mkdir -p /usr/local/lib/docker/cli-plugins
 COPY --from=docker-mcp-builder /src/mcp-gateway/dist/docker-mcp /usr/local/lib/docker/cli-plugins/docker-mcp
 RUN chmod +x /usr/local/lib/docker/cli-plugins/docker-mcp
 
