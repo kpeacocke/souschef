@@ -1011,25 +1011,21 @@ end
 class TestAnalyzeSearchPatternsEdgeCases:
     """Test analyse_chef_search_patterns error handling."""
 
-    def test_analyze_search_patterns_with_error(self):
+    def test_analyze_search_patterns_with_error(self, tmp_path, monkeypatch):
         """Test analyse_chef_search_patterns exception handling."""
-        from unittest.mock import MagicMock
-
         from souschef.server import analyse_chef_search_patterns
 
-        with patch("souschef.converters.playbook._normalize_path") as mock_path:
-            mock_file = MagicMock()
-            mock_file.is_file.return_value = True
-            mock_file.is_dir.return_value = False
-            mock_path.return_value = mock_file
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        recipe_path = tmp_path / "some_recipe.rb"
+        recipe_path.write_text("search(:node, 'name:*')")
 
-            with patch(
-                "souschef.converters.playbook._extract_search_patterns_from_file"
-            ) as mock_extract:
-                mock_extract.side_effect = ValueError("Parse error")
+        with patch(
+            "souschef.converters.playbook._extract_search_patterns_from_file"
+        ) as mock_extract:
+            mock_extract.side_effect = ValueError("Parse error")
 
-                result = analyse_chef_search_patterns("some_recipe.rb")
-                assert "Error analyzing Chef search patterns" in result
+            result = analyse_chef_search_patterns(str(recipe_path))
+            assert "Error analyzing Chef search patterns" in result
 
 
 class TestAttributePrecedenceIntegration:

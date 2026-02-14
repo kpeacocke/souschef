@@ -5,6 +5,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from souschef.storage import (
     AnalysisResult,
     ConversionResult,
@@ -402,6 +404,166 @@ class TestStorageManager:
             key2 = manager.generate_cache_key("/path/to/cookbook2", "openai", "gpt-4")
 
             assert key1 != key2
+
+    def test_generate_cache_key_falls_back_on_hash_error(self):
+        """Test cache key generation when hashing raises errors."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            with patch.object(manager, "_hash_directory_contents", side_effect=OSError):
+                cache_key = manager.generate_cache_key("/invalid/path")
+
+            assert isinstance(cache_key, str)
+            assert len(cache_key) == 64
+
+    def test_get_analysis_history_filters_by_cookbook(self):
+        """Test filtering analysis history by cookbook name."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            manager.save_analysis(
+                cookbook_name="alpha",
+                cookbook_path="/alpha",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=1.0,
+                estimated_hours_with_souschef=1.0,
+                recommendations="",
+                analysis_data={},
+            )
+            manager.save_analysis(
+                cookbook_name="beta",
+                cookbook_path="/beta",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=1.0,
+                estimated_hours_with_souschef=1.0,
+                recommendations="",
+                analysis_data={},
+            )
+
+            history = manager.get_analysis_history(cookbook_name="alpha")
+
+            assert len(history) == 1
+            assert history[0].cookbook_name == "alpha"
+
+    def test_get_conversions_by_analysis_id(self):
+        """Test retrieving conversions linked to an analysis ID."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+            analysis_id = manager.save_analysis(
+                cookbook_name="cookbook",
+                cookbook_path="/cookbook",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=1.0,
+                estimated_hours_with_souschef=1.0,
+                recommendations="",
+                analysis_data={},
+            )
+
+            manager.save_conversion(
+                cookbook_name="cookbook",
+                output_type="playbook",
+                status="success",
+                files_generated=1,
+                conversion_data={},
+                analysis_id=analysis_id,
+            )
+
+            conversions = manager.get_conversions_by_analysis_id(analysis_id or 0)
+
+            assert len(conversions) == 1
+            assert conversions[0].analysis_id == analysis_id
+
+    def test_delete_analysis_and_conversion(self):
+        """Test deleting analysis and conversion records."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+            analysis_id = manager.save_analysis(
+                cookbook_name="cookbook",
+                cookbook_path="/cookbook",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=1.0,
+                estimated_hours_with_souschef=1.0,
+                recommendations="",
+                analysis_data={},
+            )
+            conversion_id = manager.save_conversion(
+                cookbook_name="cookbook",
+                output_type="playbook",
+                status="success",
+                files_generated=1,
+                conversion_data={},
+                analysis_id=analysis_id,
+            )
+
+            assert manager.delete_conversion(conversion_id or 0) is True
+            assert manager.delete_analysis(analysis_id or 0) is True
+
+
+class TestPostgresStorageManager:
+    """Tests for PostgresStorageManager helper paths."""
+
+    def test_prepare_sql_replaces_placeholders(self):
+        """Test SQL placeholder conversion for PostgreSQL."""
+        from souschef.storage.database import PostgresStorageManager
+
+        with patch.object(PostgresStorageManager, "_ensure_database_exists"):
+            manager = PostgresStorageManager("postgresql://example")
+
+        assert manager._prepare_sql("SELECT * FROM table WHERE id = ?") == (
+            "SELECT * FROM table WHERE id = %s"
+        )
+
+    def test_get_psycopg_missing_dependency(self):
+        """Test psycopg import error is surfaced as ImportError."""
+        from souschef.storage.database import PostgresStorageManager
+
+        manager = PostgresStorageManager.__new__(PostgresStorageManager)
+        manager.dsn = "postgresql://example"
+
+        with (
+            patch("importlib.import_module", side_effect=ImportError("missing")),
+            pytest.raises(ImportError, match="psycopg is required"),
+        ):
+            manager._get_psycopg()
+
+    def test_ensure_database_exists_handles_migration_error(self):
+        """Test database migrations roll back on errors."""
+        from souschef.storage.database import PostgresStorageManager
+
+        class FakeConn:
+            """Simple fake connection for PostgreSQL tests."""
+
+            def __init__(self) -> None:
+                self.executed: list[str] = []
+                self.commits = 0
+                self.rollbacks = 0
+
+            def execute(self, sql: str, *_args: object) -> None:
+                self.executed.append(sql)
+                if "ADD COLUMN content_fingerprint" in sql:
+                    raise Exception("already exists")
+
+            def commit(self) -> None:
+                self.commits += 1
+
+            def rollback(self) -> None:
+                self.rollbacks += 1
+
+            def __enter__(self) -> "FakeConn":
+                return self
+
+            def __exit__(self, _exc_type, _exc, _tb) -> None:
+                return None
+
+        manager = PostgresStorageManager.__new__(PostgresStorageManager)
+        manager.dsn = "postgresql://example"
+
+        with patch.object(manager, "_connect", return_value=FakeConn()):
+            manager._ensure_database_exists()
 
     def test_get_storage_manager_singleton(self):
         """Test that get_storage_manager returns singleton instance."""

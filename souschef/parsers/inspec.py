@@ -10,8 +10,9 @@ from souschef.core.constants import ERROR_PREFIX, INSPEC_END_INDENT, INSPEC_SHOU
 from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
-    _safe_join,
     _trusted_workspace_root,
+    safe_glob,
+    safe_read_text,
 )
 
 # Regex patterns used across converters
@@ -205,14 +206,14 @@ def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
         RuntimeError: If error reading control files.
 
     """
-    controls_dir = _safe_join(profile_path, "controls")
+    controls_dir = _ensure_within_base_path(profile_path / "controls", profile_path)
     if not controls_dir.exists():
         raise FileNotFoundError(f"No controls directory found in {profile_path}")
 
     controls = []
-    for control_file in controls_dir.glob("*.rb"):
+    for control_file in safe_glob(controls_dir, "*.rb", profile_path):
         try:
-            content = control_file.read_text()  # nosonar
+            content = safe_read_text(control_file, profile_path)
             file_controls = _parse_inspec_control(content)
             for ctrl in file_controls:
                 ctrl["file"] = str(control_file.relative_to(profile_path))

@@ -5,16 +5,22 @@ from typing import Any
 
 import yaml
 
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+)
 
 
 def _normalize_cookbook_base(cookbook_path: str | Path) -> Path:
     """Normalise and resolve a cookbook path to prevent traversal."""
-    return (
+    base_path = (
         _normalize_path(cookbook_path)
         if isinstance(cookbook_path, str)
         else cookbook_path.resolve()
     )
+    workspace_root = _get_workspace_root()
+    return _ensure_within_base_path(base_path, workspace_root)
 
 
 def _initialise_patterns(base_path: Path) -> dict[str, Any]:

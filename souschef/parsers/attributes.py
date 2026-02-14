@@ -10,7 +10,12 @@ from souschef.core.constants import (
     ERROR_PERMISSION_DENIED,
     VALUE_PREFIX,
 )
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+    safe_read_text,
+)
 from souschef.parsers.template import _strip_ruby_comments
 
 
@@ -41,7 +46,9 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        content = file_path.read_text(encoding="utf-8")  # nosonar
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
 
         attributes = _extract_attributes(content)
 

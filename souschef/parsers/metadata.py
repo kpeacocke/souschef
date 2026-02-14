@@ -8,7 +8,13 @@ from souschef.core.constants import (
     ERROR_PERMISSION_DENIED,
     METADATA_FILENAME,
 )
-from souschef.core.path_utils import _normalize_path, _safe_join, safe_read_text
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+    _safe_join,
+    safe_read_text,
+)
 
 
 def read_cookbook_metadata(path: str) -> str:
@@ -24,7 +30,9 @@ def read_cookbook_metadata(path: str) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        content = safe_read_text(file_path, file_path.parent, encoding="utf-8")
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
 
         metadata = _extract_metadata(content)
 
@@ -58,8 +66,9 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
     """
     try:
         file_path = _normalize_path(path)
-        # nosonar
-        content = safe_read_text(file_path, file_path.parent, encoding="utf-8")
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
 
         metadata = _extract_metadata(content)
         return metadata
@@ -148,11 +157,13 @@ def list_cookbook_structure(path: str) -> str:
     """
     try:
         cookbook_path = _normalize_path(path)
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(cookbook_path, workspace_root)
 
-        if not cookbook_path.is_dir():
+        if not safe_path.is_dir():
             return f"Error: {path} is not a directory"
 
-        structure = _collect_cookbook_structure(cookbook_path)
+        structure = _collect_cookbook_structure(safe_path)
 
         if not structure:
             return f"Warning: No standard cookbook structure found in {path}"

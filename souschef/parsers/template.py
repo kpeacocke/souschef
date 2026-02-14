@@ -14,7 +14,12 @@ from souschef.core.constants import (
     REGEX_RUBY_INTERPOLATION,
     REGEX_WORD_SYMBOLS,
 )
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+    safe_read_text,
+)
 
 # Maximum length for variable names in ERB template parsing
 MAX_VARIABLE_NAME_LENGTH = 100
@@ -36,7 +41,9 @@ def parse_template(path: str) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        content = file_path.read_text(encoding="utf-8")  # nosonar
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
 
         # Extract variables
         variables = _extract_template_variables(content)

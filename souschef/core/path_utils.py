@@ -170,18 +170,9 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
     # Validate inputs before constructing the path to avoid traversal.
     relative_parts = _validate_relative_parts(parts)
 
-    # Join and resolve the full path.
-    joined_path: Path = base_resolved.joinpath(relative_parts)
-    result_resolved: Path = joined_path.resolve()
-
-    # Validate containment using relative_to
-    try:
-        result_resolved.relative_to(base_resolved)
-    except ValueError as e:
-        msg = f"Path traversal attempt: {parts} escapes {base_path}"
-        raise ValueError(msg) from e
-
-    return result_resolved  # nosonar
+    # Join and validate the full path using the shared containment check.
+    candidate = base_resolved / relative_parts
+    return _validated_candidate(candidate, base_resolved)
 
 
 def _validated_candidate(path_obj: Path, safe_base: Path) -> Path:

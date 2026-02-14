@@ -34,6 +34,8 @@ from souschef.core.constants import (
     VALUE_PREFIX,
 )
 from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
     _normalize_path,
     _safe_join,
     safe_exists,
@@ -81,22 +83,27 @@ def generate_playbook_from_recipe(recipe_path: str, cookbook_path: str = "") -> 
 
         # Parse the raw recipe file for advanced features
         recipe_file = _normalize_path(recipe_path)
+        workspace_root = _get_workspace_root()
+        safe_recipe = _ensure_within_base_path(recipe_file, workspace_root)
 
         # Validate path if cookbook_path provided
-        base_path = (
-            Path(cookbook_path).resolve() if cookbook_path else recipe_file.parent
-        )
+        if cookbook_path:
+            base_path = _ensure_within_base_path(
+                _normalize_path(cookbook_path), workspace_root
+            )
+        else:
+            base_path = safe_recipe.parent
 
         try:
-            if not safe_exists(recipe_file, base_path):
+            if not safe_exists(safe_recipe, base_path):
                 return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
-            raw_content = safe_read_text(recipe_file, base_path)
+            raw_content = safe_read_text(safe_recipe, base_path)
         except ValueError:
             return f"{ERROR_PREFIX} Path traversal attempt detected: {recipe_path}"
 
         # Generate playbook structure
         playbook: str = _generate_playbook_structure(
-            recipe_content, raw_content, recipe_file
+            recipe_content, raw_content, safe_recipe
         )
 
         return playbook
@@ -145,16 +152,21 @@ def generate_playbook_from_recipe_with_ai(
     try:
         # Parse the recipe file
         recipe_file = _normalize_path(recipe_path)
+        workspace_root = _get_workspace_root()
+        safe_recipe = _ensure_within_base_path(recipe_file, workspace_root)
 
         # Validate path if cookbook_path provided
-        base_path = (
-            Path(cookbook_path).resolve() if cookbook_path else recipe_file.parent
-        )
+        if cookbook_path:
+            base_path = _ensure_within_base_path(
+                _normalize_path(cookbook_path), workspace_root
+            )
+        else:
+            base_path = safe_recipe.parent
 
         try:
-            if not safe_exists(recipe_file, base_path):
+            if not safe_exists(safe_recipe, base_path):
                 return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
-            raw_content = safe_read_text(recipe_file, base_path)
+            raw_content = safe_read_text(safe_recipe, base_path)
         except ValueError:
             return f"{ERROR_PREFIX} Path traversal attempt detected: {recipe_path}"
 
@@ -167,7 +179,7 @@ def generate_playbook_from_recipe_with_ai(
         ai_playbook = _generate_playbook_with_ai(
             raw_content,
             parsed_content,
-            recipe_file.name,
+            safe_recipe.name,
             ai_provider,
             api_key,
             model,
@@ -963,7 +975,10 @@ def analyse_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
 
     """
     try:
-        path_obj = _normalize_path(recipe_or_cookbook_path)
+        workspace_root = _get_workspace_root()
+        path_obj = _ensure_within_base_path(
+            _normalize_path(recipe_or_cookbook_path), workspace_root
+        )
 
         if path_obj.is_file():
             # Single recipe file - use parent directory as base path
