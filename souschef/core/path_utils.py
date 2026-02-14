@@ -118,6 +118,34 @@ def _normalize_trusted_base(base_path: Path | str) -> Path:
     return _normalize_path(base_path)
 
 
+def _validate_relative_parts(parts: tuple[str, ...]) -> Path:
+    """
+    Validate and normalise relative path components.
+
+    Args:
+        parts: Path components provided by callers.
+
+    Returns:
+        A relative Path composed from the validated parts.
+
+    Raises:
+        ValueError: If any part is absolute or attempts traversal.
+
+    """
+    for part in parts:
+        part_path = Path(part)
+        if part_path.is_absolute():
+            raise ValueError(f"Path traversal attempt: {part}")
+        if ".." in part_path.parts:
+            raise ValueError(f"Path traversal attempt: {part}")
+
+    relative = Path(*parts)
+    if relative.is_absolute():
+        raise ValueError(f"Path traversal attempt: {relative}")
+
+    return relative
+
+
 def _safe_join(base_path: Path, *parts: str) -> Path:
     """
     Safely join path components ensuring result stays within base directory.
@@ -139,9 +167,11 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
     # Resolve base path to canonical form
     base_resolved: Path = Path(base_path).resolve()
 
+    # Validate inputs before constructing the path to avoid traversal.
+    relative_parts = _validate_relative_parts(parts)
+
     # Join and resolve the full path.
-    # S6549: False positive; containment is validated below via relative_to().
-    joined_path: Path = base_resolved.joinpath(*parts)  # nosonar
+    joined_path: Path = base_resolved.joinpath(relative_parts)
     result_resolved: Path = joined_path.resolve()
 
     # Validate containment using relative_to
