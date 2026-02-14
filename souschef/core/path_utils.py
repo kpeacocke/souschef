@@ -139,8 +139,9 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
     # Resolve base path to canonical form
     base_resolved: Path = Path(base_path).resolve()
 
-    # Join and resolve the full path
-    joined_path: Path = base_resolved.joinpath(*parts)
+    # Join and resolve the full path.
+    # S6549: False positive; containment is validated below via relative_to().
+    joined_path: Path = base_resolved.joinpath(*parts)  # nosonar
     result_resolved: Path = joined_path.resolve()
 
     # Validate containment using relative_to
