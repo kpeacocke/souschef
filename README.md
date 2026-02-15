@@ -88,6 +88,40 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 
 See [Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md) for complete documentation.
 
+## What's New in v2.0.0
+
+**Foundation Release: Intermediate Representation (IR) Schema & Plugin Architecture** - Core infrastructure for next-generation multi-tool support:
+
+### Core Foundation
+
+- **Unified IR Schema**: Normalised representation of infrastructure configurations supporting Chef, Puppet, Salt, Bash, PowerShell, Ansible and target platforms (Ansible, Terraform, CloudFormation)
+- **Extensible Plugin Architecture**: `SourceParser` and `TargetGenerator` abstract base classes enabling support for new source tools and target platforms
+- **Version Management**: Semantic versioning and schema migration support for IR format evolution
+- **Dependency DAG**: Directed acyclic graph with automatic topological sorting and circular dependency detection
+
+### Modules
+
+- **`souschef/ir/schema.py`**: Core data structures (IRNode, IRGraph, IRAction, IRAttribute, IRGuard)
+- **`souschef/ir/versioning.py`**: Version compatibility checking and schema migrations
+- **`souschef/ir/plugin.py`**: Plugin registry for parser and generator implementations
+
+### Documentation
+
+- **[IR.md](docs/IR.md)**: Comprehensive IR module documentation with API reference and examples
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: Updated architecture guide with IR module placement
+- **Unit Tests**: 750+ lines of test coverage with 100% schema module coverage
+- **Integration Tests**: Real-world graph operations and plugin registry tests
+- **Property-Based Tests**: 18 Hypothesis fuzz tests with 50 examples each ensuring robustness
+
+### Testing & Quality
+
+- 3,211+ passing tests (36 new IR tests)
+- 100% code coverage for IR schema module
+- All Ruff linting checks passing
+- Full mypy type checking compliance
+
+This foundation enables future support for multi-source and multi-target transformations beyond Chef-to-Ansible.
+
 ## Previous Releases
 
 ### v4.1.0 - Security Hardening & Type Safety

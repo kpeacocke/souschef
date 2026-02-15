@@ -22,6 +22,12 @@ souschef/
 ├── deployment.py            # AWX/AAP integration & deployment strategies
 ├── ansible_upgrade.py       # Ansible upgrade planning and assessment
 │
+├── ir/                      # Intermediate Representation (v2.0)
+│   ├── __init__.py          # Package exports
+│   ├── schema.py            # Core IR data structures and graph
+│   ├── versioning.py        # Version management and schema evolution
+│   └── plugin.py            # Plugin architecture for parsers/generators
+│
 ├── core/                    # Shared utilities (no business logic)
 │   ├── __init__.py
 │   ├── ansible_versions.py  # Ansible version compatibility data
@@ -70,6 +76,65 @@ souschef/
 | `assessment.py` | Migration assessment logic | Adding assessment methods, complexity rules |
 | `deployment.py` | AWX integration & deployment patterns | Deployment strategies, platform-specific logic |
 | `ansible_upgrade.py` | Ansible upgrade planning logic | Adding upgrade planning features, new upgrade workflows |
+
+## Intermediate Representation (IR) Module - v2.0
+
+The `ir/` module (introduced in v2.0) provides a unified, abstract representation of infrastructure configurations from various source tools (Chef, Puppet, Salt, Bash, PowerShell) that can be converted to target systems (Ansible, Terraform, CloudFormation).
+
+### IR Module Structure
+
+| Module | Purpose |
+|--------|---------|
+| `schema.py` | Core data structures: IRNode, IRGraph, IRAction, IRAttribute, IRGuard |
+| `versioning.py` | Version management, compatibility checking, and schema migrations |
+| `plugin.py` | Plugin architecture: SourceParser, TargetGenerator, PluginRegistry |
+
+### Key Concepts
+
+**IRGraph**: A directed acyclic graph (DAG) representation of infrastructure where:
+- Nodes represent configurable entities (recipes, resources, handlers)
+- Edges represent dependencies between nodes
+- Attributes and actions describe node properties and operations
+- Metadata tracks source file and location information
+
+**Plugin Architecture**:
+- `SourceParser`: Abstract base for parsers (Chef, Puppet, etc. → IR)
+- `TargetGenerator`: Abstract base for generators (IR → Ansible, Terraform, etc.)
+- `PluginRegistry`: Central registry managing parser and generator lifecycle
+
+**Versioning**:
+- Semantic versioning (major.minor.patch) for IR schema
+- Version compatibility checking (major version must match)
+- Schema migration support for evolving IR format
+
+### Relationship to Other Modules
+
+```
+parsers/ (v1.0)
+   ↓ (extracts raw structures)
+ir/schema.py (normalised representation)
+   ↓ (applies transformations)
+converters/ (v1.0) or ir/plugin.py (v2.0)
+   ↓
+Target format (Ansible, Terraform, etc.)
+```
+
+### When to Use IR vs Converters
+
+**Use IR module (`ir/plugin.py`) for:**
+- New parsers/generators requiring plugin architecture
+- Cross-tool compatibility checking
+- Version management and schema evolution
+- Extensible framework for multiple source/target combinations
+
+**Use converters module (`converters/`) for:**
+- Direct Chef → Ansible transformations (v1.0 compatibility)
+- Specific format conversions (Habitat → Docker)
+- Legacy code requiring minimal refactoring
+
+### Implementation Guide
+
+For detailed IR module documentation including API reference, examples, and best practices, see [IR.md](IR.md).
 
 ## Module Responsibilities
 
