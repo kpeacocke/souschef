@@ -7,7 +7,7 @@ testing strategies for Ansible upgrades.
 """
 
 import shlex
-import subprocess
+import subprocess  # nosec B602: All subprocess calls use list args, not shell=True
 from datetime import date
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict, cast

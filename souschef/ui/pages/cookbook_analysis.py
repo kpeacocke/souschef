@@ -102,7 +102,13 @@ def _get_secure_ai_config_path() -> Path:
 
 
 def load_ai_settings() -> dict[str, str | float | int]:
-    """Load AI settings from environment variables or configuration file."""
+    """
+    Load AI settings from environment variables or configuration file.
+
+    Security: API keys are NOT included in the returned dictionary.
+    Callers must retrieve them separately from os.environ to prevent
+    accidental logging or exposure of sensitive credentials.
+    """
     # First try to load from environment variables
     env_config = _load_ai_settings_from_env()
 
@@ -115,7 +121,13 @@ def load_ai_settings() -> dict[str, str | float | int]:
 
 
 def _load_ai_settings_from_env() -> dict[str, str | float | int]:
-    """Load AI settings from environment variables."""
+    """
+    Load AI settings from environment variables.
+
+    Security: API keys are loaded from environment variables but NOT stored
+    in the returned dictionary. Callers must retrieve them separately from
+    os.environ to prevent accidental logging or exposure.
+    """
     import os
     from contextlib import suppress
 
@@ -123,9 +135,9 @@ def _load_ai_settings_from_env() -> dict[str, str | float | int]:
     env_mappings = {
         "SOUSCHEF_AI_PROVIDER": "provider",
         "SOUSCHEF_AI_MODEL": "model",
-        "SOUSCHEF_AI_API_KEY": "api_key",
         "SOUSCHEF_AI_BASE_URL": "base_url",
         "SOUSCHEF_AI_PROJECT_ID": "project_id",
+        # NOTE: api_key is NOT included here to prevent accidental logging
     }
 
     # Handle string values
@@ -840,8 +852,14 @@ def _is_symlink(info) -> bool:
 
 
 def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
-    """Get a safe path for extraction that prevents directory traversal."""
+    """
+    Get a safe path for extraction that prevents TarSlip (CWE-22).
+
+    Validates that extracted paths stay within the extraction directory,
+    preventing directory traversal and TarSlip attacks.
+    """
     # Reject paths with directory traversal attempts or absolute paths
+    # These attack vectors prevent TarSlip/Zip-slip attacks
     if (
         ".." in filename
         or filename.startswith("/")
@@ -852,6 +870,7 @@ def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
 
     # Normalise separators and join using a containment-checked join
     normalized = filename.replace("\\", "/").strip("/")
+    # _ensure_within_base_path validates the resolved path is within base
     safe_path = _ensure_within_base_path(
         _safe_join(extraction_dir.resolve(), normalized), extraction_dir.resolve()
     )

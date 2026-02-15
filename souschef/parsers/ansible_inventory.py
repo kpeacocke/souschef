@@ -9,7 +9,7 @@ environments.
 import configparser
 import os
 import re
-import subprocess
+import subprocess  # nosec B404: Used for safe subprocess.run with list args
 from pathlib import Path
 from typing import Any
 

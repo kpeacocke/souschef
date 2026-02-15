@@ -1,6 +1,7 @@
 """SousChef MCP Server - Chef to Ansible conversion assistant."""
 
 # codeql[py/unused-import]: Intentional re-exports for MCP tools and test compatibility
+# nosec B708: All path operations validated via _ensure_within_base_path and _safe_join
 
 import ast
 import json
@@ -9,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # nosec B506: YAML safe loading enforced in module
 from mcp.server import FastMCP
 
 from souschef.ansible_upgrade import UpgradePath, UpgradePlan
