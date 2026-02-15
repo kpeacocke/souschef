@@ -730,6 +730,18 @@ Use this with:
 - Security scanning and SBOM included
 - Multi-platform support (amd64, arm64)
 
+**Container Security Scanning:**
+
+All Docker images are automatically scanned for vulnerabilities using Trivy during the release process:
+
+- **Automated Scanning**: Every release build includes vulnerability scanning
+- **Smart Filtering**: Only CRITICAL/HIGH severity vulnerabilities with available fixes are reported
+- **Zero Unfixed Issues**: Uses `ignore-unfixed: true` to filter noise from base image issues awaiting upstream patches
+- **GitHub Security Tab**: Scan results available in the repository's Security tab for tracking and monitoring
+- **Transparent Process**: All vulnerability scanning is documented in `.trivyignore`
+
+For details on vulnerability management and security practices, see [SECURITY.md](SECURITY.md#automated-vulnerability-scanning).
+
 **Docker Environment Configuration:**
 
 SousChef supports AI configuration via environment variables in Docker containers. Create a `.env` file in your project root:

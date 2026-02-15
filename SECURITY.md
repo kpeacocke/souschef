@@ -130,6 +130,39 @@ SousChef implements multiple layers of security protection:
 - **Vulnerability Scanning**: Automated security scanning with Snyk and CodeQL
 - **Dependency Pinning**: Lock files ensure reproducible builds with known-good versions
 
+### Automated Vulnerability Scanning
+
+SousChef includes comprehensive automated vulnerability scanning for all Docker images:
+
+**Trivy Vulnerability Scanning:**
+
+- **Release Process**: All Docker images (UI and MCP) are scanned with Trivy during release builds
+- **Smart Filtering**: Scanning is configured to report only actionable vulnerabilities:
+  - **Severity Filter**: Only CRITICAL and HIGH severity issues are reported
+  - **Fix Availability Filter**: Only vulnerabilities with available fixes are shown (`ignore-unfixed: true`)
+  - **Reduces Noise**: Upstream Alpine/Python base image issues without patches don't clutter the report
+- **GitHub Security Integration**: All scan results are uploaded to the GitHub Security tab for tracking
+- **Configuration**: See [.trivyignore](.trivyignore) for vulnerability filtering strategy
+
+**How This Works:**
+
+1. **Pull Base Image**: Fresh Alpine Linux and Python images pulled on each release
+2. **Build Docker Image**: Multi-stage build compiles application with all dependencies
+3. **Scan with Trivy**: Comprehensive vulnerability database scan
+4. **Smart Reporting**: Only CRITICAL/HIGH with available fixes are reported
+5. **Auto-Resolution**: When upstream packages are patched, next rebuild automatically picks them up
+
+**Viewing Scan Results:**
+
+- GitHub UI: Navigate to the repository's **Security** tab → **Code scanning alerts**
+- Command Line: Pull image and run Trivy locally with same configuration
+
+**For Users:**
+
+- All published images (ghcr.io/kpeacocke/souschef:*) have undergone vulnerability scanning
+- When vulnerabilities are fixed upstream, new releases will automatically include patches
+- See [GitHub Security Advisories](https://github.com/kpeacocke/souschef/security/advisories) for detailed CVE information
+
 ## Contact
 
 For general security questions or concerns, please:
