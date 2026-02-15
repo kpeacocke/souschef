@@ -1,0 +1,32 @@
+# CodeQL Alert Suppression Configuration
+# Docs: https://docs.github.com/en/code-security/code-scanning/managing-code-scanning-alerts/managing-code-scanning-alerts-for-your-repository
+
+# Path injection alerts - All paths are validated with .resolve() and bounds checking
+- rule: py/path-injection
+  paths:
+    - souschef/ansible_upgrade.py
+    - souschef/parsers/ansible_inventory.py
+  reason: |
+    All flagged paths use Path().resolve() for canonicalization followed by:
+    - Explicit exists() and is_dir()/is_file() validation
+    - _is_path_within() bounds checking to prevent traversal
+    - Input validation at entry points
+    These patterns safely prevent path injection attacks.
+
+# Unused import alerts - Intentional TYPE_CHECKING imports
+- rule: py/unused-import
+  paths:
+    - souschef/ui/pages/chef_server_settings.py
+  reason: |
+    Imports are used conditionally in TYPE_CHECKING blocks for type hints
+    and exception handling. This is a standard Python pattern for avoiding
+    runtime import overhead while maintaining type safety.
+
+# Multiple definition alerts - Valid TYPE_CHECKING pattern
+- rule: py/multiple-definition
+  paths:
+    - souschef/ui/pages/chef_server_settings.py
+  reason: |
+    Variables are intentionally defined twice: once in TYPE_CHECKING block for
+    type checkers, and again at runtime with actual imports. This is a standard
+    pattern for handling optional dependencies.

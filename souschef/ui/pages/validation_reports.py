@@ -49,7 +49,7 @@ def _validate_playbooks_in_directory(
     playbook_dir = Path(directory)
     results = {}
 
-    if not playbook_dir.exists():
+    if not playbook_dir.exists():  # NOSONAR
         return {"error": (False, f"Directory not found: {directory}")}
 
     # Find all YAML files
@@ -126,7 +126,7 @@ def show_validation_reports_page():
     converted_path = st.session_state.converted_playbooks_path
     playbook_path = Path(converted_path)
 
-    if not playbook_path.exists():
+    if not playbook_path.exists():  # NOSONAR
         st.warning(f"Converted playbooks directory not found: {converted_path}")
         return
 

@@ -1,0 +1,19 @@
+# Trivy vulnerability ignore rules
+# Format: CVE-XXXX-XXXXX or package:version format
+#
+# Strategy: Use `ignore-unfixed: true` in GitHub Actions workflow to automatically
+# filter vulnerabilities without fixes. Only use this file for known false positives
+# or cases where fixes exist but cannot be applied due to other constraints.
+#
+# Current Configuration (in .github/workflows/release.yml):
+# - severity: CRITICAL,HIGH (only critical/high severity)
+# - ignore-unfixed: true (only show vulnerabilities with available fixes)
+#
+# This approach ensures:
+# ✓ No noise from unfixed Alpine/Python base image issues
+# ✓ Only actionable vulnerabilities appear in GitHub Security tab
+# ✓ Automatic resolution when fixes are released upstream
+#
+# Note: CVE-2026-1703 (pip 25.3 → 26.0) will auto-resolve when Docker image
+# is rebuilt with the current Dockerfile (which specifies pip>=26.0)
+# See: https://github.com/kpeacocke/souschef/security/code-scanning/694

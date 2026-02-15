@@ -66,6 +66,7 @@ ENV/
 .devcontainer/*
 !.devcontainer/devcontainer.json
 !.devcontainer/post-create.sh
+!.devcontainer/post-start.sh
 !.devcontainer/Dockerfile
 
 # macOS
@@ -111,12 +112,17 @@ site/
 # Environment files (but keep examples)
 .env
 !.env.example
+.env.devcontainer
+!.env.devcontainer.example
 
 # Test artifacts
 tests/integration/fixtures/*.tar.gz
 tests/integration/fixtures/*.zip
 tests/integration/fixtures/*.tar.bz2
 tests/integration/fixtures/*.tar.xz
+
+# Accidental mock path output
+MagicMock/
 
 # Docker Compose persistent storage
 data/

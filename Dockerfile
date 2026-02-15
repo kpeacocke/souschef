@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for SousChef UI - Production Ready
 # Optimised for security, robustness, and Docker registry publishing
 
-ARG PYTHON_VERSION=3.14.3
+ARG PYTHON_VERSION=3.14
 ARG POETRY_VERSION=2.3.2
 
 # ============================================================================
@@ -12,8 +12,8 @@ FROM python:${PYTHON_VERSION}-alpine AS base
 ARG PYTHON_VERSION
 
 # Metadata for Docker registry and CI/CD
-LABEL org.opencontainers.image.title="SousChef - MCP AI Chef to Ansible Converter" \
-      org.opencontainers.image.description="AI-powered Model Context Protocol server and web UI for converting Chef cookbooks to Ansible playbooks" \
+LABEL org.opencontainers.image.title="SousChef" \
+      org.opencontainers.image.description="Web UI for converting Chef cookbooks to Ansible playbooks" \
       org.opencontainers.image.authors="SousChef Contributors" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.vendor="SousChef Project" \
@@ -104,6 +104,9 @@ FROM base AS production
 
 ARG PYTHON_VERSION
 
+# Upgrade pip to pick up security fixes (pip >= 26.0 for CVE-2026-1703 fix)
+RUN python -m pip install --no-cache-dir --upgrade "pip>=26.0"
+
 # Copy site-packages from builder (at predictable location, no glob expansion)
 COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
 
@@ -161,7 +164,7 @@ ENTRYPOINT ["python", "-m", "streamlit", "run"]
 CMD ["souschef/ui/app.py", \
      "--server.address", "0.0.0.0", \
      "--server.port", "9999", \
-     "--client.showErrorDetails", "true", \
+    "--client.showErrorDetails", "false", \
      "--logger.level", "info", \
      "--server.headless", "true", \
      "--server.runOnSave", "false", \

@@ -1,7 +1,7 @@
 # Dockerfile for SousChef MCP server (stdio)
 # Optimised for lightweight, secure container execution
 
-ARG PYTHON_VERSION=3.14.3
+ARG PYTHON_VERSION=3.14
 ARG POETRY_VERSION=2.3.2
 
 # ============================================================================
@@ -42,6 +42,9 @@ RUN apk add --no-cache \
 # Copy dependency files
 COPY pyproject.toml poetry.lock ./
 
+# Upgrade pip to pick up security fixes (pip >= 26.0 for CVE-2026-1703 fix)
+RUN python -m pip install --no-cache-dir --upgrade "pip>=26.0"
+
 # Install Poetry
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" \
     && poetry config virtualenvs.create false
@@ -59,6 +62,9 @@ RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major
 FROM base AS production
 
 ARG PYTHON_VERSION
+
+# Upgrade pip to pick up security fixes (pip >= 26.0 for CVE-2026-1703 fix)
+RUN python -m pip install --no-cache-dir --upgrade "pip>=26.0"
 
 # Copy site-packages from builder
 COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages

@@ -42,8 +42,19 @@ __all__ = [
     "ACTION_TO_STATE",
 ]
 
+
+def _load_version() -> str:
+    """Load the project version using importlib.metadata."""
+    try:
+        from importlib.metadata import version
+
+        return version("souschef")
+    except Exception:
+        return "unknown"
+
+
 # Version
-VERSION = "2.6.0"
+VERSION = _load_version()
 
 # Ansible module names
 ANSIBLE_SERVICE_MODULE = "ansible.builtin.service"

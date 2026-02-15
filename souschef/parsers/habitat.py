@@ -9,7 +9,12 @@ from souschef.core.constants import (
     ERROR_IS_DIRECTORY,
     ERROR_PERMISSION_DENIED,
 )
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+    safe_read_text,
+)
 
 # Maximum length for variable values in Habitat plan parsing
 # Prevents ReDoS attacks from extremely long variable assignments
@@ -32,12 +37,14 @@ def parse_habitat_plan(plan_path: str) -> str:
     """
     try:
         normalized_path = _normalize_path(plan_path)
-        if not normalized_path.exists():
-            return ERROR_FILE_NOT_FOUND.format(path=normalized_path)
-        if normalized_path.is_dir():
-            return ERROR_IS_DIRECTORY.format(path=normalized_path)
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(normalized_path, workspace_root)
+        if not safe_path.exists():  # NOSONAR
+            return ERROR_FILE_NOT_FOUND.format(path=safe_path)
+        if safe_path.is_dir():
+            return ERROR_IS_DIRECTORY.format(path=safe_path)
 
-        content = normalized_path.read_text(encoding="utf-8")  # nosonar
+        content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
         metadata: dict[str, Any] = {
             "package": {},
             "dependencies": {"build": [], "runtime": []},

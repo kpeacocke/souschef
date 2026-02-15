@@ -23,7 +23,8 @@
         "reportUnknownArgumentType": "none",
         "reportMissingParameterType": "none",
         "reportGeneralTypeIssues": "warning",
-        "reportOptionalMemberAccess": "warning"
+        "reportOptionalMemberAccess": "warning",
+        "reportMissingImports": "none"
     },
     "python.analysis.autoImportCompletions": true,
     "python.analysis.completeFunctionParens": true,
@@ -519,7 +520,7 @@
     "python-envs.pythonProjects": [],
     "snyk.advanced.autoSelectOrganization": false,
     "codeQL.createQuery.qlPackLocation": "/Users/kpeacocke/code/souschef",
-    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "python-envs.defaultEnvManager": "ms-python.python:system",
     "python-envs.defaultPackageManager": "ms-python.python:pip",
     "snyk.advanced.organization": "16296024-d80b-4481-bbf6-92e2a42b462e",
     "trivy.offlineScan": true

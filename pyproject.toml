@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mcp-souschef"
-version = "5.0.0"
+version = "5.1.4"
 description = "AI-powered MCP server for Chef to Ansible migration and Ansible upgrade planning"
 readme = "README.md"
 homepage = "https://github.com/kpeacocke/souschef"
@@ -16,6 +16,7 @@ classifiers = ["Development Status :: 4 - Beta", "Intended Audience :: Developer
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
+tomli = {version = ">=2.0.0", python = "<3.11"}
 click = ">=8.1.0"
 mcp = ">=1.25.0"
 python-dotenv = ">=1.2.1"
@@ -94,7 +95,7 @@ ignore = ["D100", "D104", "D105", "D107", "D203", "D212"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q --cov=souschef --cov-report=term-missing"
+addopts = "-ra -q"
 filterwarnings = [
     "ignore::ResourceWarning",
 ]
@@ -134,6 +135,14 @@ source = [
 
 [tool.mutmut]
 backup = false
+paths_to_mutate = ["souschef/core/validation.py"]
+also_copy = [
+    "souschef/",
+]
+pytest_add_cli_args_test_selection = [
+    "tests/unit/test_server.py::TestValidationFramework",
+    "tests/unit/test_validation_comprehensive.py",
+]
 
 [tool.mypy]
 python_version = "3.13"

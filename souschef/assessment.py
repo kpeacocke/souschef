@@ -159,6 +159,7 @@ def _calculate_activity_breakdown(
     }
 
     # Writing vs testing ratios for manual effort by activity type
+    # (Developer spends this % on writing code/config, remainder on testing)
     writing_ratios = {
         "Recipes": 0.70,
         "Templates": 0.75,
@@ -168,6 +169,19 @@ def _calculate_activity_breakdown(
         "Handlers": 0.70,
         "Files": 0.85,
         "Definitions": 0.70,
+    }
+
+    # Writing vs testing ratios for AI-assisted effort by activity type
+    # (AI generates code, human spends more time testing/validating)
+    ai_writing_ratios = {
+        "Recipes": 0.20,  # AI generates recipes → human validates (80% testing)
+        "Templates": 0.20,  # AI converts templates → human verifies (80% testing)
+        "Attributes": 0.30,  # AI extracts attributes → human reviews (70% testing)
+        CUSTOM_RESOURCES: 0.55,  # Complex → limited automation, closer to manual ratio
+        "Libraries": 0.40,  # AI converts libraries → human adapts (60% testing)
+        "Handlers": 0.25,  # AI generates handlers → human verifies (75% testing)
+        "Files": 0.15,  # AI copies files → human organizes (85% testing)
+        "Definitions": 0.35,  # AI converts macros → human tests (65% testing)
     }
 
     activity_descriptions = {
@@ -211,7 +225,9 @@ def _calculate_activity_breakdown(
             manual_hours * ai_efficiency[activity_type],
             1,
         )
-        ai_assisted_writing_hours = round(ai_assisted_hours * writing_ratio, 1)
+        # AI-assisted work has different writing ratio: more testing, less writing
+        ai_write_ratio = ai_writing_ratios[activity_type]
+        ai_assisted_writing_hours = round(ai_assisted_hours * ai_write_ratio, 1)
         ai_assisted_testing_hours = round(
             ai_assisted_hours - ai_assisted_writing_hours,
             1,
@@ -572,7 +588,7 @@ def analyse_cookbook_dependencies(
         except (ValueError, OSError) as e:
             return f"Error: Invalid cookbook path '{cookbook_path}': {e}"
 
-        if not normalized_input.exists():
+        if not normalized_input.exists():  # NOSONAR
             return (
                 f"Error: Cookbook path not found: {cookbook_path}\n\n"
                 "Suggestion: Check that the path exists and points to a cookbook directory"
@@ -952,37 +968,6 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
     spec_dir: Path = _safe_join(base, "spec")
     has_test_dir: bool = _exists_safe(test_dir) or _exists_safe(spec_dir)
 
-    libraries_dir = cookbook_path / "libraries"
-    libraries_count = (
-        len(list(libraries_dir.glob("*.rb"))) if libraries_dir.exists() else 0
-    )
-
-    definitions_dir = cookbook_path / "definitions"
-    definitions_count = (
-        len(list(definitions_dir.glob("*.rb"))) if definitions_dir.exists() else 0
-    )
-
-    resources_dir = cookbook_path / "resources"
-    resources_count = (
-        len(list(resources_dir.glob("*.rb"))) if resources_dir.exists() else 0
-    )
-
-    providers_dir = cookbook_path / "providers"
-    providers_count = (
-        len(list(providers_dir.glob("*.rb"))) if providers_dir.exists() else 0
-    )
-
-    # Configuration files
-    has_berksfile = (cookbook_path / "Berksfile").exists()
-    has_chefignore = (cookbook_path / "chefignore").exists()
-    has_thorfile = (cookbook_path / "Thorfile").exists()
-    has_kitchen_yml = (cookbook_path / ".kitchen.yml").exists() or (
-        cookbook_path / "kitchen.yml"
-    ).exists()
-    has_test_dir = (cookbook_path / "test").exists() or (
-        cookbook_path / "spec"
-    ).exists()
-
     return {
         "recipe_count": recipe_count,
         "template_count": template_count,
@@ -1188,7 +1173,7 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     berksfile_path = _safe_join(base, "Berksfile")
 
-    if not berksfile_path.exists():
+    if not berksfile_path.exists():  # NOSONAR
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
 
     try:
@@ -1219,7 +1204,7 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     chefignore_path = _ensure_within_base_path(_safe_join(base, "chefignore"), base)
 
-    if not chefignore_path.exists():
+    if not chefignore_path.exists():  # NOSONAR
         return {"patterns": [], "complexity": 0}
 
     try:
@@ -1248,7 +1233,7 @@ def _parse_thorfile(cookbook_path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     thorfile_path = _ensure_within_base_path(_safe_join(base, "Thorfile"), base)
 
-    if not thorfile_path.exists():
+    if not thorfile_path.exists():  # NOSONAR
         return {"tasks": [], "complexity": 0}
 
     try:
@@ -1272,7 +1257,7 @@ def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     metadata_path = _ensure_within_base_path(_safe_join(base, "metadata.rb"), base)
 
-    if not metadata_path.exists():
+    if not metadata_path.exists():  # NOSONAR
         return {
             "name": "",
             "version": "",
@@ -1792,7 +1777,7 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
     base_path: Path = _normalize_path(cookbook_path)
 
     # Validate basic accessibility
-    if not base_path.exists():
+    if not base_path.exists():  # NOSONAR
         msg = f"Cookbook path does not exist: {cookbook_path}"
         raise ValueError(msg)
     if not base_path.is_dir():

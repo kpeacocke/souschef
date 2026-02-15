@@ -134,7 +134,7 @@ class LocalBlobStorage(BlobStorage):
         """Download a file from local storage."""
         source_path = self._get_full_path(storage_key)
 
-        if not source_path.exists():
+        if not source_path.exists():  # NOSONAR
             raise FileNotFoundError(f"Storage key not found: {storage_key}")
 
         # Validate local_path is safe
@@ -156,7 +156,7 @@ class LocalBlobStorage(BlobStorage):
         """Delete a file from local storage."""
         try:
             path = self._get_full_path(storage_key)
-            if path.exists():
+            if path.exists():  # NOSONAR
                 if path.is_dir():
                     shutil.rmtree(path)
                 else:

@@ -15,6 +15,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from souschef.converters.resource import (
     _convert_chef_resource_to_ansible,
@@ -33,6 +34,8 @@ from souschef.core.constants import (
     VALUE_PREFIX,
 )
 from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
     _normalize_path,
     _safe_join,
     safe_exists,
@@ -80,22 +83,27 @@ def generate_playbook_from_recipe(recipe_path: str, cookbook_path: str = "") -> 
 
         # Parse the raw recipe file for advanced features
         recipe_file = _normalize_path(recipe_path)
+        workspace_root = _get_workspace_root()
+        safe_recipe = _ensure_within_base_path(recipe_file, workspace_root)
 
         # Validate path if cookbook_path provided
-        base_path = (
-            Path(cookbook_path).resolve() if cookbook_path else recipe_file.parent
-        )
+        if cookbook_path:
+            base_path = _ensure_within_base_path(
+                _normalize_path(cookbook_path), workspace_root
+            )
+        else:
+            base_path = safe_recipe.parent
 
         try:
-            if not safe_exists(recipe_file, base_path):
+            if not safe_exists(safe_recipe, base_path):
                 return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
-            raw_content = safe_read_text(recipe_file, base_path)
+            raw_content = safe_read_text(safe_recipe, base_path)
         except ValueError:
             return f"{ERROR_PREFIX} Path traversal attempt detected: {recipe_path}"
 
         # Generate playbook structure
         playbook: str = _generate_playbook_structure(
-            recipe_content, raw_content, recipe_file
+            recipe_content, raw_content, safe_recipe
         )
 
         return playbook
@@ -144,16 +152,21 @@ def generate_playbook_from_recipe_with_ai(
     try:
         # Parse the recipe file
         recipe_file = _normalize_path(recipe_path)
+        workspace_root = _get_workspace_root()
+        safe_recipe = _ensure_within_base_path(recipe_file, workspace_root)
 
         # Validate path if cookbook_path provided
-        base_path = (
-            Path(cookbook_path).resolve() if cookbook_path else recipe_file.parent
-        )
+        if cookbook_path:
+            base_path = _ensure_within_base_path(
+                _normalize_path(cookbook_path), workspace_root
+            )
+        else:
+            base_path = safe_recipe.parent
 
         try:
-            if not safe_exists(recipe_file, base_path):
+            if not safe_exists(safe_recipe, base_path):
                 return f"{ERROR_PREFIX} Recipe file does not exist: {recipe_path}"
-            raw_content = safe_read_text(recipe_file, base_path)
+            raw_content = safe_read_text(safe_recipe, base_path)
         except ValueError:
             return f"{ERROR_PREFIX} Path traversal attempt detected: {recipe_path}"
 
@@ -166,7 +179,7 @@ def generate_playbook_from_recipe_with_ai(
         ai_playbook = _generate_playbook_with_ai(
             raw_content,
             parsed_content,
-            recipe_file.name,
+            safe_recipe.name,
             ai_provider,
             api_key,
             model,
@@ -894,7 +907,7 @@ def _run_ansible_lint(playbook_content: str) -> str | None:
     except Exception:
         return None
     finally:
-        if tmp_path is not None and Path(tmp_path).exists():
+        if tmp_path is not None and Path(tmp_path).exists():  # NOSONAR
             Path(tmp_path).unlink()
 
 
@@ -962,7 +975,10 @@ def analyse_chef_search_patterns(recipe_or_cookbook_path: str) -> str:
 
     """
     try:
-        path_obj = _normalize_path(recipe_or_cookbook_path)
+        workspace_root = _get_workspace_root()
+        path_obj = _ensure_within_base_path(
+            _normalize_path(recipe_or_cookbook_path), workspace_root
+        )
 
         if path_obj.is_file():
             # Single recipe file - use parent directory as base path
@@ -1269,15 +1285,16 @@ import json
 import os
 import sys
 import argparse
+import socket
 import ipaddress
-from urllib.parse import urlparse, urlunparse
 from typing import Dict, List, Any
+from urllib.parse import urlparse, urlunparse, urlencode
 
 # Search query to group mappings
 SEARCH_QUERIES = {queries_json}
 
 def validate_chef_server_url(server_url: str) -> str:
-    """Validate Chef Server URL to avoid unsafe requests."""
+    """Validate Chef Server URL to prevent SSRF attacks, including DNS rebinding."""
     url_value = str(server_url).strip()
     if not url_value:
         raise ValueError("Chef Server URL is required")
@@ -1292,26 +1309,79 @@ def validate_chef_server_url(server_url: str) -> str:
     if not parsed.hostname:
         raise ValueError("Chef Server URL must include a hostname")
 
+    # Prevent SSRF: block private/local hostnames
     hostname = parsed.hostname.lower()
     local_suffixes = (".localhost", ".local", ".localdomain", ".internal")
     if hostname == "localhost" or hostname.endswith(local_suffixes):
         raise ValueError("Chef Server URL must use a public hostname")
 
+    # Prevent SSRF: block literal private IP addresses
     try:
-        ip_address = ipaddress.ip_address(hostname)
-    except ValueError:
-        ip_address = None
+        ip_addr = ipaddress.ip_address(hostname)
+        if (
+            ip_addr.is_private
+            or ip_addr.is_loopback
+            or ip_addr.is_link_local
+            or ip_addr.is_reserved
+            or ip_addr.is_multicast
+            or ip_addr.is_unspecified
+        ):
+            raise ValueError("Chef Server URL must use a public IP address")
+        # If it's a literal public IP, it's allowed
+        return urlunparse(parsed._replace(params="", query="", fragment="")).rstrip("/")
+    except ValueError as e:
+        # If it's already a validation error (private IP), propagate it
+        if "must use" in str(e):
+            raise
+        # Otherwise it's not an IP, so resolve via DNS
 
-    if ip_address and (
-        ip_address.is_private
-        or ip_address.is_loopback
-        or ip_address.is_link_local
-        or ip_address.is_reserved
-        or ip_address.is_multicast
-        or ip_address.is_unspecified
-    ):
-        raise ValueError("Chef Server URL must use a public hostname")
+    # Prevent DNS rebinding: resolve hostname and check all A/AAAA records
+    try:
+        # Limit to 10 seconds to prevent hanging on slow DNS
+        socket.setdefaulttimeout(10)
+        # getaddrinfo returns (family, type, proto, canonname, sockaddr)
+        try:
+            addrinfo = socket.getaddrinfo(
+                hostname,
+                443,
+                socket.AF_UNSPEC,
+                socket.SOCK_STREAM,
+            )
+        finally:
+            socket.setdefaulttimeout(None)
 
+        if not addrinfo:
+            # Cannot resolve - allow it (fail open, DNS may work at runtime)
+            pass
+        else:
+            # Check ALL resolved addresses - reject if ANY are problematic
+            dangerous_addresses = []
+            for _family, _socktype, _proto, _canonname, sockaddr in addrinfo:
+                ip_str = sockaddr[0]  # IPv4 or IPv6 address
+                ip_addr = ipaddress.ip_address(ip_str)
+                if (
+                    ip_addr.is_private
+                    or ip_addr.is_loopback
+                    or ip_addr.is_link_local
+                    or ip_addr.is_reserved
+                    or ip_addr.is_multicast
+                    or ip_addr.is_unspecified
+                ):
+                    dangerous_addresses.append(ip_str)
+
+            if dangerous_addresses:
+                addr_list = ", ".join(dangerous_addresses)
+                msg = (
+                    f"Hostname {{hostname}} resolves to problematic "
+                    f"addresses: {{addr_list}}"
+                )
+                raise ValueError(msg)
+
+    except OSError:
+        # DNS resolution failed/timeout - allow it (fail open, assume public)
+        pass
+
+    # Strip params, query, fragment for security
     cleaned = parsed._replace(params="", query="", fragment="")
     return urlunparse(cleaned).rstrip("/")
 
@@ -1370,6 +1440,7 @@ def build_inventory() -> Dict[str, Any]:
                     "ansible_host": node.get("ipaddress", hostname)
                 }}
         except Exception:
+            # Silently skip unprocessable nodes; partial inventory is acceptable
             pass
 
     return inventory
@@ -1427,7 +1498,8 @@ def get_chef_nodes(search_query: str) -> list[dict[str, Any]]:
     try:
         # Using Chef Server REST API search endpoint
         # Search endpoint: GET /search/node?q=<query>
-        search_url = f"{chef_server_url}/search/node?q={search_query}"
+        query_params = urlencode({"q": search_query})
+        search_url = f"{chef_server_url}/search/node?{query_params}"
 
         # Note: Proper authentication requires Chef API signing
         # For unauthenticated access, this may work on open Chef servers
@@ -2029,7 +2101,7 @@ def _convert_ruby_hash_to_yaml(ruby_hash: str) -> str:
 
         # Convert each pair from Ruby syntax to YAML
         flow_pairs = []
-        for pair in yaml_pairs:
+        for index, pair in enumerate(yaml_pairs, start=1):
             if "=>" in pair:
                 key_part, value_part = pair.split("=>", 1)
                 key = key_part.strip()
@@ -2042,14 +2114,21 @@ def _convert_ruby_hash_to_yaml(ruby_hash: str) -> str:
                 value = _convert_ruby_value_to_yaml(value)
                 flow_pairs.append(f"{key}: {value}")
             else:
-                # Malformed pair, keep as comment
-                flow_pairs.append(f"# TODO: Fix malformed pair: {pair}")
+                # Malformed pair, preserve the raw content in a safe field.
+                # These unparsed fields indicate Ruby syntax that couldn't be
+                # converted automatically. Review and manually convert these
+                # key-value pairs to valid YAML.
+                raw_value = json.dumps(pair.strip())
+                flow_pairs.append(f"unparsed_{index}: {raw_value}")
 
         return "{" + ", ".join(flow_pairs) + "}" if flow_pairs else "{}"
 
     except Exception:
-        # If conversion fails, return as-is with a comment
-        return f"# TODO: Convert Ruby hash: {ruby_hash}"
+        # If conversion fails, preserve the raw hash content as a string.
+        # This indicates the Ruby hash syntax could not be parsed automatically.
+        # Manual review required to convert to valid YAML key-value pairs.
+        raw_value = json.dumps(ruby_hash)
+        return f"{{unparsed: {raw_value}}}"
 
 
 def _convert_ruby_array_to_yaml(ruby_array: str) -> str:
@@ -2158,12 +2237,14 @@ def _convert_primitive_value(ruby_value: str) -> str:
         int(ruby_value)
         return ruby_value
     except ValueError:
+        # Not an integer; continue to check for float
         pass
 
     try:
         float(ruby_value)
         return ruby_value
     except ValueError:
+        # Not a float; continue to check other types
         pass
 
     # Handle booleans
@@ -3008,7 +3089,7 @@ def _handle_command_execution_block(block: str, positive: bool) -> str | None:
                     f"ansible_check_mode or ansible_facts.packages['{pkg}'] is defined"
                 )
             else:
-                condition = "ansible_check_mode or true  # TODO: Review shell command"
+                return _review_guard_condition(block, positive)
             return condition if positive else f"not ({condition})"
 
     return None
@@ -3067,5 +3148,31 @@ def _convert_chef_block_to_ansible(block: str, positive: bool = True) -> str:
         if condition is not None:
             return condition
 
-    # For complex blocks, create a comment indicating manual review needed
-    return f"# TODO: Review Chef block condition: {block[:50]}..."
+    converted = block
+    converted = converted.replace("&&", "and")
+    converted = converted.replace("||", "or")
+    converted = re.sub(r"!\s*(?!=)", "not ", converted)
+    converted = re.sub(r"\bnil\b", "none", converted)
+    converted = re.sub(r"\btrue\b", "true", converted, flags=re.IGNORECASE)
+    converted = re.sub(r"\bfalse\b", "false", converted, flags=re.IGNORECASE)
+
+    if _needs_manual_guard_review(converted):
+        return _review_guard_condition(block, positive)
+
+    return converted if positive else f"not ({converted})"
+
+
+def _needs_manual_guard_review(converted: str) -> bool:
+    """Check if a guard conversion still contains Ruby-specific syntax."""
+    # Match Ruby-specific patterns: namespace (::), class creation (new),
+    # blocks (do/end), ternary operators (?:), and object/hash literals ({}).
+    # Avoid matching question marks in other contexts (comments, etc.).
+    return bool(re.search(r"(::|\bnew\b|\bdo\b|\bend\b|\?\s+[^:\s]|\{|\})", converted))
+
+
+def _review_guard_condition(original: str, positive: bool) -> str:
+    """Return a conservative guard condition with review context."""
+    base = "ansible_check_mode"
+    condition = base if positive else f"not ({base})"
+    compact = " ".join(original.split())
+    return f"{condition}  # REVIEW: manual guard conversion needed: {compact[:80]}"

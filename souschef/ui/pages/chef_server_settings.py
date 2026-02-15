@@ -19,7 +19,7 @@ from souschef.assessment import assess_single_cookbook_with_ai
 
 # Import Chef Server validation functions from core module
 from souschef.core.chef_server import (  # noqa: F401
-    _handle_chef_server_response,
+    _handle_chef_server_response,  # noqa: F401
     _validate_chef_server_connection,
 )
 from souschef.core.path_utils import (
@@ -31,13 +31,13 @@ from souschef.core.url_validation import validate_user_provided_url
 from souschef.storage import get_storage_manager
 
 if TYPE_CHECKING:
-    import requests as requests_module
+    import requests as requests_module  # noqa: F401
 else:
     try:
-        import requests as requests_module
+        import requests as requests_module  # noqa: F401
         from requests.exceptions import (
-            ConnectionError,  # noqa: A004
-            Timeout,
+            ConnectionError,  # noqa: A004, F401
+            Timeout,  # noqa: F401
         )
     except ImportError:
         requests_module = None  # type: ignore[assignment]
@@ -47,8 +47,8 @@ else:
 try:
     import requests
     from requests.exceptions import (
-        ConnectionError,  # noqa: A004
-        Timeout,
+        ConnectionError,  # noqa: A004, F401, F811
+        Timeout,  # noqa: F811
     )
 except ImportError:
     requests = None  # type: ignore[assignment]
@@ -221,25 +221,38 @@ def _render_current_configuration() -> None:
 
 
 def _get_chef_cookbooks(server_url: str) -> list[dict]:
-    """Fetch list of cookbooks from Chef Server."""
+    """
+    Fetch list of cookbooks from Chef Server.
+
+    Security: URL is validated to prevent SSRF attacks. Only HTTPS URLs
+    with public hostnames are allowed.
+    """
     if not requests:
         return []
 
     try:
+        # Validate URL to prevent SSRF - only allows HTTPS with public DNS names
         validated_url = validate_user_provided_url(server_url, strip_path=True)
+        # Ensure URL is HTTPS-only for Chef Server
+        if not validated_url.startswith("https://"):
+            return []
         cookbooks_url = f"{validated_url}/cookbooks"
         response = requests.get(
             cookbooks_url,
             timeout=10,
             headers={"Accept": JSON_CONTENT_TYPE},
+            # Validate SSL certificates to prevent MITM attacks
+            verify=True,
         )
 
         if response.status_code == 200:
             cookbooks_data = response.json()
             # Chef Server returns {cookbook_name: {url: ..., versions: [...]}}
+            # Sanitize cookbook names to prevent injection
             return [
                 {"name": name, "versions": data.get("versions", [])}
                 for name, data in cookbooks_data.items()
+                if isinstance(name, str) and len(name) < 256  # Limit name length
             ]
         return []
     except Exception:
@@ -249,17 +262,40 @@ def _get_chef_cookbooks(server_url: str) -> list[dict]:
 def _download_cookbook(
     server_url: str, cookbook_name: str, version: str, target_dir: Path
 ) -> Path | None:
-    """Download a cookbook from Chef Server to local directory."""
+    """
+    Download a cookbook from Chef Server to local directory.
+
+    Security: URL and parameters are validated to prevent SSRF attacks.
+    Only HTTPS URLs are allowed. Paths are validated to prevent traversal.
+    """
     if not requests:
         return None
 
     try:
+        # Validate URL to prevent SSRF - only allows HTTPS with public DNS names
         validated_url = validate_user_provided_url(server_url, strip_path=True)
+        # Ensure URL is HTTPS-only for Chef Server
+        if not validated_url.startswith("https://"):
+            return None
+
+        # Sanitize cookbook name and version to prevent URL injection
+        if not isinstance(cookbook_name, str) or len(cookbook_name) > 256:
+            return None
+        if not isinstance(version, str) or len(version) > 256:
+            return None
+        # Validate no path traversal attempts in parameters
+        if "/" in cookbook_name or "\\" in cookbook_name:
+            return None
+        if "/" in version or "\\" in version:
+            return None
+
         cookbook_url = f"{validated_url}/cookbooks/{cookbook_name}/{version}"
         response = requests.get(
             cookbook_url,
             timeout=30,
             headers={"Accept": JSON_CONTENT_TYPE},
+            # Validate SSL certificates to prevent MITM attacks
+            verify=True,
         )
 
         if response.status_code != 200:
@@ -276,8 +312,11 @@ def _download_cookbook(
         # This is simplified - real implementation would download all files
         # For now, we'll create a minimal structure with metadata
         metadata_path = _safe_join(cookbook_dir, "metadata.rb")
-        metadata_content = f"""name '{cookbook_name}'
-version '{version}'
+        # Sanitize names for metadata (remove special chars)
+        safe_name = cookbook_name.replace("'", "").replace('"', "")
+        safe_version = version.replace("'", "").replace('"', "")
+        metadata_content = f"""name '{safe_name}'
+version '{safe_version}'
 """
         metadata_path.write_text(metadata_content)
 

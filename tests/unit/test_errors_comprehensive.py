@@ -1,5 +1,8 @@
 """Comprehensive tests for core/errors.py module to reach 95%+ coverage."""
 
+import os
+from unittest.mock import patch
+
 import pytest
 
 from souschef.core.errors import (
@@ -45,15 +48,21 @@ class TestChefFileNotFoundError:
 
     def test_error_with_file_type_default(self):
         """Test error with default file type."""
-        error = ChefFileNotFoundError("/path/to/file")
-        assert "Could not find file: /path/to/file" in str(error)
-        assert "Check that the path exists" in str(error)
+        # Enable debug mode to show full paths in tests
+        with patch.dict(os.environ, {"SOUSCHEF_DEBUG": "1"}):
+            error = ChefFileNotFoundError("/path/to/file")
+            assert "Could not find file:" in str(error)
+            # In debug mode, full path appears in debug section
+            assert "/path/to/file" in str(error)
+            assert "Check that the path exists" in str(error)
 
     def test_error_with_custom_file_type(self):
         """Test error with custom file type."""
-        error = ChefFileNotFoundError("/path/to/cookbook", "cookbook")
-        assert "Could not find cookbook: /path/to/cookbook" in str(error)
-        assert "Check that the path exists" in str(error)
+        with patch.dict(os.environ, {"SOUSCHEF_DEBUG": "1"}):
+            error = ChefFileNotFoundError("/path/to/cookbook", "cookbook")
+            assert "Could not find cookbook:" in str(error)
+            assert "/path/to/cookbook" in str(error)
+            assert "Check that the path exists" in str(error)
 
     def test_error_can_be_raised(self):
         """Test that error can be raised."""
@@ -66,10 +75,11 @@ class TestInvalidCookbookError:
 
     def test_error_creation(self):
         """Test error creation with path and reason."""
-        error = InvalidCookbookError("/path/to/cookbook", "missing metadata.rb")
-        assert "Invalid cookbook at /path/to/cookbook" in str(error)
-        assert "missing metadata.rb" in str(error)
-        assert "metadata.rb" in str(error)
+        with patch.dict(os.environ, {"SOUSCHEF_DEBUG": "1"}):
+            error = InvalidCookbookError("/path/to/cookbook", "missing metadata.rb")
+            assert "Invalid cookbook at" in str(error)
+            assert "missing metadata.rb" in str(error)
+            assert "/path/to/cookbook" in str(error)  # Full path in debug mode
 
     def test_error_has_suggestion(self):
         """Test that error includes helpful suggestion."""
@@ -87,18 +97,26 @@ class TestParseError:
 
     def test_error_without_line_number(self):
         """Test parse error without line number."""
-        error = ParseError("/path/to/file.rb")
-        assert "Failed to parse /path/to/file.rb" in str(error)
-        assert "valid Chef Ruby DSL syntax" in str(error)
+        with patch.dict(os.environ, {"SOUSCHEF_DEBUG": "1"}):
+            error = ParseError("/path/to/file.rb")
+            assert "Failed to parse" in str(error)
+            assert "/path/to/file.rb" in str(error)  # Full path in debug mode
+            assert "valid Chef Ruby DSL syntax" in str(error)
 
     def test_error_with_line_number(self):
         """Test parse error with line number."""
-        error = ParseError("/path/to/file.rb", line_number=42)
-        assert "Failed to parse /path/to/file.rb at line 42" in str(error)
+        with patch.dict(os.environ, {"SOUSCHEF_DEBUG": "1"}):
+            error = ParseError("/path/to/file.rb", line_number=42)
+            assert "Failed to parse" in str(error)
+            assert "at line 42" in str(error)
+            assert "/path/to/file.rb" in str(error)
 
     def test_error_with_detail(self):
         """Test parse error with additional detail."""
-        error = ParseError("/path/to/file.rb", detail="unexpected token")
+        with patch.dict(os.environ, {"SOUSCHEF_DEBUG": "1"}):
+            error = ParseError("/path/to/file.rb", detail="unexpected token")
+            assert "/path/to/file.rb" in str(error)
+            assert "unexpected token" in str(error)
         assert "Failed to parse /path/to/file.rb: unexpected token" in str(error)
 
     def test_error_with_all_params(self):

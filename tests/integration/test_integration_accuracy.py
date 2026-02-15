@@ -13,7 +13,6 @@ usability of converted code.
 import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -453,7 +452,7 @@ class TestDeploymentStrategyConversion:
 class TestRecipeParsingAccuracy:
     """Test that recipe parsing produces accurate results."""
 
-    def test_parse_simple_recipe_accuracy(self):
+    def test_parse_simple_recipe_accuracy(self, monkeypatch):
         """Test parsing a simple recipe produces correct structure."""
         recipe_content = """
 package 'nginx' do
@@ -467,6 +466,8 @@ end
         with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
             f.write(recipe_content)
             temp_path = f.name
+
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
 
         try:
             result = parse_recipe(temp_path)
@@ -484,7 +485,7 @@ end
         finally:
             Path(temp_path).unlink(missing_ok=True)
 
-    def test_parse_recipe_with_guards_accuracy(self):
+    def test_parse_recipe_with_guards_accuracy(self, monkeypatch):
         """Test parsing recipe with guard conditions."""
         recipe_content = """
 file '/etc/myapp/config.yml' do
@@ -496,6 +497,8 @@ end
             f.write(recipe_content)
             temp_path = f.name
 
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+
         try:
             result = parse_recipe(temp_path)
 
@@ -506,7 +509,7 @@ end
         finally:
             Path(temp_path).unlink(missing_ok=True)
 
-    def test_parse_recipe_with_notifies_accuracy(self):
+    def test_parse_recipe_with_notifies_accuracy(self, monkeypatch):
         """Test parsing recipe with notification actions."""
         recipe_content = """
 template '/etc/nginx/nginx.conf' do
@@ -517,6 +520,8 @@ end
         with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
             f.write(recipe_content)
             temp_path = f.name
+
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
 
         try:
             result = parse_recipe(temp_path)
@@ -578,7 +583,7 @@ class TestEndToEndConversion:
 class TestRecipeParsingWithComplexPatterns:
     """Test recipe parsing with various Chef patterns and constructs."""
 
-    def test_parse_recipe_with_wildcard_condition(self):
+    def test_parse_recipe_with_wildcard_condition(self, tmp_path, monkeypatch):
         """Test recipe parsing with wildcard search conditions."""
         from souschef.server import parse_recipe
 
@@ -589,85 +594,73 @@ search_results.each do |server|
   log "Found server: #{server['hostname']}"
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
-            mock_path = MagicMock()
-            mock_path.read_text.return_value = recipe_content
-            mock_path.exists.return_value = True
-            mock_path.is_file.return_value = True
-            mock_norm.return_value = mock_path
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        recipe_file = tmp_path / "recipe.rb"
+        recipe_file.write_text(recipe_content)
 
-            result = parse_recipe("/fake/path/recipe.rb")
-            assert "search" in result.lower() or "warning" in result.lower()
+        result = parse_recipe(str(recipe_file))
+        assert "search" in result.lower() or "warning" in result.lower()
 
-    def test_parse_recipe_with_regex_condition(self):
+    def test_parse_recipe_with_regex_condition(self, tmp_path, monkeypatch):
         """Test recipe parsing with regex search patterns."""
         from souschef.server import parse_recipe
 
         recipe_content = """
 nodes = search(:node, "name:/^app-\\d+$/")
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
-            mock_path = MagicMock()
-            mock_path.read_text.return_value = recipe_content
-            mock_path.exists.return_value = True
-            mock_path.is_file.return_value = True
-            mock_norm.return_value = mock_path
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        recipe_file = tmp_path / "recipe.rb"
+        recipe_file.write_text(recipe_content)
 
-            result = parse_recipe("/fake/path/recipe.rb")
-            assert len(result) > 0
+        result = parse_recipe(str(recipe_file))
+        assert len(result) > 0
 
-    def test_parse_recipe_with_subscribes_and_handlers(self):
+    def test_parse_recipe_with_subscribes_and_handlers(self, tmp_path, monkeypatch):
         """Test recipe with both subscribes and notifies generates handlers."""
         from souschef.server import parse_recipe
 
         recipe_content = """
 template '/etc/app/config.conf' do
-  source 'config.conf.erb'
-  notifies :reload, 'service[app]', :immediately
+    source 'config.conf.erb'
+    notifies :reload, 'service[app]', :immediately
 end
 
 service 'app' do
-  action [:enable, :start]
-  subscribes :restart, 'template[/etc/app/config.conf]', :delayed
+    action [:enable, :start]
+    subscribes :restart, 'template[/etc/app/config.conf]', :delayed
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
-            mock_path = MagicMock()
-            mock_path.read_text.return_value = recipe_content
-            mock_path.exists.return_value = True
-            mock_path.is_file.return_value = True
-            mock_norm.return_value = mock_path
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        recipe_file = tmp_path / "recipe.rb"
+        recipe_file.write_text(recipe_content)
 
-            result = parse_recipe("/fake/path/recipe.rb")
-            assert "service" in result.lower() or "warning" in result.lower()
-            assert len(result) > 10
+        result = parse_recipe(str(recipe_file))
+        assert "service" in result.lower() or "warning" in result.lower()
+        assert len(result) > 10
 
-    def test_parse_recipe_with_complex_version_constraints(self):
+    def test_parse_recipe_with_complex_version_constraints(self, tmp_path, monkeypatch):
         """Test recipe with version constraints in package resources."""
         from souschef.server import parse_recipe
 
         recipe_content = """
 package 'nginx' do
-  version '1.18.0-0ubuntu1'
-  action :install
+    version '1.18.0-0ubuntu1'
+    action :install
 end
 
 package 'postgresql' do
-  version '>= 12.0, < 14.0'
-  action :upgrade
+    version '>= 12.0, < 14.0'
+    action :upgrade
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
-            mock_path = MagicMock()
-            mock_path.read_text.return_value = recipe_content
-            mock_path.exists.return_value = True
-            mock_path.is_file.return_value = True
-            mock_norm.return_value = mock_path
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        recipe_file = tmp_path / "recipe.rb"
+        recipe_file.write_text(recipe_content)
 
-            result = parse_recipe("/fake/path/recipe.rb")
-            assert "nginx" in result or "warning" in result.lower()
+        result = parse_recipe(str(recipe_file))
+        assert "nginx" in result or "warning" in result.lower()
 
-    def test_parse_recipe_with_only_if_guard(self):
+    def test_parse_recipe_with_only_if_guard(self, tmp_path, monkeypatch):
         """Test recipe with only_if guards."""
         from souschef.server import parse_recipe
 
@@ -677,17 +670,14 @@ service 'nginx' do
   only_if 'test -f /etc/nginx/nginx.conf'
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
-            mock_path = MagicMock()
-            mock_path.read_text.return_value = recipe_content
-            mock_path.exists.return_value = True
-            mock_path.is_file.return_value = True
-            mock_norm.return_value = mock_path
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        recipe_file = tmp_path / "recipe.rb"
+        recipe_file.write_text(recipe_content)
 
-            result = parse_recipe("/fake/path/recipe.rb")
-            assert "nginx" in result or "warning" in result.lower()
+        result = parse_recipe(str(recipe_file))
+        assert "nginx" in result or "warning" in result.lower()
 
-    def test_parse_recipe_with_not_if_guard(self):
+    def test_parse_recipe_with_not_if_guard(self, tmp_path, monkeypatch):
         """Test recipe with not_if guards."""
         from souschef.server import parse_recipe
 
@@ -697,17 +687,14 @@ package 'apache2' do
   not_if 'which apache2'
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
-            mock_path = MagicMock()
-            mock_path.read_text.return_value = recipe_content
-            mock_path.exists.return_value = True
-            mock_path.is_file.return_value = True
-            mock_norm.return_value = mock_path
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        recipe_file = tmp_path / "recipe.rb"
+        recipe_file.write_text(recipe_content)
 
-            result = parse_recipe("/fake/path/recipe.rb")
-            assert "apache2" in result or "warning" in result.lower()
+        result = parse_recipe(str(recipe_file))
+        assert "apache2" in result or "warning" in result.lower()
 
-    def test_parse_recipe_with_block_guard(self):
+    def test_parse_recipe_with_block_guard(self, tmp_path, monkeypatch):
         """Test recipe with block guards."""
         from souschef.server import parse_recipe
 
@@ -717,16 +704,11 @@ file '/tmp/test' do
   only_if { File.exist?('/etc/config') }
 end
 """
-        with patch("souschef.parsers.recipe._normalize_path") as mock_norm:
-            mock_path = MagicMock()
-            mock_path.read_text.return_value = recipe_content
-            mock_path.exists.return_value = True
-            mock_path.is_file.return_value = True
-            mock_norm.return_value = mock_path
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        recipe_file = tmp_path / "recipe.rb"
+        recipe_file.write_text(recipe_content)
 
-            result = parse_recipe("/fake/path/recipe.rb")
-            assert (
-                "file" in result.lower()
-                or "test" in result
-                or "warning" in result.lower()
-            )
+        result = parse_recipe(str(recipe_file))
+        assert (
+            "file" in result.lower() or "test" in result or "warning" in result.lower()
+        )

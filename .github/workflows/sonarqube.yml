@@ -2,7 +2,7 @@ name: SonarCloud Analysis
 
 on:
   workflow_run:
-    workflows: ["Main Branch Validation"]
+    workflows: ["CI"]
     types:
       - completed
   workflow_dispatch:
@@ -40,7 +40,7 @@ jobs:
         fi
 
     - name: Checkout repository
-      uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       if: steps.check-token.outputs.has_token == 'true'
       with:
         # For security: always checkout repository code, never code from forks
@@ -49,7 +49,7 @@ jobs:
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}
       if: steps.check-token.outputs.has_token == 'true'
-      uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
@@ -63,7 +63,7 @@ jobs:
 
     - name: Cache Poetry dependencies
       if: steps.check-token.outputs.has_token == 'true'
-      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
       with:
         path: .venv
         key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}

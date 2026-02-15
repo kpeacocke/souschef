@@ -18,7 +18,7 @@ from souschef.server import (
 )
 
 
-def test_parse_recipe_with_syntax_errors():
+def test_parse_recipe_with_syntax_errors(monkeypatch):
     """Test that parse_recipe handles Ruby syntax errors gracefully."""
     malformed_recipe = """
 package 'nginx do  # Missing closing quote
@@ -34,16 +34,18 @@ if node['platform'] ==  # Incomplete condition
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(malformed_recipe)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        # Should return a result, not crash
-        assert isinstance(result, str)
-        # Should indicate it's a malformed recipe
-        assert len(result) > 0
+    # Should return a result, not crash
+    assert isinstance(result, str)
+    # Should indicate it's a malformed recipe
+    assert len(result) > 0
 
 
-def test_parse_recipe_with_invalid_utf8():
+def test_parse_recipe_with_invalid_utf8(monkeypatch):
     """Test that parse_recipe handles invalid UTF-8 encoding."""
     with tempfile.NamedTemporaryFile(mode="wb", suffix=".rb", delete=False) as f:
         # Write invalid UTF-8 bytes
@@ -51,31 +53,35 @@ def test_parse_recipe_with_invalid_utf8():
         f.write(b"  action :install\n")
         f.write(b"end\n")
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        # Should handle encoding error gracefully
-        assert isinstance(result, str)
-        assert "Error" in result or len(result) > 0
+    # Should handle encoding error gracefully
+    assert isinstance(result, str)
+    assert "Error" in result or len(result) > 0
 
 
-def test_parse_recipe_empty_file():
+def test_parse_recipe_empty_file(monkeypatch):
     """Test that parse_recipe handles empty files."""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write("")
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        # Empty file should return minimal output
-        assert (
-            "No Chef resources or include_recipe calls found" in result
-            or "Analysis" in result
-        )
+    assert isinstance(result, str)
+    # Empty file should return minimal output
+    assert (
+        "No Chef resources or include_recipe calls found" in result
+        or "Analysis" in result
+    )
 
 
-def test_parse_recipe_only_comments():
+def test_parse_recipe_only_comments(monkeypatch):
     """Test that parse_recipe handles files with only comments."""
     comments_only = """
 # This is a comment
@@ -85,17 +91,18 @@ def test_parse_recipe_only_comments():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(comments_only)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert (
-            "No Chef resources or include_recipe calls found" in result
-            or len(result) > 0
-        )
+    assert isinstance(result, str)
+    assert (
+        "No Chef resources or include_recipe calls found" in result or len(result) > 0
+    )
 
 
-def test_parse_recipe_with_very_long_lines():
+def test_parse_recipe_with_very_long_lines(monkeypatch):
     """Test that parse_recipe handles extremely long lines."""
     long_line_recipe = f"""
 package "{"nginx" * 1000}" do
@@ -105,14 +112,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(long_line_recipe)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert len(result) > 0
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
-def test_parse_recipe_with_nested_heredocs():
+def test_parse_recipe_with_nested_heredocs(monkeypatch):
     """Test that parse_recipe handles deeply nested heredocs."""
     nested_recipe = """
 file '/etc/config' do
@@ -128,14 +137,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(nested_recipe)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result or len(result) > 0
+    assert isinstance(result, str)
+    assert "Resource 1:" in result or len(result) > 0
 
 
-def test_parse_attributes_malformed_syntax():
+def test_parse_attributes_malformed_syntax(monkeypatch):
     """Test that parse_attributes handles malformed Ruby syntax."""
     malformed_attrs = """
 default['nginx']['port'] =   # Missing value
@@ -145,15 +156,17 @@ default['nginx' 'ssl'] = true  # Missing bracket operator
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(malformed_attrs)
         f.flush()
+        temp_path = f.name
 
-        result = parse_attributes(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_attributes(temp_path)
 
-        # Should not crash
-        assert isinstance(result, str)
-        assert len(result) > 0
+    # Should not crash
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
-def test_parse_custom_resource_invalid_syntax():
+def test_parse_custom_resource_invalid_syntax(monkeypatch):
     """Test that parse_custom_resource handles invalid Ruby syntax."""
     invalid_resource = """
 property :name, String required: true  # Missing comma
@@ -169,14 +182,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(invalid_resource)
         f.flush()
+        temp_path = f.name
 
-        result = parse_custom_resource(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_custom_resource(temp_path)
 
-        assert isinstance(result, str)
-        assert len(result) > 0
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
-def test_parse_recipe_with_circular_includes():
+def test_parse_recipe_with_circular_includes(monkeypatch):
     """Test that parse_recipe doesn't hang on circular includes."""
     # This is a conceptual test - Chef doesn't support circular includes
     # but we test that the parser doesn't get stuck
@@ -187,12 +202,14 @@ include_recipe 'cookbook::other'
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_include)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        # Should complete without hanging
-        assert isinstance(result, str)
-        assert len(result) > 0
+    # Should complete without hanging
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
 def test_read_cookbook_metadata_malformed():
@@ -209,12 +226,12 @@ depends 'other', '>= 2.0.0', '<= 1.0.0'  # Impossible constraint
     with patch("souschef.server._normalize_path", return_value=mock_path):
         result = read_cookbook_metadata("/fake/path/metadata.rb")
 
-        # Should not crash
-        assert isinstance(result, str)
-        assert len(result) > 0
+    # Should not crash
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
-def test_parse_recipe_with_mixed_encodings():
+def test_parse_recipe_with_mixed_encodings(monkeypatch):
     """Test that parse_recipe handles mixed character encodings."""
     # Create a file with mixed encodings (Latin-1 and UTF-8)
     with tempfile.NamedTemporaryFile(mode="wb", suffix=".rb", delete=False) as f:
@@ -224,14 +241,16 @@ def test_parse_recipe_with_mixed_encodings():
         f.write(b"  action :install\n")
         f.write(b"end\n")
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        # Should handle mixed encodings
-        assert isinstance(result, str)
+    # Should handle mixed encodings
+    assert isinstance(result, str)
 
 
-def test_parse_attributes_extremely_deep_nesting():
+def test_parse_attributes_extremely_deep_nesting(monkeypatch):
     """Test parse_attributes with extremely deep attribute nesting."""
     deep_attrs = """
 default['a']['b']['c']['d']['e']['f']['g']['h']['i']['j']['k'] = 'value'
@@ -240,14 +259,16 @@ default['x']['y']['z']['1']['2']['3']['4']['5']['6']['7']['8']['9'] = 42
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(deep_attrs)
         f.flush()
+        temp_path = f.name
 
-        result = parse_attributes(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_attributes(temp_path)
 
-        assert isinstance(result, str)
-        assert len(result) > 0
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
-def test_parse_custom_resource_missing_required_sections():
+def test_parse_custom_resource_missing_required_sections(monkeypatch):
     """Test parse_custom_resource when required sections are missing."""
     incomplete_resource = """
 # Missing property declarations
@@ -257,15 +278,17 @@ resource_name :incomplete
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(incomplete_resource)
         f.flush()
+        temp_path = f.name
 
-        result = parse_custom_resource(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_custom_resource(temp_path)
 
-        assert isinstance(result, str)
-        # Should indicate it's incomplete
-        assert len(result) > 0
+    assert isinstance(result, str)
+    # Should indicate it's incomplete
+    assert len(result) > 0
 
 
-def test_parse_recipe_with_extremely_large_resources():
+def test_parse_recipe_with_extremely_large_resources(monkeypatch):
     """Test parse_recipe with resources that have many properties."""
     huge_resource = """
 file '/etc/config' do
@@ -279,14 +302,16 @@ file '/etc/config' do
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(huge_resource)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_special_characters_in_strings():
+def test_parse_recipe_with_special_characters_in_strings(monkeypatch):
     """Test parse_recipe with special characters in resource strings."""
     special_chars_recipe = """
 file '/tmp/test' do
@@ -298,14 +323,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(special_chars_recipe)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_attributes_with_ruby_expressions():
+def test_parse_attributes_with_ruby_expressions(monkeypatch):
     """Test parse_attributes with complex Ruby expressions."""
     complex_attrs = """
 default['nginx']['port'] = node['platform'] == 'ubuntu' ? 80 : 8080
@@ -315,15 +342,17 @@ default['nginx']['user'] = ENV['USER'] || 'www-data'
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(complex_attrs)
         f.flush()
+        temp_path = f.name
 
-        result = parse_attributes(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_attributes(temp_path)
 
-        assert isinstance(result, str)
-        # Should parse despite complex expressions
-        assert len(result) > 0
+    assert isinstance(result, str)
+    # Should parse despite complex expressions
+    assert len(result) > 0
 
 
-def test_parse_recipe_with_guards_and_conditions():
+def test_parse_recipe_with_guards_and_conditions(monkeypatch):
     """Test parse_recipe with various guard conditions."""
     guards_recipe = """
 service 'nginx' do
@@ -342,15 +371,17 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(guards_recipe)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
-        assert "Resource 2:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
+    assert "Resource 2:" in result
 
 
-def test_parse_recipe_with_file_exist_guards():
+def test_parse_recipe_with_file_exist_guards(monkeypatch):
     """Test parse_recipe with File.exist? guard conditions."""
     recipe_with_file_checks = """
 file '/etc/config' do
@@ -368,14 +399,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_file_checks)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_system_call_guards():
+def test_parse_recipe_with_system_call_guards(monkeypatch):
     """Test parse_recipe with system() call guards."""
     recipe_with_system = """
 package 'nginx' do
@@ -391,14 +424,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_system)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_boolean_guards():
+def test_parse_recipe_with_boolean_guards(monkeypatch):
     """Test parse_recipe with simple boolean guard conditions."""
     recipe_with_booleans = """
 service 'nginx' do
@@ -414,14 +449,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_booleans)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_subscribes():
+def test_parse_recipe_with_subscribes(monkeypatch):
     """Test parse_recipe with subscribes patterns."""
     recipe_with_subscribes = """
 service 'nginx' do
@@ -438,17 +475,20 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_subscribes)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
-        assert "Resource 2:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
+    assert "Resource 2:" in result
 
 
-def test_analyze_chef_environment_usage():
+def test_analyze_chef_environment_usage(monkeypatch):
     """Test analyze_chef_environment_usage with cookbooks."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmpdir))
         env_path = Path(tmpdir) / "environments"
         env_path.mkdir()
 
@@ -486,14 +526,15 @@ default_attributes({})
 
         result = analyse_chef_environment_usage(str(cookbook_path), str(env_path))
 
-        assert isinstance(result, str)
-        # Should analyze successfully
-        assert len(result) > 0
+    assert isinstance(result, str)
+    # Should analyze successfully
+    assert len(result) > 0
 
 
-def test_analyze_chef_environment_usage_with_errors():
+def test_analyze_chef_environment_usage_with_errors(monkeypatch):
     """Test analyze_chef_environment_usage with malformed environments."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmpdir))
         env_path = Path(tmpdir) / "environments"
         env_path.mkdir()
 
@@ -512,9 +553,9 @@ description 'Bad environment
 
         result = analyse_chef_environment_usage(str(cookbook_path), str(env_path))
 
-        assert isinstance(result, str)
-        # Should handle error gracefully
-        assert len(result) > 0
+    assert isinstance(result, str)
+    # Should handle error gracefully
+    assert len(result) > 0
 
 
 def test_convert_chef_environment_to_inventory_group():
@@ -535,9 +576,10 @@ default_attributes({
     assert len(result) > 0
 
 
-def test_generate_inventory_from_chef_environments():
+def test_generate_inventory_from_chef_environments(monkeypatch):
     """Test generate_inventory_from_chef_environments."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmpdir))
         env_path = Path(tmpdir)
 
         # Create production environment
@@ -549,13 +591,14 @@ description 'Production environment'
 
         result = generate_inventory_from_chef_environments(str(env_path))
 
-        assert isinstance(result, str)
-        assert len(result) > 0
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
-def test_generate_awx_job_template_from_cookbook():
+def test_generate_awx_job_template_from_cookbook(monkeypatch):
     """Test generate_awx_job_template_from_cookbook with a basic cookbook."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmpdir))
         cookbook_path = Path(tmpdir) / "mycookbook"
         cookbook_path.mkdir()
 
@@ -581,8 +624,8 @@ end
             str(cookbook_path), "mycookbook"
         )
 
-        assert isinstance(result, str)
-        assert "AWX" in result or "Job Template" in result or len(result) > 0
+    assert isinstance(result, str)
+    assert "AWX" in result or "Job Template" in result or len(result) > 0
 
 
 def test_generate_awx_workflow_from_chef_runlist():
@@ -595,9 +638,10 @@ def test_generate_awx_workflow_from_chef_runlist():
     assert "workflow" in result.lower() or "AWX" in result or len(result) > 0
 
 
-def test_generate_awx_project_from_cookbooks():
+def test_generate_awx_project_from_cookbooks(monkeypatch):
     """Test generate_awx_project_from_cookbooks with a cookbooks directory."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmpdir))
         cookbooks_path = Path(tmpdir)
 
         # Create two simple cookbooks
@@ -615,8 +659,8 @@ version '1.0.0'
             str(cookbooks_path), "myproject", "git", "https://github.com/org/repo"
         )
 
-        assert isinstance(result, str)
-        assert "project" in result.lower() or "AWX" in result or len(result) > 0
+    assert isinstance(result, str)
+    assert "project" in result.lower() or "AWX" in result or len(result) > 0
 
 
 def test_generate_awx_functions_with_invalid_paths():
@@ -636,7 +680,7 @@ def test_generate_awx_functions_with_invalid_paths():
     assert "error" in result3.lower() or len(result3) > 0
 
 
-def test_parse_recipe_with_file_exist_guard_without_colons():
+def test_parse_recipe_with_file_exist_guard_without_colons(monkeypatch):
     """Test parse_recipe with File.exist? (no :: prefix) to match regex."""
     recipe_with_file_check = """
 service 'nginx' do
@@ -652,15 +696,17 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_file_check)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
-        assert "Resource 2:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
+    assert "Resource 2:" in result
 
 
-def test_parse_recipe_with_directory_exist_guard():
+def test_parse_recipe_with_directory_exist_guard(monkeypatch):
     """Test parse_recipe with File.directory? guard condition."""
     recipe_with_dir_check = """
 directory '/var/www/html' do
@@ -678,14 +724,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_dir_check)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_system_call_in_guard():
+def test_parse_recipe_with_system_call_in_guard(monkeypatch):
     """Test parse_recipe with system() call in guard condition."""
     recipe_with_system_guard = """
 package 'nginx' do
@@ -701,14 +749,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_system_guard)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_matching_subscribes_pattern():
+def test_parse_recipe_with_matching_subscribes_pattern(monkeypatch):
     """Test parse_recipe with subscribes that match the target resource."""
     # The subscribes pattern needs to reference a resource that exists
     recipe_with_matching_subscribes = """
@@ -725,15 +775,17 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_matching_subscribes)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
-        assert "Resource 2:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
+    assert "Resource 2:" in result
 
 
-def test_parse_recipe_with_subscribes_timing():
+def test_parse_recipe_with_subscribes_timing(monkeypatch):
     """Test parse_recipe with subscribes that have timing specified."""
     recipe_with_timed_subscribes = """
 file '/etc/app/config.json' do
@@ -749,14 +801,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_timed_subscribes)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_multiple_subscribes_patterns():
+def test_parse_recipe_with_multiple_subscribes_patterns(monkeypatch):
     """Test parse_recipe with multiple subscribes to same resource."""
     recipe_with_multi_subscribes = """
 template '/etc/haproxy/haproxy.cfg' do
@@ -778,14 +832,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_multi_subscribes)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_complex_guard_block():
+def test_parse_recipe_with_complex_guard_block(monkeypatch):
     """Test parse_recipe with complex guard blocks that need manual review."""
     recipe_with_complex_guard = """
 package 'redis' do
@@ -801,16 +857,19 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_complex_guard)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_generate_awx_job_template_with_complex_cookbook():
+def test_generate_awx_job_template_with_complex_cookbook(monkeypatch):
     """Test AWX job template generation with cookbook containing recipes and attributes."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmpdir))
         cookbook_path = Path(tmpdir) / "complex_cookbook"
         cookbook_path.mkdir()
 
@@ -858,8 +917,8 @@ default['postgresql']['version'] = '14'
             str(cookbook_path), "complex_cookbook"
         )
 
-        assert isinstance(result, str)
-        assert len(result) > 0
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
 def test_generate_awx_workflow_with_complex_runlist():
@@ -877,9 +936,10 @@ def test_generate_awx_workflow_with_complex_runlist():
     assert len(result) > 0
 
 
-def test_analyze_chef_environment_with_complex_attributes():
+def test_analyze_chef_environment_with_complex_attributes(monkeypatch):
     """Test environment analysis with complex nested attributes."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmpdir))
         env_path = Path(tmpdir) / "environments"
         env_path.mkdir()
 
@@ -921,8 +981,8 @@ cookbook 'postgresql', '>= 3.0.0'
 
         result = analyse_chef_environment_usage(str(cookbook_path), str(env_path))
 
-        assert isinstance(result, str)
-        assert len(result) > 0
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
 def test_convert_environment_with_cookbook_constraints():
@@ -966,9 +1026,10 @@ default_attributes({})
     assert len(result) > 0
 
 
-def test_generate_inventory_with_multiple_environments():
+def test_generate_inventory_with_multiple_environments(monkeypatch):
     """Test inventory generation from multiple environment files."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmpdir))
         env_path = Path(tmpdir)
 
         # Create multiple environments
@@ -986,11 +1047,11 @@ default_attributes({{
 
         result = generate_inventory_from_chef_environments(str(env_path))
 
-        assert isinstance(result, str)
-        assert len(result) > 0
+    assert isinstance(result, str)
+    assert len(result) > 0
 
 
-def test_parse_recipe_with_file_exist_block_do_end():
+def test_parse_recipe_with_file_exist_block_do_end(monkeypatch):
     """Test parse_recipe with File.exist? in do...end block to match regex."""
     recipe_with_do_end_guard = """
 package 'nginx' do
@@ -1010,14 +1071,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe_with_do_end_guard)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_directory_check_do_end():
+def test_parse_recipe_with_directory_check_do_end(monkeypatch):
     """Test parse_recipe with File.directory? in do...end block."""
     recipe = """
 directory '/var/log/app' do
@@ -1031,14 +1094,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_system_call_do_end():
+def test_parse_recipe_with_system_call_do_end(monkeypatch):
     """Test parse_recipe with system() call in do...end block."""
     recipe = """
 package 'postgresql' do
@@ -1051,14 +1116,16 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result
 
 
-def test_parse_recipe_with_true_false_guards_do_end():
+def test_parse_recipe_with_true_false_guards_do_end(monkeypatch):
     """Test parse_recipe with simple true/false in do...end blocks."""
     recipe = """
 service 'nginx' do
@@ -1078,8 +1145,10 @@ end
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         f.write(recipe)
         f.flush()
+        temp_path = f.name
 
-        result = parse_recipe(f.name)
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
+    result = parse_recipe(temp_path)
 
-        assert isinstance(result, str)
-        assert "Resource 1:" in result
+    assert isinstance(result, str)
+    assert "Resource 1:" in result

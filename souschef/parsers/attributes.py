@@ -3,6 +3,7 @@
 import re
 from typing import Any
 
+from souschef.core import path_utils
 from souschef.core.constants import (
     ATTRIBUTE_PREFIX,
     ERROR_FILE_NOT_FOUND,
@@ -10,8 +11,18 @@ from souschef.core.constants import (
     ERROR_PERMISSION_DENIED,
     VALUE_PREFIX,
 )
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+)
 from souschef.parsers.template import _strip_ruby_comments
+
+# Make safe functions available as module attributes for testing
+safe_exists = path_utils.safe_exists
+safe_is_dir = path_utils.safe_is_dir
+safe_is_file = path_utils.safe_is_file
+safe_read_text = path_utils.safe_read_text
 
 
 def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
@@ -41,7 +52,9 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
     """
     try:
         file_path = _normalize_path(path)
-        content = file_path.read_text(encoding="utf-8")  # nosonar
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
 
         attributes = _extract_attributes(content)
 

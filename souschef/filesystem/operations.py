@@ -1,11 +1,18 @@
 """Filesystem operations for Chef cookbook exploration."""
 
+from pathlib import Path
+
 from souschef.core.constants import (
     ERROR_FILE_NOT_FOUND,
     ERROR_IS_DIRECTORY,
     ERROR_PERMISSION_DENIED,
 )
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import (
+    _check_symlink_safety,
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+)
 
 
 def list_directory(path: str) -> list[str] | str:
@@ -20,8 +27,14 @@ def list_directory(path: str) -> list[str] | str:
 
     """
     try:
+        # Check for symlinks before normalisation to detect attacks
+        _check_symlink_safety(_normalize_path(path), Path(path))
+
         dir_path = _normalize_path(path)
-        return [item.name for item in dir_path.iterdir()]
+        workspace_root = _get_workspace_root()
+        safe_dir = _ensure_within_base_path(dir_path, workspace_root)
+
+        return [item.name for item in safe_dir.iterdir()]
     except ValueError as e:
         return f"Error: {e}"
     except FileNotFoundError:
@@ -46,8 +59,14 @@ def read_file(path: str) -> str:
 
     """
     try:
+        # Check for symlinks before normalisation to detect attacks
+        _check_symlink_safety(_normalize_path(path), Path(path))
+
         file_path = _normalize_path(path)
-        return file_path.read_text(encoding="utf-8")
+        workspace_root = _get_workspace_root()
+        safe_file = _ensure_within_base_path(file_path, workspace_root)
+
+        return safe_file.read_text(encoding="utf-8")
     except ValueError as e:
         return f"Error: {e}"
     except FileNotFoundError:

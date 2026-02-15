@@ -51,7 +51,7 @@ def generate_github_workflow_from_chef_ci(
 
     """
     cookbook_dir = Path(cookbook_path)
-    if not cookbook_dir.exists():
+    if not cookbook_dir.exists():  # NOSONAR
         raise FileNotFoundError(f"Cookbook directory not found: {cookbook_path}")
 
     # Analyse Chef CI patterns

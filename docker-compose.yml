@@ -38,15 +38,15 @@ services:
       - SOUSCHEF_DB_PORT=${SOUSCHEF_DB_PORT:-5432}
       - SOUSCHEF_DB_NAME=${SOUSCHEF_DB_NAME:-souschef}
       - SOUSCHEF_DB_USER=${SOUSCHEF_DB_USER:-souschef}
-      - SOUSCHEF_DB_PASSWORD=${SOUSCHEF_DB_PASSWORD:-souschef}
-      - SOUSCHEF_DB_SSLMODE=${SOUSCHEF_DB_SSLMODE:-disable}
+      - SOUSCHEF_DB_PASSWORD=${SOUSCHEF_DB_PASSWORD:?SOUSCHEF_DB_PASSWORD is required}
+      - SOUSCHEF_DB_SSLMODE=${SOUSCHEF_DB_SSLMODE:-require}
       # Blob storage configuration (S3-compatible)
       - SOUSCHEF_STORAGE_BACKEND=${SOUSCHEF_STORAGE_BACKEND:-s3}
       - SOUSCHEF_S3_BUCKET=${SOUSCHEF_S3_BUCKET:-souschef}
       - SOUSCHEF_S3_REGION=${SOUSCHEF_S3_REGION:-us-east-1}
       - SOUSCHEF_S3_ENDPOINT=${SOUSCHEF_S3_ENDPOINT:-http://minio:9000}
-      - SOUSCHEF_S3_ACCESS_KEY=${SOUSCHEF_S3_ACCESS_KEY:-minioadmin}
-      - SOUSCHEF_S3_SECRET_KEY=${SOUSCHEF_S3_SECRET_KEY:-minioadmin}
+      - SOUSCHEF_S3_ACCESS_KEY=${SOUSCHEF_S3_ACCESS_KEY:?SOUSCHEF_S3_ACCESS_KEY is required}
+      - SOUSCHEF_S3_SECRET_KEY=${SOUSCHEF_S3_SECRET_KEY:?SOUSCHEF_S3_SECRET_KEY is required}
     logging:
       driver: "json-file"
       options:
@@ -65,12 +65,15 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    user: "1000:1000"
+    user: "1001:1001"
     read_only: true
     tmpfs:
       # Temporary filesystems - writable directories for runtime use
       - /tmp:noexec,nosuid,size=256m
       - /run:noexec,nosuid,size=50m
+      - /app/.cache:noexec,nosuid,size=256m
+      - /app/.streamlit:noexec,nosuid,size=50m
+      - /app/.tmp:noexec,nosuid,size=50m
     networks:
       - souschef-public
       - souschef-internal
@@ -88,7 +91,7 @@ services:
     environment:
       POSTGRES_DB: ${SOUSCHEF_DB_NAME:-souschef}
       POSTGRES_USER: ${SOUSCHEF_DB_USER:-souschef}
-      POSTGRES_PASSWORD: ${SOUSCHEF_DB_PASSWORD:-souschef}
+      POSTGRES_PASSWORD: ${SOUSCHEF_DB_PASSWORD:?SOUSCHEF_DB_PASSWORD is required}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -106,8 +109,8 @@ services:
     image: minio/minio:latest
     container_name: souschef-minio
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${SOUSCHEF_S3_ACCESS_KEY:?SOUSCHEF_S3_ACCESS_KEY is required}
+      MINIO_ROOT_PASSWORD: ${SOUSCHEF_S3_SECRET_KEY:?SOUSCHEF_S3_SECRET_KEY is required}
     ports:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9001:9001"

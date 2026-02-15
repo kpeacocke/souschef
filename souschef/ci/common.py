@@ -5,16 +5,22 @@ from typing import Any
 
 import yaml
 
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+)
 
 
 def _normalize_cookbook_base(cookbook_path: str | Path) -> Path:
     """Normalise and resolve a cookbook path to prevent traversal."""
-    return (
+    base_path = (
         _normalize_path(cookbook_path)
         if isinstance(cookbook_path, str)
         else cookbook_path.resolve()
     )
+    workspace_root = _get_workspace_root()
+    return _ensure_within_base_path(base_path, workspace_root)
 
 
 def _initialise_patterns(base_path: Path) -> dict[str, Any]:
@@ -35,9 +41,9 @@ def _initialise_patterns(base_path: Path) -> dict[str, Any]:
 def _detect_lint_tools(base_path: Path) -> list[str]:
     """Detect linting tools configured in the cookbook directory."""
     lint_tools: list[str] = []
-    if (base_path / ".foodcritic").exists():
+    if (base_path / ".foodcritic").exists():  # NOSONAR
         lint_tools.append("foodcritic")
-    if (base_path / ".cookstyle.yml").exists():
+    if (base_path / ".cookstyle.yml").exists():  # NOSONAR
         lint_tools.append("cookstyle")
     return lint_tools
 
@@ -115,7 +121,7 @@ def analyse_chef_ci_patterns(cookbook_path: str | Path) -> dict[str, Any]:
     patterns["has_chefspec"] = _has_chefspec_tests(base_path)
 
     kitchen_file = base_path / ".kitchen.yml"
-    if kitchen_file.exists():
+    if kitchen_file.exists():  # NOSONAR
         suites, platforms = _parse_kitchen_configuration(kitchen_file)
         patterns["kitchen_suites"] = suites
         patterns["kitchen_platforms"] = platforms

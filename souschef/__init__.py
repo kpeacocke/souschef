@@ -1,8 +1,16 @@
 """SousChef: AI-powered Chef to Ansible converter."""
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import tomllib
+# tomllib is available in Python 3.11+, use tomli backport for earlier versions
+if TYPE_CHECKING:
+    import tomllib
+else:
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib  # type: ignore[import, no-redef]
 
 
 # Read version from pyproject.toml

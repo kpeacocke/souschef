@@ -674,7 +674,7 @@ def _load_ai_settings_from_file() -> dict[str, Any]:
     """Load AI settings from configuration file."""
     try:
         config_file = Path.home() / ".souschef" / "ai_config.json"
-        if config_file.exists():
+        if config_file.exists():  # NOSONAR
             with config_file.open() as f:
                 result = json.load(f)
                 return result if isinstance(result, dict) else {}

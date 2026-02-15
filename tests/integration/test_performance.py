@@ -104,8 +104,12 @@ class TestMemoryUsage:
 class TestLargeFileHandling:
     """Tests for handling large files and cookbooks."""
 
-    def test_large_recipe_with_many_resources(self, tmp_path: Path) -> None:
+    def test_large_recipe_with_many_resources(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
         """Test parsing a recipe with many resources."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         # Generate a recipe with 1000 resources
         large_recipe = tmp_path / "large_recipe.rb"
         resources = []
@@ -126,8 +130,10 @@ end
         assert "Resource 1:" in result
         assert "package" in result.lower()
 
-    def test_large_attribute_file(self, tmp_path: Path) -> None:
+    def test_large_attribute_file(self, tmp_path: Path, monkeypatch) -> None:
         """Test parsing an attribute file with many attributes."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         # Generate an attribute file with 1000 attributes
         large_attrs = tmp_path / "large_attributes.rb"
         attributes = []
@@ -141,8 +147,10 @@ end
         assert len(result) > 0
         assert "setting_" in result
 
-    def test_deep_nested_attributes(self, tmp_path: Path) -> None:
+    def test_deep_nested_attributes(self, tmp_path: Path, monkeypatch) -> None:
         """Test parsing deeply nested attributes."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         # Generate deeply nested attributes
         nested_attrs = tmp_path / "nested_attributes.rb"
         nested_attrs.write_text("""
@@ -158,8 +166,10 @@ default['level1']['level2']['hash'] = { 'key' => 'value' }
         assert len(result) > 0
         assert "level1" in result
 
-    def test_large_template_file(self, tmp_path: Path) -> None:
+    def test_large_template_file(self, tmp_path: Path, monkeypatch) -> None:
         """Test parsing a large template file."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         # Generate a template with many variables
         large_template = tmp_path / "large_template.erb"
         template_lines = ["# Large Template File\n"]
@@ -173,8 +183,10 @@ default['level1']['level2']['hash'] = { 'key' => 'value' }
         assert len(result) > 0
         assert "setting_" in result
 
-    def test_cookbook_with_many_files(self, tmp_path: Path) -> None:
+    def test_cookbook_with_many_files(self, tmp_path: Path, monkeypatch) -> None:
         """Test analyzing a cookbook with many files."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         # Create a cookbook with many recipes and resources
         cookbook = tmp_path / "large_cookbook"
         cookbook.mkdir()
@@ -382,8 +394,10 @@ class TestBenchmarkRegression:
 class TestScalability:
     """Tests for scalability and edge cases."""
 
-    def test_empty_recipe_parsing(self, tmp_path: Path) -> None:
+    def test_empty_recipe_parsing(self, tmp_path: Path, monkeypatch) -> None:
         """Test parsing an empty recipe file."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         empty_recipe = tmp_path / "empty.rb"
         empty_recipe.write_text("")
 
@@ -391,8 +405,10 @@ class TestScalability:
         # Should not crash and return some result
         assert isinstance(result, str)
 
-    def test_recipe_with_comments_only(self, tmp_path: Path) -> None:
+    def test_recipe_with_comments_only(self, tmp_path: Path, monkeypatch) -> None:
         """Test parsing a recipe with only comments."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         comments_recipe = tmp_path / "comments.rb"
         comments_recipe.write_text("""
 # This is a comment
@@ -404,8 +420,10 @@ class TestScalability:
         # Should not crash
         assert isinstance(result, str)
 
-    def test_recipe_with_very_long_lines(self, tmp_path: Path) -> None:
+    def test_recipe_with_very_long_lines(self, tmp_path: Path, monkeypatch) -> None:
         """Test parsing a recipe with very long lines."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         long_line_recipe = tmp_path / "long_lines.rb"
         long_value = "x" * 10000  # 10KB line
         long_line_recipe.write_text(f"""
@@ -419,8 +437,10 @@ end
         # Should parse without crashing
         assert "Resource" in result
 
-    def test_recipe_with_unicode_content(self, tmp_path: Path) -> None:
+    def test_recipe_with_unicode_content(self, tmp_path: Path, monkeypatch) -> None:
         """Test parsing a recipe with Unicode characters."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         unicode_recipe = tmp_path / "unicode.rb"
         unicode_recipe.write_text("""
 package 'café' do
@@ -437,8 +457,10 @@ end
         # Should handle Unicode properly
         assert "Resource" in result
 
-    def test_deeply_nested_conditionals(self, tmp_path: Path) -> None:
+    def test_deeply_nested_conditionals(self, tmp_path: Path, monkeypatch) -> None:
         """Test parsing recipes with deeply nested conditionals."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
         nested_recipe = tmp_path / "nested.rb"
         nested_recipe.write_text("""
 if node['platform'] == 'ubuntu'

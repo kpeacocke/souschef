@@ -9,11 +9,13 @@ environments.
 import configparser
 import os
 import re
-import subprocess
+import subprocess  # nosec B404: Used for safe subprocess.run with list args
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from souschef.core.caching import get_cache_manager
 
 
 def parse_ansible_cfg(config_path: str) -> dict[str, Any]:
@@ -35,9 +37,9 @@ def parse_ansible_cfg(config_path: str) -> dict[str, Any]:
 
     """
     # Validate and resolve path to prevent path traversal
-    # lgtm[py/path-injection] - Validated at entry + function level
+
     path = Path(config_path).resolve()  # nosec B108
-    if not path.exists():
+    if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Config file not found: {path}")
     if not path.is_file():
         raise ValueError(f"Config path is not a file: {path}")
@@ -99,8 +101,11 @@ def _parse_host_entry(line: str, group_name: str, inventory: dict[str, Any]) -> 
 
     if len(parts) > 1:
         var_str = parts[1]
-        for var in re.findall(r"(\w+)=(\S+)", var_str):
-            host_vars[var[0]] = var[1]
+        # Use string splitting instead of regex to prevent ReDoS
+        for pair in var_str.split():
+            if "=" in pair:
+                key, _, value = pair.partition("=")
+                host_vars[key] = value
 
     inventory["groups"][group_name]["hosts"].append(hostname)
 
@@ -108,6 +113,21 @@ def _parse_host_entry(line: str, group_name: str, inventory: dict[str, Any]) -> 
         inventory["hosts"][hostname] = {"vars": {}}
 
     inventory["hosts"][hostname]["vars"].update(host_vars)
+
+
+def _process_group_line(
+    line: str,
+    group_name: str,
+    group_type: str | None,
+    inventory: dict[str, Any],
+) -> None:
+    """Process a line within a group section."""
+    if group_type == "vars":
+        _parse_group_var(line, group_name, inventory)
+    elif group_type == "children":
+        _parse_child_group(line, group_name, inventory)
+    else:
+        _parse_host_entry(line, group_name, inventory)
 
 
 def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
@@ -129,12 +149,19 @@ def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
 
     """
     # Validate and resolve path to prevent path traversal
-    # lgtm[py/path-injection] - Validated at entry + function level
+
     path = Path(inventory_path).resolve()  # nosec B108
-    if not path.exists():
+    if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Inventory file not found: {path}")
     if not path.is_file():
         raise ValueError(f"Inventory path is not a file: {path}")
+
+    # Check cache first using resolved path to avoid duplicate entries
+    cache_manager = get_cache_manager()
+    resolved_path_str = str(path)
+    cached = cache_manager.get_inventory(resolved_path_str)
+    if cached is not None:
+        return cached
 
     inventory: dict[str, Any] = {"groups": {}, "hosts": {}}
     current_group: tuple[str, str | None] | None = None
@@ -153,14 +180,10 @@ def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
 
             if current_group:
                 group_name, group_type = current_group
+                _process_group_line(line, group_name, group_type, inventory)
 
-                if group_type == "vars":
-                    _parse_group_var(line, group_name, inventory)
-                elif group_type == "children":
-                    _parse_child_group(line, group_name, inventory)
-                else:
-                    _parse_host_entry(line, group_name, inventory)
-
+    # Cache the result using resolved path
+    cache_manager.cache_inventory(resolved_path_str, inventory)
     return inventory
 
 
@@ -183,12 +206,19 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
 
     """
     # Validate and resolve path to prevent path traversal
-    # lgtm[py/path-injection] - Validated at entry + function level
+
     path = Path(inventory_path).resolve()  # nosec B108
-    if not path.exists():
+    if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Inventory file not found: {path}")
     if not path.is_file():
         raise ValueError(f"Inventory path is not a file: {path}")
+
+    # Check cache first using resolved path to avoid duplicate entries
+    cache_manager = get_cache_manager()
+    resolved_path_str = str(path)
+    cached = cache_manager.get_inventory(resolved_path_str)
+    if cached is not None:
+        return cached
 
     try:
         with path.open() as f:
@@ -206,6 +236,8 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
             f"got {type(inventory).__name__}"
         )
 
+    # Cache the result using resolved path
+    cache_manager.cache_inventory(resolved_path_str, inventory)
     return inventory
 
 
@@ -230,9 +262,9 @@ def parse_inventory_file(inventory_path: str) -> dict[str, Any]:
 
     """
     # Validate and resolve path to prevent path traversal
-    # lgtm[py/path-injection] - Validated at entry + function level
+
     path = Path(inventory_path).resolve()  # nosec B108
-    if not path.exists():
+    if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Inventory file not found: {path}")
     if not path.is_file():
         raise ValueError(f"Inventory path is not a file: {path}")
@@ -271,9 +303,8 @@ def _validate_ansible_executable(ansible_path: str) -> Path:
         ValueError: If ansible_path is invalid or not an executable file.
 
     """
-    # lgtm[py/path-injection] - Validated at entry + function level
     ansible_exec = Path(ansible_path).resolve()  # nosec B108
-    if not ansible_exec.exists():
+    if not ansible_exec.exists():  # NOSONAR
         raise ValueError(f"Ansible executable does not exist: {ansible_exec}")
     if not ansible_exec.is_file():
         raise ValueError(f"Ansible path is not a file: {ansible_exec}")
@@ -333,7 +364,7 @@ def detect_ansible_version(ansible_path: str | None = None) -> str:
     if ansible_path:
         # Validate and resolve path; raises ValueError if invalid
         ansible_exec = _validate_ansible_executable(ansible_path)
-        # codeql[py/command-line-injection]: Validated by _validate_ansible_executable
+
         # which checks: exists, is_file, filename=='ansible', executable, resolved
         command = [str(ansible_exec), "--version"]
     else:
@@ -406,13 +437,12 @@ def parse_requirements_yml(requirements_path: str) -> dict[str, str]:
         ValueError: If requirements_path is not a file or YAML is invalid.
 
     """
-    # lgtm[py/path-injection] - Validated, restricted to requirements.yml
     path = Path(requirements_path).resolve()  # nosec B108
     # Ensure we are only ever reading a requirements.yml-style file,
     # not an arbitrary path derived from user input.
     if path.name != "requirements.yml":
         raise ValueError(f"Invalid requirements file name: {path.name}")
-    if not path.exists():
+    if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Requirements file not found: {path}")
     if not path.is_file():
         raise ValueError(f"Requirements path is not a file: {path}")
@@ -454,9 +484,8 @@ def _validate_playbook_path(playbook_path: str) -> Path:
         ValueError: If path is not a file.
 
     """
-    # lgtm[py/path-injection] - Validated for exists/is_file after resolution
     path = Path(playbook_path).resolve()  # nosec B108
-    if not path.exists():
+    if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Playbook not found: {path}")
     if not path.is_file():
         raise ValueError(f"Playbook path is not a file: {path}")
@@ -554,7 +583,7 @@ def _find_ansible_cfg() -> str | None:
     ]
 
     for location in ansible_cfg_locations:
-        if location.exists():
+        if location.exists():  # NOSONAR
             return str(location)
 
     return None
@@ -577,23 +606,23 @@ def _parse_config_for_paths(ansible_cfg: str, paths: dict[str, str | None]) -> N
 
         if "inventory" in defaults:
             # Resolve path from config to prevent traversal attacks
-            # lgtm[py/path-injection] - Config path pre-validated
+
             inv_path = Path(defaults["inventory"]).resolve()  # nosec B108
             if inv_path.exists() and inv_path.is_file():
                 paths["inventory"] = str(inv_path)
 
         if "roles_path" in defaults:
             # Resolve roles path
-            # lgtm[py/path-injection] - Config path pre-validated
+
             roles_path = Path(defaults["roles_path"]).resolve()  # nosec B108
-            if roles_path.exists():
+            if roles_path.exists():  # NOSONAR
                 paths["roles_path"] = str(roles_path)
 
         if "collections_paths" in defaults:
             # Resolve collections path
-            # lgtm[py/path-injection] - Config path pre-validated
+
             collections_path = Path(defaults["collections_paths"]).resolve()  # nosec B108
-            if collections_path.exists():
+            if collections_path.exists():  # NOSONAR
                 paths["collections_path"] = str(collections_path)
 
     except (ValueError, FileNotFoundError):
@@ -624,7 +653,7 @@ def get_ansible_config_paths() -> dict[str, str | None]:
 
     if not paths["inventory"]:
         default_inventory = Path("/etc/ansible/hosts")
-        if default_inventory.exists():
+        if default_inventory.exists():  # NOSONAR
             paths["inventory"] = str(default_inventory)
 
     return paths

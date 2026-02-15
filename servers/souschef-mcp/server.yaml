@@ -1,0 +1,26 @@
+name: souschef-mcp
+type: server
+meta:
+  category: devops
+  tags:
+    - devops
+    - chef
+    - ansible
+    - infrastructure
+    - migration
+    - conversion
+about:
+  title: SousChef MCP
+  description: AI-powered Chef to Ansible cookbook conversion and migration assistant with comprehensive assessment and planning capabilities
+  icon: https://avatars.githubusercontent.com/u/182288589?s=200&v=4
+source:
+  project: https://github.com/kpeacocke/souschef
+  commit: 4892a6d7ae8899949cd59d0de137caead3deadfd
+config:
+  description: Configure SousChef MCP server for Chef to Ansible conversion assistance
+  secrets: []
+  env: []
+  parameters:
+    type: object
+    properties: {}
+    required: []

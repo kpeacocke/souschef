@@ -51,7 +51,7 @@ Choose your preferred AI assistant and follow the setup instructions:
 
     - VS Code 1.102 or later
     - GitHub Copilot extension installed
-    - Python 3.14+ installed
+    - Python 3.10+ installed
 
     **Setup Steps**
 

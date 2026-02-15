@@ -49,7 +49,7 @@ jobs:
 
     - name: Verify code is from main branch
       env:
-        BRANCH: ${{ github.event.workflow_run.head_branch }}
+        BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
       run: |
         if [[ -z "$BRANCH" ]] || [[ "$BRANCH" != "main" ]]; then
           printf 'ERROR: Release workflow can only run on main branch, got: %s\n' "$BRANCH" >&2
@@ -123,10 +123,10 @@ jobs:
         GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Check if the Docker image with this tag exists in GHCR
-        IMAGE="ghcr.io/${{ github.repository_owner }}/mcp-souschef:$VERSION"
+        IMAGE="ghcr.io/${{ github.repository_owner }}/souschef:$VERSION"
         if docker manifest inspect "$IMAGE" >/dev/null 2>&1 || \
            curl -fsSL -H "Authorization: Bearer $GHCR_TOKEN" \
-           "https://ghcr.io/v2/${{ github.repository_owner }}/mcp-souschef/manifests/$VERSION" >/dev/null 2>&1; then
+           "https://ghcr.io/v2/${{ github.repository_owner }}/souschef/manifests/$VERSION" >/dev/null 2>&1; then
           echo "exists=true" >> $GITHUB_OUTPUT
           echo "Docker image $IMAGE already exists"
         else
@@ -360,15 +360,15 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5.10.0
         with:
           images: |
-            ghcr.io/${{ github.repository_owner }}/mcp-souschef
-            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/mcp-souschef
+            ghcr.io/${{ github.repository_owner }}/souschef
+            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/souschef
           tags: |
             type=semver,pattern={{version}},value=${{ needs.validate.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate.outputs.version }}
             type=semver,pattern={{major}},value=${{ needs.validate.outputs.version }}
             type=raw,value=latest
           labels: |
-            org.opencontainers.image.title=SousChef UI
+            org.opencontainers.image.title=SousChef
             org.opencontainers.image.description=Web UI for SousChef Chef to Ansible converter
 
       - name: Login to GitHub Container Registry
@@ -420,7 +420,7 @@ jobs:
           status: success
           deployment_id: ${{ steps.docker-deployment.outputs.deployment_id }}
           env: docker
-          env_url: https://ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}
+          env_url: https://ghcr.io/${{ github.repository_owner }}/souschef:${{ needs.validate.outputs.version }}
 
       - name: Update Docker deployment status (failure)
         uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
@@ -567,18 +567,19 @@ jobs:
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # v0.33.1
         with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}
+          image-ref: ghcr.io/${{ github.repository_owner }}/souschef:${{ needs.validate.outputs.version }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: '0'
 
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@6bc82e05fd0ea64601dd4b465378bbcf57de0314  # v4
+        uses: github/codeql-action/upload-sarif@45cbd0c69e560cd9e7cd7f8c32362050c9b7ded2  # v4
         if: always()
         with:
           sarif_file: trivy-results.sarif
-          category: trivy-ui-image-scan
+          category: trivy-image-scan
 
       - name: Display vulnerability report
         if: always()
@@ -610,10 +611,11 @@ jobs:
           format: sarif
           output: trivy-results-mcp.sarif
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: '0'
 
       - name: Upload Trivy MCP results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@6bc82e05fd0ea64601dd4b465378bbcf57de0314  # v4
+        uses: github/codeql-action/upload-sarif@45cbd0c69e560cd9e7cd7f8c32362050c9b7ded2  # v4
         if: always()
         with:
           sarif_file: trivy-results-mcp.sarif
@@ -645,13 +647,13 @@ jobs:
         run: |
           set -e
           # Pull the image first to ensure it's available
-          docker pull "ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}"
+          docker pull "ghcr.io/${{ github.repository_owner }}/souschef:${{ needs.validate.outputs.version }}"
 
           # Test if container can start (with 10-second timeout)
           timeout 10 docker run --rm \
             -e STREAMLIT_SERVER_HEADLESS=true \
             -e STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
-            "ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}" \
+            "ghcr.io/${{ github.repository_owner }}/souschef:${{ needs.validate.outputs.version }}" \
             /bin/true || true
 
           echo "Container started successfully"
@@ -661,7 +663,7 @@ jobs:
           set -e
           # Override the ENTRYPOINT to avoid streamlit run being prepended
           OUTPUT=$(docker run --rm --entrypoint="" \
-            "ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version }}" \
+            "ghcr.io/${{ github.repository_owner }}/souschef:${{ needs.validate.outputs.version }}" \
             python -m souschef.ui.health_check)
 
           echo "Health check output: $OUTPUT"
@@ -739,7 +741,7 @@ jobs:
 
     steps:
       - name: Create deployment notification issue
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8.0.0
         with:
           script: |
             const version = "${{ needs.validate.outputs.version }}";
@@ -759,12 +761,12 @@ jobs:
 
             if (uiDigest) {
               body += "### UI Image (Streamlit)\n\n";
-              body += "**Image:** `" + registry + "/" + owner + "/mcp-souschef:" + version + "`\n\n";
+              body += "**Image:** `" + registry + "/" + owner + "/souschef:" + version + "`\n\n";
               body += "**Digest:** " + uiDigest + "\n\n";
               body += "**Pull Commands:**\n";
               body += "```bash\n";
-              body += "docker pull " + registry + "/" + owner + "/mcp-souschef:" + version + "\n";
-              body += "docker pull " + registry + "/" + owner + "/mcp-souschef:latest\n";
+              body += "docker pull " + registry + "/" + owner + "/souschef:" + version + "\n";
+              body += "docker pull " + registry + "/" + owner + "/souschef:latest\n";
               body += "```\n\n";
             }
 
@@ -832,14 +834,14 @@ jobs:
           ## Deployments
           - **PyPI:** https://pypi.org/project/souschef/${{ needs.validate.outputs.version || 'latest' }}/
           - **GitHub Release:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag || 'latest' }}
-          - **UI Container Image:** ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}
+          echo "- **UI Container Image:** ghcr.io/${{ github.repository_owner }}/souschef:${{ needs.validate.outputs.version || 'latest' }}"
           - **MCP Container Image:** ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version || 'latest' }}
 
           ## Next Steps
           - PyPI package and Docker images are deployed
           - See GitHub Release for artifacts and release notes
           - See GitHub Security tab for Docker vulnerability scan results
-          - Pull the UI image: `docker pull ghcr.io/${{ github.repository_owner }}/mcp-souschef:${{ needs.validate.outputs.version || 'latest' }}`
+          - Pull the UI image: `docker pull ghcr.io/${{ github.repository_owner }}/souschef:${{ needs.validate.outputs.version || 'latest' }}`
           - Pull the MCP image: `docker pull ghcr.io/${{ github.repository_owner }}/souschef-mcp:${{ needs.validate.outputs.version || 'latest' }}`
 
           ## Workflow Run Details
@@ -871,6 +873,7 @@ jobs:
           echo "| PyPI Publish | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Create Release | ${{ needs.create-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker UI Build & Push | ${{ needs.build-and-push-docker-ui.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker MCP Build & Push | ${{ needs.build-and-push-docker-mcp.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker MCP Build & Push | ${{ needs.build-and-push-docker-mcp.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker UI Scan | ${{ needs.scan-docker-image-ui.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker MCP Scan | ${{ needs.scan-docker-image-mcp.result }} |" >> $GITHUB_STEP_SUMMARY

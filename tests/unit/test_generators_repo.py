@@ -733,15 +733,22 @@ class TestExceptionPaths:
         """Test repository generation handles permission errors."""
         output_dir = tmp_path / "output_repo"
 
-        # Patch mkdir to raise PermissionError
-        with patch("souschef.generators.repo.Path") as mock_path_cls:
-            mock_instance = mock_path_cls.return_value
-            mock_instance.mkdir.side_effect = PermissionError(
-                "Permission denied: cannot create directory"
-            )
-            mock_instance.exists.return_value = False
-            mock_instance.__str__.return_value = str(output_dir)
-
+        with (
+            patch("souschef.generators.repo._normalize_path", return_value=output_dir),
+            patch(
+                "souschef.core.path_utils._ensure_within_base_path",
+                return_value=output_dir,
+            ),
+            patch("souschef.generators.repo._check_symlink_safety"),
+            patch.object(Path, "exists", return_value=False),
+            patch.object(
+                Path,
+                "mkdir",
+                side_effect=PermissionError(
+                    "Permission denied: cannot create directory"
+                ),
+            ),
+        ):
             result = generate_ansible_repository(
                 output_path=str(output_dir),
                 repo_type=RepoType.PLAYBOOKS_ROLES,
