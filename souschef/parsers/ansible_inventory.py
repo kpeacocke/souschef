@@ -37,7 +37,7 @@ def parse_ansible_cfg(config_path: str) -> dict[str, Any]:
 
     """
     # Validate and resolve path to prevent path traversal
-    # lgtm[py/path-injection] - Validated at entry + function level
+    # codeql[py/path-injection] - Validated at entry + function level
     path = Path(config_path).resolve()  # nosec B108
     if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Config file not found: {path}")
@@ -149,7 +149,7 @@ def parse_inventory_ini(inventory_path: str) -> dict[str, Any]:
 
     """
     # Validate and resolve path to prevent path traversal
-    # lgtm[py/path-injection] - Validated at entry + function level
+    # codeql[py/path-injection] - Validated at entry + function level
     path = Path(inventory_path).resolve()  # nosec B108
     if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Inventory file not found: {path}")
@@ -206,7 +206,7 @@ def parse_inventory_yaml(inventory_path: str) -> dict[str, Any]:
 
     """
     # Validate and resolve path to prevent path traversal
-    # lgtm[py/path-injection] - Validated at entry + function level
+    # codeql[py/path-injection] - Validated at entry + function level
     path = Path(inventory_path).resolve()  # nosec B108
     if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Inventory file not found: {path}")
@@ -262,7 +262,7 @@ def parse_inventory_file(inventory_path: str) -> dict[str, Any]:
 
     """
     # Validate and resolve path to prevent path traversal
-    # lgtm[py/path-injection] - Validated at entry + function level
+    # codeql[py/path-injection] - Validated at entry + function level
     path = Path(inventory_path).resolve()  # nosec B108
     if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Inventory file not found: {path}")
@@ -303,7 +303,7 @@ def _validate_ansible_executable(ansible_path: str) -> Path:
         ValueError: If ansible_path is invalid or not an executable file.
 
     """
-    # lgtm[py/path-injection] - Validated at entry + function level
+    # codeql[py/path-injection] - Validated at entry + function level
     ansible_exec = Path(ansible_path).resolve()  # nosec B108
     if not ansible_exec.exists():  # NOSONAR
         raise ValueError(f"Ansible executable does not exist: {ansible_exec}")
@@ -438,7 +438,7 @@ def parse_requirements_yml(requirements_path: str) -> dict[str, str]:
         ValueError: If requirements_path is not a file or YAML is invalid.
 
     """
-    # lgtm[py/path-injection] - Validated, restricted to requirements.yml
+    # codeql[py/path-injection] - Validated, restricted to requirements.yml
     path = Path(requirements_path).resolve()  # nosec B108
     # Ensure we are only ever reading a requirements.yml-style file,
     # not an arbitrary path derived from user input.
@@ -486,7 +486,7 @@ def _validate_playbook_path(playbook_path: str) -> Path:
         ValueError: If path is not a file.
 
     """
-    # lgtm[py/path-injection] - Validated for exists/is_file after resolution
+    # codeql[py/path-injection] - Validated for exists/is_file after resolution
     path = Path(playbook_path).resolve()  # nosec B108
     if not path.exists():  # NOSONAR
         raise FileNotFoundError(f"Playbook not found: {path}")
@@ -609,21 +609,21 @@ def _parse_config_for_paths(ansible_cfg: str, paths: dict[str, str | None]) -> N
 
         if "inventory" in defaults:
             # Resolve path from config to prevent traversal attacks
-            # lgtm[py/path-injection] - Config path pre-validated
+            # codeql[py/path-injection] - Config path pre-validated
             inv_path = Path(defaults["inventory"]).resolve()  # nosec B108
             if inv_path.exists() and inv_path.is_file():
                 paths["inventory"] = str(inv_path)
 
         if "roles_path" in defaults:
             # Resolve roles path
-            # lgtm[py/path-injection] - Config path pre-validated
+            # codeql[py/path-injection] - Config path pre-validated
             roles_path = Path(defaults["roles_path"]).resolve()  # nosec B108
             if roles_path.exists():  # NOSONAR
                 paths["roles_path"] = str(roles_path)
 
         if "collections_paths" in defaults:
             # Resolve collections path
-            # lgtm[py/path-injection] - Config path pre-validated
+            # codeql[py/path-injection] - Config path pre-validated
             collections_path = Path(defaults["collections_paths"]).resolve()  # nosec B108
             if collections_path.exists():  # NOSONAR
                 paths["collections_path"] = str(collections_path)

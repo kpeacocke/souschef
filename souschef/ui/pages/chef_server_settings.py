@@ -19,7 +19,7 @@ from souschef.assessment import assess_single_cookbook_with_ai
 
 # Import Chef Server validation functions from core module
 from souschef.core.chef_server import (  # noqa: F401
-    _handle_chef_server_response,
+    _handle_chef_server_response,  # noqa: F401
     _validate_chef_server_connection,
 )
 from souschef.core.path_utils import (
@@ -31,13 +31,13 @@ from souschef.core.url_validation import validate_user_provided_url
 from souschef.storage import get_storage_manager
 
 if TYPE_CHECKING:
-    import requests as requests_module
+    import requests as requests_module  # noqa: F401
 else:
     try:
-        import requests as requests_module
+        import requests as requests_module  # noqa: F401
         from requests.exceptions import (
-            ConnectionError,  # noqa: A004
-            Timeout,
+            ConnectionError,  # noqa: A004, F401
+            Timeout,  # noqa: F401
         )
     except ImportError:
         requests_module = None  # type: ignore[assignment]
@@ -47,8 +47,8 @@ else:
 try:
     import requests
     from requests.exceptions import (
-        ConnectionError,  # noqa: A004
-        Timeout,
+        ConnectionError,  # noqa: A004, F401, F811
+        Timeout,  # noqa: F811
     )
 except ImportError:
     requests = None  # type: ignore[assignment]

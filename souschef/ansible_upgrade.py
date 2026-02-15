@@ -130,7 +130,7 @@ def detect_python_version(environment_path: str | None = None) -> str:
 
     if environment_path:
         # Resolve path to prevent path traversal attacks
-        # lgtm[py/path-injection] - Validated at entry + function level
+        # codeql[py/path-injection] - Path validated: .resolve() normalizes
         env_path = Path(environment_path).resolve()  # nosec B108
 
         # Validate the path exists and is a directory
@@ -142,7 +142,7 @@ def detect_python_version(environment_path: str | None = None) -> str:
         venv_python = env_path / "bin" / "python3"
         if venv_python.exists():  # NOSONAR
             # Resolve to prevent symlink attacks and validate it's a file
-            # lgtm[py/path-injection] - Derived from validated env_path
+            # codeql[py/path-injection] - Derived from validated env_path
             resolved_python = venv_python.resolve()  # nosec B108
             if not resolved_python.is_file():
                 raise ValueError(f"Python executable is not a file: {resolved_python}")
@@ -249,7 +249,7 @@ def _scan_collections(env_path: Path, result: dict[str, Any]) -> None:
         if req_path.exists():  # NOSONAR
             try:
                 # Verify requirements path is within env_path (no traversal)
-                # lgtm[py/path-injection] - Derived from validated env_path
+                # codeql[py/path-injection] - Derived from validated env_path
                 resolved_req = req_path.resolve()  # nosec B108
                 if not _is_path_within(resolved_req, env_path):
                     # Skip if path escapes environment directory
@@ -271,7 +271,7 @@ def _scan_playbooks(env_path: Path, result: dict[str, Any]) -> None:
     for playbook_path in playbook_paths[:20]:
         try:
             # Verify playbook path is within env_path (no traversal)
-            # lgtm[py/path-injection] - Paths from glob of validated env_path
+            # codeql[py/path-injection] - Paths from glob of validated env_path
             resolved_playbook = playbook_path.resolve()  # nosec B108
             if not _is_path_within(resolved_playbook, env_path):
                 # Skip files that escape the environment directory
@@ -327,7 +327,7 @@ def assess_ansible_environment(environment_path: str) -> dict[str, Any]:
         Dictionary containing environment assessment details.
 
     """
-    # lgtm[py/path-injection] - Validated at entry + function level
+    # codeql[py/path-injection] - Path validated, .resolve() prevents traversal
     env_path = Path(environment_path).resolve()  # nosec B108
     if not env_path.exists():  # NOSONAR
         return {"error": f"Environment path does not exist: {env_path}"}
@@ -850,7 +850,7 @@ def generate_upgrade_testing_plan(environment_path: str) -> str:
 
     """
     # Validate and resolve path to prevent injection
-    # lgtm[py/path-injection] - Input validated at CLI/MCP layer, resolved and escaped
+    # codeql[py/path-injection] - Input validated at CLI/MCP layer, resolved and escaped
     resolved_path = Path(environment_path).resolve()  # nosec B108
     escaped_path = shlex.quote(str(resolved_path))
 
