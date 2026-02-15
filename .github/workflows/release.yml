@@ -49,7 +49,7 @@ jobs:
 
     - name: Verify code is from main branch
       env:
-        BRANCH: ${{ github.event.workflow_run.head_branch }}
+        BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
       run: |
         if [[ -z "$BRANCH" ]] || [[ "$BRANCH" != "main" ]]; then
           printf 'ERROR: Release workflow can only run on main branch, got: %s\n' "$BRANCH" >&2
@@ -579,7 +579,7 @@ jobs:
         if: always()
         with:
           sarif_file: trivy-results.sarif
-          category: trivy-ui-image-scan
+          category: trivy-image-scan
 
       - name: Display vulnerability report
         if: always()
