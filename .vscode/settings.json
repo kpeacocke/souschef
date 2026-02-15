@@ -23,7 +23,8 @@
         "reportUnknownArgumentType": "none",
         "reportMissingParameterType": "none",
         "reportGeneralTypeIssues": "warning",
-        "reportOptionalMemberAccess": "warning"
+        "reportOptionalMemberAccess": "warning",
+        "reportMissingImports": "none"
     },
     "python.analysis.autoImportCompletions": true,
     "python.analysis.completeFunctionParens": true,

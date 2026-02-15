@@ -475,9 +475,9 @@ def _trigger_conversion(analysis, blob_storage) -> None:
                     _safe_tar_extractall(tar, extract_dir, safe_members)
             elif archive_format == "tar.bz2":
                 # Security: Archive size validated before opening.
-                with tarfile.open(
+                with tarfile.open(  # NOSONAR python:S5042
                     cookbook_path, "r:bz2"
-                ) as tar:  # NOSONAR python:S5042
+                ) as tar:
                     safe_members = _filter_safe_tar_members(
                         tar, extract_dir, max_file_size, max_total_size, max_files
                     )
