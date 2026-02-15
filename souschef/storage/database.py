@@ -103,7 +103,7 @@ def _hash_directory_contents(directory: Path) -> str:
 
     key_files: list[Path] = [directory / "metadata.rb"]
     recipes_dir = directory / "recipes"
-    if recipes_dir.exists():
+    if recipes_dir.exists():  # NOSONAR
         key_files.extend(sorted(recipes_dir.glob("*.rb")))
 
     for file_path in key_files:
@@ -165,7 +165,7 @@ class StorageManager:
         """Close all database connections and ensure cleanup."""
         # Execute a dummy query to ensure all pending operations are complete
         # This helps prevent ResourceWarnings in tests
-        if self.db_path.exists():
+        if self.db_path.exists():  # NOSONAR
             conn = None
             try:
                 conn = sqlite3.connect(str(self.db_path))

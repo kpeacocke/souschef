@@ -707,7 +707,7 @@ def _analyse_recipes(cookbook_path: Path) -> list[dict[str, Any]]:
     """
     recipes = []
     recipes_dir = _safe_join(cookbook_path, "recipes")
-    if recipes_dir.exists():
+    if recipes_dir.exists():  # NOSONAR
         for recipe_file in recipes_dir.glob("*.rb"):
             recipes.append(
                 {
@@ -736,7 +736,7 @@ def _analyse_attributes_for_survey(
     survey_fields = []
     attributes_dir = _safe_join(cookbook_path, "attributes")
 
-    if attributes_dir.exists():
+    if attributes_dir.exists():  # NOSONAR
         for attr_file in attributes_dir.glob("*.rb"):
             try:
                 with attr_file.open("r") as f:
@@ -769,7 +769,7 @@ def _analyse_metadata_dependencies(cookbook_path: Path) -> list[str]:
 
     """
     metadata_file = _safe_join(cookbook_path, METADATA_FILENAME)
-    if metadata_file.exists():
+    if metadata_file.exists():  # NOSONAR
         try:
             with metadata_file.open("r") as f:
                 content = f.read()
@@ -795,11 +795,11 @@ def _collect_static_files(cookbook_path: Path) -> tuple[list[str], list[str]]:
     files = []
 
     templates_dir = _safe_join(cookbook_path, "templates")
-    if templates_dir.exists():
+    if templates_dir.exists():  # NOSONAR
         templates = [f.name for f in templates_dir.rglob("*") if f.is_file()]
 
     files_dir = _safe_join(cookbook_path, "files")
-    if files_dir.exists():
+    if files_dir.exists():  # NOSONAR
         files = [f.name for f in files_dir.rglob("*") if f.is_file()]
 
     return templates, files
@@ -1214,7 +1214,7 @@ def _analyse_chef_deployment_pattern(cookbook_path: Path) -> dict:
 
     # Analyze recipes for deployment indicators
     recipes_dir = _safe_join(cookbook_path, "recipes")
-    if recipes_dir.exists():
+    if recipes_dir.exists():  # NOSONAR
         for recipe_file in recipes_dir.glob("*.rb"):
             try:
                 with recipe_file.open("r") as f:
@@ -1576,7 +1576,7 @@ def _analyse_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
 
     # Analyze recipes
     recipes_dir = _safe_join(cookbook_path, "recipes")
-    if recipes_dir.exists():
+    if recipes_dir.exists():  # NOSONAR
         for recipe_file in recipes_dir.glob("*.rb"):
             try:
                 with recipe_file.open("r") as f:

@@ -3,6 +3,7 @@
 import json
 import re
 
+from souschef.core import path_utils
 from souschef.core.constants import (
     ERB_PATTERNS,
     ERROR_FILE_NOT_FOUND,
@@ -18,8 +19,13 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _get_workspace_root,
     _normalize_path,
-    safe_read_text,
 )
+
+# Make safe functions available as module attributes for testing
+safe_exists = path_utils.safe_exists
+safe_is_dir = path_utils.safe_is_dir
+safe_is_file = path_utils.safe_is_file
+safe_read_text = path_utils.safe_read_text
 
 # Maximum length for variable names in ERB template parsing
 MAX_VARIABLE_NAME_LENGTH = 100

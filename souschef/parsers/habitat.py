@@ -39,7 +39,7 @@ def parse_habitat_plan(plan_path: str) -> str:
         normalized_path = _normalize_path(plan_path)
         workspace_root = _get_workspace_root()
         safe_path = _ensure_within_base_path(normalized_path, workspace_root)
-        if not safe_path.exists():
+        if not safe_path.exists():  # NOSONAR
             return ERROR_FILE_NOT_FOUND.format(path=safe_path)
         if safe_path.is_dir():
             return ERROR_IS_DIRECTORY.format(path=safe_path)

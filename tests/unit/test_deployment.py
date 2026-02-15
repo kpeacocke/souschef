@@ -5,7 +5,7 @@ These tests cover AWX/Tower integration, deployment strategies, and
 Chef cookbook analysis for deployment planning.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 class TestCanaryDeploymentValidation:
@@ -182,7 +182,7 @@ class TestGenerateBlueGreenDeploymentPlaybook:
 
         result = generate_blue_green_deployment_playbook(
             app_name="test-app",
-            health_check_url="http://example.com/health",
+            health_check_url="https://example.com/health",
         )
 
         assert "Error" in result
@@ -205,14 +205,17 @@ class TestConvertChefDeploymentToAnsibleStrategy:
     """Test Chef deployment to Ansible strategy conversion."""
 
     @patch("souschef.deployment.validate_cookbook_structure")
-    def test_convert_chef_deployment_basic(self, mock_validate):
+    def test_convert_chef_deployment_basic(self, mock_validate, tmp_path):
         """Test basic Chef deployment conversion."""
         from souschef.deployment import convert_chef_deployment_to_ansible_strategy
 
-        # Mock validated cookbook
-        mock_cookbook = MagicMock()
-        mock_cookbook.name = "test_cookbook"
-        mock_validate.return_value = mock_cookbook
+        cookbook_dir = tmp_path / "test_cookbook"
+        cookbook_dir.mkdir()
+        recipes_dir = cookbook_dir / "recipes"
+        recipes_dir.mkdir()
+        (recipes_dir / "default.rb").write_text("package 'nginx'")
+
+        mock_validate.return_value = cookbook_dir
 
         result = convert_chef_deployment_to_ansible_strategy(
             cookbook_path="/fake/path",
@@ -538,14 +541,17 @@ class TestGenerateAWXJobTemplate:
     """Test AWX job template generation."""
 
     @patch("souschef.deployment.validate_cookbook_structure")
-    def test_generate_awx_job_template_basic(self, mock_validate):
+    def test_generate_awx_job_template_basic(self, mock_validate, tmp_path):
         """Test generating AWX job template from cookbook."""
         from souschef.deployment import generate_awx_job_template_from_cookbook
 
-        # Mock validated cookbook
-        mock_cookbook = MagicMock()
-        mock_cookbook.name = "test_cookbook"
-        mock_validate.return_value = mock_cookbook
+        cookbook_dir = tmp_path / "test_cookbook"
+        cookbook_dir.mkdir()
+        recipes_dir = cookbook_dir / "recipes"
+        recipes_dir.mkdir()
+        (recipes_dir / "default.rb").write_text("package 'nginx'")
+
+        mock_validate.return_value = cookbook_dir
 
         result = generate_awx_job_template_from_cookbook(
             cookbook_path="/fake/path",
@@ -703,14 +709,17 @@ class TestAnalyseChefApplicationPatterns:
     """Test Chef application pattern analysis."""
 
     @patch("souschef.deployment.validate_cookbook_structure")
-    def test_analyse_chef_application_patterns_basic(self, mock_validate):
+    def test_analyse_chef_application_patterns_basic(self, mock_validate, tmp_path):
         """Test analysing Chef application patterns."""
         from souschef.deployment import analyse_chef_application_patterns
 
-        # Mock validated cookbook
-        mock_cookbook = MagicMock()
-        mock_cookbook.name = "test_cookbook"
-        mock_validate.return_value = mock_cookbook
+        cookbook_dir = tmp_path / "test_cookbook"
+        cookbook_dir.mkdir()
+        recipes_dir = cookbook_dir / "recipes"
+        recipes_dir.mkdir()
+        (recipes_dir / "default.rb").write_text("package 'nginx'")
+
+        mock_validate.return_value = cookbook_dir
 
         result = analyse_chef_application_patterns(
             cookbook_path="/fake/path",

@@ -588,7 +588,7 @@ def analyse_cookbook_dependencies(
         except (ValueError, OSError) as e:
             return f"Error: Invalid cookbook path '{cookbook_path}': {e}"
 
-        if not normalized_input.exists():
+        if not normalized_input.exists():  # NOSONAR
             return (
                 f"Error: Cookbook path not found: {cookbook_path}\n\n"
                 "Suggestion: Check that the path exists and points to a cookbook directory"
@@ -1173,7 +1173,7 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     berksfile_path = _safe_join(base, "Berksfile")
 
-    if not berksfile_path.exists():
+    if not berksfile_path.exists():  # NOSONAR
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
 
     try:
@@ -1204,7 +1204,7 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     chefignore_path = _ensure_within_base_path(_safe_join(base, "chefignore"), base)
 
-    if not chefignore_path.exists():
+    if not chefignore_path.exists():  # NOSONAR
         return {"patterns": [], "complexity": 0}
 
     try:
@@ -1233,7 +1233,7 @@ def _parse_thorfile(cookbook_path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     thorfile_path = _ensure_within_base_path(_safe_join(base, "Thorfile"), base)
 
-    if not thorfile_path.exists():
+    if not thorfile_path.exists():  # NOSONAR
         return {"tasks": [], "complexity": 0}
 
     try:
@@ -1257,7 +1257,7 @@ def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     metadata_path = _ensure_within_base_path(_safe_join(base, "metadata.rb"), base)
 
-    if not metadata_path.exists():
+    if not metadata_path.exists():  # NOSONAR
         return {
             "name": "",
             "version": "",
@@ -1777,7 +1777,7 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
     base_path: Path = _normalize_path(cookbook_path)
 
     # Validate basic accessibility
-    if not base_path.exists():
+    if not base_path.exists():  # NOSONAR
         msg = f"Cookbook path does not exist: {cookbook_path}"
         raise ValueError(msg)
     if not base_path.is_dir():

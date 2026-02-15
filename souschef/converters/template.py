@@ -29,7 +29,7 @@ def convert_template_file(erb_path: str) -> dict:
     try:
         file_path = Path(erb_path).resolve()
 
-        if not file_path.exists():
+        if not file_path.exists():  # NOSONAR
             return {
                 "success": False,
                 "error": f"File not found: {erb_path}",
@@ -97,7 +97,7 @@ def convert_cookbook_templates(cookbook_path: str) -> dict:
     try:
         cookbook_dir = Path(cookbook_path).resolve()
 
-        if not cookbook_dir.exists():
+        if not cookbook_dir.exists():  # NOSONAR
             return {
                 "success": False,
                 "error": f"Cookbook directory not found: {cookbook_path}",

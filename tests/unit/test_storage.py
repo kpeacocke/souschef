@@ -1,5 +1,6 @@
 """Unit tests for the storage module."""
 
+import os
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -545,7 +546,7 @@ class TestPostgresStorageManager:
             def execute(self, sql: str, *_args: object) -> None:
                 self.executed.append(sql)
                 if "ADD COLUMN content_fingerprint" in sql:
-                    raise Exception("already exists")
+                    raise ValueError("already exists")
 
             def commit(self) -> None:
                 self.commits += 1
@@ -567,7 +568,12 @@ class TestPostgresStorageManager:
 
     def test_get_storage_manager_singleton(self):
         """Test that get_storage_manager returns singleton instance."""
-        with patch("souschef.storage.database.load_database_settings") as mock_load:
+        with (
+            patch.dict("os.environ", {"POSTGRES_PASSWORD": "test-password"}),
+            patch("souschef.storage.database.load_database_settings") as mock_load,
+            patch("souschef.storage.database._storage_manager", None),
+            patch("souschef.storage.database.StorageManager.__init__") as mock_init,
+        ):
             mock_load.return_value = DatabaseSettings(
                 backend="sqlite",
                 sqlite_path=None,
@@ -576,23 +582,20 @@ class TestPostgresStorageManager:
                 postgres_port=5432,
                 postgres_name="souschef",
                 postgres_user="souschef",
-                postgres_password="souschef",
+                postgres_password=os.environ["POSTGRES_PASSWORD"],
                 postgres_sslmode="disable",
             )
-            with (
-                patch("souschef.storage.database._storage_manager", None),
-                patch("souschef.storage.database.StorageManager.__init__") as mock_init,
-            ):
-                mock_init.return_value = None
+            mock_init.return_value = None
 
-                manager1 = get_storage_manager()
-                manager2 = get_storage_manager()
+            manager1 = get_storage_manager()
+            manager2 = get_storage_manager()
 
-                assert manager1 is manager2
+            assert manager1 is manager2
 
     def test_get_storage_manager_postgres_backend(self):
         """Test that get_storage_manager returns PostgresStorageManager."""
         with (
+            patch.dict("os.environ", {"POSTGRES_PASSWORD": "test-password"}),
             patch("souschef.storage.database.load_database_settings") as mock_load,
             patch("souschef.storage.database._storage_manager", None),
             patch(
@@ -607,7 +610,7 @@ class TestPostgresStorageManager:
                 postgres_port=5432,
                 postgres_name="souschef",
                 postgres_user="souschef",
-                postgres_password="souschef",
+                postgres_password=os.environ["POSTGRES_PASSWORD"],
                 postgres_sslmode="disable",
             )
             mock_init.return_value = None

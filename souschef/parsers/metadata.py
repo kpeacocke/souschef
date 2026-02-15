@@ -2,19 +2,19 @@
 
 import re
 
+from souschef.core import path_utils
 from souschef.core.constants import (
     ERROR_FILE_NOT_FOUND,
     ERROR_IS_DIRECTORY,
     ERROR_PERMISSION_DENIED,
     METADATA_FILENAME,
 )
-from souschef.core.path_utils import (
-    _ensure_within_base_path,
-    _get_workspace_root,
-    _normalize_path,
-    _safe_join,
-    safe_read_text,
-)
+
+# Make safe functions available as module attributes for testing
+safe_exists = path_utils.safe_exists
+safe_is_dir = path_utils.safe_is_dir
+safe_is_file = path_utils.safe_is_file
+safe_read_text = path_utils.safe_read_text
 
 
 def read_cookbook_metadata(path: str) -> str:
@@ -29,9 +29,9 @@ def read_cookbook_metadata(path: str) -> str:
 
     """
     try:
-        file_path = _normalize_path(path)
-        workspace_root = _get_workspace_root()
-        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        file_path = path_utils._normalize_path(path)
+        workspace_root = path_utils._get_workspace_root()
+        safe_path = path_utils._ensure_within_base_path(file_path, workspace_root)
         content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
 
         metadata = _extract_metadata(content)
@@ -65,9 +65,9 @@ def parse_cookbook_metadata(path: str) -> dict[str, str | list[str]]:
 
     """
     try:
-        file_path = _normalize_path(path)
-        workspace_root = _get_workspace_root()
-        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        file_path = path_utils._normalize_path(path)
+        workspace_root = path_utils._get_workspace_root()
+        safe_path = path_utils._ensure_within_base_path(file_path, workspace_root)
         content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
 
         metadata = _extract_metadata(content)
@@ -99,12 +99,15 @@ def _scan_cookbook_directory(
         Tuple of (dir_name, files) if directory exists and has files, None otherwise.
 
     """
-    dir_path = _safe_join(cookbook_path, dir_name)
-    if not dir_path.exists() or not dir_path.is_dir():
+    dir_path = path_utils._safe_join(cookbook_path, dir_name)
+    workspace_root = path_utils._get_workspace_root()
+    if not safe_exists(dir_path, workspace_root) or not safe_is_dir(
+        dir_path, workspace_root
+    ):
         return None
 
     # nosonar
-    files = [f.name for f in dir_path.iterdir() if f.is_file()]
+    files = [f.name for f in dir_path.iterdir() if safe_is_file(f, workspace_root)]
     return (dir_name, files) if files else None
 
 
@@ -137,8 +140,9 @@ def _collect_cookbook_structure(cookbook_path) -> dict[str, list[str]]:
             structure[result[0]] = result[1]
 
     # Check for metadata.rb
-    metadata_path = _safe_join(cookbook_path, METADATA_FILENAME)
-    if metadata_path.exists():
+    metadata_path = path_utils._safe_join(cookbook_path, METADATA_FILENAME)
+    workspace_root = path_utils._get_workspace_root()
+    if safe_exists(metadata_path, workspace_root):
         structure["metadata"] = [METADATA_FILENAME]
 
     return structure
@@ -156,11 +160,11 @@ def list_cookbook_structure(path: str) -> str:
 
     """
     try:
-        cookbook_path = _normalize_path(path)
-        workspace_root = _get_workspace_root()
-        safe_path = _ensure_within_base_path(cookbook_path, workspace_root)
+        cookbook_path = path_utils._normalize_path(path)
+        workspace_root = path_utils._get_workspace_root()
+        safe_path = path_utils._ensure_within_base_path(cookbook_path, workspace_root)
 
-        if not safe_path.is_dir():
+        if not safe_is_dir(safe_path, workspace_root):
             return f"Error: {path} is not a directory"
 
         structure = _collect_cookbook_structure(safe_path)

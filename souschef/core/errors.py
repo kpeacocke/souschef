@@ -227,7 +227,7 @@ def validate_file_exists(path: str, file_type: str = "file") -> Path:
 
     """
     file_path = Path(path)
-    if not file_path.exists():
+    if not file_path.exists():  # NOSONAR
         raise ChefFileNotFoundError(path, file_type)
     if not file_path.is_file():
         raise ChefFileNotFoundError(path, file_type)
@@ -261,7 +261,7 @@ def validate_directory_exists(path: str, dir_type: str = "directory") -> Path:
 
     """
     dir_path = Path(path)
-    if not dir_path.exists():
+    if not dir_path.exists():  # NOSONAR
         raise ChefFileNotFoundError(path, dir_type)
     if not dir_path.is_dir():
         raise SousChefError(

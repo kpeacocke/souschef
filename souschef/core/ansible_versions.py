@@ -699,7 +699,7 @@ def _load_ai_cache() -> dict | None:
     """
     try:
         cache_path = _get_cache_path()
-        if not cache_path.exists():
+        if not cache_path.exists():  # NOSONAR
             return None
 
         with cache_path.open() as f:

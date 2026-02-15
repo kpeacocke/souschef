@@ -121,5 +121,8 @@ tests/integration/fixtures/*.zip
 tests/integration/fixtures/*.tar.bz2
 tests/integration/fixtures/*.tar.xz
 
+# Accidental mock path output
+MagicMock/
+
 # Docker Compose persistent storage
 data/

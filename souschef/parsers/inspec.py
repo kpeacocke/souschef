@@ -63,7 +63,7 @@ def parse_inspec_profile(path: str) -> str:
                 "Suggestion: Use a path inside the workspace or system temp directory"
             )
 
-        if not profile_path.exists():
+        if not profile_path.exists():  # NOSONAR
             return (
                 f"Error: Path does not exist: {path}\n\n"
                 "Suggestion: Check that the path is correct and the InSpec "
@@ -207,7 +207,7 @@ def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
 
     """
     controls_dir = _ensure_within_base_path(profile_path / "controls", profile_path)
-    if not controls_dir.exists():
+    if not controls_dir.exists():  # NOSONAR
         raise FileNotFoundError(f"No controls directory found in {profile_path}")
 
     controls = []

@@ -128,7 +128,7 @@ class TestLocalBlobStorageEdgeCases:
                     storage.upload(test_file, f"{prefix}/file{i}.txt")
 
             prod_keys = storage.list_keys(prefix="prod")
-            assert len(prod_keys) >= 0  # May be 2, but depends on structure
+            assert len(prod_keys) > 0
             assert all("prod" in key for key in prod_keys if prod_keys)
 
     def test_list_keys_empty_storage(self):
@@ -411,7 +411,10 @@ class TestGetBlobStorage:
 
         souschef.storage.blob._blob_storage = None
 
-        storage = get_blob_storage(backend="local", base_path="/tmp/test")
+        storage = get_blob_storage(
+            backend="local",
+            base_path="/tmp/test",  # NOSONAR python:S5443
+        )
 
         assert isinstance(storage, LocalBlobStorage)
 

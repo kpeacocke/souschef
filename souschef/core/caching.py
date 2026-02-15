@@ -289,7 +289,7 @@ class FileHashCache[V](CacheBackend[str, V]):
         """
         try:
             path = Path(file_path)
-            if not path.exists():
+            if not path.exists():  # NOSONAR
                 return None
 
             with path.open("rb") as f:

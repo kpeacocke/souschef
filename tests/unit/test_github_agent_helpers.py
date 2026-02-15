@@ -110,7 +110,7 @@ class TestGitHubRequest:
         _github_request("GET", "/repos/owner/repo", timeout=30.0)
 
         call_kwargs = mock_request.call_args.kwargs
-        assert call_kwargs["timeout"] == 30.0
+        assert call_kwargs["timeout"] == pytest.approx(30.0)
 
     @patch("souschef.github.agent_control.requests.request")
     @patch.dict("os.environ", {"GITHUB_TOKEN": "ghp_test"})

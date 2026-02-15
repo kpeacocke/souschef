@@ -106,47 +106,6 @@ from souschef.server import (
 FIXTURES_DIR = Path(__file__).parents[1] / "integration" / "fixtures"
 
 
-@contextlib.contextmanager
-def mock_inline_path_guards(exists_side_effect=None):
-    """
-    Context manager to mock the inline path guards used in assessment functions.
-
-    Args:
-        exists_side_effect: Optional side effect function for os.path.exists
-
-    """
-
-    def default_exists(path):
-        return "/recipes" in str(path) or "/attributes" in str(path)
-
-    def mock_realpath(path, strict=False):  # noqa: ARG001
-        if isinstance(path, Path):
-            return str(path)
-        return str(path) if path else "/mock/path"
-
-    def mock_commonpath(paths):
-        # Return the common prefix - should be the base path for valid paths
-        if not paths:
-            return "/mock/path"
-        str_paths = [str(p) for p in paths]
-        # For containment checks, the base should be the common prefix
-        return str_paths[0]  # Return first path as common
-
-    def mock_join(*args):
-        return "/".join(str(a) for a in args)
-
-    with (
-        patch("souschef.assessment.os.path.realpath", side_effect=mock_realpath),
-        patch("souschef.assessment.os.path.commonpath", side_effect=mock_commonpath),
-        patch(
-            "souschef.assessment.os.path.exists",
-            side_effect=exists_side_effect or default_exists,
-        ),
-        patch("souschef.assessment.os.path.join", side_effect=mock_join),
-    ):
-        yield
-
-
 def test_list_directory_success():
     """Test that list_directory returns a list of files."""
     mock_path = MagicMock(spec=Path)
@@ -172,37 +131,33 @@ def test_list_directory_success():
         assert result == ["file1.txt", "file2.txt"]
 
 
-def test_assess_chef_migration_complexity_success():
+def test_assess_chef_migration_complexity_success(tmp_path, monkeypatch):
     """Test assess_chef_migration_complexity with valid cookbook paths."""
     from souschef.server import assess_chef_migration_complexity
 
-    mock_cookbook_path = MagicMock(spec=Path)
-    mock_cookbook_path.exists.return_value = True
-    mock_cookbook_path.name = "test_cookbook"
-
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe_file = MagicMock(spec=Path)
-    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = """
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    cookbook_dir = tmp_path / "test_cookbook"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text(
+        """
 package "nginx" do
-  action :install
+    action :install
 end
 
 service "nginx" do
-  action [:enable, :start]
+    action [:enable, :start]
 end
 """
-    mock_recipes_dir.glob.return_value = [mock_recipe_file]
-    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+    )
 
-    with patch("souschef.assessment._normalize_path") as mock_path_class:
-        mock_path_class.return_value = mock_cookbook_path
-        result = assess_chef_migration_complexity("/path/to/cookbook")
+    result = assess_chef_migration_complexity(str(cookbook_dir))
 
-        assert "Chef to Ansible Migration Assessment" in result
-        assert "Overall Migration Metrics" in result
-        assert "Migration Recommendations" in result
-        assert "Migration Roadmap" in result
+    assert "Chef to Ansible Migration Assessment" in result
+    assert "Overall Migration Metrics" in result
+    assert "Migration Recommendations" in result
+    assert "Migration Roadmap" in result
 
 
 def test_assess_chef_migration_complexity_cookbook_not_found(monkeypatch):
@@ -222,32 +177,24 @@ def test_assess_chef_migration_complexity_cookbook_not_found(monkeypatch):
         assert "Migration Assessment" in result
 
 
-def test_generate_migration_plan_success():
+def test_generate_migration_plan_success(tmp_path, monkeypatch):
     """Test generate_migration_plan with valid parameters."""
     from souschef.server import generate_migration_plan
 
-    mock_cookbook_path = MagicMock(spec=Path)
-    mock_cookbook_path.exists.return_value = True
-    mock_cookbook_path.name = "test_cookbook"
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    cookbook_dir = tmp_path / "test_cookbook"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text("package 'nginx'")
 
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe_file = MagicMock(spec=Path)
-    mock_recipe_file.open.return_value.__enter__.return_value.read.return_value = (
-        "package 'nginx'"
-    )
-    mock_recipes_dir.glob.return_value = [mock_recipe_file]
-    mock_cookbook_path.__truediv__.return_value = mock_recipes_dir
+    result = generate_migration_plan(str(cookbook_dir), "phased", 12)
 
-    with patch("souschef.assessment._normalize_path") as mock_path_class:
-        mock_path_class.return_value = mock_cookbook_path
-        result = generate_migration_plan("/path/to/cookbook", "phased", 12)
-
-        assert "Chef to Ansible Migration Plan" in result
-        assert "Strategy: phased" in result
-        assert "Timeline: 12 weeks" in result
-        assert "Migration Phases" in result
-        assert "Team Requirements" in result
+    assert "Chef to Ansible Migration Plan" in result
+    assert "Strategy: phased" in result
+    assert "Timeline: 12 weeks" in result
+    assert "Migration Phases" in result
+    assert "Team Requirements" in result
 
 
 def test_analyse_cookbook_dependencies_success():
@@ -414,75 +361,49 @@ def test_generate_migration_plan_parallel_strategy(tmp_path):
     assert "parallel" in result.lower() or "strategy" in result.lower()
 
 
-def test_generate_migration_report_success(monkeypatch):
+def test_generate_migration_report_success(tmp_path, monkeypatch):
     """Test migration report generation with assessment results."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     from souschef.server import generate_migration_report
 
-    mock_cookbook = MagicMock(spec=Path)
-    mock_cookbook.exists.return_value = True
-    mock_cookbook.name = "test_cookbook"
+    cookbook_dir = tmp_path / "test_cookbook"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text("package 'nginx'")
 
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe = MagicMock(spec=Path)
-    mock_recipe.open.return_value.__enter__.return_value.read.return_value = (
-        "package 'nginx'"
+    result = generate_migration_report(
+        str(cookbook_dir),
+        "high_level",
+        "html",
     )
-    mock_recipes_dir.glob.return_value = [mock_recipe]
 
-    with (
-        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
-        mock_inline_path_guards(
-            exists_side_effect=lambda path: "/recipes" in str(path)
-        ),
-        patch("souschef.assessment.Path", return_value=mock_recipes_dir),
-    ):
-        result = generate_migration_report(
-            "/path/to/cookbook",
-            "high_level",
-            "html",
-        )
-
-        assert "Migration Report" in result
-        # Report is generated but format isn't explicitly mentioned
-        assert "Report Type:" in result or "high_level" in result.lower()
+    assert "Migration Report" in result
+    # Report is generated but format isn't explicitly mentioned
+    assert "Report Type:" in result or "high_level" in result.lower()
 
 
-def test_generate_migration_report_detailed_format(monkeypatch):
+def test_generate_migration_report_detailed_format(tmp_path, monkeypatch):
     """Test migration report with detailed format."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     from souschef.server import generate_migration_report
 
-    mock_cookbook = MagicMock(spec=Path)
-    mock_cookbook.exists.return_value = True
-    mock_cookbook.name = "test_cookbook"
+    cookbook_dir = tmp_path / "test_cookbook"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text("package 'nginx'")
 
-    mock_recipes_dir = MagicMock(spec=Path)
-    mock_recipes_dir.exists.return_value = True
-    mock_recipe = MagicMock(spec=Path)
-    mock_recipe.open.return_value.__enter__.return_value.read.return_value = (
-        "package 'nginx'"
+    result = generate_migration_report(
+        str(cookbook_dir),
+        "detailed",
+        "markdown",
     )
-    mock_recipes_dir.glob.return_value = [mock_recipe]
 
-    with (
-        patch("souschef.assessment._normalize_path", return_value=mock_cookbook),
-        mock_inline_path_guards(
-            exists_side_effect=lambda path: "/recipes" in str(path)
-        ),
-        patch("souschef.assessment.Path", return_value=mock_recipes_dir),
-    ):
-        result = generate_migration_report(
-            "/path/to/cookbook",
-            "detailed",
-            "markdown",
-        )
-
-        assert "Migration Report" in result
-        assert "Report Type:" in result or "Detailed" in result
-        # Detailed reports include technical sections
-        assert "Risk Assessment" in result or "Recommendations" in result
+    assert "Migration Report" in result
+    assert "Report Type:" in result or "Detailed" in result
+    # Detailed reports include technical sections
+    assert "Risk Assessment" in result or "Recommendations" in result
 
 
 def test_analyse_cookbook_dependencies_not_found(monkeypatch):
@@ -858,7 +779,11 @@ depends 'iptables'
 supports 'ubuntu'
 supports 'debian'
     """
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.return_value = metadata_content
 
         result = read_cookbook_metadata("/cookbook/metadata.rb")
@@ -877,7 +802,11 @@ def test_read_cookbook_metadata_minimal(monkeypatch):
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata with minimal metadata."""
     metadata_content = "name 'simple'"
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.return_value = metadata_content
 
         result = read_cookbook_metadata("/cookbook/metadata.rb")
@@ -890,7 +819,11 @@ def test_read_cookbook_metadata_empty(monkeypatch):
     """Test read_cookbook_metadata with empty file."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata with empty file."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.return_value = ""
 
         result = read_cookbook_metadata("/cookbook/metadata.rb")
@@ -902,9 +835,10 @@ def test_read_cookbook_metadata_not_found(monkeypatch):
     """Test read_cookbook_metadata with non-existent file."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata with non-existent file."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
-        mock_read.side_effect = FileNotFoundError()
-
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=False),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+    ):
         result = read_cookbook_metadata("/nonexistent/metadata.rb")
 
         assert "Error: File not found" in result
@@ -913,10 +847,14 @@ def test_read_cookbook_metadata_not_found(monkeypatch):
 def test_read_cookbook_metadata_is_directory(monkeypatch):
     """Test read_cookbook_metadata when path is a directory."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
-    """Test read_cookbook_metadata when path is a directory."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
-        mock_read.side_effect = IsADirectoryError()
-
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=True),
+        patch(
+            "souschef.parsers.metadata.safe_read_text",
+            side_effect=IsADirectoryError(),
+        ),
+    ):
         result = read_cookbook_metadata("/some/directory")
 
         assert "Error:" in result
@@ -925,7 +863,11 @@ def test_read_cookbook_metadata_is_directory(monkeypatch):
 
 def test_read_cookbook_metadata_permission_denied():
     """Test read_cookbook_metadata with permission error."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.side_effect = PermissionError()
 
         result = read_cookbook_metadata("/forbidden/metadata.rb")
@@ -935,7 +877,11 @@ def test_read_cookbook_metadata_permission_denied():
 
 def test_read_cookbook_metadata_unicode_error():
     """Test read_cookbook_metadata with unicode decode error."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
 
         result = read_cookbook_metadata("/binary/file")
@@ -947,7 +893,11 @@ def test_read_cookbook_metadata_other_exception(monkeypatch):
     """Test read_cookbook_metadata with unexpected exception."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test read_cookbook_metadata with unexpected exception."""
-    with patch("souschef.parsers.metadata.safe_read_text") as mock_read:
+    with (
+        patch("souschef.parsers.metadata.safe_exists", return_value=True),
+        patch("souschef.parsers.metadata.safe_is_dir", return_value=False),
+        patch("souschef.parsers.metadata.safe_read_text") as mock_read,
+    ):
         mock_read.side_effect = Exception("Unexpected")
 
         result = read_cookbook_metadata("/some/path/metadata.rb")
@@ -1138,6 +1088,8 @@ default['nginx']['user'] = 'www-data'
             "souschef.parsers.attributes._ensure_within_base_path",
             return_value=safe_path,
         ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
         patch(
             "souschef.parsers.attributes.safe_read_text",
             return_value=attributes_content,
@@ -1165,6 +1117,8 @@ def test_parse_attributes_empty(monkeypatch):
             "souschef.parsers.attributes._ensure_within_base_path",
             return_value=safe_path,
         ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
         patch(
             "souschef.parsers.attributes.safe_read_text",
             return_value="# Just comments",
@@ -1186,10 +1140,8 @@ def test_parse_attributes_not_found(monkeypatch):
             "souschef.parsers.attributes._ensure_within_base_path",
             return_value=safe_path,
         ),
-        patch(
-            "souschef.parsers.attributes.safe_read_text",
-            side_effect=FileNotFoundError(),
-        ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=False),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
     ):
         result = parse_attributes("/nonexistent/attributes.rb")
 
@@ -1199,7 +1151,6 @@ def test_parse_attributes_not_found(monkeypatch):
 def test_parse_attributes_is_directory(monkeypatch):
     """Test parse_attributes when path is a directory."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
-    """Test parse_attributes when path is a directory."""
     safe_path = Path("/some/directory")
     with (
         patch("souschef.parsers.attributes._normalize_path", return_value=safe_path),
@@ -1207,6 +1158,8 @@ def test_parse_attributes_is_directory(monkeypatch):
             "souschef.parsers.attributes._ensure_within_base_path",
             return_value=safe_path,
         ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=True),
         patch(
             "souschef.parsers.attributes.safe_read_text",
             side_effect=IsADirectoryError(),
@@ -1227,6 +1180,8 @@ def test_parse_attributes_permission_denied():
             "souschef.parsers.attributes._ensure_within_base_path",
             return_value=safe_path,
         ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
         patch(
             "souschef.parsers.attributes.safe_read_text",
             side_effect=PermissionError(),
@@ -1246,6 +1201,8 @@ def test_parse_attributes_unicode_error():
             "souschef.parsers.attributes._ensure_within_base_path",
             return_value=safe_path,
         ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
         patch(
             "souschef.parsers.attributes.safe_read_text",
             side_effect=UnicodeDecodeError("utf-8", b"", 0, 1, "invalid"),
@@ -1267,6 +1224,8 @@ def test_parse_attributes_other_exception(monkeypatch):
             "souschef.parsers.attributes._ensure_within_base_path",
             return_value=safe_path,
         ),
+        patch("souschef.parsers.attributes.safe_exists", return_value=True),
+        patch("souschef.parsers.attributes.safe_is_dir", return_value=False),
         patch(
             "souschef.parsers.attributes.safe_read_text",
             side_effect=Exception("Unexpected"),
@@ -1437,141 +1396,76 @@ def test_format_resolved_attributes_empty():
     assert result == "No attributes found."
 
 
-def test_list_cookbook_structure_success():
+def test_list_cookbook_structure_success(tmp_path, monkeypatch):
     """Test list_cookbook_structure with valid cookbook."""
-    with (
-        patch("souschef.parsers.metadata._normalize_path") as mock_path,
-        patch("souschef.parsers.metadata._safe_join") as mock_safe_join,
-        patch("souschef.parsers.metadata._ensure_within_base_path") as mock_ensure,
-    ):
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_ensure.return_value = mock_cookbook
-        mock_cookbook.is_dir.return_value = True
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "nginx"
+    cookbook_dir.mkdir()
+    recipes_dir = cookbook_dir / "recipes"
+    recipes_dir.mkdir()
+    (recipes_dir / "default.rb").write_text("package 'nginx'")
+    (recipes_dir / "install.rb").write_text("package 'nginx'")
+    attributes_dir = cookbook_dir / "attributes"
+    attributes_dir.mkdir()
+    (attributes_dir / "default.rb").write_text("default['nginx']['port'] = 80")
+    (cookbook_dir / "metadata.rb").write_text("name 'nginx'")
 
-        # Mock the various subdirectories
-        mock_recipes = MagicMock()
-        mock_recipes.exists.return_value = True
-        mock_recipes.is_dir.return_value = True
-        mock_recipe_file1 = MagicMock()
-        mock_recipe_file1.is_file.return_value = True
-        mock_recipe_file1.name = "default.rb"
-        mock_recipe_file2 = MagicMock()
-        mock_recipe_file2.is_file.return_value = True
-        mock_recipe_file2.name = "install.rb"
-        mock_recipes.iterdir.return_value = [mock_recipe_file1, mock_recipe_file2]
+    result = list_cookbook_structure(str(cookbook_dir))
 
-        mock_attributes = MagicMock()
-        mock_attributes.exists.return_value = True
-        mock_attributes.is_dir.return_value = True
-        mock_attr_file = MagicMock()
-        mock_attr_file.is_file.return_value = True
-        mock_attr_file.name = "default.rb"
-        mock_attributes.iterdir.return_value = [mock_attr_file]
-
-        mock_metadata = MagicMock()
-        mock_metadata.exists.return_value = True
-
-        # Mock _safe_join for path joining
-        def mock_join_side_effect(base, component):
-            if component == "recipes":
-                return mock_recipes
-            elif component == "attributes":
-                return mock_attributes
-            elif component == "metadata.rb":
-                return mock_metadata
-            else:
-                mock_dir = MagicMock()
-                mock_dir.exists.return_value = False
-                return mock_dir
-
-        mock_safe_join.side_effect = mock_join_side_effect
-
-        result = list_cookbook_structure("/cookbooks/nginx")
-
-        assert "recipes/" in result
-        assert "default.rb" in result
-        assert "install.rb" in result
-        assert "attributes/" in result
-        assert "metadata/" in result
+    assert "recipes/" in result
+    assert "default.rb" in result
+    assert "install.rb" in result
+    assert "attributes/" in result
+    assert "metadata/" in result
 
 
-def test_list_cookbook_structure_empty(monkeypatch):
+def test_list_cookbook_structure_empty(tmp_path, monkeypatch):
     """Test list_cookbook_structure with empty directory."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
-    with (
-        patch("souschef.parsers.metadata._normalize_path") as mock_path,
-        patch("souschef.parsers.metadata._safe_join") as mock_safe_join,
-        patch("souschef.parsers.metadata._ensure_within_base_path") as mock_ensure,
-    ):
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_ensure.return_value = mock_cookbook
-        mock_cookbook.is_dir.return_value = True
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "empty_cookbook"
+    cookbook_dir.mkdir()
 
-        def mock_join_side_effect(base, component):
-            mock_dir = MagicMock()
-            mock_dir.exists.return_value = False
-            return mock_dir
+    result = list_cookbook_structure(str(cookbook_dir))
 
-        mock_safe_join.side_effect = mock_join_side_effect
-
-        result = list_cookbook_structure("/empty/cookbook")
-
-        assert "Warning: No standard cookbook structure found" in result
+    assert "Warning: No standard cookbook structure found" in result
 
 
-def test_list_cookbook_structure_not_directory(monkeypatch):
+def test_list_cookbook_structure_not_directory(tmp_path, monkeypatch):
     """Test list_cookbook_structure with non-directory path."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
-    """Test list_cookbook_structure with non-directory path."""
-    with (
-        patch("souschef.parsers.metadata._normalize_path") as mock_path,
-        patch("souschef.parsers.metadata._ensure_within_base_path") as mock_ensure,
-    ):
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_ensure.return_value = mock_cookbook
-        mock_cookbook.is_dir.return_value = False
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    file_path = tmp_path / "some_file.txt"
+    file_path.write_text("data")
 
-        result = list_cookbook_structure("/some/file.txt")
+    result = list_cookbook_structure(str(file_path))
 
-        assert "Error:" in result
-        assert "is not a directory" in result
+    assert "Error:" in result
+    assert "is not a directory" in result
 
 
-def test_list_cookbook_structure_permission_denied():
+def test_list_cookbook_structure_permission_denied(tmp_path, monkeypatch):
     """Test list_cookbook_structure with permission error."""
-    with (
-        patch("souschef.parsers.metadata._normalize_path") as mock_path,
-        patch("souschef.parsers.metadata._ensure_within_base_path") as mock_ensure,
-    ):
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_ensure.return_value = mock_cookbook
-        mock_cookbook.is_dir.side_effect = PermissionError()
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "forbidden"
+    cookbook_dir.mkdir()
 
-        result = list_cookbook_structure("/forbidden/cookbook")
+    with patch("souschef.parsers.metadata.safe_is_dir", side_effect=PermissionError()):
+        result = list_cookbook_structure(str(cookbook_dir))
 
-        assert "Error: Permission denied" in result
+    assert "Error: Permission denied" in result
 
 
-def test_list_cookbook_structure_other_exception(monkeypatch):
+def test_list_cookbook_structure_other_exception(tmp_path, monkeypatch):
     """Test list_cookbook_structure with unexpected exception."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
-    """Test list_cookbook_structure with unexpected exception."""
-    with (
-        patch("souschef.parsers.metadata._normalize_path") as mock_path,
-        patch("souschef.parsers.metadata._ensure_within_base_path") as mock_ensure,
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "some_path"
+    cookbook_dir.mkdir()
+
+    with patch(
+        "souschef.parsers.metadata.safe_is_dir", side_effect=Exception("Unexpected")
     ):
-        mock_cookbook = MagicMock()
-        mock_path.return_value = mock_cookbook
-        mock_ensure.return_value = mock_cookbook
-        mock_cookbook.is_dir.side_effect = Exception("Unexpected")
+        result = list_cookbook_structure(str(cookbook_dir))
 
-        result = list_cookbook_structure("/some/path")
-
-        assert "An error occurred: Unexpected" in result
+    assert "An error occurred: Unexpected" in result
 
 
 def test_main():
@@ -2194,6 +2088,8 @@ def test_parse_template_success():
             "souschef.parsers.template._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.parsers.template.safe_exists", return_value=True),
+        patch("souschef.parsers.template.safe_is_dir", return_value=False),
         patch("souschef.parsers.template.safe_read_text", return_value=erb_content),
     ):
         result = parse_template("/path/to/template.erb")
@@ -2214,10 +2110,8 @@ def test_parse_template_not_found(monkeypatch):
             "souschef.parsers.template._ensure_within_base_path",
             return_value=mock_path,
         ),
-        patch(
-            "souschef.parsers.template.safe_read_text",
-            side_effect=FileNotFoundError,
-        ),
+        patch("souschef.parsers.template.safe_exists", return_value=False),
+        patch("souschef.parsers.template.safe_is_dir", return_value=False),
     ):
         result = parse_template("/nonexistent/template.erb")
 
@@ -2233,6 +2127,8 @@ def test_parse_template_permission_denied():
             "souschef.parsers.template._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.parsers.template.safe_exists", return_value=True),
+        patch("souschef.parsers.template.safe_is_dir", return_value=False),
         patch(
             "souschef.parsers.template.safe_read_text",
             side_effect=PermissionError,
@@ -2379,6 +2275,8 @@ end
             "souschef.parsers.resource._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.parsers.resource.safe_exists", return_value=True),
+        patch("souschef.parsers.resource.safe_is_dir", return_value=False),
         patch(
             "souschef.parsers.resource.safe_read_text",
             return_value=resource_content,
@@ -2402,10 +2300,8 @@ def test_parse_custom_resource_not_found(monkeypatch):
             "souschef.parsers.resource._ensure_within_base_path",
             return_value=mock_path,
         ),
-        patch(
-            "souschef.parsers.resource.safe_read_text",
-            side_effect=FileNotFoundError,
-        ),
+        patch("souschef.parsers.resource.safe_exists", return_value=False),
+        patch("souschef.parsers.resource.safe_is_dir", return_value=False),
     ):
         result = parse_custom_resource("/nonexistent/resource.rb")
 
@@ -2421,6 +2317,8 @@ def test_parse_custom_resource_permission_denied():
             "souschef.parsers.resource._ensure_within_base_path",
             return_value=mock_path,
         ),
+        patch("souschef.parsers.resource.safe_exists", return_value=True),
+        patch("souschef.parsers.resource.safe_is_dir", return_value=False),
         patch(
             "souschef.parsers.resource.safe_read_text",
             side_effect=PermissionError,
@@ -16952,7 +16850,7 @@ def test_get_chef_nodes_success():
             "roles": ["webserver"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "10.0.1.10",
+            "ipaddress": "10.0.1.10",  # NOSONAR - RFC 1918 private IP in test data
             "fqdn": "web-server-01.example.com",
         },
         {
@@ -16960,7 +16858,7 @@ def test_get_chef_nodes_success():
             "roles": ["database"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "10.0.2.10",
+            "ipaddress": "10.0.2.10",  # NOSONAR - RFC 1918 private IP in test data
             "fqdn": "db-server-01.example.com",
         },
     ]

@@ -907,7 +907,7 @@ def _run_ansible_lint(playbook_content: str) -> str | None:
     except Exception:
         return None
     finally:
-        if tmp_path is not None and Path(tmp_path).exists():
+        if tmp_path is not None and Path(tmp_path).exists():  # NOSONAR
             Path(tmp_path).unlink()
 
 

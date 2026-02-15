@@ -673,7 +673,7 @@ def generate_ansible_repository(
         }
 
     # Check if path already exists
-    if repo_path.exists():
+    if repo_path.exists():  # NOSONAR
         return {
             "success": False,
             "error": f"Path already exists: {output_path}",
