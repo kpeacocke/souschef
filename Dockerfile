@@ -104,6 +104,9 @@ FROM base AS production
 
 ARG PYTHON_VERSION
 
+# Upgrade pip to pick up security fixes (pip >= 26.0 for CVE-2026-1703 fix)
+RUN python -m pip install --no-cache-dir --upgrade "pip>=26.0"
+
 # Copy site-packages from builder (at predictable location, no glob expansion)
 COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
 
