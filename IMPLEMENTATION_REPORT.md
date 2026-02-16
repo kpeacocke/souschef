@@ -204,6 +204,7 @@
    - `souschef v2 list` - List and filter recent migrations
    - `souschef v2 rollback` - Delete created infrastructure
 7. **Chef Server Integration**: ✅ Optional node discovery stored in migration state for inventory planning
+8. **Dynamic Inventory Generation**: ✅ Chef nodes now populate Ansible inventories during deployment
 
 ## Success Criteria Met
 
@@ -230,5 +231,6 @@ The modular design allows for incremental feature development without affecting 
 - ✅ State persistence with JSON serialization
 - ✅ Converter integration (recipe, attributes, template)
 - ✅ Chef Server node query integration (optional)
+- ✅ Dynamic inventory generation from Chef nodes
 
-**Estimated Time to Full v2.0**: 1-2 weeks with focused development on advanced resource conversion and Chef Server inventory generation.
+**Estimated Time to Full v2.0**: 1-2 weeks with focused development on advanced resource conversion.

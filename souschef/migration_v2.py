@@ -766,6 +766,13 @@ class MigrationOrchestrator:
             logger.debug("Creating inventory...")
             self.result.inventory_id = self._create_inventory(client)
 
+            # Populate inventory with Chef nodes if available
+            if self.result.inventory_id:
+                self._populate_inventory_from_chef_nodes(
+                    client,
+                    self.result.inventory_id,
+                )
+
             # Step 2: Create project
             logger.debug("Creating project...")
             self.result.project_id = self._create_project(client)
@@ -803,6 +810,115 @@ class MigrationOrchestrator:
         inventory_name = f"souschef-migration-{self.migration_id[:8]}"
         result = client.create_inventory(inventory_name)
         return int(result["id"])
+
+    def _populate_inventory_from_chef_nodes(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+    ) -> None:
+        """
+        Populate Ansible inventory with hosts discovered from Chef Server.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID to populate.
+
+        """
+        assert self.result is not None
+
+        if not self.result.chef_nodes:
+            logger.debug("No Chef nodes available for inventory population")
+            return
+
+        added_hosts = 0
+        for node in self.result.chef_nodes:
+            if not isinstance(node, dict):
+                continue
+
+            hostname = self._resolve_chef_hostname(node)
+            if not hostname:
+                self.result.warnings.append(
+                    {
+                        "phase": "deployment",
+                        "message": "Chef node missing hostname, skipping",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+                continue
+
+            host_variables = self._build_chef_host_variables(node, hostname)
+            try:
+                if host_variables:
+                    client.add_host(
+                        inventory_id,
+                        hostname,
+                        variables=json.dumps(host_variables),
+                    )
+                else:
+                    client.add_host(inventory_id, hostname)
+                added_hosts += 1
+            except Exception as e:
+                self.result.warnings.append(
+                    {
+                        "phase": "deployment",
+                        "message": f"Failed to add host {hostname}: {e}",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+        logger.info(
+            "[%s] Added %s hosts to inventory",
+            self.migration_id,
+            added_hosts,
+        )
+
+    def _resolve_chef_hostname(self, node: dict[str, Any]) -> str | None:
+        """
+        Resolve the best hostname for a Chef node.
+
+        Args:
+            node: Chef node data.
+
+        Returns:
+            Best hostname candidate or None.
+
+        """
+        return node.get("fqdn") or node.get("name") or node.get("ipaddress")
+
+    def _build_chef_host_variables(
+        self,
+        node: dict[str, Any],
+        hostname: str,
+    ) -> dict[str, Any]:
+        """
+        Build host variables for a Chef node.
+
+        Args:
+            node: Chef node data.
+            hostname: Selected hostname for the node.
+
+        Returns:
+            Variables payload for Ansible host creation.
+
+        """
+        host_variables: dict[str, Any] = {}
+        ipaddress = node.get("ipaddress")
+        if ipaddress and hostname != ipaddress:
+            host_variables["ansible_host"] = ipaddress
+
+        environment = node.get("environment")
+        if environment:
+            host_variables["chef_environment"] = environment
+
+        roles = node.get("roles")
+        if roles:
+            host_variables["chef_roles"] = roles
+
+        platform = node.get("platform")
+        if platform:
+            host_variables["chef_platform"] = platform
+
+        return host_variables
 
     def _create_project(self, client: AnsiblePlatformClient) -> int:
         """Create project in Ansible platform."""

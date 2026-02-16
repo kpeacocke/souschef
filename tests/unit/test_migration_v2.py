@@ -6,7 +6,7 @@ Tests complete migration workflows with real and mocked APIs.
 
 import json
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -258,6 +258,67 @@ class TestMigrationOrchestrator:
         assert any(
             "missing client key" in warning.get("message", "")
             for warning in result.warnings
+        )
+
+    def test_populate_inventory_from_chef_nodes(self) -> None:
+        """Test inventory population from Chef nodes."""
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        orchestrator.result = MigrationResult(
+            migration_id="test-001",
+            status=MigrationStatus.CONVERTED,
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+            ansible_version="2.15.0",
+            created_at="2026-02-16T10:00:00",
+            updated_at="2026-02-16T10:00:00",
+            source_cookbook="/path/to/cookbook",
+            chef_nodes=[
+                {
+                    "name": "node-1",
+                    "ipaddress": "10.0.0.1",
+                    "environment": "production",
+                    "roles": ["web"],
+                    "platform": "ubuntu",
+                },
+                {
+                    "fqdn": "db.example.com",
+                    "ipaddress": "10.0.0.2",
+                },
+                {
+                    "ipaddress": "10.0.0.3",
+                },
+            ],
+            chef_server_queried=True,
+        )
+
+        mock_client = Mock()
+
+        orchestrator._populate_inventory_from_chef_nodes(mock_client, 1)
+
+        expected_vars_node1 = json.dumps(
+            {
+                "ansible_host": "10.0.0.1",
+                "chef_environment": "production",
+                "chef_roles": ["web"],
+                "chef_platform": "ubuntu",
+            }
+        )
+        expected_vars_node2 = json.dumps({"ansible_host": "10.0.0.2"})
+
+        assert mock_client.add_host.call_count == 3
+        mock_client.add_host.assert_has_calls(
+            [
+                call(1, "node-1", variables=expected_vars_node1),
+                call(1, "db.example.com", variables=expected_vars_node2),
+                call(1, "10.0.0.3"),
+            ],
+            any_order=True,
         )
 
     def test_migrate_cookbook_handles_missing_path(self) -> None:
