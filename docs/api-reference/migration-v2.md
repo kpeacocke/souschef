@@ -451,7 +451,7 @@ if result.status == MigrationStatus.PARTIAL_SUCCESS:
     print("Migration completed with warnings:")
     for warning in result.warnings:
         print(f"  - {warning}")
-    
+
     # Review resources needing manual attention
     if result.metrics.resources_manual_review > 0:
         print(f"{result.metrics.resources_manual_review} resources need manual review")

@@ -68,7 +68,7 @@ ValueError: Cookbook path does not exist: /path/to/cookbook
    ```python
    import logging
    logging.basicConfig(level=logging.DEBUG)
-   
+
    result = orchestrator.migrate_cookbook(cookbook_path)
    ```
 
@@ -76,7 +76,7 @@ ValueError: Cookbook path does not exist: /path/to/cookbook
    ```python
    # Migrate recipes individually
    from souschef.server import parse_recipe, generate_playbook_from_recipe
-  
+
    for recipe in Path(cookbook_path / "recipes").glob("*.rb"):
        playbook = generate_playbook_from_recipe(str(recipe))
        # Process each playbook
@@ -95,7 +95,7 @@ Warnings: 12 resources need manual review
 1. **Review specific warnings:**
    ```python
    result = orchestrator.migrate_cookbook(cookbook_path)
-   
+
    if result.status == MigrationStatus.PARTIAL_SUCCESS:
        for warning in result.warnings:
            print(f"⚠ {warning}")
@@ -105,7 +105,7 @@ Warnings: 12 resources need manual review
    ```python
    # Check metrics for manual review items
    print(f"Manual review needed: {result.metrics.resources_manual_review}")
-   
+
    # Review generated playbooks for REVIEW markers
    import re
    for playbook_path in result.playbooks_generated:
@@ -137,12 +137,12 @@ when: ansible_check_mode
 **Solutions:**
 
 1. **Simplify Chef guards:**
-   
+
    Instead of:
    ```ruby
    only_if { node['platform'] == 'ubuntu' && custom_method? }
    ```
-   
+
    Split into separate checks:
    ```ruby
    only_if { node['platform'] == 'ubuntu' }
@@ -153,7 +153,7 @@ when: ansible_check_mode
    ```ruby
    # Good: Standard file existence
    only_if { File.exist?('/etc/nginx/nginx.conf') }
-   
+
    # Problematic: Custom logic
    only_if { my_helper_method && File.readable?('/etc/app.conf') }
    ```
@@ -161,11 +161,11 @@ when: ansible_check_mode
 3. **Post-process guards manually:**
    ```python
    import yaml
-   
+
    for playbook_path in result.playbooks_generated:
        with open(playbook_path) as f:
            playbook = yaml.safe_load(f)
-       
+
        # Find and fix guard conditions
        for play in playbook:
            for task in play.get('tasks', []):
@@ -186,7 +186,7 @@ when: ansible_check_mode
    ```ruby
    # Correct
    notifies :restart, 'service[nginx]', :delayed
-   
+
    # Problematic (non-standard)
    notifies :restart, resources(:service => 'nginx')
    ```
@@ -226,7 +226,7 @@ Error: Failed to convert template: invalid ERB syntax
    ```ruby
    # Problematic: Unclosed tags
    <%= node['attribute']
-   
+
    # Fixed
    <%= node['attribute'] %>
    ```
@@ -236,7 +236,7 @@ Error: Failed to convert template: invalid ERB syntax
    # Copy as-is and mark for manual conversion
    import shutil
    from pathlib import Path
-   
+
    templates_dir = Path(cookbook_path) / "templates"
    for template in templates_dir.rglob("*.erb"):
        try:
@@ -271,7 +271,7 @@ Error: Failed to convert template: invalid ERB syntax
    ```yaml
    # Before
    path: {{app_dir}}/config
-   
+
    # After
    path: "{{ app_dir }}/config"
    ```
@@ -280,7 +280,7 @@ Error: Failed to convert template: invalid ERB syntax
    ```yaml
    # Before
    when: {{ condition }}
-   
+
    # After
    when: "{{ condition }}"
    ```
@@ -316,7 +316,7 @@ ERROR! Syntax Error while loading YAML.
    - name: Task
    ansible.builtin.package:
      name: nginx
-   
+
    # Correct
    - name: Task
      ansible.builtin.package:
@@ -327,7 +327,7 @@ ERROR! Syntax Error while loading YAML.
    ```yaml
    # Wrong
    when: status == "running: active"
-   
+
    # Correct
    when: 'status == "running: active"'
    ```
@@ -335,11 +335,11 @@ ERROR! Syntax Error while loading YAML.
 3. **Use validation in code:**
    ```python
    from souschef.core.validation import ValidationEngine
-   
+
    engine = ValidationEngine()
    for playbook in result.playbooks_generated:
        engine.validate_playbook_file(playbook)
-       
+
        if engine.results:
            for error in engine.results:
                print(f"{error.level}: {error.message}")
@@ -364,14 +364,14 @@ ConnectionError: Failed to connect to https://aap.example.com
 2. **Check credentials:**
    ```python
    from souschef.api_clients import AAPClient
-   
+
    client = AAPClient(
        server_url="https://aap.example.com",
        username="admin",
        password="password",
        verify_ssl=False,  # Only for testing!
    )
-   
+
    try:
        version = client.get_api_version()
        print(f"Connected! Version: {version}")
@@ -398,7 +398,7 @@ Failed to create inventory: 400 Bad Request
    ```python
    # Invalid: spaces, special characters
    inv = client.create_inventory("My App Inventory")
-   
+
    # Valid: underscores, hyphens
    inv = client.create_inventory("my-app-inventory")
    ```
@@ -431,13 +431,13 @@ Failed to create job template: missing required field 'inventory'
    ```python
    # Create in order
    inv = client.create_inventory("my-inv")
-   proj = client.create_project("my-project", scm_type="git", 
+   proj = client.create_project("my-project", scm_type="git",
                                 scm_url="https://github.com/org/repo")
-   
+
    # Wait for project sync
    import time
    time.sleep(5)
-   
+
    # Then create job template
    jt = client.create_job_template(
        name="my-job",
@@ -474,7 +474,7 @@ Failed to create job template: missing required field 'inventory'
        cookbook_path,
        skip_validation=True,  # Validate separately
    )
-   
+
    # Validate later
    from souschef.core.validation import ValidationEngine
    engine = ValidationEngine()
@@ -486,12 +486,12 @@ Failed to create job template: missing required field 'inventory'
    ```python
    from concurrent.futures import ThreadPoolExecutor
    from pathlib import Path
-   
+
    recipes = list(Path(cookbook_path / "recipes").glob("*.rb"))
-   
+
    def migrate_recipe(recipe_path):
        return generate_playbook_from_recipe(str(recipe_path))
-   
+
    with ThreadPoolExecutor(max_workers=4) as executor:
        playbooks = list(executor.map(migrate_recipe, recipes))
    ```
@@ -499,12 +499,12 @@ Failed to create job template: missing required field 'inventory'
 3. **Use profiling:**
    ```python
    from souschef.profiling import profile_migration
-   
+
    result = profile_migration(
        cookbook_path=cookbook_path,
        output_file="migration-profile.json",
    )
-   
+
    # Review slow operations
    import json
    with open("migration-profile.json") as f:
@@ -560,7 +560,7 @@ Failed to create job template: missing required field 'inventory'
    # Check key format
    head -n 1 /path/to/client.pem
    # Should be: -----BEGIN RSA PRIVATE KEY-----
-   
+
    # Verify key is valid
    openssl rsa -in /path/to/client.pem -check
    ```
@@ -579,14 +579,14 @@ Failed to create job template: missing required field 'inventory'
 3. **Test connection:**
    ```python
    from souschef.core.chef_server import _validate_chef_server_connection
-   
+
    success, message = _validate_chef_server_connection(
        server_url="https://chef.example.com",
        client_name="migration-client",
        organisation="default",
        client_key_path="/etc/chef/migration.pem",
    )
-   
+
    if not success:
        print(f"Connection failed: {message}")
    ```
@@ -642,9 +642,9 @@ Error: Failed to save migration state to database
 1. **Check database connection:**
    ```python
    from souschef.storage.database import StorageManager
-   
+
    storage = StorageManager(database_url="sqlite:///migrations.db")
-   
+
    # Test connection
    try:
        with storage.get_session() as session:
@@ -664,7 +664,7 @@ Error: Failed to save migration state to database
    # For SQLite
    ls -la migrations.db
    chmod 664 migrations.db
-   
+
    # For PostgreSQL
    psql -U user -d migrations -c "SELECT 1"
    ```
@@ -691,7 +691,7 @@ ValueError: Migration apache2-20260216-143022 not found
    ```python
    result = orchestrator.migrate_cookbook(cookbook_path)
    migration_id = orchestrator.save_state(result)
-   
+
    # Immediately verify
    loaded = orchestrator.load_state(migration_id)
    assert loaded.migration_id == migration_id
@@ -701,7 +701,7 @@ ValueError: Migration apache2-20260216-143022 not found
    ```bash
    # Find SQLite database
    find . -name "*.db" -type f
-   
+
    # Use absolute path
    storage = StorageManager(
        database_url="sqlite:////absolute/path/to/migrations.db"

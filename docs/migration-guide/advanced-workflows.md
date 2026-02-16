@@ -62,13 +62,13 @@ for cookbook_name in cookbooks:
     print(f"\n{'='*60}")
     print(f"Migrating: {cookbook_name}")
     print(f"{'='*60}")
-    
+
     try:
         result = orchestrator.migrate_cookbook(
             cookbook_path,
             skip_validation=False,
         )
-        
+
         # Save state
         migration_id = orchestrator.save_state(result)
         migration_map[cookbook_name] = {
@@ -77,7 +77,7 @@ for cookbook_name in cookbooks:
             "playbooks": result.playbooks_generated,
             "metrics": result.metrics,
         }
-        
+
         # Report
         if result.status == MigrationStatus.SUCCESS:
             print(f"✓ {cookbook_name}: SUCCESS")
@@ -93,7 +93,7 @@ for cookbook_name in cookbooks:
             failed_cookbooks.append(cookbook_name)
             for error in result.errors[:3]:
                 print(f"    • {error}")
-                
+
     except Exception as e:
         print(f"✗ {cookbook_name}: EXCEPTION - {e}")
         failed_cookbooks.append(cookbook_name)
@@ -263,13 +263,13 @@ for playbook_path in result.playbooks_generated:
     # Add reference to group_vars
     with open(playbook_path, "r") as f:
         content = f.read()
-    
+
     # Add note about data bags
     note = (
         "\n# NOTE: This playbook references data from Chef data bags.\n"
         f"# See group_vars/all.yml for migrated data structures.\n"
     )
-    
+
     with open(playbook_path, "w") as f:
         f.write(note + content)
 
@@ -289,7 +289,7 @@ import json
 
 class IncrementalMigrationManager:
     """Manage incremental cookbook migrations."""
-    
+
     def __init__(self, state_file="migration-state.json"):
         self.state_file = state_file
         self.state = self._load_state()
@@ -298,7 +298,7 @@ class IncrementalMigrationManager:
             target_platform="aap",
             target_version="2.4.0",
         )
-    
+
     def _load_state(self):
         """Load migration state from file."""
         try:
@@ -311,12 +311,12 @@ class IncrementalMigrationManager:
                 "pending": [],
                 "failed": {},
             }
-    
+
     def _save_state(self):
         """Save migration state to file."""
         with open(self.state_file, "w") as f:
             json.dump(self.state, f, indent=2)
-    
+
     def register_cookbook(self, name, path, dependencies=None):
         """Register a cookbook for migration."""
         if name not in self.state["migrated"] and name not in self.state["pending"]:
@@ -328,41 +328,41 @@ class IncrementalMigrationManager:
             })
             self._save_state()
             print(f"Registered {name} for migration")
-    
+
     def migrate_next(self):
         """Migrate the next cookbook in queue."""
         if not self.state["pending"]:
             print("No pending cookbooks")
             return None
-        
+
         # Find cookbook with satisfied dependencies
         for i, cookbook in enumerate(self.state["pending"]):
             deps_satisfied = all(
                 dep in self.state["migrated"]
                 for dep in cookbook["dependencies"]
             )
-            
+
             if deps_satisfied:
                 # Remove from pending
                 cookbook = self.state["pending"].pop(i)
                 name = cookbook["name"]
                 path = cookbook["path"]
-                
+
                 print(f"\nMigrating: {name}")
                 print(f"Path: {path}")
-                
+
                 # Mark as in progress
                 self.state["in_progress"][name] = {
                     **cookbook,
                     "started_at": datetime.utcnow().isoformat(),
                 }
                 self._save_state()
-                
+
                 try:
                     # Perform migration
                     result = self.orchestrator.migrate_cookbook(path)
                     migration_id = self.orchestrator.save_state(result)
-                    
+
                     # Update state based on result
                     if result.status in [MigrationStatus.SUCCESS, MigrationStatus.PARTIAL_SUCCESS]:
                         del self.state["in_progress"][name]
@@ -382,10 +382,10 @@ class IncrementalMigrationManager:
                             "failed_at": datetime.utcnow().isoformat(),
                         }
                         print(f"✗ Failed: {name}")
-                    
+
                     self._save_state()
                     return result
-                    
+
                 except Exception as e:
                     del self.state["in_progress"][name]
                     self.state["failed"][name] = {
@@ -396,10 +396,10 @@ class IncrementalMigrationManager:
                     self._save_state()
                     print(f"✗ Exception: {name} - {e}")
                     return None
-        
+
         print("Remaining cookbooks have unsatisfied dependencies")
         return None
-    
+
     def status(self):
         """Print migration status."""
         print("\n" + "="*60)
@@ -409,12 +409,12 @@ class IncrementalMigrationManager:
         print(f"In Progress: {len(self.state['in_progress'])}")
         print(f"Pending: {len(self.state['pending'])}")
         print(f"Failed: {len(self.state['failed'])}")
-        
+
         if self.state["migrated"]:
             print("\n✓ Completed Cookbooks:")
             for name, data in self.state["migrated"].items():
                 print(f"  - {name} ({data['status']})")
-        
+
         if self.state["failed"]:
             print("\n✗ Failed Cookbooks:")
             for name, data in self.state["failed"].items():
@@ -436,7 +436,7 @@ while manager.state["pending"]:
     result = manager.migrate_next()
     if result is None:
         break
-    
+
     # Review and approve before continuing
     input("\nPress Enter to migrate next cookbook (or Ctrl+C to stop)...")
 
@@ -541,16 +541,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install SousChef
         run: |
           pip install souschef
-      
+
       - name: Migrate Cookbook
         env:
           CHEF_SERVER_URL: ${{ secrets.CHEF_SERVER_URL }}
@@ -561,18 +561,18 @@ jobs:
             --target-platform aap \
             --target-version 2.4.0 \
             --save-state
-      
+
       - name: Upload Playbooks
         uses: actions/upload-artifact@v3
         with:
           name: ansible-playbooks
           path: playbooks/
-      
+
       - name: Ansible Lint
         run: |
           pip install ansible-lint
           ansible-lint playbooks/*.yml
-      
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
@@ -580,7 +580,7 @@ jobs:
           title: "Auto-migration: cookbooks/myapp"
           body: |
             Automated cookbook migration completed.
-            
+
             Review generated playbooks before merging.
           branch: auto-migrate-${{ github.run_number }}
 ```
@@ -604,7 +604,7 @@ if custom_resources_dir.exists():
     print("Custom resources found:")
     for resource_file in custom_resources_dir.glob("*.rb"):
         print(f"  - {resource_file.stem}")
-        
+
         # Parse custom resource
         try:
             resource_def = parse_custom_resource(str(resource_file))
@@ -631,7 +631,7 @@ if result.metrics.custom_resources_converted > 0:
 if result.metrics.resources_manual_review > 0:
     print(f"\n⚠ {result.metrics.resources_manual_review} resources need manual review")
     print("These may include complex custom resource logic")
-    
+
     # Export list of tasks needing review
     for playbook_path in result.playbooks_generated:
         with open(playbook_path, "r") as f:
