@@ -5363,6 +5363,212 @@ def query_chef_server(
         )
 
 
+# ==================== V2.2 Handler Generation Tools ====================
+
+
+@mcp.tool()
+def parse_chef_handler(handler_path: str) -> str:
+    """
+    Parse Chef handler class and generate conversion analysis.
+
+    Extracts handler class structure, methods, callbacks, and exception handling.
+
+    Args:
+        handler_path: Path to the Chef handler file (.rb).
+
+    Returns:
+        JSON with handler metadata, patterns, and routing information.
+
+    """
+    import json
+
+    from souschef.converters import (
+        build_handler_routing_table,
+        detect_handler_patterns,
+        parse_chef_handler_class,
+    )
+
+    try:
+        safe_path = _normalise_workspace_path(handler_path, "Handler path")
+        content = safe_path.read_text(encoding="utf-8")
+
+        # Parse the handler class
+        handler_info = parse_chef_handler_class(content)
+
+        # Detect patterns in the handler
+        patterns = detect_handler_patterns(content)
+
+        # Build routing table
+        routing = build_handler_routing_table(patterns)
+
+        return json.dumps(
+            {
+                "status": "success",
+                "handler_info": handler_info,
+                "patterns": patterns,
+                "routing": routing,
+                "file": str(safe_path),
+            },
+            indent=2,
+        )
+
+    except FileNotFoundError:
+        error_msg = f"Handler file not found: {handler_path}"
+        return json.dumps({"error": error_msg, "status": "file_not_found"}, indent=2)
+    except Exception as e:
+        error_msg = f"Error parsing handler: {e}"
+        return json.dumps({"error": error_msg, "status": "parse_error"}, indent=2)
+
+
+@mcp.tool()
+def convert_chef_handler_to_ansible(handler_path: str) -> str:
+    """
+    Convert Chef handler to Ansible handler configuration.
+
+    Generates YAML for equivalent Ansible handler blocks from Chef handler code.
+
+    Args:
+        handler_path: Path to the Chef handler file (.rb).
+
+    Returns:
+        JSON with YAML-formatted Ansible handler configuration and report.
+
+    """
+    import json
+
+    from souschef.converters import (
+        build_handler_routing_table,
+        detect_handler_patterns,
+        generate_ansible_handler_from_chef,
+        generate_handler_conversion_report,
+        parse_chef_handler_class,
+    )
+
+    try:
+        safe_path = _normalise_workspace_path(handler_path, "Handler path")
+        content = safe_path.read_text(encoding="utf-8")
+
+        # Parse and convert handler
+        handler_info = parse_chef_handler_class(content)
+        patterns = detect_handler_patterns(content)
+        routing = build_handler_routing_table(patterns)
+
+        # Generate Ansible YAML
+        ansible_yaml = generate_ansible_handler_from_chef(handler_info)
+
+        # Generate conversion report
+        report = generate_handler_conversion_report(
+            str(safe_path), handler_info, routing
+        )
+
+        return json.dumps(
+            {
+                "status": "success",
+                "handler_name": handler_info.get("name"),
+                "handler_type": handler_info.get("type"),
+                "ansible_yaml": ansible_yaml,
+                "conversion_report": report,
+                "routing_summary": routing.get("summary", {}),
+            },
+            indent=2,
+        )
+
+    except FileNotFoundError:
+        error_msg = f"Handler file not found: {handler_path}"
+        return json.dumps({"error": error_msg, "status": "file_not_found"}, indent=2)
+    except Exception as e:
+        error_msg = f"Error converting handler: {e}"
+        return json.dumps({"error": error_msg, "status": "conversion_error"}, indent=2)
+
+
+@mcp.tool()
+def generate_handler_routing_config(
+    cookbook_path: str, output_format: str = "yaml"
+) -> str:
+    """
+    Generate complete handler routing configuration for a cookbook.
+
+    Scans all handlers in a cookbook and generates unified routing configuration.
+
+    Args:
+        cookbook_path: Path to Chef cookbook directory.
+        output_format: Output format ('yaml' or 'json', default: 'yaml').
+
+    Returns:
+        JSON with routing configuration in specified format.
+
+    """
+    import json
+
+    from souschef.converters import (
+        build_handler_routing_table,
+        detect_handler_patterns,
+    )
+
+    def _scan_directory_for_patterns(
+        directory: Path,
+    ) -> list[dict[str, Any]]:
+        """Scan directory for handler patterns in .rb files."""
+        patterns: list[dict[str, Any]] = []
+        if directory.exists():
+            for rb_file in directory.glob("*.rb"):
+                try:
+                    content = rb_file.read_text(encoding="utf-8")
+                    patterns.extend(detect_handler_patterns(content))
+                except Exception:  # noqa: S110
+                    pass  # Skip files with parsing errors
+        return patterns
+
+    try:
+        safe_path = _normalise_workspace_path(cookbook_path, "Cookbook path")
+
+        if not safe_path.is_dir():
+            msg = f"Cookbook path must be a directory: {cookbook_path}"
+            raise ValueError(msg)
+
+        # Scan libraries and recipes directories
+        all_patterns: list[dict[str, Any]] = []
+        libraries_dir = safe_path / "libraries"
+        recipes_dir = safe_path / "recipes"
+
+        all_patterns.extend(_scan_directory_for_patterns(libraries_dir))
+        all_patterns.extend(_scan_directory_for_patterns(recipes_dir))
+
+        handlers_found = sum(
+            1
+            for pattern in all_patterns
+            if pattern.get("pattern") == "exception_handler_registration"
+        )
+
+        # Build routing table
+        routing = build_handler_routing_table(all_patterns)
+
+        # Format output
+        if output_format == "yaml":
+            config_output = "# Handler Routing Configuration\n"
+            config_output += "handlers:\n"
+            for route_key, route_value in routing.get("event_routes", {}).items():
+                config_output += f"  - name: {route_key}\n"
+                config_output += f"    listen: '{route_value.get('listener')}'\n"
+        else:
+            config_output = json.dumps(routing, indent=2)
+
+        return json.dumps(
+            {
+                "status": "success",
+                "handlers_found": handlers_found,
+                "total_patterns": routing.get("summary", {}).get("total_patterns", 0),
+                "routing_config": config_output,
+                "summary": routing.get("summary", {}),
+            },
+            indent=2,
+        )
+
+    except Exception as e:
+        error_msg = f"Error generating handler routing: {e}"
+        return json.dumps({"error": error_msg, "status": "error"}, indent=2)
+
+
 # ==================== End v2.0 Migration Orchestrator Tools ====================
 
 
