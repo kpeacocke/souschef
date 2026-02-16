@@ -6,6 +6,7 @@ Tests complete migration workflows with real and mocked APIs.
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, call, patch
 
 import pytest
@@ -607,3 +608,204 @@ class TestAnsibleClients:
 
         with pytest.raises(NotImplementedError):
             client.create_execution_environment("test-ee")
+
+
+class TestInventoryGrouping:
+    """Test inventory grouping from Chef nodes."""
+
+    @patch("souschef.migration_v2.get_ansible_client")
+    @patch("souschef.migration_v2.get_chef_nodes")
+    def test_create_inventory_groups_from_chef_nodes(
+        self,
+        mock_get_nodes: Mock,
+        mock_get_client: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test creating inventory groups from Chef environments and roles."""
+        # Mock Chef nodes with various environments and roles
+        mock_chef_nodes = [
+            {
+                "name": "web-1",
+                "fqdn": "web-1.example.com",
+                "ipaddress": "10.0.1.1",
+                "environment": "production",
+                "roles": ["web", "common"],
+            },
+            {
+                "name": "web-2",
+                "fqdn": "web-2.example.com",
+                "ipaddress": "10.0.1.2",
+                "environment": "production",
+                "roles": ["web", "common"],
+            },
+            {
+                "name": "db-1",
+                "fqdn": "db-1.example.com",
+                "ipaddress": "10.0.2.1",
+                "environment": "production",
+                "roles": ["database", "common"],
+            },
+            {
+                "name": "cache-1",
+                "ipaddress": "10.0.3.1",
+                "environment": "staging",
+                "roles": ["cache"],
+            },
+        ]
+        mock_get_nodes.return_value = mock_chef_nodes
+
+        # Mock Ansible API client with group creation
+        mock_client = Mock()
+        mock_client.server_url = "https://aap.example.com"
+        mock_client.session = Mock()
+
+        # Mock group creation responses
+        def create_group_side_effect(
+            inventory_id: int, name: str, **kwargs: Any
+        ) -> dict[str, Any]:
+            return {"id": hash(name) % 1000, "name": name}
+
+        mock_client.create_group.side_effect = create_group_side_effect
+
+        # Mock host listing response
+        mock_host_response = Mock()
+        mock_host_response.json.return_value = {
+            "results": [
+                {"id": 1, "name": "web-1.example.com"},
+                {"id": 2, "name": "web-2.example.com"},
+                {"id": 3, "name": "db-1.example.com"},
+                {"id": 4, "name": "10.0.3.1"},
+            ],
+        }
+        mock_client.session.get.return_value = mock_host_response
+
+        mock_get_client.return_value = mock_client
+
+        # Create cookbook and migrate
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        recipes = cookbook / "recipes"
+        recipes.mkdir()
+        (recipes / "default.rb").write_text("package 'test'")
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="admin",
+            chef_client_key="test-key",
+        )
+
+        # Deploy and test group creation
+        with patch("souschef.migration_v2.get_ansible_client") as mock_get_client2:
+            mock_client.create_inventory.return_value = {"id": 1}
+            mock_client.create_project.return_value = {"id": 2}
+            mock_client.create_job_template.return_value = {"id": 3}
+            mock_get_client2.return_value = mock_client
+
+            orchestrator.deploy_to_ansible(
+                "https://aap.example.com",
+                "admin",
+                "password",
+            )
+
+        # Verify groups were created for environments
+        env_calls = [
+            c for c in mock_client.create_group.call_args_list if "env_" in str(c)
+        ]
+        assert len(env_calls) >= 2  # production and staging
+
+        # Verify groups were created for roles
+        role_calls = [
+            c for c in mock_client.create_group.call_args_list if "role_" in str(c)
+        ]
+        assert len(role_calls) >= 3  # web, database, cache, common
+
+        # Verify hosts were added to groups
+        assert mock_client.add_host_to_group.called
+
+    @patch("souschef.migration_v2.get_ansible_client")
+    @patch("souschef.migration_v2.get_chef_nodes")
+    def test_inventory_grouping_graceful_failure(
+        self,
+        mock_get_nodes: Mock,
+        mock_get_client: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test graceful handling of group creation failures."""
+        mock_chef_nodes = [
+            {
+                "name": "node-1",
+                "environment": "production",
+                "roles": ["web"],
+            },
+        ]
+        mock_get_nodes.return_value = mock_chef_nodes
+
+        # Mock client that fails on group creation
+        mock_client = Mock()
+        mock_client.server_url = "https://aap.example.com"
+        mock_client.create_group.side_effect = Exception("API error")
+        mock_client.session = Mock()
+
+        # But host listing succeeds
+        mock_host_response = Mock()
+        mock_host_response.json.return_value = {
+            "results": [{"id": 1, "name": "node-1"}],
+        }
+        mock_client.session.get.return_value = mock_host_response
+
+        mock_get_client.return_value = mock_client
+
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        recipes = cookbook / "recipes"
+        recipes.mkdir()
+        (recipes / "default.rb").write_text("package 'test'")
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="admin",
+            chef_client_key="test-key",
+        )
+
+        with patch("souschef.migration_v2.get_ansible_client") as mock_get_client2:
+            mock_client.create_inventory.return_value = {"id": 1}
+            mock_client.create_project.return_value = {"id": 2}
+            mock_client.create_job_template.return_value = {"id": 3}
+            mock_get_client2.return_value = mock_client
+
+            # Should not raise exception despite group creation failure
+            orchestrator.deploy_to_ansible(
+                "https://aap.example.com",
+                "admin",
+                "password",
+            )
+
+        # Deployment should still succeed or report warnings
+        assert orchestrator.result is not None
+        assert orchestrator.result.status in (
+            MigrationStatus.DEPLOYED,
+            MigrationStatus.IN_PROGRESS,
+        )
+        # Check that failure was logged as warning
+        assert any(
+            "Failed to create" in str(w.get("message", ""))
+            for w in orchestrator.result.warnings
+        )

@@ -209,6 +209,39 @@ class AnsiblePlatformClient(ABC):
             logger.error(f"Failed to add host {hostname}: {e}")
             raise
 
+    def create_group(
+        self, inventory_id: int, name: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        """Create a group within an inventory."""
+        url = f"{self.server_url}/api/v2/inventories/{inventory_id}/groups/"
+        data = {"name": name, **kwargs}
+
+        try:
+            response = self.session.post(url, json=data)
+            response.raise_for_status()
+            result = cast(dict[str, Any], response.json())
+            logger.debug(
+                f"Created group {name} in inventory {inventory_id}: {result['id']}"
+            )
+            return result
+        except requests.RequestException as e:
+            logger.error(f"Failed to create group {name}: {e}")
+            raise
+
+    def add_host_to_group(self, inventory_id: int, group_id: int, host_id: int) -> bool:
+        """Add a host to a group."""
+        url = f"{self.server_url}/api/v2/groups/{group_id}/hosts/"
+        data = {"id": host_id}
+
+        try:
+            response = self.session.post(url, json=data)
+            response.raise_for_status()
+            logger.debug(f"Added host {host_id} to group {group_id}")
+            return True
+        except requests.RequestException as e:
+            logger.error(f"Failed to add host to group: {e}")
+            raise
+
     def create_project(
         self, name: str, scm_type: str = "git", **kwargs: Any
     ) -> dict[str, Any]:

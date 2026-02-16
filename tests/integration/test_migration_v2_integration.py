@@ -5,6 +5,7 @@ Tests real migration scenarios with sample cookbooks.
 """
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -692,3 +693,255 @@ end
         assert any(
             "Chef Server query failed" in w.get("message", "") for w in result.warnings
         )
+
+
+class TestInventoryGrouping:
+    """Test inventory grouping from Chef environments and roles."""
+
+    @patch("souschef.migration_v2.get_ansible_client")
+    @patch("souschef.migration_v2.get_chef_nodes")
+    def test_inventory_groups_created_from_chef_environments_and_roles(
+        self,
+        mock_get_nodes: Mock,
+        mock_get_client: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test complete workflow: discover → populate hosts → create groups → assign hosts."""
+        # Mock Chef nodes with diverse environments and roles
+        mock_chef_nodes = [
+            {
+                "name": "web-1",
+                "fqdn": "web-1.prod.example.com",
+                "ipaddress": "10.0.1.10",
+                "environment": "production",
+                "roles": ["web", "common"],
+            },
+            {
+                "name": "web-2",
+                "fqdn": "web-2.prod.example.com",
+                "ipaddress": "10.0.1.11",
+                "environment": "production",
+                "roles": ["web", "common"],
+            },
+            {
+                "name": "db-1",
+                "fqdn": "db-1.prod.example.com",
+                "ipaddress": "10.0.2.10",
+                "environment": "production",
+                "roles": ["database", "common"],
+            },
+            {
+                "name": "cache-1",
+                "ipaddress": "10.0.3.10",
+                "environment": "staging",
+                "roles": ["cache"],
+            },
+            {
+                "name": "dev-1",
+                "ipaddress": "10.0.4.10",
+                "environment": "development",
+                "roles": ["dev", "common"],
+            },
+        ]
+        mock_get_nodes.return_value = mock_chef_nodes
+
+        # Mock Ansible API client with group and host operations
+        mock_client = Mock()
+        mock_client.server_url = "https://aap.example.com"
+        mock_client.session = Mock()
+
+        # Track created groups
+        created_groups: dict[str, int] = {}
+
+        def create_group_side_effect(
+            inventory_id: int, name: str, **kwargs: Any
+        ) -> dict[str, Any]:
+            group_id = len(created_groups) + 100
+            created_groups[name] = group_id
+            return {"id": group_id, "name": name}
+
+        mock_client.create_group.side_effect = create_group_side_effect
+
+        # Mock host listing to return hosts we "added"
+        def get_hosts_side_effect(url: str) -> Mock:
+            response = Mock()
+            response.json.return_value = {
+                "results": [
+                    {"id": 1, "name": "web-1.prod.example.com"},
+                    {"id": 2, "name": "web-2.prod.example.com"},
+                    {"id": 3, "name": "db-1.prod.example.com"},
+                    {"id": 4, "name": "10.0.3.10"},
+                    {"id": 5, "name": "10.0.4.10"},
+                ]
+            }
+            return response
+
+        mock_client.session.get.side_effect = get_hosts_side_effect
+
+        # Mock other operations
+        mock_client.create_inventory.return_value = {"id": 1}
+        mock_client.create_project.return_value = {"id": 2}
+        mock_client.create_job_template.return_value = {"id": 3}
+
+        mock_get_client.return_value = mock_client
+
+        # Create cookbook and run migration
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        recipes = cookbook / "recipes"
+        recipes.mkdir()
+        (recipes / "default.rb").write_text("package 'curl'")
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        # Run migration with Chef Server
+        orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="admin",
+            chef_client_key="test-key",
+        )
+
+        # Deploy to Ansible (triggers group creation)
+        deployment_success = orchestrator.deploy_to_ansible(
+            "https://aap.example.com",
+            "admin",
+            "password",
+        )
+
+        assert deployment_success
+        assert orchestrator.result is not None
+        assert orchestrator.result.status == MigrationStatus.DEPLOYED
+
+        # Verify environment groups were created
+        env_group_calls = [
+            c for c in mock_client.create_group.call_args_list if "env_" in str(c)
+        ]
+        assert len(env_group_calls) >= 3  # production, staging, development
+
+        # Verify role groups were created
+        role_group_calls = [
+            c for c in mock_client.create_group.call_args_list if "role_" in str(c)
+        ]
+        assert len(role_group_calls) >= 4  # web, database, cache, dev, common
+
+        # Verify hosts were assigned to groups
+        assert mock_client.add_host_to_group.called
+        # Should have multiple assignments (each host to env + each role)
+        assert mock_client.add_host_to_group.call_count >= 8
+
+    @patch("souschef.migration_v2.get_ansible_client")
+    @patch("souschef.migration_v2.get_chef_nodes")
+    def test_inventory_grouping_with_duplicate_roles_across_environments(
+        self,
+        mock_get_nodes: Mock,
+        mock_get_client: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test grouping correctly deduplicates roles across environments."""
+        # Nodes with same role in different environments
+        mock_chef_nodes = [
+            {
+                "name": "web-prod",
+                "ipaddress": "10.0.1.1",
+                "environment": "production",
+                "roles": ["web", "common"],
+            },
+            {
+                "name": "web-staging",
+                "ipaddress": "10.0.2.1",
+                "environment": "staging",
+                "roles": ["web", "common"],
+            },
+            {
+                "name": "web-dev",
+                "ipaddress": "10.0.3.1",
+                "environment": "development",
+                "roles": ["web", "common"],
+            },
+        ]
+        mock_get_nodes.return_value = mock_chef_nodes
+
+        # Mock client
+        mock_client = Mock()
+        mock_client.server_url = "https://aap.example.com"
+        mock_client.session = Mock()
+
+        # Track group creation
+        created_groups = []
+
+        def create_group_side_effect(
+            inventory_id: int, name: str, **kwargs: Any
+        ) -> dict[str, Any]:
+            created_groups.append(name)
+            return {"id": len(created_groups) + 100, "name": name}
+
+        mock_client.create_group.side_effect = create_group_side_effect
+
+        # Mock host listing
+        mock_client.session.get.return_value = Mock(
+            json=Mock(
+                return_value={
+                    "results": [
+                        {"id": 1, "name": "10.0.1.1"},
+                        {"id": 2, "name": "10.0.2.1"},
+                        {"id": 3, "name": "10.0.3.1"},
+                    ]
+                }
+            )
+        )
+
+        # Mock other operations
+        mock_client.create_inventory.return_value = {"id": 1}
+        mock_client.create_project.return_value = {"id": 2}
+        mock_client.create_job_template.return_value = {"id": 3}
+
+        mock_get_client.return_value = mock_client
+
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        recipes = cookbook / "recipes"
+        recipes.mkdir()
+        (recipes / "default.rb").write_text("package 'curl'")
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="admin",
+            chef_client_key="test-key",
+        )
+
+        orchestrator.deploy_to_ansible(
+            "https://aap.example.com",
+            "admin",
+            "password",
+        )
+
+        # Verify role_web is created only once (not once per environment)
+        web_role_count = created_groups.count("role_web")
+        assert web_role_count == 1, f"Expected 1 role_web group, got {web_role_count}"
+
+        # Verify role_common is created only once
+        common_role_count = created_groups.count("role_common")
+        assert common_role_count == 1, (
+            f"Expected 1 role_common group, got {common_role_count}"
+        )
+
+        # Verify each environment group is created
+        assert "env_production" in created_groups
+        assert "env_staging" in created_groups
+        assert "env_development" in created_groups

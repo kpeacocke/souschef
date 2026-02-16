@@ -773,6 +773,12 @@ class MigrationOrchestrator:
                     self.result.inventory_id,
                 )
 
+                # Create groups from Chef environments and roles
+                self._create_inventory_groups_from_chef_nodes(
+                    client,
+                    self.result.inventory_id,
+                )
+
             # Step 2: Create project
             logger.debug("Creating project...")
             self.result.project_id = self._create_project(client)
@@ -919,6 +925,273 @@ class MigrationOrchestrator:
             host_variables["chef_platform"] = platform
 
         return host_variables
+
+    def _extract_chef_environments_and_roles(
+        self,
+    ) -> tuple[set[str], set[str], dict[str, str], dict[str, list[str]]]:
+        """
+        Extract unique environments and roles from Chef nodes.
+
+        Returns:
+            Tuple of (environments, roles, node_env_map, node_roles_map).
+
+        """
+        assert self.result is not None
+        environments = set()
+        roles_set = set()
+        node_env_map: dict[str, str] = {}
+        node_roles_map: dict[str, list[str]] = {}
+
+        for node in self.result.chef_nodes:
+            if not isinstance(node, dict):
+                continue
+
+            hostname = self._resolve_chef_hostname(node)
+            if not hostname:
+                continue
+
+            environment = node.get("environment")
+            if environment:
+                environments.add(environment)
+                node_env_map[hostname] = environment
+
+            roles = node.get("roles")
+            if roles and isinstance(roles, list):
+                for role in roles:
+                    roles_set.add(role)
+                node_roles_map[hostname] = roles
+
+        return environments, roles_set, node_env_map, node_roles_map
+
+    def _create_groups_for_environments(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        environments: set[str],
+    ) -> dict[str, int]:
+        """
+        Create environment groups in inventory.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID.
+            environments: Set of environment names.
+
+        Returns:
+            Map of environment name to group ID.
+
+        """
+        assert self.result is not None
+        env_groups: dict[str, int] = {}
+
+        for environment in sorted(environments):
+            try:
+                result = client.create_group(inventory_id, f"env_{environment}")
+                env_groups[environment] = int(result["id"])
+                logger.debug(f"Created environment group: env_{environment}")
+            except Exception as e:
+                self.result.warnings.append(
+                    {
+                        "phase": "deployment",
+                        "message": (
+                            f"Failed to create environment group {environment}: {e}"
+                        ),
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+        return env_groups
+
+    def _create_groups_for_roles(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        roles_set: set[str],
+    ) -> dict[str, int]:
+        """
+        Create role groups in inventory.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID.
+            roles_set: Set of role names.
+
+        Returns:
+            Map of role name to group ID.
+
+        """
+        assert self.result is not None
+        role_groups: dict[str, int] = {}
+
+        for role in sorted(roles_set):
+            try:
+                result = client.create_group(inventory_id, f"role_{role}")
+                role_groups[role] = int(result["id"])
+                logger.debug(f"Created role group: role_{role}")
+            except Exception as e:
+                self.result.warnings.append(
+                    {
+                        "phase": "deployment",
+                        "message": f"Failed to create role group {role}: {e}",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+        return role_groups
+
+    def _assign_hosts_to_created_groups(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        env_groups: dict[str, int],
+        role_groups: dict[str, int],
+        node_env_map: dict[str, str],
+        node_roles_map: dict[str, list[str]],
+    ) -> None:
+        """
+        Assign hosts to created groups based on Chef metadata.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID.
+            env_groups: Map of environment name to group ID.
+            role_groups: Map of role name to group ID.
+            node_env_map: Map of hostname to environment.
+            node_roles_map: Map of hostname to roles list.
+
+        """
+        assert self.result is not None
+
+        try:
+            # Fetch hosts from inventory
+            host_list_url = (
+                f"{client.server_url}/api/v2/inventories/{inventory_id}/hosts/"
+            )
+            response = client.session.get(host_list_url)
+            response.raise_for_status()
+            hosts = response.json().get("results", [])
+
+            # Build hostname to host_id mapping
+            hostname_to_id: dict[str, int] = {}
+            for host in hosts:
+                hostname_to_id[host.get("name")] = int(host.get("id", 0))
+
+            # Assign hosts to groups
+            for hostname, host_id in hostname_to_id.items():
+                self._assign_host_to_env_group(
+                    client, inventory_id, hostname, host_id, env_groups, node_env_map
+                )
+                self._assign_host_to_role_groups(
+                    client, inventory_id, hostname, host_id, role_groups, node_roles_map
+                )
+
+        except Exception as e:
+            self.result.warnings.append(
+                {
+                    "phase": "deployment",
+                    "message": f"Failed to assign hosts to groups: {e}",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+    def _assign_host_to_env_group(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        hostname: str,
+        host_id: int,
+        env_groups: dict[str, int],
+        node_env_map: dict[str, str],
+    ) -> None:
+        """Assign host to environment group."""
+        if hostname not in node_env_map:
+            return
+
+        env = node_env_map[hostname]
+        if env not in env_groups:
+            return
+
+        try:
+            client.add_host_to_group(inventory_id, env_groups[env], host_id)
+            logger.debug(f"Added {hostname} to env_{env}")
+        except Exception as e:
+            logger.warning(f"Failed to add {hostname} to env_{env}: {e}")
+
+    def _assign_host_to_role_groups(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        hostname: str,
+        host_id: int,
+        role_groups: dict[str, int],
+        node_roles_map: dict[str, list[str]],
+    ) -> None:
+        """Assign host to all its role groups."""
+        if hostname not in node_roles_map:
+            return
+
+        for role in node_roles_map[hostname]:
+            if role not in role_groups:
+                continue
+
+            try:
+                client.add_host_to_group(inventory_id, role_groups[role], host_id)
+                logger.debug(f"Added {hostname} to role_{role}")
+            except Exception as e:
+                logger.warning(f"Failed to add {hostname} to role_{role}: {e}")
+
+    def _create_inventory_groups_from_chef_nodes(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+    ) -> None:
+        """
+        Create ansible inventory groups from Chef environments and roles.
+
+        Creates groups for each unique Chef environment and role discovered,
+        then assigns hosts to appropriate groups based on Chef metadata.
+
+        This method orchestrates the grouping workflow by delegating to helper
+        methods for collection, group creation, and host assignment.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID to populate with groups.
+
+        """
+        assert self.result is not None
+
+        if not self.result.chef_nodes:
+            logger.debug("No Chef nodes available for group creation")
+            return
+
+        # Extract environments and roles from Chef nodes
+        environments, roles_set, node_env_map, node_roles_map = (
+            self._extract_chef_environments_and_roles()
+        )
+
+        # Create groups in inventory
+        env_groups = self._create_groups_for_environments(
+            client, inventory_id, environments
+        )
+        role_groups = self._create_groups_for_roles(client, inventory_id, roles_set)
+
+        # Assign hosts to created groups
+        self._assign_hosts_to_created_groups(
+            client,
+            inventory_id,
+            env_groups,
+            role_groups,
+            node_env_map,
+            node_roles_map,
+        )
+
+        logger.info(
+            "[%s] Created %s environment groups and %s role groups",
+            self.migration_id,
+            len(env_groups),
+            len(role_groups),
+        )
 
     def _create_project(self, client: AnsiblePlatformClient) -> int:
         """Create project in Ansible platform."""
