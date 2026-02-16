@@ -5,7 +5,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 [![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](https://github.com/kpeacocke/souschef/tree/main/htmlcov)
+[![Test Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen.svg)](https://github.com/kpeacocke/souschef/tree/main/htmlcov)
 
 ## Overview
 
@@ -118,6 +118,21 @@ Get started with SousChef in minutes:
     souschef-cli cookbook /path/to/cookbook
     ```
 
+=== "CLI (v2 Orchestrator)"
+
+        ```bash
+        # Run an end-to-end v2 migration
+        souschef-cli v2 migrate \
+            --cookbook-path /path/to/cookbook \
+            --chef-version 15.10.91 \
+            --target-platform aap \
+            --target-version 2.4.0 \
+            --save-state
+
+        # Load the stored migration state later
+        souschef-cli v2 status --migration-id mig-abc123
+        ```
+
 === "Web UI"
 
     **Launch the Visual Interface:**
@@ -184,6 +199,30 @@ Get started with SousChef in minutes:
     Plan and execute your Chef-to-Ansible migration
 
     [:octicons-arrow-right-24: Migration guide](migration-guide/overview.md)
+
+-   :material-api:{ .lg .middle } __v2.0 API Reference__
+
+    ---
+
+    Complete API documentation for the v2.0 Migration Orchestrator
+
+    [:octicons-arrow-right-24: API reference](api-reference/migration-v2.md)
+
+-   :material-cog-sync:{ .lg .middle } __Advanced Workflows__
+
+    ---
+
+    Complex migration patterns and integration strategies
+
+    [:octicons-arrow-right-24: Advanced workflows](migration-guide/advanced-workflows.md)
+
+-   :material-help-circle:{ .lg .middle } __Troubleshooting__
+
+    ---
+
+    Common issues and solutions for migrations
+
+    [:octicons-arrow-right-24: Troubleshooting](user-guide/troubleshooting.md)
 
 </div>
 

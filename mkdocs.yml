@@ -99,17 +99,20 @@ nav:
       - CLI Usage: user-guide/cli-usage.md
       - Examples: user-guide/examples.md
       - Data Persistence: user-guide/data-persistence.md
+      - Troubleshooting: user-guide/troubleshooting.md
   - Migration Guide:
       - Overview: migration-guide/overview.md
       - Assessment: migration-guide/assessment.md
       - Conversion: migration-guide/conversion.md
       - Deployment: migration-guide/deployment.md
+      - Advanced Workflows: migration-guide/advanced-workflows.md
   - API Reference:
       - Server: api-reference/server.md
       - CLI: api-reference/cli.md
       - Parsers: api-reference/parsers.md
       - Converters: api-reference/converters.md
       - Core Utilities: api-reference/core.md
+      - Migration v2.0: api-reference/migration-v2.md
   - Contributing:
       - Contributing Guide: contributing.md
       - Architecture Guide: ARCHITECTURE.md
