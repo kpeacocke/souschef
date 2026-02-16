@@ -194,6 +194,72 @@ class TestMigrationOrchestrator:
             MigrationStatus.VALIDATED,
         )
 
+    @patch("souschef.migration_v2.get_chef_nodes")
+    def test_migrate_cookbook_queries_chef_server(
+        self, mock_get_nodes: Mock, tmp_path: Path
+    ) -> None:
+        """Test that migration queries Chef Server when configured."""
+        cookbook = tmp_path / "test_cookbook"
+        recipes = cookbook / "recipes"
+        recipes.mkdir(parents=True)
+        (recipes / "default.rb").write_text("package 'curl'")
+
+        mock_get_nodes.return_value = [{"name": "node-1"}]
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        result = orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="validator",
+            chef_client_key="dummy-key",
+            chef_query="*:*",
+        )
+
+        assert result.chef_server_queried is True
+        assert result.chef_nodes == [{"name": "node-1"}]
+        mock_get_nodes.assert_called_once_with(
+            search_query="*:*",
+            server_url="https://chef.example.com",
+            organisation="default",
+            client_name="validator",
+            client_key_path=None,
+            client_key="dummy-key",
+        )
+
+    def test_migrate_cookbook_warns_on_missing_chef_key(self, tmp_path: Path) -> None:
+        """Test warning when Chef Server config is incomplete."""
+        cookbook = tmp_path / "test_cookbook"
+        recipes = cookbook / "recipes"
+        recipes.mkdir(parents=True)
+        (recipes / "default.rb").write_text("package 'curl'")
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        result = orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="validator",
+        )
+
+        assert result.chef_server_queried is False
+        assert any(
+            "missing client key" in warning.get("message", "")
+            for warning in result.warnings
+        )
+
     def test_migrate_cookbook_handles_missing_path(self) -> None:
         """Test migration with non-existent cookbook."""
         orchestrator = MigrationOrchestrator(

@@ -27,6 +27,7 @@ from souschef.api_clients import (
 )
 from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.converters.template import convert_template_file
+from souschef.core.chef_server import get_chef_nodes
 from souschef.migration_simulation import (
     create_simulation_config,
 )
@@ -195,6 +196,8 @@ class MigrationResult:
     inventory_id: int | None = None
     project_id: int | None = None
     job_template_id: int | None = None
+    chef_nodes: list[dict[str, Any]] = field(default_factory=list)
+    chef_server_queried: bool = False
     metrics: ConversionMetrics = field(default_factory=ConversionMetrics)
     errors: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[dict[str, Any]] = field(default_factory=list)
@@ -217,6 +220,11 @@ class MigrationResult:
                 "inventory_id": self.inventory_id,
                 "project_id": self.project_id,
                 "job_template_id": self.job_template_id,
+            },
+            "chef_server": {
+                "nodes_discovered": len(self.chef_nodes),
+                "nodes": self.chef_nodes if self.chef_server_queried else [],
+                "queried": self.chef_server_queried,
             },
             "metrics": self.metrics.to_dict(),
             "errors": self.errors,
@@ -246,6 +254,7 @@ class MigrationResult:
 
         infrastructure = data.get("infrastructure", {})
         metrics_payload = data.get("metrics", {})
+        chef_server = data.get("chef_server", {})
 
         return cls(
             migration_id=data.get("migration_id", ""),
@@ -262,6 +271,8 @@ class MigrationResult:
             inventory_id=infrastructure.get("inventory_id"),
             project_id=infrastructure.get("project_id"),
             job_template_id=infrastructure.get("job_template_id"),
+            chef_nodes=chef_server.get("nodes", []),
+            chef_server_queried=chef_server.get("queried", False),
             metrics=ConversionMetrics.from_dict(metrics_payload),
             errors=data.get("errors", []),
             warnings=data.get("warnings", []),
@@ -289,7 +300,15 @@ class MigrationOrchestrator:
         self.result: MigrationResult | None = None
 
     def migrate_cookbook(
-        self, cookbook_path: str, skip_validation: bool = False
+        self,
+        cookbook_path: str,
+        skip_validation: bool = False,
+        chef_server_url: str | None = None,
+        chef_organisation: str | None = None,
+        chef_client_name: str | None = None,
+        chef_client_key_path: str | None = None,
+        chef_client_key: str | None = None,
+        chef_query: str = "*",
     ) -> MigrationResult:
         """
         Execute complete cookbook migration.
@@ -297,6 +316,12 @@ class MigrationOrchestrator:
         Args:
             cookbook_path: Path to cookbook to migrate.
             skip_validation: Skip playbook validation if True.
+            chef_server_url: Chef Server URL (optional).
+            chef_organisation: Chef organisation name (optional).
+            chef_client_name: Chef client name (optional).
+            chef_client_key_path: Path to Chef client key (optional).
+            chef_client_key: Inline Chef client key content (optional).
+            chef_query: Chef search query for nodes (default: *).
 
         Returns:
             Migration result with status, playbooks, and metrics.
@@ -318,6 +343,46 @@ class MigrationOrchestrator:
             # Phase 1: Analyze
             logger.info(f"[{self.migration_id}] Starting migration analysis")
             self._analyze_cookbook(cookbook_path)
+
+            # Optional Chef Server query for node data
+            if any(
+                [
+                    chef_server_url,
+                    chef_organisation,
+                    chef_client_name,
+                    chef_client_key_path,
+                    chef_client_key,
+                ]
+            ):
+                if not chef_server_url or not chef_organisation or not chef_client_name:
+                    message = "Chef Server query skipped due to missing configuration"
+                    self.result.warnings.append(
+                        {
+                            "phase": "chef_server",
+                            "message": message,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
+                    logger.warning("[%s] %s", self.migration_id, message)
+                elif not chef_client_key_path and not chef_client_key:
+                    message = "Chef Server query skipped due to missing client key"
+                    self.result.warnings.append(
+                        {
+                            "phase": "chef_server",
+                            "message": message,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
+                    logger.warning("[%s] %s", self.migration_id, message)
+                else:
+                    self._query_chef_server(
+                        server_url=chef_server_url,
+                        organisation=chef_organisation,
+                        client_name=chef_client_name,
+                        client_key_path=chef_client_key_path,
+                        client_key=chef_client_key,
+                        query=chef_query,
+                    )
 
             # Phase 2: Convert
             logger.info(f"[{self.migration_id}] Converting Chef artifacts")
@@ -384,6 +449,56 @@ class MigrationOrchestrator:
         templates_dir = path / "templates"
         if templates_dir.exists():
             self.result.metrics.templates_total = len(list(templates_dir.glob("*")))
+
+    def _query_chef_server(
+        self,
+        server_url: str,
+        organisation: str,
+        client_name: str,
+        client_key_path: str | None,
+        client_key: str | None,
+        query: str,
+    ) -> None:
+        """
+        Query Chef Server for node data to support inventory generation.
+
+        Args:
+            server_url: Chef Server URL.
+            organisation: Chef organisation name.
+            client_name: Chef client name.
+            client_key_path: Path to client key file.
+            client_key: Inline client key content.
+            query: Chef search query for nodes.
+
+        """
+        assert self.result is not None
+
+        try:
+            nodes = get_chef_nodes(
+                search_query=query,
+                server_url=server_url,
+                organisation=organisation,
+                client_name=client_name,
+                client_key_path=client_key_path,
+                client_key=client_key,
+            )
+            self.result.chef_nodes = nodes
+            self.result.chef_server_queried = True
+            logger.info(
+                "[%s] Retrieved %s Chef nodes",
+                self.migration_id,
+                len(nodes),
+            )
+        except Exception as e:
+            self.result.chef_server_queried = True
+            self.result.warnings.append(
+                {
+                    "phase": "chef_server",
+                    "message": f"Chef Server query failed: {e}",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            logger.warning("[%s] Chef Server query failed: %s", self.migration_id, e)
 
     def _convert_recipes(self, cookbook_path: str) -> None:
         """Convert Chef recipes to Ansible playbooks."""

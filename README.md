@@ -98,7 +98,7 @@ See [Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md) fo
 - **Extensible Plugin Architecture**: `SourceParser` and `TargetGenerator` abstract base classes enabling support for new source tools and target platforms
 - **Version Management**: Semantic versioning and schema migration support for IR format evolution
 - **Dependency DAG**: Directed acyclic graph with automatic topological sorting and circular dependency detection
-- **v2 Migration CLI**: `souschef-cli v2 migrate` and `souschef-cli v2 status` for orchestrated workflows and saved state
+- **v2 Migration CLI**: `souschef v2 migrate`, `souschef v2 status`, `souschef v2 list`, and `souschef v2 rollback` for orchestrated workflows and saved state
 
 ### Modules
 

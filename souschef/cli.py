@@ -1538,6 +1538,37 @@ def v2() -> None:
     help="Target platform version (e.g., 2.4.0)",
 )
 @click.option(
+    "--chef-server-url",
+    default=None,
+    help="Chef Server URL (optional)",
+)
+@click.option(
+    "--chef-organisation",
+    default=None,
+    help="Chef organisation name (optional)",
+)
+@click.option(
+    "--chef-client-name",
+    default=None,
+    help="Chef client name (optional)",
+)
+@click.option(
+    "--chef-client-key-path",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to Chef client key file (optional)",
+)
+@click.option(
+    "--chef-client-key",
+    default=None,
+    help="Inline Chef client key content (optional)",
+)
+@click.option(
+    "--chef-query",
+    default="*",
+    help="Chef search query for nodes (default: *)",
+)
+@click.option(
     "--skip-validation",
     is_flag=True,
     help="Skip playbook validation",
@@ -1577,6 +1608,12 @@ def v2_migrate(
     chef_version: str,
     target_platform: str,
     target_version: str,
+    chef_server_url: str | None,
+    chef_organisation: str | None,
+    chef_client_name: str | None,
+    chef_client_key_path: str | None,
+    chef_client_key: str | None,
+    chef_query: str,
     skip_validation: bool,
     save_state: bool,
     analysis_id: int | None,
@@ -1605,6 +1642,12 @@ def v2_migrate(
         result = orchestrator.migrate_cookbook(
             str(cookbook_dir),
             skip_validation=skip_validation,
+            chef_server_url=chef_server_url,
+            chef_organisation=chef_organisation,
+            chef_client_name=chef_client_name,
+            chef_client_key_path=chef_client_key_path,
+            chef_client_key=chef_client_key,
+            chef_query=chef_query,
         )
 
         storage_id = None

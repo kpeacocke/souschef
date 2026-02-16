@@ -5105,6 +5105,12 @@ def start_v2_migration(
     target_platform: str,
     target_version: str,
     fips_mode: str = "no",
+    chef_server_url: str | None = None,
+    chef_organisation: str | None = None,
+    chef_client_name: str | None = None,
+    chef_client_key_path: str | None = None,
+    chef_client_key: str | None = None,
+    chef_query: str = "*",
 ) -> str:
     """
     Start a complete Chef to Ansible v2.0 migration.
@@ -5118,6 +5124,12 @@ def start_v2_migration(
         target_platform: Target platform (tower, awx, aap).
         target_version: Target platform version.
         fips_mode: Enable FIPS compliance (yes/no, default no).
+        chef_server_url: Chef Server URL (optional).
+        chef_organisation: Chef organisation name (optional).
+        chef_client_name: Chef client name (optional).
+        chef_client_key_path: Path to client key file (optional).
+        chef_client_key: Inline client key content (optional).
+        chef_query: Chef search query for nodes (default: *).
 
     Returns:
         JSON with migration ID, status, and metrics.
@@ -5138,6 +5150,12 @@ def start_v2_migration(
         result = orchestrator.migrate_cookbook(
             cookbook_path=cookbook_path,
             skip_validation=False,
+            chef_server_url=chef_server_url,
+            chef_organisation=chef_organisation,
+            chef_client_name=chef_client_name,
+            chef_client_key_path=chef_client_key_path,
+            chef_client_key=chef_client_key,
+            chef_query=chef_query,
         )
 
         return json.dumps(result.to_dict(), indent=2)

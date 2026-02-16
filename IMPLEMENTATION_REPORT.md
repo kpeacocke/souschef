@@ -203,6 +203,7 @@
    - `souschef v2 status` - Load migration state by ID
    - `souschef v2 list` - List and filter recent migrations
    - `souschef v2 rollback` - Delete created infrastructure
+7. **Chef Server Integration**: ✅ Optional node discovery stored in migration state for inventory planning
 
 ## Success Criteria Met
 
@@ -221,12 +222,13 @@ SousChef v2.0 core framework is production-ready with full deployment API integr
 
 The modular design allows for incremental feature development without affecting the stable v1.x migration simulator. Tests provide confidence in the implementation (3376 passing), and the architecture supports the planned v2.1 advanced features.
 
-**Current Status**: 
+**Current Status**:
 - ✅ Orchestration framework complete
 - ✅ API client library complete with all CRUD operations
 - ✅ Deployment methods using real API calls
 - ✅ Validation with ansible-lint subprocess
 - ✅ State persistence with JSON serialization
-- ⏳ Converter integration (existing parsers/converters ready to wire up)
+- ✅ Converter integration (recipe, attributes, template)
+- ✅ Chef Server node query integration (optional)
 
-**Estimated Time to Full v2.0**: 1-2 weeks with focused development on converter integration (linking existing recipe/attribute/resource parsers to the orchestrator).
+**Estimated Time to Full v2.0**: 1-2 weeks with focused development on advanced resource conversion and Chef Server inventory generation.
