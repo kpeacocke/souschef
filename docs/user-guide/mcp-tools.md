@@ -1162,7 +1162,10 @@ Validate Chef Server connectivity and authentication.
 
 **Parameters:**
 - `server_url` (string, required): Base URL of the Chef Server (e.g., https://chef.example.com)
-- `node_name` (string, required): Chef node name for authentication
+- `organisation` (string, optional): Chef organisation name (default: `default`)
+- `client_name` (string, required): Chef client or user name for authentication
+- `client_key_path` (string, optional): Path to the client key file (PEM format)
+- `client_key` (string, optional): Inline client key content (avoid when possible)
 
 **Returns:**
 - Success/failure message with connection details
@@ -1177,7 +1180,11 @@ Validate Chef Server connectivity and authentication.
 
 === "CLI"
     ```bash
-    souschef validate-chef-server --server-url https://chef.example.com --node-name ansible-admin
+        souschef validate-chef-server \
+            --server-url https://chef.example.com \
+            --organisation default \
+            --client-name ansible-admin \
+            --client-key-path /path/to/client.pem
     ```
 
 ---
@@ -1202,7 +1209,12 @@ Query Chef Server for nodes matching search criteria.
 
 **Parameters:**
 - `search_query` (string, optional): Chef search query (default: '*:*' for all nodes)
-  - Examples: `role:web_server`, `environment:production`, `platform:ubuntu`
+    - Examples: `role:web_server`, `environment:production`, `platform:ubuntu`
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
 
 **Returns:**
 - JSON string with list of matching nodes and their attributes
@@ -1217,8 +1229,78 @@ Query Chef Server for nodes matching search criteria.
 
 === "CLI"
     ```bash
-    souschef query-chef-nodes --search-query "role:database" --json
+        souschef query-chef-nodes \
+            --search-query "role:database" \
+            --server-url https://chef.example.com \
+            --organisation default \
+            --client-name ansible-admin \
+            --client-key-path /path/to/client.pem \
+            --json
     ```
+
+---
+
+### get_chef_roles
+
+List Chef Server roles.
+
+**Parameters:**
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
+
+**Returns:**
+- JSON string with role summaries
+
+---
+
+### get_chef_environments
+
+List Chef Server environments.
+
+**Parameters:**
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
+
+**Returns:**
+- JSON string with environment summaries
+
+---
+
+### get_chef_cookbooks
+
+List Chef Server cookbooks.
+
+**Parameters:**
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
+
+**Returns:**
+- JSON string with cookbook summaries
+
+---
+
+### get_chef_policies
+
+List Chef Server policies.
+
+**Parameters:**
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
+
+**Returns:**
+- JSON string with policy summaries
 
 ---
 

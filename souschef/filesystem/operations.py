@@ -1,5 +1,6 @@
 """Filesystem operations for Chef cookbook exploration."""
 
+import tarfile
 from pathlib import Path
 
 from souschef.core.constants import (
@@ -77,3 +78,35 @@ def read_file(path: str) -> str:
         return ERROR_PERMISSION_DENIED.format(path=path)
     except Exception as e:
         return f"An error occurred: {e}"
+
+
+def create_tar_gz_archive(source_dir: str, output_path: str) -> str:
+    """
+    Create a tar.gz archive from a directory.
+
+    Args:
+        source_dir: Directory to archive.
+        output_path: Destination path for the tar.gz archive.
+
+    Returns:
+        Path to the created archive.
+
+    """
+    # Check for symlinks before normalisation to detect attacks
+    _check_symlink_safety(_normalize_path(source_dir), Path(source_dir))
+
+    workspace_root = _get_workspace_root()
+    source_path = _ensure_within_base_path(_normalize_path(source_dir), workspace_root)
+    if not source_path.is_dir():
+        raise ValueError(f"Source directory does not exist: {source_dir}")
+
+    output_file = _ensure_within_base_path(_normalize_path(output_path), workspace_root)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with tarfile.open(output_file, "w:gz") as tar:
+        for file_path in source_path.rglob("*"):
+            if file_path.is_file():
+                arcname = file_path.relative_to(source_path)
+                tar.add(file_path, arcname=arcname)
+
+    return str(output_file)

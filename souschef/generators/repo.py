@@ -6,6 +6,7 @@ Ansible repository structures with proper organisation, configuration files,
 and git initialisation.
 """
 
+import shutil
 import subprocess
 from enum import Enum
 from pathlib import Path
@@ -625,6 +626,42 @@ def _create_repo_structure(repo_path: Path, repo_type: RepoType, org_name: str) 
         _create_mono_repo_structure(repo_path)
 
 
+def _get_roles_destination(repo_path: Path, repo_type: RepoType, org_name: str) -> Path:
+    """Resolve the roles directory for the chosen repository type."""
+    if repo_type == RepoType.COLLECTION:
+        collection_name = org_name.lower().replace("-", "_")
+        return (
+            repo_path / "ansible_collections" / collection_name / "platform" / "roles"
+        )
+    if repo_type == RepoType.MONO_REPO:
+        return repo_path / "shared_roles"
+    return repo_path / "roles"
+
+
+def _commit_repo_changes(repo_path: Path, message: str) -> str:
+    """Commit repository changes if git is available."""
+    try:
+        subprocess.run(
+            ["git", "add", "."],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", message],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return "Repository changes committed"
+    except subprocess.CalledProcessError as exc:
+        return f"Repository commit skipped: {exc.stderr.strip()}"
+    except FileNotFoundError:
+        return "Git not found - skipped repository commit"
+
+
 def generate_ansible_repository(
     output_path: str,
     repo_type: RepoType | str,
@@ -717,4 +754,99 @@ def generate_ansible_repository(
         return {
             "success": False,
             "error": f"Failed to generate repository: {e}",
+        }
+
+
+def create_ansible_repository_from_roles(
+    roles_path: str,
+    output_path: str,
+    org_name: str = "souschef",
+    init_git: bool = True,
+    repo_type: RepoType | str | None = None,
+) -> dict[str, Any]:
+    """
+    Create an Ansible repository and populate it with converted roles.
+
+    Args:
+        roles_path: Path to the directory containing converted roles.
+        output_path: Path where the repository should be created.
+        org_name: Organisation name for repository metadata.
+        init_git: Whether to initialise a git repository.
+        repo_type: Optional repository type override.
+
+    Returns:
+        Dictionary with repository creation details and copy results.
+
+    """
+    try:
+        _check_symlink_safety(_normalize_path(roles_path), Path(roles_path))
+        roles_dir = _normalize_path(roles_path)
+
+        if not roles_dir.exists():  # NOSONAR
+            return {
+                "success": False,
+                "error": f"Roles directory does not exist: {roles_path}",
+            }
+
+        role_dirs = [
+            path
+            for path in roles_dir.iterdir()
+            if path.is_dir() and not path.name.startswith(".")
+        ]
+
+        if repo_type is None:
+            repo_type = analyse_conversion_output(
+                cookbook_path=str(roles_dir),
+                num_recipes=0,
+                num_roles=len(role_dirs),
+                has_multiple_apps=len(role_dirs) > 3,
+                needs_multi_env=True,
+            )
+
+        repo_result = generate_ansible_repository(
+            output_path=output_path,
+            repo_type=repo_type,
+            org_name=org_name,
+            init_git=init_git,
+        )
+
+        if not repo_result.get("success"):
+            return repo_result
+
+        if isinstance(repo_type, str):
+            try:
+                repo_type = RepoType(repo_type)
+            except ValueError:
+                return {
+                    "success": False,
+                    "error": f"Invalid repo_type: {repo_type}. "
+                    f"Valid types: {[t.value for t in RepoType]}",
+                }
+
+        repo_path = Path(repo_result["repo_path"])
+        roles_dest = _get_roles_destination(repo_path, repo_type, org_name)
+        roles_dest.mkdir(parents=True, exist_ok=True)
+
+        copied_roles = []
+        for role_dir in role_dirs:
+            dest_dir = roles_dest / role_dir.name
+            if dest_dir.exists():  # NOSONAR
+                shutil.rmtree(dest_dir)
+            shutil.copytree(role_dir, dest_dir)
+            copied_roles.append(role_dir.name)
+
+        repo_result["roles_copied"] = copied_roles
+        repo_result["roles_destination"] = str(roles_dest)
+
+        if init_git:
+            repo_result["git_commit_status"] = _commit_repo_changes(
+                repo_path,
+                f"Add converted Ansible roles ({len(copied_roles)} role(s))",
+            )
+
+        return repo_result
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to create repository from roles: {e}",
         }

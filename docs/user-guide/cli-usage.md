@@ -37,6 +37,8 @@ souschef-cli --help
 | [`profile-operation`](#profile-operation) | Profile specific operation | `souschef-cli profile-operation recipe default.rb` |
 | [`ls`](#ls) | List directory contents | `souschef-cli ls recipes/` |
 | [`cat`](#cat) | Display file contents | `souschef-cli cat default.rb` |
+| [`v2 migrate`](#v2-migrate) | Run v2 migration orchestration | `souschef-cli v2 migrate --cookbook-path cookbooks/app` |
+| [`v2 status`](#v2-status) | Load v2 migration state | `souschef-cli v2 status --migration-id mig-abc123` |
 
 ---
 
@@ -195,6 +197,76 @@ souschef-cli resource resources/app_config.rb --format json | jq '.properties'
   "actions": ["create", "delete"],
   "default_action": "create"
 }
+```
+
+---
+
+### v2 migrate
+
+Run the v2 migration orchestrator for a cookbook.
+
+**Syntax:**
+```bash
+souschef-cli v2 migrate \
+  --cookbook-path PATH \
+  --chef-version VERSION \
+  --target-platform PLATFORM \
+  --target-version VERSION
+```
+
+**Options:**
+- `--cookbook-path` (required): Path to the Chef cookbook directory
+- `--chef-version` (required): Chef Infra Client version (e.g., 15.10.91)
+- `--target-platform` (required): Target platform (`tower`, `awx`, `aap`)
+- `--target-version` (required): Target platform version (e.g., 2.4.0)
+- `--skip-validation`: Skip playbook validation
+- `--save-state`: Persist migration state to storage
+- `--analysis-id`: Link to an existing analysis ID
+- `--output-type`: History output type (`playbook`, `role`, `collection`)
+- `--format`: Output format (`json` default, `text`)
+- `--output`: Save result to file instead of stdout
+
+**Examples:**
+
+=== "Basic Migration"
+    ```bash
+    souschef-cli v2 migrate \
+      --cookbook-path cookbooks/nginx \
+      --chef-version 15.10.91 \
+      --target-platform aap \
+      --target-version 2.4.0
+    ```
+
+=== "Save State"
+    ```bash
+    souschef-cli v2 migrate \
+      --cookbook-path cookbooks/nginx \
+      --chef-version 15.10.91 \
+      --target-platform aap \
+      --target-version 2.4.0 \
+      --save-state
+    ```
+
+---
+
+### v2 status
+
+Load a saved v2 migration state by ID.
+
+**Syntax:**
+```bash
+souschef-cli v2 status --migration-id MIGRATION_ID
+```
+
+**Options:**
+- `--migration-id` (required): Migration ID to load from storage
+- `--limit`: Maximum number of history entries to scan (default: 500)
+- `--format`: Output format (`json` default, `text`)
+- `--output`: Save result to file instead of stdout
+
+**Example:**
+```bash
+souschef-cli v2 status --migration-id mig-abc123
 ```
 
 ---

@@ -100,6 +100,7 @@ from souschef.server import (
     parse_template,
     read_cookbook_metadata,
     read_file,
+    simulate_chef_to_awx_migration,
     validate_conversion,
 )
 
@@ -195,6 +196,41 @@ def test_generate_migration_plan_success(tmp_path, monkeypatch):
     assert "Timeline: 12 weeks" in result
     assert "Migration Phases" in result
     assert "Team Requirements" in result
+
+
+def test_simulate_chef_to_awx_migration_creates_archives(tmp_path, monkeypatch):
+    """Test simulation generates conversion outputs and archives."""
+    monkeypatch.chdir(tmp_path)
+
+    cookbooks_dir = tmp_path / "cookbooks"
+    cookbook = cookbooks_dir / "nginx"
+    recipes_dir = cookbook / "recipes"
+    recipes_dir.mkdir(parents=True)
+    (cookbook / "metadata.rb").write_text("name 'nginx'\nversion '1.0.0'\n")
+    (recipes_dir / "default.rb").write_text("package 'nginx'\n")
+
+    output_dir = tmp_path / "output"
+
+    result = simulate_chef_to_awx_migration(
+        cookbooks_path=str(cookbooks_dir),
+        output_path=str(output_dir),
+        target_platform="awx",
+        include_repo=True,
+        include_tar=True,
+    )
+
+    data = json.loads(result)
+    assert data["target_platform"] == "awx"
+
+    roles_path = Path(data["conversion"]["roles_path"])
+    assert roles_path.exists()
+
+    roles_tar = data["archives"]["roles_tar_gz"]
+    assert roles_tar is not None
+    assert Path(roles_tar).exists()
+
+    repo_info = data["repository"]
+    assert repo_info["success"] is True
 
 
 def test_analyse_cookbook_dependencies_success():
@@ -16807,11 +16843,22 @@ def test_validate_chef_server_connection_success():
     with patch("souschef.server._validate_chef_server_connection") as mock_validate:
         mock_validate.return_value = (True, "Connection successful")
 
-        result = validate_chef_server_connection("https://chef.example.com", "admin")
+        result = validate_chef_server_connection(
+            "https://chef.example.com",
+            organisation="default",
+            client_name="admin",
+            client_key_path="/tmp/client.pem",
+        )
 
         assert "Success" in result
         assert "Connection successful" in result
-        mock_validate.assert_called_once_with("https://chef.example.com", "admin")
+        mock_validate.assert_called_once_with(
+            "https://chef.example.com",
+            "admin",
+            organisation="default",
+            client_key_path="/tmp/client.pem",
+            client_key=None,
+        )
 
 
 def test_validate_chef_server_connection_failure():
@@ -16821,7 +16868,12 @@ def test_validate_chef_server_connection_failure():
     with patch("souschef.server._validate_chef_server_connection") as mock_validate:
         mock_validate.return_value = (False, "Connection timeout")
 
-        result = validate_chef_server_connection("https://chef.example.com", "admin")
+        result = validate_chef_server_connection(
+            "https://chef.example.com",
+            organisation="default",
+            client_name="admin",
+            client_key_path="/tmp/client.pem",
+        )
 
         assert "Failed" in result
         assert "Connection timeout" in result
@@ -16834,10 +16886,39 @@ def test_validate_chef_server_connection_exception():
     with patch("souschef.server._validate_chef_server_connection") as mock_validate:
         mock_validate.side_effect = Exception("Network error")
 
-        result = validate_chef_server_connection("https://chef.example.com", "admin")
+        result = validate_chef_server_connection(
+            "https://chef.example.com",
+            organisation="default",
+            client_name="admin",
+            client_key_path="/tmp/client.pem",
+        )
 
         assert "Error" in result
         assert "Network error" in result
+
+
+def test_validate_chef_server_connection_redacts_keys():
+    """Test that validate_chef_server_connection redacts sensitive keys in errors."""
+    from souschef.server import validate_chef_server_connection
+
+    with patch("souschef.server._validate_chef_server_connection") as mock_validate:
+        # Simulate an error message containing a PEM key
+        mock_validate.side_effect = Exception(
+            "Invalid key: -----BEGIN RSA PRIVATE KEY-----\nMIIEpAIB...\n-----END RSA PRIVATE KEY-----"
+        )
+
+        result = validate_chef_server_connection(
+            "https://chef.example.com",
+            organisation="default",
+            client_name="admin",
+            client_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----",
+        )
+
+        # Ensure the error message is returned but keys are redacted
+        assert "Error" in result
+        assert "-----BEGIN RSA PRIVATE KEY-----" not in result
+        assert "MIIEpAIB" not in result
+        assert "***REDACTED***" in result
 
 
 def test_get_chef_nodes_success():
@@ -16874,7 +16955,14 @@ def test_get_chef_nodes_success():
         assert data["count"] == 2
         assert len(data["nodes"]) == 2
         assert data["nodes"][0]["name"] == "web-server-01"
-        mock_query.assert_called_once_with("role:webserver OR role:database")
+        mock_query.assert_called_once_with(
+            "role:webserver OR role:database",
+            server_url=None,
+            organisation="default",
+            client_name=None,
+            client_key_path=None,
+            client_key=None,
+        )
 
 
 def test_get_chef_nodes_no_results():
@@ -16903,7 +16991,14 @@ def test_get_chef_nodes_default_query():
 
         data = json.loads(result)
         assert data["status"] == "success"
-        mock_query.assert_called_once_with("*:*")
+        mock_query.assert_called_once_with(
+            "*:*",
+            server_url=None,
+            organisation="default",
+            client_name=None,
+            client_key_path=None,
+            client_key=None,
+        )
 
 
 def test_get_chef_nodes_exception():
@@ -16919,6 +17014,88 @@ def test_get_chef_nodes_exception():
         assert data["status"] == "error"
         assert "Chef Server unavailable" in data["message"]
         assert data["nodes"] == []
+
+
+def test_get_chef_roles_success():
+    """Test get_chef_roles with successful query."""
+    from souschef.server import get_chef_roles
+
+    with patch("souschef.server._list_chef_roles") as mock_roles:
+        mock_roles.return_value = [{"name": "webserver", "url": "role-url"}]
+
+        result = get_chef_roles(
+            server_url="https://chef.example.com",
+            organisation="default",
+            client_name="admin",
+            client_key_path="/tmp/client.pem",
+        )
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data["count"] == 1
+        assert data["roles"][0]["name"] == "webserver"
+
+
+def test_get_chef_environments_success():
+    """Test get_chef_environments with successful query."""
+    from souschef.server import get_chef_environments
+
+    with patch("souschef.server._list_chef_environments") as mock_envs:
+        mock_envs.return_value = [{"name": "production", "url": "env-url"}]
+
+        result = get_chef_environments(
+            server_url="https://chef.example.com",
+            organisation="default",
+            client_name="admin",
+            client_key_path="/tmp/client.pem",
+        )
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data["count"] == 1
+        assert data["environments"][0]["name"] == "production"
+
+
+def test_get_chef_cookbooks_success():
+    """Test get_chef_cookbooks with successful query."""
+    from souschef.server import get_chef_cookbooks
+
+    with patch("souschef.server._list_chef_cookbooks") as mock_cookbooks:
+        mock_cookbooks.return_value = [
+            {"name": "apache2", "versions": [{"version": "1.0.0"}]}
+        ]
+
+        result = get_chef_cookbooks(
+            server_url="https://chef.example.com",
+            organisation="default",
+            client_name="admin",
+            client_key_path="/tmp/client.pem",
+        )
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data["count"] == 1
+        assert data["cookbooks"][0]["name"] == "apache2"
+
+
+def test_get_chef_policies_success():
+    """Test get_chef_policies with successful query."""
+    from souschef.server import get_chef_policies
+
+    with patch("souschef.server._list_chef_policies") as mock_policies:
+        mock_policies.return_value = [{"name": "policy", "url": "policy-url"}]
+
+        result = get_chef_policies(
+            server_url="https://chef.example.com",
+            organisation="default",
+            client_name="admin",
+            client_key_path="/tmp/client.pem",
+        )
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert data["count"] == 1
+        assert data["policies"][0]["name"] == "policy"
 
 
 def test_convert_template_with_ai_success():

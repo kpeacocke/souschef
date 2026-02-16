@@ -207,6 +207,89 @@ def test_cookbook_command_with_output(runner, tmp_path):
     assert (output_dir / "conversion_summary.json").exists()
 
 
+def test_v2_migrate_command(runner, tmp_path):
+    """Test v2 migrate command with JSON output."""
+    cookbook = tmp_path / "cookbook"
+    recipes = cookbook / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "default.rb").write_text("package 'curl'")
+
+    env = {"SOUSCHEF_DB_PATH": str(tmp_path / "souschef.db")}
+
+    result = runner.invoke(
+        cli,
+        [
+            "v2",
+            "migrate",
+            "--cookbook-path",
+            str(cookbook),
+            "--chef-version",
+            "15.10.91",
+            "--target-platform",
+            "aap",
+            "--target-version",
+            "2.4.0",
+            "--skip-validation",
+            "--format",
+            "json",
+        ],
+        env=env,
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert "migration_id" in payload
+    assert payload["target_platform"] == "aap"
+
+
+def test_v2_status_command(runner, tmp_path):
+    """Test v2 status command loading stored state."""
+    cookbook = tmp_path / "cookbook"
+    recipes = cookbook / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "default.rb").write_text("package 'curl'")
+
+    env = {"SOUSCHEF_DB_PATH": str(tmp_path / "souschef.db")}
+
+    migrate_result = runner.invoke(
+        cli,
+        [
+            "v2",
+            "migrate",
+            "--cookbook-path",
+            str(cookbook),
+            "--chef-version",
+            "15.10.91",
+            "--target-platform",
+            "aap",
+            "--target-version",
+            "2.4.0",
+            "--skip-validation",
+            "--save-state",
+        ],
+        env=env,
+    )
+
+    assert migrate_result.exit_code == 0
+    migrate_payload = json.loads(migrate_result.output)
+    migration_id = migrate_payload["migration_id"]
+
+    status_result = runner.invoke(
+        cli,
+        [
+            "v2",
+            "status",
+            "--migration-id",
+            migration_id,
+        ],
+        env=env,
+    )
+
+    assert status_result.exit_code == 0
+    status_payload = json.loads(status_result.output)
+    assert status_payload["migration_id"] == migration_id
+
+
 # Version and help tests
 def test_version_flag(runner):
     """Test --version flag."""

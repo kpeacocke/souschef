@@ -58,6 +58,29 @@ graph LR
 
 ---
 
+## CLI Quick Start (v2 Orchestrator)
+
+Use the v2 CLI to run end-to-end migrations and persist state for later
+review. This is helpful when you want a reproducible migration run without
+an MCP client.
+
+```bash
+souschef-cli v2 migrate \
+   --cookbook-path /path/to/cookbook \
+   --chef-version 15.10.91 \
+   --target-platform aap \
+   --target-version 2.4.0 \
+   --save-state
+```
+
+Load the saved state later by migration ID:
+
+```bash
+souschef-cli v2 status --migration-id mig-abc123
+```
+
+---
+
 ### Phase 2: Assessment & Planning
 
 **Objective**: Evaluate migration complexity and create execution plan.

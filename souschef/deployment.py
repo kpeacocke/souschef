@@ -299,13 +299,16 @@ def generate_awx_inventory_source_from_chef(
 
 ## Credential Type Fields:
 - chef_server_url: Chef server URL
-- chef_node_name: Chef client node name
+- chef_org: Chef organisation name
+- chef_client_name: Chef client/user name
+- chef_client_key_path: Chef client key path
 - chef_client_key: Chef client private key
-- chef_client_pem: Chef client PEM file content
 
 ## Environment Variables:
 - CHEF_SERVER_URL: {validated_url}
-- CHEF_NODE_NAME: ${{{{chef_node_name}}}}
+- CHEF_ORG: ${{{{chef_org}}}}
+- CHEF_CLIENT_NAME: ${{{{chef_client_name}}}}
+- CHEF_CLIENT_KEY_PATH: ${{{{chef_client_key_path}}}}
 - CHEF_CLIENT_KEY: ${{{{chef_client_key}}}}
 """
     except Exception as e:
@@ -987,13 +990,21 @@ def main():
     """Main inventory generation function."""
     # Chef server configuration
     chef_server_url = os.environ.get('CHEF_SERVER_URL', '{chef_server_url}')
-    client_name = os.environ.get('CHEF_NODE_NAME', 'admin')
-    # Client key path should be customizable - use environment variable with
+    chef_org = os.environ.get('CHEF_ORG', 'default')
+    client_name = os.environ.get('CHEF_CLIENT_NAME') or os.environ.get(
+        'CHEF_NODE_NAME', 'admin'
+    )
+    # Client key path should be customisable - use environment variable with
     # home directory default instead of hardcoded /etc/chef/client.pem
     client_key = os.environ.get(
-        'CHEF_CLIENT_KEY',
-        os.path.expanduser('~/.chef/client.pem')
+        'CHEF_CLIENT_KEY_PATH',
+        os.environ.get('CHEF_CLIENT_KEY', os.path.expanduser('~/.chef/client.pem'))
     )
+
+    if '/organizations/' not in chef_server_url:
+        chef_server_url = (
+            chef_server_url.rstrip('/') + f'/organizations/{{chef_org}}'
+        )
 
     # Initialize Chef API
     try:

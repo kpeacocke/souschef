@@ -72,6 +72,16 @@ end
     souschef-cli convert-recipe recipes/webserver.rb > playbooks/webserver.yml
     ```
 
+=== "CLI (v2 Orchestrator)"
+    ```bash
+    souschef-cli v2 migrate \
+      --cookbook-path . \
+      --chef-version 15.10.91 \
+      --target-platform aap \
+      --target-version 2.4.0 \
+      --save-state
+    ```
+
 **Generated Ansible Playbook:**
 
 ```yaml

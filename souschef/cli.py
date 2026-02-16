@@ -36,6 +36,7 @@ from souschef.migration_config import (
     ValidationTool,
     get_migration_config_from_user,
 )
+from souschef.migration_v2 import MigrationOrchestrator, MigrationStatus
 from souschef.profiling import (
     generate_cookbook_performance_report,
     profile_function,
@@ -1430,6 +1431,274 @@ def convert_cookbook(
         sys.exit(1)
 
 
+@cli.command("simulate-migration")
+@click.option(
+    "--cookbooks-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to a directory containing Chef cookbooks",
+)
+@click.option(
+    "--output-path",
+    required=True,
+    type=click.Path(),
+    help="Directory where simulation outputs will be written",
+)
+@click.option(
+    "--target-platform",
+    type=click.Choice(["awx", "aap"], case_sensitive=False),
+    default="awx",
+    help="Target platform for the simulated deployment",
+)
+@click.option(
+    "--chef-server-url",
+    default="https://chef.example.com",
+    help="Chef Server URL used in simulated inventory sources",
+)
+@click.option(
+    "--organisation",
+    default="default",
+    help="Chef organisation name for simulated inventory sources",
+)
+@click.option(
+    "--include-repo/--no-repo",
+    default=True,
+    help="Generate a repository structure from converted roles",
+)
+@click.option(
+    "--include-tar/--no-tar",
+    default=True,
+    help="Create tar.gz archives for simulation outputs",
+)
+def simulate_migration(
+    cookbooks_path: str,
+    output_path: str,
+    target_platform: str,
+    chef_server_url: str,
+    organisation: str,
+    include_repo: bool,
+    include_tar: bool,
+) -> None:
+    """
+    Simulate end-to-end Chef analysis and conversion to AWX/AAP.
+
+    Runs analysis, conversion, and AWX/AAP configuration generation using
+    local cookbooks and simulated Chef inventory data. Optionally generates
+    a repository structure and tar archives for testing.
+    """
+    try:
+        from souschef.server import simulate_chef_to_awx_migration
+
+        result = simulate_chef_to_awx_migration(
+            cookbooks_path=cookbooks_path,
+            output_path=output_path,
+            target_platform=target_platform,
+            chef_server_url=chef_server_url,
+            organisation=organisation,
+            include_repo=include_repo,
+            include_tar=include_tar,
+        )
+
+        click.echo(result)
+    except Exception as e:
+        click.echo(f"Error running simulation: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.group("v2")
+def v2() -> None:
+    """
+    SousChef v2 migration commands.
+
+    Provides the v2 migration orchestrator workflow and state tracking.
+    """
+
+
+@v2.command("migrate")
+@click.option(
+    "--cookbook-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to the Chef cookbook directory",
+)
+@click.option(
+    "--chef-version",
+    required=True,
+    help="Chef Infra Client version (e.g., 15.10.91)",
+)
+@click.option(
+    "--target-platform",
+    required=True,
+    type=click.Choice(["tower", "awx", "aap"], case_sensitive=False),
+    help="Target automation platform (tower/awx/aap)",
+)
+@click.option(
+    "--target-version",
+    required=True,
+    help="Target platform version (e.g., 2.4.0)",
+)
+@click.option(
+    "--skip-validation",
+    is_flag=True,
+    help="Skip playbook validation",
+)
+@click.option(
+    "--save-state",
+    is_flag=True,
+    help="Persist migration state to storage",
+)
+@click.option(
+    "--analysis-id",
+    type=int,
+    default=None,
+    help="Optional analysis ID to link the migration history",
+)
+@click.option(
+    "--output-type",
+    type=click.Choice(["playbook", "role", "collection"]),
+    default="playbook",
+    help="Output type recorded in history",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+    help="Output format (default: json)",
+)
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(),
+    help="Save result to file instead of printing to stdout",
+)
+def v2_migrate(
+    cookbook_path: str,
+    chef_version: str,
+    target_platform: str,
+    target_version: str,
+    skip_validation: bool,
+    save_state: bool,
+    analysis_id: int | None,
+    output_type: str,
+    output_format: str,
+    output_path: str | None,
+) -> None:
+    """
+    Run the v2 migration orchestrator for a cookbook.
+
+    Executes analysis, conversion, and optional validation. Optionally
+    saves migration state to the storage layer for later retrieval.
+    """
+    try:
+        cookbook_dir = _validate_user_path(cookbook_path)
+        if not cookbook_dir.is_dir():
+            click.echo(f"Error: {cookbook_path} is not a directory", err=True)
+            sys.exit(1)
+
+        orchestrator = MigrationOrchestrator(
+            chef_version=chef_version,
+            target_platform=target_platform,
+            target_version=target_version,
+        )
+
+        result = orchestrator.migrate_cookbook(
+            str(cookbook_dir),
+            skip_validation=skip_validation,
+        )
+
+        storage_id = None
+        if save_state:
+            storage_id = orchestrator.save_state(
+                output_type=output_type,
+                analysis_id=analysis_id,
+            )
+
+        payload = result.to_dict()
+        if storage_id is not None:
+            payload["storage_id"] = storage_id
+
+        output_content = json.dumps(payload, indent=2)
+        if output_path:
+            _safe_write_file(
+                output_content,
+                output_path,
+                Path("migration-result.json"),
+            )
+            click.echo(f"Result saved to: {output_path}")
+        else:
+            _output_result(output_content, output_format)
+
+        if result.status == MigrationStatus.FAILED:
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(f"Error running v2 migration: {e}", err=True)
+        sys.exit(1)
+
+
+@v2.command("status")
+@click.option(
+    "--migration-id",
+    required=True,
+    help="Migration ID to load from storage",
+)
+@click.option(
+    "--limit",
+    type=int,
+    default=500,
+    help="Maximum number of history entries to scan",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+    help="Output format (default: json)",
+)
+@click.option(
+    "--output",
+    "output_path",
+    type=click.Path(),
+    help="Save result to file instead of printing to stdout",
+)
+def v2_status(
+    migration_id: str,
+    limit: int,
+    output_format: str,
+    output_path: str | None,
+) -> None:
+    """
+    Load a saved v2 migration state by ID.
+
+    Scans stored conversion history for a matching migration ID.
+    """
+    try:
+        result = MigrationOrchestrator.load_state(
+            migration_id,
+            limit=limit,
+        )
+
+        if result is None:
+            click.echo("Migration ID not found in storage", err=True)
+            sys.exit(1)
+
+        output_content = json.dumps(result.to_dict(), indent=2)
+        if output_path:
+            _safe_write_file(
+                output_content,
+                output_path,
+                Path(f"migration-{migration_id}.json"),
+            )
+            click.echo(f"Result saved to: {output_path}")
+        else:
+            _output_result(output_content, output_format)
+
+    except Exception as e:
+        click.echo(f"Error loading migration state: {e}", err=True)
+        sys.exit(1)
+
+
 @cli.command()
 @click.option("--port", default=8501, help="Port to run the Streamlit app on")
 def ui(port: int) -> None:
@@ -1469,8 +1738,27 @@ def ui(port: int) -> None:
 
 @cli.command("validate-chef-server")
 @click.option("--server-url", prompt="Chef Server URL", help="Chef Server base URL")
-@click.option("--node-name", default="admin", help="Chef node name for authentication")
-def validate_chef_server(server_url: str, node_name: str) -> None:
+@click.option(
+    "--organisation",
+    default="default",
+    help="Chef organisation name",
+)
+@click.option(
+    "--client-name",
+    default="admin",
+    help="Chef client/user name for authentication",
+)
+@click.option(
+    "--client-key-path",
+    default="",
+    help="Path to the client key file (PEM format)",
+)
+def validate_chef_server(
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+) -> None:
     """
     Validate Chef Server connectivity and configuration.
 
@@ -1480,7 +1768,12 @@ def validate_chef_server(server_url: str, node_name: str) -> None:
     click.echo("🔍 Validating Chef Server connection...")
     from souschef.core.chef_server import _validate_chef_server_connection
 
-    success, message = _validate_chef_server_connection(server_url, node_name)
+    success, message = _validate_chef_server_connection(
+        server_url,
+        client_name,
+        organisation=organisation,
+        client_key_path=client_key_path or None,
+    )
 
     if success:
         click.echo(f"✅ {message}")
@@ -1513,8 +1806,35 @@ def _output_chef_nodes(nodes: list, output_json: bool) -> None:
 
 @cli.command("query-chef-nodes")
 @click.option("--search-query", default="*:*", help="Chef search query for nodes")
+@click.option(
+    "--server-url",
+    default="",
+    help="Chef Server URL (defaults to CHEF_SERVER_URL)",
+)
+@click.option(
+    "--organisation",
+    default="default",
+    help="Chef organisation name (defaults to CHEF_ORG)",
+)
+@click.option(
+    "--client-name",
+    default="",
+    help="Chef client name (defaults to CHEF_CLIENT_NAME)",
+)
+@click.option(
+    "--client-key-path",
+    default="",
+    help="Chef client key path (defaults to CHEF_CLIENT_KEY_PATH)",
+)
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-def query_chef_nodes(search_query: str, output_json: bool) -> None:
+def query_chef_nodes(
+    search_query: str,
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+    output_json: bool,
+) -> None:
     """
     Query Chef Server for nodes matching search criteria.
 
@@ -1524,16 +1844,28 @@ def query_chef_nodes(search_query: str, output_json: bool) -> None:
     """
     import os
 
-    if not os.environ.get("CHEF_SERVER_URL"):
+    if not (server_url or os.environ.get("CHEF_SERVER_URL")):
         click.echo("❌ CHEF_SERVER_URL not set", err=True)
+        sys.exit(1)
+    if not (client_name or os.environ.get("CHEF_CLIENT_NAME")):
+        click.echo("❌ CHEF_CLIENT_NAME not set", err=True)
+        sys.exit(1)
+    if not (client_key_path or os.environ.get("CHEF_CLIENT_KEY_PATH")):
+        click.echo("❌ CHEF_CLIENT_KEY_PATH not set", err=True)
         sys.exit(1)
 
     click.echo(f"🔎 Querying Chef Server for nodes matching: {search_query}")
 
-    from souschef.converters.playbook import get_chef_nodes
+    from souschef.core.chef_server import get_chef_nodes
 
     try:
-        nodes = get_chef_nodes(search_query)
+        nodes = get_chef_nodes(
+            search_query,
+            server_url=server_url or None,
+            organisation=organisation or None,
+            client_name=client_name or None,
+            client_key_path=client_key_path or None,
+        )
 
         if not nodes:
             click.echo("ℹ️  No nodes found matching the search query")

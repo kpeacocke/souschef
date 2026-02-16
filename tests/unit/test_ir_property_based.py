@@ -228,8 +228,8 @@ class TestIRVersionOperations:
 
         # Identical versions should be equal
         assert ver1 == ver2
-        assert not (ver1 < ver2)
-        assert not (ver1 > ver2)
+        assert ver1 >= ver2
+        assert ver1 <= ver2
         assert ver1 <= ver2
         assert ver1 >= ver2
 

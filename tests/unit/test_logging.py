@@ -2,6 +2,7 @@
 
 import json
 import logging
+import uuid
 
 import pytest
 
@@ -156,13 +157,14 @@ class TestStructuredFormatter:
             exc_info=None,
         )
         # Add extra fields
-        record.user_id = "user-123"
+        user_id = f"user-{uuid.uuid4()}"
+        record.user_id = user_id
         record.duration_ms = 150
 
         result = formatter.format(record)
         log_data = json.loads(result)
 
-        assert log_data["user_id"] == "user-123"
+        assert log_data["user_id"] == user_id
         assert log_data["duration_ms"] == 150
 
     def test_text_format_without_context(self):

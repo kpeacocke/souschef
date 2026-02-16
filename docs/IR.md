@@ -356,10 +356,10 @@ class CustomToolParser(SourceParser):
             target_type=TargetType.ANSIBLE,
             version="1.0.0",
         )
-        
+
         # Add nodes to graph
         # ... parsing logic ...
-        
+
         return graph
 
     def validate(self, source_path: str) -> dict:

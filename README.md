@@ -5,7 +5,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 [![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-91%25-green.svg)](htmlcov/index.html)
+[![Test Coverage](https://img.shields.io/badge/coverage-85%25-green.svg)](htmlcov/index.html)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
@@ -16,9 +16,9 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 SousChef is a complete enterprise-grade platform with two major capabilities:
 
-### 1. Chef to Ansible Migration (38 tools)
+### 1. Chef to Ansible Migration (39 tools)
 
-Complete enterprise-grade migration platform with **38 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
+Complete enterprise-grade migration platform with **39 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, CI/CD pipeline generation, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### 2. Ansible Upgrade Assessment & Planning (5 tools)
 
@@ -39,11 +39,11 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 
 **Why 43 tools in the documentation but more in the server?**
 
-The MCP server provides **48 total tools**. This documentation focuses on the **43 primary user-facing tools** (38 migration + 5 upgrade tools) that cover the main capabilities. The remaining 5 are low-level filesystem operations used internally by the main tools.
+The MCP server provides **49 total tools**. This documentation focuses on the **44 primary user-facing tools** (39 migration + 5 upgrade tools) that cover the main capabilities. The remaining 5 are low-level filesystem operations used internally by the main tools.
 
 As a user, you'll primarily interact with the documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
-> **For developers:** See `souschef/server.py` for the complete list of all 48 registered tools.
+> **For developers:** See `souschef/server.py` for the complete list of all 49 registered tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -82,7 +82,7 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 - **5 New CLI Commands**: `ansible assess`, `plan`, `eol`, `validate-collections`, `detect-python` for comprehensive upgrade workflows
 - **3 Interactive UI Pages**: Environment Assessment, Upgrade Planning, and Collection Validation interfaces
 - **MCP Tool Integration**: Access upgrade planning programmatically through MCP server tools
-- **Comprehensive Testing**: 1,954 passing tests with 91% coverage across all upgrade functionality
+- **Comprehensive Testing**: 1,954 passing tests with 85% coverage across all upgrade functionality
 - **Type Safety**: Full mypy compliance with proper type hints for all new functions
 - **Production Ready**: All quality gates passing - Ruff linting, mypy, and comprehensive test coverage
 
@@ -98,6 +98,7 @@ See [Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md) fo
 - **Extensible Plugin Architecture**: `SourceParser` and `TargetGenerator` abstract base classes enabling support for new source tools and target platforms
 - **Version Management**: Semantic versioning and schema migration support for IR format evolution
 - **Dependency DAG**: Directed acyclic graph with automatic topological sorting and circular dependency detection
+- **v2 Migration CLI**: `souschef-cli v2 migrate` and `souschef-cli v2 status` for orchestrated workflows and saved state
 
 ### Modules
 
@@ -440,26 +441,58 @@ Output formats:
 
 Dynamic inventory generation and Chef Server connectivity for hybrid environments:
 
-- **validate_chef_server_connection** - Test Chef Server REST API connectivity and authentication
+- **validate_chef_server_connection** - Test Chef Server REST API connectivity and authentication with key-based auth
 - **get_chef_nodes** - Query Chef Server for nodes matching search criteria, extracting roles, environment, platform, and IP information
+- **get_chef_roles** - List Chef Server roles for inventory grouping
+- **get_chef_environments** - List Chef Server environments for filtering
+- **get_chef_cookbooks** - List cookbooks and versions for migration planning
+- **get_chef_policies** - List policyfiles for policy-based environments
 - **convert_template_with_ai** - Convert ERB templates to Jinja2 with AI-based validation for complex Ruby logic
+
+> **✅ Security**: All MCP tools and CLI commands automatically redact sensitive data (PEM keys, passwords, tokens) from error messages and logs.
+> See [Chef Server Testing Guide](docs/testing/CHEF_SERVER_TESTING.md) for comprehensive testing instructions.
 
 #### Chef Server Features
 
-- **Connection Validation**: Test Chef Server connectivity before migrations
+- **RSA Key Authentication**: Secure Chef Server API access with X-Ops-* signed request headers
+- **Configuration Flexibility**: Server URL, organisation, client name via environment variables or direct parameters
+- **Connection Validation**: Test Chef Server connectivity with clear error reporting before migrations
 - **Dynamic Node Queries**: Search Chef Server by role, environment, or custom attributes
 - **Node Metadata Extraction**: Retrieve IP addresses, FQDNs, platforms, and roles for inventory
+- **Secrets Redaction**: Automatic masking of PEM keys and credentials in logs/output
 - **AI-Enhanced Conversion**: Intelligent ERB→Jinja2 conversion with validation for complex Ruby constructs
 - **Fallback Handling**: Graceful degradation when Chef Server is unavailable
+
+#### Environment Variables
+
+```bash
+# Required for authenticated Chef Server access
+export CHEF_SERVER_URL="https://chef.example.com"
+export CHEF_CLIENT_NAME="your-client-name"
+export CHEF_CLIENT_KEY_PATH="/path/to/client.pem"
+
+# Optional (defaults shown)
+export CHEF_ORG="default"
+```
 
 #### Usage Examples
 
 ```bash
 # Validate Chef Server connection
-souschef validate-chef-server --server-url https://chef.example.com --node-name admin
+souschef validate-chef-server \
+  --server-url https://chef.example.com \
+  --organisation default \
+  --client-name admin \
+  --client-key-path /path/to/client.pem
 
 # Query Chef Server for nodes
-souschef query-chef-nodes --search-query "role:web_server" --json
+souschef query-chef-nodes \
+  --search-query "role:web_server" \
+  --server-url https://chef.example.com \
+  --organisation default \
+  --client-name admin \
+  --client-key-path /path/to/client.pem \
+  --json
 
 # Convert template with AI assistance
 souschef convert-template-ai /path/to/template.erb --ai --output /path/to/output.j2
@@ -591,6 +624,9 @@ generate_awx_workflow_from_chef_runlist \"recipe[app::deploy]\" workflow_name
 
 # Setup dynamic inventory from Chef server
 generate_awx_inventory_source_from_chef https://chef.example.com production web_servers
+
+# Simulate full migration with repo and tar outputs
+simulate-migration /path/to/cookbooks --target awx --include-repo --include-tar
 ```
 
 ### Phase 4: Habitat to Container Migration
@@ -653,6 +689,7 @@ Interactive web-based interface for Chef-to-Ansible migration planning and Ansib
 - **Validation Reports**: Conversion validation results with syntax checking and best practice compliance
 - **Progress Tracking**: Real-time migration progress with completion metrics and bottleneck identification
 - **History and Persistence**: Stored analysis history, cached results, and downloadable artefacts (SQLite or PostgreSQL, plus S3-compatible storage)
+- **Simulation Preview**: End-to-end AWX/AAP migration simulation with repository and archive outputs
 
 **Ansible Upgrade Features (NEW):**
 - **Environment Assessment**: Analyse current Ansible installation, Python compatibility, and installed collections
@@ -1059,6 +1096,7 @@ souschef-cli inspec-convert controls.rb --format testinfra
 - `structure` - Display cookbook directory structure
 - `convert` - Convert Chef resources to Ansible tasks
 - `cookbook` - Comprehensive cookbook analysis
+- `simulate-migration` - Run an end-to-end migration simulation for AWX or AAP
 - `inspec-parse` - Parse InSpec profiles and controls
 - `inspec-convert` - Convert InSpec to Testinfra/Ansible tests
 - `inspec-generate` - Generate InSpec validation from recipes
@@ -1204,7 +1242,7 @@ Following enterprise-grade testing standards with comprehensive test coverage:
 - **Specialized Tests**: Enhanced guards (test_enhanced_guards.py), error handling (test_error_paths.py, test_error_recovery.py), real-world fixtures (test_real_world_fixtures.py)
 - **Performance Tests**: Benchmarking and optimization validation (test_performance.py)
 - **Snapshot Tests**: Regression testing for output stability (test_snapshots.py)
-- **83% Coverage**: Comprehensive test coverage approaching the 90% target for production readiness
+- **85% Coverage**: Comprehensive test coverage trending toward the 90% target for production readiness
 
 ### Quality Assurance
 
@@ -1562,7 +1600,7 @@ SousChef uses a modern Python toolchain for code quality:
 - Zero warnings from all tools (Ruff, mypy, Pylance)
 - Type hints required for all functions
 - Google-style docstrings
-- 92% test coverage (exceeds 90% target)
+- 85% test coverage (below the 90% target)
 
 See [.github/copilot-instructions.md](.github/copilot-instructions.md) for detailed development guidelines.
 
@@ -1634,7 +1672,7 @@ The project includes comprehensive test coverage across multiple dimensions:
 
 ### Test Coverage
 
-The project maintains 91% test coverage, exceeding the 90% target. Run coverage with HTML report:
+The project maintains 85% test coverage, below the 90% target. Run coverage with HTML report:
 
 ```bash
 poetry run pytest --cov=souschef --cov-report=html

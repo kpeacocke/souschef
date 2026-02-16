@@ -1,6 +1,7 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
+import copy
 import inspect
 import io
 import json
@@ -774,25 +775,24 @@ def _pre_scan_tar_members(members):
 
 def _extract_tar_members(tar_ref, members, extraction_dir):
     """Extract validated TAR members to the extraction directory."""
+    sanitized_members = []
+    data_filter = getattr(tarfile, "data_filter", None)
+
     for member in members:
         safe_path = _get_safe_extraction_path(member.name, extraction_dir)
-        if member.isdir():
-            safe_path.mkdir(parents=True, exist_ok=True)
-        else:
-            safe_path.parent.mkdir(parents=True, exist_ok=True)
-            _extract_file_content(tar_ref, member, safe_path)
+        safe_relative = safe_path.relative_to(extraction_dir.resolve()).as_posix()
+        sanitized_member = copy.copy(member)
+        sanitized_member.name = safe_relative
 
+        if data_filter is not None:
+            sanitized_member = data_filter(sanitized_member, str(extraction_dir))
+            if sanitized_member is None:
+                continue
 
-def _extract_file_content(tar_ref, member, safe_path):
-    """Extract the content of a single TAR member to a file."""
-    source = tar_ref.extractfile(member)
-    if source:
-        with source, safe_path.open("wb") as target:
-            while True:
-                chunk = source.read(8192)
-                if not chunk:
-                    break
-                target.write(chunk)
+        sanitized_members.append(sanitized_member)
+
+    if sanitized_members:
+        tar_ref.extractall(path=extraction_dir, members=sanitized_members)
 
 
 def _validate_tar_file_security(member, file_count: int, total_size: int) -> None:
@@ -979,6 +979,8 @@ def show_cookbook_analysis_page() -> None:
         st.session_state.analysis_cookbook_path = None
         st.session_state.total_cookbooks = 0
         st.session_state.temp_dir = None
+        st.session_state.simulation_result = None
+        st.session_state.simulation_output_path = None
 
     # Add unique key to track if this is a new page load
     if "analysis_page_key" not in st.session_state:
@@ -1067,6 +1069,8 @@ def _display_results_view() -> None:
             st.session_state.analysis_info_messages = None
             st.session_state.conversion_results = None
             st.session_state.generated_playbook_repo = None
+            st.session_state.simulation_result = None
+            st.session_state.simulation_output_path = None
             st.session_state.analysis_page_key += 1
             st.rerun()
 
@@ -1343,6 +1347,197 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
             key="holistic_conversion",
         ):
             _convert_all_cookbooks_holistically(cookbook_path)
+
+    st.markdown("### Deployment & Orchestration")
+    st.markdown("Configure target platform and deployment options for your migration.")
+
+    # Platform configuration
+    sim_col1, sim_col2, sim_col3 = st.columns(3)
+    with sim_col1:
+        target_platform = st.selectbox(
+            "Target Platform",
+            ["awx", "aap", "tower"],
+            format_func=lambda x: {
+                "awx": "AWX (Open Source)",
+                "aap": "Ansible Automation Platform",
+                "tower": "Ansible Tower (Legacy)",
+            }.get(x, x),
+            index=0,
+            key="simulation_target",
+            help="Select the target Ansible automation platform",
+        )
+    with sim_col2:
+        target_version = st.text_input(
+            "Platform Version",
+            value="23.0.0" if target_platform == "awx" else "2.4.0",
+            key="platform_version",
+            help="Enter the target platform version",
+        )
+    with sim_col3:
+        deployment_mode = st.radio(
+            "Deployment Mode",
+            ["Simulation", "Live Deployment"],
+            index=0,
+            key="deployment_mode",
+            help=(
+                "Simulation previews without changes; "
+                "Live Deployment creates actual resources"
+            ),
+        )
+
+    # Show info based on deployment mode
+    if deployment_mode == "Simulation":
+        st.info(
+            "🔍 **Simulation Mode**: Preview AWX/AAP deployment "
+            "without creating actual resources."
+        )
+    else:
+        st.warning(
+            "⚠️ **Live Deployment**: Will create actual resources "
+            "in AWX/AAP. Ensure credentials are configured."
+        )
+
+    # Platform connection (only for live deployment)
+    if deployment_mode == "Live Deployment":
+        with st.expander("Platform Connection Settings", expanded=False):
+            server_url = st.text_input(
+                "Server URL",
+                placeholder="https://awx.example.com",
+                key="platform_server_url",
+                help="AWX/AAP server URL",
+            )
+            conn_col1, conn_col2 = st.columns(2)
+            with conn_col1:
+                username = st.text_input(
+                    "Username", key="platform_username", help="Authentication username"
+                )
+            with conn_col2:
+                password = st.text_input(
+                    "Password",
+                    type="password",
+                    key="platform_password",
+                    help="Authentication password",
+                )
+            verify_ssl = st.checkbox(
+                "Verify SSL", value=True, key="platform_verify_ssl"
+            )
+
+    # Conversion options
+    with st.expander("Conversion Options", expanded=True):
+        conv_col1, conv_col2 = st.columns(2)
+        with conv_col1:
+            include_repo = st.checkbox(
+                "Generate Git Repository",
+                value=True,
+                key="simulation_repo",
+                help="Generate a Git repository structure for the converted playbooks",
+            )
+            include_tests = st.checkbox(
+                "Convert InSpec Tests",
+                value=True,
+                key="convert_inspec",
+                help="Convert InSpec profiles to Ansible tests",
+            )
+            convert_habitat = st.checkbox(
+                "Convert Habitat Plans",
+                value=False,
+                key="convert_habitat",
+                help="Convert Chef Habitat plans to Docker/Compose",
+            )
+        with conv_col2:
+            include_tar = st.checkbox(
+                "Create TAR Archives",
+                value=True,
+                key="simulation_tar",
+                help="Package converted files as tar archives",
+            )
+            generate_ci = st.checkbox(
+                "Generate CI/CD Pipelines",
+                value=False,
+                key="generate_ci",
+                help="Generate CI/CD pipeline configurations",
+            )
+            validate_playbooks = st.checkbox(
+                "Validate Generated Playbooks",
+                value=True,
+                key="validate_playbooks",
+                help="Run validation on generated Ansible playbooks",
+            )
+
+    # Advanced options
+    with st.expander("Advanced Options"):
+        chef_version = st.text_input(
+            "Chef Version",
+            value="15.10.91",
+            key="chef_version",
+            help="Chef version being migrated from",
+        )
+        output_dir = st.text_input(
+            "Custom Output Directory (optional)",
+            placeholder="/path/to/output",
+            key="custom_output_dir",
+            help="Specify custom output directory for generated files",
+        )
+        preserve_comments = st.checkbox(
+            "Preserve Comments",
+            value=True,
+            key="preserve_comments",
+            help="Attempt to preserve comments from Chef code",
+        )
+
+    # Execute button
+    button_label = (
+        "Simulate Deployment"
+        if deployment_mode == "Simulation"
+        else "Execute Migration"
+    )
+    button_help = (
+        "Preview AWX/AAP deployment without making changes"
+        if deployment_mode == "Simulation"
+        else "Execute end-to-end migration with actual deployment"
+    )
+
+    if st.button(
+        button_label,
+        type="primary" if deployment_mode == "Live Deployment" else "secondary",
+        help=button_help,
+        key="execute_migration",
+    ):
+        # Collect all configuration
+        migration_config = {
+            "target_platform": target_platform,
+            "target_version": target_version,
+            "deployment_mode": deployment_mode,
+            "include_repo": include_repo,
+            "include_tar": include_tar,
+            "include_tests": include_tests,
+            "convert_habitat": convert_habitat,
+            "generate_ci": generate_ci,
+            "validate_playbooks": validate_playbooks,
+            "chef_version": chef_version,
+            "output_dir": output_dir or None,
+            "preserve_comments": preserve_comments,
+        }
+
+        if deployment_mode == "Live Deployment":
+            migration_config["platform_connection"] = {
+                "server_url": server_url,
+                "username": username,
+                "password": password,
+                "verify_ssl": verify_ssl,
+            }
+
+        # Execute migration (simulation for now, can be extended for live deployment)
+        _simulate_chef_to_awx_migration_ui(
+            cookbook_path,
+            target_platform,
+            include_repo,
+            include_tar,
+            migration_config=migration_config,
+        )
+
+    if st.session_state.simulation_result:
+        _display_simulation_results(st.session_state.simulation_result)
 
     st.divider()
 
@@ -2176,6 +2371,101 @@ def _display_conversion_report(result_text: str):
     """Display the raw conversion report."""
     with st.expander("Full Conversion Report"):
         st.code(result_text, language="markdown")
+
+
+def _simulate_chef_to_awx_migration_ui(
+    cookbooks_path: str,
+    target_platform: str,
+    include_repo: bool,
+    include_tar: bool,
+    migration_config: dict[str, Any] | None = None,
+) -> None:
+    """
+    Run the end-to-end simulation and store results in session state.
+
+    Args:
+        cookbooks_path: Path to the cookbooks directory
+        target_platform: Target platform (awx, aap, tower)
+        include_repo: Whether to generate Git repository
+        include_tar: Whether to create TAR archives
+        migration_config: Optional full migration configuration with v2.0 options
+
+    """
+    import tempfile
+
+    try:
+        from souschef.server import simulate_chef_to_awx_migration
+
+        output_dir = Path(
+            tempfile.mkdtemp(prefix="souschef_simulation_", dir=Path.cwd())
+        )
+        with contextlib.suppress(FileNotFoundError, OSError):
+            output_dir.chmod(0o700)
+
+        # Display configuration being used
+        if migration_config:
+            with st.expander("Migration Configuration", expanded=False):
+                st.json(migration_config)
+
+        result_json = simulate_chef_to_awx_migration(
+            cookbooks_path=cookbooks_path,
+            output_path=str(output_dir),
+            target_platform=target_platform,
+            include_repo=include_repo,
+            include_tar=include_tar,
+        )
+
+        st.session_state.simulation_output_path = str(output_dir)
+        st.session_state.simulation_result = json.loads(result_json)
+
+        # Store additional migration config if provided
+        if migration_config:
+            st.session_state.simulation_result["migration_config"] = migration_config
+
+        st.success("Simulation completed successfully")
+    except json.JSONDecodeError:
+        st.error("Simulation returned invalid JSON output")
+    except Exception as e:
+        st.error(f"Simulation failed: {e}")
+
+
+def _display_simulation_results(simulation_result: dict) -> None:
+    """Display simulation results and download options."""
+    st.subheader("Simulation Results")
+
+    with st.expander("Simulation Summary", expanded=True):
+        st.json(simulation_result)
+
+    archives = simulation_result.get("archives", {})
+    roles_tar = archives.get("roles_tar_gz")
+    repo_tar = archives.get("repository_tar_gz")
+
+    if roles_tar or repo_tar:
+        st.subheader("Download Archives")
+
+    if roles_tar:
+        roles_path = _validate_output_path(roles_tar)
+        if roles_path and roles_path.is_file():
+            with roles_path.open("rb") as file_handle:
+                st.download_button(
+                    label="Download Roles Archive",
+                    data=file_handle.read(),
+                    file_name=roles_path.name,
+                    mime="application/gzip",
+                    key="download_simulation_roles",
+                )
+
+    if repo_tar:
+        repo_path = _validate_output_path(repo_tar)
+        if repo_path and repo_path.is_file():
+            with repo_path.open("rb") as file_handle:
+                st.download_button(
+                    label="Download Repository Archive",
+                    data=file_handle.read(),
+                    file_name=repo_path.name,
+                    mime="application/gzip",
+                    key="download_simulation_repo",
+                )
 
 
 def _validate_output_path(output_path: str) -> Path | None:

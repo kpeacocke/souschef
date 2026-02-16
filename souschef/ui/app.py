@@ -32,28 +32,25 @@ from souschef.ui.pages.chef_server_settings import show_chef_server_settings_pag
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
 from souschef.ui.pages.migration_config import show_migration_config_page
-from souschef.ui.pages.migration_v2 import show_migration_v2_page
 
 # Constants
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
 SECTION_COMMUNITY_COOKBOOKS = "Community Cookbooks"
 SECTION_CIRCULAR_DEPENDENCIES = "Circular Dependencies"
 SECTION_MIGRATION_IMPACT_ANALYSIS = "Migration Impact Analysis"
-NAV_MIGRATION_V2 = "v2.0 Migration Orchestrator"
 NAV_MIGRATION_PLANNING = "Migration Planning"
 NAV_MIGRATION_CONFIG = "Migration Config"
 NAV_DEPENDENCY_MAPPING = "Dependency Mapping"
 NAV_VALIDATION_REPORTS = "Validation Reports"
 NAV_AI_SETTINGS = "AI Settings"
 NAV_CHEF_SERVER_SETTINGS = "Chef Server Settings"
-NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
+NAV_COOKBOOK_ANALYSIS = "Migrate Cookbook"
 NAV_HISTORY = "History"
 NAV_ANSIBLE_ASSESSMENT = "Ansible Assessment"
 NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
 NAV_ANSIBLE_VALIDATION = "Collection Validation"
 CHEF_FEATURES = {
     NAV_COOKBOOK_ANALYSIS,
-    NAV_MIGRATION_V2,
     NAV_MIGRATION_PLANNING,
     NAV_MIGRATION_CONFIG,
     NAV_DEPENDENCY_MAPPING,
@@ -163,8 +160,7 @@ def _render_navigation_button(
 def _render_buttons_for_features(features: set[str], current_page: str) -> None:
     """Render navigation buttons for a given set of features."""
     all_nav_buttons = [
-        ("Cookbook Analysis", NAV_COOKBOOK_ANALYSIS),
-        ("v2.0 Orchestrator", NAV_MIGRATION_V2),
+        ("Migrate Cookbook", NAV_COOKBOOK_ANALYSIS),
         ("Migration Planning", NAV_MIGRATION_PLANNING),
         ("Migration Config", NAV_MIGRATION_CONFIG),
         ("Dependency Mapping", NAV_DEPENDENCY_MAPPING),
@@ -231,7 +227,6 @@ def _route_to_page(page: str) -> None:
     page_routes = {
         "Dashboard": show_dashboard,
         NAV_COOKBOOK_ANALYSIS: show_cookbook_analysis_page,
-        NAV_MIGRATION_V2: show_migration_v2_page,
         NAV_MIGRATION_PLANNING: show_migration_planning,
         NAV_MIGRATION_CONFIG: show_migration_config_page,
         NAV_DEPENDENCY_MAPPING: show_dependency_mapping,
