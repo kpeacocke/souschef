@@ -236,7 +236,7 @@ The following enhancements are planned for v2.1 but not required for v2.0:
 
 All core converters are properly implemented and wired:
 - Recipe/Playbook conversion (via `generate_playbook_from_recipe()`)
-- Attribute conversion (via `parse_attributes()`)  
+- Attribute conversion (via `parse_attributes()`)
 - Resource conversion (via `parse_recipe()` and resource metrics)
 - Handler conversion (detection and documentation)
 - Template conversion (via `convert_template_file()`)
