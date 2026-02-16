@@ -403,3 +403,292 @@ class TestVersionCombinations:
         assert result.target_version == target_ver
         assert result.ansible_version == ansible_ver
         assert result.status != MigrationStatus.FAILED
+
+
+class TestChefServerIntegration:
+    """Test Chef Server node discovery and inventory population."""
+
+    @patch("souschef.migration_v2.get_chef_nodes")
+    def test_chef_node_discovery_and_inventory_population(
+        self,
+        mock_get_nodes: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test complete workflow: discover Chef nodes → populate inventory."""
+        # Mock Chef nodes discovery
+        mock_chef_nodes = [
+            {
+                "name": "web-1.example.com",
+                "fqdn": "web-1.example.com",
+                "ipaddress": "192.168.1.10",
+                "environment": "production",
+                "roles": ["web", "common"],
+                "platform": "ubuntu",
+                "platform_version": "20.04",
+            },
+            {
+                "name": "db-1.example.com",
+                "fqdn": "db-1.example.com",
+                "ipaddress": "192.168.1.20",
+                "environment": "production",
+                "roles": ["database", "common"],
+                "platform": "ubuntu",
+                "platform_version": "18.04",
+            },
+            {
+                "name": "cache-1",
+                "ipaddress": "192.168.1.30",
+                "environment": "staging",
+                "roles": ["cache", "common"],
+                "platform": "centos",
+                "platform_version": "7",
+            },
+        ]
+        mock_get_nodes.return_value = mock_chef_nodes
+
+        # Create test cookbook
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        recipes = cookbook / "recipes"
+        recipes.mkdir()
+        (recipes / "default.rb").write_text("""
+package 'curl'
+service 'ssh' do
+  action :enable
+end
+""")
+
+        # Create orchestrator and migrate with Chef Server params
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        result = orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="admin",
+            chef_client_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----",
+            chef_query="*:*",
+        )
+
+        # Verify Chef Server was queried
+        assert result.chef_server_queried
+        assert len(result.chef_nodes) == 3
+        assert result.chef_nodes[0]["name"] == "web-1.example.com"
+        assert result.chef_nodes[1]["environment"] == "production"
+
+        # Verify get_chef_nodes was called with correct parameters
+        mock_get_nodes.assert_called_once_with(
+            search_query="*:*",
+            server_url="https://chef.example.com",
+            organisation="default",
+            client_name="admin",
+            client_key_path=None,
+            client_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----",
+        )
+
+    @patch("souschef.migration_v2.get_ansible_client")
+    @patch("souschef.migration_v2.get_chef_nodes")
+    def test_inventory_populated_with_chef_nodes_variables(
+        self,
+        mock_get_nodes: Mock,
+        mock_get_client: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test that inventory hosts are created with Chef node variables."""
+        # Mock Chef nodes
+        mock_chef_nodes = [
+            {
+                "name": "web-server",
+                "fqdn": "web-server.prod.example.com",
+                "ipaddress": "10.0.1.5",
+                "environment": "production",
+                "roles": ["web", "common"],
+                "platform": "ubuntu",
+                "platform_version": "22.04",
+            },
+        ]
+        mock_get_nodes.return_value = mock_chef_nodes
+
+        # Mock Ansible API client
+        mock_client = Mock()
+        mock_client.create_inventory.return_value = {"id": 1, "name": "test-inv"}
+        mock_client.create_project.return_value = {"id": 2, "name": "test-proj"}
+        mock_client.create_job_template.return_value = {"id": 3, "name": "test-jt"}
+        mock_get_client.return_value = mock_client
+
+        # Create test cookbook
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        recipes = cookbook / "recipes"
+        recipes.mkdir()
+        (recipes / "default.rb").write_text("package 'apache2'")
+
+        # Run migration with deployment
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        result = orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="admin",
+            chef_client_key="test-key",
+        )
+
+        # Deploy to Ansible
+        deployment_success = orchestrator.deploy_to_ansible(
+            "https://aap.example.com",
+            "admin",
+            "password",
+        )
+
+        assert deployment_success
+        assert result.inventory_id == 1
+
+        # Verify add_host was called with correct variables
+        mock_client.add_host.assert_called_once()
+        call_args = mock_client.add_host.call_args
+        assert call_args[0][0] == 1  # inventory_id
+        assert (
+            call_args[0][1] == "web-server.prod.example.com"
+        )  # hostname (fqdn preferred)
+
+        # Verify variables include Chef metadata
+        import json
+
+        variables_json = call_args[1]["variables"]
+        variables = json.loads(variables_json)
+        assert variables["ansible_host"] == "10.0.1.5"  # IP address
+        assert variables["chef_environment"] == "production"
+        assert variables["chef_roles"] == ["web", "common"]
+        assert variables["chef_platform"] == "ubuntu"
+
+    @patch("souschef.migration_v2.get_chef_nodes")
+    def test_chef_nodes_fallback_to_name_then_ip(
+        self,
+        mock_get_nodes: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test hostname resolution fallback: fqdn → name → ipaddress."""
+        # Nodes with different hostname priorities
+        mock_chef_nodes = [
+            {
+                "name": "node-with-fqdn",
+                "fqdn": "node-with-fqdn.example.com",
+                "ipaddress": "10.0.1.1",
+                "environment": "test",
+                "roles": [],
+            },
+            {
+                "name": "node-name-only",
+                "ipaddress": "10.0.1.2",
+                "environment": "test",
+                "roles": [],
+            },
+            {
+                "ipaddress": "10.0.1.3",
+                "environment": "test",
+                "roles": [],
+            },
+        ]
+        mock_get_nodes.return_value = mock_chef_nodes
+
+        # Create cookbook and migrate
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        recipes = cookbook / "recipes"
+        recipes.mkdir()
+        (recipes / "default.rb").write_text("package 'test'")
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        result = orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="admin",
+            chef_client_key="test-key",
+        )
+
+        # Verify nodes were discovered
+        assert result.chef_server_queried
+        assert len(result.chef_nodes) == 3
+
+        # Verify hostname resolution logic by deploying
+        with patch("souschef.migration_v2.get_ansible_client") as mock_get_client:
+            mock_client = Mock()
+            mock_client.create_inventory.return_value = {"id": 1}
+            mock_client.create_project.return_value = {"id": 2}
+            mock_client.create_job_template.return_value = {"id": 3}
+            mock_get_client.return_value = mock_client
+
+            orchestrator.deploy_to_ansible(
+                "https://aap.example.com",
+                "admin",
+                "password",
+            )
+
+            # Verify add_host calls with correct hostname resolution
+            calls = mock_client.add_host.call_args_list
+            assert len(calls) == 3
+
+            # First node: should use fqdn
+            assert calls[0][0][1] == "node-with-fqdn.example.com"
+
+            # Second node: should use name (no fqdn)
+            assert calls[1][0][1] == "node-name-only"
+
+            # Third node: should use ipaddress (no name or fqdn)
+            assert calls[2][0][1] == "10.0.1.3"
+
+    @patch("souschef.migration_v2.get_chef_nodes")
+    def test_chef_server_query_failure_warning(
+        self,
+        mock_get_nodes: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test handling of Chef Server query failures with warnings."""
+        # Simulate Chef Server query failure
+        mock_get_nodes.side_effect = Exception("Authentication failed")
+
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        recipes = cookbook / "recipes"
+        recipes.mkdir()
+        (recipes / "default.rb").write_text("package 'curl'")
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        result = orchestrator.migrate_cookbook(
+            str(cookbook),
+            skip_validation=True,
+            chef_server_url="https://chef.example.com",
+            chef_organisation="default",
+            chef_client_name="admin",
+            chef_client_key="invalid-key",
+        )
+
+        # Verify failure was captured as warning (not fatal)
+        assert result.chef_server_queried
+        assert len(result.chef_nodes) == 0
+        assert any(
+            "Chef Server query failed" in w.get("message", "") for w in result.warnings
+        )
