@@ -160,11 +160,11 @@
 2. ✅ **COMPLETED**: Ansible Platform HTTP Basic Auth with real credentials
 3. Token management and refresh
 
-**Phase 4: CLI Commands**
-1. `souschef migrate --cookbook /path --target aap:2.4.0`
-2. `souschef validate-playbooks --playbooks /path --ansible 2.15.0`
-3. `souschef list-migrations`
-4. `souschef rollback-migration --id mig-xxx`
+**Phase 4: CLI Commands (✅ COMPLETED)**
+1. ✅ `souschef v2 migrate` - Run full migration with version-aware config
+2. ✅ `souschef v2 status` - Load and display migration state by ID
+3. ✅ `souschef v2 list` - List recent migrations with filtering
+4. ✅ `souschef v2 rollback` - Delete created Ansible infrastructure
 
 ### v2.1 Features
 
@@ -197,6 +197,12 @@
 2. **ansible-lint Integration**: ✅ `_validate_playbooks()` now runs ansible-lint subprocess with proper error handling
 3. **Type Safety**: ✅ Added `int()` casts to API response IDs for mypy compliance
 4. **Import Organization**: ✅ All imports properly organized according to ruff standards
+5. **Converter Integration**: ✅ Wired up existing parsers (recipe, attributes, template) to orchestrator
+6. **CLI Commands**: ✅ Implemented complete v2 command suite:
+   - `souschef v2 migrate` - Full migration with all version combinations
+   - `souschef v2 status` - Load migration state by ID
+   - `souschef v2 list` - List and filter recent migrations
+   - `souschef v2 rollback` - Delete created infrastructure
 
 ## Success Criteria Met
 

@@ -1699,6 +1699,198 @@ def v2_status(
         sys.exit(1)
 
 
+@v2.command("list")
+@click.option(
+    "--cookbook-name",
+    default=None,
+    help="Filter by cookbook name (optional)",
+)
+@click.option(
+    "--limit",
+    type=int,
+    default=20,
+    help="Maximum number of migrations to show (default: 20)",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format (default: text)",
+)
+def v2_list(
+    cookbook_name: str | None,
+    limit: int,
+    output_format: str,
+) -> None:
+    """
+    List recent v2 migrations from storage.
+
+    Shows migration history with status, timestamps, and conversion metrics.
+    Optionally filter by cookbook name.
+    """
+    try:
+        from souschef.storage import get_storage_manager
+
+        storage = get_storage_manager()
+        conversions = storage.get_conversion_history(
+            cookbook_name=cookbook_name,
+            limit=limit,
+        )
+
+        if not conversions:
+            click.echo("No migrations found in storage")
+            return
+
+        if output_format == "json":
+            output = []
+            for conv in conversions:
+                # Extract migration data if available
+                migration_data = (
+                    json.loads(conv.conversion_data) if conv.conversion_data else {}
+                )
+                migration_result = migration_data.get("migration_result", {})
+
+                output.append(
+                    {
+                        "id": conv.id,
+                        "cookbook_name": conv.cookbook_name,
+                        "output_type": conv.output_type,
+                        "status": conv.status,
+                        "files_generated": conv.files_generated,
+                        "created_at": conv.created_at,
+                        "migration_id": migration_result.get("migration_id"),
+                        "migration_status": migration_result.get("status"),
+                    }
+                )
+            click.echo(json.dumps(output, indent=2))
+        else:
+            # Text format
+            click.echo(f"\n{'=' * 80}")
+            click.echo(f"Recent Migrations (showing {len(conversions)} of {limit} max)")
+            click.echo(f"{'=' * 80}\n")
+
+            for conv in conversions:
+                migration_data = (
+                    json.loads(conv.conversion_data) if conv.conversion_data else {}
+                )
+                migration_result = migration_data.get("migration_result", {})
+                migration_id = migration_result.get("migration_id", "N/A")
+
+                click.echo(f"ID: {conv.id}")
+                click.echo(f"Migration ID: {migration_id[:16]}...")
+                click.echo(f"Cookbook: {conv.cookbook_name}")
+                click.echo(f"Status: {conv.status}")
+                click.echo(f"Files Generated: {conv.files_generated}")
+                click.echo(f"Created: {conv.created_at}")
+
+                if migration_result.get("metrics"):
+                    metrics = migration_result["metrics"]
+                    recipes_converted = metrics.get("recipes_converted", 0)
+                    recipes_total = metrics.get("recipes_total", 0)
+                    if recipes_total > 0:
+                        conversion_rate = (recipes_converted / recipes_total) * 100
+                        click.echo(f"Conversion Rate: {conversion_rate:.1f}%")
+
+                click.echo(f"{'-' * 80}\n")
+
+    except Exception as e:
+        click.echo(f"Error listing migrations: {e}", err=True)
+        sys.exit(1)
+
+
+@v2.command("rollback")
+@click.option(
+    "--url",
+    required=True,
+    help="Ansible platform URL (e.g., https://tower.example.com)",
+)
+@click.option(
+    "--username",
+    required=True,
+    help="Username for authentication",
+)
+@click.option(
+    "--password",
+    required=True,
+    help="Password for authentication",
+)
+@click.option(
+    "--migration-id",
+    required=True,
+    help="Migration ID to rollback (load from storage first)",
+)
+@click.option(
+    "--limit",
+    type=int,
+    default=500,
+    help="Maximum number of history entries to scan when loading state",
+)
+def v2_rollback(
+    url: str,
+    username: str,
+    password: str,
+    migration_id: str,
+    limit: int,
+) -> None:
+    """
+    Rollback a v2 migration by deleting created Ansible infrastructure.
+
+    Loads the migration state from storage and deletes all created resources
+    (job template, inventory, project, execution environment) from the target
+    Ansible platform.
+    """
+    try:
+        # Load migration state from storage
+        result = MigrationOrchestrator.load_state(
+            migration_id,
+            limit=limit,
+        )
+
+        if result is None:
+            click.echo("Migration ID not found in storage", err=True)
+            sys.exit(1)
+
+        # Check if migration was deployed
+        if result.status != MigrationStatus.DEPLOYED:
+            status_msg = (
+                f"Migration {migration_id} is not deployed "
+                f"(status: {result.status.value})"
+            )
+            click.echo(status_msg, err=True)
+            click.echo("Only deployed migrations can be rolled back.", err=True)
+            sys.exit(1)
+
+        # Create orchestrator with same config
+        orchestrator = MigrationOrchestrator(
+            chef_version=result.chef_version,
+            target_platform=result.target_platform,
+            target_version=result.target_version,
+        )
+        orchestrator.result = result
+        orchestrator.migration_id = migration_id
+
+        # Perform rollback
+        click.echo(f"Rolling back migration {migration_id}...")
+        orchestrator.rollback(url, (username, password))
+
+        if orchestrator.result.status == MigrationStatus.ROLLED_BACK:
+            click.echo("✅ Rollback successful!")
+            click.echo(
+                f"Deleted {len(orchestrator.result.playbooks_generated)} resources"
+            )
+        else:
+            click.echo("❌ Rollback failed", err=True)
+            if orchestrator.result.errors:
+                for error in orchestrator.result.errors:
+                    click.echo(f"  - {error.get('error', 'Unknown error')}", err=True)
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(f"Error during rollback: {e}", err=True)
+        sys.exit(1)
+
+
 @cli.command()
 @click.option("--port", default=8501, help="Port to run the Streamlit app on")
 def ui(port: int) -> None:
