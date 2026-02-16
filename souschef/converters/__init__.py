@@ -1,5 +1,14 @@
 """Chef to Ansible converters."""
 
+from souschef.converters.custom_module_generator import (
+    analyse_resource_complexity,
+    build_module_collection,
+    extract_module_interface,
+    generate_ansible_module_scaffold,
+    generate_module_documentation,
+    generate_module_manifest,
+    validate_module_code,
+)
 from souschef.converters.habitat import (
     convert_habitat_to_dockerfile,
     generate_compose_from_habitat,
@@ -32,4 +41,11 @@ __all__ = [
     "generate_ansible_handler_from_chef",
     "build_handler_routing_table",
     "generate_handler_conversion_report",
+    "analyse_resource_complexity",
+    "extract_module_interface",
+    "generate_ansible_module_scaffold",
+    "generate_module_documentation",
+    "generate_module_manifest",
+    "validate_module_code",
+    "build_module_collection",
 ]
