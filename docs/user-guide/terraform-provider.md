@@ -605,14 +605,14 @@ locals {
 Convert multiple recipes in one operation instead of individually:
 
 ```terraform
-# ✅ Efficient - single batch operation
+# [YES] Efficient - single batch operation
 resource "souschef_batch_migration" "recipes" {
   cookbook_path = "/chef/cookbooks/app"
   output_path   = "/ansible/playbooks"
   recipe_names  = ["default", "setup", "deploy", "config"]
 }
 
-# ❌ Inefficient - multiple separate operations
+# [NO] Inefficient - multiple separate operations
 resource "souschef_migration" "default" {
   cookbook_path = "/chef/cookbooks/app"
   output_path   = "/ansible/playbooks"

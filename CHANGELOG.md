@@ -5,7 +5,133 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] - 2026-02-17
+
+### Added
+
+* **v2.2:** Interactive CLI migration wizard with step-by-step guidance
+* **v2.2:** Custom rule engine for resource conversion with user-defined mappings
+* **v2.2:** Custom module generator for Ansible module scaffolding
+* **v2.2:** Handler generation module for Ansible handler conversion
+
+### Changed
+
+* **documentation:** Aggressive documentation refactoring for clarity and conciseness
+  - README: 185 → 165 lines with improved structure and status line
+  - CONTRIBUTING: 722 → 587 lines, trimmed release process bloat (135 line reduction)
+  - ARCHITECTURE: Replaced ASCII diagram with Mermaid flowchart
+  - Added "Documentation Guide" with role-based routing for users
+  - Standardised Australian English across all documentation
+* **documentation:** Consolidated ansible_versions.py documentation with master-link pattern
+* **documentation:** Condensed CodeQL section from 130 lines to 16 lines (87% reduction)
+
+## [5.1.4] - 2026-02-14
+
+### Fixed
+
+* **security:** Upgrade pip to version 26.0 for security fixes
+* **version:** Update version to 5.1.4 in pyproject.toml
+
+## [5.1.3] - 2026-02-13
+
+### Fixed
+
+* **version:** Update version to 5.1.3 in pyproject.toml
+
+## [5.1.2] - 2026-02-13
+
+### Added
+
+* **security:** Enhanced Trivy vulnerability scanning with improved report categories
+
+### Fixed
+
+* **ci:** Update branch verification logic and correct Trivy scan category
+* **version:** Update version to 5.1.2 in pyproject.toml
+
+## [5.1.1] - 2026-02-11
+
+### Added
+
+* **testing:** Comprehensive tests to boost coverage from 77% to 91%
+  - 679 new tests for CLI, Ansible versions, assessment, and server modules
+  - 72 tests for chef_server and __init__ modules
+  - 60 tests for GitHub agent control (97% coverage)
+  - 60 tests for migration_config and blob storage (95%+ coverage)
+  - 1 comprehensive edge case tests for resource converter
+  - 35 tests for ReDoS vulnerability fixes
+
+### Fixed
+
+* **security:** Fix ReDoS vulnerability in ansible inventory parser (S5852)
+* **code-quality:** Eliminate code duplication in HTTP client (SonarCloud)
+* **code-quality:** Convert caching.py to PEP 695 generic syntax (9 SonarCloud issues)
+* **codeql:** Convert obsolete CodeQL suppressions to current syntax
+* **codeql:** Remove non-functional CodeQL inline suppressions
+* **path-security:** Harden path handling with enhanced validation
+* **path-security:** Validate safe_join parts before path construction
+* **version:** Update version to 5.1.1 in pyproject.toml
+
+### Changed
+
+* **security:** Enhanced security and code quality across multiple modules
+* **documentation:** Add CodeQL alert suppression documentation
+
+### Dependencies
+
+* Bump production-dependencies group (2 updates)
+* Bump pillow from 12.1.0 to 12.1.1
+* Bump pip from 25.3 to 26.0
+* Bump cryptography from 46.0.3 to 46.0.5
+* Bump production-dependencies group (4 updates)
+* Bump dev-dependencies group (3 updates)
+* Bump actions/cache from 5.0.1 to 5.0.3
+* Bump actions/checkout from 4.2.2 to 6.0.2
+* Bump actions/github-script from 7.0.1 to 8.0.0
+* Bump actions/setup-python from 6.1.0 to 6.2.0
+* Bump github/codeql-action from 4.32.1 to 4.32.2
+
+## [5.1.0] - 2026-02-10
+
+### Added
+
+* **v2.1:** Advanced features (guards, optimization, audit trail)
+* **v2.0:** Complete resource and handler conversion system
+* **v2.0:** Chef Server node discovery and inventory population
+* **v2.0:** Complete CLI command suite for v2 migration
+* **v2.0:** Deployment integration with real AWX/AAP API clients
+* **v2.0:** Migration Orchestrator UI with simulation mode
+* **v2.0:** Core Foundation with IR schema, versioning, and plugin architecture
+* **ir:** Intermediate Representation module for multi-tool support
+  - IRGraph: Directed acyclic graph representation of infrastructure
+  - IRNode, IRAction, IRAttribute, IRGuard data structures
+  - Plugin architecture: SourceParser, TargetGenerator, PluginRegistry
+  - Version management and schema evolution
+* **testing:** Comprehensive integration and property-based tests for IR module
+* **documentation:** Comprehensive IR module documentation and ARCHITECTURE updates
+
+### Changed
+
+* **refactoring:** Modular architecture improvements for better maintainability
+  - New `cookbook_analysis_security.py` module (275 lines, 11 security functions)
+  - New `cookbook_analysis_utilities.py` module (61 lines, 3 utility functions)
+  - Focus on path security, archive handling, and utility functions
+* **documentation:** Updated markdown documentation for accuracy and consistency
+* **qa:** Test coverage reporting updated to 91% (3,500+ passing tests)
+* **architecture:** Code organised by concerns for improved maintainability
+
+### Improved
+
+* **code-quality:** Zero breaking changes - all refactoring maintains backward compatibility
+* **type-safety:** Maintained full mypy compliance across all modules
+* **testing:** All 3,500+ tests passing with 99.7% success rate
+
+### Documentation
+
+* See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module organisation
+* See [IR.md](docs/IR.md) for Intermediate Representation documentation
+
+## [5.0.x] - Previous Releases
 
 ### Added
 
@@ -95,7 +221,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.2.0](https://github.com/kpeacocke/souschef/releases/tag/v3.2.0) (2026-01-22)
 
 
-### ⚠ BREAKING CHANGES
+### BREAKING CHANGES
 
 * Package name changed from 'souschef' to 'mcp-souschef' on PyPI
 

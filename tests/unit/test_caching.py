@@ -312,9 +312,11 @@ class TestCacheManager:
         """Test inventory caching via manager."""
         manager = CacheManager()
         test_file = tmp_path / "inventory.ini"
-        test_file.write_text("[servers]\nhost1 ansible_host=10.0.0.1\n")
+        test_file.write_text(
+            "[servers]\nhost1 ansible_host=10.0.0.1\n"
+        )  # NOSONAR - test fixture
 
-        inventory = {"hosts": {"host1": "10.0.0.1"}}
+        inventory = {"hosts": {"host1": "10.0.0.1"}}  # NOSONAR - test fixture
         manager.cache_inventory(str(test_file), inventory)
 
         # Should return same inventory
@@ -322,7 +324,9 @@ class TestCacheManager:
         assert cached == inventory
 
         # Change file should invalidate
-        test_file.write_text("[servers]\nhost2 ansible_host=10.0.0.2\n")
+        test_file.write_text(
+            "[servers]\nhost2 ansible_host=10.0.0.2\n"
+        )  # NOSONAR - test fixture
         assert manager.get_inventory(str(test_file)) is None
 
     def test_cache_manager_assessment_cache(self):

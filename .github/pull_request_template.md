@@ -1,6 +1,6 @@
 # Pull Request Template
 
-## 🌿 Gitflow Branch Check
+## Gitflow Branch Check
 
 **Source branch**: `[your branch name]`
 **Target branch**: `[base branch]`
@@ -20,14 +20,14 @@ _The gitflow workflow will automatically validate this._
 Brief description of what this PR does and why.
 
 **Type of Change** (check all that apply):
-- [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
-- [ ] ✨ New feature (non-breaking change that adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ]  Documentation update
-- [ ]  Test improvements
-- [ ]  Refactoring (no functional changes)
-- [ ]  Dependencies update
-- [ ]  Performance improvement
+- [ ] Bug fix (non-breaking change that fixes an issue)
+- [ ] New feature (non-breaking change that adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] Documentation update
+- [ ] Test improvements
+- [ ] Refactoring (no functional changes)
+- [ ] Dependencies update
+- [ ] Performance improvement
 
 ## Related Issues
 
@@ -107,12 +107,12 @@ For changes that might have security implications:
 - [ ] Docstrings added/updated following Google style
 - [ ] Examples added or updated
 
-## 🧹 Code Quality
+## Code Quality
 
 ### Checklist (verify before submitting)
-- [ ]  Code passes linting (`poetry run ruff check .`)
-- [ ]  Code is properly formatted (`poetry run ruff format .`)
-- [ ]  All tests pass (`poetry run pytest`)
+- [ ]Code passes linting (`poetry run ruff check .`)
+- [ ] Code is properly formatted (`poetry run ruff format .`)
+- [ ] All tests pass (`poetry run pytest`)
 - [ ]  Type hints are complete and accurate
 - [ ]  Docstrings follow Google style format
 - [ ]  No warnings introduced (zero warnings policy)
@@ -190,14 +190,14 @@ Add any additional context, screenshots, or information that reviewers should kn
 
 Before submitting this PR, I have verified:
 
-- [ ]  All tests pass locally (`poetry run pytest`)
-- [ ]  Code is linted and formatted (`poetry run ruff check . && poetry run ruff format .`)
+- [ ] All tests pass locally (`poetry run pytest`)
+- [ ] Code is linted and formatted (`poetry run ruff check . && poetry run ruff format .`)
 - [ ]  Test coverage is maintained or improved
 - [ ]  Documentation is updated where needed
-- [ ] 🔍 I have self-reviewed my code changes
-- [ ] 💭 Complex logic has explanatory comments
-- [ ] 🚨 No debug code or console.log statements left
-- [ ]  Commit messages follow conventional format
+- [ ] I have self-reviewed my code changes
+- [ ] Complex logic has explanatory comments
+- [ ] No debug code or console.log statements left
+- [ ] Commit messages follow conventional format
 
 **By submitting this PR, I confirm that**:
 - [ ] My contribution is made under the project's MIT license
@@ -206,6 +206,6 @@ Before submitting this PR, I have verified:
 
 ---
 
-**Thank you for contributing to SousChef!** 🙏
+**Thank you for contributing to SousChef!**
 
 Your improvements help make Chef-to-Ansible migrations easier for everyone.

@@ -26,6 +26,7 @@ from souschef.server import (
     parse_recipe,
     parse_template,
     read_file,
+    simulate_chef_to_awx_migration,
 )
 
 
@@ -82,8 +83,6 @@ def test_parse_attributes_handles_any_content(content):
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         temp_path = f.name
         old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
-        temp_path = f.name
-        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
@@ -123,8 +122,6 @@ def test_parse_attributes_with_generated_attributes(precedence, key1, key2, valu
     attr_content = f"{precedence}['{key1}']['{key2}'] = {value}\n"
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
-        temp_path = f.name
-        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         temp_path = f.name
         old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
@@ -179,7 +176,6 @@ def test_parse_attributes_all_precedence_levels(precedence, key, value):
         try:
             f.write(attr_content)
             f.flush()
-            temp_path = f.name
 
             os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
             result = parse_attributes(temp_path, resolve_precedence=True)
@@ -193,7 +189,36 @@ def test_parse_attributes_all_precedence_levels(precedence, key, value):
                 os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
             else:
                 os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
-            Path(f.name).unlink(missing_ok=True)
+            Path(temp_path).unlink(missing_ok=True)
+
+
+@given(st.sampled_from(["awx", "aap"]))
+@settings(max_examples=50, deadline=500)
+def test_simulate_migration_handles_supported_targets(target_platform):
+    """Test simulation handles supported target platforms."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        base = Path(temp_dir)
+        cookbooks_dir = base / "cookbooks" / "demo"
+        recipes_dir = cookbooks_dir / "recipes"
+        recipes_dir.mkdir(parents=True)
+        (cookbooks_dir / "metadata.rb").write_text("name 'demo'\nversion '1.0.0'\n")
+        (recipes_dir / "default.rb").write_text("package 'nginx'\n")
+
+        output_dir = base / "output"
+        old_root = Path.cwd()
+        try:
+            os.chdir(base)
+            result = simulate_chef_to_awx_migration(
+                cookbooks_path=str(base / "cookbooks"),
+                output_path=str(output_dir),
+                target_platform=target_platform,
+                include_repo=False,
+                include_tar=False,
+            )
+            data = json.loads(result)
+            assert data["target_platform"] == target_platform
+        finally:
+            os.chdir(old_root)
 
 
 @given(
@@ -585,7 +610,7 @@ def test_parse_inspec_profile_handles_any_content(content):
                 os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
             else:
                 os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
-            Path(f.name).unlink()
+            Path(temp_path).unlink(missing_ok=True)
 
 
 @given(st.text(min_size=1, max_size=1000))

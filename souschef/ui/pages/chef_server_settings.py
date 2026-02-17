@@ -9,7 +9,6 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import streamlit as st
 
@@ -18,53 +17,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from souschef.assessment import assess_single_cookbook_with_ai
 
 # Import Chef Server validation functions from core module
-from souschef.core.chef_server import (  # noqa: F401
-    _handle_chef_server_response,  # noqa: F401
-    _validate_chef_server_connection,
-)
+from souschef.core.chef_server import _validate_chef_server_connection
 from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
     _safe_join,
 )
-from souschef.core.url_validation import validate_user_provided_url
 from souschef.storage import get_storage_manager
 
-if TYPE_CHECKING:
-    import requests as requests_module  # noqa: F401
-else:
-    try:
-        import requests as requests_module  # noqa: F401
-        from requests.exceptions import (
-            ConnectionError,  # noqa: A004, F401
-            Timeout,  # noqa: F401
-        )
-    except ImportError:
-        requests_module = None  # type: ignore[assignment]
-        ConnectionError = Exception  # type: ignore[assignment,misc]  # noqa: A001
-        Timeout = Exception  # type: ignore[assignment,misc]
-
-try:
-    import requests
-    from requests.exceptions import (
-        ConnectionError,  # noqa: A004, F401, F811
-        Timeout,  # noqa: F811
-    )
-except ImportError:
-    requests = None  # type: ignore[assignment]
-    ConnectionError = Exception  # type: ignore[assignment,misc]  # noqa: A001
-    Timeout = Exception  # type: ignore[assignment,misc]
-
-# Constants
-JSON_CONTENT_TYPE = "application/json"
+NOT_CONFIGURED = "Not configured"
 
 
-def _render_chef_server_configuration() -> tuple[str, str]:
+def _render_chef_server_configuration() -> tuple[str, str, str, str]:
     """
     Render Chef Server configuration UI and return config values.
 
     Returns:
-        Tuple of (server_url, node_name)
+        Tuple of (server_url, organisation, client_name, client_key_path).
 
     """
     st.subheader("Chef Server Configuration")
@@ -87,24 +56,51 @@ def _render_chef_server_configuration() -> tuple[str, str]:
         )
 
     with col2:
-        node_name = st.text_input(
-            "Chef Node Name",
-            help="Node name for authentication with Chef Server",
-            key="chef_node_name_input",
-            placeholder="my-node",
-            value=os.environ.get("CHEF_NODE_NAME", ""),
+        organisation = st.text_input(
+            "Chef Organisation",
+            help="Chef organisation name (e.g., default)",
+            key="chef_org_input",
+            placeholder="default",
+            value=os.environ.get("CHEF_ORG", "default"),
         )
 
-    return server_url, node_name
+    col3, col4 = st.columns(2)
+
+    with col3:
+        client_name = st.text_input(
+            "Chef Client Name",
+            help="Client or user name for Chef Server authentication",
+            key="chef_client_name_input",
+            placeholder="my-client",
+            value=os.environ.get("CHEF_CLIENT_NAME", ""),
+        )
+
+    with col4:
+        client_key_path = st.text_input(
+            "Client Key Path",
+            help="Path to your Chef client key file (PEM format)",
+            key="chef_client_key_path_input",
+            placeholder="/path/to/client.pem",
+            value=os.environ.get("CHEF_CLIENT_KEY_PATH", ""),
+        )
+
+    return server_url, organisation, client_name, client_key_path
 
 
-def _render_test_connection_button(server_url: str, node_name: str) -> None:
+def _render_test_connection_button(
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+) -> None:
     """
     Render the test connection button and display results.
 
     Args:
-        server_url: Chef Server URL to test
-        node_name: Chef node name for authentication
+        server_url: Chef Server URL to test.
+        organisation: Chef organisation name.
+        client_name: Client or user name for authentication.
+        client_key_path: Path to client key file.
 
     """
     st.markdown("---")
@@ -121,7 +117,12 @@ def _render_test_connection_button(server_url: str, node_name: str) -> None:
 
     if test_button:
         with col2, st.spinner("Testing Chef Server connection..."):
-            success, message = _validate_chef_server_connection(server_url, node_name)
+            success, message = _validate_chef_server_connection(
+                server_url,
+                client_name,
+                organisation=organisation,
+                client_key_path=client_key_path or None,
+            )
 
             if success:
                 st.success(message)
@@ -160,20 +161,29 @@ def _render_usage_examples() -> None:
 
         ```bash
         export CHEF_SERVER_URL="https://chef.example.com"
-        export CHEF_NODE_NAME="my-node"
+        export CHEF_ORG="default"
+        export CHEF_CLIENT_NAME="my-client"
+        export CHEF_CLIENT_KEY_PATH="/path/to/client.pem"
         ```
 
         These will be automatically detected by SousChef.
         """)
 
 
-def _render_save_settings_section(server_url: str, node_name: str) -> None:
+def _render_save_settings_section(
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+) -> None:
     """
     Render the save settings section.
 
     Args:
-        server_url: Chef Server URL to save
-        node_name: Chef node name to save
+        server_url: Chef Server URL to save.
+        organisation: Chef organisation name to save.
+        client_name: Chef client name to save.
+        client_key_path: Chef client key path to save.
 
     """
     st.markdown("---")
@@ -192,7 +202,9 @@ def _render_save_settings_section(server_url: str, node_name: str) -> None:
         with col2:
             # Save to session state
             st.session_state.chef_server_url = server_url
-            st.session_state.chef_node_name = node_name
+            st.session_state.chef_org = organisation
+            st.session_state.chef_client_name = client_name
+            st.session_state.chef_client_key_path = client_key_path
 
             st.success("""
             ✅ Chef Server configuration saved to session!
@@ -200,67 +212,68 @@ def _render_save_settings_section(server_url: str, node_name: str) -> None:
             **Note:** For persistent configuration across sessions,
             set environment variables:
             - `CHEF_SERVER_URL`
-            - `CHEF_NODE_NAME`
+            - `CHEF_ORG`
+            - `CHEF_CLIENT_NAME`
+            - `CHEF_CLIENT_KEY_PATH`
             """)
 
 
 def _render_current_configuration() -> None:
     """Display current Chef Server configuration from environment or session."""
     current_url = os.environ.get("CHEF_SERVER_URL") or st.session_state.get(
-        "chef_server_url", "Not configured"
+        "chef_server_url", NOT_CONFIGURED
     )
-    current_node = os.environ.get("CHEF_NODE_NAME") or st.session_state.get(
-        "chef_node_name", "Not configured"
+    current_org = os.environ.get("CHEF_ORG") or st.session_state.get(
+        "chef_org", NOT_CONFIGURED
+    )
+    current_client = os.environ.get("CHEF_CLIENT_NAME") or st.session_state.get(
+        "chef_client_name", NOT_CONFIGURED
+    )
+    current_key_path = os.environ.get("CHEF_CLIENT_KEY_PATH") or st.session_state.get(
+        "chef_client_key_path", NOT_CONFIGURED
     )
 
     st.info(f"""
     **Current Configuration:**
     - Server URL: `{current_url}`
-    - Node Name: `{current_node}`
+    - Organisation: `{current_org}`
+    - Client Name: `{current_client}`
+    - Client Key Path: `{current_key_path}`
     """)
 
 
-def _get_chef_cookbooks(server_url: str) -> list[dict]:
+def _get_chef_cookbooks(
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+) -> list[dict]:
     """
     Fetch list of cookbooks from Chef Server.
 
-    Security: URL is validated to prevent SSRF attacks. Only HTTPS URLs
-    with public hostnames are allowed.
+    Security: URL is validated and Chef Server authentication is required.
     """
-    if not requests:
-        return []
-
     try:
-        # Validate URL to prevent SSRF - only allows HTTPS with public DNS names
-        validated_url = validate_user_provided_url(server_url, strip_path=True)
-        # Ensure URL is HTTPS-only for Chef Server
-        if not validated_url.startswith("https://"):
-            return []
-        cookbooks_url = f"{validated_url}/cookbooks"
-        response = requests.get(
-            cookbooks_url,
-            timeout=10,
-            headers={"Accept": JSON_CONTENT_TYPE},
-            # Validate SSL certificates to prevent MITM attacks
-            verify=True,
-        )
+        from souschef.core.chef_server import list_chef_cookbooks
 
-        if response.status_code == 200:
-            cookbooks_data = response.json()
-            # Chef Server returns {cookbook_name: {url: ..., versions: [...]}}
-            # Sanitize cookbook names to prevent injection
-            return [
-                {"name": name, "versions": data.get("versions", [])}
-                for name, data in cookbooks_data.items()
-                if isinstance(name, str) and len(name) < 256  # Limit name length
-            ]
-        return []
+        return list_chef_cookbooks(
+            server_url=server_url,
+            organisation=organisation,
+            client_name=client_name,
+            client_key_path=client_key_path or None,
+        )
     except Exception:
         return []
 
 
 def _download_cookbook(
-    server_url: str, cookbook_name: str, version: str, target_dir: Path
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+    cookbook_name: str,
+    version: str,
+    target_dir: Path,
 ) -> Path | None:
     """
     Download a cookbook from Chef Server to local directory.
@@ -268,37 +281,28 @@ def _download_cookbook(
     Security: URL and parameters are validated to prevent SSRF attacks.
     Only HTTPS URLs are allowed. Paths are validated to prevent traversal.
     """
-    if not requests:
-        return None
-
     try:
-        # Validate URL to prevent SSRF - only allows HTTPS with public DNS names
-        validated_url = validate_user_provided_url(server_url, strip_path=True)
-        # Ensure URL is HTTPS-only for Chef Server
-        if not validated_url.startswith("https://"):
-            return None
+        from souschef.core.chef_server import get_chef_cookbook_version
 
         # Sanitize cookbook name and version to prevent URL injection
         if not isinstance(cookbook_name, str) or len(cookbook_name) > 256:
             return None
         if not isinstance(version, str) or len(version) > 256:
             return None
-        # Validate no path traversal attempts in parameters
         if "/" in cookbook_name or "\\" in cookbook_name:
             return None
         if "/" in version or "\\" in version:
             return None
 
-        cookbook_url = f"{validated_url}/cookbooks/{cookbook_name}/{version}"
-        response = requests.get(
-            cookbook_url,
-            timeout=30,
-            headers={"Accept": JSON_CONTENT_TYPE},
-            # Validate SSL certificates to prevent MITM attacks
-            verify=True,
+        metadata = get_chef_cookbook_version(
+            cookbook_name,
+            version,
+            server_url=server_url,
+            organisation=organisation,
+            client_name=client_name,
+            client_key_path=client_key_path or None,
         )
-
-        if response.status_code != 200:
+        if not metadata:
             return None
 
         # Create cookbook directory safely
@@ -346,7 +350,12 @@ def _format_time_estimate(seconds: float) -> str:
         return f"{hours} hour{'s' if hours != 1 else ''} {minutes} min"
 
 
-def _render_bulk_operations(server_url: str) -> None:
+def _render_bulk_operations(
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+) -> None:
     """Render bulk assessment and conversion operations."""
     st.markdown("---")
     st.subheader("Bulk Operations")
@@ -360,7 +369,7 @@ def _render_bulk_operations(server_url: str) -> None:
 
     with col1:
         if st.button("Assess ALL Cookbooks", type="primary", width="stretch"):
-            _run_bulk_assessment(server_url)
+            _run_bulk_assessment(server_url, organisation, client_name, client_key_path)
 
     with col2:
         if st.button(
@@ -368,12 +377,15 @@ def _render_bulk_operations(server_url: str) -> None:
             type="secondary",
             width="stretch",
         ):
-            _run_bulk_conversion(server_url)
+            _run_bulk_conversion(server_url, organisation, client_name, client_key_path)
 
 
 def _assess_single_cookbook(
     storage,
     server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
     temp_path: Path,
     cookbook: dict,
     ai_provider: str,
@@ -390,7 +402,13 @@ def _assess_single_cookbook(
 
     # Download cookbook
     cookbook_dir = _download_cookbook(
-        server_url, cookbook_name, latest_version, temp_path
+        server_url,
+        organisation,
+        client_name,
+        client_key_path,
+        cookbook_name,
+        latest_version,
+        temp_path,
     )
     if not cookbook_dir:
         return False
@@ -445,10 +463,17 @@ def _confirm_bulk_operation(estimated_time: float, operation: str) -> bool:
     return confirm
 
 
-def _run_bulk_assessment(server_url: str) -> None:
+def _run_bulk_assessment(
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+) -> None:
     """Run bulk assessment on all Chef Server cookbooks."""
     with st.spinner("Fetching cookbooks from Chef Server..."):
-        cookbooks = _get_chef_cookbooks(server_url)
+        cookbooks = _get_chef_cookbooks(
+            server_url, organisation, client_name, client_key_path
+        )
 
     if not cookbooks:
         st.error("❌ No cookbooks found or unable to connect to Chef Server")
@@ -499,6 +524,9 @@ def _run_bulk_assessment(server_url: str) -> None:
                 success = _assess_single_cookbook(
                     storage,
                     server_url,
+                    organisation,
+                    client_name,
+                    client_key_path,
                     temp_path,
                     cookbook,
                     ai_provider,
@@ -525,10 +553,17 @@ def _run_bulk_assessment(server_url: str) -> None:
         col3.metric("Failed", failed)
 
 
-def _run_bulk_conversion(server_url: str) -> None:
+def _run_bulk_conversion(
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+) -> None:
     """Run bulk conversion on all Chef Server cookbooks."""
     with st.spinner("Fetching cookbooks from Chef Server..."):
-        cookbooks = _get_chef_cookbooks(server_url)
+        cookbooks = _get_chef_cookbooks(
+            server_url, organisation, client_name, client_key_path
+        )
 
     if not cookbooks:
         st.error("❌ No cookbooks found or unable to connect to Chef Server")
@@ -592,7 +627,13 @@ def _run_bulk_conversion(server_url: str) -> None:
             try:
                 # Download cookbook
                 cookbook_dir = _download_cookbook(
-                    server_url, cookbook_name, latest_version, temp_path
+                    server_url,
+                    organisation,
+                    client_name,
+                    client_key_path,
+                    cookbook_name,
+                    latest_version,
+                    temp_path,
                 )
 
                 if not cookbook_dir:
@@ -661,17 +702,23 @@ def show_chef_server_settings_page() -> None:
     st.markdown("---")
 
     # Configuration inputs
-    server_url, node_name = _render_chef_server_configuration()
+    server_url, organisation, client_name, client_key_path = (
+        _render_chef_server_configuration()
+    )
 
     # Test connection
-    _render_test_connection_button(server_url, node_name)
+    _render_test_connection_button(
+        server_url, organisation, client_name, client_key_path
+    )
 
     # Save settings
-    _render_save_settings_section(server_url, node_name)
+    _render_save_settings_section(
+        server_url, organisation, client_name, client_key_path
+    )
 
     # Bulk operations (only show if server is configured)
     if server_url:
-        _render_bulk_operations(server_url)
+        _render_bulk_operations(server_url, organisation, client_name, client_key_path)
 
     # Usage examples
     _render_usage_examples()

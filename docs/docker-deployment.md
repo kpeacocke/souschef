@@ -192,7 +192,9 @@ SOUSCHEF_AI_MAX_TOKENS=4000             # Max response tokens
 
 # Chef Server Configuration (for dynamic inventory queries)
 CHEF_SERVER_URL=https://chef.example.com  # Chef Server URL
-CHEF_NODE_NAME=my-node                  # Chef node for authentication
+CHEF_ORG=default                          # Chef organisation name
+CHEF_CLIENT_NAME=my-client                # Chef client/user name
+CHEF_CLIENT_KEY_PATH=/path/to/client.pem  # Chef client key path (PEM)
 ```
 
 ### Docker Compose Configuration

@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-## 🚚 Migration Overview
+## Migration Overview
 
 **What are you migrating?** (Brief description of your Chef infrastructure)
 
@@ -63,7 +63,7 @@ List your main cookbooks here
 
 **Results so far**: [What worked well? What didn't?]
 
-## 🤝 Support Needed
+## Support Needed
 
 - [ ] Help using SousChef tools
 - [ ] Review of converted Ansible code

@@ -341,9 +341,9 @@ Create a migration order matrix:
 
 | Level | Cookbooks | Dependencies | Can Migrate? |
 |-------|-----------|--------------|--------------|
-| 0 | compat_resource, build-essential | None | ✅ Yes (leaf nodes) |
-| 1 | apt, yum, postgresql | Level 0 | ✅ After Level 0 |
-| 2 | database | Level 1 | ✅ After Level 1 |
+| 0 | compat_resource, build-essential | None | [YES] Yes (leaf nodes) |
+| 1 | apt, yum, postgresql | Level 0 | [YES] After Level 0 |
+| 2 | database | Level 1 | [YES] After Level 1 |
 
 ### Circular Dependencies
 
@@ -356,7 +356,7 @@ souschef-cli analyze-dependencies /path/to/cookbooks --check-circular
 **Example Output:**
 
 ```
-⚠️  Circular dependency detected:
+WARNING  Circular dependency detected:
   cookbook-a → cookbook-b → cookbook-c → cookbook-a
 
 Resolution Strategy:
@@ -645,7 +645,7 @@ grep -r "include_recipe" /path/to/cookbooks --include="*.rb" | \
 
 ## Best Practices
 
-### Do's ✅
+### Do's [YES]
 
 1. **Assess All Cookbooks**: Don't skip "simple" ones
 2. **Include Dependencies**: Assess entire dependency chain
@@ -655,7 +655,7 @@ grep -r "include_recipe" /path/to/cookbooks --include="*.rb" | \
 6. **Consider Alternatives**: Some cookbooks may not need migration
 7. **Plan for Unknowns**: Add 20-30% buffer to estimates
 
-### Don'ts ❌
+### Don'ts [NO]
 
 1. **Don't Rush Assessment**: Thorough assessment prevents problems
 2. **Don't Ignore Dependencies**: Will cause migration failures

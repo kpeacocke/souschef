@@ -19,6 +19,7 @@ from souschef.ansible_upgrade import (
     generate_upgrade_plan,
     validate_collection_compatibility,
 )
+from souschef.cli_registry import get_registry, register_default_groups
 from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.core.ansible_versions import format_version_display, get_eol_status
 from souschef.core.logging import configure_logging
@@ -165,6 +166,23 @@ def cli() -> None:
 
     Parse Chef cookbooks and convert resources to Ansible playbooks.
     """
+
+
+# Initialize CLI command groups via registry
+def _init_cli_groups() -> None:
+    """Initialise CLI command groups at module level."""
+    try:
+        register_default_groups()
+        registry = get_registry()
+        registry.load_all(cli)
+    except Exception as e:
+        # Log but don't fail - some tests may not need all groups
+        import logging
+
+        logging.debug(f"Failed to initialise CLI groups: {e}")
+
+
+_init_cli_groups()
 
 
 @cli.command()
@@ -1430,6 +1448,84 @@ def convert_cookbook(
         sys.exit(1)
 
 
+@cli.command("simulate-migration")
+@click.option(
+    "--cookbooks-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Path to a directory containing Chef cookbooks",
+)
+@click.option(
+    "--output-path",
+    required=True,
+    type=click.Path(),
+    help="Directory where simulation outputs will be written",
+)
+@click.option(
+    "--target-platform",
+    type=click.Choice(["awx", "aap"], case_sensitive=False),
+    default="awx",
+    help="Target platform for the simulated deployment",
+)
+@click.option(
+    "--chef-server-url",
+    default="https://chef.example.com",
+    help="Chef Server URL used in simulated inventory sources",
+)
+@click.option(
+    "--organisation",
+    default="default",
+    help="Chef organisation name for simulated inventory sources",
+)
+@click.option(
+    "--include-repo/--no-repo",
+    default=True,
+    help="Generate a repository structure from converted roles",
+)
+@click.option(
+    "--include-tar/--no-tar",
+    default=True,
+    help="Create tar.gz archives for simulation outputs",
+)
+def simulate_migration(
+    cookbooks_path: str,
+    output_path: str,
+    target_platform: str,
+    chef_server_url: str,
+    organisation: str,
+    include_repo: bool,
+    include_tar: bool,
+) -> None:
+    """
+    Simulate end-to-end Chef analysis and conversion to AWX/AAP.
+
+    Runs analysis, conversion, and AWX/AAP configuration generation using
+    local cookbooks and simulated Chef inventory data. Optionally generates
+    a repository structure and tar archives for testing.
+    """
+    try:
+        from souschef.server import simulate_chef_to_awx_migration
+
+        result = simulate_chef_to_awx_migration(
+            cookbooks_path=cookbooks_path,
+            output_path=output_path,
+            target_platform=target_platform,
+            chef_server_url=chef_server_url,
+            organisation=organisation,
+            include_repo=include_repo,
+            include_tar=include_tar,
+        )
+
+        click.echo(result)
+    except Exception as e:
+        click.echo(f"Error running simulation: {e}", err=True)
+        sys.exit(1)
+
+
+# V2 migration commands are registered via the CLI feature registry
+# See souschef/cli_registry.py for command group registration
+
+
 @cli.command()
 @click.option("--port", default=8501, help="Port to run the Streamlit app on")
 def ui(port: int) -> None:
@@ -1469,8 +1565,27 @@ def ui(port: int) -> None:
 
 @cli.command("validate-chef-server")
 @click.option("--server-url", prompt="Chef Server URL", help="Chef Server base URL")
-@click.option("--node-name", default="admin", help="Chef node name for authentication")
-def validate_chef_server(server_url: str, node_name: str) -> None:
+@click.option(
+    "--organisation",
+    default="default",
+    help="Chef organisation name",
+)
+@click.option(
+    "--client-name",
+    default="admin",
+    help="Chef client/user name for authentication",
+)
+@click.option(
+    "--client-key-path",
+    default="",
+    help="Path to the client key file (PEM format)",
+)
+def validate_chef_server(
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+) -> None:
     """
     Validate Chef Server connectivity and configuration.
 
@@ -1480,7 +1595,12 @@ def validate_chef_server(server_url: str, node_name: str) -> None:
     click.echo("🔍 Validating Chef Server connection...")
     from souschef.core.chef_server import _validate_chef_server_connection
 
-    success, message = _validate_chef_server_connection(server_url, node_name)
+    success, message = _validate_chef_server_connection(
+        server_url,
+        client_name,
+        organisation=organisation,
+        client_key_path=client_key_path or None,
+    )
 
     if success:
         click.echo(f"✅ {message}")
@@ -1513,8 +1633,35 @@ def _output_chef_nodes(nodes: list, output_json: bool) -> None:
 
 @cli.command("query-chef-nodes")
 @click.option("--search-query", default="*:*", help="Chef search query for nodes")
+@click.option(
+    "--server-url",
+    default="",
+    help="Chef Server URL (defaults to CHEF_SERVER_URL)",
+)
+@click.option(
+    "--organisation",
+    default="default",
+    help="Chef organisation name (defaults to CHEF_ORG)",
+)
+@click.option(
+    "--client-name",
+    default="",
+    help="Chef client name (defaults to CHEF_CLIENT_NAME)",
+)
+@click.option(
+    "--client-key-path",
+    default="",
+    help="Chef client key path (defaults to CHEF_CLIENT_KEY_PATH)",
+)
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-def query_chef_nodes(search_query: str, output_json: bool) -> None:
+def query_chef_nodes(
+    search_query: str,
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str,
+    output_json: bool,
+) -> None:
     """
     Query Chef Server for nodes matching search criteria.
 
@@ -1524,16 +1671,28 @@ def query_chef_nodes(search_query: str, output_json: bool) -> None:
     """
     import os
 
-    if not os.environ.get("CHEF_SERVER_URL"):
+    if not (server_url or os.environ.get("CHEF_SERVER_URL")):
         click.echo("❌ CHEF_SERVER_URL not set", err=True)
+        sys.exit(1)
+    if not (client_name or os.environ.get("CHEF_CLIENT_NAME")):
+        click.echo("❌ CHEF_CLIENT_NAME not set", err=True)
+        sys.exit(1)
+    if not (client_key_path or os.environ.get("CHEF_CLIENT_KEY_PATH")):
+        click.echo("❌ CHEF_CLIENT_KEY_PATH not set", err=True)
         sys.exit(1)
 
     click.echo(f"🔎 Querying Chef Server for nodes matching: {search_query}")
 
-    from souschef.converters.playbook import get_chef_nodes
+    from souschef.core.chef_server import get_chef_nodes
 
     try:
-        nodes = get_chef_nodes(search_query)
+        nodes = get_chef_nodes(
+            search_query,
+            server_url=server_url or None,
+            organisation=organisation or None,
+            client_name=client_name or None,
+            client_key_path=client_key_path or None,
+        )
 
         if not nodes:
             click.echo("ℹ️  No nodes found matching the search query")

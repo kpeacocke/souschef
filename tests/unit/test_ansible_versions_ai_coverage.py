@@ -1,5 +1,6 @@
 """Tests for Ansible version AI integration - targeting uncovered lines."""
 
+import uuid
 from unittest.mock import patch
 
 from souschef.core.ansible_versions import (
@@ -9,6 +10,11 @@ from souschef.core.ansible_versions import (
     get_latest_version_with_ai,
     get_python_compatibility_with_ai,
 )
+
+
+def _sample_api_key() -> str:
+    """Return a non-secret placeholder API key for tests."""
+    return f"example-{uuid.uuid4()}"
 
 
 class TestParseAIResponse:
@@ -77,7 +83,7 @@ class TestFetchAnsibleVersionsWithAI:
         """Test that invalid AI provider returns None."""
         result = fetch_ansible_versions_with_ai(
             ai_provider="invalid_provider",
-            api_key="test-key",
+            api_key=_sample_api_key(),
             use_cache=False,
         )
         assert result is None
@@ -89,7 +95,7 @@ class TestFetchAnsibleVersionsWithAI:
         mock_load_cache.return_value = mock_cache_data
 
         result = fetch_ansible_versions_with_ai(
-            api_key="test-key",
+            api_key=_sample_api_key(),
             use_cache=True,
         )
         assert result == mock_cache_data
@@ -108,7 +114,7 @@ class TestFetchAnsibleVersionsWithAI:
 
         result = fetch_ansible_versions_with_ai(
             ai_provider="anthropic",
-            api_key="test-key",
+            api_key=_sample_api_key(),
             use_cache=True,
         )
         assert result is not None
@@ -127,7 +133,7 @@ class TestFetchAnsibleVersionsWithAI:
 
         result = fetch_ansible_versions_with_ai(
             ai_provider="openai",
-            api_key="test-key",
+            api_key=_sample_api_key(),
             use_cache=False,
         )
         assert result is None
@@ -147,7 +153,7 @@ class TestFetchAnsibleVersionsWithAI:
 
         result = fetch_ansible_versions_with_ai(
             ai_provider="watson",
-            api_key="test-key",
+            api_key=_sample_api_key(),
             use_cache=False,
         )
         assert result is None
@@ -170,7 +176,7 @@ class TestGetPythonCompatibilityWithAI:
         result = get_python_compatibility_with_ai(
             "2.20",
             node_type="control",
-            api_key="test-key",
+            api_key=_sample_api_key(),
         )
         assert result == ["3.12", "3.13", "3.14"]
 
@@ -187,7 +193,7 @@ class TestGetPythonCompatibilityWithAI:
         result = get_python_compatibility_with_ai(
             "2.20",
             node_type="managed",
-            api_key="test-key",
+            api_key=_sample_api_key(),
         )
         assert result == ["3.9", "3.10", "3.11"]
 
@@ -203,7 +209,7 @@ class TestGetPythonCompatibilityWithAI:
         result = get_python_compatibility_with_ai(
             "2.20",  # Not in AI data
             node_type="control",
-            api_key="test-key",
+            api_key=_sample_api_key(),
         )
         assert result == ["3.11", "3.12"]
         mock_static.assert_called_once_with("2.20", "control")
@@ -217,7 +223,7 @@ class TestGetPythonCompatibilityWithAI:
 
         result = get_python_compatibility_with_ai(
             "2.20",
-            api_key="test-key",
+            api_key=_sample_api_key(),
         )
         assert result == ["3.12", "3.13"]
         mock_static.assert_called_once()
@@ -236,7 +242,7 @@ class TestGetLatestVersionWithAI:
             "2.17": {},
         }
 
-        result = get_latest_version_with_ai(api_key="test-key")
+        result = get_latest_version_with_ai(api_key=_sample_api_key())
         assert result == "2.20"  # Highest version
 
     @patch("souschef.core.ansible_versions.fetch_ansible_versions_with_ai")
@@ -246,7 +252,7 @@ class TestGetLatestVersionWithAI:
         mock_fetch.return_value = None
         mock_static.return_value = "2.20"
 
-        result = get_latest_version_with_ai(api_key="test-key")
+        result = get_latest_version_with_ai(api_key=_sample_api_key())
         assert result == "2.20"
         mock_static.assert_called_once()
 
@@ -257,7 +263,7 @@ class TestGetLatestVersionWithAI:
         mock_fetch.return_value = {}
         mock_static.return_value = "2.20"
 
-        result = get_latest_version_with_ai(api_key="test-key")
+        result = get_latest_version_with_ai(api_key=_sample_api_key())
         assert result == "2.20"
         mock_static.assert_called_once()
 
@@ -277,7 +283,7 @@ class TestCalculateUpgradePathWithAI:
             "2.18",
             "2.20",
             use_ai=True,
-            api_key="test-key",
+            api_key=_sample_api_key(),
         )
         # Should use AI data to determine Python upgrade needs
         assert "current_python" in result
@@ -297,7 +303,7 @@ class TestCalculateUpgradePathWithAI:
             "2.17",
             "2.20",
             use_ai=True,
-            api_key="test-key",
+            api_key=_sample_api_key(),
         )
         # Python upgrade may be needed depending on overlap
         assert "python_upgrade_needed" in result
@@ -309,7 +315,7 @@ class TestCalculateUpgradePathWithAI:
             "2.18",
             "2.20",
             use_ai=False,
-            api_key="test-key",
+            api_key=_sample_api_key(),
         )
         # Should still work with static data
         assert result["from_version"] == "2.18"

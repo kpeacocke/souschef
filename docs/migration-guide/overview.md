@@ -1,6 +1,6 @@
 # Migration Guide Overview
 
-This guide provides a comprehensive methodology for migrating from Chef to Ansible, leveraging SousChef's 38 MCP tools and proven enterprise practices.
+This guide provides a comprehensive methodology for migrating from Chef to Ansible, leveraging SousChef's 43 MCP tools and proven enterprise practices.
 
 ## Migration Philosophy
 
@@ -55,6 +55,29 @@ graph LR
 - `analyze_chef_environment_usage` - Catalog environments
 
 **Deliverable**: Complete inventory document with dependency map.
+
+---
+
+## CLI Quick Start (v2 Orchestrator)
+
+Use the v2 CLI to run end-to-end migrations and persist state for later
+review. This is helpful when you want a reproducible migration run without
+an MCP client.
+
+```bash
+souschef-cli v2 migrate \
+   --cookbook-path /path/to/cookbook \
+   --chef-version 15.10.91 \
+   --target-platform aap \
+   --target-version 2.4.0 \
+   --save-state
+```
+
+Load the saved state later by migration ID:
+
+```bash
+souschef-cli v2 status --migration-id mig-abc123
+```
 
 ---
 
@@ -364,7 +387,7 @@ graph LR
 
 ## Best Practices
 
-### Do's ✅
+### Do's [YES]
 
 1. **Start with Assessment**
    - Always run `assess_chef_migration_complexity` first
@@ -398,7 +421,7 @@ graph LR
    - Convert existing InSpec tests with `convert_inspec_to_test`
    - Generate new tests with `generate_inspec_from_recipe`
 
-### Don'ts ❌
+### Don'ts [NO]
 
 1. **Don't Skip Assessment**
    - Jumping directly to conversion often leads to rework
@@ -594,4 +617,4 @@ Or explore specific topics:
 - **InSpec Documentation**: [docs.chef.io/inspec/](https://docs.chef.io/inspec/)
 
 !!! success "Ready to Migrate?"
-    With SousChef's 38 tools and this methodology, you have everything needed for a successful Chef-to-Ansible migration. Start with assessment, follow the phases, and leverage automation throughout the process.
+    With SousChef's 43 tools and this methodology, you have everything needed for a successful Chef-to-Ansible migration. Start with assessment, follow the phases, and leverage automation throughout the process.

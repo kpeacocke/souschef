@@ -28,11 +28,13 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 - **Testing Plan Generation** - Generate comprehensive upgrade testing plans
 
 !!! info "About Tool Counts"
-    **Why 43 tools in the documentation but more in the server?**
+    **Complete tool inventory available in source code**
 
-    The MCP server provides **48 total tools**. This documentation focuses on the **43 primary user-facing tools** (38 migration + 5 upgrade tools) that cover the main capabilities. The remaining 5 are low-level filesystem operations used internally by the main tools.
+    The MCP server includes primary user-facing tools for Chef-to-Ansible migration and Ansible upgrade planning. This documentation focuses on the primary user-facing tools (38 migration + 5 upgrade) that cover the main capabilities.
 
-    As a user, you'll primarily interact with the documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
+    As a user, you'll primarily interact with the documented tools. Your AI assistant may use additional tools automatically when needed, but you don't need to know about them for successful migrations.
+
+    See [api-reference/](api-reference/) and `souschef/server.py` for the complete authoritative list of all MCP tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -46,7 +48,7 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 - :material-domain: **Custom Enterprise Models**
 
 !!! tip "How it works"
-    You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 43 specialized tools. The model calls these tools to help with your migration and upgrade planning.
+    You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through specialized tools. The model calls these tools to help with your migration and upgrade planning.
 
 ## Core Capabilities
 
@@ -112,11 +114,22 @@ Get started with SousChef in minutes:
     # Reload VS Code, trust the server
     # Use tools in Copilot Chat:
     # "Analyze the cookbook at /path/to/cookbook"
-    pip install mcp-souschef
-
-    # Start using immediately
-    souschef-cli cookbook /path/to/cookbook
     ```
+
+=== "CLI (v2 Orchestrator)"
+
+        ```bash
+        # Run an end-to-end v2 migration
+        souschef-cli v2 migrate \
+            --cookbook-path /path/to/cookbook \
+            --chef-version 15.10.91 \
+            --target-platform aap \
+            --target-version 2.4.0 \
+            --save-state
+
+        # Load the stored migration state later
+        souschef-cli v2 status --migration-id mig-abc123
+        ```
 
 === "Web UI"
 
@@ -185,6 +198,30 @@ Get started with SousChef in minutes:
 
     [:octicons-arrow-right-24: Migration guide](migration-guide/overview.md)
 
+-   :material-api:{ .lg .middle } __v2.0 API Reference__
+
+    ---
+
+    Complete API documentation for the v2.0 Migration Orchestrator
+
+    [:octicons-arrow-right-24: API reference](api-reference/migration-v2.md)
+
+-   :material-cog-sync:{ .lg .middle } __Advanced Workflows__
+
+    ---
+
+    Complex migration patterns and integration strategies
+
+    [:octicons-arrow-right-24: Advanced workflows](migration-guide/advanced-workflows.md)
+
+-   :material-help-circle:{ .lg .middle } __Troubleshooting__
+
+    ---
+
+    Common issues and solutions for migrations
+
+    [:octicons-arrow-right-24: Troubleshooting](user-guide/troubleshooting.md)
+
 </div>
 
 ## Community & Support
@@ -196,4 +233,4 @@ Get started with SousChef in minutes:
 
 ---
 
-**SousChef** - *Transforming infrastructure automation, one recipe at a time.* ✨
+**SousChef** - *Transforming infrastructure automation, one recipe at a time.*

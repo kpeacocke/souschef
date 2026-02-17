@@ -12,9 +12,9 @@ When running containers via `docker compose` from within the devcontainer, they 
 - **127.0.0.1:9999** - Same as localhost
 
 ### From Within Devcontainer
-- **localhost:9999** ❌ Does NOT work (network isolation)
-- **172.17.0.1:9999** ✅ Use the host gateway IP
-- **host.docker.internal:9999** ❌ May not be available
+- **localhost:9999** [NO] Does NOT work (network isolation)
+- **172.17.0.1:9999** [YES] Use the host gateway IP
+- **host.docker.internal:9999** [NO] May not be available
 
 To find the correct host IP from devcontainer:
 ```bash

@@ -29,15 +29,21 @@ def large_ini_inventory(tmp_path):
     """
     inventory_content = "[webservers]\n"
     for i in range(500):
-        inventory_content += f"web_{i:04d} ansible_host=192.168.1.{i % 255}\n"
+        inventory_content += (
+            f"web_{i:04d} ansible_host=192.168.1.{i % 255}\n"  # NOSONAR - test fixture
+        )
 
     inventory_content += "\n[databases]\n"
     for i in range(300):
-        inventory_content += f"db_{i:04d} ansible_host=10.0.0.{i % 255}\n"
+        inventory_content += (
+            f"db_{i:04d} ansible_host=10.0.0.{i % 255}\n"  # NOSONAR - test fixture
+        )
 
     inventory_content += "\n[monitoring]\n"
     for i in range(200):
-        inventory_content += f"mon_{i:04d} ansible_host=172.16.0.{i % 255}\n"
+        inventory_content += (
+            f"mon_{i:04d} ansible_host=172.16.0.{i % 255}\n"  # NOSONAR - test fixture
+        )
 
     inventory_file = tmp_path / "inventory.ini"
     inventory_file.write_text(inventory_content)
@@ -57,7 +63,7 @@ def large_yaml_inventory(tmp_path):
                 "webservers": {
                     "hosts": {
                         f"web_{i:04d}": {
-                            "ansible_host": f"192.168.1.{i % 255}",
+                            "ansible_host": f"192.168.1.{i % 255}",  # NOSONAR - test fixture
                             "http_port": 8080 + (i % 100),
                             "max_clients": 200 + (i % 100),
                             "region": ["us-east", "us-west", "eu-west"][i % 3],
@@ -69,7 +75,7 @@ def large_yaml_inventory(tmp_path):
                 "databases": {
                     "hosts": {
                         f"db_{i:04d}": {
-                            "ansible_host": f"10.0.0.{i % 255}",
+                            "ansible_host": f"10.0.0.{i % 255}",  # NOSONAR - test fixture
                             "db_port": 5432,
                             "max_connections": 100 + (i % 50),
                             "backup_enabled": i % 2 == 0,
@@ -82,7 +88,7 @@ def large_yaml_inventory(tmp_path):
                 "monitoring": {
                     "hosts": {
                         f"mon_{i:04d}": {
-                            "ansible_host": f"172.16.0.{i % 255}",
+                            "ansible_host": f"172.16.0.{i % 255}",  # NOSONAR - test fixture
                             "monitoring_port": 9090,
                             "scrape_interval": 15 + (i % 30),
                             "tags": ["monitoring", "observability"],
@@ -311,7 +317,9 @@ class TestRegressionBaselines:
         # Standard test inventory
         inventory_content = "[servers]\n"
         for i in range(100):
-            inventory_content += f"server_{i:03d} ansible_host=10.0.0.{i}\n"
+            inventory_content += (
+                f"server_{i:03d} ansible_host=10.0.0.{i}\n"  # NOSONAR - test fixture
+            )
 
         inventory_file = tmp_path / "inventory.ini"
         inventory_file.write_text(inventory_content)
@@ -335,7 +343,7 @@ class TestRegressionBaselines:
             "all": {
                 "hosts": {
                     f"server_{i:03d}": {
-                        "ansible_host": f"10.0.0.{i}",
+                        "ansible_host": f"10.0.0.{i}",  # NOSONAR - test fixture
                         "custom_var": f"value_{i}",
                     }
                     for i in range(100)

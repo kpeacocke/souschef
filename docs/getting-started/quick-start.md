@@ -246,11 +246,11 @@ Validate that the conversion is correct and follows best practices:
     ```
 
 The validation checks:
-- ✅ Syntax correctness
-- ✅ Semantic equivalence
-- ✅ Best practices compliance
-- ✅ Security considerations
-- ✅ Performance optimizations
+- [YES] Syntax correctness
+- [YES] Semantic equivalence
+- [YES] Best practices compliance
+- [YES] Security considerations
+- [YES] Performance optimizations
 
 ### Step 4: Test the Playbook
 

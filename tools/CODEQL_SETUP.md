@@ -45,32 +45,32 @@ scripts\codeql-analyze.bat rebuild
 
 ```text
 .codeql/
-├── config/                    # ✅ Committed to git
+├── config/                    # Committed to git
 │   ├── .codeqlignore         # Files to exclude from analysis
 │   ├── config.yml            # CodeQL configuration
 │   └── codeql.yml            # Query pack settings
-├── databases/                 # ❌ Ignored (local build artifacts)
+├── databases/                 # Ignored (local build artifacts)
 │   └── python-db/            # CodeQL database for Python
 │       ├── db-python/        # Extracted code representation
 │       └── [other files]     # Database metadata
-├── reports/                   # ✅ Committed to git
+├── reports/                   # Committed to git
 │   ├── latest.sarif          # Most recent analysis
 │   └── archive/              # Historical results
-└── queries/                   # ✅ Committed to git (for custom queries)
+└── queries/                   # Committed to git (for custom queries)
     └── .gitkeep
 ```
 
 ### What Gets Committed
 
-- ✅ **Configuration** (`config/`) - except `databases/`
-- ✅ **Reports** (`reports/`) - SARIF files showing analysis results
-- ✅ **Custom Queries** (`queries/`) - if any are added
-- ✅ **.codeql/README.md** - This directory's documentation
+- **Configuration** (`config/`) - except `databases/`
+- **Reports** (`reports/`) - SARIF files showing analysis results
+- **Custom Queries** (`queries/`) - if any are added
+- **.codeql/README.md** - This directory's documentation
 
 ### What's Ignored
 
-- ❌ **Databases** (`databases/`) - Large files (~600MB), rebuilt per machine
-- ❌ **Build artifacts** - Temporary extraction files and metadata
+- **Databases** (`databases/`) - Large files (~600MB), rebuilt per machine
+- **Build artifacts** - Temporary extraction files and metadata
 
 ## Detailed Usage
 

@@ -400,7 +400,7 @@ souschef-cli dependencies cookbook/
 
 **Strategy:**
 - Use SousChef for initial structure
-- Configure environment variables for Chef Server access (`CHEF_SERVER_URL`, `CHEF_NODE_NAME`)
+- Configure environment variables for Chef Server access (`CHEF_SERVER_URL`, `CHEF_ORG`, `CHEF_CLIENT_NAME`, `CHEF_CLIENT_KEY_PATH`)
 - Manually refine complex areas
 - Document custom mappings
 - Share learnings with team

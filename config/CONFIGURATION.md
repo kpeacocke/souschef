@@ -2,7 +2,7 @@
 
 This directory contains example MCP server configurations for various MCP clients.
 
-## 📁 Configuration Files
+## Configuration Files
 
 ### Production Use (PyPI Installation)
 
@@ -285,7 +285,7 @@ The provided VS Code configs work with Copilot:
 4. Type `@souschef` and you should see it as available
 5. Try: `@souschef list your available tools`
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Server Not Appearing
 
@@ -338,6 +338,6 @@ pwd  # Use this output in your config
 3. **Multiple servers** - You can configure multiple MCP servers in the same file
 4. **Environment variables** - Add to `"env": {}` if needed for your setup
 
-## 🤝 Contributing
+## Contributing
 
 Found an issue with these configs? Please [open an issue](https://github.com/kpeacocke/souschef/issues) or submit a PR!

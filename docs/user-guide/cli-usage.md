@@ -37,6 +37,8 @@ souschef-cli --help
 | [`profile-operation`](#profile-operation) | Profile specific operation | `souschef-cli profile-operation recipe default.rb` |
 | [`ls`](#ls) | List directory contents | `souschef-cli ls recipes/` |
 | [`cat`](#cat) | Display file contents | `souschef-cli cat default.rb` |
+| [`v2 migrate`](#v2-migrate) | Run v2 migration orchestration | `souschef-cli v2 migrate --cookbook-path cookbooks/app` |
+| [`v2 status`](#v2-status) | Load v2 migration state | `souschef-cli v2 status --migration-id mig-abc123` |
 
 ---
 
@@ -195,6 +197,76 @@ souschef-cli resource resources/app_config.rb --format json | jq '.properties'
   "actions": ["create", "delete"],
   "default_action": "create"
 }
+```
+
+---
+
+### v2 migrate
+
+Run the v2 migration orchestrator for a cookbook.
+
+**Syntax:**
+```bash
+souschef-cli v2 migrate \
+  --cookbook-path PATH \
+  --chef-version VERSION \
+  --target-platform PLATFORM \
+  --target-version VERSION
+```
+
+**Options:**
+- `--cookbook-path` (required): Path to the Chef cookbook directory
+- `--chef-version` (required): Chef Infra Client version (e.g., 15.10.91)
+- `--target-platform` (required): Target platform (`tower`, `awx`, `aap`)
+- `--target-version` (required): Target platform version (e.g., 2.4.0)
+- `--skip-validation`: Skip playbook validation
+- `--save-state`: Persist migration state to storage
+- `--analysis-id`: Link to an existing analysis ID
+- `--output-type`: History output type (`playbook`, `role`, `collection`)
+- `--format`: Output format (`json` default, `text`)
+- `--output`: Save result to file instead of stdout
+
+**Examples:**
+
+=== "Basic Migration"
+    ```bash
+    souschef-cli v2 migrate \
+      --cookbook-path cookbooks/nginx \
+      --chef-version 15.10.91 \
+      --target-platform aap \
+      --target-version 2.4.0
+    ```
+
+=== "Save State"
+    ```bash
+    souschef-cli v2 migrate \
+      --cookbook-path cookbooks/nginx \
+      --chef-version 15.10.91 \
+      --target-platform aap \
+      --target-version 2.4.0 \
+      --save-state
+    ```
+
+---
+
+### v2 status
+
+Load a saved v2 migration state by ID.
+
+**Syntax:**
+```bash
+souschef-cli v2 status --migration-id MIGRATION_ID
+```
+
+**Options:**
+- `--migration-id` (required): Migration ID to load from storage
+- `--limit`: Maximum number of history entries to scan (default: 500)
+- `--format`: Output format (`json` default, `text`)
+- `--output`: Save result to file instead of stdout
+
+**Example:**
+```bash
+souschef-cli v2 status --migration-id mig-abc123
 ```
 
 ---
@@ -446,13 +518,13 @@ souschef-cli cookbook examples/database
 Analyzing cookbook: database
 ==================================================
 
-📋 Metadata:
+[LIST] Metadata:
 --------------------------------------------------
 Cookbook: database
 Version: 2.1.0
 Dependencies: postgresql (>= 1.0.0), apt (~> 7.0)
 
-📁 Structure:
+Structure:
 --------------------------------------------------
 database/
 ├── metadata.rb
@@ -461,7 +533,7 @@ database/
 ├── templates/ (2 files)
 └── resources/ (1 file)
 
-🧑‍🍳 Recipes:
+[USER]‍[CHEF] Recipes:
 --------------------------------------------------
   default.rb:
     Resource 1: package[postgresql]
@@ -469,14 +541,14 @@ database/
     Resource 3: template[/etc/postgresql/postgresql.conf]
     ... (7 more resources)
 
-🔧 Custom Resources:
+[CONFIG] Custom Resources:
 --------------------------------------------------
   user.rb:
     Type: database_user
     Properties: 3
     Actions: create, delete
 
-📄 Templates:
+[FILE] Templates:
 --------------------------------------------------
   database.yml.erb:
     Variables: 4
@@ -750,7 +822,7 @@ souschef-cli profile-operation OPERATION PATH [OPTIONS]
     Execution Time: 89.4ms
     Peak Memory: 12.3 MB
 
-    Status: ✓ Performance is good
+    Status: [OK] Performance is good
     ```
 
 === "Detailed Profiling"
@@ -780,7 +852,7 @@ souschef-cli profile-operation OPERATION PATH [OPTIONS]
     extract_properties:       45 calls
     resolve_guards:          12 calls
 
-    Status: ✓ Performance is good
+    Status: [OK] Performance is good
     ```
 
 ---
@@ -976,7 +1048,7 @@ if grep -q "SLOW" performance.txt; then
   exit 1
 fi
 
-echo "✓ All validations passed"
+echo "[OK] All validations passed"
 ```
 
 ---

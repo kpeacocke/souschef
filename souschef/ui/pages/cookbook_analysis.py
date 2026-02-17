@@ -1,7 +1,6 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
-import inspect
 import io
 import json
 import os
@@ -11,6 +10,7 @@ import sys
 import tarfile
 import tempfile
 import zipfile
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +38,6 @@ from souschef.core.metrics import (
 from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
-    _safe_join,
 )
 from souschef.generators.repo import (
     analyse_conversion_output,
@@ -50,6 +49,26 @@ from souschef.storage import (
     get_storage_manager,
 )
 
+# Import refactored modules for backward compatibility
+from souschef.ui.pages.cookbook_analysis_security import (  # noqa: F401
+    _exceeds_depth_limit,
+    _extract_tar_members,
+    _extract_tar_securely,
+    _extract_zip_securely,
+    _get_safe_extraction_path,
+    _has_path_traversal,
+    _is_blocked_extension,
+    _is_symlink,
+    _pre_scan_tar_members,
+    _validate_tar_file_security,
+    _validate_zip_file_security,
+)
+from souschef.ui.pages.cookbook_analysis_utilities import (  # noqa: F401
+    _get_secure_ai_config_path,
+    _is_within_base,
+    _sanitize_filename,
+)
+
 # AI Settings
 ANTHROPIC_PROVIDER = "Anthropic (Claude)"
 ANTHROPIC_CLAUDE_DISPLAY = "Anthropic Claude"
@@ -59,46 +78,15 @@ IBM_WATSONX = "IBM Watsonx"
 RED_HAT_LIGHTSPEED = "Red Hat Lightspeed"
 
 
-def _sanitize_filename(filename: str) -> str:
-    """
-    Sanitise filename to prevent path injection attacks.
+# Deployment modes
+class DeploymentMode(str, Enum):
+    """Deployment mode options."""
 
-    Args:
-        filename: The filename to sanitise.
-
-    Returns:
-        Sanitised filename safe for file operations.
-
-    """
-    import re
-
-    # Remove any path separators and parent directory references
-    sanitised = filename.replace("..", "_").replace("/", "_").replace("\\", "_")
-    # Remove any null bytes or control characters
-    sanitised = re.sub(r"[\x00-\x1f\x7f]", "_", sanitised)
-    # Remove leading/trailing whitespace and dots
-    sanitised = sanitised.strip(". ")
-    # Limit length to prevent issues
-    sanitised = sanitised[:255]
-    return sanitised if sanitised else "unnamed"
+    SIMULATION = "Simulation"
+    LIVE = "Live Deployment"
 
 
-def _get_secure_ai_config_path() -> Path:
-    """Return a private, non-world-writable path for AI config storage."""
-    config_dir = Path(tempfile.gettempdir()) / ".souschef"
-    config_dir.mkdir(mode=0o700, exist_ok=True)
-    with contextlib.suppress(OSError):
-        config_dir.chmod(0o700)
-
-    if config_dir.is_symlink():
-        raise ValueError("AI config directory cannot be a symlink")
-
-    config_file = config_dir / "ai_config.json"
-    # Ensure config file has secure permissions if it exists
-    if config_file.exists():  # NOSONAR
-        with contextlib.suppress(OSError):
-            config_file.chmod(0o600)
-    return config_file
+DEPLOYMENT_MODES = [DeploymentMode.SIMULATION.value, DeploymentMode.LIVE.value]
 
 
 def load_ai_settings() -> dict[str, str | float | int]:
@@ -644,240 +632,6 @@ version '1.0.0'
         return single_dir
 
 
-def _extract_zip_securely(archive_path: Path, extraction_dir: Path) -> None:
-    """Extract ZIP archive with security checks."""
-    total_size = 0
-
-    with zipfile.ZipFile(archive_path, "r") as zip_ref:
-        # Pre-scan for security issues
-        for file_count, info in enumerate(zip_ref.filelist, start=1):
-            _validate_zip_file_security(info, file_count, total_size)
-            total_size += info.file_size
-
-        # Safe extraction with manual path handling
-        for info in zip_ref.filelist:
-            # Construct safe relative path
-
-            safe_path = _get_safe_extraction_path(info.filename, extraction_dir)
-
-            if info.is_dir():
-                safe_path.mkdir(parents=True, exist_ok=True)
-            else:
-                safe_path.parent.mkdir(parents=True, exist_ok=True)
-
-                with zip_ref.open(info) as source, safe_path.open("wb") as target:
-                    # Read in chunks to control memory usage
-                    while True:
-                        chunk = source.read(8192)
-                        if not chunk:
-                            break
-                        target.write(chunk)
-
-
-def _validate_zip_file_security(info, file_count: int, total_size: int) -> None:
-    """Validate a single ZIP file entry for security issues."""
-    file_count += 1
-    if file_count > MAX_FILES:
-        raise ValueError(f"Too many files in archive: {file_count} (max: {MAX_FILES})")
-
-    # Check file size
-    if info.file_size > MAX_FILE_SIZE:
-        raise ValueError(f"File too large: {info.filename} ({info.file_size} bytes)")
-
-    total_size += info.file_size
-    if total_size > MAX_ARCHIVE_SIZE:
-        raise ValueError(f"Total archive size too large: {total_size} bytes")
-
-    # Check for path traversal
-    if _has_path_traversal(info.filename):
-        raise ValueError(f"Path traversal detected: {info.filename}")
-
-    # Check directory depth
-    if _exceeds_depth_limit(info.filename):
-        raise ValueError(f"Directory depth too deep: {info.filename}")
-
-    # Check for blocked file extensions
-    if _is_blocked_extension(info.filename):
-        raise ValueError(f"Blocked file type: {info.filename}")
-
-    # Check for symlinks
-    if _is_symlink(info):
-        raise ValueError(f"Symlinks not allowed: {info.filename}")
-
-
-def _extract_tar_securely(
-    archive_path: Path, extraction_dir: Path, gzipped: bool
-) -> None:
-    """
-    Extract TAR archive with resource consumption controls (S5042).
-
-    Resource consumption is controlled via:
-    - Pre-scanning all members before extraction
-    - Validating file sizes, counts, and directory depth
-    - Using tarfile.filter='data' (Python 3.12+) to prevent symlink traversal
-    - Limiting extraction to validated safe paths
-
-    """
-    mode = "r:gz" if gzipped else "r"
-
-    if not archive_path.is_file():
-        raise ValueError(f"Archive path is not a file: {archive_path}")
-
-    if not tarfile.is_tarfile(str(archive_path)):
-        raise ValueError(f"Invalid or corrupted TAR archive: {archive_path.name}")
-
-    try:
-        open_kwargs: dict[str, Any] = {"name": str(archive_path), "mode": mode}
-
-        # Apply safe filter if available (Python 3.12+) to prevent traversal attacks.
-        # For older Python versions, resource consumption is controlled via pre-scanning
-        # and member validation before extraction.
-        if "filter" in inspect.signature(tarfile.open).parameters:
-            # Use 'data' filter to prevent extraction of special files and symlinks
-            open_kwargs["filter"] = "data"
-
-        # Resource consumption controls (S5042): Pre-scan validates all members for
-        # size limits (MAX_ARCHIVE_SIZE, MAX_FILE_SIZE), file count (MAX_FILES),
-        # depth (MAX_DEPTH), and blocks malicious files before extraction.
-        # Security: Validated via _pre_scan_tar_members + _extract_tar_members
-        with tarfile.open(**open_kwargs) as tar_ref:  # NOSONAR
-            members = tar_ref.getmembers()
-            # Pre-validate all members before allowing extraction
-            # This controls resource consumption and prevents
-            # zip bombs/decompression bombs
-            _pre_scan_tar_members(members)
-            # Extract only validated members to pre-validated safe paths
-            _extract_tar_members(tar_ref, members, extraction_dir)
-    except tarfile.TarError as e:
-        raise ValueError(f"Invalid or corrupted TAR archive: {e}") from e
-    except Exception as e:
-        raise ValueError(f"Failed to process TAR archive: {e}") from e
-
-
-def _pre_scan_tar_members(members):
-    """
-    Pre-scan TAR members to control resource consumption (S5042).
-
-    Validates all members before extraction to prevent:
-    - Compression/decompression bombs (via size limits)
-    - Excessive memory consumption (via file count limits)
-    - Directory traversal attacks (via depth limits)
-    - Malicious file inclusion (via extension and type checks)
-
-    """
-    total_size = 0
-    for file_count, member in enumerate(members, start=1):
-        total_size += member.size
-        # Validate member and accumulate size for bounds checking
-        _validate_tar_file_security(member, file_count, total_size)
-
-
-def _extract_tar_members(tar_ref, members, extraction_dir):
-    """Extract validated TAR members to the extraction directory."""
-    for member in members:
-        safe_path = _get_safe_extraction_path(member.name, extraction_dir)
-        if member.isdir():
-            safe_path.mkdir(parents=True, exist_ok=True)
-        else:
-            safe_path.parent.mkdir(parents=True, exist_ok=True)
-            _extract_file_content(tar_ref, member, safe_path)
-
-
-def _extract_file_content(tar_ref, member, safe_path):
-    """Extract the content of a single TAR member to a file."""
-    source = tar_ref.extractfile(member)
-    if source:
-        with source, safe_path.open("wb") as target:
-            while True:
-                chunk = source.read(8192)
-                if not chunk:
-                    break
-                target.write(chunk)
-
-
-def _validate_tar_file_security(member, file_count: int, total_size: int) -> None:
-    """Validate a single TAR file entry for security issues."""
-    file_count += 1
-    if file_count > MAX_FILES:
-        raise ValueError(f"Too many files in archive: {file_count} (max: {MAX_FILES})")
-
-    # Check file size
-    if member.size > MAX_FILE_SIZE:
-        raise ValueError(f"File too large: {member.name} ({member.size} bytes)")
-
-    total_size += member.size
-    if total_size > MAX_ARCHIVE_SIZE:
-        raise ValueError(f"Total archive size too large: {total_size} bytes")
-
-    # Check for path traversal
-    if _has_path_traversal(member.name):
-        raise ValueError(f"Path traversal detected: {member.name}")
-
-    # Check directory depth
-    if _exceeds_depth_limit(member.name):
-        raise ValueError(f"Directory depth too deep: {member.name}")
-
-    # Check for blocked file extensions
-    if _is_blocked_extension(member.name):
-        raise ValueError(f"Blocked file type: {member.name}")
-
-    # Check for symlinks
-    if member.issym() or member.islnk():
-        raise ValueError(f"Symlinks not allowed: {member.name}")
-
-    # Check for device files, fifos, etc.
-    if not member.isfile() and not member.isdir():
-        raise ValueError(f"Unsupported file type: {member.name} (type: {member.type})")
-
-
-def _has_path_traversal(filename: str) -> bool:
-    """Check if filename contains path traversal attempts."""
-    return ".." in filename
-
-
-def _exceeds_depth_limit(filename: str) -> bool:
-    """Check if filename exceeds directory depth limit."""
-    return filename.count("/") > MAX_DEPTH or filename.count("\\") > MAX_DEPTH
-
-
-def _is_blocked_extension(filename: str) -> bool:
-    """Check if filename has a blocked extension."""
-    file_ext = Path(filename).suffix.lower()
-    return file_ext in BLOCKED_EXTENSIONS
-
-
-def _is_symlink(info) -> bool:
-    """Check if ZIP file info indicates a symlink."""
-    return bool(info.external_attr & 0xA000 == 0xA000)  # Symlink flag
-
-
-def _get_safe_extraction_path(filename: str, extraction_dir: Path) -> Path:
-    """
-    Get a safe path for extraction that prevents TarSlip (CWE-22).
-
-    Validates that extracted paths stay within the extraction directory,
-    preventing directory traversal and TarSlip attacks.
-    """
-    # Reject paths with directory traversal attempts or absolute paths
-    # These attack vectors prevent TarSlip/Zip-slip attacks
-    if (
-        ".." in filename
-        or filename.startswith("/")
-        or "\\" in filename
-        or ":" in filename
-    ):
-        raise ValueError(f"Path traversal or absolute path detected: {filename}")
-
-    # Normalise separators and join using a containment-checked join
-    normalized = filename.replace("\\", "/").strip("/")
-    # _ensure_within_base_path validates the resolved path is within base
-    safe_path = _ensure_within_base_path(
-        _safe_join(extraction_dir.resolve(), normalized), extraction_dir.resolve()
-    )
-
-    return safe_path
-
-
 def create_results_archive(results: list, cookbook_path: str) -> bytes:
     """Create a ZIP archive containing analysis results."""
     zip_buffer = io.BytesIO()
@@ -979,6 +733,8 @@ def show_cookbook_analysis_page() -> None:
         st.session_state.analysis_cookbook_path = None
         st.session_state.total_cookbooks = 0
         st.session_state.temp_dir = None
+        st.session_state.simulation_result = None
+        st.session_state.simulation_output_path = None
 
     # Add unique key to track if this is a new page load
     if "analysis_page_key" not in st.session_state:
@@ -1067,6 +823,8 @@ def _display_results_view() -> None:
             st.session_state.analysis_info_messages = None
             st.session_state.conversion_results = None
             st.session_state.generated_playbook_repo = None
+            st.session_state.simulation_result = None
+            st.session_state.simulation_output_path = None
             st.session_state.analysis_page_key += 1
             st.rerun()
 
@@ -1130,17 +888,6 @@ def _get_archive_upload_input() -> Any:
         help="Upload a ZIP or TAR archive containing your Chef cookbooks",
     )
     return uploaded_file
-
-
-def _is_within_base(base: Path, candidate: Path) -> bool:
-    """Check whether candidate is contained within base after resolution."""
-    base_real = Path(os.path.realpath(str(base)))
-    candidate_real = Path(os.path.realpath(str(candidate)))
-    try:
-        candidate_real.relative_to(base_real)
-        return True
-    except ValueError:
-        return False
 
 
 def _validate_and_list_cookbooks(cookbook_path: str) -> None:
@@ -1312,11 +1059,21 @@ def _display_cookbook_table(cookbook_data):
 def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
     """Handle the cookbook selection interface with individual and holistic options."""
     st.subheader("Cookbook Selection & Analysis")
-
-    # Show validation warnings if any cookbooks have issues
     _show_cookbook_validation_warnings(cookbook_data)
 
-    # Holistic analysis/conversion buttons
+    _show_holistic_actions(cookbook_path, cookbook_data)
+    st.markdown("### Deployment & Orchestration")
+    st.markdown("Configure target platform and deployment options for your migration.")
+
+    config = _collect_deployment_config()
+    _execute_migration_if_requested(cookbook_path, config)
+
+    st.divider()
+    _show_individual_selection(cookbook_path, cookbook_data)
+
+
+def _show_holistic_actions(cookbook_path: str, cookbook_data: list) -> None:
+    """Show holistic analysis and conversion buttons."""
     st.markdown("### Holistic Analysis & Conversion")
     st.markdown(
         "Analyse and convert **ALL cookbooks** in the archive holistically, "
@@ -1324,13 +1081,13 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
     )
 
     col1, col2 = st.columns(2)
-
     with col1:
         if st.button(
             "🔍 Analyse ALL Cookbooks",
             type="primary",
-            help="Analyse all cookbooks together considering inter-cookbook "
-            "dependencies",
+            help=(
+                "Analyse all cookbooks together considering inter-cookbook dependencies"
+            ),
             key="holistic_analysis",
         ):
             _analyze_all_cookbooks_holistically(cookbook_path, cookbook_data)
@@ -1344,15 +1101,238 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
         ):
             _convert_all_cookbooks_holistically(cookbook_path)
 
-    st.divider()
 
-    # Individual cookbook selection
+def _collect_deployment_config() -> dict[str, Any]:
+    """Collect deployment configuration from UI."""
+    sim_col1, sim_col2, sim_col3 = st.columns(3)
+
+    with sim_col1:
+        target_platform: str = st.selectbox(
+            "Target Platform",
+            ["awx", "aap", "tower"],
+            format_func=lambda x: {
+                "awx": "AWX (Open Source)",
+                "aap": "Ansible Automation Platform",
+                "tower": "Ansible Tower (Legacy)",
+            }.get(x, x),
+            index=0,
+            key="simulation_target",
+            help="Select the target Ansible automation platform",
+        )
+
+    with sim_col2:
+        target_version: str = st.text_input(
+            "Platform Version",
+            value="23.0.0" if target_platform == "awx" else "2.4.0",
+            key="platform_version",
+            help="Enter the target platform version",
+        )
+
+    with sim_col3:
+        deployment_mode: str = st.radio(
+            "Deployment Mode",
+            DEPLOYMENT_MODES,
+            index=0,
+            key="deployment_mode",
+            help=(
+                "Simulation previews without changes; "
+                "Live Deployment creates actual resources"
+            ),
+        )
+
+    _show_deployment_information(deployment_mode)
+    connection_config = _get_connection_config(deployment_mode)
+    conversion_options = _collect_conversion_options()
+    advanced_options = _collect_advanced_options()
+
+    return {
+        "target_platform": target_platform,
+        "target_version": target_version,
+        "deployment_mode": deployment_mode,
+        "connection": connection_config,
+        "conversion": conversion_options,
+        "advanced": advanced_options,
+    }
+
+
+def _show_deployment_information(deployment_mode: str) -> None:
+    """Show information based on deployment mode."""
+    if deployment_mode == DeploymentMode.SIMULATION.value:
+        st.info(
+            "🔍 **Simulation Mode**: Preview AWX/AAP deployment "
+            "without creating actual resources."
+        )
+    elif deployment_mode == DeploymentMode.LIVE.value:
+        st.warning(
+            "⚠️ **Live Deployment**: Will create actual resources "
+            "in AWX/AAP. Ensure credentials are configured."
+        )
+
+
+def _get_connection_config(deployment_mode: str) -> dict[str, Any]:
+    """Get connection configuration for live deployment."""
+    if deployment_mode != DeploymentMode.LIVE.value:
+        return {}
+
+    with st.expander("Platform Connection Settings", expanded=False):
+        server_url: str = st.text_input(
+            "Server URL",
+            placeholder="https://awx.example.com",
+            key="platform_server_url",
+            help="AWX/AAP server URL",
+        )
+        conn_col1, conn_col2 = st.columns(2)
+        with conn_col1:
+            username: str = st.text_input(
+                "Username", key="platform_username", help="Authentication username"
+            )
+        with conn_col2:
+            password: str = st.text_input(
+                "Password",
+                type="password",
+                key="platform_password",
+                help="Authentication password",
+            )
+        verify_ssl: bool = st.checkbox(
+            "Verify SSL", value=True, key="platform_verify_ssl"
+        )
+
+    return {
+        "server_url": server_url,
+        "username": username,
+        "password": password,
+        "verify_ssl": verify_ssl,
+    }
+
+
+def _collect_conversion_options() -> dict[str, bool]:
+    """Collect conversion options from UI."""
+    conversion_opts: dict[str, bool] = {}
+
+    with st.expander("Conversion Options", expanded=True):
+        conv_col1, conv_col2 = st.columns(2)
+        with conv_col1:
+            conversion_opts["include_repo"] = st.checkbox(
+                "Generate Git Repository",
+                value=True,
+                key="simulation_repo",
+                help="Generate a Git repository structure for the converted playbooks",
+            )
+            conversion_opts["include_tests"] = st.checkbox(
+                "Convert InSpec Tests",
+                value=True,
+                key="convert_inspec",
+                help="Convert InSpec profiles to Ansible tests",
+            )
+            conversion_opts["convert_habitat"] = st.checkbox(
+                "Convert Habitat Plans",
+                value=False,
+                key="convert_habitat",
+                help="Convert Chef Habitat plans to Docker/Compose",
+            )
+        with conv_col2:
+            conversion_opts["include_tar"] = st.checkbox(
+                "Create TAR Archives",
+                value=True,
+                key="simulation_tar",
+                help="Package converted files as tar archives",
+            )
+            conversion_opts["generate_ci"] = st.checkbox(
+                "Generate CI/CD Pipelines",
+                value=False,
+                key="generate_ci",
+                help="Generate CI/CD pipeline configurations",
+            )
+            conversion_opts["validate_playbooks"] = st.checkbox(
+                "Validate Generated Playbooks",
+                value=True,
+                key="validate_playbooks",
+                help="Run validation on generated Ansible playbooks",
+            )
+
+    return conversion_opts
+
+
+def _collect_advanced_options() -> dict[str, str | bool]:
+    """Collect advanced options from UI."""
+    options: dict[str, str | bool] = {}
+
+    with st.expander("Advanced Options"):
+        options["chef_version"] = st.text_input(
+            "Chef Version",
+            value="15.10.91",
+            key="chef_version",
+            help="Chef version being migrated from",
+        )
+        options["output_dir"] = st.text_input(
+            "Custom Output Directory (optional)",
+            placeholder="/path/to/output",
+            key="custom_output_dir",
+            help="Specify custom output directory for generated files",
+        )
+        options["preserve_comments"] = st.checkbox(
+            "Preserve Comments",
+            value=True,
+            key="preserve_comments",
+            help="Attempt to preserve comments from Chef code",
+        )
+
+    return options
+
+
+def _execute_migration_if_requested(cookbook_path: str, config: dict[str, Any]) -> None:
+    """Execute migration if user clicks the button."""
+    deployment_mode = config["deployment_mode"]
+    button_label = (
+        "Simulate Deployment"
+        if deployment_mode == DeploymentMode.SIMULATION.value
+        else "Execute Migration"
+    )
+    button_help = (
+        "Preview AWX/AAP deployment without making changes"
+        if deployment_mode == DeploymentMode.SIMULATION.value
+        else "Execute end-to-end migration with actual deployment"
+    )
+
+    if not st.button(
+        button_label,
+        type="primary" if deployment_mode == DeploymentMode.LIVE.value else "secondary",
+        help=button_help,
+        key="execute_migration",
+    ):
+        return
+
+    migration_config = {
+        "target_platform": config["target_platform"],
+        "target_version": config["target_version"],
+        "deployment_mode": deployment_mode,
+        **config["conversion"],
+        "chef_version": config["advanced"]["chef_version"],
+        "output_dir": config["advanced"]["output_dir"] or None,
+        "preserve_comments": config["advanced"]["preserve_comments"],
+    }
+
+    if config["connection"]:
+        migration_config["platform_connection"] = config["connection"]
+
+    _simulate_chef_to_awx_migration_ui(
+        cookbook_path,
+        config["target_platform"],
+        config["conversion"]["include_repo"],
+        config["conversion"]["include_tar"],
+        migration_config=migration_config,
+    )
+
+    if st.session_state.simulation_result:
+        _display_simulation_results(st.session_state.simulation_result)
+
+
+def _show_individual_selection(cookbook_path: str, cookbook_data: list) -> None:
+    """Show individual cookbook selection interface."""
     st.markdown("### Individual Cookbook Selection")
     st.markdown("Select specific cookbooks to analyse individually.")
 
-    # Get list of cookbook names for multiselect
     cookbook_names = [cb["Name"] for cb in cookbook_data]
-
     selected_cookbooks = st.multiselect(
         "Select cookbooks to analyse:",
         options=cookbook_names,
@@ -1360,35 +1340,37 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
         help="Choose which cookbooks to analyse individually",
     )
 
-    if selected_cookbooks:
-        col1, col2, col3 = st.columns(3)
+    if not selected_cookbooks:
+        return
 
-        with col1:
-            if st.button(
-                f"📊 Analyse Selected ({len(selected_cookbooks)})",
-                help=f"Analyse {len(selected_cookbooks)} selected cookbooks",
-                key="analyze_selected",
-            ):
-                analyse_selected_cookbooks(cookbook_path, selected_cookbooks)
+    col1, col2, col3 = st.columns(3)
 
-        with col2:
-            if st.button(
-                f"🔗 Analyse as Project ({len(selected_cookbooks)})",
-                help=f"Analyse {len(selected_cookbooks)} cookbooks as a project "
-                f"with dependency analysis",
-                key="analyze_project",
-            ):
-                analyse_project_cookbooks(cookbook_path, selected_cookbooks)
+    with col1:
+        if st.button(
+            f"📊 Analyse Selected ({len(selected_cookbooks)})",
+            help=f"Analyse {len(selected_cookbooks)} selected cookbooks",
+            key="analyze_selected",
+        ):
+            analyse_selected_cookbooks(cookbook_path, selected_cookbooks)
 
-        with col3:
-            if st.button(
-                f"Select All ({len(cookbook_names)})",
-                help=f"Select all {len(cookbook_names)} cookbooks",
-                key="select_all",
-            ):
-                # This will trigger a rerun with all cookbooks selected
-                st.session_state.selected_cookbooks = cookbook_names
-                st.rerun()
+    with col2:
+        if st.button(
+            f"🔗 Analyse as Project ({len(selected_cookbooks)})",
+            help=f"Analyse {len(selected_cookbooks)} cookbooks as a project "
+            f"with dependency analysis",
+            key="analyze_project",
+        ):
+            analyse_project_cookbooks(cookbook_path, selected_cookbooks)
+
+    with col3:
+        if st.button(
+            f"Select All ({len(cookbook_names)})",
+            help=f"Select all {len(cookbook_names)} cookbooks",
+            key="select_all",
+        ):
+            # This will trigger a rerun with all cookbooks selected
+            st.session_state.selected_cookbooks = cookbook_names
+            st.rerun()
 
 
 def _show_cookbook_validation_warnings(cookbook_data: list):
@@ -2176,6 +2158,101 @@ def _display_conversion_report(result_text: str):
     """Display the raw conversion report."""
     with st.expander("Full Conversion Report"):
         st.code(result_text, language="markdown")
+
+
+def _simulate_chef_to_awx_migration_ui(
+    cookbooks_path: str,
+    target_platform: str,
+    include_repo: bool,
+    include_tar: bool,
+    migration_config: dict[str, Any] | None = None,
+) -> None:
+    """
+    Run the end-to-end simulation and store results in session state.
+
+    Args:
+        cookbooks_path: Path to the cookbooks directory
+        target_platform: Target platform (awx, aap, tower)
+        include_repo: Whether to generate Git repository
+        include_tar: Whether to create TAR archives
+        migration_config: Optional full migration configuration with v2.0 options
+
+    """
+    import tempfile
+
+    try:
+        from souschef.server import simulate_chef_to_awx_migration
+
+        output_dir = Path(
+            tempfile.mkdtemp(prefix="souschef_simulation_", dir=Path.cwd())
+        )
+        with contextlib.suppress(FileNotFoundError, OSError):
+            output_dir.chmod(0o700)
+
+        # Display configuration being used
+        if migration_config:
+            with st.expander("Migration Configuration", expanded=False):
+                st.json(migration_config)
+
+        result_json = simulate_chef_to_awx_migration(
+            cookbooks_path=cookbooks_path,
+            output_path=str(output_dir),
+            target_platform=target_platform,
+            include_repo=include_repo,
+            include_tar=include_tar,
+        )
+
+        st.session_state.simulation_output_path = str(output_dir)
+        st.session_state.simulation_result = json.loads(result_json)
+
+        # Store additional migration config if provided
+        if migration_config:
+            st.session_state.simulation_result["migration_config"] = migration_config
+
+        st.success("Simulation completed successfully")
+    except json.JSONDecodeError:
+        st.error("Simulation returned invalid JSON output")
+    except Exception as e:
+        st.error(f"Simulation failed: {e}")
+
+
+def _display_simulation_results(simulation_result: dict) -> None:
+    """Display simulation results and download options."""
+    st.subheader("Simulation Results")
+
+    with st.expander("Simulation Summary", expanded=True):
+        st.json(simulation_result)
+
+    archives = simulation_result.get("archives", {})
+    roles_tar = archives.get("roles_tar_gz")
+    repo_tar = archives.get("repository_tar_gz")
+
+    if roles_tar or repo_tar:
+        st.subheader("Download Archives")
+
+    if roles_tar:
+        roles_path = _validate_output_path(roles_tar)
+        if roles_path and roles_path.is_file():
+            with roles_path.open("rb") as file_handle:
+                st.download_button(
+                    label="Download Roles Archive",
+                    data=file_handle.read(),
+                    file_name=roles_path.name,
+                    mime="application/gzip",
+                    key="download_simulation_roles",
+                )
+
+    if repo_tar:
+        repo_path = _validate_output_path(repo_tar)
+        if repo_path and repo_path.is_file():
+            with repo_path.open("rb") as file_handle:
+                st.download_button(
+                    label="Download Repository Archive",
+                    data=file_handle.read(),
+                    file_name=repo_path.name,
+                    mime="application/gzip",
+                    key="download_simulation_repo",
+                )
 
 
 def _validate_output_path(output_path: str) -> Path | None:

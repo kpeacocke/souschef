@@ -1,6 +1,7 @@
 """Comprehensive tests for blob storage module."""
 
 import tempfile
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +12,15 @@ from souschef.storage.blob import (
     S3BlobStorage,
     get_blob_storage,
 )
+
+
+def _sample_value(prefix: str) -> str:
+    """Return a non-secret placeholder value for tests."""
+    return f"{prefix}-{uuid.uuid4()}"
+
+
+DUMMY_ACCESS_ID = _sample_value("example-access")
+DUMMY_CREDENTIAL = _sample_value("example-credential")
 
 
 class TestLocalBlobStorageEdgeCases:
@@ -177,8 +187,8 @@ class TestS3BlobStorage:
 
         storage = S3BlobStorage(
             bucket_name="mybucket",
-            access_key="AKIAIOSFODNN7EXAMPLE",
-            secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            access_key=DUMMY_ACCESS_ID,
+            secret_key=DUMMY_CREDENTIAL,
             endpoint_url="https://s3.amazonaws.com",
             region="us-west-2",
         )
@@ -431,8 +441,8 @@ class TestGetBlobStorage:
         mock_settings = MagicMock()
         mock_settings.backend = "s3"
         mock_settings.s3_bucket = "mybucket"
-        mock_settings.s3_access_key = "AKIAIOSFODNN7EXAMPLE"
-        mock_settings.s3_secret_key = "secret"
+        mock_settings.s3_access_key = DUMMY_ACCESS_ID
+        mock_settings.s3_secret_key = DUMMY_CREDENTIAL
         mock_settings.s3_endpoint = "https://s3.amazonaws.com"
         mock_settings.s3_region = "us-east-1"
         mock_load.return_value = mock_settings
@@ -459,8 +469,8 @@ class TestGetBlobStorage:
         mock_settings = MagicMock()
         mock_settings.backend = "minio"
         mock_settings.s3_bucket = "mybucket"
-        mock_settings.s3_access_key = "minioadmin"
-        mock_settings.s3_secret_key = "minioadmin"
+        mock_settings.s3_access_key = DUMMY_ACCESS_ID
+        mock_settings.s3_secret_key = DUMMY_CREDENTIAL
         mock_settings.s3_endpoint = "http://localhost:9000"
         mock_settings.s3_region = "us-east-1"
         mock_load.return_value = mock_settings

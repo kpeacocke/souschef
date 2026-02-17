@@ -44,7 +44,7 @@ NAV_DEPENDENCY_MAPPING = "Dependency Mapping"
 NAV_VALIDATION_REPORTS = "Validation Reports"
 NAV_AI_SETTINGS = "AI Settings"
 NAV_CHEF_SERVER_SETTINGS = "Chef Server Settings"
-NAV_COOKBOOK_ANALYSIS = "Cookbook Analysis"
+NAV_COOKBOOK_ANALYSIS = "Migrate Cookbook"
 NAV_HISTORY = "History"
 NAV_ANSIBLE_ASSESSMENT = "Ansible Assessment"
 NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
@@ -160,7 +160,7 @@ def _render_navigation_button(
 def _render_buttons_for_features(features: set[str], current_page: str) -> None:
     """Render navigation buttons for a given set of features."""
     all_nav_buttons = [
-        ("Cookbook Analysis", NAV_COOKBOOK_ANALYSIS),
+        ("Migrate Cookbook", NAV_COOKBOOK_ANALYSIS),
         ("Migration Planning", NAV_MIGRATION_PLANNING),
         ("Migration Config", NAV_MIGRATION_CONFIG),
         ("Dependency Mapping", NAV_DEPENDENCY_MAPPING),

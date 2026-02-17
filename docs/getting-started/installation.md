@@ -133,7 +133,7 @@ Restart your MCP client and ask:
 What Chef migration tools are available?
 ```
 
-The AI should respond with a list of SousChef's 38 MCP tools.
+The AI should respond with a list of SousChef's 43 MCP tools.
 
 ## Troubleshooting
 

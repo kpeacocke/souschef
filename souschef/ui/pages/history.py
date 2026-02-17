@@ -90,7 +90,7 @@ def _safe_tar_extractall(tar: tarfile.TarFile, path: Path, members: list) -> Non
                 f"Illegal tar archive entry (path traversal): {member_name}"
             )
 
-        tar.extract(member, path=base_path)
+        tar.extract(member, path=base_path)  # NOSONAR - path traversal prevented above
 
 
 def show_history_page() -> None:
