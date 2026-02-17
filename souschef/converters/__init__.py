@@ -1,5 +1,15 @@
 """Chef to Ansible converters."""
 
+from souschef.converters.conversion_rules import (
+    ConversionRule,
+    RuleEngine,
+    RulePriority,
+    RuleType,
+    build_default_rule_engine,
+    create_custom_rule,
+    create_package_rule,
+    create_service_rule,
+)
 from souschef.converters.custom_module_generator import (
     analyse_resource_complexity,
     build_module_collection,
@@ -48,4 +58,12 @@ __all__ = [
     "generate_module_manifest",
     "validate_module_code",
     "build_module_collection",
+    "ConversionRule",
+    "RuleEngine",
+    "RuleType",
+    "RulePriority",
+    "create_package_rule",
+    "create_service_rule",
+    "create_custom_rule",
+    "build_default_rule_engine",
 ]
