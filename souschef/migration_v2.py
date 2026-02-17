@@ -661,7 +661,14 @@ class MigrationOrchestrator:
 
         # Process in parallel
         try:
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            mp_context = None
+            if "fork" in multiprocessing.get_all_start_methods():
+                mp_context = multiprocessing.get_context("fork")
+
+            with ProcessPoolExecutor(
+                max_workers=max_workers,
+                mp_context=mp_context,
+            ) as executor:
                 # Submit all tasks
                 future_to_file = {
                     executor.submit(_process_recipe_worker, item): item[0]
@@ -738,7 +745,14 @@ class MigrationOrchestrator:
 
         # Process in parallel
         try:
-            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            mp_context = None
+            if "fork" in multiprocessing.get_all_start_methods():
+                mp_context = multiprocessing.get_context("fork")
+
+            with ProcessPoolExecutor(
+                max_workers=max_workers,
+                mp_context=mp_context,
+            ) as executor:
                 # Submit all tasks
                 future_to_file = {
                     executor.submit(_process_attribute_worker, item): item[0]
