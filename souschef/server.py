@@ -4934,8 +4934,6 @@ def list_migration_version_combinations() -> str:
     - Chef 15.10.91 → AAP 2.4.0 (EE + signing, Ansible 2.15)
 
     """
-    import json
-
     combinations = _get_all_version_combinations()
 
     # Enrich with execution model and Ansible version info
@@ -4959,6 +4957,7 @@ def list_migration_version_combinations() -> str:
                 }
             )
         except ValueError:
+            # Skip invalid combinations - validation filters out unsupported version pairs
             pass
 
     return json.dumps({"combinations": enriched, "total": len(enriched)}, indent=2)
@@ -5002,8 +5001,6 @@ def get_version_combination_info(
       → Shows legacy configuration with virtualenv
 
     """
-    import json
-
     try:
         info = _validate_version_combination(
             chef_version, target_platform, target_version
@@ -5052,8 +5049,6 @@ def configure_migration_simulation(
     - Legacy: Chef 12.19.36 → Tower 3.8.5 with virtualenv
 
     """
-    import json
-
     try:
         fips_enabled = fips_mode.lower() in ("yes", "true", "1")
         config = _create_simulation_config(
@@ -5135,8 +5130,6 @@ def start_v2_migration(
         JSON with migration ID, status, and metrics.
 
     """
-    import json
-
     try:
         fips_enabled = fips_mode.lower() in ("yes", "true", "1")
 
@@ -5194,8 +5187,6 @@ def deploy_v2_migration(
         JSON with deployment status and created resource IDs.
 
     """
-    import json
-
     try:
         # In real implementation, retrieve orchestrator state by migration_id
         # For now, return status
@@ -5230,7 +5221,6 @@ def validate_v2_playbooks(playbook_paths: str, target_ansible_version: str) -> s
         JSON with validation results per playbook.
 
     """
-    import json
     from typing import Any
 
     try:
@@ -5283,8 +5273,6 @@ def rollback_v2_migration(
         JSON with rollback status.
 
     """
-    import json
-
     try:
         deleted = []
         if job_template_id > 0:
@@ -5334,8 +5322,6 @@ def query_chef_server(
         JSON with search results and node information.
 
     """
-    import json
-
     try:
         client = ChefServerClient(
             server_url=chef_url,
@@ -5380,8 +5366,6 @@ def parse_chef_handler(handler_path: str) -> str:
         JSON with handler metadata, patterns, and routing information.
 
     """
-    import json
-
     from souschef.converters import (
         build_handler_routing_table,
         detect_handler_patterns,
@@ -5434,8 +5418,6 @@ def convert_chef_handler_to_ansible(handler_path: str) -> str:
         JSON with YAML-formatted Ansible handler configuration and report.
 
     """
-    import json
-
     from souschef.converters import (
         build_handler_routing_table,
         detect_handler_patterns,
@@ -5498,8 +5480,6 @@ def generate_handler_routing_config(
         JSON with routing configuration in specified format.
 
     """
-    import json
-
     from souschef.converters import (
         build_handler_routing_table,
         detect_handler_patterns,
