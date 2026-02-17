@@ -77,6 +77,56 @@ souschef/
 | `deployment.py` | AWX integration & deployment patterns | Deployment strategies, platform-specific logic |
 | `ansible_upgrade.py` | Ansible upgrade planning logic | Adding upgrade planning features, new upgrade workflows |
 
+## Module Dependencies
+
+The data flows through SousChef modules in this pattern:
+
+```
+User Input (CLI/MCP/UI)
+    │
+    ├─→ filesystem/
+    │   └─→ Read cookbook files
+    │
+    └─→ parsers/
+        ├─→ Parse Chef atoms (recipes, attributes, metadata, templates, resources)
+        ├─→ Extract to normalised structures
+        └─→ Validate with core/
+            │
+            └─→ core/
+                ├─→ path_utils (safety)
+                ├─→ ruby_utils (value parsing)
+                ├─→ validation (schema checking)
+                ├─→ ansible_versions (for version checks)
+                └─→ metrics (effort calculations)
+            │
+            └─→ converters/ OR ir/plugin.py (v2.0+)
+                ├─→ Transform to target format
+                ├─→ Resource/recipe → Ansible tasks/playbooks
+                ├─→ IR schema for future multi-tool support
+                │
+                └─→ assessment.py
+                    ├─→ Analyse complexity & dependencies
+                    └─→ Generate migration plans
+                │
+                └─→ deployment.py
+                    ├─→ Generate AWX templates
+                    ├─→ Build deployment strategies
+                    └─→ Plan migrations
+                │
+                └─→ ansible_upgrade.py
+                    ├─→ Assess current environment
+                    ├─→ Plan upgrade paths
+                    └─→ Validate collection compatibility
+
+Output: Ansible playbooks, configurations, AWX templates, migration plans
+```
+
+**Key principle**: Each layer specialises in one concern:
+- `parsers/` extracts only (read-only)
+- `converters/` transforms only
+- `core/` provides utilities only
+- Top-level files orchestrate and expose via CLI/MCP/UI
+
 ## Intermediate Representation (IR) Module - v2.0
 
 The `ir/` module (introduced in v2.0) provides a unified, abstract representation of infrastructure configurations from various source tools (Chef, Puppet, Salt, Bash, PowerShell) that can be converted to target systems (Ansible, Terraform, CloudFormation).
@@ -164,7 +214,26 @@ For detailed IR module documentation including API reference, examples, and best
 - `path_utils.py` - Path normalisation and safety checks
 - `ruby_utils.py` - Ruby value parsing and normalisation
 - `validation.py` - General validation utilities
-- `ansible_versions.py` - Ansible and Python version compatibility data (NEW)
+- `ansible_versions.py` - Ansible and Python version compatibility matrices
+
+**`ansible_versions.py` Module**
+
+Centralises Ansible-Python version compatibility data and upgrade path calculations. Consumed by `ansible_upgrade.py` and related assessment tools.
+
+**Responsibilities**:
+- Maintain version compatibility matrices (Ansible Core vs Python versions)
+- Track end-of-life dates for each version
+- Calculate safe upgrade paths between versions
+- Identify breaking changes and required actions
+
+**What It Provides**:
+- `ANSIBLE_VERSIONS` dictionary: Version metadata (release date, EOL, Python support, breaking changes)
+- `UpgradePath` dataclass: Upgrade sequence, effort estimation, risk assessment
+- `get_python_compatibility()`: Retrieve compatible Python versions for a given Ansible version
+- `calculate_upgrade_path()`: Determine safe migration path between versions
+- `get_eol_status()`: Check if version is end-of-life or approaching EOL
+
+For detailed API reference, data structures, and version matrices, see [ANSIBLE_UPGRADE_INTEGRATION.md](ANSIBLE_UPGRADE_INTEGRATION.md#Module-Responsibilities).
 
 **Example**:
 ```python
