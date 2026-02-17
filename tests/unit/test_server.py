@@ -14922,6 +14922,48 @@ def test_nginx(host):
         assert len(warnings) > 0
         assert any("handlers" in w.message.lower() for w in warnings)
 
+    def test_handler_timing_mapping_immediately_to_notify(self):
+        """Test that 'immediately' Chef handlers map to notify in Ansible."""
+        from souschef.converters.handler_generation import build_handler_routing_table
+
+        patterns = [
+            {
+                "pattern": "notification_handler",
+                "resource_type": "service",
+                "action": "restart",
+                "timing": "immediately",
+            }
+        ]
+
+        routing = build_handler_routing_table(patterns)
+
+        # Immediately-timed handlers should use 'notify' in Ansible
+        notification_route = routing["notification_routes"]["service[restart]"]
+        assert notification_route["ansible_equivalent"] == "notify", (
+            "Immediately-timed handlers should map to 'notify'"
+        )
+
+    def test_handler_timing_mapping_delayed_to_listen(self):
+        """Test that 'delayed' Chef handlers map to listen in Ansible."""
+        from souschef.converters.handler_generation import build_handler_routing_table
+
+        patterns = [
+            {
+                "pattern": "notification_handler",
+                "resource_type": "service",
+                "action": "restart",
+                "timing": "delayed",
+            }
+        ]
+
+        routing = build_handler_routing_table(patterns)
+
+        # Delayed handlers should use 'listen' in Ansible
+        notification_route = routing["notification_routes"]["service[restart]"]
+        assert notification_route["ansible_equivalent"] == "listen", (
+            "Delayed-timed handlers should map to 'listen'"
+        )
+
     def test_validation_playbook_structure_missing_hosts(self):
         """Test playbook validation catches missing hosts."""
         engine = ValidationEngine()

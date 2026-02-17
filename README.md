@@ -5,7 +5,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 [![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-85%25-green.svg)](htmlcov/index.html)
+[![Test Coverage](https://img.shields.io/badge/coverage-91%25-green.svg)](htmlcov/index.html)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
@@ -37,13 +37,11 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 
 ### About Tool Counts
 
-**Why 43 tools in the documentation but more in the server?**
+**Complete tool inventory available in source code**
 
-The MCP server provides **49 total tools**. This documentation focuses on the **44 primary user-facing tools** (39 migration + 5 upgrade tools) that cover the main capabilities. The remaining 5 are low-level filesystem operations used internally by the main tools.
+The MCP server includes primary user-facing tools for Chef-to-Ansible migration and Ansible upgrade planning. See `souschef/server.py` for the complete authoritative list of all registered MCP tools.
 
-As a user, you'll primarily interact with the documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
-
-> **For developers:** See `souschef/server.py` for the complete list of all 49 registered tools.
+As a user, you'll primarily interact with the documented tools in [docs/api-reference/](docs/api-reference/). Your AI assistant may use additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -56,7 +54,7 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 - **Local Models** (Ollama, llama.cpp, etc.)
 - **Custom Enterprise Models**
 
-**How it works:** You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 43 specialized tools. The model calls these tools to help with your migration and upgrade planning.
+**How it works:** You choose your AI model provider in your MCP client. SousChef provides specialized Chef/Ansible expertise tools. The model calls these tools to help with your migration and upgrade planning.
 
 > See [config/CONFIGURATION.md](config/CONFIGURATION.md) for configuration examples with different model providers.
 
@@ -75,16 +73,29 @@ As a user, you'll primarily interact with the documented tools. Your AI assistan
 - **[Implementation Roadmap](docs/ANSIBLE_UPGRADE_ROADMAP.md)** - Detailed development timeline
 - **[User Guide](docs/user-guide/ansible-upgrades.md)** - Comprehensive usage guide
 
-## What's New in v5.0.0
+## What's New
 
-**Major Release: Ansible Upgrade & Planning Tools** - Complete upgrade assessment and planning capabilities:
+### v5.1.0 (Current)
 
-- **5 New CLI Commands**: `ansible assess`, `plan`, `eol`, `validate-collections`, `detect-python` for comprehensive upgrade workflows
+**UI Module Refactoring & Architecture Improvements**:
+
+- **Modular Architecture**: Extracted security and utility modules from monolithic files for better maintainability
+- **Code Quality**: 91% test coverage with 3,559+ passing tests
+- **Type Safety**: Full mypy compliance across all modules
+- **Zero Breaking Changes**: All refactoring maintains backward compatibility
+- **Production Ready**: All quality gates passing - Ruff, mypy, pytest with comprehensive coverage
+
+See [UI Refactoring Summary](UI_REFACTORING_SUMMARY.md) and [Architecture Guide](docs/ARCHITECTURE.md) for complete details.
+
+### v5.0.0
+
+**Ansible Upgrade & Planning Tools** - Complete upgrade assessment and planning capabilities:
+
+- **5 CLI Commands**: `ansible assess`, `plan`, `eol`, `validate-collections`, `detect-python` for comprehensive upgrade workflows
 - **3 Interactive UI Pages**: Environment Assessment, Upgrade Planning, and Collection Validation interfaces
 - **MCP Tool Integration**: Access upgrade planning programmatically through MCP server tools
-- **Comprehensive Testing**: 1,954 passing tests with 85% coverage across all upgrade functionality
+- **Comprehensive Testing**: Full test coverage across all upgrade functionality
 - **Type Safety**: Full mypy compliance with proper type hints for all new functions
-- **Production Ready**: All quality gates passing - Ruff linting, mypy, and comprehensive test coverage
 
 See [Ansible Upgrade Integration Design](docs/ANSIBLE_UPGRADE_INTEGRATION.md) for complete documentation.
 

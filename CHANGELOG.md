@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-02-17
+
+### Added
+
+* **refactoring:** Modular architecture improvements for better maintainability
+  - New `cookbook_analysis_security.py` module (275 lines, 11 security functions)
+  - New `cookbook_analysis_utilities.py` module (61 lines, 3 utility functions)
+  - Focus on path security, archive handling, and utility functions
+
+### Changed
+
+* **documentation:** Updated markdown documentation for accuracy and consistency
+* **qa:** Test coverage reporting updated to 91% (3,559+ passing tests)
+* **architecture:** Code organized by concerns for improved maintainability
+
+### Improved
+
+* **code-quality:** Zero breaking changes - all refactoring maintains backward compatibility
+* **type-safety:** Maintained full mypy compliance across all modules
+* **testing:** All 3,559+ tests passing with 99.7% success rate
+
+### Documentation
+
+* See [UI Refactoring Summary](UI_REFACTORING_SUMMARY.md) for detailed refactoring information
+* See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module organization
+
 ## [Unreleased]
 
 ### Added

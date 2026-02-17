@@ -232,7 +232,9 @@ def test_v2_migrate_command(runner, tmp_path):
     mock_orchestrator = MagicMock()
     mock_orchestrator.migrate_cookbook.return_value = mock_result
 
-    with patch("souschef.cli.MigrationOrchestrator", return_value=mock_orchestrator):
+    with patch(
+        "souschef.cli_v2_commands.MigrationOrchestrator", return_value=mock_orchestrator
+    ):
         result = runner.invoke(
             cli,
             [
@@ -288,7 +290,9 @@ def test_v2_status_command(runner, tmp_path):
     mock_orchestrator.migrate_cookbook.return_value = mock_result
     mock_orchestrator.save_state.return_value = "test-storage-id-123"
 
-    with patch("souschef.cli.MigrationOrchestrator", return_value=mock_orchestrator):
+    with patch(
+        "souschef.cli_v2_commands.MigrationOrchestrator", return_value=mock_orchestrator
+    ):
         migrate_result = runner.invoke(
             cli,
             [

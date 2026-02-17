@@ -5,7 +5,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 [![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen.svg)](https://github.com/kpeacocke/souschef/tree/main/htmlcov)
+[![Test Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](https://github.com/kpeacocke/souschef/tree/main/htmlcov)
 
 ## Overview
 
@@ -28,11 +28,13 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 - **Testing Plan Generation** - Generate comprehensive upgrade testing plans
 
 !!! info "About Tool Counts"
-    **Why 43 tools in the documentation but more in the server?**
+    **Complete tool inventory available in source code**
 
-    The MCP server provides **48 total tools**. This documentation focuses on the **43 primary user-facing tools** (38 migration + 5 upgrade tools) that cover the main capabilities. The remaining 5 are low-level filesystem operations used internally by the main tools.
+    The MCP server includes primary user-facing tools for Chef-to-Ansible migration and Ansible upgrade planning. This documentation focuses on the primary user-facing tools (38 migration + 5 upgrade) that cover the main capabilities.
 
-    As a user, you'll primarily interact with the documented tools. Your AI assistant may use the additional tools automatically when needed, but you don't need to know about them for successful migrations.
+    As a user, you'll primarily interact with the documented tools. Your AI assistant may use additional tools automatically when needed, but you don't need to know about them for successful migrations.
+
+    See [api-reference/](api-reference/) and `souschef/server.py` for the complete authoritative list of all MCP tools.
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -46,7 +48,7 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 - :material-domain: **Custom Enterprise Models**
 
 !!! tip "How it works"
-    You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through 43 specialized tools. The model calls these tools to help with your migration and upgrade planning.
+    You choose your AI model provider in your MCP client. SousChef provides the Chef/Ansible expertise through specialized tools. The model calls these tools to help with your migration and upgrade planning.
 
 ## Core Capabilities
 

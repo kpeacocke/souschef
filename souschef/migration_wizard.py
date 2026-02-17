@@ -10,7 +10,7 @@ guidance through the migration configuration process.
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 
 def setup_wizard() -> dict[str, Any]:
@@ -80,7 +80,7 @@ def _prompt_cookbook_path() -> str:
         return str(result)
 
 
-def _validate_cookbook_path(path: str) -> str | bool:
+def _validate_cookbook_path(path: str) -> str | Literal["exit", "retry"]:
     """
     Validate cookbook path.
 

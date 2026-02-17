@@ -89,7 +89,10 @@ def extract_module_interface(resource_body: str) -> dict[str, Any]:
         interface["resource_type"] = resource_match.group(1)
 
     # Extract properties (property :prop_name)
-    prop_pattern = r"property\s+:(\w+)(required:|default:)?"
+    # Note: Pattern allows optional required/default keywords immediately after
+    # property name. If properties have other attributes between name and
+    # required/default, expand this pattern.
+    prop_pattern = r"property\s+:(\w+)(?:.*?(?:required:|default:))?"
     for match in re.finditer(prop_pattern, resource_body):
         prop_name = match.group(1)
         interface["properties"][prop_name] = {
