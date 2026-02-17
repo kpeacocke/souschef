@@ -3,11 +3,12 @@
 Transform Chef automation to Ansible and plan Ansible version upgrades. Works with any AI assistant via MCP (Model Context Protocol)—Claude, GPT-4, GitHub Copilot, Red Hat AI, local models, and more.
 
 ---
-***Warning*** I did not hand craft 100k lines of code in two days while doing my actual day job (which, for the record, isn’t this). A lot of this is AI generated. Architected, hand edited, and personally sworn at yes, but the heavy hand of AI is all over this repo.
+***Warning***
+I did not hand craft 100k lines of code in two days while doing my actual day job (which, for the record, isn’t this). A lot of this is AI generated. Architected, hand edited, and personally sworn at yes, but the heavy hand of AI is all over this repo.
 
 I’ve pushed it to include a *lot* of tests, and I run it through its paces before pushing, but some things may break, or may have always been broken. If you find something, raise it and I’ll fix it.
 
-A fair bit of this relies on mocked Chef/AWX/AAP APIs, because—shockingly—I don’t have a fleet of enterprise grade installs with enterprise grade data sitting around to test against. Buyer beware (doubly so, since you didn’t actually buy anything).
+A fair bit of this relies on mocked Chef/AWX/AAP APIs because *shockingly* I don’t have a fleet of enterprise grade installs with enterprise grade data sitting around to test against. Buyer beware (doubly so, since you didn’t actually buy anything).
 ---
 
 **Quick Facts:** MIT License | Python 3.10+ | 43 MCP Tools | 91% Test Coverage
