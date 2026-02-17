@@ -40,7 +40,7 @@ Read the full [ARCHITECTURE.md](docs/ARCHITECTURE.md) before adding new code!
 
 ### Prerequisites
 
-- **Python 3.14+**: SousChef requires Python 3.14 or newer
+- **Python 3.10+**: SousChef requires Python 3.10 or newer
 - **Poetry**: We use Poetry for dependency management
 - **Git**: For version control
 
@@ -662,91 +662,18 @@ print(result)
 
 ## Security Scanning
 
-### **Automatic CodeQL Scanning (GitHub Actions)**
+## Security Scanning with CodeQL
 
-CodeQL security scanning runs automatically - already set up in `.github/workflows/codeql.yml`:
-- Runs on push to main/develop/release/hotfix branches
-- Runs on all pull requests
-- Weekly scheduled scans (Mondays 6am UTC)
-- Results appear in Security → Code scanning alerts
+**GitHub Actions** (Automatic): CodeQL security scanning runs automatically on all PRs and pushes to `main`, `develop`, `release/*`, and `hotfix/*` branches. Results appear in Security → Code scanning alerts. No setup required.
 
-**No action needed** - this runs automatically on every PR and push!
+**VS Code Extension** (Optional, x86_64 only):
+1. Install "CodeQL" extension: `Ctrl+Shift+P` → "Extensions: Install Extensions" → search "CodeQL"
+2. Configure path: Settings → search "codeql cli" → set to `${userHome}/.codeql/codeql/codeql`
+3. Use: Open Python file in `souschef/` → right-click → "CodeQL: Run Queries in Selected Files"
 
-### **Local CodeQL Scanning (VS Code Extension)**
+**ARM64 Limitation**: CodeQL CLI is not officially supported on ARM64 Linux. GitHub Actions scanning continues to work automatically; only local VS Code extension is unavailable.
 
-The devcontainer automatically installs CodeQL CLI when supported. **Works on x86_64 Linux, Windows, and macOS (Intel/Apple Silicon).**
-
-#### ARM64 Linux Limitation
-
-**CodeQL CLI does not officially support ARM64 Linux.** If you're developing on ARM64 (e.g., Raspberry Pi, AWS Graviton, Oracle Cloud ARM):
-
-- **GitHub Actions still work** - automated scanning continues on every push/PR
-- **CI/CD is unaffected** - all security checks run in GitHub's infrastructure
-- **Local VS Code extension won't work** - CLI can't run natively on ARM64 Linux
-
-**Alternatives for ARM64 users:**
-1. Rely on GitHub Actions for all CodeQL scanning (already configured)
-2. Run the devcontainer on x86_64 hardware
-3. Use [GitHub Codespaces](https://github.com/features/codespaces) (runs on x86_64)
-
-#### Installation (x86_64 only)
-
-**The CodeQL extension is not pre-installed due to ARM64 compatibility.** x86_64 users can install it manually:
-
-1. **Verify your architecture:**
-   ```bash
-   uname -m  # Should show x86_64 for compatibility
-   ```
-
-2. **Install the extension:**
-   - Press `Ctrl+Shift+P` and type "Extensions: Install Extensions"
-   - Search for "CodeQL"
-   - Install "CodeQL" by GitHub
-   - Restart VS Code if prompted
-
-3. **Configure the CLI path:**
-   - Open Settings (`Ctrl+,`)
-   - Search for "codeql cli"
-   - Set **CodeQL: Cli: Executable Path** to: `${userHome}/.codeql/codeql/codeql`
-   - Reload VS Code
-
-#### Using CodeQL in VS Code
-
-**Quick Analysis (Easiest):**
-1. Open any Python file in `souschef/`
-2. Right-click anywhere in the file
-3. Select **"CodeQL: Run Queries in Selected Files"**
-4. Results appear in the CodeQL view panel
-
-**Full Database Analysis:**
-1. Open Command Palette (`Ctrl+Shift+P`)
-2. Type "CodeQL: Create Database from Folder"
-3. Select the workspace root
-4. Once created, run security queries against it
-
-**View Results:**
-- Click the CodeQL icon in the sidebar
-- See all findings with highlighted code snippets
-- Click any result to jump directly to the vulnerable code
-- Filter by severity (Error, Warning, Note)
-
-#### What CodeQL Checks
-
-The same security queries as GitHub Actions:
-- SQL injection
-- Command injection
-- Path traversal
-- Code injection
-- Hardcoded credentials
-- Information exposure
-- 100+ more security patterns
-
-#### Tips
-
-- **First run takes 2-3 minutes** to build the database
-- **Subsequent runs are instant** - database is cached
-- **Run before pushing** to catch issues early
-- **Explore queries** - right-click results to see query source code
+See [CodeQL for VS Code Guide](https://codeql.github.com/docs/codeql-for-visual-studio-code/) for full documentation.
 
 ## Resources
 
