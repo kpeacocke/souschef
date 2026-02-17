@@ -1,19 +1,18 @@
 # MCP Tools Reference
 
-SousChef provides **45 specialised MCP tools** for comprehensive Chef-to-Ansible migration and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **43 specialised MCP tools** for comprehensive Chef-to-Ansible migration and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
 
 !!! info "About the Tool Count"
-    **Why 45 tools here but the server shows more?**
+    **Complete tool inventory available in source code**
 
-    The MCP server actually provides **48 total tools** (45 public + 3 internal). This guide documents the **45 primary tools** you'll use for migrations and Ansible upgrades. The remaining 3 are:
+    This guide documents the **43 primary user-facing tools** (38 Chef migration + 5 Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
 
-    - **Internal filesystem operations** - Low-level file reading and directory listing used by other tools
-    - **Helper utilities** - Supporting functions that other tools call
+    As a user, you'll primarily interact with these 43 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
 
-    Your AI assistant may use these additional tools automatically behind the scenes (e.g., when a tool needs to read a file, it calls the internal file reading tool). You don't need to invoke them directly - just use the 45 documented tools and let your AI assistant handle the rest.
+    See `souschef/server.py` for the complete authoritative list of all MCP tools.
 
 ## Quick Reference by Capability Area
 

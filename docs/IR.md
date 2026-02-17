@@ -1,12 +1,8 @@
-"""Intermediate Representation (IR) schema documentation.
-
-This file provides comprehensive documentation for the IR module,
-including data structures, version management, and plugin architecture.
-"""
-
-# Intermediate Representation Module
+# Intermediate Representation (IR) Module
 
 The Intermediate Representation (IR) module provides a unified, abstract representation of infrastructure-as-code configurations from various source tools (Chef, Puppet, Salt, Bash, PowerShell) that can be converted to target systems (Ansible, Terraform, CloudFormation).
+
+This document provides comprehensive documentation for the IR module, including data structures, version management, and plugin architecture.
 
 ## Overview
 

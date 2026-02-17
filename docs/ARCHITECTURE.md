@@ -84,18 +84,18 @@ The data flows through SousChef modules in this pattern:
 ```mermaid
 graph TD
     A["User Input<br/>(CLI/MCP/UI)"]
-    
+
     A --> B["filesystem/<br/>Read files"]
     B --> C["parsers/<br/>Extract Chef atoms"]
-    
+
     C --> D["core/ Utilities<br/>path_utils, ruby_utils<br/>validation, metrics<br/>ansible_versions"]
-    
+
     D --> E["converters/<br/>Transform to Ansible<br/>OR ir/plugin.py v2.0+"]
-    
+
     E --> F["assessment.py<br/>Analyse complexity<br/>Generate plans"]
     E --> G["deployment.py<br/>AWX templates<br/>Deployment patterns"]
     E --> H["ansible_upgrade.py<br/>Assess environment<br/>Plan upgrades<br/>Validate collections"]
-    
+
     F --> Z["Output<br/>Playbooks, configs<br/>AWX templates<br/>Migration plans"]
     G --> Z
     H --> Z
@@ -103,7 +103,7 @@ graph TD
 
 **Key principle**: Each layer specialises in one concern:
 - `parsers/` = extract only (read-only)
-- `converters/` = transform only  
+- `converters/` = transform only
 - `core/` = utilities only
 - Top-level files (`assessment.py`, `deployment.py`, `ansible_upgrade.py`) = orchestrate
 - `server.py`, `cli.py`, `ui/` = expose via different interfaces

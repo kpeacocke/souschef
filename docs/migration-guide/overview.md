@@ -1,6 +1,6 @@
 # Migration Guide Overview
 
-This guide provides a comprehensive methodology for migrating from Chef to Ansible, leveraging SousChef's 38 MCP tools and proven enterprise practices.
+This guide provides a comprehensive methodology for migrating from Chef to Ansible, leveraging SousChef's 43 MCP tools and proven enterprise practices.
 
 ## Migration Philosophy
 
@@ -617,4 +617,4 @@ Or explore specific topics:
 - **InSpec Documentation**: [docs.chef.io/inspec/](https://docs.chef.io/inspec/)
 
 !!! success "Ready to Migrate?"
-    With SousChef's 38 tools and this methodology, you have everything needed for a successful Chef-to-Ansible migration. Start with assessment, follow the phases, and leverage automation throughout the process.
+    With SousChef's 43 tools and this methodology, you have everything needed for a successful Chef-to-Ansible migration. Start with assessment, follow the phases, and leverage automation throughout the process.

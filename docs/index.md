@@ -114,10 +114,6 @@ Get started with SousChef in minutes:
     # Reload VS Code, trust the server
     # Use tools in Copilot Chat:
     # "Analyze the cookbook at /path/to/cookbook"
-    pip install mcp-souschef
-
-    # Start using immediately
-    souschef-cli cookbook /path/to/cookbook
     ```
 
 === "CLI (v2 Orchestrator)"
