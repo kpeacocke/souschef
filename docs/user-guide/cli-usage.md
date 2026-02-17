@@ -518,13 +518,13 @@ souschef-cli cookbook examples/database
 Analyzing cookbook: database
 ==================================================
 
-📋 Metadata:
+[LIST] Metadata:
 --------------------------------------------------
 Cookbook: database
 Version: 2.1.0
 Dependencies: postgresql (>= 1.0.0), apt (~> 7.0)
 
-📁 Structure:
+Structure:
 --------------------------------------------------
 database/
 ├── metadata.rb
@@ -533,7 +533,7 @@ database/
 ├── templates/ (2 files)
 └── resources/ (1 file)
 
-🧑‍🍳 Recipes:
+[USER]‍[CHEF] Recipes:
 --------------------------------------------------
   default.rb:
     Resource 1: package[postgresql]
@@ -541,14 +541,14 @@ database/
     Resource 3: template[/etc/postgresql/postgresql.conf]
     ... (7 more resources)
 
-🔧 Custom Resources:
+[CONFIG] Custom Resources:
 --------------------------------------------------
   user.rb:
     Type: database_user
     Properties: 3
     Actions: create, delete
 
-📄 Templates:
+[FILE] Templates:
 --------------------------------------------------
   database.yml.erb:
     Variables: 4
@@ -822,7 +822,7 @@ souschef-cli profile-operation OPERATION PATH [OPTIONS]
     Execution Time: 89.4ms
     Peak Memory: 12.3 MB
 
-    Status: ✓ Performance is good
+    Status: [OK] Performance is good
     ```
 
 === "Detailed Profiling"
@@ -852,7 +852,7 @@ souschef-cli profile-operation OPERATION PATH [OPTIONS]
     extract_properties:       45 calls
     resolve_guards:          12 calls
 
-    Status: ✓ Performance is good
+    Status: [OK] Performance is good
     ```
 
 ---
@@ -1048,7 +1048,7 @@ if grep -q "SLOW" performance.txt; then
   exit 1
 fi
 
-echo "✓ All validations passed"
+echo "[OK] All validations passed"
 ```
 
 ---

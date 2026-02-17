@@ -40,7 +40,7 @@ tests/integration/test_chef_server_mock.py::TestChefServerMockIntegration::test_
 
 The mock integration tests cover:
 
-### ✅ Connection & Authentication
+### [YES] Connection & Authentication
 - Successful Chef Server connections with RSA-signed requests
 - 401 Authentication failures (invalid credentials)
 - 403 Authorization failures (access denied)
@@ -48,20 +48,20 @@ The mock integration tests cover:
 - Connection timeouts
 - 500 Internal Server Errors
 
-### ✅ Node Search & Queries
+### [YES] Node Search & Queries
 - Searching nodes by query (`role:webserver`, `*:*`)
 - Node metadata extraction (name, roles, environment, platform, IP, FQDN)
 - Empty result handling
 - Multiple node responses
 
-### ✅ Chef Server Resources
+### [YES] Chef Server Resources
 - Listing roles with URLs
 - Listing environments (production, staging, _default)
 - Listing cookbooks with version metadata
 - Listing policies (policyfiles)
 - Getting specific cookbook versions
 
-### ✅ Authentication Headers
+### [YES] Authentication Headers
 - X-Ops-Userid (client name)
 - X-Ops-Sign (signature algorithm and version)
 - X-Ops-Timestamp (request timestamp)
@@ -69,7 +69,7 @@ The mock integration tests cover:
 - X-Ops-Authorization-{1..N} (signature chunks, ≤60 chars each)
 - Query parameters included in signature
 
-### ✅ Error Handling
+### [YES] Error Handling
 - Malformed JSON responses
 - Empty/missing data in responses
 - Network errors and timeouts
@@ -435,11 +435,11 @@ def test_my_feature():
 If the URL doesn't match, `responses` won't intercept it. Ensure URLs match exactly:
 
 ```python
-# ❌ Wrong - URL mismatch
+# [NO] Wrong - URL mismatch
 responses.add(responses.GET, "https://chef.com/...", ...)
 client = ChefServerClient(config)  # config uses chef.example.com
 
-# ✅ Correct - URLs match
+# [YES] Correct - URLs match
 responses.add(responses.GET, "https://chef.example.com/...", ...)
 ```
 

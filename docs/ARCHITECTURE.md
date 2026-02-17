@@ -218,7 +218,7 @@ For detailed API reference, data structures, and version matrices, see [ANSIBLE_
 
 **Example**:
 ```python
-# ✅ Belongs in core/
+# [YES] Belongs in core/
 # - Shared constants
 # - Path normalisation
 # - Error formatting
@@ -227,7 +227,7 @@ HOURS_PER_WORKDAY = 8  # core/metrics.py
 METADATA_FILENAME = "metadata.rb"  # core/constants.py
 ANSIBLE_VERSIONS = {...}  # core/ansible_versions.py
 
-# ✅ Belongs in core/ansible_versions.py
+# [YES] Belongs in core/ansible_versions.py
 def get_python_compatibility(ansible_version: str) -> List[str]:
     """Get compatible Python versions for Ansible version."""
     return ANSIBLE_VERSIONS[ansible_version].python_versions
@@ -236,7 +236,7 @@ def calculate_upgrade_path(from_version: str, to_version: str) -> dict:
     """Calculate safe upgrade path between versions."""
     # Uses ANSIBLE_VERSIONS data
 
-# ❌ Does NOT belong in core/
+# [NO] Does NOT belong in core/
 # - "assess complexity of this cookbook" logic
 # - "convert this recipe to playbook" logic
 # - "generate upgrade plan" logic
@@ -279,21 +279,21 @@ def calculate_upgrade_path(from_version: str, to_version: str) -> dict:
 
 **Example**:
 ```python
-# ✅ Belongs in parsers/recipe.py
+# [YES] Belongs in parsers/recipe.py
 def parse_recipe(recipe_path: str) -> dict:
     """Extract resources from a Chef recipe (parse only)."""
     resources = []
     # Read file, extract resources
     return {"resources": resources}
 
-# ✅ Belongs in parsers/ansible_inventory.py
+# [YES] Belongs in parsers/ansible_inventory.py
 def parse_inventory_ini(inventory_path: str) -> dict:
     """Parse Ansible inventory file in INI format."""
     groups = {}
     # Read file, extract groups and hosts
     return {"groups": groups}
 
-# ❌ Does NOT belong in parsers/
+# [NO] Does NOT belong in parsers/
 def assess_recipe_complexity(recipe_path):
     """This is assessment logic, not parsing."""
     # Belongs in assessment.py
@@ -327,7 +327,7 @@ def assess_recipe_complexity(recipe_path):
 
 **Example**:
 ```python
-# ✅ Belongs in converters/resource.py
+# [YES] Belongs in converters/resource.py
 def convert_resource_to_task(resource_dict):
     """Convert a parsed Chef resource to Ansible task."""
     return {
@@ -335,7 +335,7 @@ def convert_resource_to_task(resource_dict):
         "ansible.builtin.debug": {"msg": "..."}
     }
 
-# ❌ Does NOT belong in converters/
+# [NO] Does NOT belong in converters/
 def parse_recipe_for_resources():
     """This is parsing, not conversion."""
     # Belongs in parsers/recipe.py
@@ -367,7 +367,7 @@ def parse_recipe_for_resources():
 
 **Example**:
 ```python
-# ✅ Belongs in assessment.py
+# [YES] Belongs in assessment.py
 def assess_single_cookbook(cookbook_path):
     """Assess complexity and generate recommendations."""
     metrics = count_artifacts(cookbook_path)
@@ -435,7 +435,7 @@ def assess_single_cookbook(cookbook_path):
 
 **Example**:
 ```python
-# ✅ Belongs in ansible_upgrade.py
+# [YES] Belongs in ansible_upgrade.py
 def generate_upgrade_plan(current_version, target_version):
     """Generate upgrade plan using version data and environment parsing."""
     versions = get_supported_versions()  # From core/ansible_versions
@@ -521,7 +521,7 @@ def _assess_chef_migration_complexity(cookbook_paths: str) -> str:
 
 **Example**:
 ```python
-# ✅ Belongs in cli.py
+# [YES] Belongs in cli.py
 @cli.command()
 @click.argument("cookbook_path", type=str)
 def assess_cookbook(cookbook_path):

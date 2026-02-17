@@ -80,22 +80,22 @@ for cookbook_name in cookbooks:
 
         # Report
         if result.status == MigrationStatus.SUCCESS:
-            print(f"✓ {cookbook_name}: SUCCESS")
+            print(f"[OK] {cookbook_name}: SUCCESS")
             print(f"  - Recipes: {result.metrics.recipes_converted}/{result.metrics.recipes_total}")
             print(f"  - Tasks: {result.metrics.tasks_generated}")
         elif result.status == MigrationStatus.PARTIAL_SUCCESS:
-            print(f"⚠ {cookbook_name}: PARTIAL SUCCESS")
+            print(f"WARNING {cookbook_name}: PARTIAL SUCCESS")
             print(f"  - Warnings: {len(result.warnings)}")
             for warning in result.warnings[:3]:  # Show first 3
                 print(f"    • {warning}")
         else:
-            print(f"✗ {cookbook_name}: FAILED")
+            print(f"[FAIL] {cookbook_name}: FAILED")
             failed_cookbooks.append(cookbook_name)
             for error in result.errors[:3]:
                 print(f"    • {error}")
 
     except Exception as e:
-        print(f"✗ {cookbook_name}: EXCEPTION - {e}")
+        print(f"[FAIL] {cookbook_name}: EXCEPTION - {e}")
         failed_cookbooks.append(cookbook_name)
 
 # Summary
@@ -373,7 +373,7 @@ class IncrementalMigrationManager:
                             "completed_at": datetime.utcnow().isoformat(),
                             "playbooks": result.playbooks_generated,
                         }
-                        print(f"✓ Completed: {name}")
+                        print(f"[OK] Completed: {name}")
                     else:
                         del self.state["in_progress"][name]
                         self.state["failed"][name] = {
@@ -381,7 +381,7 @@ class IncrementalMigrationManager:
                             "errors": result.errors,
                             "failed_at": datetime.utcnow().isoformat(),
                         }
-                        print(f"✗ Failed: {name}")
+                        print(f"[FAIL] Failed: {name}")
 
                     self._save_state()
                     return result
@@ -394,7 +394,7 @@ class IncrementalMigrationManager:
                         "failed_at": datetime.utcnow().isoformat(),
                     }
                     self._save_state()
-                    print(f"✗ Exception: {name} - {e}")
+                    print(f"[FAIL] Exception: {name} - {e}")
                     return None
 
         print("Remaining cookbooks have unsatisfied dependencies")
@@ -411,12 +411,12 @@ class IncrementalMigrationManager:
         print(f"Failed: {len(self.state['failed'])}")
 
         if self.state["migrated"]:
-            print("\n✓ Completed Cookbooks:")
+            print("\n[OK] Completed Cookbooks:")
             for name, data in self.state["migrated"].items():
                 print(f"  - {name} ({data['status']})")
 
         if self.state["failed"]:
-            print("\n✗ Failed Cookbooks:")
+            print("\n[FAIL] Failed Cookbooks:")
             for name, data in self.state["failed"].items():
                 print(f"  - {name}")
                 for error in data["errors"][:2]:
@@ -624,12 +624,12 @@ result = orchestrator.migrate_cookbook(str(cookbook_path))
 
 # 3. Review custom resource conversions
 if result.metrics.custom_resources_converted > 0:
-    print(f"\n✓ Converted {result.metrics.custom_resources_converted} custom resources")
+    print(f"\n[OK] Converted {result.metrics.custom_resources_converted} custom resources")
     print("Review generated tasks for correctness")
 
 # 4. Check for manual review items
 if result.metrics.resources_manual_review > 0:
-    print(f"\n⚠ {result.metrics.resources_manual_review} resources need manual review")
+    print(f"\nWARNING {result.metrics.resources_manual_review} resources need manual review")
     print("These may include complex custom resource logic")
 
     # Export list of tasks needing review

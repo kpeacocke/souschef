@@ -40,45 +40,45 @@ tests/integration/test_awx_mock.py::TestAWXMockInventories::test_list_inventorie
 
 The mock tests cover all major AWX/AAP API endpoints:
 
-### ✅ Job Templates
+### [YES] Job Templates
 - List job templates
 - Create job template
 - Launch job template
 - Get job template details
 
-### ✅ Inventories
+### [YES] Inventories
 - List inventories
 - Sync inventory sources
 - Get inventory hosts and groups
 
-### ✅ Projects
+### [YES] Projects
 - List projects
 - Update project (SCM sync)
 - Get project details
 
-### ✅ Credentials
+### [YES] Credentials
 - List credentials
 - Create credentials
 - Manage credential types
 
-### ✅ Workflows
+### [YES] Workflows
 - List workflow templates
 - Launch workflow
 - Get workflow job status
 
-### ✅ Jobs & Monitoring
+### [YES] Jobs & Monitoring
 - Get job status
 - Get job output/stdout
 - Cancel running jobs
 - List job events
 
-### ✅ Authentication & Errors
+### [YES] Authentication & Errors
 - 401 Unauthorized responses
 - 403 Forbidden responses
 - 404 Not Found responses
 - 400 Validation errors
 
-### ✅ Organizations
+### [YES] Organizations
 - List organizations
 - Get organization details
 

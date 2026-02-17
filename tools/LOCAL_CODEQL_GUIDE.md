@@ -13,10 +13,10 @@ python3 tools/check_codeql_suppressions.py
 
 This is the **recommended approach** for the SousChef project. It:
 
-- ✅ Runs instantly (no downloads needed)
-- ✅ Checks for proper `# codeql [py/path-injection]` suppressions
-- ✅ Validates your code before pushing to GitHub
-- ✅ Provides clear success/failure reports
+- Runs instantly (no downloads needed)
+- Checks for proper `# codeql [py/path-injection]` suppressions
+- Validates your code before pushing to GitHub
+- Provides clear success/failure reports
 
 ### Option 2: Download CodeQL CLI (Full Analysis)
 
@@ -59,10 +59,10 @@ The `tools/check_codeql_suppressions.py` script is optimized for SousChef develo
 | Feature | Local Validator | CodeQL CLI | Snyk |
 | --------- | --------- | --------- | ------ |
 | Setup time | < 1 second | 2-5 minutes | 1-2 minutes |
-| Identifies missing suppressions | ✓ Yes | ✓ Yes | ~ Limited |
-| Catches code before GitHub | ✓ Yes | ✓ Yes | ✓ Yes |
-| Full SARIF report | ✗ No | ✓ Yes | ✓ Yes |
-| IDE integration | ✓ Easy | ✓ Yes | ✓ Yes |
+| Identifies missing suppressions | Yes | Yes | Limited |
+| Catches code before GitHub | Yes | Yes | Yes |
+| Full SARIF report | No | Yes | Yes |
+| IDE integration | Easy | Yes | Yes |
 | Cost | Free | Free | Free tier |
 | Maintenance | SousChef team | GitHub | Snyk |
 
@@ -74,11 +74,11 @@ The `tools/check_codeql_suppressions.py` script is optimized for SousChef develo
 # 3. Validate locally
 python3 tools/check_codeql_suppressions.py
 
-# 4. If validation passes ✓
+# 4. If validation passes [OK]
 git commit -m "feat: add new path operation"
 git push origin main
 
-# 5. If validation fails ✗
+# 5. If validation fails [FAIL]
 # - Add missing suppressions
 # - Run validator again
 # - Repeat until passing
@@ -101,7 +101,7 @@ Total: 82+ suppressions verified
 CodeQL flags code like this as potentially dangerous:
 
 ```python
-# ⚠️ UNSAFE - User input directly in path
+# WARNING UNSAFE - User input directly in path
 def read_cookbook(user_cookbook_path):
     file_path = Path(user_cookbook_path) / "metadata.rb"
     return file_path.read_text()
@@ -110,7 +110,7 @@ def read_cookbook(user_cookbook_path):
 The fix is to validate the path first:
 
 ```python
-# ✅ SAFE - Path normalized before use
+# [YES] SAFE - Path normalized before use
 def read_cookbook(user_cookbook_path):
     # _normalize_path() validates against directory traversal
     safe_path = _normalize_path(user_cookbook_path)
@@ -149,11 +149,11 @@ extract_path = archive_dir / member_path  # codeql [py/path-injection]
 A: Make sure the suppression is on the **same line** as the path operation:
 
 ```python
-# ❌ Wrong - suppression on wrong line
+# [NO] Wrong - suppression on wrong line
 cookbook_path = Path(user_input)
 path = cookbook_path / "recipes"  # codeql [py/path-injection]
 
-# ✅ Correct - suppression on path operation line
+# [YES] Correct - suppression on path operation line
 path = cookbook_path / "recipes"  # codeql [py/path-injection]
 ```
 

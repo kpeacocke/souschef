@@ -4,11 +4,11 @@
 
 We currently support the following versions of SousChef with security updates:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.0   | :white_check_mark: |
-| 5.0.0   | :white_check_mark: |
-| < 5.0.0 | :x:                |
+| Version | Supported |
+| ------- | --------- |
+| 5.1.0   | Yes       |
+| 5.0.0   | Yes       |
+| < 5.0.0 | No        |
 
 For security updates, please upgrade to the latest version.
 

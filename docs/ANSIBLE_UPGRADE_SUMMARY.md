@@ -137,7 +137,7 @@ souschef ansible plan /opt/ansible 2.16 -o upgrade_plan.md
 
 # Check EOL status
 souschef ansible eol 2.9
-# Output: ⚠️  Version 2.9 reached EOL on 2022-05-23 (1356 days ago)
+# Output: WARNING  Version 2.9 reached EOL on 2022-05-23 (1356 days ago)
 
 # Validate collections
 souschef ansible validate-collections requirements.yml 2.16
@@ -194,7 +194,7 @@ managed_node_python: ["2.7", "3.6", "3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
 
 ## Implementation Status
 
-### ✅ Completed
+### [YES] Completed
 - [x] Feature branch created: `feature/ansible-upgrades`
 - [x] Complete architectural design
 - [x] PDF data mapped to code structure
@@ -328,13 +328,13 @@ poetry run mypy souschef
 
 Your Ansible upgrade feature is **architecturally sound** and **ready for implementation**. It:
 
-✅ Fits naturally into SousChef's existing structure
-✅ Uses your PDF data as the authoritative source
-✅ Provides multiple interfaces (MCP, CLI, Web)
-✅ Follows established patterns and conventions
-✅ Has clear scope and implementation plan
-✅ Maintains backward compatibility
-✅ Includes comprehensive testing strategy
+[YES] Fits naturally into SousChef's existing structure
+[YES] Uses your PDF data as the authoritative source
+[YES] Provides multiple interfaces (MCP, CLI, Web)
+[YES] Follows established patterns and conventions
+[YES] Has clear scope and implementation plan
+[YES] Maintains backward compatibility
+[YES] Includes comprehensive testing strategy
 
 The design respects SousChef's architecture while adding significant new value. Users get a single tool for both Chef migration AND Ansible upgrades.
 

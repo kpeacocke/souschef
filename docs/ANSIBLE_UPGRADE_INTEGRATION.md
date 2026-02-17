@@ -372,7 +372,7 @@ from pathlib import Path
 
 def show_ansible_upgrade_page():
     """Display Ansible upgrade planning page."""
-    st.title("🔄 Ansible Upgrade Planning")
+    st.title("[SYNC] Ansible Upgrade Planning")
 
     # Tabs for different workflows
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -418,13 +418,13 @@ def show_environment_assessment():
                 eol = result["eol_status"]
                 st.metric(
                     "EOL Status",
-                    "⚠️ EOL" if eol["is_eol"] else "✅ Supported",
+                    "WARNING EOL" if eol["is_eol"] else "[YES] Supported",
                     delta="Action Required" if eol["is_eol"] else None
                 )
 
             # Show issues
             if result["compatibility_issues"]:
-                st.error("⚠️ Compatibility Issues Found")
+                st.error("WARNING Compatibility Issues Found")
                 for issue in result["compatibility_issues"]:
                     st.warning(issue)
 
@@ -463,11 +463,11 @@ def show_eol_status():
 
         # Display status with visual indicators
         if status["is_eol"]:
-            st.error(f"⚠️ Version {version} reached EOL on {status['eol_date']}")
+            st.error(f"WARNING Version {version} reached EOL on {status['eol_date']}")
         elif status.get("eol_approaching"):
-            st.warning(f"⚡ Version {version} will reach EOL on {status['eol_date']}")
+            st.warning(f"[URGENT] Version {version} will reach EOL on {status['eol_date']}")
         else:
-            st.success(f"✅ Version {version} is supported until {status['eol_date']}")
+            st.success(f"[YES] Version {version} is supported until {status['eol_date']}")
 
 def show_collection_compatibility():
     """Show collection compatibility checker."""

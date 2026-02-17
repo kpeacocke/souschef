@@ -793,13 +793,13 @@ souschef-cli validate playbook \
 
 **Validation Output:**
 ```
-✓ Syntax: PASSED (YAML valid)
-✓ Semantic: PASSED (Logic preserved)
-⚠ Best Practice: 2 warnings
+[OK] Syntax: PASSED (YAML valid)
+[OK] Semantic: PASSED (Logic preserved)
+WARNING Best Practice: 2 warnings
   - Consider using 'package' instead of 'apt'
   - Add 'become: true' for privilege escalation
-✓ Security: PASSED
-✓ Performance: PASSED
+[OK] Security: PASSED
+[OK] Performance: PASSED
 
 Overall: PASSED with warnings
 ```
@@ -840,7 +840,7 @@ Overall: PASSED with warnings
 
 ## Best Practices
 
-### Do's ✅
+### Do's [YES]
 
 1. **Convert One Recipe at a Time**: Test each before moving to next
 2. **Preserve Intent**: Focus on what the code does, not how
@@ -851,7 +851,7 @@ Overall: PASSED with warnings
 7. **Organise into Roles**: Structure for reusability
 8. **Version Control**: Commit after each successful conversion
 
-### Don'ts ❌
+### Don'ts [NO]
 
 1. **Don't Skip Testing**: Always test converted code
 2. **Don't Ignore Warnings**: Validation warnings indicate issues

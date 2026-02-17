@@ -2,7 +2,7 @@
 
 This guide explains how to test the authenticated Chef Server integration with a **live Chef Server**, including secrets redaction functionality.
 
-> **💡 Testing Without Chef Server?** See [Mock Chef Server Testing Guide](MOCK_CHEF_SERVER.md) for testing with mocked HTTP responses - no Chef Server required!
+> **NOTE: Testing Without Chef Server?** See [Mock Chef Server Testing Guide](MOCK_CHEF_SERVER.md) for testing with mocked HTTP responses - no Chef Server required!
 
 ## Quick Links
 
@@ -392,12 +392,12 @@ Safe to include in error messages:
 
 From Issue #197, verify each criterion:
 
-- ✅ **Key-based auth**: RSA signature with X-Ops-* headers
-- ✅ **Configuration**: Server URL, org, client name via env vars
-- ✅ **Basic endpoints**: nodes, roles, environments, cookbooks, policies
-- ✅ **Connection test**: `validate_chef_server_connection` tool
-- ✅ **Clear errors**: HTTP status codes with helpful messages
-- ✅ **Secrets redaction**: PEM keys and passwords masked in output
+- [YES] **Key-based auth**: RSA signature with X-Ops-* headers
+- [YES] **Configuration**: Server URL, org, client name via env vars
+- [YES] **Basic endpoints**: nodes, roles, environments, cookbooks, policies
+- [YES] **Connection test**: `validate_chef_server_connection` tool
+- [YES] **Clear errors**: HTTP status codes with helpful messages
+- [YES] **Secrets redaction**: PEM keys and passwords masked in output
 
 ## Next Steps
 

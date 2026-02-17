@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-## ❓ Question
+## Question
 
 What would you like help with? Please be as specific as possible.
 
@@ -83,7 +83,7 @@ What result are you hoping to achieve?
     enabled: yes
 ```
 
-## 🖥️ Environment
+## Environment
 
 - **SousChef Version**: [e.g., 0.1.0]
 - **Python Version**: [e.g., 3.14.1]
@@ -100,7 +100,7 @@ Are there specific resources you've consulted?
 - [ ] Ansible documentation: [link]
 - [ ] Other: _______________
 
-## ☑️ Checklist
+## Checklist
 
 - [ ] I have searched existing issues and discussions
 - [ ] I have provided enough context about what I'm trying to do

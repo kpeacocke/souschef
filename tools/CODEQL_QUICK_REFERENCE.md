@@ -10,8 +10,8 @@ python3 tools/check_codeql_suppressions.py
 
 | Result | Meaning | Action |
 |--------|---------|--------|
-| ✓ ALL SUPPRESSIONS IN PLACE | Code is safe to push | `git commit && git push` |
-| ✗ Missing suppressions | CodeQL will reject PR | Add `# codeql [py/path-injection]` comments and retry |
+| [OK] ALL SUPPRESSIONS IN PLACE | Code is safe to push | `git commit && git push` |
+| [FAIL] Missing suppressions | CodeQL will reject PR | Add `# codeql [py/path-injection]` comments and retry |
 
 ## Suppression Syntax
 
@@ -29,7 +29,7 @@ path = cookbook_dir / "recipes" / recipe_name
 1. Make changes with path operations
 2. Add suppressions: `# codeql [py/path-injection]`
 3. Run: `python3 tools/check_codeql_suppressions.py`
-4. See ✓? Push it! See ✗? Fix it!
+4. See [OK]? Push it! See [FAIL]? Fix it!
 
 ## Safe Path Patterns in SousChef
 

@@ -37,17 +37,17 @@ LOCAL CODEQL SUPPRESSION VALIDATION
 ======================================================================
 
 Checking souschef/assessment.py:
-  ✓ 49/23 suppressions found (PERFECT)
+  [OK] 49/23 suppressions found (PERFECT)
 ...
-✓ ALL SUPPRESSIONS IN PLACE!
-✓ Ready to push to GitHub
+[OK] ALL SUPPRESSIONS IN PLACE!
+[OK] Ready to push to GitHub
 ```
 
 **Failure (missing suppressions):**
 
 ```text
 Checking souschef/assessment.py:
-  ✗ 22/30 suppressions found (MISSING 8)
+  [FAIL] 22/30 suppressions found (MISSING 8)
 ...
 FILES WITH MISSING SUPPRESSIONS:
   souschef/assessment.py: Missing 8 suppressions

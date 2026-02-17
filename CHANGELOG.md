@@ -221,7 +221,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [3.2.0](https://github.com/kpeacocke/souschef/releases/tag/v3.2.0) (2026-01-22)
 
 
-### ⚠ BREAKING CHANGES
+### BREAKING CHANGES
 
 * Package name changed from 'souschef' to 'mcp-souschef' on PyPI
 

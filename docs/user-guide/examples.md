@@ -92,7 +92,7 @@ ansible-playbook -i inventory/dev tasks/nginx.yml
 ansible-playbook -i inventory/dev tasks/nginx.yml --check
 ```
 
-**Best Practice:** ✅ Direct conversion works perfectly for simple packages and services.
+**Best Practice:** [YES] Direct conversion works perfectly for simple packages and services.
 
 ---
 
@@ -241,7 +241,7 @@ end
   when: app_environment == 'production'
 ```
 
-**Best Practice:** ✅ Guards convert to `stat` checks + `when` conditions for clarity.
+**Best Practice:** [YES] Guards convert to `stat` checks + `when` conditions for clarity.
 
 ---
 
@@ -322,7 +322,7 @@ db_password: !vault |
           66386439653865...
 ```
 
-**Best Practice:** ✅ Always use `no_log: true` for sensitive data tasks.
+**Best Practice:** [YES] Always use `no_log: true` for sensitive data tasks.
 
 ---
 
@@ -412,7 +412,7 @@ all:
           ansible_host: 10.0.1.20
 ```
 
-**Best Practice:** ✅ Chef search converts to Ansible inventory groups with `groups[]` variable.
+**Best Practice:** [YES] Chef search converts to Ansible inventory groups with `groups[]` variable.
 
 ---
 
@@ -518,7 +518,7 @@ app_deploy_environment: {}
           DATABASE_URL: postgresql://localhost/myapp
 ```
 
-**Best Practice:** ✅ Custom resources → Ansible roles with similar interface.
+**Best Practice:** [YES] Custom resources → Ansible roles with similar interface.
 
 ---
 

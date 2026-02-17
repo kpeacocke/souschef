@@ -237,4 +237,4 @@ Get started with SousChef in minutes:
 
 ---
 
-**SousChef** - *Transforming infrastructure automation, one recipe at a time.* ✨
+**SousChef** - *Transforming infrastructure automation, one recipe at a time.*

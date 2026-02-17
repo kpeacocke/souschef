@@ -136,7 +136,7 @@ https://www.contributor-covenant.org/translations.
 
 In addition to the general guidelines above, the SousChef community values:
 
-### 🤝 Collaboration Over Competition
+### Collaboration Over Competition
 - Share knowledge freely about Chef-to-Ansible migration patterns
 - Help others learn infrastructure automation best practices
 - Contribute improvements that benefit the entire community
@@ -146,7 +146,7 @@ In addition to the general guidelines above, the SousChef community values:
 - Code changes should be thoroughly tested and reviewed
 - Documentation should be accurate and helpful
 
-### 🌍 Inclusive Infrastructure Community
+### Inclusive Infrastructure Community
 - Welcome practitioners from all backgrounds and experience levels
 - Value different perspectives on automation and migration strategies
 - Support learning and professional development

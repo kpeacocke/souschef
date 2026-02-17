@@ -368,7 +368,7 @@ def get_eol_status(version: str) -> dict:
             "eol_date": version_info.eol_date,
             "days_overdue": days_diff,
             "status": "End of Life",
-            "message": f"⚠️  Version {version} reached EOL {days_diff} days ago. Upgrade immediately!",
+            "message": f"WARNING  Version {version} reached EOL {days_diff} days ago. Upgrade immediately!",
             "security_risk": "HIGH"
         }
     elif days_diff < 90:
@@ -379,7 +379,7 @@ def get_eol_status(version: str) -> dict:
             "eol_date": version_info.eol_date,
             "days_remaining": days_diff,
             "status": "EOL Approaching",
-            "message": f"⚡ Version {version} will reach EOL in {days_diff} days. Plan upgrade soon.",
+            "message": f"[URGENT] Version {version} will reach EOL in {days_diff} days. Plan upgrade soon.",
             "security_risk": "MEDIUM"
         }
     else:
@@ -389,7 +389,7 @@ def get_eol_status(version: str) -> dict:
             "eol_date": version_info.eol_date,
             "days_remaining": days_diff,
             "status": "Supported",
-            "message": f"✅ Version {version} is supported for {days_diff} more days",
+            "message": f"[YES] Version {version} is supported for {days_diff} more days",
             "security_risk": "LOW"
         }
 ```
@@ -438,7 +438,7 @@ def assess_ansible_environment(environment_path: str) -> dict:
 
     if eol_status["is_eol"]:
         recommendations.append(
-            f"🚨 URGENT: Upgrade from EOL version {ansible_version}"
+            f"[URGENT] URGENT: Upgrade from EOL version {ansible_version}"
         )
         # FROM PDF: Recommend latest stable
         recommendations.append(
@@ -447,7 +447,7 @@ def assess_ansible_environment(environment_path: str) -> dict:
 
     if not python_compatible:
         recommendations.append(
-            f"⚠️  Python {python_version} incompatible with Ansible {ansible_version}"
+            f"WARNING  Python {python_version} incompatible with Ansible {ansible_version}"
         )
         recommendations.append(
             f"Supported Python versions: {', '.join(version_info.control_node_python)}"
@@ -533,7 +533,7 @@ else:
 ```bash
 # Check if your version is EOL (FROM PDF)
 souschef ansible eol 2.9
-# Output: ⚠️  Version 2.9 reached EOL on 2022-05-23 (1356 days ago)
+# Output: WARNING  Version 2.9 reached EOL on 2022-05-23 (1356 days ago)
 
 # Plan upgrade considering Python compatibility (FROM PDF)
 souschef ansible plan /opt/ansible 2.16
@@ -599,7 +599,7 @@ The PDF provides the **"what"** (compatibility rules), and our implementation pr
 
 ## Next Actions
 
-1. ✅ Created design document
+1. [YES] Created design document
 2. ⏳ Implement `core/ansible_versions.py` with PDF data
 3. ⏳ Add unit tests validating PDF matrix accuracy
 4. ⏳ Implement assessment logic

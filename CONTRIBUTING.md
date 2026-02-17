@@ -97,12 +97,12 @@ We welcome several types of contributions:
 - Property-based tests for edge case coverage
 - Performance benchmarks
 
-#### 🐛 **Bug Reports**
+#### Bug Reports
 - Detailed bug reports with reproduction steps
 - Edge case discoveries
 - Performance issue identification
 
-####  **Feature Requests**
+#### Feature Requests
 - New Chef resource type support
 - Ansible module mappings
 - CLI command suggestions

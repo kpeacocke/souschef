@@ -172,12 +172,12 @@ We take security vulnerabilities seriously. If you discover a security issue, pl
 
 **Security Checklist:**
 
-- ✅ Store API keys as GitHub Secrets
-- ✅ Use minimal permissions for workflow tokens
-- ✅ Pin dependency versions
-- ✅ Run security scans on generated code
-- ✅ Review workflow logs for sensitive data leaks
-- ✅ Use separate API keys for CI/CD vs production
+- Store API keys as GitHub Secrets
+- Use minimal permissions for workflow tokens
+- Pin dependency versions
+- Run security scans on generated code
+- Review workflow logs for sensitive data leaks
+- Use separate API keys for CI/CD vs production
 
 ## Security Testing
 

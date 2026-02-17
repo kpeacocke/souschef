@@ -36,10 +36,10 @@ Tests Chef Server data extraction and IR graph construction.
 - Validates IR structure and node variables
 
 **Validates:**
-- ✅ Chef Server authentication with RSA signatures
-- ✅ Node search query execution
-- ✅ IR graph creation from Chef data
-- ✅ Variable assignment in IR nodes
+- [YES] Chef Server authentication with RSA signatures
+- [YES] Node search query execution
+- [YES] IR graph creation from Chef data
+- [YES] Variable assignment in IR nodes
 
 #### `test_chef_cookbook_to_ir_with_dependencies`
 - Mocks Chef Server cookbook metadata endpoint
@@ -48,10 +48,10 @@ Tests Chef Server data extraction and IR graph construction.
 - Validates topological ordering of dependencies
 
 **Validates:**
-- ✅ Cookbook metadata parsing
-- ✅ Dependency graph construction
-- ✅ Topological dependency resolution
-- ✅ IR node relationships
+- [YES] Cookbook metadata parsing
+- [YES] Dependency graph construction
+- [YES] Topological dependency resolution
+- [YES] IR node relationships
 
 ### 2. TestIRToAWXWorkflow
 Tests IR transformation to AWX job templates and inventories.
@@ -63,10 +63,10 @@ Tests IR transformation to AWX job templates and inventories.
 - Mocks AWX API `/job_templates/` POST endpoint
 
 **Validates:**
-- ✅ IR to AWX job template transformation
-- ✅ Action mapping to playbook tasks
-- ✅ Extra vars injection (source tracking)
-- ✅ AWX API authentication
+- [YES] IR to AWX job template transformation
+- [YES] Action mapping to playbook tasks
+- [YES] Extra vars injection (source tracking)
+- [YES] AWX API authentication
 
 #### `test_ir_to_awx_inventory_creation`
 - Creates IR graph with host inventory
@@ -75,10 +75,10 @@ Tests IR transformation to AWX job templates and inventories.
 - Mocks AWX API `/inventories/` POST endpoint
 
 **Validates:**
-- ✅ IR host to AWX inventory mapping
-- ✅ Group and host variable assignment
-- ✅ Tag propagation to AWX metadata
-- ✅ Inventory organization structure
+- [YES] IR host to AWX inventory mapping
+- [YES] Group and host variable assignment
+- [YES] Tag propagation to AWX metadata
+- [YES] Inventory organization structure
 
 ### 3. TestEndToEndChefToAWXWorkflow
 Tests complete migration workflow across all stages.
@@ -91,12 +91,12 @@ Tests complete migration workflow across all stages.
 4. Generate AWX configurations (inventory, hosts, job templates)
 
 **Validates:**
-- ✅ Multi-step Chef Server queries
-- ✅ IR graph construction from multiple Chef resources
-- ✅ AWX inventory creation
-- ✅ AWX host creation
-- ✅ AWX job template generation
-- ✅ End-to-end data flow integrity
+- [YES] Multi-step Chef Server queries
+- [YES] IR graph construction from multiple Chef resources
+- [YES] AWX inventory creation
+- [YES] AWX host creation
+- [YES] AWX job template generation
+- [YES] End-to-end data flow integrity
 
 #### `test_workflow_with_chef_environments_to_awx_groups`
 - Queries Chef environments (production, staging)
@@ -105,10 +105,10 @@ Tests complete migration workflow across all stages.
 - Creates AWX groups for each environment
 
 **Validates:**
-- ✅ Chef environment enumeration
-- ✅ Environment-based node filtering
-- ✅ IR environment modeling
-- ✅ AWX group creation from environments
+- [YES] Chef environment enumeration
+- [YES] Environment-based node filtering
+- [YES] IR environment modeling
+- [YES] AWX group creation from environments
 
 ### 4. TestIRValidationWithChefAndAWX
 Tests IR validation against real API constraints.
@@ -119,9 +119,9 @@ Tests IR validation against real API constraints.
 - Marks IR node with validation metadata
 
 **Validates:**
-- ✅ IR to Chef Server validation
-- ✅ Recipe existence checking
-- ✅ Validation metadata tracking
+- [YES] IR to Chef Server validation
+- [YES] Recipe existence checking
+- [YES] Validation metadata tracking
 
 #### `test_validate_awx_compatibility_from_ir`
 - Creates IR graph for Ansible playbook
@@ -129,9 +129,9 @@ Tests IR validation against real API constraints.
 - Validates IR compatibility with AWX Ansible version
 
 **Validates:**
-- ✅ AWX capability detection
-- ✅ Ansible version compatibility checking
-- ✅ IR metadata enrichment
+- [YES] AWX capability detection
+- [YES] Ansible version compatibility checking
+- [YES] IR metadata enrichment
 
 ## Migration Path Configuration
 
@@ -207,22 +207,22 @@ def test_migration_path(origin, destination):
 ### Chef Server API: What Actually Changes
 
 **Chef Server 11.x → 12.x**:
-- ✅ Maintained: All REST endpoints unchanged
-- ➕ Added: X-Ops-Sign version=1.3 support (SHA-256)
-- ➕ Added: `/organizations/{org}/policies` endpoint
-- ⚠️ Deprecated: Opscode User/Organization endpoints
+- [YES] Maintained: All REST endpoints unchanged
+- [ADD] Added: X-Ops-Sign version=1.3 support (SHA-256)
+- [ADD] Added: `/organizations/{org}/policies` endpoint
+- WARNING Deprecated: Opscode User/Organization endpoints
 
 **Chef Server 12.x → 14.x**:
-- ✅ Maintained: All core REST endpoints stable
-- 🔒 Changed: Stricter SSL certificate validation (HTTPS required)
-- 🔒 Changed: Default authentication protocol → 1.3 (SHA-256)
-- ⚠️ Removed: SHA-1 deprecation warnings (still works)
+- [YES] Maintained: All core REST endpoints stable
+- [SECURE] Changed: Stricter SSL certificate validation (HTTPS required)
+- [SECURE] Changed: Default authentication protocol → 1.3 (SHA-256)
+- WARNING Removed: SHA-1 deprecation warnings (still works)
 
 **Chef Server 14.x → 15.x**:
-- ✅ Maintained: All REST endpoints identical
-- 🔒 Changed: FIPS 140-2 compliance enforced
-- ⚠️ Deprecated: SHA-1 support (planned removal in v16+)
-- ➕ Added: Enhanced LDAP integration options
+- [YES] Maintained: All REST endpoints identical
+- [SECURE] Changed: FIPS 140-2 compliance enforced
+- WARNING Deprecated: SHA-1 support (planned removal in v16+)
+- [ADD] Added: Enhanced LDAP integration options
 
 **API Response Changes**: None across all versions (12.x-15.x)
 - Node search responses: Same structure
@@ -244,36 +244,36 @@ X-Ops-Content-Hash: SHA256(body)
 ### AWX/Tower/AAP API: What Actually Changes
 
 **Tower 2.x → Tower 3.x**:
-- ✅ Maintained: `/api/v2/` endpoints unchanged
-- ➕ Added: `/api/v2/workflow_job_templates/` (workflow support)
-- ➕ Added: `/api/v2/credential_types/` (custom credentials)
-- ➕ Added: Smart inventory support
-- 🔄 Changed: OAuth2 token format (longer tokens)
+- [YES] Maintained: `/api/v2/` endpoints unchanged
+- [ADD] Added: `/api/v2/workflow_job_templates/` (workflow support)
+- [ADD] Added: `/api/v2/credential_types/` (custom credentials)
+- [ADD] Added: Smart inventory support
+- [SYNC] Changed: OAuth2 token format (longer tokens)
 
 **Tower 3.x → AWX (OSS)**:
-- ✅ Maintained: All `/api/v2/` endpoints identical
-- ➕ Added: Faster release cycle (every 2 weeks vs quarterly)
-- ➕ Added: Container-based execution environment preview
-- 🔄 Changed: Branding (Tower → AWX, API unchanged)
+- [YES] Maintained: All `/api/v2/` endpoints identical
+- [ADD] Added: Faster release cycle (every 2 weeks vs quarterly)
+- [ADD] Added: Container-based execution environment preview
+- [SYNC] Changed: Branding (Tower → AWX, API unchanged)
 
 **AWX 17.x → AWX 21.x**:
-- ✅ Maintained: `/api/v2/` core endpoints stable
-- ➕ Added: Execution Environments (EE) support
-- ➕ Added: `/api/v2/execution_environments/` endpoint
-- ⚠️ Deprecated: Custom virtual environments (replaced by EE)
-- 🔄 Changed: Job isolation method (bubblewrap → podman)
+- [YES] Maintained: `/api/v2/` core endpoints stable
+- [ADD] Added: Execution Environments (EE) support
+- [ADD] Added: `/api/v2/execution_environments/` endpoint
+- WARNING Deprecated: Custom virtual environments (replaced by EE)
+- [SYNC] Changed: Job isolation method (bubblewrap → podman)
 
 **AWX 21.x → AWX 24.x / AAP 2.4**:
-- ✅ Maintained: All existing `/api/v2/` endpoints
-- ➕ Added: Ansible content signing support
-- ➕ Added: Enhanced RBAC with organizations
-- ➕ Added: `/api/v2/mesh_visualizer/` (topology view)
-- 🔄 Changed: Default Ansible version (2.12 → 2.15)
+- [YES] Maintained: All existing `/api/v2/` endpoints
+- [ADD] Added: Ansible content signing support
+- [ADD] Added: Enhanced RBAC with organizations
+- [ADD] Added: `/api/v2/mesh_visualizer/` (topology view)
+- [SYNC] Changed: Default Ansible version (2.12 → 2.15)
 
 **Breaking Changes**:
-- ⚠️ AWX 19.x: Removed some legacy credential fields (migration provided)
-- ⚠️ AWX 21.x: Removed `/api/v2/custom_virtualenvs/` (use EE instead)
-- ⚠️ AAP 2.0: Renamed `/api/v2/towers/` → `/api/v2/instances/`
+- WARNING AWX 19.x: Removed some legacy credential fields (migration provided)
+- WARNING AWX 21.x: Removed `/api/v2/custom_virtualenvs/` (use EE instead)
+- WARNING AAP 2.0: Renamed `/api/v2/towers/` → `/api/v2/instances/`
 
 **API Response Structure Changes**:
 ```json
@@ -712,7 +712,7 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
     assert len(nodes) == 2
     assert nodes[0]["name"] == "web-prod-01"
     assert nodes[1]["name"] == "app-prod-01"
-    print(f"  ✓ Found {len(nodes)} production nodes from Chef")
+    print(f"  [OK] Found {len(nodes)} production nodes from Chef")
 
     # ===== STAGE 2: Build IR Graph =====
     print("[STAGE 2] Building Intermediate Representation...")
@@ -728,7 +728,7 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
     assert ir_graph.source_type == SourceType.CHEF
     assert ir_graph.target_type == TargetType.ANSIBLE
     assert len(ir_graph.nodes) >= 2
-    print(f"  ✓ Built IR with {len(ir_graph.nodes)} nodes")
+    print(f"  [OK] Built IR with {len(ir_graph.nodes)} nodes")
 
     for node in ir_graph.nodes:
         print(f"    - {node.node_id}: platform={node.properties.get('platform')}")
@@ -746,7 +746,7 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
         }
     )
     ee_id = ee_response.json()["id"]
-    print(f"  ✓ Created execution environment EE#{ee_id}")
+    print(f"  [OK] Created execution environment EE#{ee_id}")
 
     # Create inventory from Chef nodes
     inventory_response = requests.post(
@@ -758,7 +758,7 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
         }
     )
     inventory_id = inventory_response.json()["id"]
-    print(f"  ✓ Created inventory ID#{inventory_id}")
+    print(f"  [OK] Created inventory ID#{inventory_id}")
 
     # Add hosts to inventory
     for node in nodes:
@@ -786,7 +786,7 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
         }
     )
     project_id = project_response.json()["id"]
-    print(f"  ✓ Created project ID#{project_id}")
+    print(f"  [OK] Created project ID#{project_id}")
 
     # Transform IR to job template
     job_template = ir_to_awx_job_template(
@@ -800,23 +800,23 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
         ansible_version="2.15.0",
         signing_enabled=True,
     )
-    print(f"  ✓ Generated job template: {job_template['name']}")
+    print(f"  [OK] Generated job template: {job_template['name']}")
 
     # ===== STAGE 4: Validation & Verification =====
     print("[STAGE 4] Validating transformation...")
 
     # Verify job template has AAP 2.4 requirements
     assert job_template["execution_environment"] == ee_id  # REQUIRED
-    print(f"  ✓ Job template uses execution_environment: {ee_id}")
+    print(f"  [OK] Job template uses execution_environment: {ee_id}")
 
     assert job_template["ansible_version"] == "2.15.0"
-    print(f"  ✓ Ansible version: {job_template['ansible_version']}")
+    print(f"  [OK] Ansible version: {job_template['ansible_version']}")
 
     assert job_template["content_signing"] is True
-    print(f"  ✓ Content signing enabled: {job_template['content_signing']}")
+    print(f"  [OK] Content signing enabled: {job_template['content_signing']}")
 
     assert "custom_virtualenv" not in job_template or job_template["custom_virtualenv"] is None
-    print(f"  ✓ Legacy virtualenv NOT used (correct for AAP 2.4)")
+    print(f"  [OK] Legacy virtualenv NOT used (correct for AAP 2.4)")
 
     # ===== STAGE 5: Create in AAP =====
     print("[STAGE 5] Creating job template in AAP 2.4...")
@@ -831,12 +831,12 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
     assert created_jt["id"] == 1
     assert created_jt["execution_environment"] == ee_id
     assert created_jt["content_signing"] is True
-    print(f"  ✓ Job template created: JT#{created_jt['id']}")
+    print(f"  [OK] Job template created: JT#{created_jt['id']}")
     print(f"    - Name: {created_jt['name']}")
     print(f"    - EE: {created_jt['execution_environment']}")
     print(f"    - Signed: {created_jt['content_signing']}")
 
-    print("\n✅ SUCCESS: Chef 15.10.91 → AAP 2.4.0 migration complete!")
+    print("\n[YES] SUCCESS: Chef 15.10.91 → AAP 2.4.0 migration complete!")
     print(f"   {len(nodes)} nodes migrated to {1} job template with modern AAP features")
 ```
 
@@ -854,30 +854,30 @@ def test_latest_chef_to_latest_aap(chef_15_aap_24_mocks):
 **Output from successful migration:**
 ```
 [STAGE 1] Querying Chef Server 15.10.91...
-  ✓ Found 2 production nodes from Chef
+  [OK] Found 2 production nodes from Chef
 [STAGE 2] Building Intermediate Representation...
-  ✓ Built IR with 2 nodes
+  [OK] Built IR with 2 nodes
     - web-prod-01: platform=ubuntu
     - app-prod-01: platform=ubuntu
 [STAGE 3] Transforming IR to AAP 2.4...
-  ✓ Created execution environment EE#42
-  ✓ Created inventory ID#1
+  [OK] Created execution environment EE#42
+  [OK] Created inventory ID#1
     - Added host: web-prod-01
     - Added host: app-prod-01
-  ✓ Created project ID#1
-  ✓ Generated job template: Deploy-from-Chef-Migration
+  [OK] Created project ID#1
+  [OK] Generated job template: Deploy-from-Chef-Migration
 [STAGE 4] Validating transformation...
-  ✓ Job template uses execution_environment: 42
-  ✓ Ansible version: 2.15.0
-  ✓ Content signing enabled: True
-  ✓ Legacy virtualenv NOT used (correct for AAP 2.4)
+  [OK] Job template uses execution_environment: 42
+  [OK] Ansible version: 2.15.0
+  [OK] Content signing enabled: True
+  [OK] Legacy virtualenv NOT used (correct for AAP 2.4)
 [STAGE 5] Creating job template in AAP 2.4...
-  ✓ Job template created: JT#1
+  [OK] Job template created: JT#1
     - Name: Deploy-from-Chef-Migration
     - EE: 42
     - Signed: True
 
-✅ SUCCESS: Chef 15.10.91 → AAP 2.4.0 migration complete!
+[YES] SUCCESS: Chef 15.10.91 → AAP 2.4.0 migration complete!
    2 nodes migrated to 1 job template with modern AAP features
 ```
 
@@ -1051,11 +1051,11 @@ graph.metadata["awx_compatible"] = "true"
 
 When adding new v2.0/2.1 IR features:
 
-1. ✅ Add mock tests for new Chef Server endpoints
-2. ✅ Add mock tests for new AWX API interactions
-3. ✅ Validate IR graph transformations
-4. ✅ Test complete workflow integration
-5. ✅ Document new mock responses
+1. [YES] Add mock tests for new Chef Server endpoints
+2. [YES] Add mock tests for new AWX API interactions
+3. [YES] Validate IR graph transformations
+4. [YES] Test complete workflow integration
+5. [YES] Document new mock responses
 
 ## Validation Checklist
 
@@ -1290,14 +1290,14 @@ def test_migration_path_compatibility(origin, destination):
 
 | Test | Origin | Destination | Status | API Validation |
 |------|--------|-------------|--------|----------------|
-| `test_query_chef_nodes_and_build_ir` | Chef 14.x | N/A | ✅ Passing | SHA-256 auth, node search |
-| `test_chef_cookbook_to_ir_with_dependencies` | Chef 12.x+ | N/A | ✅ Passing | Cookbook metadata |
-| `test_ir_to_awx_job_template_creation` | N/A | AWX 24.6.1 | ✅ Passing | EE-based templates |
-| `test_ir_to_awx_inventory_creation` | N/A | AWX 24.6.1 | ✅ Passing | Inventory API v2 |
-| `test_complete_migration_workflow` | Chef 14.x | AWX 24.6.1 | ✅ Passing | Full 4-stage pipeline |
-| `test_workflow_with_chef_environments_to_awx_groups` | Chef 14.x | AWX 24.6.1 | ✅ Passing | Environment mapping |
-| `test_validate_ir_node_against_chef_server` | Chef 14.x | N/A | ✅ Passing | Recipe validation |
-| `test_validate_awx_compatibility_from_ir` | N/A | AWX 24.6.1 | ✅ Passing | Ansible version check |
+| `test_query_chef_nodes_and_build_ir` | Chef 14.x | N/A | [YES] Passing | SHA-256 auth, node search |
+| `test_chef_cookbook_to_ir_with_dependencies` | Chef 12.x+ | N/A | [YES] Passing | Cookbook metadata |
+| `test_ir_to_awx_job_template_creation` | N/A | AWX 24.6.1 | [YES] Passing | EE-based templates |
+| `test_ir_to_awx_inventory_creation` | N/A | AWX 24.6.1 | [YES] Passing | Inventory API v2 |
+| `test_complete_migration_workflow` | Chef 14.x | AWX 24.6.1 | [YES] Passing | Full 4-stage pipeline |
+| `test_workflow_with_chef_environments_to_awx_groups` | Chef 14.x | AWX 24.6.1 | [YES] Passing | Environment mapping |
+| `test_validate_ir_node_against_chef_server` | Chef 14.x | N/A | [YES] Passing | Recipe validation |
+| `test_validate_awx_compatibility_from_ir` | N/A | AWX 24.6.1 | [YES] Passing | Ansible version check |
 
 **Default Test Configuration**:
 - **Origin**: Chef Server 14.x with SHA-256 authentication (protocol 1.3)

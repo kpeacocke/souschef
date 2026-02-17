@@ -98,7 +98,7 @@ Warnings: 12 resources need manual review
 
    if result.status == MigrationStatus.PARTIAL_SUCCESS:
        for warning in result.warnings:
-           print(f"⚠ {warning}")
+           print(f"WARNING {warning}")
    ```
 
 2. **Identify problematic resources:**

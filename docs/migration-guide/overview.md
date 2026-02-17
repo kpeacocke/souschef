@@ -387,7 +387,7 @@ souschef-cli v2 status --migration-id mig-abc123
 
 ## Best Practices
 
-### Do's ✅
+### Do's [YES]
 
 1. **Start with Assessment**
    - Always run `assess_chef_migration_complexity` first
@@ -421,7 +421,7 @@ souschef-cli v2 status --migration-id mig-abc123
    - Convert existing InSpec tests with `convert_inspec_to_test`
    - Generate new tests with `generate_inspec_from_recipe`
 
-### Don'ts ❌
+### Don'ts [NO]
 
 1. **Don't Skip Assessment**
    - Jumping directly to conversion often leads to rework

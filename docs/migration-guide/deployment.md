@@ -992,7 +992,7 @@ ansible-playbook test_suite.yml -i inventory/production
         token: "{{ slack_token }}"
         channel: "#deployments"
         msg: |
-          🚀 Deployment started
+          [DEPLOY] Deployment started
           Playbook: {{ ansible_play_name }}
           Environment: {{ environment }}
           Initiated by: {{ ansible_user_id }}
@@ -1080,7 +1080,7 @@ ansible-playbook test_suite.yml -i inventory/production
 
 ## Best Practices
 
-### Do's ✅
+### Do's [YES]
 
 1. **Test in Lower Environments**: Always deploy to dev/staging first
 2. **Use Check Mode**: Validate with `--check` before actual run
@@ -1091,7 +1091,7 @@ ansible-playbook test_suite.yml -i inventory/production
 7. **Document Changes**: Maintain deployment logs
 8. **Practice Rollbacks**: Test rollback procedures regularly
 
-### Don'ts ❌
+### Don'ts [NO]
 
 1. **Don't Deploy Fridays**: Avoid end-of-week deployments
 2. **Don't Skip Testing**: Always test before production

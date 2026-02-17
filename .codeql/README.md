@@ -22,7 +22,7 @@ This directory contains all CodeQL-related files and artifacts for security and 
 
 ## What Gets Committed vs Ignored
 
-### ✅ Committed to Git
+### [YES] Committed to Git
 - **config/.codeqlignore** - Specifies which files to exclude from analysis
 - **config/config.yml** - CodeQL analysis parameters
 - **config/qlpack.yml** - Query pack configuration
@@ -30,7 +30,7 @@ This directory contains all CodeQL-related files and artifacts for security and 
 - **reports/archive/** - Historical analysis results (for tracking trends)
 - **queries/** - Custom security queries
 
-### ❌ Ignored (Local Build Artifacts)
+### [NO] Ignored (Local Build Artifacts)
 - **databases/** - CodeQL databases are large (~600MB) and rebuilt per machine
   - Rebuilt with: `codeql database create .codeql/databases/python-db --language=python --source-root=.`
   - Contents include extracted code representations, not source code
@@ -71,9 +71,9 @@ rm -rf .codeql/databases/python-db
 ## Platform Compatibility
 
 This structure works on:
-- ✅ macOS (Intel and Apple Silicon)
-- ✅ Linux
-- ✅ Windows (Git Bash, WSL, or PowerShell)
+- [YES] macOS (Intel and Apple Silicon)
+- [YES] Linux
+- [YES] Windows (Git Bash, WSL, or PowerShell)
 
 All paths use forward slashes and work across platforms.
 
