@@ -53,8 +53,8 @@ from souschef.storage import (
 from souschef.ui.pages.cookbook_analysis_security import (
     _extract_tar_securely,
     _extract_zip_securely,
-    _validate_tar_file_security,  # noqa: F401 - used in tests
-    _validate_zip_file_security,  # noqa: F401 - used in tests
+    _validate_tar_file_security,  # noqa: F401 - re-exported for backward compatibility
+    _validate_zip_file_security,  # noqa: F401 - re-exported for backward compatibility
 )
 from souschef.ui.pages.cookbook_analysis_utilities import (
     _get_secure_ai_config_path,

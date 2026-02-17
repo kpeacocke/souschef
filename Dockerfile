@@ -38,12 +38,12 @@ ENV PYTHONUNBUFFERED=1 \
     STREAMLIT_SERVER_MAX_UPLOAD_SIZE=200
 
 # Install runtime dependencies only (Alpine)
-RUN apk add --no-cache \
+RUN apk update && apk add --no-cache \
     ca-certificates \
     curl \
     # Runtime libraries (not -dev packages)
     libffi \
-    libpq \
+    libpq>=18.2 \
     && addgroup -g 1001 -S app \
     && adduser -u 1001 -S app -G app \
     && mkdir -p /app \
