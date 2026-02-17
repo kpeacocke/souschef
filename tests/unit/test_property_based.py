@@ -83,8 +83,6 @@ def test_parse_attributes_handles_any_content(content):
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
         temp_path = f.name
         old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
-        temp_path = f.name
-        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
             f.write(content)
             f.flush()
@@ -124,8 +122,6 @@ def test_parse_attributes_with_generated_attributes(precedence, key1, key2, valu
     attr_content = f"{precedence}['{key1}']['{key2}'] = {value}\n"
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".rb", delete=False) as f:
-        temp_path = f.name
-        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         temp_path = f.name
         old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
         try:
@@ -180,7 +176,6 @@ def test_parse_attributes_all_precedence_levels(precedence, key, value):
         try:
             f.write(attr_content)
             f.flush()
-            temp_path = f.name
 
             os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(Path(temp_path).parent)
             result = parse_attributes(temp_path, resolve_precedence=True)
@@ -194,7 +189,7 @@ def test_parse_attributes_all_precedence_levels(precedence, key, value):
                 os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
             else:
                 os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
-            Path(f.name).unlink(missing_ok=True)
+            Path(temp_path).unlink(missing_ok=True)
 
 
 @given(st.sampled_from(["awx", "aap"]))
@@ -615,7 +610,7 @@ def test_parse_inspec_profile_handles_any_content(content):
                 os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
             else:
                 os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
-            Path(f.name).unlink()
+            Path(temp_path).unlink(missing_ok=True)
 
 
 @given(st.text(min_size=1, max_size=1000))

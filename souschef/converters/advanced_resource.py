@@ -93,12 +93,12 @@ def convert_guard_to_ansible_when(guard_type: str, condition: str) -> str:
     """
     if guard_type == "only_if":
         # Chef: only_if "test -f /tmp/file"
-        # Ansible: when: <result of command check>
-        return 'ansible_play_batch | selectattr("command_result.rc", "equalto", 0)'
+        # Ansible: when: command_result.rc == 0
+        return "command_result.rc == 0"
     elif guard_type == "not_if":
         # Chef: not_if "test -f /tmp/file"
-        # Ansible: when: not <result of command check>
-        return 'ansible_play_batch | selectattr("command_result.rc", "not", 0)'
+        # Ansible: when: command_result.rc != 0
+        return "command_result.rc != 0"
     return ""
 
 

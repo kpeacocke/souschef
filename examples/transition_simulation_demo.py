@@ -53,8 +53,8 @@ def demo_transition_simulation():
 ║ Virtualenv Support ║ Yes (required)     ║ Yes (legacy)       ║
 ║ Content Signing    ║ No                 ║ No                 ║
 ║ FIPS              ║ No                 ║ No                 ║
-║ API Endpoints      ║ 6                  ║ {len(config.available_endpoints)}                  ║
-║ Ansible Min        ║ 2.9.0              ║ {config.ansible_version}              ║
+║ API Endpoints      ║ 6                  ║ {len(config.available_endpoints):<19}║
+║ Ansible Min        ║ 2.9.0              ║ {config.ansible_version:<19}║
 ╚════════════════════╩════════════════════╩════════════════════╝
 """)
 
