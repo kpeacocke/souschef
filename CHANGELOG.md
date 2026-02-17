@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 * See [UI Refactoring Summary](UI_REFACTORING_SUMMARY.md) for detailed refactoring information
-* See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module organization
+* See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for module organisation
 
 ## [Unreleased]
 

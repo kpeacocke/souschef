@@ -112,7 +112,7 @@ We welcome several types of contributions:
 
 1. **Search Existing Issues**: Check if your idea or bug is already reported
 2. **Read Documentation**: Familiarize yourself with the project structure
-3. **Understand the Architecture**: Review the MCP server pattern and tool organization
+3. **Understand the Architecture**: Review the MCP server pattern and tool organisation
 4. **Review Code Standards**: Follow our development standards (below)
 
 ## Code Standards
@@ -174,7 +174,7 @@ SousChef uses a modern Python toolchain for quality and consistency:
 - Follow Google-style docstring format
 - Include parameter descriptions and return value documentation
 
-### **File Organization**
+### **File Organisation**
 - Source code in `souschef/`
 - Tests in `tests/` mirroring source structure
 - Test fixtures in `tests/integration/fixtures/`
@@ -415,41 +415,11 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) for automate
 - `ci:` - CI/CD configuration changes
 - `style:` - Code style/formatting changes
 
-**Breaking Changes**: Add `BREAKING CHANGE:` in the commit body or use `!` after type (triggers major version bump):
-
+**Breaking Changes**: Add `BREAKING CHANGE:` in commit body or use `!` after type:
 ```bash
 feat!: change MCP tool parameter names
-
-BREAKING CHANGE: Renamed 'path' parameter to 'file_path' for consistency
+BREAKING CHANGE: Renamed 'path' parameter to 'file_path'
 ```
-
-**Examples**:
-
-```bash
-# Feature (bumps 0.1.0 → 0.2.0)
-feat: add support for Chef Policyfiles
-
-# Bug fix (bumps 0.1.0 → 0.1.1)
-fix: handle empty recipe files without crashing
-
-# Documentation (no version bump)
-docs: update installation instructions for PyPI
-
-# Breaking change in pre-1.0.0 (bumps 0.1.0 → 0.2.0)
-feat!: redesign MCP tool parameter structure
-
-BREAKING CHANGE: All tools now use standardized parameter names
-
-# Note: Breaking changes only bump major version after reaching 1.0.0
-# Before 1.0.0, breaking changes bump the minor version (0.x.y → 0.(x+1).0)
-# After 1.0.0, breaking changes bump the major version (1.x.y → 2.0.0)
-```
-
-**Why Conventional Commits?**
-- Automated semantic versioning
-- Auto-generated changelogs
-- Clear communication of changes
-- Standardized git history
 
 ### **PR Checklist**
 
@@ -459,129 +429,24 @@ Before submitting your PR, ensure:
 - [ ] Properly formatted (`poetry run ruff format .`)
 - [ ] No type errors (`poetry run mypy souschef`)
 - [ ] All tests pass (`poetry run pytest`)
-- [ ] Coverage maintained/improved (`pytest --cov`)
+- [ ] Coverage maintained/improved
 - [ ] Unit tests added/updated in `test_server.py`
 - [ ] Integration tests added/updated in `test_integration.py`
-- [ ] Property-based tests added if applicable in `test_property_based.py`
-- [ ] Test fixtures updated if new parsing features added
+- [ ] Property-based tests added (if applicable)
 - [ ] Type hints are complete
 - [ ] Docstrings are present and clear
 - [ ] Error cases are handled
 - [ ] Cross-platform compatible
 
-## Release Process
+## Release Process (Maintainers)
 
-SousChef uses automated releases powered by Release Please and follows the Gitflow branching model.
+SousChef uses automated releases with Release Please. Releases are triggered automatically when PRs merge to `main`. Use conventional commits—they determine version bumps automatically:
 
-### **Branching Strategy**
+- `fix:` or `docs:` → patch version bump
+- `feat:` → minor version bump  
+- `feat!:` or `BREAKING CHANGE:` → major version bump (after 1.0.0)
 
-- **`main`**: Production releases only (protected)
-- **`develop`**: Integration branch for upcoming releases (protected)
-- **`feature/*`**: Feature development branches
-- **`bugfix/*`**: Bug fix branches
-- **`release/*`**: Release preparation branches (if needed)
-- **`hotfix/*`**: Emergency production fixes
-
-### **How Releases Work**
-
-1. **Develop Features**
-   - Create feature branches from `develop`
-   - Use conventional commits for all changes
-   - Submit PRs targeting `develop`
-
-2. **Accumulate on Develop**
-   - Multiple features/fixes accumulate on `develop`
-   - This is your "staging" branch for batching changes
-   - Test everything thoroughly on `develop`
-
-3. **Release When Ready**
-   - Create PR: `develop` → `main`
-   - Once merged, Release Please automatically:
-     - Analyzes conventional commits since last release
-     - Creates a Release PR with version bump and CHANGELOG
-     - Auto-merges the Release PR when CI passes
-     - Publishes the release with Git tag
-     - Builds and publishes package to PyPI
-
-### **Automated Release Flow**
-
-```
-feature/x ──┐
-            ├─→ develop ──→ main ──→ [Release Please] ──→ PyPI
-feature/y ──┘                         ↓
-                                   Release PR
-                                   (auto-merges)
-```
-
-**Key Points:**
-- **Develop is your control point** - merge here to batch changes
-- **Main triggers releases** - every merge to main creates a release
-- **Fully automatic** - Release PR auto-merges when CI passes
-- **Conventional commits required** - they determine version bumps
-- **CHANGELOG auto-generated** - from commit messages
-
-### **Version Bumping Rules**
-
-Based on conventional commit types:
-
-- **Patch (0.0.x)**: `fix:`, `docs:`, `test:`, `chore:`, `refactor:`, `style:`
-- **Minor (0.x.0)**: `feat:`, breaking changes in pre-1.0 (`feat!:`, `BREAKING CHANGE`)
-- **Major (x.0.0)**: Breaking changes after 1.0.0 only
-
-**Example:**
-```bash
-# These commits on develop...
-git commit -m "feat: add Chef Policyfile support"
-git commit -m "fix: handle empty attribute files"
-git commit -m "docs: update CLI examples"
-
-# ...will create a minor version bump (0.x.0)
-# when merged to main because of the feat: commit
-```
-
-### **Manual Release Override**
-
-If you need to release immediately without auto-merge:
-
-1. Merge `develop` → `main`
-2. Wait for Release Please to create Release PR
-3. Review the Release PR (version, CHANGELOG)
-4. Manually merge it if auto-merge fails
-
-### **Hotfix Process**
-
-For emergency production fixes:
-
-```bash
-# Create hotfix from main
-git checkout main
-git checkout -b hotfix/critical-bug-fix
-
-# Make fix and commit
-git commit -m "fix: resolve critical security issue"
-
-# PR directly to main
-# Release happens automatically
-```
-
-### **Pre-Release Validation**
-
-Before merging `develop` → `main`:
-
-```bash
-# Ensure everything passes
-poetry run ruff check .
-poetry run ruff format .
-poetry run mypy souschef
-poetry run pytest --cov=souschef
-poetry run pytest --benchmark-only
-
-# Review accumulated commits
-git log main..develop --oneline
-
-# Verify conventional commits
-git log main..develop --pretty=format:"%s" | grep -E "^(feat|fix|docs|test|refactor|perf|chore|ci|style)(\(.*\))?:"
-```
+Contributors: Target `develop` branch with PRs. Maintainers batch changes and create release PRs.
 
 ## Adding New MCP Tools
 
