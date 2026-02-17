@@ -13,7 +13,7 @@ Ansible powers infrastructure provisioning, application deployment, configuratio
 - Understand breaking changes between versions
 - Generate comprehensive testing plans for infrastructure and application workloads
 
-SousChef's 5 upgrade planning tools automate this analysis and provide actionable recommendations.
+SousChef's upgrade planning tools automate this analysis and provide actionable recommendations.
 
 ## Quick Start
 
