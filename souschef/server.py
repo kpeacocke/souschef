@@ -134,8 +134,8 @@ from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     safe_read_text,
     safe_write_text,
 )
-from souschef.core.ruby_utils import (  # noqa: F401, codeql[py/unused-import]
-    _normalize_ruby_value,
+from souschef.core.ruby_utils import (
+    _normalize_ruby_value,  # noqa: F401 - used by MCP tools and tests
 )
 from souschef.core.validation import (  # noqa: F401, codeql[py/unused-import]
     ValidationCategory,
