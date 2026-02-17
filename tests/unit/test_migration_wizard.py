@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from souschef.cli.migration_wizard import (
+from souschef.migration_wizard import (
     generate_migration_config,
     setup_wizard,
     validate_inputs,
@@ -35,7 +35,7 @@ class TestValidateInputs:
     def test_validate_inputs_missing_cookbook_path(self) -> None:
         """Test validation fails when cookbook_path is missing."""
         config = {
-            "output_dir": "/tmp/output",
+            "output_dir": "/tmp/output",  # NOSONAR - test fixture
             "chef_version": "14.15.6",
             "ansible_version": "2.12",
         }
@@ -48,7 +48,7 @@ class TestValidateInputs:
         """Test validation fails when cookbook path doesn't exist."""
         config = {
             "cookbook_path": "/nonexistent/path",
-            "output_dir": "/tmp/output",
+            "output_dir": "/tmp/output",  # NOSONAR - test fixture
             "chef_version": "14.15.6",
             "ansible_version": "2.12",
         }
@@ -155,7 +155,7 @@ class TestValidateInputs:
                 "resource_patterns": {"package": True},
             }
 
-            is_valid, errors = validate_inputs(config)
+            is_valid, _ = validate_inputs(config)
             assert is_valid is True, f"Version {version} should be valid"
 
 
@@ -245,8 +245,8 @@ class TestGenerateMigrationConfig:
 class TestSetupWizard:
     """Test interactive wizard functionality."""
 
-    @patch("souschef.cli.migration_wizard.input")
-    @patch("souschef.cli.migration_wizard._confirm_configuration")
+    @patch("souschef.migration_wizard.input")
+    @patch("souschef.migration_wizard._confirm_configuration")
     def test_setup_wizard_success(
         self, mock_confirm: MagicMock, mock_input: MagicMock, tmp_path: Path
     ) -> None:
@@ -293,9 +293,9 @@ class TestSetupWizard:
         assert "resource_patterns" in config
         assert "conversion_options" in config
 
-    @patch("souschef.cli.migration_wizard.input")
-    @patch("souschef.cli.migration_wizard._confirm_configuration")
-    @patch("souschef.cli.migration_wizard.sys.exit")
+    @patch("souschef.migration_wizard.input")
+    @patch("souschef.migration_wizard._confirm_configuration")
+    @patch("souschef.migration_wizard.sys.exit")
     def test_setup_wizard_user_cancels(
         self,
         mock_exit: MagicMock,
@@ -341,8 +341,8 @@ class TestSetupWizard:
         mock_exit.assert_called_once_with(0)
 
     @pytest.mark.skip(reason="Complex mocking of interactive prompts")
-    @patch("souschef.cli.migration_wizard.input")
-    @patch("souschef.cli.migration_wizard.sys.exit")
+    @patch("souschef.migration_wizard.input")
+    @patch("souschef.migration_wizard.sys.exit")
     def test_setup_wizard_invalid_cookbook_path(
         self, mock_exit: MagicMock, mock_input: MagicMock
     ) -> None:
@@ -364,8 +364,8 @@ class TestSetupWizard:
 class TestWizardIntegration:
     """Integration tests for full wizard workflow."""
 
-    @patch("souschef.cli.migration_wizard.input")
-    @patch("souschef.cli.migration_wizard._confirm_configuration")
+    @patch("souschef.migration_wizard.input")
+    @patch("souschef.migration_wizard._confirm_configuration")
     def test_complete_wizard_flow_with_defaults(
         self, mock_confirm: MagicMock, mock_input: MagicMock, tmp_path: Path
     ) -> None:
@@ -409,7 +409,7 @@ class TestWizardIntegration:
         }
 
         # Validate first
-        is_valid, errors = validate_inputs(config)
+        is_valid, _ = validate_inputs(config)
         assert is_valid is True
 
         # Then generate config

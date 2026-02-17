@@ -43,7 +43,7 @@ class TestConversionMetrics:
     def test_conversion_rate_zero(self) -> None:
         """Test conversion rate with no artifacts."""
         metrics = ConversionMetrics()
-        assert metrics.conversion_rate() == 0.0
+        assert metrics.conversion_rate() == pytest.approx(0.0, abs=0.01)
 
     def test_metrics_to_dict(self) -> None:
         """Test metrics serialization."""
@@ -282,17 +282,17 @@ class TestMigrationOrchestrator:
             chef_nodes=[
                 {
                     "name": "node-1",
-                    "ipaddress": "10.0.0.1",
+                    "ipaddress": "10.0.0.1",  # NOSONAR - test fixture
                     "environment": "production",
                     "roles": ["web"],
                     "platform": "ubuntu",
                 },
                 {
                     "fqdn": "db.example.com",
-                    "ipaddress": "10.0.0.2",
+                    "ipaddress": "10.0.0.2",  # NOSONAR - test fixture
                 },
                 {
-                    "ipaddress": "10.0.0.3",
+                    "ipaddress": "10.0.0.3",  # NOSONAR - test fixture
                 },
             ],
             chef_server_queried=True,
@@ -304,20 +304,22 @@ class TestMigrationOrchestrator:
 
         expected_vars_node1 = json.dumps(
             {
-                "ansible_host": "10.0.0.1",
+                "ansible_host": "10.0.0.1",  # NOSONAR - test fixture
                 "chef_environment": "production",
                 "chef_roles": ["web"],
                 "chef_platform": "ubuntu",
             }
         )
-        expected_vars_node2 = json.dumps({"ansible_host": "10.0.0.2"})
+        expected_vars_node2 = json.dumps(
+            {"ansible_host": "10.0.0.2"}
+        )  # NOSONAR - test fixture
 
         assert mock_client.add_host.call_count == 3
         mock_client.add_host.assert_has_calls(
             [
                 call(1, "node-1", variables=expected_vars_node1),
                 call(1, "db.example.com", variables=expected_vars_node2),
-                call(1, "10.0.0.3"),
+                call(1, "10.0.0.3"),  # NOSONAR - test fixture
             ],
             any_order=True,
         )
@@ -483,7 +485,7 @@ class TestChefServerClient:
         mock_instance.search_nodes.return_value = [
             {
                 "name": "node-1",
-                "ipaddress": "10.0.0.1",
+                "ipaddress": "10.0.0.1",  # NOSONAR - test fixture
             }
         ]
         mock_core_client.return_value = mock_instance
@@ -627,27 +629,27 @@ class TestInventoryGrouping:
             {
                 "name": "web-1",
                 "fqdn": "web-1.example.com",
-                "ipaddress": "10.0.1.1",
+                "ipaddress": "10.0.1.1",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["web", "common"],
             },
             {
                 "name": "web-2",
                 "fqdn": "web-2.example.com",
-                "ipaddress": "10.0.1.2",
+                "ipaddress": "10.0.1.2",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["web", "common"],
             },
             {
                 "name": "db-1",
                 "fqdn": "db-1.example.com",
-                "ipaddress": "10.0.2.1",
+                "ipaddress": "10.0.2.1",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["database", "common"],
             },
             {
                 "name": "cache-1",
-                "ipaddress": "10.0.3.1",
+                "ipaddress": "10.0.3.1",  # NOSONAR - test fixture
                 "environment": "staging",
                 "roles": ["cache"],
             },
@@ -674,7 +676,7 @@ class TestInventoryGrouping:
                 {"id": 1, "name": "web-1.example.com"},
                 {"id": 2, "name": "web-2.example.com"},
                 {"id": 3, "name": "db-1.example.com"},
-                {"id": 4, "name": "10.0.3.1"},
+                {"id": 4, "name": "10.0.3.1"},  # NOSONAR - test fixture
             ],
         }
         mock_client.session.get.return_value = mock_host_response

@@ -231,7 +231,7 @@ class TestMigrationSimulator:
 
         # Should serialize without error
         json_str = json.dumps(config_dict)
-        assert json_str is not None
+        assert isinstance(json_str, str)
 
     def test_migration_results_structure(self) -> None:
         """Test that migration results have expected structure."""

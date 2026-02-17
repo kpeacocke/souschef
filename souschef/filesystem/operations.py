@@ -103,7 +103,9 @@ def create_tar_gz_archive(source_dir: str, output_path: str) -> str:
     output_file = _ensure_within_base_path(_normalize_path(output_path), workspace_root)
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    with tarfile.open(output_file, "w:gz") as tar:
+    with tarfile.open(  # NOSONAR - S5042: creating archive, not expanding/extracting
+        output_file, "w:gz"
+    ) as tar:
         for file_path in source_path.rglob("*"):
             if file_path.is_file():
                 arcname = file_path.relative_to(source_path)

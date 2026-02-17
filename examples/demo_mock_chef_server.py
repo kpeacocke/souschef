@@ -65,7 +65,9 @@ def demo_connection_test():
     print("   Auth headers sent:")
     print(f"   - X-Ops-Userid: {headers.get('X-Ops-Userid')}")
     print(f"   - X-Ops-Sign: {headers.get('X-Ops-Sign')}")
-    print(f"   - X-Ops-Authorization-1: {headers.get('X-Ops-Authorization-1')[:30]}...")
+    auth_header = headers.get("X-Ops-Authorization-1")
+    if auth_header:
+        print(f"   - X-Ops-Authorization-1: {auth_header[:30]}...")
 
 
 @responses.activate
@@ -81,7 +83,7 @@ def demo_node_search():
                 "run_list": ["role[webserver]", "role[monitoring]"],
                 "chef_environment": "production",
                 "platform": "ubuntu",
-                "ipaddress": "10.0.1.10",
+                "ipaddress": "10.0.1.10",  # NOSONAR - S1313: mock data for demo
                 "fqdn": "web-server-01.example.com",
                 "automatic": {"platform_version": "22.04"},
             },
@@ -90,7 +92,7 @@ def demo_node_search():
                 "run_list": ["role[database]"],
                 "chef_environment": "production",
                 "platform": "centos",
-                "ipaddress": "10.0.1.20",
+                "ipaddress": "10.0.1.20",  # NOSONAR - S1313: mock data for demo
                 "fqdn": "db-server-01.example.com",
                 "automatic": {"platform_version": "8"},
             },
@@ -189,7 +191,9 @@ def demo_auth_failure():
     # Display results
     print(f"❌ Connection: {success}")
     print(f"   Message: {message}")
-    print(f"   Status code: {responses.calls[0].response.status_code}")
+    status_code = getattr(responses.calls[0].response, "status_code", None)
+    if status_code is not None:
+        print(f"   Status code: {status_code}")
 
 
 @responses.activate

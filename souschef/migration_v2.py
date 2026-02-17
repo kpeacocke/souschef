@@ -12,6 +12,8 @@ Supports all 18 Chef→Ansible version combinations.
 
 import json
 import logging
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -46,6 +48,100 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from souschef.storage import StorageManager
+
+
+# Constants
+NO_MIGRATION_RESULT_ERROR = "No migration result available"
+
+
+# Parallel processing worker functions (module-level for pickling)
+def _process_recipe_worker(args: tuple[str, str]) -> dict[str, Any]:
+    """
+    Worker function to convert a single recipe file.
+
+    Args:
+        args: Tuple of (recipe_file_path, cookbook_path)
+
+    Returns:
+        Dictionary with conversion results:
+            - success: bool
+            - playbook_name: str (if successful)
+            - error: str (if failed)
+            - file: str (recipe filename)
+
+    """
+    recipe_file_path, cookbook_path = args
+    recipe_file = Path(recipe_file_path)
+
+    try:
+        # Generate Ansible playbook from Chef recipe
+        playbook_content = generate_playbook_from_recipe(
+            str(recipe_file), cookbook_path
+        )
+
+        # Check if conversion was successful
+        if not playbook_content.startswith("Error"):
+            playbook_name = recipe_file.stem + ".yml"
+            return {
+                "success": True,
+                "playbook_name": playbook_name,
+                "file": recipe_file.name,
+            }
+        else:
+            return {
+                "success": False,
+                "error": playbook_content,
+                "file": recipe_file.name,
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "file": recipe_file.name,
+        }
+
+
+def _process_attribute_worker(args: tuple[str]) -> dict[str, Any]:
+    """
+    Worker function to convert a single attributes file.
+
+    Args:
+        args: Tuple containing (attribute_file_path,)
+
+    Returns:
+        Dictionary with conversion results:
+            - success: bool
+            - var_name: str (if successful)
+            - error: str (if failed)
+            - file: str (attribute filename)
+
+    """
+    (attr_file_path,) = args
+    attr_file = Path(attr_file_path)
+
+    try:
+        # Parse Chef attributes
+        attributes_content = parse_attributes(str(attr_file))
+
+        if not attributes_content.startswith("Error"):
+            var_name = attr_file.stem + ".yml"
+            return {
+                "success": True,
+                "var_name": var_name,
+                "file": attr_file.name,
+            }
+        else:
+            return {
+                "success": False,
+                "error": attributes_content,
+                "file": attr_file.name,
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "file": attr_file.name,
+        }
 
 
 class MigrationStatus(Enum):
@@ -314,6 +410,8 @@ class MigrationOrchestrator:
         self,
         cookbook_path: str,
         skip_validation: bool = False,
+        parallel_processing: bool = False,
+        max_workers: int | None = None,
         chef_server_url: str | None = None,
         chef_organisation: str | None = None,
         chef_client_name: str | None = None,
@@ -327,6 +425,9 @@ class MigrationOrchestrator:
         Args:
             cookbook_path: Path to cookbook to migrate.
             skip_validation: Skip playbook validation if True.
+            parallel_processing: Enable parallel conversion of recipes and attributes.
+            max_workers: Maximum number of worker processes for parallel execution
+                        (default: CPU count - 1).
             chef_server_url: Chef Server URL (optional).
             chef_organisation: Chef organisation name (optional).
             chef_client_name: Chef client name (optional).
@@ -398,8 +499,20 @@ class MigrationOrchestrator:
             # Phase 2: Convert
             logger.info(f"[{self.migration_id}] Converting Chef artifacts")
             self.result.status = MigrationStatus.IN_PROGRESS
-            self._convert_recipes(cookbook_path)
-            self._convert_attributes(cookbook_path)
+
+            # Use parallel or sequential conversion based on configuration
+            if parallel_processing:
+                logger.info(
+                    "[%s] Using parallel processing for conversion",
+                    self.migration_id,
+                )
+                self._convert_recipes_parallel(cookbook_path, max_workers)
+                self._convert_attributes_parallel(cookbook_path, max_workers)
+            else:
+                self._convert_recipes(cookbook_path)
+                self._convert_attributes(cookbook_path)
+
+            # These conversions remain sequential (less common, not worth parallelizing)
             self._convert_resources(cookbook_path)
             self._convert_handlers(cookbook_path)
             self._convert_templates(cookbook_path)
@@ -412,10 +525,9 @@ class MigrationOrchestrator:
             else:
                 self.result.status = MigrationStatus.CONVERTED
 
-            logger.info(
-                f"[{self.migration_id}] Migration complete: "
-                f"{self.result.metrics.conversion_rate():.1f}% conversion rate"
-            )
+            conversion_rate = self.result.metrics.conversion_rate()
+            msg = f"[{self.migration_id}] Migration complete: {conversion_rate:.1f}%"
+            logger.info(msg)
 
         except Exception as e:
             logger.error(f"[{self.migration_id}] Migration failed: {e}")
@@ -511,6 +623,161 @@ class MigrationOrchestrator:
             )
             logger.warning("[%s] Chef Server query failed: %s", self.migration_id, e)
 
+    def _convert_recipes_parallel(
+        self, cookbook_path: str, max_workers: int | None = None
+    ) -> None:
+        """
+        Convert Chef recipes to Ansible playbooks in parallel.
+
+        Args:
+            cookbook_path: Path to the cookbook directory.
+            max_workers: Maximum number of worker processes (default: CPU count).
+
+        """
+        assert self.result is not None
+        recipes_dir = Path(cookbook_path) / "recipes"
+
+        if not recipes_dir.exists():
+            return
+
+        # Collect all recipe files
+        recipe_files = list(recipes_dir.glob("*.rb"))
+        if not recipe_files:
+            return
+
+        # Determine worker count
+        if max_workers is None:
+            max_workers = max(1, multiprocessing.cpu_count() - 1)
+
+        logger.info(
+            "[%s] Converting %d recipes using %d workers",
+            self.migration_id,
+            len(recipe_files),
+            max_workers,
+        )
+
+        # Prepare work items
+        work_items = [(str(recipe_file), cookbook_path) for recipe_file in recipe_files]
+
+        # Process in parallel
+        try:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all tasks
+                future_to_file = {
+                    executor.submit(_process_recipe_worker, item): item[0]
+                    for item in work_items
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_file):
+                    result = future.result()
+
+                    if result["success"]:
+                        self.result.playbooks_generated.append(result["playbook_name"])
+                        self.result.metrics.recipes_converted += 1
+                        logger.debug(
+                            "[%s] Converted recipe %s to %s",
+                            self.migration_id,
+                            result["file"],
+                            result["playbook_name"],
+                        )
+                    else:
+                        self.result.metrics.recipes_skipped += 1
+                        logger.warning(
+                            "[%s] Failed to convert %s: %s",
+                            self.migration_id,
+                            result["file"],
+                            result.get("error", "Unknown error"),
+                        )
+
+        except Exception as e:
+            logger.error(
+                "[%s] Parallel recipe conversion failed: %s. "
+                "Falling back to sequential.",
+                self.migration_id,
+                e,
+            )
+            # Fallback to sequential processing
+            self._convert_recipes(cookbook_path)
+
+    def _convert_attributes_parallel(
+        self, cookbook_path: str, max_workers: int | None = None
+    ) -> None:
+        """
+        Convert Chef attributes to Ansible variables in parallel.
+
+        Args:
+            cookbook_path: Path to the cookbook directory.
+            max_workers: Maximum number of worker processes (default: CPU count).
+
+        """
+        assert self.result is not None
+        attributes_dir = Path(cookbook_path) / "attributes"
+
+        if not attributes_dir.exists():
+            return
+
+        # Collect all attribute files
+        attr_files = list(attributes_dir.glob("*.rb"))
+        if not attr_files:
+            return
+
+        # Determine worker count
+        if max_workers is None:
+            max_workers = max(1, multiprocessing.cpu_count() - 1)
+
+        logger.info(
+            "[%s] Converting %d attribute files using %d workers",
+            self.migration_id,
+            len(attr_files),
+            max_workers,
+        )
+
+        # Prepare work items
+        work_items = [(str(attr_file),) for attr_file in attr_files]
+
+        # Process in parallel
+        try:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all tasks
+                future_to_file = {
+                    executor.submit(_process_attribute_worker, item): item[0]
+                    for item in work_items
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_file):
+                    result = future.result()
+
+                    if result["success"]:
+                        var_name = f"vars/{result['var_name']}"
+                        self.result.playbooks_generated.append(var_name)
+                        self.result.metrics.attributes_converted += 1
+                        logger.debug(
+                            "[%s] Converted attributes %s to %s",
+                            self.migration_id,
+                            result["file"],
+                            result["var_name"],
+                        )
+                    else:
+                        self.result.metrics.attributes_skipped += 1
+                        logger.warning(
+                            "[%s] Failed to convert attributes %s: %s",
+                            self.migration_id,
+                            result["file"],
+                            result.get("error", "Unknown error"),
+                        )
+
+        except Exception as e:
+            logger.error(
+                "[%s] Parallel attribute conversion failed: %s. "
+                "Falling back to sequential.",
+                self.migration_id,
+                e,
+            )
+            # Fallback to sequential processing
+            self._convert_attributes(cookbook_path)
+
     def _convert_recipes(self, cookbook_path: str) -> None:
         """Convert Chef recipes to Ansible playbooks."""
         assert self.result is not None
@@ -578,69 +845,72 @@ class MigrationOrchestrator:
         2. Custom resources (LWRPs) defined in the resources/ directory
         """
         assert self.result is not None
+        self._process_recipe_resources(cookbook_path)
+        self._process_custom_resources(cookbook_path)
 
-        # First, process recipes to extract and document resources used
+    def _process_recipe_resources(self, cookbook_path: str) -> None:
+        """Process resources used in recipe files."""
+        assert self.result is not None
+
         recipes_dir = Path(cookbook_path) / "recipes"
-        if recipes_dir.exists():
-            for recipe_file in recipes_dir.glob("*.rb"):
-                try:
-                    # Parse recipe to extract resources
-                    recipe_content = parse_recipe(str(recipe_file))
+        if not recipes_dir.exists():
+            return
 
-                    # If recipe parsing was successful
-                    if not recipe_content.startswith("Error"):
-                        # Resources in recipes are converted as app generation
-                        try:
-                            # Try to extract resource count from parsed recipe
-                            lines = recipe_content.split("\n")
-                            resource_count = len(
-                                [
-                                    line
-                                    for line in lines
-                                    if line.strip().startswith("Type:")
-                                ]
-                            )
-                            if resource_count > 0:
-                                self.result.metrics.resources_converted += (
-                                    resource_count
-                                )
-                                logger.debug(
-                                    f"Found {resource_count} resources in "
-                                    f"{recipe_file.name}"
-                                )
-                        except Exception:
-                            pass  # Count not critical
-                except Exception as e:
-                    logger.debug(
-                        f"Error analyzing resources in {recipe_file.name}: {e}"
-                    )
+        for recipe_file in recipes_dir.glob("*.rb"):
+            try:
+                recipe_content = parse_recipe(str(recipe_file))
 
-        # Process custom resources (LWRPs) in resources/ directory
+                if not recipe_content.startswith("Error"):
+                    self._extract_recipe_resource_count(recipe_file, recipe_content)
+            except Exception as e:
+                logger.debug(f"Error analyzing resources in {recipe_file.name}: {e}")
+
+    def _extract_recipe_resource_count(self, recipe_file: Path, content: str) -> None:
+        """Extract and count resources from recipe content."""
+        assert self.result is not None
+
+        try:
+            lines = content.split("\n")
+            resource_lines = [
+                line for line in lines if line.strip().startswith("Type:")
+            ]
+            resource_count = len(resource_lines)
+
+            if resource_count > 0:
+                self.result.metrics.resources_converted += resource_count
+                logger.debug(f"Found {resource_count} resources in {recipe_file.name}")
+        except Exception:
+            pass  # Count not critical
+
+    def _process_custom_resources(self, cookbook_path: str) -> None:
+        """Process custom resources (LWRPs) in resources/ directory."""
+        assert self.result is not None
+
         resources_dir = Path(cookbook_path) / "resources"
-        if resources_dir.exists():
-            for resource_file in resources_dir.glob("*.rb"):
-                try:
-                    # Custom resources are documented but may need
-                    # custom Ansible module creation
-                    resource_name = resource_file.stem
-                    self.result.warnings.append(
-                        {
-                            "type": "custom_resource",
-                            "resource": resource_name,
-                            "file": resource_file.name,
-                            "message": (
-                                "Custom LWRP found - may require custom Ansible module "
-                                "or set_resource_name in Ansible"
-                            ),
-                            "timestamp": datetime.now().isoformat(),
-                        }
-                    )
-                    logger.debug(f"Found custom resource: {resource_name}")
-                except Exception as e:
-                    logger.error(
-                        f"Error processing custom resource {resource_file.name}: {e}"
-                    )
-                    self.result.metrics.resources_skipped += 1
+        if not resources_dir.exists():
+            return
+
+        for resource_file in resources_dir.glob("*.rb"):
+            try:
+                resource_name = resource_file.stem
+                self.result.warnings.append(
+                    {
+                        "type": "custom_resource",
+                        "resource": resource_name,
+                        "file": resource_file.name,
+                        "message": (
+                            "Custom LWRP found - may require custom Ansible module "
+                            "or set_resource_name in Ansible"
+                        ),
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+                logger.debug(f"Found custom resource: {resource_name}")
+            except Exception as e:
+                logger.error(
+                    f"Error processing custom resource {resource_file.name}: {e}"
+                )
+                self.result.metrics.resources_skipped += 1
 
     def _convert_handlers(self, cookbook_path: str) -> None:
         """
@@ -650,68 +920,68 @@ class MigrationOrchestrator:
         These are converted to Ansible block error handling and notification handlers.
         """
         assert self.result is not None
+        self._process_library_handlers(cookbook_path)
+        self._process_recipe_handlers(cookbook_path)
 
-        # Chef handlers can be in:
-        # 1. Inline in recipes (rescue/notification blocks)
-        # 2. In libraries/ directory as handler classes
+    def _process_library_handlers(self, cookbook_path: str) -> None:
+        """Process Chef::Handler classes from libraries/ directory."""
+        assert self.result is not None
 
         libraries_dir = Path(cookbook_path) / "libraries"
+        if not libraries_dir.exists():
+            return
 
-        if libraries_dir.exists():
-            for library_file in libraries_dir.glob("*.rb"):
-                try:
-                    content = library_file.read_text(encoding="utf-8")
+        for library_file in libraries_dir.glob("*.rb"):
+            try:
+                content = library_file.read_text(encoding="utf-8")
 
-                    # Check if this file contains handler definitions
-                    if "Chef::Handler" in content or "class " in content:
-                        handler_name = library_file.stem
-
-                        # Document handler for reference
-                        self.result.warnings.append(
-                            {
-                                "type": "handler",
-                                "handler": handler_name,
-                                "file": library_file.name,
-                                "message": (
-                                    "Chef handler found - implement equivalent "
-                                    "error handling using Ansible blocks with "
-                                    "rescue clauses"
-                                ),
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        )
-                        logger.debug(f"Found handler: {handler_name}")
-                        self.result.metrics.handlers_skipped += 1
-                except Exception as e:
-                    logger.error(f"Error processing handler {library_file.name}: {e}")
-
-        # Also check recipes for inline handlers
-        recipes_dir = Path(cookbook_path) / "recipes"
-        if recipes_dir.exists():
-            for recipe_file in recipes_dir.glob("*.rb"):
-                try:
-                    content = recipe_file.read_text(encoding="utf-8")
-
-                    # Check for handler or notification syntax
-                    if "rescue" in content and "notifies" in content:
-                        self.result.warnings.append(
-                            {
-                                "type": "handler",
-                                "recipe": recipe_file.name,
-                                "message": (
-                                    "Notification handlers detected in recipe - "
-                                    "convert to Ansible notify handlers"
-                                ),
-                                "timestamp": datetime.now().isoformat(),
-                            }
-                        )
-                        logger.debug(
-                            f"Found notification handlers in {recipe_file.name}"
-                        )
-                except Exception as e:
-                    logger.debug(
-                        f"Error checking for handlers in {recipe_file.name}: {e}"
+                if "Chef::Handler" in content or "class " in content:
+                    handler_name = library_file.stem
+                    self.result.warnings.append(
+                        {
+                            "type": "handler",
+                            "handler": handler_name,
+                            "file": library_file.name,
+                            "message": (
+                                "Chef handler found - implement equivalent "
+                                "error handling using Ansible blocks with "
+                                "rescue clauses"
+                            ),
+                            "timestamp": datetime.now().isoformat(),
+                        }
                     )
+                    logger.debug(f"Found handler: {handler_name}")
+                    self.result.metrics.handlers_skipped += 1
+            except Exception as e:
+                logger.error(f"Error processing handler {library_file.name}: {e}")
+
+    def _process_recipe_handlers(self, cookbook_path: str) -> None:
+        """Process inline handlers and notifications from recipes."""
+        assert self.result is not None
+
+        recipes_dir = Path(cookbook_path) / "recipes"
+        if not recipes_dir.exists():
+            return
+
+        for recipe_file in recipes_dir.glob("*.rb"):
+            try:
+                content = recipe_file.read_text(encoding="utf-8")
+
+                if "rescue" in content and "notifies" in content:
+                    self.result.warnings.append(
+                        {
+                            "type": "handler",
+                            "recipe": recipe_file.name,
+                            "message": (
+                                "Notification handlers detected in recipe - "
+                                "convert to Ansible notify handlers"
+                            ),
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
+                    logger.debug(f"Found notification handlers in {recipe_file.name}")
+            except Exception as e:
+                logger.debug(f"Error checking for handlers in {recipe_file.name}: {e}")
 
     def _convert_templates(self, cookbook_path: str) -> None:
         """Convert Chef templates to Ansible Jinja2."""
@@ -752,91 +1022,94 @@ class MigrationOrchestrator:
     def _validate_playbooks(self) -> None:
         """Validate generated playbooks for target Ansible version."""
         assert self.result is not None
-        import subprocess
-        import tempfile
-        from pathlib import Path
 
-        # Skip validation if no playbooks were generated
         if not self.result.playbooks_generated:
             logger.debug("No playbooks to validate")
             return
 
-        # Create temporary directory for playbooks
+        import tempfile
+        from pathlib import Path
+
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            playbook_files = []
+            playbook_files = self._create_playbook_test_files(
+                Path(temp_dir), self.result.playbooks_generated
+            )
 
-            # Write playbooks to temporary files for validation
-            for playbook_name in self.result.playbooks_generated:
-                # Skip variable and template references
-                if playbook_name.startswith("vars/") or playbook_name.startswith(
-                    "templates/"
-                ):
-                    continue
-
-                # Create a basic playbook structure for validation
-                playbook_path = temp_path / playbook_name
-                playbook_path.parent.mkdir(parents=True, exist_ok=True)
-
-                # Write minimal valid YAML for validation
-                playbook_path.write_text(
-                    "---\n- name: Placeholder\n  hosts: all\n  tasks: []\n"
-                )
-                playbook_files.append(playbook_path)
-
-            # Run ansible-lint if we have playbooks to validate
             if playbook_files:
-                try:
-                    # Run ansible-lint with appropriate options
-                    playbook_paths = [str(p) for p in playbook_files]
-                    result = subprocess.run(
-                        ["ansible-lint", "--nocolor", *playbook_paths],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                        check=False,  # Don't raise on non-zero exit
-                    )
+                self._run_playbook_validation(playbook_files)
 
-                    if result.returncode == 0:
-                        logger.info("All playbooks passed ansible-lint validation")
-                    else:
-                        # Parse lint warnings/errors
-                        if result.stdout:
-                            logger.warning(
-                                f"ansible-lint found issues:\\n{result.stdout}"
-                            )
-                            self.result.warnings.append(
-                                {
-                                    "phase": "validation",
-                                    "message": "ansible-lint found issues",
-                                    "details": result.stdout[:500],  # Truncate
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                            )
+    def _create_playbook_test_files(
+        self, temp_path: Path, playbook_names: list[str]
+    ) -> list[Path]:
+        """Create temporary test files for playbook validation."""
+        playbook_files = []
 
-                except FileNotFoundError:
-                    logger.warning(
-                        "ansible-lint not found, skipping validation. "
-                        "Install with: pip install ansible-lint"
-                    )
-                except subprocess.TimeoutExpired:
-                    logger.error("ansible-lint validation timed out")
-                    self.result.warnings.append(
-                        {
-                            "phase": "validation",
-                            "message": "Validation timed out after 30 seconds",
-                            "timestamp": datetime.now().isoformat(),
-                        }
-                    )
-                except Exception as e:
-                    logger.error(f"Validation error: {e}")
-                    self.result.warnings.append(
-                        {
-                            "phase": "validation",
-                            "message": f"Validation error: {e}",
-                            "timestamp": datetime.now().isoformat(),
-                        }
-                    )
+        for playbook_name in playbook_names:
+            if playbook_name.startswith("vars/") or playbook_name.startswith(
+                "templates/"
+            ):
+                continue
+
+            playbook_path = temp_path / playbook_name
+            playbook_path.parent.mkdir(parents=True, exist_ok=True)
+            playbook_path.write_text(
+                "---\n- name: Placeholder\n  hosts: all\n  tasks: []\n"
+            )
+            playbook_files.append(playbook_path)
+
+        return playbook_files
+
+    def _run_playbook_validation(self, playbook_files: list[Path]) -> None:
+        """Run ansible-lint validation on playbook files."""
+        assert self.result is not None
+        import subprocess
+
+        try:
+            playbook_paths = [str(p) for p in playbook_files]
+            result = subprocess.run(
+                ["ansible-lint", "--nocolor", *playbook_paths],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            if result.returncode == 0:
+                logger.info("All playbooks passed ansible-lint validation")
+            elif result.stdout:
+                logger.warning(f"ansible-lint found issues:\\n{result.stdout}")
+                self.result.warnings.append(
+                    {
+                        "phase": "validation",
+                        "message": "ansible-lint found issues",
+                        "details": result.stdout[:500],
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+        except FileNotFoundError:
+            logger.warning(
+                "ansible-lint not found, skipping validation. "
+                "Install with: pip install ansible-lint"
+            )
+        except subprocess.TimeoutExpired:
+            logger.error("ansible-lint validation timed out")
+            self.result.warnings.append(
+                {
+                    "phase": "validation",
+                    "message": "Validation timed out after 30 seconds",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Validation error: {e}")
+            self.result.warnings.append(
+                {
+                    "phase": "validation",
+                    "message": f"Validation error: {e}",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
     def _initialize_audit_trail(self) -> None:
         """
@@ -856,14 +1129,11 @@ class MigrationOrchestrator:
                 f"[{self.migration_id}] Initialized audit trail for conversion tracking"
             )
 
-    def _analyze_resource_complexity(
-        self, resource_type: str, resource_body: str
-    ) -> str:
+    def _analyze_resource_complexity(self, resource_body: str) -> str:
         """
         Analyze resource conversion complexity (v2.1).
 
         Args:
-            resource_type: Chef resource type.
             resource_body: Resource block content.
 
         Returns:
@@ -990,7 +1260,7 @@ class MigrationOrchestrator:
 
         """
         if not self.result:
-            raise RuntimeError("No migration result available")
+            raise RuntimeError(NO_MIGRATION_RESULT_ERROR)
 
         try:
             logger.info(
@@ -1554,7 +1824,7 @@ class MigrationOrchestrator:
 
         """
         if not self.result:
-            raise RuntimeError("No migration result available")
+            raise RuntimeError(NO_MIGRATION_RESULT_ERROR)
 
         from souschef.storage import get_storage_manager
 
@@ -1623,7 +1893,7 @@ class MigrationOrchestrator:
     def _resolve_conversion_status(self) -> str:
         """Resolve migration status into storage status labels."""
         if not self.result:
-            raise RuntimeError("No migration result available")
+            raise RuntimeError(NO_MIGRATION_RESULT_ERROR)
 
         if self.result.status == MigrationStatus.FAILED:
             return "failed"
@@ -1645,7 +1915,7 @@ class MigrationOrchestrator:
     def export_result(self, filename: str) -> None:
         """Export migration result to JSON file."""
         if not self.result:
-            raise RuntimeError("No migration result available")
+            raise RuntimeError(NO_MIGRATION_RESULT_ERROR)
 
         with Path(filename).open("w") as f:
             json.dump(self.result.to_dict(), f, indent=2)

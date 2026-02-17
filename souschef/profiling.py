@@ -137,6 +137,307 @@ class PerformanceReport:
         return "\n".join(report_lines)
 
 
+@dataclass
+class PhaseTiming:
+    """
+    Timing details for a migration phase.
+
+    Attributes:
+        phase_name: Name of the migration phase.
+        start_time: Phase start time (perf counter).
+        end_time: Phase end time (perf counter).
+        duration: Phase duration in seconds.
+        metadata: Optional metadata about the phase.
+
+    """
+
+    phase_name: str
+    start_time: float
+    end_time: float
+    duration: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert phase timing to a dictionary.
+
+        Returns:
+            Dictionary representation of the phase timing.
+
+        """
+        return {
+            "phase_name": self.phase_name,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "duration": self.duration,
+            "metadata": self.metadata,
+        }
+
+
+@dataclass
+class MigrationPerformanceProfile:
+    """
+    Performance profile for a migration.
+
+    Attributes:
+        migration_id: Migration identifier.
+        total_duration: Total duration in seconds.
+        phases: List of recorded phase timings.
+
+    """
+
+    migration_id: str
+    total_duration: float
+    phases: list[PhaseTiming] = field(default_factory=list)
+
+    def add_phase(self, phase: PhaseTiming) -> None:
+        """
+        Add a phase timing to the profile.
+
+        Args:
+            phase: Phase timing to add.
+
+        """
+        self.phases.append(phase)
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert profile to a dictionary.
+
+        Returns:
+            Dictionary representation of the profile.
+
+        """
+        return {
+            "migration_id": self.migration_id,
+            "total_duration": self.total_duration,
+            "phases": [phase.to_dict() for phase in self.phases],
+        }
+
+
+class MigrationProfiler:
+    """
+    Profile migration phases with timing data.
+
+    Tracks phase start/end times and provides helpers for reporting.
+
+    """
+
+    def __init__(self, migration_id: str) -> None:
+        """
+        Initialise migration profiler.
+
+        Args:
+            migration_id: Migration identifier.
+
+        """
+        self.migration_id = migration_id
+        self._start_time = time.perf_counter()
+        self._in_progress: dict[str, float] = {}
+        self._metadata: dict[str, dict[str, Any]] = {}
+        self._phases: list[PhaseTiming] = []
+
+    def start_phase(
+        self, phase_name: str, metadata: dict[str, Any] | None = None
+    ) -> None:
+        """
+        Mark the start of a migration phase.
+
+        Args:
+            phase_name: Name of the phase.
+            metadata: Optional metadata about the phase.
+
+        Raises:
+            SousChefError: If the phase is already started.
+
+        """
+        if phase_name in self._in_progress:
+            raise SousChefError(
+                f"Phase already started: {phase_name}",
+                suggestion="Call end_phase before restarting the same phase",
+            )
+
+        self._in_progress[phase_name] = time.perf_counter()
+        if metadata is not None:
+            self._metadata[phase_name] = metadata
+
+    def end_phase(self, phase_name: str) -> PhaseTiming:
+        """
+        Mark the end of a migration phase.
+
+        Args:
+            phase_name: Name of the phase.
+
+        Returns:
+            PhaseTiming for the completed phase.
+
+        Raises:
+            SousChefError: If the phase was not started.
+
+        """
+        if phase_name not in self._in_progress:
+            raise SousChefError(
+                f"Phase not started: {phase_name}",
+                suggestion="Call start_phase before end_phase",
+            )
+
+        start_time = self._in_progress.pop(phase_name)
+        end_time = time.perf_counter()
+        metadata = self._metadata.pop(phase_name, {})
+
+        phase = PhaseTiming(
+            phase_name=phase_name,
+            start_time=start_time,
+            end_time=end_time,
+            duration=end_time - start_time,
+            metadata=metadata,
+        )
+        self._phases.append(phase)
+        return phase
+
+    @contextmanager
+    def profile_phase(
+        self, phase_name: str, metadata: dict[str, Any] | None = None
+    ) -> Iterator[PhaseTiming]:
+        """
+        Context manager to profile a migration phase.
+
+        Args:
+            phase_name: Name of the phase.
+            metadata: Optional metadata about the phase.
+
+        Yields:
+            Placeholder PhaseTiming while the phase runs. The completed
+            phase timing is recorded and available via build_profile.
+
+        """
+        self.start_phase(phase_name, metadata)
+        try:
+            yield PhaseTiming(
+                phase_name=phase_name,
+                start_time=0.0,
+                end_time=0.0,
+                duration=0.0,
+                metadata=metadata or {},
+            )
+        finally:
+            self.end_phase(phase_name)
+
+    def build_profile(self) -> MigrationPerformanceProfile:
+        """
+        Build a migration performance profile.
+
+        Returns:
+            MigrationPerformanceProfile with aggregated phase timings.
+
+        """
+        total_duration = time.perf_counter() - self._start_time
+        profile = MigrationPerformanceProfile(
+            migration_id=self.migration_id,
+            total_duration=total_duration,
+            phases=list(self._phases),
+        )
+        return profile
+
+
+def identify_migration_bottlenecks(
+    profile: MigrationPerformanceProfile, threshold_ratio: float = 0.25
+) -> list[PhaseTiming]:
+    """
+    Identify slow migration phases by relative duration.
+
+    Args:
+        profile: Migration performance profile.
+        threshold_ratio: Minimum fraction of total duration for a phase to
+            be flagged as a bottleneck.
+
+    Returns:
+        List of phase timings considered bottlenecks.
+
+    """
+    if profile.total_duration <= 0:
+        return []
+
+    bottlenecks = [
+        phase
+        for phase in profile.phases
+        if (phase.duration / profile.total_duration) >= threshold_ratio
+    ]
+    return bottlenecks
+
+
+def generate_migration_timeline(
+    profile: MigrationPerformanceProfile,
+) -> list[dict[str, Any]]:
+    """
+    Generate a timeline summary of migration phases.
+
+    Args:
+        profile: Migration performance profile.
+
+    Returns:
+        List of timeline entries with phase details.
+
+    """
+    timeline = []
+    for phase in profile.phases:
+        timeline.append(
+            {
+                "phase": phase.phase_name,
+                "duration": phase.duration,
+                "metadata": phase.metadata,
+            }
+        )
+    return timeline
+
+
+def generate_migration_performance_report(
+    profile: MigrationPerformanceProfile,
+) -> str:
+    """
+    Generate a text report for migration performance.
+
+    Args:
+        profile: Migration performance profile.
+
+    Returns:
+        Formatted report string.
+
+    """
+    lines = [
+        "Migration Performance Report",
+        "=" * 80,
+        f"Migration ID: {profile.migration_id}",
+        f"Total Duration: {profile.total_duration:.3f}s",
+        "",
+        "Phase Breakdown:",
+        "-" * 80,
+    ]
+
+    for phase in profile.phases:
+        lines.append(
+            f"{phase.phase_name}: {phase.duration:.3f}s "
+            f"({(phase.duration / profile.total_duration * 100):.1f}%)"
+            if profile.total_duration > 0
+            else f"{phase.phase_name}: {phase.duration:.3f}s"
+        )
+        if phase.metadata:
+            for key, value in phase.metadata.items():
+                lines.append(f"  {key}: {value}")
+
+    bottlenecks = identify_migration_bottlenecks(profile)
+    if bottlenecks:
+        lines.extend(["", "Bottlenecks:", "-" * 80])
+        for phase in bottlenecks:
+            lines.append(
+                f"{phase.phase_name} ({phase.duration:.3f}s, "
+                f"{phase.duration / profile.total_duration * 100:.1f}% of total)"
+            )
+
+    lines.append("=" * 80)
+    return "\n".join(lines)
+
+
 @contextmanager
 def profile_operation(
     operation_name: str, context: dict[str, Any] | None = None

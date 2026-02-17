@@ -155,7 +155,8 @@ def _hash_bytes(data: bytes) -> str:
         Base64-encoded SHA1 digest.
 
     """
-    digest = hashes.Hash(hashes.SHA1())
+    # S4790: Chef Server API requires SHA1 for request signing
+    digest = hashes.Hash(hashes.SHA1())  # NOSONAR
     digest.update(data)
     return base64.b64encode(digest.finalize()).decode("utf-8")
 
@@ -238,10 +239,11 @@ def _sign_request(canonical: str, key_pem: str) -> str:
     """
     key = _load_private_key(key_pem)
     try:
+        # S4790: Chef Server API requires SHA1 for signing
         signature = key.sign(
             canonical.encode("utf-8"),
             padding.PKCS1v15(),
-            hashes.SHA1(),
+            hashes.SHA1(),  # NOSONAR
         )
     except Exception as exc:
         raise ValueError("Failed to sign Chef Server request") from exc

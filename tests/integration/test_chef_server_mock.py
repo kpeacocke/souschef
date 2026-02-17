@@ -126,7 +126,7 @@ class TestChefServerMockIntegration:
                     "run_list": ["role[webserver]"],
                     "chef_environment": "production",
                     "platform": "ubuntu",
-                    "ipaddress": "10.0.1.10",
+                    "ipaddress": "10.0.1.10",  # NOSONAR - test fixture
                     "fqdn": "web-01.example.com",
                     "automatic": {"platform": "ubuntu", "platform_version": "22.04"},
                 },
@@ -135,7 +135,7 @@ class TestChefServerMockIntegration:
                     "run_list": ["role[database]"],
                     "chef_environment": "production",
                     "platform": "centos",
-                    "ipaddress": "10.0.1.20",
+                    "ipaddress": "10.0.1.20",  # NOSONAR - test fixture
                     "fqdn": "db-01.example.com",
                     "automatic": {"platform": "centos", "platform_version": "8"},
                 },

@@ -89,7 +89,7 @@ def extract_module_interface(resource_body: str) -> dict[str, Any]:
         interface["resource_type"] = resource_match.group(1)
 
     # Extract properties (property :prop_name)
-    prop_pattern = r"property\s+:(\w+)(?:.*?)(required:|default:)?"
+    prop_pattern = r"property\s+:(\w+)(required:|default:)?"
     for match in re.finditer(prop_pattern, resource_body):
         prop_name = match.group(1)
         interface["properties"][prop_name] = {
@@ -98,7 +98,7 @@ def extract_module_interface(resource_body: str) -> dict[str, Any]:
         }
 
     # Extract actions (actions :action1, :action2)
-    action_match = re.search(r"actions\s+(.+?)(?:\n|end)", resource_body)
+    action_match = re.search(r"actions\s+([:\w\s,]+)", resource_body)
     if action_match:
         actions_str = action_match.group(1)
         actions = re.findall(r":(\w+)", actions_str)

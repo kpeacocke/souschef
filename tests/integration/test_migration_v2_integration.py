@@ -421,7 +421,7 @@ class TestChefServerIntegration:
             {
                 "name": "web-1.example.com",
                 "fqdn": "web-1.example.com",
-                "ipaddress": "192.168.1.10",
+                "ipaddress": "192.168.1.10",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["web", "common"],
                 "platform": "ubuntu",
@@ -430,7 +430,7 @@ class TestChefServerIntegration:
             {
                 "name": "db-1.example.com",
                 "fqdn": "db-1.example.com",
-                "ipaddress": "192.168.1.20",
+                "ipaddress": "192.168.1.20",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["database", "common"],
                 "platform": "ubuntu",
@@ -438,7 +438,7 @@ class TestChefServerIntegration:
             },
             {
                 "name": "cache-1",
-                "ipaddress": "192.168.1.30",
+                "ipaddress": "192.168.1.30",  # NOSONAR - test fixture
                 "environment": "staging",
                 "roles": ["cache", "common"],
                 "platform": "centos",
@@ -506,7 +506,7 @@ end
             {
                 "name": "web-server",
                 "fqdn": "web-server.prod.example.com",
-                "ipaddress": "10.0.1.5",
+                "ipaddress": "10.0.1.5",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["web", "common"],
                 "platform": "ubuntu",
@@ -568,7 +568,9 @@ end
 
         variables_json = call_args[1]["variables"]
         variables = json.loads(variables_json)
-        assert variables["ansible_host"] == "10.0.1.5"  # IP address
+        assert (
+            variables["ansible_host"] == "10.0.1.5"
+        )  # IP address  # NOSONAR - test fixture
         assert variables["chef_environment"] == "production"
         assert variables["chef_roles"] == ["web", "common"]
         assert variables["chef_platform"] == "ubuntu"
@@ -585,18 +587,18 @@ end
             {
                 "name": "node-with-fqdn",
                 "fqdn": "node-with-fqdn.example.com",
-                "ipaddress": "10.0.1.1",
+                "ipaddress": "10.0.1.1",  # NOSONAR - test fixture
                 "environment": "test",
                 "roles": [],
             },
             {
                 "name": "node-name-only",
-                "ipaddress": "10.0.1.2",
+                "ipaddress": "10.0.1.2",  # NOSONAR - test fixture
                 "environment": "test",
                 "roles": [],
             },
             {
-                "ipaddress": "10.0.1.3",
+                "ipaddress": "10.0.1.3",  # NOSONAR - test fixture
                 "environment": "test",
                 "roles": [],
             },
@@ -654,7 +656,7 @@ end
             assert calls[1][0][1] == "node-name-only"
 
             # Third node: should use ipaddress (no name or fqdn)
-            assert calls[2][0][1] == "10.0.1.3"
+            assert calls[2][0][1] == "10.0.1.3"  # NOSONAR - test fixture
 
     @patch("souschef.migration_v2.get_chef_nodes")
     def test_chef_server_query_failure_warning(
@@ -712,33 +714,33 @@ class TestInventoryGrouping:
             {
                 "name": "web-1",
                 "fqdn": "web-1.prod.example.com",
-                "ipaddress": "10.0.1.10",
+                "ipaddress": "10.0.1.10",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["web", "common"],
             },
             {
                 "name": "web-2",
                 "fqdn": "web-2.prod.example.com",
-                "ipaddress": "10.0.1.11",
+                "ipaddress": "10.0.1.11",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["web", "common"],
             },
             {
                 "name": "db-1",
                 "fqdn": "db-1.prod.example.com",
-                "ipaddress": "10.0.2.10",
+                "ipaddress": "10.0.2.10",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["database", "common"],
             },
             {
                 "name": "cache-1",
-                "ipaddress": "10.0.3.10",
+                "ipaddress": "10.0.3.10",  # NOSONAR - test fixture
                 "environment": "staging",
                 "roles": ["cache"],
             },
             {
                 "name": "dev-1",
-                "ipaddress": "10.0.4.10",
+                "ipaddress": "10.0.4.10",  # NOSONAR - test fixture
                 "environment": "development",
                 "roles": ["dev", "common"],
             },
@@ -770,8 +772,8 @@ class TestInventoryGrouping:
                     {"id": 1, "name": "web-1.prod.example.com"},
                     {"id": 2, "name": "web-2.prod.example.com"},
                     {"id": 3, "name": "db-1.prod.example.com"},
-                    {"id": 4, "name": "10.0.3.10"},
-                    {"id": 5, "name": "10.0.4.10"},
+                    {"id": 4, "name": "10.0.3.10"},  # NOSONAR - test fixture
+                    {"id": 5, "name": "10.0.4.10"},  # NOSONAR - test fixture
                 ]
             }
             return response
@@ -849,19 +851,19 @@ class TestInventoryGrouping:
         mock_chef_nodes = [
             {
                 "name": "web-prod",
-                "ipaddress": "10.0.1.1",
+                "ipaddress": "10.0.1.1",  # NOSONAR - test fixture
                 "environment": "production",
                 "roles": ["web", "common"],
             },
             {
                 "name": "web-staging",
-                "ipaddress": "10.0.2.1",
+                "ipaddress": "10.0.2.1",  # NOSONAR - test fixture
                 "environment": "staging",
                 "roles": ["web", "common"],
             },
             {
                 "name": "web-dev",
-                "ipaddress": "10.0.3.1",
+                "ipaddress": "10.0.3.1",  # NOSONAR - test fixture
                 "environment": "development",
                 "roles": ["web", "common"],
             },
@@ -889,9 +891,9 @@ class TestInventoryGrouping:
             json=Mock(
                 return_value={
                     "results": [
-                        {"id": 1, "name": "10.0.1.1"},
-                        {"id": 2, "name": "10.0.2.1"},
-                        {"id": 3, "name": "10.0.3.1"},
+                        {"id": 1, "name": "10.0.1.1"},  # NOSONAR - test fixture
+                        {"id": 2, "name": "10.0.2.1"},  # NOSONAR - test fixture
+                        {"id": 3, "name": "10.0.3.1"},  # NOSONAR - test fixture
                     ]
                 }
             )

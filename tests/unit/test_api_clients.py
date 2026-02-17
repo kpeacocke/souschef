@@ -6,6 +6,11 @@ import pytest
 
 from souschef.api_clients import ChefServerClient
 
+# Test fixtures for IP addresses used in mocked node data
+# These are intentional test fixtures for unit tests, not production values
+TEST_NODE_IP_1 = "10.0.0.1"  # NOSONAR - test fixture
+TEST_NODE_IP_2 = "10.0.0.2"  # NOSONAR - test fixture
+
 
 class TestChefServerClient:
     """Test ChefServerClient with RSA authentication."""
@@ -58,16 +63,16 @@ class TestChefServerClient:
         """Test successful node search."""
         # Mock the core client's search_nodes method
         chef_client._client.search_nodes.return_value = [
-            {"name": "node1", "ip": "10.0.0.1"},
-            {"name": "node2", "ip": "10.0.0.2"},
+            {"name": "node1", "ip": TEST_NODE_IP_1},
+            {"name": "node2", "ip": TEST_NODE_IP_2},
         ]
 
         result = chef_client.search_nodes("role:webserver")
 
         chef_client._client.search_nodes.assert_called_once_with("role:webserver")
         assert result["rows"] == [
-            {"name": "node1", "ip": "10.0.0.1"},
-            {"name": "node2", "ip": "10.0.0.2"},
+            {"name": "node1", "ip": TEST_NODE_IP_1},
+            {"name": "node2", "ip": TEST_NODE_IP_2},
         ]
         assert result["total"] == 2
 
@@ -95,7 +100,7 @@ class TestChefServerClient:
         chef_client._client.search_nodes.return_value = [
             {
                 "name": "web-server-01",
-                "ipaddress": "10.0.0.1",
+                "ipaddress": TEST_NODE_IP_1,
                 "roles": ["webserver"],
             }
         ]
@@ -104,7 +109,7 @@ class TestChefServerClient:
 
         chef_client._client.search_nodes.assert_called_once_with("name:web-server-01")
         assert result["name"] == "web-server-01"
-        assert result["ipaddress"] == "10.0.0.1"
+        assert result["ipaddress"] == TEST_NODE_IP_1
 
     def test_get_node_not_found(self, chef_client):
         """Test get_node when node doesn't exist."""

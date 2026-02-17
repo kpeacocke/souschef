@@ -273,7 +273,7 @@ def build_handler_routing_table(
             routing["notification_routes"][route_key] = {
                 "listener": action,
                 "timing": timing,
-                "ansible_equivalent": "listen" if timing == "immediately" else "listen",
+                "ansible_equivalent": "notify" if timing == "immediately" else "listen",
             }
             routing["summary"]["notification_handlers"] += 1
 

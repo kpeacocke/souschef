@@ -7235,7 +7235,7 @@ class TestCriticalMCPToolCoverage:
             "role:web AND (chef_environment:production OR chef_environment:staging)",
             "platform_family:debian AND memory_total:[* TO 8000000] AND cpu_total:[4 TO *]",
             "role:database AND chef_environment:production AND platform:ubuntu",
-            "tags:load-balancer AND ipaddress:10.0.*",
+            "tags:load-balancer AND ipaddress:10.0.*",  # NOSONAR - test fixture
             "name:web-* AND uptime_seconds:[3600 TO *]",
             # Data bag searches
             "data_bag:users",
@@ -7409,7 +7409,7 @@ mysql_servers = search(:node, 'recipes:mysql\\:\\:server AND mysql.version:[5.7 
 
 # Network-based searches
 dmz_servers = search(:node, "ipaddress:10.1.* AND role:dmz")
-internal_servers = search(:node, "ipaddress:192.168.* AND NOT role:dmz")
+internal_servers = search(:node, "ipaddress:192.168.* AND NOT role:dmz")  # NOSONAR - test fixture
 
 # Custom attribute searches
 docker_hosts = search(:node, "virtualization.system:docker AND docker.enabled:true")
@@ -9481,7 +9481,7 @@ end""",
             # Wildcard searches
             "name:web-server-*",
             "fqdn:*.example.com",
-            "ipaddress:192.168.*",
+            "ipaddress:192.168.*",  # NOSONAR - test fixture
             "hostname:db-*",
             "datacenter:us-*",
             # Attribute-based searches
@@ -9500,9 +9500,9 @@ end""",
             "data_bag:secrets",
             "data_bag:certificates AND environment:production",
             # Network-based searches
-            "ipaddress:10.0.0.*",
-            "network.interfaces.eth0.addresses:192.168.*",
-            "network.default_gateway:10.0.0.1",
+            "ipaddress:10.0.0.*",  # NOSONAR - test fixture
+            "network.interfaces.eth0.addresses:192.168.*",  # NOSONAR - test fixture
+            "network.default_gateway:10.0.0.1",  # NOSONAR - test fixture
             # Time-based searches
             "automatic.ohai_time:[1609459200 TO *]",
             "chef_packages.chef.version:[15.0 TO *]",
@@ -11024,7 +11024,7 @@ version '0.1.0' """,
             # Wildcard queries
             "name:web-*",
             "fqdn:*.example.com",
-            "ipaddress:192.168.*",
+            "ipaddress:192.168.*",  # NOSONAR - test fixture
             # Attribute queries
             "nginx.version:1.*",
             "ssl.enabled:true",
@@ -16847,7 +16847,7 @@ def test_validate_chef_server_connection_success():
             "https://chef.example.com",
             organisation="default",
             client_name="admin",
-            client_key_path="/tmp/client.pem",
+            client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
         )
 
         assert "Success" in result
@@ -16856,7 +16856,7 @@ def test_validate_chef_server_connection_success():
             "https://chef.example.com",
             "admin",
             organisation="default",
-            client_key_path="/tmp/client.pem",
+            client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
             client_key=None,
         )
 
@@ -16872,7 +16872,7 @@ def test_validate_chef_server_connection_failure():
             "https://chef.example.com",
             organisation="default",
             client_name="admin",
-            client_key_path="/tmp/client.pem",
+            client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
         )
 
         assert "Failed" in result
@@ -16890,7 +16890,7 @@ def test_validate_chef_server_connection_exception():
             "https://chef.example.com",
             organisation="default",
             client_name="admin",
-            client_key_path="/tmp/client.pem",
+            client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
         )
 
         assert "Error" in result
@@ -17027,7 +17027,7 @@ def test_get_chef_roles_success():
             server_url="https://chef.example.com",
             organisation="default",
             client_name="admin",
-            client_key_path="/tmp/client.pem",
+            client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
         )
 
         data = json.loads(result)
@@ -17047,7 +17047,7 @@ def test_get_chef_environments_success():
             server_url="https://chef.example.com",
             organisation="default",
             client_name="admin",
-            client_key_path="/tmp/client.pem",
+            client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
         )
 
         data = json.loads(result)
@@ -17069,7 +17069,7 @@ def test_get_chef_cookbooks_success():
             server_url="https://chef.example.com",
             organisation="default",
             client_name="admin",
-            client_key_path="/tmp/client.pem",
+            client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
         )
 
         data = json.loads(result)
@@ -17089,7 +17089,7 @@ def test_get_chef_policies_success():
             server_url="https://chef.example.com",
             organisation="default",
             client_name="admin",
-            client_key_path="/tmp/client.pem",
+            client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
         )
 
         data = json.loads(result)

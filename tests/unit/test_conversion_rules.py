@@ -597,7 +597,7 @@ class TestFactoryFunctions:
         """Test default engine can process resources."""
         engine = build_default_rule_engine()
         package_resource = {"type": "package"}
-        result, rule = engine.apply_rule(package_resource)
+        _, rule = engine.apply_rule(package_resource)
         assert rule is not None
 
 
@@ -618,17 +618,15 @@ class TestRuleEngineIntegration:
         engine.register_rule(custom_rule)
 
         # Test package
-        pkg_result, pkg_rule = engine.apply_rule({"type": "package", "body": "package"})
+        _, pkg_rule = engine.apply_rule({"type": "package", "body": "package"})
         assert pkg_rule is not None
 
         # Test service
-        svc_result, svc_rule = engine.apply_rule(
-            {"type": "service", "body": "service 'test'"}
-        )
+        _, svc_rule = engine.apply_rule({"type": "service", "body": "service 'test'"})
         assert svc_rule is not None
 
         # Test custom
-        custom_result, custom_rule = engine.apply_rule(
+        _, custom_rule = engine.apply_rule(
             {"type": "custom_svc_test", "body": "custom_svc_test"}
         )
         assert custom_rule is not None
@@ -652,6 +650,7 @@ class TestRuleEngineIntegration:
         engine.register_rule(high_rule)
 
         matched = engine.find_matching_rule({})
+        assert matched is not None
         assert matched.name == "high_priority"
 
     def test_conditional_rule_with_multiple_attributes(self) -> None:

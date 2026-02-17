@@ -23,7 +23,7 @@ class TestChefServerValidation:
                 "https://chef.example.com",
                 "my-client",
                 organisation="default",
-                client_key_path="/tmp/client.pem",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
             )
 
         assert success is True
@@ -44,7 +44,7 @@ class TestChefServerValidation:
                 "https://chef.example.com",
                 "my-client",
                 organisation="default",
-                client_key_path="/tmp/client.pem",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
             )
 
         assert success is False
@@ -64,7 +64,7 @@ class TestChefServerValidation:
                 "https://chef.example.com",
                 "my-client",
                 organisation="default",
-                client_key_path="/tmp/client.pem",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
             )
 
         assert success is False
@@ -79,7 +79,7 @@ class TestChefServerValidation:
                 "invalid-url",
                 "my-client",
                 organisation="default",
-                client_key_path="/tmp/client.pem",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
             )
 
         assert success is False
@@ -94,7 +94,7 @@ class TestChefServerValidation:
                 "https://chef.example.com",
                 "",
                 organisation="default",
-                client_key_path="/tmp/client.pem",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
             )
 
         assert success is False
@@ -107,7 +107,7 @@ class TestChefServerValidation:
                 "https://chef.example.com",
                 "my-client",
                 organisation="default",
-                client_key_path="/tmp/client.pem",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
             )
 
             assert success is False

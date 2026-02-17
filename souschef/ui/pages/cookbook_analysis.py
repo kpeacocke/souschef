@@ -12,6 +12,7 @@ import sys
 import tarfile
 import tempfile
 import zipfile
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,17 @@ OPENAI_PROVIDER = "OpenAI (GPT)"
 LOCAL_PROVIDER = "Local Model"
 IBM_WATSONX = "IBM Watsonx"
 RED_HAT_LIGHTSPEED = "Red Hat Lightspeed"
+
+
+# Deployment modes
+class DeploymentMode(str, Enum):
+    """Deployment mode options."""
+
+    SIMULATION = "Simulation"
+    LIVE = "Live Deployment"
+
+
+DEPLOYMENT_MODES = [DeploymentMode.SIMULATION.value, DeploymentMode.LIVE.value]
 
 
 def _sanitize_filename(filename: str) -> str:
@@ -792,7 +804,9 @@ def _extract_tar_members(tar_ref, members, extraction_dir):
         sanitized_members.append(sanitized_member)
 
     if sanitized_members:
-        tar_ref.extractall(path=extraction_dir, members=sanitized_members)
+        tar_ref.extractall(
+            path=extraction_dir, members=sanitized_members
+        )  # NOSONAR - resource consumption controlled with file size/count limits
 
 
 def _validate_tar_file_security(member, file_count: int, total_size: int) -> None:
@@ -1316,11 +1330,21 @@ def _display_cookbook_table(cookbook_data):
 def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
     """Handle the cookbook selection interface with individual and holistic options."""
     st.subheader("Cookbook Selection & Analysis")
-
-    # Show validation warnings if any cookbooks have issues
     _show_cookbook_validation_warnings(cookbook_data)
 
-    # Holistic analysis/conversion buttons
+    _show_holistic_actions(cookbook_path, cookbook_data)
+    st.markdown("### Deployment & Orchestration")
+    st.markdown("Configure target platform and deployment options for your migration.")
+
+    config = _collect_deployment_config()
+    _execute_migration_if_requested(cookbook_path, config)
+
+    st.divider()
+    _show_individual_selection(cookbook_path, cookbook_data)
+
+
+def _show_holistic_actions(cookbook_path: str, cookbook_data: list) -> None:
+    """Show holistic analysis and conversion buttons."""
     st.markdown("### Holistic Analysis & Conversion")
     st.markdown(
         "Analyse and convert **ALL cookbooks** in the archive holistically, "
@@ -1328,13 +1352,13 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
     )
 
     col1, col2 = st.columns(2)
-
     with col1:
         if st.button(
             "🔍 Analyse ALL Cookbooks",
             type="primary",
-            help="Analyse all cookbooks together considering inter-cookbook "
-            "dependencies",
+            help=(
+                "Analyse all cookbooks together considering inter-cookbook dependencies"
+            ),
             key="holistic_analysis",
         ):
             _analyze_all_cookbooks_holistically(cookbook_path, cookbook_data)
@@ -1348,13 +1372,13 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
         ):
             _convert_all_cookbooks_holistically(cookbook_path)
 
-    st.markdown("### Deployment & Orchestration")
-    st.markdown("Configure target platform and deployment options for your migration.")
 
-    # Platform configuration
+def _collect_deployment_config() -> dict[str, Any]:
+    """Collect deployment configuration from UI."""
     sim_col1, sim_col2, sim_col3 = st.columns(3)
+
     with sim_col1:
-        target_platform = st.selectbox(
+        target_platform: str = st.selectbox(
             "Target Platform",
             ["awx", "aap", "tower"],
             format_func=lambda x: {
@@ -1366,17 +1390,19 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
             key="simulation_target",
             help="Select the target Ansible automation platform",
         )
+
     with sim_col2:
-        target_version = st.text_input(
+        target_version: str = st.text_input(
             "Platform Version",
             value="23.0.0" if target_platform == "awx" else "2.4.0",
             key="platform_version",
             help="Enter the target platform version",
         )
+
     with sim_col3:
-        deployment_mode = st.radio(
+        deployment_mode: str = st.radio(
             "Deployment Mode",
-            ["Simulation", "Live Deployment"],
+            DEPLOYMENT_MODES,
             index=0,
             key="deployment_mode",
             help=(
@@ -1385,169 +1411,199 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
             ),
         )
 
-    # Show info based on deployment mode
-    if deployment_mode == "Simulation":
+    _show_deployment_information(deployment_mode)
+    connection_config = _get_connection_config(deployment_mode)
+    conversion_options = _collect_conversion_options()
+    advanced_options = _collect_advanced_options()
+
+    return {
+        "target_platform": target_platform,
+        "target_version": target_version,
+        "deployment_mode": deployment_mode,
+        "connection": connection_config,
+        "conversion": conversion_options,
+        "advanced": advanced_options,
+    }
+
+
+def _show_deployment_information(deployment_mode: str) -> None:
+    """Show information based on deployment mode."""
+    if deployment_mode == DeploymentMode.SIMULATION.value:
         st.info(
             "🔍 **Simulation Mode**: Preview AWX/AAP deployment "
             "without creating actual resources."
         )
-    else:
+    elif deployment_mode == DeploymentMode.LIVE.value:
         st.warning(
             "⚠️ **Live Deployment**: Will create actual resources "
             "in AWX/AAP. Ensure credentials are configured."
         )
 
-    # Platform connection (only for live deployment)
-    if deployment_mode == "Live Deployment":
-        with st.expander("Platform Connection Settings", expanded=False):
-            server_url = st.text_input(
-                "Server URL",
-                placeholder="https://awx.example.com",
-                key="platform_server_url",
-                help="AWX/AAP server URL",
-            )
-            conn_col1, conn_col2 = st.columns(2)
-            with conn_col1:
-                username = st.text_input(
-                    "Username", key="platform_username", help="Authentication username"
-                )
-            with conn_col2:
-                password = st.text_input(
-                    "Password",
-                    type="password",
-                    key="platform_password",
-                    help="Authentication password",
-                )
-            verify_ssl = st.checkbox(
-                "Verify SSL", value=True, key="platform_verify_ssl"
-            )
 
-    # Conversion options
+def _get_connection_config(deployment_mode: str) -> dict[str, Any]:
+    """Get connection configuration for live deployment."""
+    if deployment_mode != DeploymentMode.LIVE.value:
+        return {}
+
+    with st.expander("Platform Connection Settings", expanded=False):
+        server_url: str = st.text_input(
+            "Server URL",
+            placeholder="https://awx.example.com",
+            key="platform_server_url",
+            help="AWX/AAP server URL",
+        )
+        conn_col1, conn_col2 = st.columns(2)
+        with conn_col1:
+            username: str = st.text_input(
+                "Username", key="platform_username", help="Authentication username"
+            )
+        with conn_col2:
+            password: str = st.text_input(
+                "Password",
+                type="password",
+                key="platform_password",
+                help="Authentication password",
+            )
+        verify_ssl: bool = st.checkbox(
+            "Verify SSL", value=True, key="platform_verify_ssl"
+        )
+
+    return {
+        "server_url": server_url,
+        "username": username,
+        "password": password,
+        "verify_ssl": verify_ssl,
+    }
+
+
+def _collect_conversion_options() -> dict[str, bool]:
+    """Collect conversion options from UI."""
+    conversion_opts: dict[str, bool] = {}
+
     with st.expander("Conversion Options", expanded=True):
         conv_col1, conv_col2 = st.columns(2)
         with conv_col1:
-            include_repo = st.checkbox(
+            conversion_opts["include_repo"] = st.checkbox(
                 "Generate Git Repository",
                 value=True,
                 key="simulation_repo",
                 help="Generate a Git repository structure for the converted playbooks",
             )
-            include_tests = st.checkbox(
+            conversion_opts["include_tests"] = st.checkbox(
                 "Convert InSpec Tests",
                 value=True,
                 key="convert_inspec",
                 help="Convert InSpec profiles to Ansible tests",
             )
-            convert_habitat = st.checkbox(
+            conversion_opts["convert_habitat"] = st.checkbox(
                 "Convert Habitat Plans",
                 value=False,
                 key="convert_habitat",
                 help="Convert Chef Habitat plans to Docker/Compose",
             )
         with conv_col2:
-            include_tar = st.checkbox(
+            conversion_opts["include_tar"] = st.checkbox(
                 "Create TAR Archives",
                 value=True,
                 key="simulation_tar",
                 help="Package converted files as tar archives",
             )
-            generate_ci = st.checkbox(
+            conversion_opts["generate_ci"] = st.checkbox(
                 "Generate CI/CD Pipelines",
                 value=False,
                 key="generate_ci",
                 help="Generate CI/CD pipeline configurations",
             )
-            validate_playbooks = st.checkbox(
+            conversion_opts["validate_playbooks"] = st.checkbox(
                 "Validate Generated Playbooks",
                 value=True,
                 key="validate_playbooks",
                 help="Run validation on generated Ansible playbooks",
             )
 
-    # Advanced options
+    return conversion_opts
+
+
+def _collect_advanced_options() -> dict[str, str | bool]:
+    """Collect advanced options from UI."""
+    options: dict[str, str | bool] = {}
+
     with st.expander("Advanced Options"):
-        chef_version = st.text_input(
+        options["chef_version"] = st.text_input(
             "Chef Version",
             value="15.10.91",
             key="chef_version",
             help="Chef version being migrated from",
         )
-        output_dir = st.text_input(
+        options["output_dir"] = st.text_input(
             "Custom Output Directory (optional)",
             placeholder="/path/to/output",
             key="custom_output_dir",
             help="Specify custom output directory for generated files",
         )
-        preserve_comments = st.checkbox(
+        options["preserve_comments"] = st.checkbox(
             "Preserve Comments",
             value=True,
             key="preserve_comments",
             help="Attempt to preserve comments from Chef code",
         )
 
-    # Execute button
+    return options
+
+
+def _execute_migration_if_requested(cookbook_path: str, config: dict[str, Any]) -> None:
+    """Execute migration if user clicks the button."""
+    deployment_mode = config["deployment_mode"]
     button_label = (
         "Simulate Deployment"
-        if deployment_mode == "Simulation"
+        if deployment_mode == DeploymentMode.SIMULATION.value
         else "Execute Migration"
     )
     button_help = (
         "Preview AWX/AAP deployment without making changes"
-        if deployment_mode == "Simulation"
+        if deployment_mode == DeploymentMode.SIMULATION.value
         else "Execute end-to-end migration with actual deployment"
     )
 
-    if st.button(
+    if not st.button(
         button_label,
-        type="primary" if deployment_mode == "Live Deployment" else "secondary",
+        type="primary" if deployment_mode == DeploymentMode.LIVE.value else "secondary",
         help=button_help,
         key="execute_migration",
     ):
-        # Collect all configuration
-        migration_config = {
-            "target_platform": target_platform,
-            "target_version": target_version,
-            "deployment_mode": deployment_mode,
-            "include_repo": include_repo,
-            "include_tar": include_tar,
-            "include_tests": include_tests,
-            "convert_habitat": convert_habitat,
-            "generate_ci": generate_ci,
-            "validate_playbooks": validate_playbooks,
-            "chef_version": chef_version,
-            "output_dir": output_dir or None,
-            "preserve_comments": preserve_comments,
-        }
+        return
 
-        if deployment_mode == "Live Deployment":
-            migration_config["platform_connection"] = {
-                "server_url": server_url,
-                "username": username,
-                "password": password,
-                "verify_ssl": verify_ssl,
-            }
+    migration_config = {
+        "target_platform": config["target_platform"],
+        "target_version": config["target_version"],
+        "deployment_mode": deployment_mode,
+        **config["conversion"],
+        "chef_version": config["advanced"]["chef_version"],
+        "output_dir": config["advanced"]["output_dir"] or None,
+        "preserve_comments": config["advanced"]["preserve_comments"],
+    }
 
-        # Execute migration (simulation for now, can be extended for live deployment)
-        _simulate_chef_to_awx_migration_ui(
-            cookbook_path,
-            target_platform,
-            include_repo,
-            include_tar,
-            migration_config=migration_config,
-        )
+    if config["connection"]:
+        migration_config["platform_connection"] = config["connection"]
+
+    _simulate_chef_to_awx_migration_ui(
+        cookbook_path,
+        config["target_platform"],
+        config["conversion"]["include_repo"],
+        config["conversion"]["include_tar"],
+        migration_config=migration_config,
+    )
 
     if st.session_state.simulation_result:
         _display_simulation_results(st.session_state.simulation_result)
 
-    st.divider()
 
-    # Individual cookbook selection
+def _show_individual_selection(cookbook_path: str, cookbook_data: list) -> None:
+    """Show individual cookbook selection interface."""
     st.markdown("### Individual Cookbook Selection")
     st.markdown("Select specific cookbooks to analyse individually.")
 
-    # Get list of cookbook names for multiselect
     cookbook_names = [cb["Name"] for cb in cookbook_data]
-
     selected_cookbooks = st.multiselect(
         "Select cookbooks to analyse:",
         options=cookbook_names,
@@ -1555,35 +1611,37 @@ def _handle_cookbook_selection(cookbook_path: str, cookbook_data: list):
         help="Choose which cookbooks to analyse individually",
     )
 
-    if selected_cookbooks:
-        col1, col2, col3 = st.columns(3)
+    if not selected_cookbooks:
+        return
 
-        with col1:
-            if st.button(
-                f"📊 Analyse Selected ({len(selected_cookbooks)})",
-                help=f"Analyse {len(selected_cookbooks)} selected cookbooks",
-                key="analyze_selected",
-            ):
-                analyse_selected_cookbooks(cookbook_path, selected_cookbooks)
+    col1, col2, col3 = st.columns(3)
 
-        with col2:
-            if st.button(
-                f"🔗 Analyse as Project ({len(selected_cookbooks)})",
-                help=f"Analyse {len(selected_cookbooks)} cookbooks as a project "
-                f"with dependency analysis",
-                key="analyze_project",
-            ):
-                analyse_project_cookbooks(cookbook_path, selected_cookbooks)
+    with col1:
+        if st.button(
+            f"📊 Analyse Selected ({len(selected_cookbooks)})",
+            help=f"Analyse {len(selected_cookbooks)} selected cookbooks",
+            key="analyze_selected",
+        ):
+            analyse_selected_cookbooks(cookbook_path, selected_cookbooks)
 
-        with col3:
-            if st.button(
-                f"Select All ({len(cookbook_names)})",
-                help=f"Select all {len(cookbook_names)} cookbooks",
-                key="select_all",
-            ):
-                # This will trigger a rerun with all cookbooks selected
-                st.session_state.selected_cookbooks = cookbook_names
-                st.rerun()
+    with col2:
+        if st.button(
+            f"🔗 Analyse as Project ({len(selected_cookbooks)})",
+            help=f"Analyse {len(selected_cookbooks)} cookbooks as a project "
+            f"with dependency analysis",
+            key="analyze_project",
+        ):
+            analyse_project_cookbooks(cookbook_path, selected_cookbooks)
+
+    with col3:
+        if st.button(
+            f"Select All ({len(cookbook_names)})",
+            help=f"Select all {len(cookbook_names)} cookbooks",
+            key="select_all",
+        ):
+            # This will trigger a rerun with all cookbooks selected
+            st.session_state.selected_cookbooks = cookbook_names
+            st.rerun()
 
 
 def _show_cookbook_validation_warnings(cookbook_data: list):

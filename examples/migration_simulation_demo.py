@@ -75,7 +75,7 @@ def demo_simulation():
                     "platform": "ubuntu",
                     "platform_version": "20.04",
                     "automatic": {
-                        "ipaddress": "10.0.1.10",
+                        "ipaddress": "10.0.1.10",  # NOSONAR - S1313: mock data for demo
                         "environment": "production",
                     },
                     "normal": {
@@ -89,7 +89,7 @@ def demo_simulation():
                     "platform": "ubuntu",
                     "platform_version": "20.04",
                     "automatic": {
-                        "ipaddress": "10.0.2.10",
+                        "ipaddress": "10.0.2.10",  # NOSONAR - S1313: mock data for demo
                         "environment": "production",
                     },
                     "normal": {"run_list": ["role[app]", "recipe[chef-app::deploy]"]},

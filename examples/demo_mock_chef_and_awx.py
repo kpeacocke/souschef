@@ -64,7 +64,7 @@ def scenario_1_query_chef_nodes():
                     "automatic": {
                         "platform": "ubuntu",
                         "platform_version": "22.04",
-                        "ipaddress": "10.0.1.10",
+                        "ipaddress": "10.0.1.10",  # NOSONAR - S1313: mock data for demo
                         "fqdn": "web-01.example.com",
                     },
                     "run_list": ["recipe[nginx]", "recipe[php]"],
@@ -75,7 +75,7 @@ def scenario_1_query_chef_nodes():
                     "automatic": {
                         "platform": "ubuntu",
                         "platform_version": "22.04",
-                        "ipaddress": "10.0.1.11",
+                        "ipaddress": "10.0.1.11",  # NOSONAR - S1313: mock data for demo
                         "fqdn": "web-02.example.com",
                     },
                     "run_list": ["recipe[nginx]", "recipe[php]"],
@@ -86,7 +86,7 @@ def scenario_1_query_chef_nodes():
                     "automatic": {
                         "platform": "centos",
                         "platform_version": "8",
-                        "ipaddress": "10.0.2.20",
+                        "ipaddress": "10.0.2.20",  # NOSONAR - S1313: mock data for demo
                         "fqdn": "db-01.example.com",
                     },
                     "run_list": ["recipe[postgresql]", "recipe[backup]"],

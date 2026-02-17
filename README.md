@@ -673,6 +673,26 @@ profile_cookbook_performance /path/to/large_cookbook
 profile_parsing_operation recipe /path/to/recipe.rb --detailed
 ```
 
+Migration phase profiling for end-to-end workflows:
+
+```python
+from souschef.profiling import (
+  MigrationProfiler,
+  generate_migration_performance_report,
+)
+
+profiler = MigrationProfiler("mig-123")
+
+with profiler.profile_phase("analyse", {"recipes": 5}):
+  pass
+
+with profiler.profile_phase("convert", {"parallel": True}):
+  pass
+
+profile = profiler.build_profile()
+print(generate_migration_performance_report(profile))
+```
+
 ### 10. Visual Migration Planning Interface
 
 Interactive web-based interface for Chef-to-Ansible migration planning and Ansible upgrade management:

@@ -29,7 +29,7 @@ def setup_wizard() -> dict[str, Any]:
     print("╚════════════════════════════════════════════════════════╝\n")
     print("This wizard will guide you through setting up a migration.\n")
 
-    config = {}
+    config: dict[str, Any] = {}
 
     # Cookbook path
     config["cookbook_path"] = _prompt_cookbook_path()
@@ -71,34 +71,57 @@ def _prompt_cookbook_path() -> str:
         print("─" * 60)
         path = input("Enter path to Chef cookbook directory: ").strip()
 
-        if not path:
-            print("  ✗ Error: Path cannot be empty")
+        result = _validate_cookbook_path(path)
+        if result == "exit":
+            sys.exit(1)
+        if result == "retry":
             continue
 
-        cookbook_path = Path(path)
-        if not cookbook_path.exists():
-            print(f"  ✗ Error: Path does not exist: {path}")
-            retry = input("  Would you like to try again? (y/n): ").strip().lower()
-            if retry != "y":
-                sys.exit(1)
-            continue
+        return str(result)
 
-        if not cookbook_path.is_dir():
-            print(f"  ✗ Error: Path is not a directory: {path}")
-            continue
 
-        # Check for metadata.rb or recipes directory
-        has_metadata = (cookbook_path / "metadata.rb").exists()
-        has_recipes = (cookbook_path / "recipes").exists()
+def _validate_cookbook_path(path: str) -> str | bool:
+    """
+    Validate cookbook path.
 
-        if not has_metadata and not has_recipes:
-            print("  ⚠ Warning: No metadata.rb or recipes/ directory found")
-            proceed = input("  Continue anyway? (y/n): ").strip().lower()
-            if proceed != "y":
-                continue
+    Returns:
+        Absolute path if valid, "exit" to exit, "retry" to retry.
 
-        print(f"  ✓ Cookbook path set: {cookbook_path.absolute()}")
-        return str(cookbook_path.absolute())
+    """
+    if not path:
+        print("  ✗ Error: Path cannot be empty")
+        return "retry"
+
+    cookbook_path = Path(path)
+    if not cookbook_path.exists():
+        print(f"  ✗ Error: Path does not exist: {path}")
+        retry = input("  Would you like to try again? (y/n): ").strip().lower()
+        return "retry" if retry == "y" else "exit"
+
+    if not cookbook_path.is_dir():
+        print(f"  ✗ Error: Path is not a directory: {path}")
+        return "retry"
+
+    has_valid_structure = _is_valid_cookbook_structure(cookbook_path)
+    if not has_valid_structure:
+        proceed = input("  Continue anyway? (y/n): ").strip().lower()
+        if proceed != "y":
+            return "retry"
+
+    print(f"  ✓ Cookbook path set: {cookbook_path.absolute()}")
+    return str(cookbook_path.absolute())
+
+
+def _is_valid_cookbook_structure(cookbook_path: Path) -> bool:
+    """Check if path has valid Chef cookbook structure."""
+    has_metadata = (cookbook_path / "metadata.rb").exists()
+    has_recipes = (cookbook_path / "recipes").exists()
+
+    if not has_metadata and not has_recipes:
+        print("  ⚠ Warning: No metadata.rb or recipes/ directory found")
+        return False
+
+    return True
 
 
 def _prompt_output_directory() -> str:

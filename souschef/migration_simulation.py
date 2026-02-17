@@ -29,82 +29,99 @@ CHEF_AUTH_PROTOCOLS = {
     "15.10.91": ["1.3"],  # SHA-256 only (SHA-1 removed)
 }
 
+# Platform/version identifiers
+TOWER_385 = "tower-3.8.5"
+AWX_201 = "awx-20.1.0"
+AWX_210 = "awx-21.0.0"
+AWX_220 = "awx-22.0.0"
+AWX_2461 = "awx-24.6.1"
+AAP_240 = "aap-2.4.0"
+
+# API endpoint constants
+API_INVENTORIES = "/api/v2/inventories/"
+API_JOB_TEMPLATES = "/api/v2/job_templates/"
+API_PROJECTS = "/api/v2/projects/"
+API_CREDENTIALS = "/api/v2/credentials/"
+API_GROUPS = "/api/v2/groups/"
+API_HOSTS = "/api/v2/hosts/"
+API_EXECUTION_ENVIRONMENTS = "/api/v2/execution_environments/"
+
 # Execution model by platform/version
 EXECUTION_MODELS = {
-    "tower-3.8.5": "custom_virtualenv",  # Legacy: virtualenv
-    "awx-20.1.0": "custom_virtualenv",  # Pre-EE: virtualenv
-    "awx-21.0.0": "execution_environment",  # EE transition
-    "awx-22.0.0": "execution_environment",  # EE standard
-    "awx-24.6.1": "execution_environment",  # EE required
-    "aap-2.4.0": "execution_environment",  # EE required
+    TOWER_385: "custom_virtualenv",  # Legacy: virtualenv
+    AWX_201: "custom_virtualenv",  # Pre-EE: virtualenv
+    AWX_210: "execution_environment",  # EE transition
+    AWX_220: "execution_environment",  # EE standard
+    AWX_2461: "execution_environment",  # EE required
+    AAP_240: "execution_environment",  # EE required
 }
 
 # Ansible version requirements by platform
 ANSIBLE_VERSIONS = {
-    "tower-3.8.5": "2.9.0",
-    "awx-20.1.0": "2.10.0",
-    "awx-21.0.0": "2.11.0",
-    "awx-22.0.0": "2.12.0",
-    "awx-24.6.1": "2.16.0",
-    "aap-2.4.0": "2.15.0",
+    TOWER_385: "2.9.0",
+    AWX_201: "2.10.0",
+    AWX_210: "2.11.0",
+    AWX_220: "2.12.0",
+    AWX_2461: "2.16.0",
+    AAP_240: "2.15.0",
 }
 
 # API endpoint availability by platform/version
 AVAILABLE_ENDPOINTS = {
-    "tower-3.8.5": [
-        "/api/v2/inventories/",
-        "/api/v2/job_templates/",
-        "/api/v2/projects/",
-        "/api/v2/credentials/",
-        "/api/v2/groups/",
-        "/api/v2/hosts/",
+    TOWER_385: [
+        API_INVENTORIES,
+        API_JOB_TEMPLATES,
+        API_PROJECTS,
+        API_CREDENTIALS,
+        API_GROUPS,
+        API_HOSTS,
     ],
-    "awx-20.1.0": [
-        "/api/v2/inventories/",
-        "/api/v2/job_templates/",
-        "/api/v2/projects/",
-        "/api/v2/credentials/",
-        "/api/v2/groups/",
-        "/api/v2/hosts/",
+    AWX_201: [
+        API_INVENTORIES,
+        API_JOB_TEMPLATES,
+        API_PROJECTS,
+        API_CREDENTIALS,
+        API_GROUPS,
+        API_HOSTS,
         "/api/v2/custom_virtualenvs/",
     ],
-    "awx-21.0.0": [
-        "/api/v2/inventories/",
-        "/api/v2/job_templates/",
-        "/api/v2/projects/",
-        "/api/v2/credentials/",
-        "/api/v2/groups/",
-        "/api/v2/hosts/",
-        "/api/v2/execution_environments/",
+    AWX_210: [
+        API_INVENTORIES,
+        API_JOB_TEMPLATES,
+        API_PROJECTS,
+        API_CREDENTIALS,
+        API_GROUPS,
+        API_HOSTS,
+        API_EXECUTION_ENVIRONMENTS,
         "/api/v2/custom_virtualenvs/",  # Deprecated
     ],
-    "awx-22.0.0": [
-        "/api/v2/inventories/",
-        "/api/v2/job_templates/",
-        "/api/v2/projects/",
-        "/api/v2/credentials/",
-        "/api/v2/groups/",
-        "/api/v2/hosts/",
-        "/api/v2/execution_environments/",
+    AWX_220: [
+        API_INVENTORIES,
+        API_JOB_TEMPLATES,
+        API_PROJECTS,
+        API_CREDENTIALS,
+        API_GROUPS,
+        API_HOSTS,
+        API_EXECUTION_ENVIRONMENTS,
     ],
-    "awx-24.6.1": [
-        "/api/v2/inventories/",
-        "/api/v2/job_templates/",
-        "/api/v2/projects/",
-        "/api/v2/credentials/",
-        "/api/v2/groups/",
-        "/api/v2/hosts/",
-        "/api/v2/execution_environments/",
+    AWX_2461: [
+        API_INVENTORIES,
+        API_JOB_TEMPLATES,
+        API_PROJECTS,
+        API_CREDENTIALS,
+        API_GROUPS,
+        API_HOSTS,
+        API_EXECUTION_ENVIRONMENTS,
         "/api/v2/mesh_visualizer/",
     ],
-    "aap-2.4.0": [
-        "/api/v2/inventories/",
-        "/api/v2/job_templates/",
-        "/api/v2/projects/",
-        "/api/v2/credentials/",
-        "/api/v2/groups/",
-        "/api/v2/hosts/",
-        "/api/v2/execution_environments/",
+    AAP_240: [
+        API_INVENTORIES,
+        API_JOB_TEMPLATES,
+        API_PROJECTS,
+        API_CREDENTIALS,
+        API_GROUPS,
+        API_HOSTS,
+        API_EXECUTION_ENVIRONMENTS,
         "/api/v2/instances/",
         "/api/v2/mesh_visualizer/",
         "/api/v2/content_signing/",

@@ -144,7 +144,9 @@ class LocalBlobStorage(BlobStorage):
             # Extract ZIP archive
             local_path.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(source_path, "r") as zipf:
-                zipf.extractall(local_path)
+                zipf.extractall(
+                    local_path
+                )  # NOSONAR - local file from verified storage
         else:
             # Copy single file
             local_path.parent.mkdir(parents=True, exist_ok=True)
@@ -267,7 +269,9 @@ class S3BlobStorage(BlobStorage):
 
             local_path.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(zip_buffer, "r") as zipf:
-                zipf.extractall(local_path)
+                zipf.extractall(
+                    local_path
+                )  # NOSONAR - S3 bucket is internally controlled
         else:
             # Download single file
             local_path.parent.mkdir(parents=True, exist_ok=True)

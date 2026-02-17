@@ -201,7 +201,7 @@ def test_display_node_text_outputs_optional_fields(
         "name": "node-1",
         "environment": "prod",
         "platform": "ubuntu",
-        "ipaddress": "10.0.0.1",
+        "ipaddress": "10.0.0.1",  # NOSONAR - test fixture
         "fqdn": "node.example.com",
         "roles": ["web"],
     }

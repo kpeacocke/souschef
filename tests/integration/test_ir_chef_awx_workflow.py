@@ -78,7 +78,7 @@ class TestChefToIRWorkflow:
                     "chef_environment": "production",
                     "platform": "ubuntu",
                     "platform_version": "22.04",
-                    "ipaddress": "10.0.1.10",
+                    "ipaddress": "10.0.1.10",  # NOSONAR - test fixture
                     "fqdn": "web-prod-01.example.com",
                     "automatic": {
                         "cpu": {"total": 4},
@@ -91,7 +91,7 @@ class TestChefToIRWorkflow:
                     "chef_environment": "production",
                     "platform": "ubuntu",
                     "platform_version": "22.04",
-                    "ipaddress": "10.0.1.20",
+                    "ipaddress": "10.0.1.20",  # NOSONAR - test fixture
                     "fqdn": "db-prod-01.example.com",
                 },
             ],
@@ -314,9 +314,9 @@ class TestIRToAWXWorkflow:
 
         # Add host nodes
         hosts = [
-            ("web-01", "10.0.1.10", "webservers"),
-            ("web-02", "10.0.1.11", "webservers"),
-            ("db-01", "10.0.1.20", "databases"),
+            ("web-01", "10.0.1.10", "webservers"),  # NOSONAR - test fixture
+            ("web-02", "10.0.1.11", "webservers"),  # NOSONAR - test fixture
+            ("db-01", "10.0.1.20", "databases"),  # NOSONAR - test fixture
         ]
 
         for hostname, ip, group in hosts:
@@ -376,7 +376,7 @@ class TestEndToEndChefToAWXWorkflow:
                     "run_list": ["role[webserver]"],
                     "chef_environment": "production",
                     "platform": "ubuntu",
-                    "ipaddress": "10.0.1.10",
+                    "ipaddress": "10.0.1.10",  # NOSONAR - test fixture
                 }
             ],
             "total": 1,
@@ -500,7 +500,9 @@ class TestEndToEndChefToAWXWorkflow:
             f"https://awx.example.com/api/v2/inventories/{inventory_id}/hosts/",
             json={
                 "name": "prod-web-01",
-                "variables": json.dumps({"ansible_host": "10.0.1.10"}),
+                "variables": json.dumps(
+                    {"ansible_host": "10.0.1.10"}
+                ),  # NOSONAR - test fixture
             },
             headers={"Authorization": "Bearer test-token"},
             timeout=10,
@@ -545,7 +547,7 @@ class TestEndToEndChefToAWXWorkflow:
                     {
                         "name": f"{env_name}-web-01",
                         "chef_environment": env_name,
-                        "ipaddress": f"10.0.{1 if env_name == 'production' else 2}.10",
+                        "ipaddress": f"10.0.{1 if env_name == 'production' else 2}.10",  # NOSONAR - test fixture
                     }
                 ],
                 "total": 1,

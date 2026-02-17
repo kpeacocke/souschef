@@ -280,7 +280,7 @@ def create_service_rule() -> ConversionRule:
     def service_condition(resource: dict[str, Any]) -> bool:
         """Check if resource is a service resource."""
         body = resource.get("body", "")
-        return body.startswith("service ")
+        return bool(body.startswith("service "))
 
     rule.add_condition(service_condition)
 

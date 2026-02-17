@@ -1603,7 +1603,7 @@ def v2() -> None:
     type=click.Path(),
     help="Save result to file instead of printing to stdout",
 )
-def v2_migrate(
+def v2_migrate(  # noqa: S107  # NOSONAR
     cookbook_path: str,
     chef_version: str,
     target_platform: str,
@@ -1627,6 +1627,46 @@ def v2_migrate(
     Executes analysis, conversion, and optional validation. Optionally
     saves migration state to the storage layer for later retrieval.
     """
+    # Group parameters into logical dictionaries to reduce complexity
+    chef_server_config = {
+        "url": chef_server_url,
+        "organisation": chef_organisation,
+        "client_name": chef_client_name,
+        "client_key_path": chef_client_key_path,
+        "client_key": chef_client_key,
+        "query": chef_query,
+    }
+    output_config = {
+        "type": output_type,
+        "format": output_format,
+        "path": output_path,
+    }
+    migration_options = {
+        "skip_validation": skip_validation,
+        "save_state": save_state,
+        "analysis_id": analysis_id,
+    }
+    _run_v2_migration(
+        cookbook_path=cookbook_path,
+        chef_version=chef_version,
+        target_platform=target_platform,
+        target_version=target_version,
+        chef_server_config=chef_server_config,
+        output_config=output_config,
+        migration_options=migration_options,
+    )
+
+
+def _run_v2_migration(
+    cookbook_path: str,
+    chef_version: str,
+    target_platform: str,
+    target_version: str,
+    chef_server_config: dict[str, Any],
+    output_config: dict[str, Any],
+    migration_options: dict[str, Any],
+) -> None:
+    """Execute v2 migration with grouped parameter sets for reduced complexity."""
     try:
         cookbook_dir = _validate_user_path(cookbook_path)
         if not cookbook_dir.is_dir():
@@ -1641,20 +1681,20 @@ def v2_migrate(
 
         result = orchestrator.migrate_cookbook(
             str(cookbook_dir),
-            skip_validation=skip_validation,
-            chef_server_url=chef_server_url,
-            chef_organisation=chef_organisation,
-            chef_client_name=chef_client_name,
-            chef_client_key_path=chef_client_key_path,
-            chef_client_key=chef_client_key,
-            chef_query=chef_query,
+            skip_validation=migration_options["skip_validation"],
+            chef_server_url=chef_server_config["url"],
+            chef_organisation=chef_server_config["organisation"],
+            chef_client_name=chef_server_config["client_name"],
+            chef_client_key_path=chef_server_config["client_key_path"],
+            chef_client_key=chef_server_config["client_key"],
+            chef_query=chef_server_config["query"],
         )
 
         storage_id = None
-        if save_state:
+        if migration_options["save_state"]:
             storage_id = orchestrator.save_state(
-                output_type=output_type,
-                analysis_id=analysis_id,
+                output_type=output_config["type"],
+                analysis_id=migration_options["analysis_id"],
             )
 
         payload = result.to_dict()
@@ -1662,15 +1702,15 @@ def v2_migrate(
             payload["storage_id"] = storage_id
 
         output_content = json.dumps(payload, indent=2)
-        if output_path:
+        if output_config["path"]:
             _safe_write_file(
                 output_content,
-                output_path,
+                output_config["path"],
                 Path("migration-result.json"),
             )
-            click.echo(f"Result saved to: {output_path}")
+            click.echo(f"Result saved to: {output_config['path']}")
         else:
-            _output_result(output_content, output_format)
+            _output_result(output_content, output_config["format"])
 
         if result.status == MigrationStatus.FAILED:
             sys.exit(1)
@@ -1786,60 +1826,68 @@ def v2_list(
             return
 
         if output_format == "json":
-            output = []
-            for conv in conversions:
-                # Extract migration data if available
-                migration_data = (
-                    json.loads(conv.conversion_data) if conv.conversion_data else {}
-                )
-                migration_result = migration_data.get("migration_result", {})
-
-                output.append(
-                    {
-                        "id": conv.id,
-                        "cookbook_name": conv.cookbook_name,
-                        "output_type": conv.output_type,
-                        "status": conv.status,
-                        "files_generated": conv.files_generated,
-                        "created_at": conv.created_at,
-                        "migration_id": migration_result.get("migration_id"),
-                        "migration_status": migration_result.get("status"),
-                    }
-                )
-            click.echo(json.dumps(output, indent=2))
+            _display_migrations_json(conversions)
         else:
-            # Text format
-            click.echo(f"\n{'=' * 80}")
-            click.echo(f"Recent Migrations (showing {len(conversions)} of {limit} max)")
-            click.echo(f"{'=' * 80}\n")
-
-            for conv in conversions:
-                migration_data = (
-                    json.loads(conv.conversion_data) if conv.conversion_data else {}
-                )
-                migration_result = migration_data.get("migration_result", {})
-                migration_id = migration_result.get("migration_id", "N/A")
-
-                click.echo(f"ID: {conv.id}")
-                click.echo(f"Migration ID: {migration_id[:16]}...")
-                click.echo(f"Cookbook: {conv.cookbook_name}")
-                click.echo(f"Status: {conv.status}")
-                click.echo(f"Files Generated: {conv.files_generated}")
-                click.echo(f"Created: {conv.created_at}")
-
-                if migration_result.get("metrics"):
-                    metrics = migration_result["metrics"]
-                    recipes_converted = metrics.get("recipes_converted", 0)
-                    recipes_total = metrics.get("recipes_total", 0)
-                    if recipes_total > 0:
-                        conversion_rate = (recipes_converted / recipes_total) * 100
-                        click.echo(f"Conversion Rate: {conversion_rate:.1f}%")
-
-                click.echo(f"{'-' * 80}\n")
+            _display_migrations_text(conversions, limit)
 
     except Exception as e:
         click.echo(f"Error listing migrations: {e}", err=True)
         sys.exit(1)
+
+
+def _display_migrations_json(conversions: list[Any]) -> None:
+    """Display migrations in JSON format."""
+    output = []
+    for conv in conversions:
+        # Extract migration data if available
+        migration_data = (
+            json.loads(conv.conversion_data) if conv.conversion_data else {}
+        )
+        migration_result = migration_data.get("migration_result", {})
+
+        output.append(
+            {
+                "id": conv.id,
+                "cookbook_name": conv.cookbook_name,
+                "output_type": conv.output_type,
+                "status": conv.status,
+                "files_generated": conv.files_generated,
+                "created_at": conv.created_at,
+                "migration_id": migration_result.get("migration_id"),
+                "migration_status": migration_result.get("status"),
+            }
+        )
+    click.echo(json.dumps(output, indent=2))
+
+
+def _display_migrations_text(conversions: list[Any], limit: int) -> None:
+    """Display migrations in text format."""
+    click.echo(f"\n{'=' * 80}")
+    click.echo(f"Recent Migrations (showing {len(conversions)} of {limit} max)")
+    click.echo(f"{'=' * 80}\n")
+
+    for conv in conversions:
+        migration_data = (
+            json.loads(conv.conversion_data) if conv.conversion_data else {}
+        )
+        migration_result = migration_data.get("migration_result", {})
+        migration_id = migration_result.get("migration_id", "N/A")
+
+        click.echo(f"ID: {conv.id}")
+        click.echo(f"Migration ID: {migration_id[:16]}...")
+        click.echo(f"Cookbook: {conv.cookbook_name}")
+        click.echo(f"Status: {conv.status}")
+        click.echo(f"Files Generated: {conv.files_generated}")
+        click.echo(f"Created: {conv.created_at}")
+
+        metrics = migration_result.get("metrics", {})
+        recipes_converted = metrics.get("recipes_converted", 0)
+        recipes_total = metrics.get("recipes_total", 0)
+        if recipes_total > 0:
+            conversion_rate = (recipes_converted / recipes_total) * 100
+            click.echo(f"Conversion Rate: {conversion_rate:.1f}%")
+
+        click.echo(f"{'-' * 80}\n")
 
 
 @v2.command("rollback")
