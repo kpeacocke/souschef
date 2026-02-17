@@ -46,3 +46,20 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
+
+  # Go dependencies (terraform-provider)
+  - package-ecosystem: "gomod"
+    directory: "/terraform-provider"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    assignees:
+      - "kpeacocke"
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "chore"
+      include: "scope"

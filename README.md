@@ -4,10 +4,15 @@ Transform Chef automation to Ansible and plan Ansible version upgrades. Works wi
 
 **Quick Facts:** MIT License | Python 3.10+ | 43 MCP Tools | 91% Test Coverage
 
-[![GitHub release](https://img.shields.io/github/v/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
+[![GitHub release](https://img.shields.io/github/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Test Coverage](https://img.shields.io/badge/coverage-91%25-green.svg)](htmlcov/index.html)
+[![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Type Checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=kpeacocke_souschef&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=kpeacocke_souschef)
 
 ## What It Does
 
@@ -98,11 +103,11 @@ souschef ui  # Launch interactive dashboard
 
 ## Recent Updates
 
+**v6.0.0** — v2 core foundation with enhanced migration capabilities
+
 **v5.1.4** — Modular architecture, 91% test coverage, full type safety, production-ready
 
 **v5.0.0** — Complete Ansible upgrade planning with version matrices and EOL tracking
-
-**v2.0.0** — Intermediate Representation (IR) layer for multi-tool support
 
 ## Contributing
 
