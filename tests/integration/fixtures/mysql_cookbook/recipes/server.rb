@@ -65,9 +65,10 @@ service 'mysql' do
 end
 
 # Secure MySQL installation
+root_user = node['mysql']['root_user']
 execute 'secure-mysql-installation' do
   command <<~MYSQL
-    mysql -u root <<-EOF
+    mysql -u #{root_user} <<-EOF
       DELETE FROM mysql.user WHERE User='';
       DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
       DROP DATABASE IF EXISTS test;
@@ -76,7 +77,7 @@ execute 'secure-mysql-installation' do
       FLUSH PRIVILEGES;
     EOF
   MYSQL
-  only_if 'mysql -u root -e "SELECT 1"', user: 'root'
+  only_if "mysql -u #{root_user} -e \"SELECT 1\"", user: root_user
   sensitive true
 end
 

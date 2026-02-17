@@ -1,19 +1,18 @@
 # MCP Tools Reference
 
-SousChef provides **45 specialised MCP tools** for comprehensive Chef-to-Ansible migration and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **43 specialised MCP tools** for comprehensive Chef-to-Ansible migration and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
 
 !!! info "About the Tool Count"
-    **Why 45 tools here but the server shows more?**
+    **Complete tool inventory available in source code**
 
-    The MCP server actually provides **48 total tools** (45 public + 3 internal). This guide documents the **45 primary tools** you'll use for migrations and Ansible upgrades. The remaining 3 are:
+    This guide documents the **43 primary user-facing tools** (38 Chef migration + 5 Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
 
-    - **Internal filesystem operations** - Low-level file reading and directory listing used by other tools
-    - **Helper utilities** - Supporting functions that other tools call
+    As a user, you'll primarily interact with these 43 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
 
-    Your AI assistant may use these additional tools automatically behind the scenes (e.g., when a tool needs to read a file, it calls the internal file reading tool). You don't need to invoke them directly - just use the 45 documented tools and let your AI assistant handle the rest.
+    See `souschef/server.py` for the complete authoritative list of all MCP tools.
 
 ## Quick Reference by Capability Area
 
@@ -1162,7 +1161,10 @@ Validate Chef Server connectivity and authentication.
 
 **Parameters:**
 - `server_url` (string, required): Base URL of the Chef Server (e.g., https://chef.example.com)
-- `node_name` (string, required): Chef node name for authentication
+- `organisation` (string, optional): Chef organisation name (default: `default`)
+- `client_name` (string, required): Chef client or user name for authentication
+- `client_key_path` (string, optional): Path to the client key file (PEM format)
+- `client_key` (string, optional): Inline client key content (avoid when possible)
 
 **Returns:**
 - Success/failure message with connection details
@@ -1177,7 +1179,11 @@ Validate Chef Server connectivity and authentication.
 
 === "CLI"
     ```bash
-    souschef validate-chef-server --server-url https://chef.example.com --node-name ansible-admin
+        souschef validate-chef-server \
+            --server-url https://chef.example.com \
+            --organisation default \
+            --client-name ansible-admin \
+            --client-key-path /path/to/client.pem
     ```
 
 ---
@@ -1202,7 +1208,12 @@ Query Chef Server for nodes matching search criteria.
 
 **Parameters:**
 - `search_query` (string, optional): Chef search query (default: '*:*' for all nodes)
-  - Examples: `role:web_server`, `environment:production`, `platform:ubuntu`
+    - Examples: `role:web_server`, `environment:production`, `platform:ubuntu`
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
 
 **Returns:**
 - JSON string with list of matching nodes and their attributes
@@ -1217,8 +1228,78 @@ Query Chef Server for nodes matching search criteria.
 
 === "CLI"
     ```bash
-    souschef query-chef-nodes --search-query "role:database" --json
+        souschef query-chef-nodes \
+            --search-query "role:database" \
+            --server-url https://chef.example.com \
+            --organisation default \
+            --client-name ansible-admin \
+            --client-key-path /path/to/client.pem \
+            --json
     ```
+
+---
+
+### get_chef_roles
+
+List Chef Server roles.
+
+**Parameters:**
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
+
+**Returns:**
+- JSON string with role summaries
+
+---
+
+### get_chef_environments
+
+List Chef Server environments.
+
+**Parameters:**
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
+
+**Returns:**
+- JSON string with environment summaries
+
+---
+
+### get_chef_cookbooks
+
+List Chef Server cookbooks.
+
+**Parameters:**
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
+
+**Returns:**
+- JSON string with cookbook summaries
+
+---
+
+### get_chef_policies
+
+List Chef Server policies.
+
+**Parameters:**
+- `server_url` (string, optional): Chef Server URL (defaults to `CHEF_SERVER_URL`)
+- `organisation` (string, optional): Chef organisation (defaults to `CHEF_ORG`)
+- `client_name` (string, optional): Client name (defaults to `CHEF_CLIENT_NAME`)
+- `client_key_path` (string, optional): Client key path (defaults to `CHEF_CLIENT_KEY_PATH`)
+- `client_key` (string, optional): Inline client key (defaults to `CHEF_CLIENT_KEY`)
+
+**Returns:**
+- JSON string with policy summaries
 
 ---
 

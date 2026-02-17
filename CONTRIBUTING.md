@@ -1,606 +1,256 @@
 # Contributing to SousChef
 
-Thank you for your interest in contributing to SousChef! This guide will help you get started with contributing to our Chef-to-Ansible migration platform.
+Thank you for contributing! This guide covers essentials for contributing to Chef-to-Ansible migration and Ansible upgrade planning tools.
 
-## Table of Contents
+## Quick Start
 
-- [Understanding the Architecture](#understanding-the-architecture)
-- [Getting Started](#getting-started)
-- [Development Setup](#development-setup)
-- [Contributing Guidelines](#contributing-guidelines)
-- [Code Standards](#code-standards)
-- [Testing Requirements](#testing-requirements)
-- [Submitting Changes](#submitting-changes)
-- [Community](#community)
+```bash
+git clone https://github. com/kpeacocke/souschef.git && cd souschef
+poetry install
+poetry run pytest --cov=souschef  # All tests should pass
+poetry run ruff check .            # No errors
+poetry run mypy souschef           # No type errors
+```
 
-## Understanding the Architecture
+**Prerequisites:** Python 3.10+, Poetry, Git
 
-**New to the codebase?** Start here!
+## Architecture
 
-The [**ARCHITECTURE.md**](docs/ARCHITECTURE.md) guide explains:
-- **What goes where** - Each module's responsibility and what shouldn't go there
-- **Module structure** - Visual guide to the project layout
-- **Design patterns** - How components interact
-- **Decision tree** - Where to add your feature
-- **Common scenarios** - Troubleshooting and code locations
+**Read [ARCHITECTURE.md](docs/ARCHITECTURE.md) first!** It explains:
 
-**TL;DR**:
-- `parsers/` = Extract Chef data
-- `converters/` = Transform to Ansible
+- Module responsibilities (parsers/, converters/, core/, etc.)
+- Decision tree for where code belongs
+- Design patterns and common scenarios
+
+**Quick reference:**
+
+- `parsers/` = Extract Chef/Ansible artifacts (read-only)
+- `converters/` = Transform Chef to Ansible
 - `assessment.py` = Migration planning
-- `deployment.py` = AWX/deployment logic
-- `core/` = Shared utilities
+- `deployment.py` = AWX/AAP integration
+- `ansible_upgrade.py` = Ansible upgrade planning
 - `server.py` = MCP tool registration
 - `cli.py` = Command-line interface
-- `ui/` = Web interface
-
-Read the full [ARCHITECTURE.md](docs/ARCHITECTURE.md) before adding new code!
-
-## Getting Started
-
-### Prerequisites
-
-- **Python 3.14+**: SousChef requires Python 3.14 or newer
-- **Poetry**: We use Poetry for dependency management
-- **Git**: For version control
-
-### Development Setup
-
-1. **Fork and Clone**
-   ```bash
-   git clone https://github.com/kpeacocke/souschef.git
-   cd souschef
-   ```
-
-2. **Install Dependencies**
-   ```bash
-   # Install Poetry if you don't have it
-   curl -sSL https://install.python-poetry.org | python3 -
-
-   # Install project dependencies
-   poetry install
-   ```
-
-3. **Verify Installation**
-   ```bash
-   # Run tests to ensure everything works
-   poetry run pytest
-
-   # Check linting
-   poetry run ruff check .
-
-   # Try the CLI
-   poetry run souschef-cli --help
-   ```
-
-## Contributing Guidelines
-
-### Types of Contributions
-
-We welcome several types of contributions:
-
-####  **Code Contributions**
-- New MCP tools for Chef-to-Ansible conversion
-- Bug fixes and performance improvements
-- CLI enhancements and new commands
-- Enhanced parsing for additional Chef constructs
-
-####  **Documentation**
-- API documentation improvements
-- Usage examples and tutorials
-- Migration best practices guides
-- README and setup documentation
-
-####  **Testing**
-- Unit tests for new features
-- Integration tests with real cookbook fixtures
-- Property-based tests for edge case coverage
-- Performance benchmarks
-
-#### 🐛 **Bug Reports**
-- Detailed bug reports with reproduction steps
-- Edge case discoveries
-- Performance issue identification
-
-####  **Feature Requests**
-- New Chef resource type support
-- Ansible module mappings
-- CLI command suggestions
-- Migration workflow improvements
-
-### Before You Contribute
-
-1. **Search Existing Issues**: Check if your idea or bug is already reported
-2. **Read Documentation**: Familiarize yourself with the project structure
-3. **Understand the Architecture**: Review the MCP server pattern and tool organization
-4. **Review Code Standards**: Follow our development standards (below)
 
 ## Code Standards
 
-SousChef maintains high code quality standards:
+### Zero Warnings Policy
 
-### **Development Tools**
+All code must pass **all tools** with zero errors/warnings:
 
-SousChef uses a modern Python toolchain for quality and consistency:
+```bash
+poetry run ruff check .      # Linting (MUST pass)
+poetry run ruff format .     # Formatting
+poetry run mypy souschef     # Type checking (MUST pass)
+poetry run pytest --cov      # Tests (MUST pass, 90%+ coverage)
+```
 
-#### **Ruff** (Linting & Formatting)
-- **Purpose**: Primary code quality tool - combines linting + formatting
-- **Replaces**: Black, isort, flake8, pycodestyle, and many others
-- **Usage**:
-  ```bash
-  poetry run ruff check .     # Lint code
-  poetry run ruff format .    # Format code
-  ```
-- **Config**: See `[tool.ruff]` in `pyproject.toml`
-- **VS Code**: Runs automatically on save via the Ruff extension
+**Critical:** Never add code suppressions (`# noqa`, `# type: ignore`, etc.) without user approval. Fix the issue, don't mask it.
 
-#### **mypy** (Static Type Checking)
-- **Purpose**: Strict type checking for CI/CD and command line
-- **Usage**:
-  ```bash
-  poetry run mypy souschef    # Type check source code
-  ```
-- **Config**: See `[tool.mypy]` in `pyproject.toml`
-- **CI**: Runs automatically in GitHub Actions
+**Exception:** Pre-existing `# noqa: F401` for backward compatibility exports—respect these.
 
-#### **Pylance** (VS Code Language Server)
-- **Purpose**: Real-time type checking, intellisense, and code navigation in VS Code
-- **How it works**: Provides immediate feedback as you type
-- **Config**: See `.vscode/settings.json` for Pylance settings
-- **Note**: Complements mypy - Pylance for development speed, mypy for CI strictness
+### Type Hints
 
-#### **pytest** (Testing Framework)
-- **Purpose**: Test runner with coverage reporting
-- **Usage**:
-  ```bash
-  poetry run pytest                                      # Run all tests
-  poetry run pytest --cov=souschef --cov-report=html    # With coverage
-  ```
-- **Config**: See `[tool.pytest.ini_options]` in `pyproject.toml`
+- **Source code** (`souschef/`): Type hints required for all functions
+- **Test files**: Can omit types for pytest fixtures and parameterized tests
+- Use built-in types (dict, list) and `typing` module appropriately
 
-### **Zero Warnings Policy**
-- All code must be free of errors and warnings from **all tools** (Ruff, mypy, Pylance)
-- Do not disable linting warnings without fixing the underlying issue
-- Ruff handles formatting automatically - use `poetry run ruff format`
-- mypy runs in CI for strict type checking - ensure types are correct locally with Pylance
+### Docstrings
 
-### **Type Hints**
-- All function signatures in `souschef/` must have type hints
-- Test files can omit type hints for pytest fixtures and parameterized test parameters
-- Use Python's built-in types and `typing` module appropriately
+Google style, required for all functions/classes/modules:
 
-### **Documentation**
-- Every function, class, and module must have docstrings
-- Follow Google-style docstring format
-- Include parameter descriptions and return value documentation
+```python
+def convert_resource(name: str, action: str) -> dict:
+    """Convert Chef resource to Ansible task.
+    
+    Args:
+        name: Resource name.
+        action: Resource action (install, create, etc.).
+    
+    Returns:
+        Dictionary with Ansible task definition.
+    
+    Raises:
+        ValueError: If resource type unsupported.
+    """
+```
 
-### **File Organization**
-- Source code in `souschef/`
-- Tests in `tests/` mirroring source structure
-- Test fixtures in `tests/integration/fixtures/`
-- Follow established patterns for new modules
+### Australian English
 
-### **Security**
-- Validate all file paths to prevent directory traversal
-- Sanitize user inputs, especially Chef cookbook content
-- Never commit secrets or credentials
-- Review security implications of new features
+Use Australian English spelling in all documentation, comments, and docstrings:
+
+- **Use:** colour, centre, organise, recognise, optimise, behaviour
+- **Not:** color, center, organize, recognize, optimize, behavior
 
 ## Testing Requirements
 
-SousChef maintains comprehensive test coverage with three types of tests:
+### Three Test Types Required
 
-### 1. **Unit Tests** (`tests/unit/test_server.py`)
-- Mock-based tests for individual functions
-- Test error handling and edge cases
-- Fast execution, isolated from filesystem
-- Use `unittest.mock` to patch dependencies
+**1. Unit Tests** (`tests/unit/test_server.py`)
 
-Example:
+Mock-based, fast, isolated:
+
 ```python
 def test_parse_recipe_success():
-    """Test that parse_recipe successfully parses a basic recipe."""
-    with patch("souschef.server.Path.read_text") as mock_read:
-        mock_read.return_value = "package 'nginx'"
+    """Test recipe parsing with mocked file."""
+    with patch("souschef.server.Path.read_text") as mock:
+        mock.return_value = "package 'nginx'"
         result = parse_recipe("/path/to/recipe.rb")
-        assert "Resource 1:" in result
         assert "nginx" in result
 ```
 
-### 2. **Integration Tests** (`tests/integration/test_integration.py`)
-- Real file operations with test fixtures
-- Test with actual Chef cookbook files from `tests/integration/fixtures/`
-- Use parameterized tests for multiple scenarios
-- Include performance benchmarks
+**2. Integration Tests** (`tests/integration/test_integration.py`)
 
-Example:
+Real files from `tests/integration/fixtures/`:
+
 ```python
-@pytest.mark.parametrize("recipe_file,expected_resources", [
-    ("default.rb", ["package", "service"]),
-    ("advanced.rb", ["template", "execute"]),
-])
-def test_parse_real_recipes(recipe_file, expected_resources):
-    """Test parsing real Chef recipe files."""
-    fixture_path = FIXTURES_DIR / "sample_cookbook" / "recipes" / recipe_file
+def test_parse_real_recipe():
+    """Test with actual Chef recipe file."""
+    fixture_path = FIXTURES_DIR / "sample_cookbook" / "recipes" / "default.rb"
     result = parse_recipe(str(fixture_path))
-
-    for resource_type in expected_resources:
-        assert resource_type in result
+    assert "Resource 1:" in result
 ```
 
-### 3. **Property-Based Tests** (`tests/unit/test_property_based.py`)
-- Use Hypothesis for fuzz testing
-- Generate random inputs to find edge cases
-- Ensure functions handle any input gracefully
-- Limited to 50 examples per test
+**3. Property-Based Tests** (`tests/unit/test_property_based.py`)
 
-Example:
+Fuzz testing with Hypothesis:
+
 ```python
-from hypothesis import given, settings
-from hypothesis import strategies as st
-
 @given(st.text(min_size=1, max_size=100))
 @settings(max_examples=50)
-def test_parse_handles_any_input(random_input):
-    """Test that parsing functions handle any string input."""
-    result = parse_recipe_content(random_input)
+def test_handles_any_input(random_input):
+    """Test function handles any string input."""
+    result = function_name(random_input)
     assert isinstance(result, str)  # Should never crash
 ```
 
-### **Test Coverage Goals**
-- **Current**: 91% test coverage (913 tests passing)
-- **Goal**: 95%+ coverage for production readiness
-- **Requirement**: All new features must include comprehensive tests
+### Coverage Goal
 
-### **Running Tests**
-```bash
-# Run all tests
-poetry run pytest
+- **Current:** 91% (3,500+ passing tests)
+- **Requirement:** Maintain 90%+, aim for 95%+
+- **For New Code:** All three test types required
 
-# Run with coverage
-poetry run pytest --cov=souschef --cov-report=term-missing
+## Dependency Management
 
-# Run specific test types
-poetry run pytest tests/unit/test_server.py          # Unit tests
-poetry run pytest tests/integration/test_integration.py    # Integration tests
-poetry run pytest tests/unit/test_property_based.py # Property-based tests
-
-# Run performance benchmarks
-poetry run pytest --benchmark-only
-```
-
-## Managing Dependencies
-
-SousChef uses **Poetry** for dependency management with automated lock file synchronization.
-
-### **Adding Dependencies**
+### Adding Dependencies
 
 ```bash
-# Add a production dependency
+# Production dependency
 poetry add package-name
 
-# Add a development dependency
+# Development dependency
 poetry add --group dev package-name
 
-# Add with version constraints
+# With version constraints
 poetry add "package-name>=1.0.0,<2.0.0"
-
-# Update a specific package
-poetry update package-name
-
-# Update all dependencies
-poetry update
 ```
 
-### **Keeping poetry.lock in Sync**
+### Lock File Synchronization
 
-The project uses **three layers** of automation to prevent lock file issues:
+**Three layers of automation prevent lock file issues:**
 
-#### **1. Pre-commit Hooks** (Automatic)
-- `poetry-check`: Validates lock file is in sync before every commit
-- `poetry-lock`: Auto-regenerates lock when pyproject.toml changes
-- **Setup**: `poetry run pre-commit install` (one-time setup)
+1. **Pre-commit hooks** (automatic): Validates and regenerates lock on each commit
+2. **GitHub Actions** (CI): Validates lock in all PRs
+3. **Dependabot** (weekly): Automated dependency updates
 
-#### **2. GitHub Actions** (CI Validation)
-- `poetry-lock-check.yml`: Validates lock file in all PRs
-- Posts helpful comments if out of sync
-- Prevents merging with outdated lock files
-
-#### **3. Dependabot** (Automated Updates)
-- Weekly dependency updates (Mondays 9am UTC)
-- Groups minor/patch updates together
-- Auto-creates PRs with updated lock files
-- Already configured in `.github/dependabot.yml`
-
-### **Manual Lock File Update**
-
-If you manually edit `pyproject.toml`:
+**Manual update if needed:**
 
 ```bash
-# Update lock file (Poetry 2.x preserves versions automatically)
-poetry lock
-
-# Commit both files together
-git add pyproject.toml poetry.lock
-git commit -m "chore: update dependencies"
+poetry lock  # Updates lock file
+poetry check # Validates pyproject.toml and poetry.lock match
 ```
-
-### **Troubleshooting**
-
-**Error: "poetry.lock out of sync"**
-```bash
-# Fix it:
-poetry lock
-
-# Verify:
-poetry check
-```
-
-**Pre-commit hook not running?**
-```bash
-# Install hooks:
-poetry run pre-commit install
-
-# Test manually:
-poetry run pre-commit run --all-files
-```
-
-**Poetry 2.x Changes:**
-- `poetry lock` now preserves versions by default (no `--no-update` flag needed)
-- Updates lock file hashes without upgrading versions
-- Use `poetry update` when you actually want to upgrade packages
 
 ## Submitting Changes
 
-### Pull Request Process
-
-1. **Create Feature Branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Make Changes**
-   - Follow code standards
-   - Add comprehensive tests
-   - Update documentation if needed
-
-3. **Test Your Changes**
-   ```bash
-   # Lint and format
-   poetry run ruff check .
-   poetry run ruff format .
-
-   # Type check
-   poetry run mypy souschef
-
-   # Run all tests
-   poetry run pytest
-
-   # Check coverage
-   poetry run pytest --cov=souschef --cov-report=term-missing
-   ```
-
-4. **Commit Changes**
-   ```bash
-   git add .
-   git commit -m "feat: add support for Chef custom resources
-
-   - Add parsing for custom resource properties
-   - Include action mapping to Ansible modules
-   - Add comprehensive test coverage
-   - Update documentation"
-   ```
-
-5. **Push and Create PR**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-   Then create a pull request on GitHub.
-
-### **Commit Message Format**
-
-We use [Conventional Commits](https://www.conventionalcommits.org/) for automated versioning and changelog generation:
-
-**Format**: `<type>(<scope>): <subject>`
-
-**Types**:
-- `feat:` - New features (triggers minor version bump)
-- `fix:` - Bug fixes (triggers patch version bump)
-- `docs:` - Documentation changes only
-- `test:` - Test additions or changes
-- `refactor:` - Code refactoring without feature changes
-- `perf:` - Performance improvements
-- `chore:` - Maintenance tasks, dependency updates
-- `ci:` - CI/CD configuration changes
-- `style:` - Code style/formatting changes
-
-**Breaking Changes**: Add `BREAKING CHANGE:` in the commit body or use `!` after type (triggers major version bump):
+### 1. Create Feature Branch
 
 ```bash
-feat!: change MCP tool parameter names
-
-BREAKING CHANGE: Renamed 'path' parameter to 'file_path' for consistency
+git checkout -b feature/your-feature-name
 ```
 
-**Examples**:
+### 2. Make Changes
+
+Follow code standards, add tests, update docs if needed.
+
+### 3. Pre-Submit Checklist
+
+Run these checks **before committing**:
 
 ```bash
-# Feature (bumps 0.1.0 → 0.2.0)
-feat: add support for Chef Policyfiles
-
-# Bug fix (bumps 0.1.0 → 0.1.1)
-fix: handle empty recipe files without crashing
-
-# Documentation (no version bump)
-docs: update installation instructions for PyPI
-
-# Breaking change in pre-1.0.0 (bumps 0.1.0 → 0.2.0)
-feat!: redesign MCP tool parameter structure
-
-BREAKING CHANGE: All tools now use standardized parameter names
-
-# Note: Breaking changes only bump major version after reaching 1.0.0
-# Before 1.0.0, breaking changes bump the minor version (0.x.y → 0.(x+1).0)
-# After 1.0.0, breaking changes bump the major version (1.x.y → 2.0.0)
-```
-
-**Why Conventional Commits?**
-- Automated semantic versioning
-- Auto-generated changelogs
-- Clear communication of changes
-- Standardized git history
-
-### **PR Checklist**
-
-Before submitting your PR, ensure:
-
-- [ ] No linting errors (`poetry run ruff check .`)
-- [ ] Properly formatted (`poetry run ruff format .`)
-- [ ] No type errors (`poetry run mypy souschef`)
-- [ ] All tests pass (`poetry run pytest`)
-- [ ] Coverage maintained/improved (`pytest --cov`)
-- [ ] Unit tests added/updated in `test_server.py`
-- [ ] Integration tests added/updated in `test_integration.py`
-- [ ] Property-based tests added if applicable in `test_property_based.py`
-- [ ] Test fixtures updated if new parsing features added
-- [ ] Type hints are complete
-- [ ] Docstrings are present and clear
-- [ ] Error cases are handled
-- [ ] Cross-platform compatible
-
-## Release Process
-
-SousChef uses automated releases powered by Release Please and follows the Gitflow branching model.
-
-### **Branching Strategy**
-
-- **`main`**: Production releases only (protected)
-- **`develop`**: Integration branch for upcoming releases (protected)
-- **`feature/*`**: Feature development branches
-- **`bugfix/*`**: Bug fix branches
-- **`release/*`**: Release preparation branches (if needed)
-- **`hotfix/*`**: Emergency production fixes
-
-### **How Releases Work**
-
-1. **Develop Features**
-   - Create feature branches from `develop`
-   - Use conventional commits for all changes
-   - Submit PRs targeting `develop`
-
-2. **Accumulate on Develop**
-   - Multiple features/fixes accumulate on `develop`
-   - This is your "staging" branch for batching changes
-   - Test everything thoroughly on `develop`
-
-3. **Release When Ready**
-   - Create PR: `develop` → `main`
-   - Once merged, Release Please automatically:
-     - Analyzes conventional commits since last release
-     - Creates a Release PR with version bump and CHANGELOG
-     - Auto-merges the Release PR when CI passes
-     - Publishes the release with Git tag
-     - Builds and publishes package to PyPI
-
-### **Automated Release Flow**
-
-```
-feature/x ──┐
-            ├─→ develop ──→ main ──→ [Release Please] ──→ PyPI
-feature/y ──┘                         ↓
-                                   Release PR
-                                   (auto-merges)
-```
-
-**Key Points:**
-- **Develop is your control point** - merge here to batch changes
-- **Main triggers releases** - every merge to main creates a release
-- **Fully automatic** - Release PR auto-merges when CI passes
-- **Conventional commits required** - they determine version bumps
-- **CHANGELOG auto-generated** - from commit messages
-
-### **Version Bumping Rules**
-
-Based on conventional commit types:
-
-- **Patch (0.0.x)**: `fix:`, `docs:`, `test:`, `chore:`, `refactor:`, `style:`
-- **Minor (0.x.0)**: `feat:`, breaking changes in pre-1.0 (`feat!:`, `BREAKING CHANGE`)
-- **Major (x.0.0)**: Breaking changes after 1.0.0 only
-
-**Example:**
-```bash
-# These commits on develop...
-git commit -m "feat: add Chef Policyfile support"
-git commit -m "fix: handle empty attribute files"
-git commit -m "docs: update CLI examples"
-
-# ...will create a minor version bump (0.x.0)
-# when merged to main because of the feat: commit
-```
-
-### **Manual Release Override**
-
-If you need to release immediately without auto-merge:
-
-1. Merge `develop` → `main`
-2. Wait for Release Please to create Release PR
-3. Review the Release PR (version, CHANGELOG)
-4. Manually merge it if auto-merge fails
-
-### **Hotfix Process**
-
-For emergency production fixes:
-
-```bash
-# Create hotfix from main
-git checkout main
-git checkout -b hotfix/critical-bug-fix
-
-# Make fix and commit
-git commit -m "fix: resolve critical security issue"
-
-# PR directly to main
-# Release happens automatically
-```
-
-### **Pre-Release Validation**
-
-Before merging `develop` → `main`:
-
-```bash
-# Ensure everything passes
+# Lint and format
 poetry run ruff check .
 poetry run ruff format .
+
+# Type check
 poetry run mypy souschef
+
+# Run tests
 poetry run pytest --cov=souschef
-poetry run pytest --benchmark-only
 
-# Review accumulated commits
-git log main..develop --oneline
-
-# Verify conventional commits
-git log main..develop --pretty=format:"%s" | grep -E "^(feat|fix|docs|test|refactor|perf|chore|ci|style)(\(.*\))?:"
+# Check git status
+git status  # Should be clean after commit
 ```
+
+These checks are **mandatory quality gates**. Do not skip.
+
+### 4. Commit with Conventional Commits
+
+Format: `<type>(<scope>): <subject>`
+
+**Types:**
+- `feat:` = New feature (minor version bump)
+- `fix:` = Bug fix (patch version bump)
+- `docs:` = Documentation only
+- `test:` = Test changes
+- `refactor:` = Code refactoring
+- `perf:` = Performance improvements
+- `chore:` = Maintenance
+- `ci:` = CI/CD changes
+
+**Breaking changes:** Add `!` or `BREAKING CHANGE:` in body:
+
+```bash
+git commit -m "feat!: change MCP tool parameter names
+
+BREAKING CHANGE: Renamed 'path' parameter to 'file_path' for consistency."
+```
+
+### 5. Create Pull Request
+
+**PR Checklist:**
+
+- [ ] No linting errors (`ruff check`)
+- [ ] Properly formatted (`ruff format`)
+- [ ] No type errors (`mypy souschef`)
+- [ ] All tests pass (`pytest`)
+- [ ] Coverage maintained/improved (90%+)
+- [ ] Unit, integration, and property-based tests added
+- [ ] Type hints complete
+- [ ] Docstrings present and clear
+- [ ] Error cases handled
+- [ ] Cross-platform compatible (use `pathlib.Path`)
+- [ ] Architecture respected (code in correct module)
+- [ ] Australian English spelling
 
 ## Adding New MCP Tools
 
-When adding new MCP tools to SousChef:
+### Implementation Steps
 
-### 1. **Tool Implementation**
+**1. Create the tool function:**
+
 ```python
 @mcp.tool()
 def your_new_tool(parameter: str) -> str:
-    """Brief description of what this tool does.
-
+    """Brief description.
+    
     Args:
-        parameter: Description of the parameter.
-
+        parameter: Description.
+    
     Returns:
         Description of return value.
-
+    
     Raises:
-        ValueError: When parameter is invalid.
+        ValueError: When parameter invalid.
     """
     try:
         # Implementation
@@ -609,7 +259,8 @@ def your_new_tool(parameter: str) -> str:
         return f"Error: {e}"
 ```
 
-### 2. **Add to CLI** (if appropriate)
+**2. Add to CLI** (if appropriate):
+
 ```python
 @cli.command()
 @click.argument("parameter", type=str)
@@ -619,177 +270,97 @@ def your_command(parameter: str) -> None:
     click.echo(result)
 ```
 
-### 3. **Comprehensive Testing**
+**3. Add comprehensive tests:**
+
 - Unit tests with mocks
 - Integration tests with fixtures
-- Property-based tests for robustness
+- Property-based tests
 - Error case coverage
 
-### 4. **Documentation Updates**
-- Add tool to README.md
-- Update CLI documentation if applicable
+**4. Update documentation:**
+
+- Add to README.md capabilities
+- Update docs/user-guide/mcp-tools.md
 - Include usage examples
 
 ## Development Tips
 
-### **Working with Chef Cookbook Fixtures**
-- Add realistic Chef content to `tests/integration/fixtures/sample_cookbook/`
-- Include edge cases and complex scenarios
-- Update fixtures when adding new parsing capabilities
+### Working with Fixtures
 
-### **Debugging MCP Tools**
+- Store realistic Chef content in `tests/integration/fixtures/sample_cookbook/`
+- Include edge cases
+- Update when adding new parsing capabilities
+
+### Performance Testing
+
 ```python
-# Add logging for development
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Test tools directly
-from souschef.server import your_tool
-result = your_tool("/path/to/test/file")
-print(result)
+def test_parse_large_recipe(benchmark):
+    """Benchmark parsing performance."""
+    result = benchmark(parse_recipe, large_recipe_pathstr())
+    assert len(result) > 0
 ```
 
-### **Performance Considerations**
-- Large cookbooks can be several MB
-- Include benchmarks for parsing functions
-- Consider memory usage with large files
-- Test with realistic cookbook sizes
+### Cross-Platform
 
-### **Cross-Platform Compatibility**
-- Use `pathlib.Path` for file operations
+- Use `pathlib.Path` for all file operations
 - Avoid OS-specific code
 - Test on multiple Python versions if possible
 
-## Security Scanning
-
-### **Automatic CodeQL Scanning (GitHub Actions)**
-
-CodeQL security scanning runs automatically - already set up in `.github/workflows/codeql.yml`:
-- Runs on push to main/develop/release/hotfix branches
-- Runs on all pull requests
-- Weekly scheduled scans (Mondays 6am UTC)
-- Results appear in Security → Code scanning alerts
-
-**No action needed** - this runs automatically on every PR and push!
-
-### **Local CodeQL Scanning (VS Code Extension)**
-
-The devcontainer automatically installs CodeQL CLI when supported. **Works on x86_64 Linux, Windows, and macOS (Intel/Apple Silicon).**
-
-#### ARM64 Linux Limitation
-
-**CodeQL CLI does not officially support ARM64 Linux.** If you're developing on ARM64 (e.g., Raspberry Pi, AWS Graviton, Oracle Cloud ARM):
-
-- **GitHub Actions still work** - automated scanning continues on every push/PR
-- **CI/CD is unaffected** - all security checks run in GitHub's infrastructure
-- **Local VS Code extension won't work** - CLI can't run natively on ARM64 Linux
-
-**Alternatives for ARM64 users:**
-1. Rely on GitHub Actions for all CodeQL scanning (already configured)
-2. Run the devcontainer on x86_64 hardware
-3. Use [GitHub Codespaces](https://github.com/features/codespaces) (runs on x86_64)
-
-#### Installation (x86_64 only)
-
-**The CodeQL extension is not pre-installed due to ARM64 compatibility.** x86_64 users can install it manually:
-
-1. **Verify your architecture:**
-   ```bash
-   uname -m  # Should show x86_64 for compatibility
-   ```
-
-2. **Install the extension:**
-   - Press `Ctrl+Shift+P` and type "Extensions: Install Extensions"
-   - Search for "CodeQL"
-   - Install "CodeQL" by GitHub
-   - Restart VS Code if prompted
-
-3. **Configure the CLI path:**
-   - Open Settings (`Ctrl+,`)
-   - Search for "codeql cli"
-   - Set **CodeQL: Cli: Executable Path** to: `${userHome}/.codeql/codeql/codeql`
-   - Reload VS Code
-
-#### Using CodeQL in VS Code
-
-**Quick Analysis (Easiest):**
-1. Open any Python file in `souschef/`
-2. Right-click anywhere in the file
-3. Select **"CodeQL: Run Queries in Selected Files"**
-4. Results appear in the CodeQL view panel
-
-**Full Database Analysis:**
-1. Open Command Palette (`Ctrl+Shift+P`)
-2. Type "CodeQL: Create Database from Folder"
-3. Select the workspace root
-4. Once created, run security queries against it
-
-**View Results:**
-- Click the CodeQL icon in the sidebar
-- See all findings with highlighted code snippets
-- Click any result to jump directly to the vulnerable code
-- Filter by severity (Error, Warning, Note)
-
-#### What CodeQL Checks
-
-The same security queries as GitHub Actions:
-- SQL injection
-- Command injection
-- Path traversal
-- Code injection
-- Hardcoded credentials
-- Information exposure
-- 100+ more security patterns
-
-#### Tips
-
-- **First run takes 2-3 minutes** to build the database
-- **Subsequent runs are instant** - database is cached
-- **Run before pushing** to catch issues early
-- **Explore queries** - right-click results to see query source code
-
 ## Resources
 
-### **Learning Resources**
-- [Chef Documentation](https://docs.chef.io/)
-- [Ansible Documentation](https://docs.ansible.com/)
-- [Model Context Protocol](https://modelcontextprotocol.io/)
-- [Python Type Hints Guide](https://docs.python.org/3/library/typing.html)
-- [CodeQL for VS Code Guide](https://codeql.github.com/docs/codeql-for-visual-studio-code/)
-
-### **Project-Specific Resources**
-- [SousChef README](README.md) - Complete project documentation
-- [GitHub Copilot Instructions](.github/copilot-instructions.md) - Development guidelines
+- [SousChef README](README.md) - Project overview
+- [Architecture Guide](docs/ARCHITECTURE.md) - Code organization
 - [Security Policy](SECURITY.md) - Security guidelines
 - [Code of Conduct](CODE_OF_CONDUCT.md) - Community guidelines
 
+### External Resources
+
+- [Chef Documentation](https://docs.chef.io/)
+- [Ansible Documentation](https://docs.ansible.com/)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [Python Type Hints](https://docs.python.org/3/library/typing.html)
+
 ## Getting Help
 
-### **Where to Ask Questions**
-- **GitHub Issues**: For bugs, feature requests, and general questions
-- **GitHub Discussions**: For broader community discussions
-- **Pull Request Comments**: For code-specific questions
+### Where to Ask
 
-### **What Information to Include**
-- Python version and operating system
+- **GitHub Issues**: Bugs, feature requests, questions
+- **GitHub Discussions**: Broader discussions
+- **PR Comments**: Code-specific questions
+
+### What to Include
+
+- Python version and OS
 - SousChef version
 - Complete error messages
 - Minimal reproduction example
-- What you expected vs. what happened
+- Expected vs actual behaviour
 
 ## Recognition
 
 Contributors are recognized in:
+
 - GitHub contributors list
 - Release notes for significant contributions
-- README acknowledgments section (coming soon)
+- README acknowledgments
+
+## Release Process (Maintainers)
+
+SousChef uses automated releases via Release Please:
+
+- **Conventional commits** determine version bumps automatically
+- **Releases triggered** when PRs merge to `main`
+- **Contributors:** Target `develop` branch with PRs
+
+**Version bumps:**
+- `fix:` or `docs:` → patch (5.1.4 → 5.1.5)
+- `feat:` → minor (5.1.4 → 5.2.0)
+- `feat!:` or `BREAKING CHANGE:` → major (5.1.4 → 6.0.0, after 1.0.0)
 
 ## License
 
-By contributing to SousChef, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree your contributions will be licensed under the MIT License.
 
 ---
 
-**Happy Contributing!**
-
-We're excited to have you as part of the SousChef community. Every contribution, no matter how small, helps make infrastructure migrations easier for everyone.
+**Thank you for contributing!** Every contribution helps make Chef-to-Ansible migrations easier for everyone.

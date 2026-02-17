@@ -163,7 +163,7 @@ class TestDockerCookbook:
 
         assert "name 'docker'" in content
         assert "chef_version '>= 17.0'" in content
-        assert "version '10.0.0'" in content
+        assert "version '10.0.0'" in content  # NOSONAR - test fixture
 
     def test_parse_docker_attributes(self):
         """Test parsing Docker daemon configuration attributes."""

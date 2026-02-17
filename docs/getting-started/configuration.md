@@ -82,7 +82,10 @@ Available environment variables:
 | `SOUSCHEF_CONFIG_PATH` | - | Custom configuration file path |
 | `CHEF_REPO_PATH` | - | Default Chef repository path |
 | `CHEF_SERVER_URL` | - | Chef Server URL for dynamic inventory queries (e.g., `https://chef.example.com`) |
-| `CHEF_NODE_NAME` | - | Chef node name for Chef Server authentication |
+| `CHEF_ORG` | `default` | Chef organisation name |
+| `CHEF_CLIENT_NAME` | - | Chef client or user name for Chef Server authentication |
+| `CHEF_CLIENT_KEY_PATH` | - | Path to the Chef client key file (PEM format) |
+| `CHEF_CLIENT_KEY` | - | Inline Chef client key content (avoid when possible) |
 
 ## Model Provider Configuration
 

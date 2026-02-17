@@ -5,7 +5,7 @@ This document tracks the SHA hashes used to pin GitHub Actions dependencies in o
 
 ## Pinned Actions Reference
 
-### CI Workflow (.github/workflows/ci.yml) - PINNED ✅
+### CI Workflow (.github/workflows/ci.yml) - PINNED
 
 | Action | Version Tag | Commit SHA | Notes |
 |--------|-------------|------------|-------|
@@ -17,7 +17,7 @@ This document tracks the SHA hashes used to pin GitHub Actions dependencies in o
 | trufflesecurity/trufflehog | main | `50aa4695becccb04c958215388cab34a75e0fd31` | Secret scanning |
 | actions/upload-artifact | v6 | `b7c566a772e6b6bfb58ed0dc250532a479d7789f` | Artifact upload |
 
-### SonarQube Workflow (.github/workflows/sonarqube.yml) - PINNED ✅
+### SonarQube Workflow (.github/workflows/sonarqube.yml) - PINNED
 
 | Action | Version Tag | Commit SHA | Notes |
 |--------|-------------|------------|-------|
@@ -28,56 +28,56 @@ This document tracks the SHA hashes used to pin GitHub Actions dependencies in o
 | actions/download-artifact | v4 | `fa0a91b85d4f404e444e00e005971372dc801d16` | Download coverage from CI |
 | SonarSource/sonarqube-scan-action | v7.0.0 | `a31c9398be7ace6bbfaf30c0bd5d415f843d45e9` | SonarCloud static analysis |
 
-### Snyk Workflow (.github/workflows/snyk.yml) - PARTIALLY PINNED ⚠️
+### Snyk Workflow (.github/workflows/snyk.yml) - PARTIALLY PINNED (WARNING)
 
 | Action | Version Tag | Commit SHA | Notes |
 |--------|-------------|------------|-------|
-| actions/checkout | v6 | ⚠️ **Not pinned** | Repository checkout |
-| actions/setup-python | v6 | ⚠️ **Not pinned** | Python setup |
+| actions/checkout | v6 | **Not pinned** | Repository checkout |
+| actions/setup-python | v6 | **Not pinned** | Python setup |
 | snok/install-poetry | v1 | `76e04a911780d5b312d89783f7b1cd627778900a` | Poetry installation |
-| actions/cache | v5 | ⚠️ **Not pinned** | Dependency caching |
+| actions/cache | v5 | **Not pinned** | Dependency caching |
 | snyk/actions/setup | v1.0.0 | `9adf32b1121593767fc3c057af55b55db032dc04` | Snyk setup |
-| github/codeql-action/upload-sarif | v4 | ⚠️ **Not pinned** | SARIF upload |
+| github/codeql-action/upload-sarif | v4 | **Not pinned** | SARIF upload |
 
-### Release Workflow (.github/workflows/release.yml) - NOT PINNED ⚠️
+### Release Workflow (.github/workflows/release.yml) - NOT PINNED (WARNING)
 
 | Action | Version Tag | Commit SHA | Notes |
 |--------|-------------|------------|-------|
-| actions/checkout | v6 | ⚠️ **Not pinned** | Repository checkout |
-| actions/setup-python | v6 | ⚠️ **Not pinned** | Python setup |
+| actions/checkout | v6 | **Not pinned** | Repository checkout |
+| actions/setup-python | v6 | **Not pinned** | Python setup |
 | snok/install-poetry | v1 | `76e04a911780d5b312d89783f7b1cd627778900a` | Poetry installation |
-| actions/cache | v5 | ⚠️ **Not pinned** | Dependency caching |
-| actions/upload-artifact | v6 | ⚠️ **Not pinned** | Artifact upload |
-| actions/download-artifact | v7 | ⚠️ **Not pinned** | Artifact download |
+| actions/cache | v5 | **Not pinned** | Dependency caching |
+| actions/upload-artifact | v6 | **Not pinned** | Artifact upload |
+| actions/download-artifact | v7 | **Not pinned** | Artifact download |
 | pypa/gh-action-pypi-publish | v1.12.3 | `67339c736fd9354cd4f8cb0b744f2b82a74b5c70` | PyPI publishing |
 
-### CodeQL Workflow (.github/workflows/codeql.yml) - NOT PINNED ⚠️
+### CodeQL Workflow (.github/workflows/codeql.yml) - NOT PINNED (WARNING)
 
 | Action | Version Tag | Commit SHA | Notes |
 |--------|-------------|------------|-------|
-| actions/checkout | v4 | ⚠️ **Not pinned** | Repository checkout |
-| actions/setup-python | v6 | ⚠️ **Not pinned** | Python setup |
-| github/codeql-action/init | v4 | ⚠️ **Not pinned** | CodeQL initialization |
-| github/codeql-action/analyze | v4 | ⚠️ **Not pinned** | CodeQL analysis |
-| actions/upload-artifact | v4 | ⚠️ **Not pinned** | Artifact upload |
+| actions/checkout | v4 | **Not pinned** | Repository checkout |
+| actions/setup-python | v6 | **Not pinned** | Python setup |
+| github/codeql-action/init | v4 | **Not pinned** | CodeQL initialization |
+| github/codeql-action/analyze | v4 | **Not pinned** | CodeQL analysis |
+| actions/upload-artifact | v4 | **Not pinned** | Artifact upload |
 
-### Other Workflows - NOT PINNED ⚠️
+### Other Workflows - NOT PINNED (WARNING)
 
 **release-please.yml:**
-- googleapis/release-please-action@v4 - ⚠️ **Not pinned**
+- googleapis/release-please-action@v4 - **Not pinned**
 
 **post-release.yml:**
-- actions/checkout@v6 - ⚠️ **Not pinned**
-- actions/github-script@v8 - ⚠️ **Not pinned**
+- actions/checkout@v6 - **Not pinned**
+- actions/github-script@v8 - **Not pinned**
 
 **poetry-lock-check.yml:**
-- actions/checkout@v6 - ⚠️ **Not pinned**
-- actions/setup-python@v6 - ⚠️ **Not pinned**
-- snok/install-poetry@v1 - `76e04a911780d5b312d89783f7b1cd627778900a` ✅
-- actions/github-script@v8 - ⚠️ **Not pinned**
+- actions/checkout@v6 - **Not pinned**
+- actions/setup-python@v6 - **Not pinned**
+- snok/install-poetry@v1 - `76e04a911780d5b312d89783f7b1cd627778900a` [PINNED]
+- actions/github-script@v8 - **Not pinned**
 
 **gitflow.yml:**
-- actions/github-script@v8 - ⚠️ **Not pinned**
+- actions/github-script@v8 - **Not pinned**
 
 **pr-title.yml:**
 - No external actions
@@ -129,9 +129,9 @@ When a new version is released:
 ## Verification
 
 The CI workflow has been validated:
-- ✅ YAML syntax is correct
-- ✅ All SHA hashes verified from GitHub releases
-- ✅ Comment format: `@<sha> # <version>`
+- YAML syntax is correct
+- All SHA hashes verified from GitHub releases
+- Comment format: `@<sha> # <version>`
 
 ## References
 

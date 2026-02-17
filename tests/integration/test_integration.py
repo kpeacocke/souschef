@@ -1,6 +1,9 @@
 """Integration tests using real files and fixtures."""
 
+import json
+import shutil
 import tempfile
+import uuid
 from pathlib import Path
 from unittest.mock import patch
 
@@ -23,6 +26,7 @@ from souschef.server import (
     parse_template,
     read_cookbook_metadata,
     read_file,
+    simulate_chef_to_awx_migration,
 )
 
 # Path to test fixtures
@@ -30,6 +34,11 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_COOKBOOK = FIXTURES_DIR / "sample_cookbook"
 SAMPLE_INSPEC_PROFILE = FIXTURES_DIR / "sample_inspec_profile"
 SIMPLE_CONTROL = FIXTURES_DIR / "simple_control.rb"
+
+
+def _sample_api_key() -> str:
+    """Return a non-secret placeholder API key for tests."""
+    return f"example-{uuid.uuid4()}"
 
 
 class TestRealFileOperations:
@@ -145,6 +154,30 @@ def test_read_various_files(file_path, expected_content):
 
     assert isinstance(content, str)
     assert expected_content in content
+
+
+def test_simulate_chef_to_awx_migration_integration(tmp_path, monkeypatch):
+    """Test simulation with fixture cookbook and local output."""
+    monkeypatch.chdir(tmp_path)
+
+    cookbooks_dir = tmp_path / "cookbooks"
+    cookbooks_dir.mkdir()
+    shutil.copytree(SAMPLE_COOKBOOK, cookbooks_dir / "sample_cookbook")
+
+    output_dir = tmp_path / "output"
+
+    result = simulate_chef_to_awx_migration(
+        cookbooks_path=str(cookbooks_dir),
+        output_path=str(output_dir),
+        target_platform="aap",
+        include_repo=False,
+        include_tar=True,
+    )
+
+    data = json.loads(result)
+    assert data["target_platform"] == "aap"
+    assert Path(data["conversion"]["roles_path"]).exists()
+    assert Path(data["archives"]["roles_tar_gz"]).exists()
 
 
 class TestEdgeCases:
@@ -1293,7 +1326,7 @@ class TestAIRepositoryTypeDetermination:
                 has_multiple_apps=False,
                 needs_multi_env=True,
                 ai_provider="anthropic",
-                api_key="test-key-12345",
+                api_key=_sample_api_key(),
             )
 
         # High complexity with multiple roles should recommend collection
@@ -1339,7 +1372,7 @@ class TestAIRepositoryTypeDetermination:
                 has_multiple_apps=False,
                 needs_multi_env=False,
                 ai_provider="anthropic",
-                api_key="test-key",
+                api_key=_sample_api_key(),
             )
 
         # Should fall back to heuristics - small simple project

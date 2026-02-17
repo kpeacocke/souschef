@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-## 🐛 Bug Description
+## Bug Description
 
 A clear and concise description of what the bug is.
 
@@ -20,7 +20,7 @@ Steps to reproduce the behavior:
 3. Expected behavior: `...`
 4. Actual behavior: `...`
 
-## 📎 Minimal Example
+## Minimal Example
 
 Please provide a minimal Chef cookbook or file that reproduces the issue:
 
@@ -31,7 +31,7 @@ package 'nginx' do
 end
 ```
 
-## 🖥️ Environment
+## Environment
 
 - **SousChef Version**: [e.g., 0.1.0]
 - **Python Version**: [e.g., 3.14.1]
@@ -48,7 +48,7 @@ Paste the complete error message or unexpected output here
 
 A clear and concise description of what you expected to happen.
 
-## 🔍 Additional Context
+## Additional Context
 
 Add any other context about the problem here:
 
@@ -57,7 +57,7 @@ Add any other context about the problem here:
 - Any workarounds you've found?
 - Related issues or discussions?
 
-## ☑️ Checklist
+## Checklist
 
 - [ ] I have searched existing issues to ensure this is not a duplicate
 - [ ] I have provided a minimal example that reproduces the issue

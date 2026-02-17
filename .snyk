@@ -14,6 +14,7 @@ ignore:
     - 'souschef/ui/pages/cookbook_analysis.py:534'
     - 'souschef/ui/pages/cookbook_analysis.py:540'
 
+
 # Patch rules
 patch: {}
 

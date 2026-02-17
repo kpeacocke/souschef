@@ -386,7 +386,7 @@ SousChef's test fixtures intentionally contain insecure code because:
 All test fixtures with intentional vulnerabilities must include:
 
 ```ruby
-# ⚠️ SECURITY WARNING - TEST FIXTURE ONLY - ANTI-PATTERN EXAMPLE
+# WARNING SECURITY WARNING - TEST FIXTURE ONLY - ANTI-PATTERN EXAMPLE
 # [Description of vulnerability]
 #
 # SECURE ALTERNATIVE:

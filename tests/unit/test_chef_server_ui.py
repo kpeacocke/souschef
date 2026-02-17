@@ -11,97 +11,103 @@ from souschef.ui.pages.chef_server_settings import (
 class TestChefServerValidation:
     """Test Chef Server connection validation."""
 
-    @patch("souschef.core.chef_server.requests_module")
-    def test_validate_connection_success(self, mock_requests):
+    def test_validate_connection_success(self):
         """Test successful Chef Server validation."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.get.return_value = mock_response
+        mock_client = MagicMock()
+        mock_client.test_connection.return_value = (True, "Connection ok")
 
-        success, message = _validate_chef_server_connection(
-            "https://chef.example.com", "my-node"
-        )
+        with patch("souschef.core.chef_server._build_client_from_env") as mock_build:
+            mock_build.return_value = mock_client
+
+            success, message = _validate_chef_server_connection(
+                "https://chef.example.com",
+                "my-client",
+                organisation="default",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
+            )
 
         assert success is True
-        assert "Successfully connected" in message
+        assert "Connection ok" in message
 
-    @patch("souschef.core.chef_server.requests_module")
-    def test_validate_connection_auth_failure(self, mock_requests):
+    def test_validate_connection_auth_failure(self):
         """Test authentication failure."""
-        mock_response = MagicMock()
-        mock_response.status_code = 401
-        mock_requests.get.return_value = mock_response
-
-        success, message = _validate_chef_server_connection(
-            "https://chef.example.com", "my-node"
+        mock_client = MagicMock()
+        mock_client.test_connection.return_value = (
+            False,
+            "Authentication failed - check your Chef Server credentials",
         )
+
+        with patch("souschef.core.chef_server._build_client_from_env") as mock_build:
+            mock_build.return_value = mock_client
+
+            success, message = _validate_chef_server_connection(
+                "https://chef.example.com",
+                "my-client",
+                organisation="default",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
+            )
 
         assert success is False
         assert "Authentication failed" in message
 
-    @patch("souschef.core.chef_server.requests_module")
-    def test_validate_connection_not_found(self, mock_requests):
-        """Test endpoint not found."""
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-        mock_requests.get.return_value = mock_response
-
-        success, message = _validate_chef_server_connection(
-            "https://chef.example.com", "my-node"
-        )
-
-        assert success is False
-        assert "not found" in message
-
-    @patch("souschef.core.chef_server.requests_module")
-    def test_validate_connection_timeout(self, mock_requests):
+    def test_validate_connection_timeout(self):
         """Test connection timeout."""
         from requests.exceptions import Timeout
 
-        mock_requests.get.side_effect = Timeout()
+        mock_client = MagicMock()
+        mock_client.test_connection.side_effect = Timeout()
 
-        success, message = _validate_chef_server_connection(
-            "https://chef.example.com", "my-node"
-        )
+        with patch("souschef.core.chef_server._build_client_from_env") as mock_build:
+            mock_build.return_value = mock_client
+
+            success, message = _validate_chef_server_connection(
+                "https://chef.example.com",
+                "my-client",
+                organisation="default",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
+            )
 
         assert success is False
         assert "timeout" in message.lower()
 
-    @patch("souschef.core.chef_server.requests_module")
-    def test_validate_connection_error(self, mock_requests):
-        """Test connection error."""
-        from requests.exceptions import ConnectionError as RequestsConnectionError
-
-        mock_requests.get.side_effect = RequestsConnectionError()
-
-        success, message = _validate_chef_server_connection(
-            "https://chef.example.com", "my-node"
-        )
-
-        assert success is False
-        assert "not reachable" in message
-
     def test_validate_invalid_url(self):
         """Test validation with invalid URL."""
-        success, message = _validate_chef_server_connection("invalid-url", "my-node")
+        with patch("souschef.core.chef_server._build_client_from_env") as mock_build:
+            mock_build.side_effect = ValueError("Invalid server URL: bad")
+
+            success, message = _validate_chef_server_connection(
+                "invalid-url",
+                "my-client",
+                organisation="default",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
+            )
 
         assert success is False
         assert "Invalid server URL" in message
 
-    def test_validate_missing_node_name(self):
-        """Test validation with missing node name."""
-        success, message = _validate_chef_server_connection(
-            "https://chef.example.com", ""
-        )
+    def test_validate_missing_client_name(self):
+        """Test validation with missing client name."""
+        with patch("souschef.core.chef_server._build_client_from_env") as mock_build:
+            mock_build.side_effect = ValueError("Client name is required")
+
+            success, message = _validate_chef_server_connection(
+                "https://chef.example.com",
+                "",
+                organisation="default",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
+            )
 
         assert success is False
-        assert "Node name is required" in message
+        assert "Client name is required" in message
 
     def test_validate_requests_not_available(self):
         """Test validation when requests library not available."""
         with patch("souschef.core.chef_server.requests_module", None):
             success, message = _validate_chef_server_connection(
-                "https://chef.example.com", "my-node"
+                "https://chef.example.com",
+                "my-client",
+                organisation="default",
+                client_key_path="/tmp/client.pem",  # NOSONAR - S2083: test fixture
             )
 
             assert success is False

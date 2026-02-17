@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-## 💡 Feature Request
+## Feature Request
 
 **Fill out what's relevant to your request — you don't need to complete every section.**
 
@@ -132,7 +132,7 @@ Add any other context, screenshots, examples, or references:
 - Community discussions or blog posts
 - Screenshots or diagrams
 
-## ☑️ Checklist
+## Checklist
 
 - [ ] I have searched existing issues and feature requests
 - [ ] I have clearly described the problem this feature solves
@@ -142,6 +142,6 @@ Add any other context, screenshots, examples, or references:
 
 ---
 
-**Thank you for helping improve SousChef!** 🙏
+**Thank you for helping improve SousChef!**
 
 Feature requests help us understand what the community needs most. Even if you can't implement it yourself, your idea might inspire someone else to contribute!

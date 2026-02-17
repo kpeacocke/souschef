@@ -56,10 +56,11 @@ services:
 
 ## Features
 
-### Cookbook Analysis Dashboard
+### Unified Cookbook Migration Interface
 
-Upload and analyse Chef cookbooks with comprehensive metadata extraction and effort estimation:
+The **Migrate Cookbook** page provides a comprehensive interface for end-to-end Chef-to-Ansible migrations with analysis, conversion, and deployment capabilities:
 
+#### Analysis & Conversion
 - **Archive Upload**: Secure handling of ZIP and TAR archives with size limits and security validation
 - **Directory Scanning**: Interactive exploration of cookbook structures
 - **Metadata Parsing**: Automatic extraction of cookbook dependencies, versions, and attributes
@@ -68,6 +69,27 @@ Upload and analyse Chef cookbooks with comprehensive metadata extraction and eff
   - **AI-Assisted with SousChef**: 50% time reduction through automated boilerplate conversion
   - **Time Savings**: Clearly displayed comparison showing hours and percentage saved
 - **Complexity Assessment**: Real-time calculation of migration effort and risk factors
+- **Holistic Analysis**: Analyse all cookbooks together considering inter-cookbook dependencies
+- **Individual Selection**: Choose specific cookbooks for targeted analysis
+- **Project Analysis**: Analyse selected cookbooks as a cohesive project with dependency tracking
+
+#### Deployment & Orchestration
+- **Platform Selection**: Target AWX (Open Source), Ansible Automation Platform, or Ansible Tower (Legacy)
+- **Deployment Modes**:
+  - **Simulation Mode**: Preview AWX/AAP deployment without creating actual resources
+  - **Live Deployment**: Execute end-to-end migration with actual resource creation
+- **Platform Connection**: Configure server URL, credentials, and SSL verification for live deployments
+- **Conversion Options** (expandable):
+  - Generate Git repository structure
+  - Convert InSpec tests to Ansible tests
+  - Convert Chef Habitat plans to Docker/Compose
+  - Create TAR archives of converted files
+  - Generate CI/CD pipeline configurations
+  - Validate generated Ansible playbooks
+- **Advanced Options**:
+  - Specify Chef version being migrated from
+  - Custom output directory for generated files
+  - Preserve code comments during conversion
 
 ### Interactive Dependency Visualisation
 
@@ -251,7 +273,7 @@ poetry run pytest tests/unit/test_ui.py
 souschef/ui/
 ├── app.py              # Main Streamlit application
 ├── pages/              # Page modules
-│   ├── cookbook_analysis.py    # Cookbook analysis page
+│   ├── cookbook_analysis.py    # Unified migration interface (analysis + orchestration)
 │   ├── migration_planning.py   # Migration planning wizards
 │   ├── ai_settings.py          # AI provider configuration
 │   └── reports.py              # Report generation

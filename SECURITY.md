@@ -4,9 +4,13 @@
 
 We currently support the following versions of SousChef with security updates:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| Version | Supported |
+| ------- | --------- |
+| 5.1.0   | Yes       |
+| 5.0.0   | Yes       |
+| < 5.0.0 | No        |
+
+For security updates, please upgrade to the latest version.
 
 ## Reporting a Vulnerability
 
@@ -96,12 +100,13 @@ SousChef implements multiple layers of security protection:
 
 ### Input Validation
 
-- **Chef Cookbook Parsing**: Comprehensive input validation for all Chef artifacts (recipes, attributes, metadata, templates)
+- **Chef Cookbook Parsing**: Comprehensive input validation for all Chef artefacts (recipes, attributes, metadata, templates)
 - **Request Size Limits**:
   - Maximum 4096 characters for file paths
   - Maximum 20 Habitat plan paths per request
   - Maximum 8192 characters for plan path lists
 - **Resource Exhaustion Prevention**: Request size limits prevent denial-of-service attacks
+- **File Path Validation**: Normalised paths prevent directory traversal (CWE-22) and symlink attacks (CWE-61)
 
 ### HTTP Client Security (CWE-400)
 

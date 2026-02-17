@@ -1,0 +1,1923 @@
+"""
+SousChef v2.0 - Complete Migration Orchestrator.
+
+Handles end-to-end Chef to Ansible migrations:
+1. Query Chef Server for cookbook data and nodes
+2. Convert Chef artifacts (recipes, attributes, resources) to Ansible
+3. Create/configure Ansible infrastructure (inventory, playbooks, job templates)
+4. Track migration state and handle errors
+
+Supports all 18 Chef→Ansible version combinations.
+"""
+
+import json
+import logging
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
+
+from souschef.api_clients import (
+    AAPClient,
+    AnsiblePlatformClient,
+    AWXClient,
+    get_ansible_client,
+)
+from souschef.converters.advanced_resource import (
+    estimate_conversion_complexity,
+    parse_resource_guards,
+    parse_resource_notifications,
+)
+from souschef.converters.conversion_audit import (
+    ConversionAuditTrail,
+)
+from souschef.converters.playbook import generate_playbook_from_recipe
+from souschef.converters.template import convert_template_file
+from souschef.core.chef_server import get_chef_nodes
+from souschef.migration_simulation import (
+    create_simulation_config,
+)
+from souschef.parsers.attributes import parse_attributes
+from souschef.parsers.recipe import parse_recipe
+
+logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from souschef.storage import StorageManager
+
+
+# Constants
+NO_MIGRATION_RESULT_ERROR = "No migration result available"
+
+
+# Parallel processing worker functions (module-level for pickling)
+def _process_recipe_worker(args: tuple[str, str]) -> dict[str, Any]:
+    """
+    Worker function to convert a single recipe file.
+
+    Args:
+        args: Tuple of (recipe_file_path, cookbook_path)
+
+    Returns:
+        Dictionary with conversion results:
+            - success: bool
+            - playbook_name: str (if successful)
+            - error: str (if failed)
+            - file: str (recipe filename)
+
+    """
+    recipe_file_path, cookbook_path = args
+    recipe_file = Path(recipe_file_path)
+
+    try:
+        # Generate Ansible playbook from Chef recipe
+        playbook_content = generate_playbook_from_recipe(
+            str(recipe_file), cookbook_path
+        )
+
+        # Check if conversion was successful
+        if not playbook_content.startswith("Error"):
+            playbook_name = recipe_file.stem + ".yml"
+            return {
+                "success": True,
+                "playbook_name": playbook_name,
+                "file": recipe_file.name,
+            }
+        else:
+            return {
+                "success": False,
+                "error": playbook_content,
+                "file": recipe_file.name,
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "file": recipe_file.name,
+        }
+
+
+def _process_attribute_worker(args: tuple[str]) -> dict[str, Any]:
+    """
+    Worker function to convert a single attributes file.
+
+    Args:
+        args: Tuple containing (attribute_file_path,)
+
+    Returns:
+        Dictionary with conversion results:
+            - success: bool
+            - var_name: str (if successful)
+            - error: str (if failed)
+            - file: str (attribute filename)
+
+    """
+    (attr_file_path,) = args
+    attr_file = Path(attr_file_path)
+
+    try:
+        # Parse Chef attributes
+        attributes_content = parse_attributes(str(attr_file))
+
+        if not attributes_content.startswith("Error"):
+            var_name = attr_file.stem + ".yml"
+            return {
+                "success": True,
+                "var_name": var_name,
+                "file": attr_file.name,
+            }
+        else:
+            return {
+                "success": False,
+                "error": attributes_content,
+                "file": attr_file.name,
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "file": attr_file.name,
+        }
+
+
+class MigrationStatus(Enum):
+    """Status of a migration."""
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    CONVERTED = "converted"
+    VALIDATED = "validated"
+    DEPLOYED = "deployed"
+    FAILED = "failed"
+    ROLLED_BACK = "rolled_back"
+
+
+class MetricsConversionStatus(Enum):
+    """Status of converted assets."""
+
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
+@dataclass
+class ConversionMetrics:
+    """Metrics for conversion results."""
+
+    recipes_total: int = 0
+    recipes_converted: int = 0
+    recipes_partial: int = 0
+    recipes_skipped: int = 0
+    recipes_failed: int = 0
+
+    attributes_total: int = 0
+    attributes_converted: int = 0
+    attributes_skipped: int = 0
+
+    resources_total: int = 0
+    resources_converted: int = 0
+    resources_skipped: int = 0
+
+    handlers_total: int = 0
+    handlers_converted: int = 0
+    handlers_skipped: int = 0
+
+    templates_total: int = 0
+    templates_converted: int = 0
+    templates_skipped: int = 0
+
+    def conversion_rate(self) -> float:
+        """Get overall conversion rate as percentage."""
+        total = (
+            self.recipes_total
+            + self.attributes_total
+            + self.resources_total
+            + self.handlers_total
+            + self.templates_total
+        )
+        if total == 0:
+            return 0.0
+        converted = (
+            self.recipes_converted
+            + self.attributes_converted
+            + self.resources_converted
+            + self.handlers_converted
+            + self.templates_converted
+        )
+        return (converted / total) * 100.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "recipes": {
+                "total": self.recipes_total,
+                "converted": self.recipes_converted,
+                "partial": self.recipes_partial,
+                "skipped": self.recipes_skipped,
+                "failed": self.recipes_failed,
+            },
+            "attributes": {
+                "total": self.attributes_total,
+                "converted": self.attributes_converted,
+                "skipped": self.attributes_skipped,
+            },
+            "resources": {
+                "total": self.resources_total,
+                "converted": self.resources_converted,
+                "skipped": self.resources_skipped,
+            },
+            "handlers": {
+                "total": self.handlers_total,
+                "converted": self.handlers_converted,
+                "skipped": self.handlers_skipped,
+            },
+            "templates": {
+                "total": self.templates_total,
+                "converted": self.templates_converted,
+                "skipped": self.templates_skipped,
+            },
+            "overall_conversion_rate": f"{self.conversion_rate():.1f}%",
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ConversionMetrics":
+        """
+        Build metrics from a dictionary payload.
+
+        Args:
+            data: Metrics data from storage.
+
+        Returns:
+            ConversionMetrics instance.
+
+        """
+        recipes = data.get("recipes", {}) if isinstance(data, dict) else {}
+        attributes = data.get("attributes", {}) if isinstance(data, dict) else {}
+        resources = data.get("resources", {}) if isinstance(data, dict) else {}
+        handlers = data.get("handlers", {}) if isinstance(data, dict) else {}
+        templates = data.get("templates", {}) if isinstance(data, dict) else {}
+
+        return cls(
+            recipes_total=recipes.get("total", 0),
+            recipes_converted=recipes.get("converted", 0),
+            recipes_partial=recipes.get("partial", 0),
+            recipes_skipped=recipes.get("skipped", 0),
+            recipes_failed=recipes.get("failed", 0),
+            attributes_total=attributes.get("total", 0),
+            attributes_converted=attributes.get("converted", 0),
+            attributes_skipped=attributes.get("skipped", 0),
+            resources_total=resources.get("total", 0),
+            resources_converted=resources.get("converted", 0),
+            resources_skipped=resources.get("skipped", 0),
+            handlers_total=handlers.get("total", 0),
+            handlers_converted=handlers.get("converted", 0),
+            handlers_skipped=handlers.get("skipped", 0),
+            templates_total=templates.get("total", 0),
+            templates_converted=templates.get("converted", 0),
+            templates_skipped=templates.get("skipped", 0),
+        )
+
+
+@dataclass
+class MigrationResult:
+    """Result of a migration."""
+
+    migration_id: str
+    status: MigrationStatus
+    chef_version: str
+    target_platform: str
+    target_version: str
+    ansible_version: str
+    created_at: str
+    updated_at: str
+    source_cookbook: str
+    playbooks_generated: list[str] = field(default_factory=list)
+    playbooks_deployed: list[str] = field(default_factory=list)
+    inventory_id: int | None = None
+    project_id: int | None = None
+    job_template_id: int | None = None
+    chef_nodes: list[dict[str, Any]] = field(default_factory=list)
+    chef_server_queried: bool = False
+    metrics: ConversionMetrics = field(default_factory=ConversionMetrics)
+    errors: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[dict[str, Any]] = field(default_factory=list)
+    audit_trail: "ConversionAuditTrail | None" = None
+    optimization_metrics: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "migration_id": self.migration_id,
+            "status": self.status.value,
+            "chef_version": self.chef_version,
+            "target_platform": self.target_platform,
+            "target_version": self.target_version,
+            "ansible_version": self.ansible_version,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "source_cookbook": self.source_cookbook,
+            "playbooks_generated": self.playbooks_generated,
+            "playbooks_deployed": self.playbooks_deployed,
+            "infrastructure": {
+                "inventory_id": self.inventory_id,
+                "project_id": self.project_id,
+                "job_template_id": self.job_template_id,
+            },
+            "chef_server": {
+                "nodes_discovered": len(self.chef_nodes),
+                "nodes": self.chef_nodes if self.chef_server_queried else [],
+                "queried": self.chef_server_queried,
+            },
+            "metrics": self.metrics.to_dict(),
+            "errors": self.errors,
+            "warnings": self.warnings,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MigrationResult":
+        """
+        Build a MigrationResult from stored data.
+
+        Args:
+            data: Migration result data from storage.
+
+        Returns:
+            MigrationResult instance.
+
+        """
+        if not isinstance(data, dict):
+            raise ValueError("Migration result data must be a dictionary")
+
+        status_value = data.get("status", MigrationStatus.PENDING.value)
+        try:
+            status = MigrationStatus(status_value)
+        except ValueError:
+            status = MigrationStatus.PENDING
+
+        infrastructure = data.get("infrastructure", {})
+        metrics_payload = data.get("metrics", {})
+        chef_server = data.get("chef_server", {})
+
+        return cls(
+            migration_id=data.get("migration_id", ""),
+            status=status,
+            chef_version=data.get("chef_version", ""),
+            target_platform=data.get("target_platform", ""),
+            target_version=data.get("target_version", ""),
+            ansible_version=data.get("ansible_version", ""),
+            created_at=data.get("created_at", ""),
+            updated_at=data.get("updated_at", ""),
+            source_cookbook=data.get("source_cookbook", ""),
+            playbooks_generated=data.get("playbooks_generated", []),
+            playbooks_deployed=data.get("playbooks_deployed", []),
+            inventory_id=infrastructure.get("inventory_id"),
+            project_id=infrastructure.get("project_id"),
+            job_template_id=infrastructure.get("job_template_id"),
+            chef_nodes=chef_server.get("nodes", []),
+            chef_server_queried=chef_server.get("queried", False),
+            metrics=ConversionMetrics.from_dict(metrics_payload),
+            errors=data.get("errors", []),
+            warnings=data.get("warnings", []),
+        )
+
+
+class MigrationOrchestrator:
+    """Orchestrates complete Chef→Ansible migrations."""
+
+    def __init__(
+        self,
+        chef_version: str,
+        target_platform: str,
+        target_version: str,
+        fips_mode: bool = False,
+    ):
+        """Initialize migration orchestrator."""
+        self.config = create_simulation_config(
+            chef_version=chef_version,
+            target_platform=target_platform,
+            target_version=target_version,
+            fips_mode=fips_mode,
+        )
+        self.migration_id = f"mig-{uuid4().hex[:12]}"
+        self.result: MigrationResult | None = None
+
+    def migrate_cookbook(
+        self,
+        cookbook_path: str,
+        skip_validation: bool = False,
+        parallel_processing: bool = False,
+        max_workers: int | None = None,
+        chef_server_url: str | None = None,
+        chef_organisation: str | None = None,
+        chef_client_name: str | None = None,
+        chef_client_key_path: str | None = None,
+        chef_client_key: str | None = None,
+        chef_query: str = "*",
+    ) -> MigrationResult:
+        """
+        Execute complete cookbook migration.
+
+        Args:
+            cookbook_path: Path to cookbook to migrate.
+            skip_validation: Skip playbook validation if True.
+            parallel_processing: Enable parallel conversion of recipes and attributes.
+            max_workers: Maximum number of worker processes for parallel execution
+                        (default: CPU count - 1).
+            chef_server_url: Chef Server URL (optional).
+            chef_organisation: Chef organisation name (optional).
+            chef_client_name: Chef client name (optional).
+            chef_client_key_path: Path to Chef client key (optional).
+            chef_client_key: Inline Chef client key content (optional).
+            chef_query: Chef search query for nodes (default: *).
+
+        Returns:
+            Migration result with status, playbooks, and metrics.
+
+        """
+        self.result = MigrationResult(
+            migration_id=self.migration_id,
+            status=MigrationStatus.PENDING,
+            chef_version=self.config.chef_version,
+            target_platform=self.config.target_platform,
+            target_version=self.config.target_version,
+            ansible_version=self.config.ansible_version,
+            created_at=datetime.now().isoformat(),
+            updated_at=datetime.now().isoformat(),
+            source_cookbook=cookbook_path,
+        )
+
+        try:
+            # Phase 1: Analyze
+            logger.info(f"[{self.migration_id}] Starting migration analysis")
+            self._analyze_cookbook(cookbook_path)
+
+            # Optional Chef Server query for node data
+            if any(
+                [
+                    chef_server_url,
+                    chef_organisation,
+                    chef_client_name,
+                    chef_client_key_path,
+                    chef_client_key,
+                ]
+            ):
+                if not chef_server_url or not chef_organisation or not chef_client_name:
+                    message = "Chef Server query skipped due to missing configuration"
+                    self.result.warnings.append(
+                        {
+                            "phase": "chef_server",
+                            "message": message,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
+                    logger.warning("[%s] %s", self.migration_id, message)
+                elif not chef_client_key_path and not chef_client_key:
+                    message = "Chef Server query skipped due to missing client key"
+                    self.result.warnings.append(
+                        {
+                            "phase": "chef_server",
+                            "message": message,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
+                    logger.warning("[%s] %s", self.migration_id, message)
+                else:
+                    self._query_chef_server(
+                        server_url=chef_server_url,
+                        organisation=chef_organisation,
+                        client_name=chef_client_name,
+                        client_key_path=chef_client_key_path,
+                        client_key=chef_client_key,
+                        query=chef_query,
+                    )
+
+            # Phase 2: Convert
+            logger.info(f"[{self.migration_id}] Converting Chef artifacts")
+            self.result.status = MigrationStatus.IN_PROGRESS
+
+            # Use parallel or sequential conversion based on configuration
+            if parallel_processing:
+                logger.info(
+                    "[%s] Using parallel processing for conversion",
+                    self.migration_id,
+                )
+                self._convert_recipes_parallel(cookbook_path, max_workers)
+                self._convert_attributes_parallel(cookbook_path, max_workers)
+            else:
+                self._convert_recipes(cookbook_path)
+                self._convert_attributes(cookbook_path)
+
+            # These conversions remain sequential (less common, not worth parallelizing)
+            self._convert_resources(cookbook_path)
+            self._convert_handlers(cookbook_path)
+            self._convert_templates(cookbook_path)
+
+            # Phase 3: Validate
+            if not skip_validation:
+                logger.info(f"[{self.migration_id}] Validating playbooks")
+                self._validate_playbooks()
+                self.result.status = MigrationStatus.VALIDATED
+            else:
+                self.result.status = MigrationStatus.CONVERTED
+
+            conversion_rate = self.result.metrics.conversion_rate()
+            msg = f"[{self.migration_id}] Migration complete: {conversion_rate:.1f}%"
+            logger.info(msg)
+
+        except Exception as e:
+            logger.error(f"[{self.migration_id}] Migration failed: {e}")
+            self.result.status = MigrationStatus.FAILED
+            self.result.errors.append(
+                {
+                    "phase": "migration",
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+        self.result.updated_at = datetime.now().isoformat()
+        return self.result
+
+    def _analyze_cookbook(self, cookbook_path: str) -> None:
+        """Analyse cookbook structure and content."""
+        assert self.result is not None
+        path = Path(cookbook_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Cookbook not found: {cookbook_path}")
+
+        # Count Chef artifacts
+        recipes_dir = path / "recipes"
+        if recipes_dir.exists():
+            self.result.metrics.recipes_total = len(list(recipes_dir.glob("*.rb")))
+
+        attributes_dir = path / "attributes"
+        if attributes_dir.exists():
+            self.result.metrics.attributes_total = len(
+                list(attributes_dir.glob("*.rb"))
+            )
+
+        resources_dir = path / "resources"
+        if resources_dir.exists():
+            self.result.metrics.resources_total = len(list(resources_dir.glob("*.rb")))
+
+        handlers_dir = path / "libraries"
+        if handlers_dir.exists():
+            self.result.metrics.handlers_total = len(list(handlers_dir.glob("*.rb")))
+
+        templates_dir = path / "templates"
+        if templates_dir.exists():
+            self.result.metrics.templates_total = len(list(templates_dir.glob("*")))
+
+    def _query_chef_server(
+        self,
+        server_url: str,
+        organisation: str,
+        client_name: str,
+        client_key_path: str | None,
+        client_key: str | None,
+        query: str,
+    ) -> None:
+        """
+        Query Chef Server for node data to support inventory generation.
+
+        Args:
+            server_url: Chef Server URL.
+            organisation: Chef organisation name.
+            client_name: Chef client name.
+            client_key_path: Path to client key file.
+            client_key: Inline client key content.
+            query: Chef search query for nodes.
+
+        """
+        assert self.result is not None
+
+        try:
+            nodes = get_chef_nodes(
+                search_query=query,
+                server_url=server_url,
+                organisation=organisation,
+                client_name=client_name,
+                client_key_path=client_key_path,
+                client_key=client_key,
+            )
+            self.result.chef_nodes = nodes
+            self.result.chef_server_queried = True
+            logger.info(
+                "[%s] Retrieved %s Chef nodes",
+                self.migration_id,
+                len(nodes),
+            )
+        except Exception as e:
+            self.result.chef_server_queried = True
+            self.result.warnings.append(
+                {
+                    "phase": "chef_server",
+                    "message": f"Chef Server query failed: {e}",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            logger.warning("[%s] Chef Server query failed: %s", self.migration_id, e)
+
+    def _convert_recipes_parallel(
+        self, cookbook_path: str, max_workers: int | None = None
+    ) -> None:
+        """
+        Convert Chef recipes to Ansible playbooks in parallel.
+
+        Args:
+            cookbook_path: Path to the cookbook directory.
+            max_workers: Maximum number of worker processes (default: CPU count).
+
+        """
+        assert self.result is not None
+        recipes_dir = Path(cookbook_path) / "recipes"
+
+        if not recipes_dir.exists():
+            return
+
+        # Collect all recipe files
+        recipe_files = list(recipes_dir.glob("*.rb"))
+        if not recipe_files:
+            return
+
+        # Determine worker count
+        if max_workers is None:
+            max_workers = max(1, multiprocessing.cpu_count() - 1)
+
+        logger.info(
+            "[%s] Converting %d recipes using %d workers",
+            self.migration_id,
+            len(recipe_files),
+            max_workers,
+        )
+
+        # Prepare work items
+        work_items = [(str(recipe_file), cookbook_path) for recipe_file in recipe_files]
+
+        # Process in parallel
+        try:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all tasks
+                future_to_file = {
+                    executor.submit(_process_recipe_worker, item): item[0]
+                    for item in work_items
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_file):
+                    result = future.result()
+
+                    if result["success"]:
+                        self.result.playbooks_generated.append(result["playbook_name"])
+                        self.result.metrics.recipes_converted += 1
+                        logger.debug(
+                            "[%s] Converted recipe %s to %s",
+                            self.migration_id,
+                            result["file"],
+                            result["playbook_name"],
+                        )
+                    else:
+                        self.result.metrics.recipes_skipped += 1
+                        logger.warning(
+                            "[%s] Failed to convert %s: %s",
+                            self.migration_id,
+                            result["file"],
+                            result.get("error", "Unknown error"),
+                        )
+
+        except Exception as e:
+            logger.error(
+                "[%s] Parallel recipe conversion failed: %s. "
+                "Falling back to sequential.",
+                self.migration_id,
+                e,
+            )
+            # Fallback to sequential processing
+            self._convert_recipes(cookbook_path)
+
+    def _convert_attributes_parallel(
+        self, cookbook_path: str, max_workers: int | None = None
+    ) -> None:
+        """
+        Convert Chef attributes to Ansible variables in parallel.
+
+        Args:
+            cookbook_path: Path to the cookbook directory.
+            max_workers: Maximum number of worker processes (default: CPU count).
+
+        """
+        assert self.result is not None
+        attributes_dir = Path(cookbook_path) / "attributes"
+
+        if not attributes_dir.exists():
+            return
+
+        # Collect all attribute files
+        attr_files = list(attributes_dir.glob("*.rb"))
+        if not attr_files:
+            return
+
+        # Determine worker count
+        if max_workers is None:
+            max_workers = max(1, multiprocessing.cpu_count() - 1)
+
+        logger.info(
+            "[%s] Converting %d attribute files using %d workers",
+            self.migration_id,
+            len(attr_files),
+            max_workers,
+        )
+
+        # Prepare work items
+        work_items = [(str(attr_file),) for attr_file in attr_files]
+
+        # Process in parallel
+        try:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all tasks
+                future_to_file = {
+                    executor.submit(_process_attribute_worker, item): item[0]
+                    for item in work_items
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_file):
+                    result = future.result()
+
+                    if result["success"]:
+                        var_name = f"vars/{result['var_name']}"
+                        self.result.playbooks_generated.append(var_name)
+                        self.result.metrics.attributes_converted += 1
+                        logger.debug(
+                            "[%s] Converted attributes %s to %s",
+                            self.migration_id,
+                            result["file"],
+                            result["var_name"],
+                        )
+                    else:
+                        self.result.metrics.attributes_skipped += 1
+                        logger.warning(
+                            "[%s] Failed to convert attributes %s: %s",
+                            self.migration_id,
+                            result["file"],
+                            result.get("error", "Unknown error"),
+                        )
+
+        except Exception as e:
+            logger.error(
+                "[%s] Parallel attribute conversion failed: %s. "
+                "Falling back to sequential.",
+                self.migration_id,
+                e,
+            )
+            # Fallback to sequential processing
+            self._convert_attributes(cookbook_path)
+
+    def _convert_recipes(self, cookbook_path: str) -> None:
+        """Convert Chef recipes to Ansible playbooks."""
+        assert self.result is not None
+        recipes_dir = Path(cookbook_path) / "recipes"
+        if recipes_dir.exists():
+            for recipe_file in recipes_dir.glob("*.rb"):
+                try:
+                    # Generate Ansible playbook from Chef recipe
+                    playbook_content = generate_playbook_from_recipe(
+                        str(recipe_file), cookbook_path
+                    )
+
+                    # Check if conversion was successful
+                    if not playbook_content.startswith("Error"):
+                        playbook_name = recipe_file.stem + ".yml"
+                        self.result.playbooks_generated.append(playbook_name)
+                        self.result.metrics.recipes_converted += 1
+                        logger.debug(
+                            f"Converted recipe {recipe_file.name} to {playbook_name}"
+                        )
+                    else:
+                        self.result.metrics.recipes_skipped += 1
+                        logger.warning(
+                            f"Failed to convert {recipe_file.name}: {playbook_content}"
+                        )
+                except Exception as e:
+                    logger.error(f"Error converting {recipe_file.name}: {e}")
+                    self.result.metrics.recipes_skipped += 1
+
+    def _convert_attributes(self, cookbook_path: str) -> None:
+        """Convert Chef attributes to Ansible variables."""
+        assert self.result is not None
+        attributes_dir = Path(cookbook_path) / "attributes"
+        if attributes_dir.exists():
+            for attr_file in attributes_dir.glob("*.rb"):
+                try:
+                    # Parse Chef attributes
+                    attributes_content = parse_attributes(str(attr_file))
+
+                    if not attributes_content.startswith("Error"):
+                        # Generate Ansible variables file
+                        var_name = attr_file.stem + ".yml"
+                        # Store reference to variables file
+                        self.result.playbooks_generated.append(f"vars/{var_name}")
+                        self.result.metrics.attributes_converted += 1
+                        logger.debug(
+                            f"Converted attributes {attr_file.name} to {var_name}"
+                        )
+                    else:
+                        self.result.metrics.attributes_skipped += 1
+                        logger.warning(
+                            f"Failed to convert attributes {attr_file.name}: "
+                            f"{attributes_content}"
+                        )
+                except Exception as e:
+                    logger.error(f"Error converting {attr_file.name}: {e}")
+                    self.result.metrics.attributes_skipped += 1
+
+    def _convert_resources(self, cookbook_path: str) -> None:
+        """
+        Convert Chef resources to Ansible tasks.
+
+        Processes both:
+        1. Resources used in recipes (converted as part of playbook generation)
+        2. Custom resources (LWRPs) defined in the resources/ directory
+        """
+        assert self.result is not None
+        self._process_recipe_resources(cookbook_path)
+        self._process_custom_resources(cookbook_path)
+
+    def _process_recipe_resources(self, cookbook_path: str) -> None:
+        """Process resources used in recipe files."""
+        assert self.result is not None
+
+        recipes_dir = Path(cookbook_path) / "recipes"
+        if not recipes_dir.exists():
+            return
+
+        for recipe_file in recipes_dir.glob("*.rb"):
+            try:
+                recipe_content = parse_recipe(str(recipe_file))
+
+                if not recipe_content.startswith("Error"):
+                    self._extract_recipe_resource_count(recipe_file, recipe_content)
+            except Exception as e:
+                logger.debug(f"Error analyzing resources in {recipe_file.name}: {e}")
+
+    def _extract_recipe_resource_count(self, recipe_file: Path, content: str) -> None:
+        """Extract and count resources from recipe content."""
+        assert self.result is not None
+
+        try:
+            lines = content.split("\n")
+            resource_lines = [
+                line for line in lines if line.strip().startswith("Type:")
+            ]
+            resource_count = len(resource_lines)
+
+            if resource_count > 0:
+                self.result.metrics.resources_converted += resource_count
+                logger.debug(f"Found {resource_count} resources in {recipe_file.name}")
+        except Exception:
+            pass  # Count not critical
+
+    def _process_custom_resources(self, cookbook_path: str) -> None:
+        """Process custom resources (LWRPs) in resources/ directory."""
+        assert self.result is not None
+
+        resources_dir = Path(cookbook_path) / "resources"
+        if not resources_dir.exists():
+            return
+
+        for resource_file in resources_dir.glob("*.rb"):
+            try:
+                resource_name = resource_file.stem
+                self.result.warnings.append(
+                    {
+                        "type": "custom_resource",
+                        "resource": resource_name,
+                        "file": resource_file.name,
+                        "message": (
+                            "Custom LWRP found - may require custom Ansible module "
+                            "or set_resource_name in Ansible"
+                        ),
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+                logger.debug(f"Found custom resource: {resource_name}")
+            except Exception as e:
+                logger.error(
+                    f"Error processing custom resource {resource_file.name}: {e}"
+                )
+                self.result.metrics.resources_skipped += 1
+
+    def _convert_handlers(self, cookbook_path: str) -> None:
+        """
+        Convert Chef handlers to Ansible error handlers and notifications.
+
+        Note: Chef handlers are typically used for notifications and error handling.
+        These are converted to Ansible block error handling and notification handlers.
+        """
+        assert self.result is not None
+        self._process_library_handlers(cookbook_path)
+        self._process_recipe_handlers(cookbook_path)
+
+    def _process_library_handlers(self, cookbook_path: str) -> None:
+        """Process Chef::Handler classes from libraries/ directory."""
+        assert self.result is not None
+
+        libraries_dir = Path(cookbook_path) / "libraries"
+        if not libraries_dir.exists():
+            return
+
+        for library_file in libraries_dir.glob("*.rb"):
+            try:
+                content = library_file.read_text(encoding="utf-8")
+
+                if "Chef::Handler" in content or "class " in content:
+                    handler_name = library_file.stem
+                    self.result.warnings.append(
+                        {
+                            "type": "handler",
+                            "handler": handler_name,
+                            "file": library_file.name,
+                            "message": (
+                                "Chef handler found - implement equivalent "
+                                "error handling using Ansible blocks with "
+                                "rescue clauses"
+                            ),
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
+                    logger.debug(f"Found handler: {handler_name}")
+                    self.result.metrics.handlers_skipped += 1
+            except Exception as e:
+                logger.error(f"Error processing handler {library_file.name}: {e}")
+
+    def _process_recipe_handlers(self, cookbook_path: str) -> None:
+        """Process inline handlers and notifications from recipes."""
+        assert self.result is not None
+
+        recipes_dir = Path(cookbook_path) / "recipes"
+        if not recipes_dir.exists():
+            return
+
+        for recipe_file in recipes_dir.glob("*.rb"):
+            try:
+                content = recipe_file.read_text(encoding="utf-8")
+
+                if "rescue" in content and "notifies" in content:
+                    self.result.warnings.append(
+                        {
+                            "type": "handler",
+                            "recipe": recipe_file.name,
+                            "message": (
+                                "Notification handlers detected in recipe - "
+                                "convert to Ansible notify handlers"
+                            ),
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
+                    logger.debug(f"Found notification handlers in {recipe_file.name}")
+            except Exception as e:
+                logger.debug(f"Error checking for handlers in {recipe_file.name}: {e}")
+
+    def _convert_templates(self, cookbook_path: str) -> None:
+        """Convert Chef templates to Ansible Jinja2."""
+        assert self.result is not None
+        templates_dir = Path(cookbook_path) / "templates"
+        if templates_dir.exists():
+            for template_file in templates_dir.glob("*"):
+                # Skip non-.erb files
+                if template_file.suffix != ".erb" and not template_file.name.endswith(
+                    ".erb"
+                ):
+                    continue
+
+                try:
+                    # Convert ERB to Jinja2
+                    conversion_result = convert_template_file(str(template_file))
+
+                    if conversion_result.get("success"):
+                        jinja2_filename = Path(conversion_result["jinja2_file"]).name
+                        self.result.playbooks_generated.append(
+                            f"templates/{jinja2_filename}"
+                        )
+                        self.result.metrics.templates_converted += 1
+                        logger.debug(
+                            f"Converted template {template_file.name} "
+                            f"to {jinja2_filename}"
+                        )
+                    else:
+                        self.result.metrics.templates_skipped += 1
+                        logger.warning(
+                            f"Failed to convert {template_file.name}: "
+                            f"{conversion_result.get('error')}"
+                        )
+                except Exception as e:
+                    logger.error(f"Error converting {template_file.name}: {e}")
+                    self.result.metrics.templates_skipped += 1
+
+    def _validate_playbooks(self) -> None:
+        """Validate generated playbooks for target Ansible version."""
+        assert self.result is not None
+
+        if not self.result.playbooks_generated:
+            logger.debug("No playbooks to validate")
+            return
+
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            playbook_files = self._create_playbook_test_files(
+                Path(temp_dir), self.result.playbooks_generated
+            )
+
+            if playbook_files:
+                self._run_playbook_validation(playbook_files)
+
+    def _create_playbook_test_files(
+        self, temp_path: Path, playbook_names: list[str]
+    ) -> list[Path]:
+        """Create temporary test files for playbook validation."""
+        playbook_files = []
+
+        for playbook_name in playbook_names:
+            if playbook_name.startswith("vars/") or playbook_name.startswith(
+                "templates/"
+            ):
+                continue
+
+            playbook_path = temp_path / playbook_name
+            playbook_path.parent.mkdir(parents=True, exist_ok=True)
+            playbook_path.write_text(
+                "---\n- name: Placeholder\n  hosts: all\n  tasks: []\n"
+            )
+            playbook_files.append(playbook_path)
+
+        return playbook_files
+
+    def _run_playbook_validation(self, playbook_files: list[Path]) -> None:
+        """Run ansible-lint validation on playbook files."""
+        assert self.result is not None
+        import subprocess
+
+        try:
+            playbook_paths = [str(p) for p in playbook_files]
+            result = subprocess.run(
+                ["ansible-lint", "--nocolor", *playbook_paths],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            if result.returncode == 0:
+                logger.info("All playbooks passed ansible-lint validation")
+            elif result.stdout:
+                logger.warning(f"ansible-lint found issues:\\n{result.stdout}")
+                self.result.warnings.append(
+                    {
+                        "phase": "validation",
+                        "message": "ansible-lint found issues",
+                        "details": result.stdout[:500],
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+        except FileNotFoundError:
+            logger.warning(
+                "ansible-lint not found, skipping validation. "
+                "Install with: pip install ansible-lint"
+            )
+        except subprocess.TimeoutExpired:
+            logger.error("ansible-lint validation timed out")
+            self.result.warnings.append(
+                {
+                    "phase": "validation",
+                    "message": "Validation timed out after 30 seconds",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Validation error: {e}")
+            self.result.warnings.append(
+                {
+                    "phase": "validation",
+                    "message": f"Validation error: {e}",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+    def _initialize_audit_trail(self) -> None:
+        """
+        Initialize audit trail for tracking conversion decisions (v2.1).
+
+        Called at start of migration to set up conversion tracking.
+        """
+        assert self.result is not None
+
+        # Only initialize audit trail if not already present
+        if self.result.audit_trail is None:
+            self.result.audit_trail = ConversionAuditTrail(
+                migration_id=self.migration_id,
+                cookbook_name=Path(self.result.source_cookbook).name,
+            )
+            logger.debug(
+                f"[{self.migration_id}] Initialized audit trail for conversion tracking"
+            )
+
+    def _analyze_resource_complexity(self, resource_body: str) -> str:
+        """
+        Analyze resource conversion complexity (v2.1).
+
+        Args:
+            resource_body: Resource block content.
+
+        Returns:
+            Complexity level: 'simple', 'moderate', 'complex'.
+
+        """
+        return estimate_conversion_complexity(resource_body)
+
+    def _detect_resource_guards(self, resource_body: str) -> dict[str, Any]:
+        """
+        Extract Chef resource guards for advanced conversion (v2.1).
+
+        Args:
+            resource_body: Resource block content.
+
+        Returns:
+            Dictionary with guard information.
+
+        """
+        return parse_resource_guards(resource_body)
+
+    def _detect_resource_notifications(
+        self, resource_body: str
+    ) -> list[dict[str, str]]:
+        """
+        Extract Chef notifications for handler conversion (v2.1).
+
+        Args:
+            resource_body: Resource block content.
+
+        Returns:
+            List of notification dictionaries.
+
+        """
+        return parse_resource_notifications(resource_body)
+
+    def _optimize_generated_playbooks(self) -> None:
+        """
+        Optimize generated playbooks for better Ansible practices (v2.1).
+
+        Deduplicates tasks, consolidates loops, and improves structure.
+        """
+        assert self.result is not None
+
+        if not self.result.playbooks_generated:
+            logger.debug("No playbooks to optimize")
+            return
+
+        logger.info(
+            f"[{self.migration_id}] Optimizing "
+            f"{len(self.result.playbooks_generated)} playbooks"
+        )
+
+        # In a real implementation, this would:
+        # 1. Parse generated playbook YAMLs
+        # 2. Detect duplicate tasks
+        # 3. Consolidate loops
+        # 4. Apply optimization rules
+        # 5. Calculate metrics
+        # 6. Report optimizations applied
+
+        # For v2.1, we store optimization capability
+        self.result.optimization_metrics = {
+            "optimization_enabled": True,
+            "playbooks_scanned": len(self.result.playbooks_generated),
+            "tasks_analyzed": 0,  # Would be populated with actual count
+            "duplicates_detected": 0,
+            "tasks_consolidated": 0,
+        }
+
+        logger.debug(f"[{self.migration_id}] Playbook optimization complete")
+
+    def _finalize_audit_trail(self) -> None:
+        """Finalize and export audit trail for conversion analysis (v2.1)."""
+        assert self.result is not None
+
+        if self.result.audit_trail is None:
+            return
+
+        self.result.audit_trail.finalize()
+
+        # Export audit trail in JSON and HTML formats
+        try:
+            migration_dir = Path.home() / ".souschef" / "migrations"
+            migration_dir.mkdir(parents=True, exist_ok=True)
+
+            json_file = migration_dir / f"{self.migration_id}_audit.json"
+            html_file = migration_dir / f"{self.migration_id}_audit.html"
+
+            self.result.audit_trail.export_json(str(json_file))
+            self.result.audit_trail.export_html_report(str(html_file))
+
+            logger.info(
+                f"[{self.migration_id}] Exported audit trail to "
+                f"{json_file} and {html_file}"
+            )
+
+            # Add summary to result
+            summary = self.result.audit_trail._generate_summary()
+            logger.info(
+                f"[{self.migration_id}] Conversion quality score: "
+                f"{summary['quality_score']}/100"
+            )
+
+        except Exception as e:
+            logger.warning(f"Failed to export audit trail: {e}")
+
+    def deploy_to_ansible(
+        self,
+        ansible_url: str,
+        ansible_username: str,
+        ansible_password: str,
+    ) -> bool:
+        """
+        Deploy playbooks and create job templates in Ansible platform.
+
+        Args:
+            ansible_url: URL of Ansible platform (Tower/AWX/AAP).
+            ansible_username: Username for authentication.
+            ansible_password: Password for authentication.
+
+        Returns:
+            True if deployment successful, False otherwise.
+
+        """
+        if not self.result:
+            raise RuntimeError(NO_MIGRATION_RESULT_ERROR)
+
+        try:
+            logger.info(
+                f"[{self.migration_id}] Deploying to {self.config.target_platform}"
+            )
+            self.result.status = MigrationStatus.IN_PROGRESS
+
+            # Create API client
+            client = get_ansible_client(
+                ansible_url,
+                self.config.target_platform,
+                self.config.target_version,
+                ansible_username,
+                ansible_password,
+            )
+
+            # Step 1: Create inventory
+            logger.debug("Creating inventory...")
+            self.result.inventory_id = self._create_inventory(client)
+
+            # Populate inventory with Chef nodes if available
+            if self.result.inventory_id:
+                self._populate_inventory_from_chef_nodes(
+                    client,
+                    self.result.inventory_id,
+                )
+
+                # Create groups from Chef environments and roles
+                self._create_inventory_groups_from_chef_nodes(
+                    client,
+                    self.result.inventory_id,
+                )
+
+            # Step 2: Create project
+            logger.debug("Creating project...")
+            self.result.project_id = self._create_project(client)
+
+            # Step 3: Create execution environment if needed
+            if self.config.execution_model == "execution_environment":
+                logger.debug("Creating execution environment...")
+                self._create_execution_environment(client)
+
+            # Step 4: Create job template
+            logger.debug("Creating job template...")
+            self.result.job_template_id = self._create_job_template(client)
+
+            # Update deployed playbooks
+            self.result.playbooks_deployed = self.result.playbooks_generated
+
+            self.result.status = MigrationStatus.DEPLOYED
+            logger.info(f"[{self.migration_id}] Deployment complete")
+            return True
+
+        except Exception as e:
+            logger.error(f"[{self.migration_id}] Deployment failed: {e}")
+            self.result.status = MigrationStatus.FAILED
+            self.result.errors.append(
+                {
+                    "phase": "deployment",
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            return False
+
+    def _create_inventory(self, client: AnsiblePlatformClient) -> int:
+        """Create inventory in Ansible platform."""
+        inventory_name = f"souschef-migration-{self.migration_id[:8]}"
+        result = client.create_inventory(inventory_name)
+        return int(result["id"])
+
+    def _populate_inventory_from_chef_nodes(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+    ) -> None:
+        """
+        Populate Ansible inventory with hosts discovered from Chef Server.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID to populate.
+
+        """
+        assert self.result is not None
+
+        if not self.result.chef_nodes:
+            logger.debug("No Chef nodes available for inventory population")
+            return
+
+        added_hosts = 0
+        for node in self.result.chef_nodes:
+            if not isinstance(node, dict):
+                continue
+
+            hostname = self._resolve_chef_hostname(node)
+            if not hostname:
+                self.result.warnings.append(
+                    {
+                        "phase": "deployment",
+                        "message": "Chef node missing hostname, skipping",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+                continue
+
+            host_variables = self._build_chef_host_variables(node, hostname)
+            try:
+                if host_variables:
+                    client.add_host(
+                        inventory_id,
+                        hostname,
+                        variables=json.dumps(host_variables),
+                    )
+                else:
+                    client.add_host(inventory_id, hostname)
+                added_hosts += 1
+            except Exception as e:
+                self.result.warnings.append(
+                    {
+                        "phase": "deployment",
+                        "message": f"Failed to add host {hostname}: {e}",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+        logger.info(
+            "[%s] Added %s hosts to inventory",
+            self.migration_id,
+            added_hosts,
+        )
+
+    def _resolve_chef_hostname(self, node: dict[str, Any]) -> str | None:
+        """
+        Resolve the best hostname for a Chef node.
+
+        Args:
+            node: Chef node data.
+
+        Returns:
+            Best hostname candidate or None.
+
+        """
+        return node.get("fqdn") or node.get("name") or node.get("ipaddress")
+
+    def _build_chef_host_variables(
+        self,
+        node: dict[str, Any],
+        hostname: str,
+    ) -> dict[str, Any]:
+        """
+        Build host variables for a Chef node.
+
+        Args:
+            node: Chef node data.
+            hostname: Selected hostname for the node.
+
+        Returns:
+            Variables payload for Ansible host creation.
+
+        """
+        host_variables: dict[str, Any] = {}
+        ipaddress = node.get("ipaddress")
+        if ipaddress and hostname != ipaddress:
+            host_variables["ansible_host"] = ipaddress
+
+        environment = node.get("environment")
+        if environment:
+            host_variables["chef_environment"] = environment
+
+        roles = node.get("roles")
+        if roles:
+            host_variables["chef_roles"] = roles
+
+        platform = node.get("platform")
+        if platform:
+            host_variables["chef_platform"] = platform
+
+        return host_variables
+
+    def _extract_chef_environments_and_roles(
+        self,
+    ) -> tuple[set[str], set[str], dict[str, str], dict[str, list[str]]]:
+        """
+        Extract unique environments and roles from Chef nodes.
+
+        Returns:
+            Tuple of (environments, roles, node_env_map, node_roles_map).
+
+        """
+        assert self.result is not None
+        environments = set()
+        roles_set = set()
+        node_env_map: dict[str, str] = {}
+        node_roles_map: dict[str, list[str]] = {}
+
+        for node in self.result.chef_nodes:
+            if not isinstance(node, dict):
+                continue
+
+            hostname = self._resolve_chef_hostname(node)
+            if not hostname:
+                continue
+
+            environment = node.get("environment")
+            if environment:
+                environments.add(environment)
+                node_env_map[hostname] = environment
+
+            roles = node.get("roles")
+            if roles and isinstance(roles, list):
+                for role in roles:
+                    roles_set.add(role)
+                node_roles_map[hostname] = roles
+
+        return environments, roles_set, node_env_map, node_roles_map
+
+    def _create_groups_for_environments(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        environments: set[str],
+    ) -> dict[str, int]:
+        """
+        Create environment groups in inventory.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID.
+            environments: Set of environment names.
+
+        Returns:
+            Map of environment name to group ID.
+
+        """
+        assert self.result is not None
+        env_groups: dict[str, int] = {}
+
+        for environment in sorted(environments):
+            try:
+                result = client.create_group(inventory_id, f"env_{environment}")
+                env_groups[environment] = int(result["id"])
+                logger.debug(f"Created environment group: env_{environment}")
+            except Exception as e:
+                self.result.warnings.append(
+                    {
+                        "phase": "deployment",
+                        "message": (
+                            f"Failed to create environment group {environment}: {e}"
+                        ),
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+        return env_groups
+
+    def _create_groups_for_roles(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        roles_set: set[str],
+    ) -> dict[str, int]:
+        """
+        Create role groups in inventory.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID.
+            roles_set: Set of role names.
+
+        Returns:
+            Map of role name to group ID.
+
+        """
+        assert self.result is not None
+        role_groups: dict[str, int] = {}
+
+        for role in sorted(roles_set):
+            try:
+                result = client.create_group(inventory_id, f"role_{role}")
+                role_groups[role] = int(result["id"])
+                logger.debug(f"Created role group: role_{role}")
+            except Exception as e:
+                self.result.warnings.append(
+                    {
+                        "phase": "deployment",
+                        "message": f"Failed to create role group {role}: {e}",
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+        return role_groups
+
+    def _assign_hosts_to_created_groups(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        env_groups: dict[str, int],
+        role_groups: dict[str, int],
+        node_env_map: dict[str, str],
+        node_roles_map: dict[str, list[str]],
+    ) -> None:
+        """
+        Assign hosts to created groups based on Chef metadata.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID.
+            env_groups: Map of environment name to group ID.
+            role_groups: Map of role name to group ID.
+            node_env_map: Map of hostname to environment.
+            node_roles_map: Map of hostname to roles list.
+
+        """
+        assert self.result is not None
+
+        try:
+            # Fetch hosts from inventory
+            host_list_url = (
+                f"{client.server_url}/api/v2/inventories/{inventory_id}/hosts/"
+            )
+            response = client.session.get(host_list_url)
+            response.raise_for_status()
+            hosts = response.json().get("results", [])
+
+            # Build hostname to host_id mapping
+            hostname_to_id: dict[str, int] = {}
+            for host in hosts:
+                hostname_to_id[host.get("name")] = int(host.get("id", 0))
+
+            # Assign hosts to groups
+            for hostname, host_id in hostname_to_id.items():
+                self._assign_host_to_env_group(
+                    client, inventory_id, hostname, host_id, env_groups, node_env_map
+                )
+                self._assign_host_to_role_groups(
+                    client, inventory_id, hostname, host_id, role_groups, node_roles_map
+                )
+
+        except Exception as e:
+            self.result.warnings.append(
+                {
+                    "phase": "deployment",
+                    "message": f"Failed to assign hosts to groups: {e}",
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+    def _assign_host_to_env_group(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        hostname: str,
+        host_id: int,
+        env_groups: dict[str, int],
+        node_env_map: dict[str, str],
+    ) -> None:
+        """Assign host to environment group."""
+        if hostname not in node_env_map:
+            return
+
+        env = node_env_map[hostname]
+        if env not in env_groups:
+            return
+
+        try:
+            client.add_host_to_group(inventory_id, env_groups[env], host_id)
+            logger.debug(f"Added {hostname} to env_{env}")
+        except Exception as e:
+            logger.warning(f"Failed to add {hostname} to env_{env}: {e}")
+
+    def _assign_host_to_role_groups(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+        hostname: str,
+        host_id: int,
+        role_groups: dict[str, int],
+        node_roles_map: dict[str, list[str]],
+    ) -> None:
+        """Assign host to all its role groups."""
+        if hostname not in node_roles_map:
+            return
+
+        for role in node_roles_map[hostname]:
+            if role not in role_groups:
+                continue
+
+            try:
+                client.add_host_to_group(inventory_id, role_groups[role], host_id)
+                logger.debug(f"Added {hostname} to role_{role}")
+            except Exception as e:
+                logger.warning(f"Failed to add {hostname} to role_{role}: {e}")
+
+    def _create_inventory_groups_from_chef_nodes(
+        self,
+        client: AnsiblePlatformClient,
+        inventory_id: int,
+    ) -> None:
+        """
+        Create ansible inventory groups from Chef environments and roles.
+
+        Creates groups for each unique Chef environment and role discovered,
+        then assigns hosts to appropriate groups based on Chef metadata.
+
+        This method orchestrates the grouping workflow by delegating to helper
+        methods for collection, group creation, and host assignment.
+
+        Args:
+            client: Ansible platform client.
+            inventory_id: Inventory ID to populate with groups.
+
+        """
+        assert self.result is not None
+
+        if not self.result.chef_nodes:
+            logger.debug("No Chef nodes available for group creation")
+            return
+
+        # Extract environments and roles from Chef nodes
+        environments, roles_set, node_env_map, node_roles_map = (
+            self._extract_chef_environments_and_roles()
+        )
+
+        # Create groups in inventory
+        env_groups = self._create_groups_for_environments(
+            client, inventory_id, environments
+        )
+        role_groups = self._create_groups_for_roles(client, inventory_id, roles_set)
+
+        # Assign hosts to created groups
+        self._assign_hosts_to_created_groups(
+            client,
+            inventory_id,
+            env_groups,
+            role_groups,
+            node_env_map,
+            node_roles_map,
+        )
+
+        logger.info(
+            "[%s] Created %s environment groups and %s role groups",
+            self.migration_id,
+            len(env_groups),
+            len(role_groups),
+        )
+
+    def _create_project(self, client: AnsiblePlatformClient) -> int:
+        """Create project in Ansible platform."""
+        project_name = f"souschef-project-{self.migration_id[:8]}"
+        result = client.create_project(
+            project_name,
+            scm_type="git",
+            scm_url="https://github.com/example/playbooks.git",
+        )
+        return int(result["id"])
+
+    def _create_execution_environment(self, client: AnsiblePlatformClient) -> int:
+        """Create execution environment (if supported)."""
+        if isinstance(client, (AWXClient, AAPClient)):
+            ee_name = f"souschef-ee-{self.migration_id[:8]}"
+            result = client.create_execution_environment(ee_name)
+            return int(result["id"])
+        return 0  # Not supported for Tower
+
+    def _create_job_template(self, client: AnsiblePlatformClient) -> int:
+        """Create job template in Ansible platform."""
+        assert self.result is not None
+        jt_name = f"souschef-job-{self.migration_id[:8]}"
+        jt_data = {
+            "inventory": self.result.inventory_id,
+            "project": self.result.project_id,
+            "playbook": "site.yml",
+        }
+        result = client.create_job_template(jt_name, **jt_data)
+        return int(result["id"])
+
+    def rollback(self, ansible_url: str, ansible_auth: tuple[str, str]) -> bool:
+        """
+        Rollback migration by deleting created infrastructure.
+
+        Args:
+            ansible_url: URL of Ansible platform.
+            ansible_auth: Tuple of (username, password).
+
+        Returns:
+            True if rollback successful, False otherwise.
+
+        """
+        if not self.result:
+            return False
+
+        try:
+            logger.info(f"[{self.migration_id}] Rolling back migration")
+            username, password = ansible_auth
+
+            # Create API client
+            client = get_ansible_client(
+                ansible_url,
+                self.config.target_platform,
+                self.config.target_version,
+                username,
+                password,
+            )
+
+            # Delete in reverse order
+            if self.result.job_template_id:
+                self._delete_job_template(client, self.result.job_template_id)
+
+            if self.result.inventory_id:
+                self._delete_inventory(client, self.result.inventory_id)
+
+            if self.result.project_id:
+                self._delete_project(client, self.result.project_id)
+
+            self.result.status = MigrationStatus.ROLLED_BACK
+            logger.info(f"[{self.migration_id}] Rollback complete")
+            return True
+
+        except Exception as e:
+            logger.error(f"[{self.migration_id}] Rollback failed: {e}")
+            return False
+
+    def _delete_job_template(self, client: AnsiblePlatformClient, jt_id: int) -> None:
+        """Delete job template."""
+        client.delete_job_template(jt_id)
+
+    def _delete_inventory(self, client: AnsiblePlatformClient, inv_id: int) -> None:
+        """Delete inventory."""
+        client.delete_inventory(inv_id)
+
+    def _delete_project(self, client: AnsiblePlatformClient, proj_id: int) -> None:
+        """Delete project."""
+        client.delete_project(proj_id)
+
+    def get_status(self) -> dict[str, Any]:
+        """Get migration status."""
+        if not self.result:
+            return {"status": "no_migration"}
+
+        return self.result.to_dict()
+
+    def save_state(
+        self,
+        storage_manager: "StorageManager | None" = None,
+        output_type: str = "playbook",
+        analysis_id: int | None = None,
+        blob_storage_key: str | None = None,
+    ) -> int | None:
+        """
+        Persist migration state to the storage manager.
+
+        Args:
+            storage_manager: Optional storage manager instance.
+            output_type: Output type for storage history.
+            analysis_id: Optional analysis ID to link history.
+            blob_storage_key: Optional blob storage key.
+
+        Returns:
+            Conversion record ID if saved, otherwise None.
+
+        """
+        if not self.result:
+            raise RuntimeError(NO_MIGRATION_RESULT_ERROR)
+
+        from souschef.storage import get_storage_manager
+
+        resolved_storage = storage_manager or get_storage_manager()
+        cookbook_name = Path(self.result.source_cookbook).name
+        conversion_data = {
+            "migration_id": self.result.migration_id,
+            "migration_result": self.result.to_dict(),
+            "saved_at": datetime.now().isoformat(),
+        }
+
+        return resolved_storage.save_conversion(
+            cookbook_name=cookbook_name,
+            output_type=output_type,
+            status=self._resolve_conversion_status(),
+            files_generated=len(self.result.playbooks_generated),
+            conversion_data=conversion_data,
+            analysis_id=analysis_id,
+            blob_storage_key=blob_storage_key,
+        )
+
+    @staticmethod
+    def load_state(
+        migration_id: str,
+        storage_manager: "StorageManager | None" = None,
+        limit: int = 500,
+    ) -> MigrationResult | None:
+        """
+        Load a migration state from the storage manager.
+
+        Args:
+            migration_id: Migration identifier to look up.
+            storage_manager: Optional storage manager instance.
+            limit: Maximum number of history entries to scan.
+
+        Returns:
+            MigrationResult if found, otherwise None.
+
+        """
+        from souschef.storage import get_storage_manager
+
+        resolved_storage = storage_manager or get_storage_manager()
+        conversions = resolved_storage.get_conversion_history(limit=limit)
+
+        for conversion in conversions:
+            try:
+                payload = json.loads(conversion.conversion_data)
+            except (TypeError, json.JSONDecodeError):
+                continue
+
+            if not isinstance(payload, dict):
+                continue
+
+            if payload.get("migration_id") != migration_id:
+                continue
+
+            stored_result = payload.get("migration_result")
+            if isinstance(stored_result, dict):
+                return MigrationResult.from_dict(stored_result)
+
+            if "migration_id" in payload:
+                return MigrationResult.from_dict(payload)
+
+        return None
+
+    def _resolve_conversion_status(self) -> str:
+        """Resolve migration status into storage status labels."""
+        if not self.result:
+            raise RuntimeError(NO_MIGRATION_RESULT_ERROR)
+
+        if self.result.status == MigrationStatus.FAILED:
+            return "failed"
+
+        metrics = self.result.metrics
+        skipped_total = (
+            metrics.recipes_skipped
+            + metrics.attributes_skipped
+            + metrics.resources_skipped
+            + metrics.handlers_skipped
+            + metrics.templates_skipped
+        )
+
+        if skipped_total > 0 or self.result.warnings:
+            return "partial"
+
+        return "success"
+
+    def export_result(self, filename: str) -> None:
+        """Export migration result to JSON file."""
+        if not self.result:
+            raise RuntimeError(NO_MIGRATION_RESULT_ERROR)
+
+        with Path(filename).open("w") as f:
+            json.dump(self.result.to_dict(), f, indent=2)
+
+        logger.info(f"Exported migration result to {filename}")

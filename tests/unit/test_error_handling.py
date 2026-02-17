@@ -170,8 +170,8 @@ class TestHostnameValidation:
             "example.com",
             "my-server.example.co.uk",
             "server1.example.com",
-            "192.168.1.1",
-            "10.0.0.1",
+            "192.168.1.1",  # NOSONAR - test fixture
+            "10.0.0.1",  # NOSONAR - test fixture
             "255.255.255.255",
             "srv-01",
             "database",
@@ -237,7 +237,7 @@ class TestAnsibleVersionValidation:
             "2.9",  # EOL (end of life)
             "1.0",  # Way too old
             "foo",  # Invalid format
-            "2.9.0.1",  # Too many parts
+            "2.9.0.1",  # Too many parts  # NOSONAR - test version string, not an IP
             "",  # Empty
         ],
     )
@@ -317,7 +317,7 @@ class TestValidationIntegration:
     def test_hostname_validation_with_various_formats(self):
         """Test hostname validation handles various formats."""
         # Test IPv4
-        is_valid, _ = validate_hostname("192.168.1.100")
+        is_valid, _ = validate_hostname("192.168.1.100")  # NOSONAR - test fixture
         assert is_valid
 
         # Test DNS

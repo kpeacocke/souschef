@@ -2,6 +2,7 @@
 
 import io
 import json
+import uuid
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +15,12 @@ from souschef.generators.repo import (
     analyse_conversion_output,
     generate_ansible_repository,
 )
+
+
+def _sample_api_key() -> str:
+    """Return a non-secret placeholder API key for tests."""
+    return f"example-{uuid.uuid4()}"
+
 
 # ============================================================================
 # Unit Tests
@@ -86,7 +93,7 @@ class TestAnalyseConversionOutput:
                 has_multiple_apps=False,
                 needs_multi_env=True,
                 ai_provider="anthropic",
-                api_key="test-key",
+                api_key=_sample_api_key(),
             )
 
         assert result == RepoType.COLLECTION
@@ -110,7 +117,7 @@ class TestAnalyseConversionOutput:
                 has_multiple_apps=False,
                 needs_multi_env=False,
                 ai_provider="anthropic",
-                api_key="test-key",
+                api_key=_sample_api_key(),
             )
 
         assert result == RepoType.PLAYBOOKS_ROLES
@@ -134,7 +141,7 @@ class TestAnalyseConversionOutput:
                 has_multiple_apps=False,
                 needs_multi_env=True,
                 ai_provider="anthropic",
-                api_key="test-key",
+                api_key=_sample_api_key(),
             )
 
         assert result == RepoType.INVENTORY_FIRST
@@ -154,7 +161,7 @@ class TestAnalyseConversionOutput:
                 has_multiple_apps=False,
                 needs_multi_env=True,
                 ai_provider="anthropic",
-                api_key="test-key",
+                api_key=_sample_api_key(),
             )
 
         # Heuristics should suggest collection for 3+ roles

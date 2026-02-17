@@ -22,6 +22,12 @@ souschef/
 ├── deployment.py            # AWX/AAP integration & deployment strategies
 ├── ansible_upgrade.py       # Ansible upgrade planning and assessment
 │
+├── ir/                      # Intermediate Representation (v2.0)
+│   ├── __init__.py          # Package exports
+│   ├── schema.py            # Core IR data structures and graph
+│   ├── versioning.py        # Version management and schema evolution
+│   └── plugin.py            # Plugin architecture for parsers/generators
+│
 ├── core/                    # Shared utilities (no business logic)
 │   ├── __init__.py
 │   ├── ansible_versions.py  # Ansible version compatibility data
@@ -71,6 +77,96 @@ souschef/
 | `deployment.py` | AWX integration & deployment patterns | Deployment strategies, platform-specific logic |
 | `ansible_upgrade.py` | Ansible upgrade planning logic | Adding upgrade planning features, new upgrade workflows |
 
+## Module Dependencies
+
+The data flows through SousChef modules in this pattern:
+
+```mermaid
+graph TD
+    A["User Input<br/>(CLI/MCP/UI)"]
+
+    A --> B["filesystem/<br/>Read files"]
+    B --> C["parsers/<br/>Extract Chef atoms"]
+
+    C --> D["core/ Utilities<br/>path_utils, ruby_utils<br/>validation, metrics<br/>ansible_versions"]
+
+    D --> E["converters/<br/>Transform to Ansible<br/>OR ir/plugin.py v2.0+"]
+
+    E --> F["assessment.py<br/>Analyse complexity<br/>Generate plans"]
+    E --> G["deployment.py<br/>AWX templates<br/>Deployment patterns"]
+    E --> H["ansible_upgrade.py<br/>Assess environment<br/>Plan upgrades<br/>Validate collections"]
+
+    F --> Z["Output<br/>Playbooks, configs<br/>AWX templates<br/>Migration plans"]
+    G --> Z
+    H --> Z
+```
+
+**Key principle**: Each layer specialises in one concern:
+- `parsers/` = extract only (read-only)
+- `converters/` = transform only
+- `core/` = utilities only
+- Top-level files (`assessment.py`, `deployment.py`, `ansible_upgrade.py`) = orchestrate
+- `server.py`, `cli.py`, `ui/` = expose via different interfaces
+
+## Intermediate Representation (IR) Module - v2.0
+
+The `ir/` module (introduced in v2.0) provides a unified, abstract representation of infrastructure configurations from various source tools (Chef, Puppet, Salt, Bash, PowerShell) that can be converted to target systems (Ansible, Terraform, CloudFormation).
+
+### IR Module Structure
+
+| Module | Purpose |
+|--------|---------|
+| `schema.py` | Core data structures: IRNode, IRGraph, IRAction, IRAttribute, IRGuard |
+| `versioning.py` | Version management, compatibility checking, and schema migrations |
+| `plugin.py` | Plugin architecture: SourceParser, TargetGenerator, PluginRegistry |
+
+### Key Concepts
+
+**IRGraph**: A directed acyclic graph (DAG) representation of infrastructure where:
+- Nodes represent configurable entities (recipes, resources, handlers)
+- Edges represent dependencies between nodes
+- Attributes and actions describe node properties and operations
+- Metadata tracks source file and location information
+
+**Plugin Architecture**:
+- `SourceParser`: Abstract base for parsers (Chef, Puppet, etc. → IR)
+- `TargetGenerator`: Abstract base for generators (IR → Ansible, Terraform, etc.)
+- `PluginRegistry`: Central registry managing parser and generator lifecycle
+
+**Versioning**:
+- Semantic versioning (major.minor.patch) for IR schema
+- Version compatibility checking (major version must match)
+- Schema migration support for evolving IR format
+
+### Relationship to Other Modules
+
+```
+parsers/ (v1.0)
+   ↓ (extracts raw structures)
+ir/schema.py (normalised representation)
+   ↓ (applies transformations)
+converters/ (v1.0) or ir/plugin.py (v2.0)
+   ↓
+Target format (Ansible, Terraform, etc.)
+```
+
+### When to Use IR vs Converters
+
+**Use IR module (`ir/plugin.py`) for:**
+- New parsers/generators requiring plugin architecture
+- Cross-tool compatibility checking
+- Version management and schema evolution
+- Extensible framework for multiple source/target combinations
+
+**Use converters module (`converters/`) for:**
+- Direct Chef → Ansible transformations (v1.0 compatibility)
+- Specific format conversions (Habitat → Docker)
+- Legacy code requiring minimal refactoring
+
+### Implementation Guide
+
+For detailed IR module documentation including API reference, examples, and best practices, see [IR.md](IR.md).
+
 ## Module Responsibilities
 
 ### `core/` - Shared Utilities
@@ -99,11 +195,30 @@ souschef/
 - `path_utils.py` - Path normalisation and safety checks
 - `ruby_utils.py` - Ruby value parsing and normalisation
 - `validation.py` - General validation utilities
-- `ansible_versions.py` - Ansible and Python version compatibility data (NEW)
+- `ansible_versions.py` - Ansible and Python version compatibility matrices
+
+**`ansible_versions.py` Module**
+
+Centralises Ansible-Python version compatibility data and upgrade path calculations. Consumed by `ansible_upgrade.py` and related assessment tools.
+
+**Responsibilities**:
+- Maintain version compatibility matrices (Ansible Core vs Python versions)
+- Track end-of-life dates for each version
+- Calculate safe upgrade paths between versions
+- Identify breaking changes and required actions
+
+**What It Provides**:
+- `ANSIBLE_VERSIONS` dictionary: Version metadata (release date, EOL, Python support, breaking changes)
+- `UpgradePath` dataclass: Upgrade sequence, effort estimation, risk assessment
+- `get_python_compatibility()`: Retrieve compatible Python versions for a given Ansible version
+- `calculate_upgrade_path()`: Determine safe migration path between versions
+- `get_eol_status()`: Check if version is end-of-life or approaching EOL
+
+For detailed API reference, data structures, and version matrices, see [ANSIBLE_UPGRADE_INTEGRATION.md](ANSIBLE_UPGRADE_INTEGRATION.md#Module-Responsibilities).
 
 **Example**:
 ```python
-# ✅ Belongs in core/
+# [YES] Belongs in core/
 # - Shared constants
 # - Path normalisation
 # - Error formatting
@@ -112,7 +227,7 @@ HOURS_PER_WORKDAY = 8  # core/metrics.py
 METADATA_FILENAME = "metadata.rb"  # core/constants.py
 ANSIBLE_VERSIONS = {...}  # core/ansible_versions.py
 
-# ✅ Belongs in core/ansible_versions.py
+# [YES] Belongs in core/ansible_versions.py
 def get_python_compatibility(ansible_version: str) -> List[str]:
     """Get compatible Python versions for Ansible version."""
     return ANSIBLE_VERSIONS[ansible_version].python_versions
@@ -121,7 +236,7 @@ def calculate_upgrade_path(from_version: str, to_version: str) -> dict:
     """Calculate safe upgrade path between versions."""
     # Uses ANSIBLE_VERSIONS data
 
-# ❌ Does NOT belong in core/
+# [NO] Does NOT belong in core/
 # - "assess complexity of this cookbook" logic
 # - "convert this recipe to playbook" logic
 # - "generate upgrade plan" logic
@@ -164,21 +279,21 @@ def calculate_upgrade_path(from_version: str, to_version: str) -> dict:
 
 **Example**:
 ```python
-# ✅ Belongs in parsers/recipe.py
+# [YES] Belongs in parsers/recipe.py
 def parse_recipe(recipe_path: str) -> dict:
     """Extract resources from a Chef recipe (parse only)."""
     resources = []
     # Read file, extract resources
     return {"resources": resources}
 
-# ✅ Belongs in parsers/ansible_inventory.py
+# [YES] Belongs in parsers/ansible_inventory.py
 def parse_inventory_ini(inventory_path: str) -> dict:
     """Parse Ansible inventory file in INI format."""
     groups = {}
     # Read file, extract groups and hosts
     return {"groups": groups}
 
-# ❌ Does NOT belong in parsers/
+# [NO] Does NOT belong in parsers/
 def assess_recipe_complexity(recipe_path):
     """This is assessment logic, not parsing."""
     # Belongs in assessment.py
@@ -212,7 +327,7 @@ def assess_recipe_complexity(recipe_path):
 
 **Example**:
 ```python
-# ✅ Belongs in converters/resource.py
+# [YES] Belongs in converters/resource.py
 def convert_resource_to_task(resource_dict):
     """Convert a parsed Chef resource to Ansible task."""
     return {
@@ -220,7 +335,7 @@ def convert_resource_to_task(resource_dict):
         "ansible.builtin.debug": {"msg": "..."}
     }
 
-# ❌ Does NOT belong in converters/
+# [NO] Does NOT belong in converters/
 def parse_recipe_for_resources():
     """This is parsing, not conversion."""
     # Belongs in parsers/recipe.py
@@ -252,7 +367,7 @@ def parse_recipe_for_resources():
 
 **Example**:
 ```python
-# ✅ Belongs in assessment.py
+# [YES] Belongs in assessment.py
 def assess_single_cookbook(cookbook_path):
     """Assess complexity and generate recommendations."""
     metrics = count_artifacts(cookbook_path)
@@ -320,7 +435,7 @@ def assess_single_cookbook(cookbook_path):
 
 **Example**:
 ```python
-# ✅ Belongs in ansible_upgrade.py
+# [YES] Belongs in ansible_upgrade.py
 def generate_upgrade_plan(current_version, target_version):
     """Generate upgrade plan using version data and environment parsing."""
     versions = get_supported_versions()  # From core/ansible_versions
@@ -406,7 +521,7 @@ def _assess_chef_migration_complexity(cookbook_paths: str) -> str:
 
 **Example**:
 ```python
-# ✅ Belongs in cli.py
+# [YES] Belongs in cli.py
 @cli.command()
 @click.argument("cookbook_path", type=str)
 def assess_cookbook(cookbook_path):

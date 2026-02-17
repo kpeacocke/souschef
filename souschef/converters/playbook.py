@@ -15,7 +15,6 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
 
 from souschef.converters.resource import (
     _convert_chef_resource_to_ansible,
@@ -1481,60 +1480,11 @@ def get_chef_nodes(search_query: str) -> list[dict[str, Any]]:
         List of node objects from Chef server
 
     """
-    if not requests:
-        return []
-
-    chef_server_url = os.environ.get("CHEF_SERVER_URL", "").rstrip("/")
-
-    if not chef_server_url:
-        # Chef server not configured - return empty list
-        return []
+    from souschef.core.chef_server import get_chef_nodes as _get_chef_nodes
 
     try:
-        chef_server_url = validate_user_provided_url(chef_server_url)
-    except ValueError:
-        return []
-
-    try:
-        # Using Chef Server REST API search endpoint
-        # Search endpoint: GET /search/node?q=<query>
-        query_params = urlencode({"q": search_query})
-        search_url = f"{chef_server_url}/search/node?{query_params}"
-
-        # Note: Proper authentication requires Chef API signing
-        # For unauthenticated access, this may work on open Chef servers
-        # For production, use python-chef library for proper authentication
-        response = requests.get(search_url, timeout=10)
-        response.raise_for_status()
-
-        search_result = response.json()
-        nodes_data = []
-
-        for row in search_result.get("rows", []):
-            node_obj = {
-                "name": row.get("name", "unknown"),
-                "roles": row.get("run_list", []),
-                "environment": row.get("chef_environment", "_default"),
-                "platform": row.get("platform", "unknown"),
-                "ipaddress": row.get("ipaddress", ""),
-                "fqdn": row.get("fqdn", ""),
-                "automatic": row.get("automatic", {}),
-            }
-            nodes_data.append(node_obj)
-
-        return nodes_data
-
-    except requests.exceptions.Timeout:
-        # Chef server not responding within timeout
-        return []
-    except requests.exceptions.ConnectionError:
-        # Cannot reach Chef server
-        return []
-    except requests.exceptions.HTTPError:
-        # HTTP error (404, 403, 500, etc.)
-        return []
+        return _get_chef_nodes(search_query)
     except Exception:
-        # Fallback for any other errors
         return []
 
 

@@ -2,10 +2,23 @@
 
 from unittest.mock import MagicMock, patch
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+
 from souschef.core.chef_server import (
     _handle_chef_server_response,
     _validate_chef_server_connection,
 )
+
+
+def _get_test_key_pem() -> str:
+    """Generate a valid test RSA key in PEM format."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    return key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
 
 
 class TestHandleChefServerResponse:
@@ -67,7 +80,7 @@ class TestHandleChefServerResponse:
         success, message = _handle_chef_server_response(mock_response, server_url)
 
         assert success is False
-        assert "403" in message
+        assert "Authorisation failed" in message
 
 
 class TestValidateChefServerConnectionEdgeCases:
@@ -83,10 +96,12 @@ class TestValidateChefServerConnectionEdgeCases:
     @patch("souschef.core.chef_server.requests_module")
     def test_validate_connection_generic_exception(self, mock_requests):
         """Test handling of generic exception."""
-        mock_requests.get.side_effect = RuntimeError("Unexpected error")
+        mock_requests.request.side_effect = RuntimeError("Unexpected error")
 
         success, message = _validate_chef_server_connection(
-            "https://chef.example.com", "my-node"
+            "https://chef.example.com",
+            "my-node",
+            client_key=_get_test_key_pem(),
         )
 
         assert success is False
@@ -97,12 +112,16 @@ class TestValidateChefServerConnectionEdgeCases:
         """Test that trailing slashes are removed from server URL."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_requests.get.return_value = mock_response
+        mock_requests.request.return_value = mock_response
 
-        _validate_chef_server_connection("https://chef.example.com/", "my-node")
+        _validate_chef_server_connection(
+            "https://chef.example.com/",
+            "my-node",
+            client_key=_get_test_key_pem(),
+        )
 
-        # Verify URL was stripped
-        call_url = mock_requests.get.call_args.args[0]
+        # Verify URL was stripped (should not have trailing slash)
+        call_url = mock_requests.request.call_args.kwargs["url"]
         assert not call_url.endswith("//search")
 
     @patch("souschef.core.chef_server.requests_module")
@@ -110,37 +129,49 @@ class TestValidateChefServerConnectionEdgeCases:
         """Test that search query is passed correctly."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_requests.get.return_value = mock_response
+        mock_requests.request.return_value = mock_response
 
-        _validate_chef_server_connection("https://chef.example.com", "my-node")
+        _validate_chef_server_connection(
+            "https://chef.example.com",
+            "my-node",
+            client_key=_get_test_key_pem(),
+        )
 
-        # Verify query params
-        call_params = mock_requests.get.call_args.kwargs["params"]
-        assert call_params == {"q": "*:*"}
+        # Verify query params are in URL
+        call_url = mock_requests.request.call_args.kwargs["url"]
+        assert "q=%2A%3A%2A" in call_url or "q=*:*" in call_url
 
     @patch("souschef.core.chef_server.requests_module")
     def test_validate_connection_with_timeout(self, mock_requests):
         """Test that timeout is set correctly."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_requests.get.return_value = mock_response
+        mock_requests.request.return_value = mock_response
 
-        _validate_chef_server_connection("https://chef.example.com", "my-node")
+        _validate_chef_server_connection(
+            "https://chef.example.com",
+            "my-node",
+            client_key=_get_test_key_pem(),
+        )
 
-        # Verify timeout
-        call_timeout = mock_requests.get.call_args.kwargs["timeout"]
-        assert call_timeout == 5
+        # Verify timeout (default is 10)
+        call_timeout = mock_requests.request.call_args.kwargs["timeout"]
+        assert call_timeout == 10
 
     @patch("souschef.core.chef_server.requests_module")
     def test_validate_connection_with_headers(self, mock_requests):
         """Test that correct headers are sent."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_requests.get.return_value = mock_response
+        mock_requests.request.return_value = mock_response
 
-        _validate_chef_server_connection("https://chef.example.com", "my-node")
+        _validate_chef_server_connection(
+            "https://chef.example.com",
+            "my-node",
+            client_key=_get_test_key_pem(),
+        )
 
         # Verify headers
-        call_headers = mock_requests.get.call_args.kwargs["headers"]
+        call_headers = mock_requests.request.call_args.kwargs["headers"]
         assert "Accept" in call_headers
         assert "application/json" in call_headers["Accept"]

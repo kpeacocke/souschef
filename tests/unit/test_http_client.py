@@ -1,11 +1,22 @@
 """Tests for HTTP client abstraction."""
 
+import uuid
 from unittest.mock import Mock, patch
 
 import pytest
 
 from souschef.core.errors import SousChefError
 from souschef.core.http_client import HTTPClient, HTTPError, create_client
+
+DUMMY_API_KEY = "example-value"
+
+
+def _sample_api_key() -> str:
+    """Return a non-secret placeholder API key for tests."""
+    return f"example-{uuid.uuid4()}"
+
+
+API_KEY = _sample_api_key()
 
 
 class TestHTTPError:
@@ -75,12 +86,12 @@ class TestHTTPClient:
         """Test client initialization."""
         client = HTTPClient(
             base_url="https://api.example.com",
-            api_key="test-key",
+            api_key=API_KEY,
             timeout=30,
         )
 
         assert client.base_url == "https://api.example.com"
-        assert client.api_key == "test-key"
+        assert client.api_key == API_KEY
         assert client.timeout == 30
 
     def test_client_strips_trailing_slash(self):
@@ -93,12 +104,12 @@ class TestHTTPClient:
         """Test header generation with bearer auth."""
         client = HTTPClient(
             base_url="https://api.example.com",
-            api_key="test-key",
+            api_key=API_KEY,
         )
 
         headers = client._get_headers(auth_type="bearer")
 
-        assert headers["Authorization"] == "Bearer test-key"
+        assert headers["Authorization"] == f"Bearer {API_KEY}"
         assert headers["Content-Type"] == "application/json"
         assert "SousChef" in headers["User-Agent"]
 
@@ -106,12 +117,12 @@ class TestHTTPClient:
         """Test header generation with API key auth."""
         client = HTTPClient(
             base_url="https://api.example.com",
-            api_key="test-key",
+            api_key=API_KEY,
         )
 
         headers = client._get_headers(auth_type="api_key")
 
-        assert headers["X-API-Key"] == "test-key"
+        assert headers["X-API-Key"] == API_KEY
         assert "Authorization" not in headers
 
     def test_get_headers_no_auth(self):
@@ -159,7 +170,7 @@ class TestHTTPClient:
 
         client = HTTPClient(
             base_url="https://api.example.com",
-            api_key="test-key",
+            api_key=API_KEY,
         )
         result = client.post("/v1/endpoint", json_data={"key": "value"})
 
@@ -304,18 +315,18 @@ class TestCreateClient:
         """Test basic client creation."""
         client = create_client(
             base_url="https://api.example.com",
-            api_key="test-key",
+            api_key=API_KEY,
         )
 
         assert isinstance(client, HTTPClient)
         assert client.base_url == "https://api.example.com"
-        assert client.api_key == "test-key"
+        assert client.api_key == API_KEY
 
     def test_create_client_with_kwargs(self):
         """Test client creation with additional arguments."""
         client = create_client(
             base_url="https://api.example.com",
-            api_key="test-key",
+            api_key=API_KEY,
             timeout=45,
             max_retries=5,
         )
