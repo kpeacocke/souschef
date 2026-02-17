@@ -49,23 +49,15 @@ from souschef.storage import (
     get_storage_manager,
 )
 
-# Import refactored modules for backward compatibility
-from souschef.ui.pages.cookbook_analysis_security import (  # noqa: F401
-    _exceeds_depth_limit,
-    _extract_tar_members,
+# Import refactored modules for backward compatibility and tests
+from souschef.ui.pages.cookbook_analysis_security import (
     _extract_tar_securely,
     _extract_zip_securely,
-    _get_safe_extraction_path,
-    _has_path_traversal,
-    _is_blocked_extension,
-    _is_symlink,
-    _pre_scan_tar_members,
-    _validate_tar_file_security,
-    _validate_zip_file_security,
+    _validate_tar_file_security,  # noqa: F401 - used in tests
+    _validate_zip_file_security,  # noqa: F401 - used in tests
 )
-from souschef.ui.pages.cookbook_analysis_utilities import (  # noqa: F401
+from souschef.ui.pages.cookbook_analysis_utilities import (
     _get_secure_ai_config_path,
-    _is_within_base,
     _sanitize_filename,
 )
 
