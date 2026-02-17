@@ -7,8 +7,8 @@ toolchain go1.24.11
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.13.0
 	github.com/hashicorp/terraform-plugin-go v0.29.0
-	github.com/hashicorp/terraform-plugin-log v0.9.0
-	github.com/hashicorp/terraform-plugin-testing v1.10.0
+	github.com/hashicorp/terraform-plugin-log v0.10.0
+	github.com/hashicorp/terraform-plugin-testing v1.14.0
 )
 
 replace google.golang.org/genproto => google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7
@@ -36,7 +36,7 @@ require (
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/hashicorp/terraform-exec v0.24.0 // indirect
 	github.com/hashicorp/terraform-json v0.27.2 // indirect
-	github.com/hashicorp/terraform-plugin-sdk/v2 v2.34.0 // indirect
+	github.com/hashicorp/terraform-plugin-sdk/v2 v2.38.1 // indirect
 	github.com/hashicorp/terraform-registry-address v0.4.0 // indirect
 	github.com/hashicorp/terraform-svchost v0.1.1 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
