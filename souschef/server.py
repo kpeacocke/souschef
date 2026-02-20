@@ -191,6 +191,9 @@ from souschef.filesystem import (
 from souschef.generators.repo import (
     create_ansible_repository_from_roles as _create_ansible_repository_from_roles,
 )
+from souschef.ingestion import (
+    import_offline_bundle as _import_offline_bundle,
+)
 from souschef.migration_simulation import (
     create_simulation_config as _create_simulation_config,
 )
@@ -200,7 +203,11 @@ from souschef.migration_simulation import (
 from souschef.migration_simulation import (
     validate_version_combination as _validate_version_combination,
 )
-from souschef.migration_v2 import MigrationOrchestrator
+from souschef.migration_v2 import (
+    ChefServerOptions,
+    CookbookIngestionOptions,
+    MigrationOrchestrator,
+)
 from souschef.parsers.attributes import (  # noqa: F401, codeql[py/unused-import]
     _extract_attributes,
     _format_attributes,
@@ -484,6 +491,34 @@ def read_file(path: str) -> str:
         return format_error_with_context(e, "validating file path", path)
     result: str = _read_file(str(safe_path))
     return result
+
+
+@mcp.tool()
+def import_offline_bundle(bundle_path: str, output_dir: str) -> str:
+    """
+    Import an offline bundle of Chef cookbooks.
+
+    Args:
+        bundle_path: Path to the offline bundle tar.gz file.
+        output_dir: Directory to extract the bundle contents into.
+
+    Returns:
+        JSON string with extraction status and path.
+
+    """
+    try:
+        safe_bundle = _normalise_workspace_path(bundle_path, "Bundle path")
+        safe_output = _normalise_workspace_path(output_dir, "Output directory")
+        extracted = _import_offline_bundle(str(safe_bundle), str(safe_output))
+        return json.dumps(
+            {"status": "success", "path": str(extracted)},
+            indent=2,
+        )
+    except Exception as e:
+        return json.dumps(
+            {"status": "failed", "error": str(e)},
+            indent=2,
+        )
 
 
 @mcp.tool()
@@ -5100,12 +5135,8 @@ def start_v2_migration(
     target_platform: str,
     target_version: str,
     fips_mode: str = "no",
-    chef_server_url: str | None = None,
-    chef_organisation: str | None = None,
-    chef_client_name: str | None = None,
-    chef_client_key_path: str | None = None,
-    chef_client_key: str | None = None,
-    chef_query: str = "*",
+    chef_server_config: str | None = None,
+    ingestion_config: str | None = None,
 ) -> str:
     """
     Start a complete Chef to Ansible v2.0 migration.
@@ -5114,17 +5145,13 @@ def start_v2_migration(
     Integrates with existing parsers and converters for real conversion.
 
     Args:
-        cookbook_path: Path to Chef cookbook to migrate.
+        cookbook_path: Path to Chef cookbook to migrate (optional when ingesting).
         chef_version: Source Chef version (12.19.36, 14.15.6, 15.10.91).
         target_platform: Target platform (tower, awx, aap).
         target_version: Target platform version.
         fips_mode: Enable FIPS compliance (yes/no, default no).
-        chef_server_url: Chef Server URL (optional).
-        chef_organisation: Chef organisation name (optional).
-        chef_client_name: Chef client name (optional).
-        chef_client_key_path: Path to client key file (optional).
-        chef_client_key: Inline client key content (optional).
-        chef_query: Chef search query for nodes (default: *).
+        chef_server_config: JSON with Chef Server options.
+        ingestion_config: JSON with ingestion options.
 
     Returns:
         JSON with migration ID, status, and metrics.
@@ -5140,19 +5167,45 @@ def start_v2_migration(
             fips_mode=fips_enabled,
         )
 
+        chef_payload = json.loads(chef_server_config) if chef_server_config else {}
+        ingestion_payload = json.loads(ingestion_config) if ingestion_config else {}
+
+        chef_server = ChefServerOptions(
+            server_url=chef_payload.get("server_url") or chef_payload.get("url"),
+            organisation=chef_payload.get("organisation") or chef_payload.get("org"),
+            client_name=chef_payload.get("client_name") or chef_payload.get("client"),
+            client_key_path=chef_payload.get("client_key_path"),
+            client_key=chef_payload.get("client_key"),
+            query=chef_payload.get("query", "*"),
+            node=chef_payload.get("node"),
+            policy=chef_payload.get("policy"),
+        )
+        ingestion = CookbookIngestionOptions(
+            cookbook_name=ingestion_payload.get("cookbook_name"),
+            cookbook_version=ingestion_payload.get("cookbook_version"),
+            dependency_depth=ingestion_payload.get("dependency_depth", "full"),
+            use_cache=ingestion_payload.get("use_cache", True),
+            offline_bundle_path=ingestion_payload.get("offline_bundle_path"),
+        )
+
         result = orchestrator.migrate_cookbook(
             cookbook_path=cookbook_path,
             skip_validation=False,
-            chef_server_url=chef_server_url,
-            chef_organisation=chef_organisation,
-            chef_client_name=chef_client_name,
-            chef_client_key_path=chef_client_key_path,
-            chef_client_key=chef_client_key,
-            chef_query=chef_query,
+            chef_server=chef_server,
+            ingestion=ingestion,
         )
 
         return json.dumps(result.to_dict(), indent=2)
 
+    except json.JSONDecodeError as e:
+        return json.dumps(
+            {
+                "error": f"Invalid JSON config: {e}",
+                "status": "failed",
+                "phase": "initialization",
+            },
+            indent=2,
+        )
     except Exception as e:
         return json.dumps(
             {

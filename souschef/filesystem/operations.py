@@ -112,3 +112,44 @@ def create_tar_gz_archive(source_dir: str, output_path: str) -> str:
                 tar.add(file_path, arcname=arcname)
 
     return str(output_file)
+
+
+def extract_tar_gz_archive(archive_path: str, output_dir: str) -> str:
+    """
+    Extract a tar.gz archive into a directory.
+
+    Args:
+        archive_path: Path to the tar.gz archive.
+        output_dir: Directory to extract contents into.
+
+    Returns:
+        Path to the extracted directory.
+
+    """
+    # Check for symlinks before normalisation to detect attacks
+    _check_symlink_safety(_normalize_path(archive_path), Path(archive_path))
+
+    workspace_root = _get_workspace_root()
+    archive_file = _ensure_within_base_path(
+        _normalize_path(archive_path), workspace_root
+    )
+    target_dir = _ensure_within_base_path(_normalize_path(output_dir), workspace_root)
+
+    if not archive_file.is_file():
+        raise ValueError(f"Archive does not exist: {archive_path}")
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    with tarfile.open(archive_file, "r:gz") as tar:  # NOSONAR
+        for member in tar.getmembers():
+            member_path = target_dir / member.name
+            _ensure_within_base_path(member_path, target_dir)
+        try:
+            tar.extractall(
+                target_dir, filter="data"
+            )  # NOSONAR - validated members before extract
+        except TypeError:
+            # Older Python versions do not support the filter argument.
+            tar.extractall(target_dir)  # NOSONAR - validated members before extract
+
+    return str(target_dir)

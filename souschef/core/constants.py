@@ -145,6 +145,7 @@ RESOURCE_MAPPINGS = {
     "mount": "ansible.builtin.mount",
     "git": "ansible.builtin.git",
     "remote_file": "ansible.builtin.get_url",
+    "cookbook_file": "ansible.builtin.copy",
     "nodejs_npm": "community.general.npm",
     # Map include_recipe to a generic package install so well-known recipes
     # (like nodejs) can be materialised into concrete tasks instead of

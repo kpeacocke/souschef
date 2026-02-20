@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -528,6 +528,46 @@ class ChefServerClient:
             )
         return cookbooks
 
+    def list_cookbook_versions(self, cookbook_name: str) -> list[str]:
+        """
+        List available versions for a cookbook.
+
+        Args:
+            cookbook_name: Cookbook name to look up.
+
+        Returns:
+            List of version strings.
+
+        """
+        cookbooks = self.list_cookbooks()
+        for cookbook in cookbooks:
+            if cookbook.get("name") == cookbook_name:
+                return self._extract_version_strings(cookbook)
+        return []
+
+    def _extract_version_strings(self, cookbook: dict[str, Any]) -> list[str]:
+        """
+        Extract version strings from a cookbook dictionary.
+
+        Args:
+            cookbook: Cookbook dictionary with versions.
+
+        Returns:
+            List of version strings.
+
+        """
+        versions = cookbook.get("versions", [])
+        if not isinstance(versions, list):
+            return []
+
+        result: list[str] = []
+        for version in versions:
+            if isinstance(version, dict):
+                v = version.get("version")
+                if v and isinstance(v, str):
+                    result.append(v)
+        return result
+
     def get_cookbook_version(self, cookbook_name: str, version: str) -> dict[str, Any]:
         """
         Fetch cookbook details for a specific version.
@@ -547,6 +587,84 @@ class ChefServerClient:
         response.raise_for_status()
         data = response.json()
         return data if isinstance(data, dict) else {}
+
+    def get_node(self, node_name: str) -> dict[str, Any]:
+        """
+        Retrieve a node payload from Chef Server.
+
+        Args:
+            node_name: Chef node name.
+
+        Returns:
+            Node payload dictionary.
+
+        """
+        response = self._request("GET", f"/nodes/{node_name}")
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
+    def get_policy(self, policy_name: str) -> dict[str, Any]:
+        """
+        Retrieve a policy payload from Chef Server.
+
+        Args:
+            policy_name: Policy name.
+
+        Returns:
+            Policy payload dictionary.
+
+        """
+        response = self._request("GET", f"/policies/{policy_name}")
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
+    def get_policy_revision(self, policy_name: str, revision_id: str) -> dict[str, Any]:
+        """
+        Retrieve a specific policy revision.
+
+        Args:
+            policy_name: Policy name.
+            revision_id: Policy revision identifier.
+
+        Returns:
+            Policy revision payload.
+
+        """
+        response = self._request(
+            "GET", f"/policies/{policy_name}/revisions/{revision_id}"
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, dict) else {}
+
+    def download_url(self, url: str) -> bytes:
+        """
+        Download a file from a Chef Server URL.
+
+        Args:
+            url: Cookbook file URL provided by the Chef Server.
+
+        Returns:
+            File content bytes.
+
+        """
+        parsed = urlparse(url)
+        if parsed.scheme and parsed.netloc:
+            base_netloc = urlparse(self._base_url).netloc
+            if parsed.netloc != base_netloc:
+                raise ValueError("Cookbook URL host does not match Chef Server")
+            endpoint = parsed.path
+            raw_params = parse_qs(parsed.query)
+            params = {key: values[0] for key, values in raw_params.items() if values}
+        else:
+            endpoint = url
+            params = None
+
+        response = self._request("GET", endpoint, params=params)
+        response.raise_for_status()
+        return response.content
 
     def list_policies(self) -> list[dict[str, Any]]:
         """
@@ -636,6 +754,39 @@ def _build_client_from_env(
         timeout=timeout,
     )
     return ChefServerClient(config)
+
+
+def build_chef_server_client(
+    server_url: str,
+    organisation: str,
+    client_name: str,
+    client_key_path: str | None = None,
+    client_key: str | None = None,
+    timeout: int = 10,
+) -> ChefServerClient:
+    """
+    Build a Chef Server client from explicit configuration.
+
+    Args:
+        server_url: Chef Server URL.
+        organisation: Chef organisation name.
+        client_name: Chef client name.
+        client_key_path: Path to client key file.
+        client_key: Inline client key content.
+        timeout: Request timeout.
+
+    Returns:
+        Configured ChefServerClient instance.
+
+    """
+    return _build_client_from_env(
+        server_url=server_url,
+        organisation=organisation,
+        client_name=client_name,
+        client_key_path=client_key_path,
+        client_key=client_key,
+        timeout=timeout,
+    )
 
 
 def _validate_chef_server_connection(

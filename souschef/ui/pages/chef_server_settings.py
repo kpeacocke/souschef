@@ -10,7 +10,10 @@ import tempfile
 import time
 from pathlib import Path
 
-import streamlit as st
+try:
+    import streamlit as st
+except ImportError:
+    st = None  # type: ignore[assignment]
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 

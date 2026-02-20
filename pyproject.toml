@@ -65,6 +65,9 @@ types-requests = "^2.32.4.20260107"
 types-urllib3 = "^1.26.25.14"
 pandas-stubs = "^2.0.0"
 responses = "^0.25.0"
+pandas = ">=2.0.0"
+streamlit = ">=1.28.0"
+plotly = ">=5.17.0,<7.0"
 
 [tool.poetry.scripts]
 souschef = "souschef.cli:main"

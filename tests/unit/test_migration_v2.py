@@ -19,12 +19,43 @@ from souschef.api_clients import (
     get_ansible_client,
 )
 from souschef.migration_v2 import (
+    ChefServerOptions,
     ConversionMetrics,
+    CookbookIngestionOptions,
     MigrationOrchestrator,
     MigrationResult,
     MigrationStatus,
 )
 from souschef.storage.database import StorageManager
+
+
+def _chef_server_options(**overrides: Any) -> ChefServerOptions:
+    """Build Chef Server options for unit tests."""
+    defaults: dict[str, Any] = {
+        "server_url": "https://chef.example.com",
+        "organisation": "default",
+        "client_name": "admin",
+        "client_key_path": None,
+        "client_key": "test-key",
+        "query": "*:*",
+        "node": None,
+        "policy": None,
+    }
+    defaults.update(overrides)
+    return ChefServerOptions(**defaults)
+
+
+def _ingestion_options(**overrides: Any) -> CookbookIngestionOptions:
+    """Build ingestion options for unit tests."""
+    defaults: dict[str, Any] = {
+        "cookbook_name": None,
+        "cookbook_version": None,
+        "dependency_depth": "full",
+        "use_cache": True,
+        "offline_bundle_path": None,
+    }
+    defaults.update(overrides)
+    return CookbookIngestionOptions(**defaults)
 
 
 class TestConversionMetrics:
@@ -125,6 +156,9 @@ class TestMigrationResult:
         assert result_dict["status"] == "converted"
         assert len(result_dict["playbooks_generated"]) == 2
         assert result_dict["infrastructure"]["inventory_id"] == 1
+        assert result_dict["run_list"] == []
+        assert result_dict["variable_context"] == {}
+        assert result_dict["dependency_graph"] == {}
 
     def test_migration_result_from_dict(self) -> None:
         """Test result deserialisation."""
@@ -143,12 +177,17 @@ class TestMigrationResult:
         )
 
         payload = result.to_dict()
+        payload["run_list"] = ["nginx::default"]
+        payload["variable_context"] = {"nginx.port": "80"}
+        payload["dependency_graph"] = {"nginx": {"apt": ">= 0.0.0"}}
         restored = MigrationResult.from_dict(payload)
 
         assert restored.migration_id == result.migration_id
         assert restored.status == MigrationStatus.VALIDATED
         assert restored.inventory_id == 2
         assert restored.playbooks_generated == ["site.yml"]
+        assert restored.run_list == ["nginx::default"]
+        assert restored.variable_context == {"nginx.port": "80"}
 
 
 class TestMigrationOrchestrator:
@@ -195,6 +234,30 @@ class TestMigrationOrchestrator:
             MigrationStatus.VALIDATED,
         )
 
+    def test_migration_builds_variable_context(self, tmp_path: Path) -> None:
+        """Test that variable context and conflicts are recorded."""
+        cookbook = tmp_path / "conflict_cookbook"
+        cookbook.mkdir()
+        recipes = cookbook / "recipes"
+        recipes.mkdir()
+        (recipes / "default.rb").write_text("package 'curl'")
+
+        attributes = cookbook / "attributes"
+        attributes.mkdir()
+        (attributes / "default.rb").write_text("default['web']['port'] = 80")
+        (attributes / "override.rb").write_text("override['web']['port'] = 443")
+
+        orchestrator = MigrationOrchestrator(
+            chef_version="15.10.91",
+            target_platform="aap",
+            target_version="2.4.0",
+        )
+
+        result = orchestrator.migrate_cookbook(str(cookbook), skip_validation=True)
+
+        assert result.variable_context.get("web.port") in ("443", 443)
+        assert "attributes" in result.variable_provenance
+
     @patch("souschef.migration_v2.get_chef_nodes")
     def test_migrate_cookbook_queries_chef_server(
         self, mock_get_nodes: Mock, tmp_path: Path
@@ -216,11 +279,12 @@ class TestMigrationOrchestrator:
         result = orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="validator",
-            chef_client_key="dummy-key",
-            chef_query="*:*",
+            chef_server=_chef_server_options(
+                client_name="validator",
+                client_key="dummy-key",
+                query="*:*",
+            ),
+            ingestion=_ingestion_options(),
         )
 
         assert result.chef_server_queried is True
@@ -250,9 +314,10 @@ class TestMigrationOrchestrator:
         result = orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="validator",
+            chef_server=_chef_server_options(
+                client_name="validator", client_key=None, client_key_path=None
+            ),
+            ingestion=_ingestion_options(),
         )
 
         assert result.chef_server_queried is False
@@ -311,7 +376,7 @@ class TestMigrationOrchestrator:
             }
         )
         expected_vars_node2 = json.dumps(
-            {"ansible_host": "10.0.0.2"}
+            {"ansible_host": "10.0.0.2"}  # NOSONAR
         )  # NOSONAR - test fixture
 
         assert mock_client.add_host.call_count == 3
@@ -699,10 +764,8 @@ class TestInventoryGrouping:
         orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="admin",
-            chef_client_key="test-key",
+            chef_server=_chef_server_options(),
+            ingestion=_ingestion_options(),
         )
 
         # Deploy and test group creation
@@ -781,10 +844,8 @@ class TestInventoryGrouping:
         orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="admin",
-            chef_client_key="test-key",
+            chef_server=_chef_server_options(),
+            ingestion=_ingestion_options(),
         )
 
         with patch("souschef.migration_v2.get_ansible_client") as mock_get_client2:

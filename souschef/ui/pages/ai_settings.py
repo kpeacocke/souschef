@@ -9,7 +9,10 @@ import os
 from pathlib import Path
 from typing import Any
 
-import streamlit as st
+try:
+    import streamlit as st
+except ImportError:
+    st = None  # type: ignore[assignment]
 
 from souschef.core.url_validation import validate_user_provided_url
 

@@ -15,7 +15,7 @@ RUN for i in 1 2 3; do \
   done; exit 1
 
 # Use the official Python devcontainer as base
-FROM mcr.microsoft.com/devcontainers/python:3.13
+FROM mcr.microsoft.com/devcontainers/python:3.14
 
 # Build arguments
 ARG SNYK_VERSION=latest

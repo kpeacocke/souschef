@@ -768,3 +768,207 @@ class TestLocalBlobStorage:
             storage.download(storage_key, downloaded)
 
             assert downloaded.read_text() == original_content
+
+
+class TestDatabaseDeduplication:
+    """Tests for content fingerprint-based deduplication."""
+
+    def test_save_analysis_with_fingerprint_deduplicates(self):
+        """Test that saving analysis with same fingerprint returns existing ID."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            # Save first analysis with fingerprint
+            id1 = manager.save_analysis(
+                cookbook_name="cookbook1",
+                cookbook_path="/path1",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=5.0,
+                estimated_hours_with_souschef=2.0,
+                recommendations="Test",
+                analysis_data={},
+                content_fingerprint="abc123def456",
+            )
+
+            # Try to save another with same fingerprint
+            id2 = manager.save_analysis(
+                cookbook_name="cookbook2",
+                cookbook_path="/path2",
+                cookbook_version="2.0.0",
+                complexity="high",
+                estimated_hours=10.0,
+                estimated_hours_with_souschef=5.0,
+                recommendations="Different",
+                analysis_data={},
+                content_fingerprint="abc123def456",
+            )
+
+            # Should return same ID (deduplicated)
+            assert id1 == id2
+
+    def test_get_analysis_by_fingerprint(self):
+        """Test retrieving analysis by content fingerprint."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            fingerprint = "unique-fingerprint"
+            manager.save_analysis(
+                cookbook_name="test",
+                cookbook_path="/path",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=5.0,
+                estimated_hours_with_souschef=2.0,
+                recommendations="",
+                analysis_data={},
+                content_fingerprint=fingerprint,
+            )
+
+            result = manager.get_analysis_by_fingerprint(fingerprint)
+            assert result is not None
+            assert result.cookbook_name == "test"
+            assert result.content_fingerprint == fingerprint
+
+    def test_get_analysis_by_fingerprint_none_if_missing(self):
+        """Test that non-existent fingerprint returns None."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            result = manager.get_analysis_by_fingerprint("nonexistent")
+            assert result is None
+
+    def test_save_analysis_with_blob_key(self):
+        """Test saving analysis with blob storage key."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            blob_key = "blobs/cookbook-123.zip"
+            manager.save_analysis(
+                cookbook_name="test",
+                cookbook_path="/path",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=5.0,
+                estimated_hours_with_souschef=2.0,
+                recommendations="",
+                analysis_data={},
+                cookbook_blob_key=blob_key,
+            )
+
+            # Retrieve and verify blob key is stored
+            result = manager.get_analysis_history(limit=1)[0]
+            assert result.cookbook_blob_key == blob_key
+
+    def test_get_statistics_returns_correct_values(self):
+        """Test statistics calculation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            # Add multiple analyses
+            for i in range(3):
+                analysis_id = manager.save_analysis(
+                    cookbook_name=f"cookbook{i}",
+                    cookbook_path=f"/path{i}",
+                    cookbook_version="1.0.0",
+                    complexity="low",
+                    estimated_hours=10.0,
+                    estimated_hours_with_souschef=5.0,
+                    recommendations="",
+                    analysis_data={},
+                )
+
+                # Add conversions
+                manager.save_conversion(
+                    cookbook_name=f"cookbook{i}",
+                    output_type="playbook",
+                    status="success" if i < 2 else "failed",
+                    files_generated=i + 1,
+                    conversion_data={},
+                    analysis_id=analysis_id,
+                )
+
+            stats = manager.get_statistics()
+            assert stats["total_analyses"] == 3
+            assert stats["unique_cookbooks_analysed"] == 3
+            assert stats["avg_manual_hours"] == pytest.approx(10.0)
+            assert stats["avg_ai_hours"] == pytest.approx(5.0)
+            assert stats["total_conversions"] == 3
+            assert stats["successful_conversions"] == 2
+            assert stats["total_files_generated"] == 6  # 1+2+3
+
+    def test_delete_analysis_cascades_to_conversions(self):
+        """Test that deleting analysis also deletes its conversions."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            analysis_id = manager.save_analysis(
+                cookbook_name="test",
+                cookbook_path="/path",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=5.0,
+                estimated_hours_with_souschef=2.0,
+                recommendations="",
+                analysis_data={},
+            )
+
+            manager.save_conversion(
+                cookbook_name="test",
+                output_type="playbook",
+                status="success",
+                files_generated=1,
+                conversion_data={},
+                analysis_id=analysis_id,
+            )
+
+            # Delete analysis
+            assert manager.delete_analysis(analysis_id or 0) is True
+
+            # Verify both are gone
+            assert manager.get_analysis_history(limit=100) == []
+
+    def test_delete_conversion_removes_only_conversion(self):
+        """Test that deleting conversion doesn't affect analysis."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = StorageManager(db_path=Path(tmpdir) / "test.db")
+
+            analysis_id = manager.save_analysis(
+                cookbook_name="test",
+                cookbook_path="/path",
+                cookbook_version="1.0.0",
+                complexity="low",
+                estimated_hours=5.0,
+                estimated_hours_with_souschef=2.0,
+                recommendations="",
+                analysis_data={},
+            )
+
+            conversion_id = manager.save_conversion(
+                cookbook_name="test",
+                output_type="playbook",
+                status="success",
+                files_generated=1,
+                conversion_data={},
+                analysis_id=analysis_id,
+            )
+
+            # Delete conversion only
+            assert manager.delete_conversion(conversion_id or 0) is True
+
+            # Analysis should still exist
+            history = manager.get_analysis_history()
+            assert len(history) == 1
+
+    def test_get_storage_manager_singleton(self, monkeypatch, tmp_path):
+        """Test that get_storage_manager returns singleton instance."""
+        from souschef.storage import database as storage_db
+
+        monkeypatch.setenv("SOUSCHEF_DB_BACKEND", "sqlite")
+        monkeypatch.setenv("SOUSCHEF_DB_PATH", str(tmp_path / "storage.db"))
+        storage_db._storage_manager = None
+
+        manager1 = storage_db.get_storage_manager()
+        manager2 = storage_db.get_storage_manager()
+
+        assert manager1 is manager2

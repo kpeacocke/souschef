@@ -17,9 +17,43 @@ from souschef.api_clients import (
     AWXClient,
     ChefServerClient,
 )
-from souschef.migration_v2 import MigrationOrchestrator, MigrationStatus
+from souschef.migration_v2 import (
+    ChefServerOptions,
+    CookbookIngestionOptions,
+    MigrationOrchestrator,
+    MigrationStatus,
+)
 
 FIXTURES_DIR = Path(__file__).parent.parent / "integration" / "fixtures"
+
+
+def _chef_server_options(**overrides: Any) -> ChefServerOptions:
+    """Build Chef Server options for migration tests."""
+    defaults: dict[str, Any] = {
+        "server_url": "https://chef.example.com",
+        "organisation": "default",
+        "client_name": "admin",
+        "client_key_path": None,
+        "client_key": "test-key",
+        "query": "*:*",
+        "node": None,
+        "policy": None,
+    }
+    defaults.update(overrides)
+    return ChefServerOptions(**defaults)
+
+
+def _ingestion_options(**overrides: Any) -> CookbookIngestionOptions:
+    """Build ingestion options for migration tests."""
+    defaults: dict[str, Any] = {
+        "cookbook_name": None,
+        "cookbook_version": None,
+        "dependency_depth": "full",
+        "use_cache": True,
+        "offline_bundle_path": None,
+    }
+    defaults.update(overrides)
+    return CookbookIngestionOptions(**defaults)
 
 
 class TestFullMigrationWorkflow:
@@ -469,11 +503,11 @@ end
         result = orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="admin",
-            chef_client_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----",
-            chef_query="*:*",
+            chef_server=_chef_server_options(
+                client_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----",
+                query="*:*",
+            ),
+            ingestion=_ingestion_options(),
         )
 
         # Verify Chef Server was queried
@@ -539,10 +573,8 @@ end
         result = orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="admin",
-            chef_client_key="test-key",
+            chef_server=_chef_server_options(),
+            ingestion=_ingestion_options(),
         )
 
         # Deploy to Ansible
@@ -569,7 +601,7 @@ end
         variables_json = call_args[1]["variables"]
         variables = json.loads(variables_json)
         assert (
-            variables["ansible_host"] == "10.0.1.5"
+            variables["ansible_host"] == "10.0.1.5"  # NOSONAR
         )  # IP address  # NOSONAR - test fixture
         assert variables["chef_environment"] == "production"
         assert variables["chef_roles"] == ["web", "common"]
@@ -621,10 +653,8 @@ end
         result = orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="admin",
-            chef_client_key="test-key",
+            chef_server=_chef_server_options(),
+            ingestion=_ingestion_options(),
         )
 
         # Verify nodes were discovered
@@ -683,10 +713,8 @@ end
         result = orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="admin",
-            chef_client_key="invalid-key",
+            chef_server=_chef_server_options(client_key="invalid-key"),
+            ingestion=_ingestion_options(),
         )
 
         # Verify failure was captured as warning (not fatal)
@@ -804,10 +832,8 @@ class TestInventoryGrouping:
         orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="admin",
-            chef_client_key="test-key",
+            chef_server=_chef_server_options(),
+            ingestion=_ingestion_options(),
         )
 
         # Deploy to Ansible (triggers group creation)
@@ -921,10 +947,8 @@ class TestInventoryGrouping:
         orchestrator.migrate_cookbook(
             str(cookbook),
             skip_validation=True,
-            chef_server_url="https://chef.example.com",
-            chef_organisation="default",
-            chef_client_name="admin",
-            chef_client_key="test-key",
+            chef_server=_chef_server_options(),
+            ingestion=_ingestion_options(),
         )
 
         orchestrator.deploy_to_ansible(

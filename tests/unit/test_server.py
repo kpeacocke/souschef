@@ -89,6 +89,7 @@ from souschef.server import (
     generate_github_workflow_from_chef,
     generate_inspec_from_recipe,
     generate_inventory_from_chef_environments,
+    import_offline_bundle,
     list_cookbook_structure,
     list_directory,
     main,
@@ -130,6 +131,60 @@ def test_list_directory_success():
     ):
         result = list_directory(".")
         assert result == ["file1.txt", "file2.txt"]
+
+
+def test_import_offline_bundle_success(tmp_path, monkeypatch):
+    """Test importing an offline bundle archive."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
+    bundle_source = tmp_path / "bundle_source"
+    bundle_source.mkdir()
+    (bundle_source / "manifest.json").write_text("{}")
+
+    archive_path = tmp_path / "bundle.tar.gz"
+    from souschef.filesystem.operations import create_tar_gz_archive
+
+    create_tar_gz_archive(str(bundle_source), str(archive_path))
+
+    output_dir = tmp_path / "bundle_output"
+    result = import_offline_bundle(str(archive_path), str(output_dir))
+
+    payload = json.loads(result)
+    assert payload["status"] == "success"
+    assert (output_dir / "manifest.json").exists()
+
+
+def test_import_offline_bundle_invalid_archive(tmp_path, monkeypatch):
+    """Test error handling for invalid archive path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
+    result = import_offline_bundle(
+        "/nonexistent/bundle.tar.gz", str(tmp_path / "output")
+    )
+
+    payload = json.loads(result)
+    assert payload["status"] == "failed"
+    assert "error" in payload
+
+
+def test_import_offline_bundle_invalid_path(tmp_path, monkeypatch):
+    """Test error handling for path outside workspace."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
+    bundle_source = tmp_path / "bundle_source"
+    bundle_source.mkdir()
+    (bundle_source / "manifest.json").write_text("{}")
+
+    archive_path = tmp_path / "bundle.tar.gz"
+    from souschef.filesystem.operations import create_tar_gz_archive
+
+    create_tar_gz_archive(str(bundle_source), str(archive_path))
+
+    # Try to extract to a path outside workspace
+    result = import_offline_bundle(str(archive_path), "/tmp/../../etc")  # NOSONAR
+
+    payload = json.loads(result)
+    assert payload["status"] == "failed"
 
 
 def test_assess_chef_migration_complexity_success(tmp_path, monkeypatch):

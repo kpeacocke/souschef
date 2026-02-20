@@ -79,6 +79,45 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
         return f"An error occurred: {e}"
 
 
+def parse_attributes_with_provenance(path: str) -> dict[str, Any] | str:
+    """
+    Parse attributes and return structured provenance data.
+
+    Args:
+        path: Path to the attributes (.rb) file.
+
+    Returns:
+        Dictionary containing resolved attributes and provenance details,
+        or an error string on failure.
+
+    """
+    try:
+        file_path = _normalize_path(path)
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
+
+        attributes = collect_attributes_with_provenance(content, str(safe_path))
+        resolved = resolve_attribute_precedence_with_provenance(attributes)
+
+        return {
+            "source_file": str(safe_path),
+            "attributes": attributes,
+            "resolved": resolved,
+        }
+
+    except ValueError as e:
+        return f"Error: {e}"
+    except FileNotFoundError:
+        return ERROR_FILE_NOT_FOUND.format(path=path)
+    except IsADirectoryError:
+        return ERROR_IS_DIRECTORY.format(path=path)
+    except PermissionError:
+        return ERROR_PERMISSION_DENIED.format(path=path)
+    except Exception as e:
+        return f"An error occurred: {e}"
+
+
 def _extract_precedence_and_path(line: str) -> tuple[str, str, str] | None:
     """Extract precedence and attribute path from a line."""
     precedence_types = (
@@ -491,6 +530,26 @@ def _extract_attributes(content: str) -> list[dict[str, str]]:  # noqa: C901
     return attributes
 
 
+def collect_attributes_with_provenance(
+    content: str, source_file: str
+) -> list[dict[str, str]]:
+    """
+    Extract attributes with provenance metadata.
+
+    Args:
+        content: Raw attributes file content.
+        source_file: Source file path for provenance.
+
+    Returns:
+        List of attribute dictionaries including source file metadata.
+
+    """
+    attributes = _extract_attributes(content)
+    for attr in attributes:
+        attr["source_file"] = source_file
+    return attributes
+
+
 def _get_precedence_level(precedence: str) -> int:
     """
     Get numeric precedence level for Chef attribute precedence.
@@ -570,6 +629,60 @@ def _resolve_attribute_precedence(
             "precedence_level": _get_precedence_level(winning_attr["precedence"]),
             "has_conflict": has_conflict,
             "overridden_values": ", ".join(conflict_info) if conflict_info else "",
+        }
+
+    return resolved
+
+
+def resolve_attribute_precedence_with_provenance(
+    attributes: list[dict[str, str]],
+) -> dict[str, dict[str, Any]]:
+    """
+    Resolve attribute precedence with provenance details.
+
+    Args:
+        attributes: Attribute dictionaries including source file metadata.
+
+    Returns:
+        Mapping of attribute paths to resolved values and provenance.
+
+    """
+    path_groups: dict[str, list[dict[str, str]]] = {}
+    for attr in attributes:
+        path = attr["path"]
+        if path not in path_groups:
+            path_groups[path] = []
+        path_groups[path].append(attr)
+
+    resolved: dict[str, dict[str, Any]] = {}
+    for path, attrs in path_groups.items():
+        winning_attr = max(attrs, key=lambda a: _get_precedence_level(a["precedence"]))
+        sorted_attrs = sorted(
+            attrs, key=lambda a: _get_precedence_level(a["precedence"])
+        )
+        overridden = [
+            {
+                "precedence": entry["precedence"],
+                "value": entry["value"],
+                "source_file": entry.get("source_file", ""),
+            }
+            for entry in sorted_attrs[:-1]
+        ]
+
+        resolved[path] = {
+            "value": winning_attr["value"],
+            "precedence": winning_attr["precedence"],
+            "precedence_level": _get_precedence_level(winning_attr["precedence"]),
+            "has_conflict": len(attrs) > 1,
+            "sources": [
+                {
+                    "precedence": entry["precedence"],
+                    "value": entry["value"],
+                    "source_file": entry.get("source_file", ""),
+                }
+                for entry in sorted_attrs
+            ],
+            "overridden_values": overridden,
         }
 
     return resolved

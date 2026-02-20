@@ -1075,19 +1075,20 @@ def _parse_chef_search_query(query: str) -> dict[str, Any]:
 def _parse_search_condition(condition: str) -> dict[str, str]:
     """Parse a single search condition."""
     # Handle different condition patterns
+    # Note: Order matters - more specific patterns first
     patterns = [
+        # Regex search: role:~web.* (more specific, check before wildcard)
+        (r"^(\w+):~(.+)$", "regex"),
         # Wildcard search: role:web*
         (r"^(\w+):([^:]*\*)$", "wildcard"),
-        # Regex search: role:~web.*
-        (r"^(\w+):~(.+)$", "regex"),
         # Not equal: role:!web
         (r"^(\w+):!(.+)$", "not_equal"),
         # Range: memory:(>1024 AND <4096)
         (r"^(\w+):\(([^)]+)\)$", "range"),
+        # Tag search: tags:web (more specific, check before simple key:value)
+        (r"^tags?:(.+)$", "tag"),
         # Simple key:value
         (r"^(\w+):(.+)$", "equal"),
-        # Tag search: tags:web
-        (r"^tags?:(.+)$", "tag"),
     ]
 
     for pattern, condition_type in patterns:
@@ -1213,7 +1214,7 @@ def _process_search_condition(
     """Process a single search condition and update inventory config."""
     group_name = _generate_group_name_from_condition(condition, index)
 
-    if condition["operator"] == "equal":
+    if condition["operator"] in ["equal", "contains"]:
         group_config = _create_group_config_for_equal_condition(condition)
         # Add role variable if it's a role condition
         if condition["key"] == "role":

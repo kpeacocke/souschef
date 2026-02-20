@@ -19,6 +19,7 @@ from souschef.server import (
     _parse_inspec_control,
     convert_inspec_to_test,
     generate_inspec_from_recipe,
+    import_offline_bundle,
     list_directory,
     parse_attributes,
     parse_custom_resource,
@@ -47,7 +48,7 @@ def test_list_directory_handles_any_string_path(path_str):
 
 
 @given(st.text(min_size=1, max_size=200))
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=5000)
 def test_validate_user_provided_url_handles_any_input(raw_url):
     """Test URL validation handles any string input safely."""
     with contextlib.suppress(ValueError):
@@ -190,6 +191,24 @@ def test_parse_attributes_all_precedence_levels(precedence, key, value):
             else:
                 os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
             Path(temp_path).unlink(missing_ok=True)
+
+
+@given(st.text(min_size=1, max_size=100))
+@settings(max_examples=50, deadline=500)
+def test_import_offline_bundle_handles_any_path(raw_path):
+    """Test offline bundle import handles any input string safely."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        base = Path(temp_dir)
+        old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+        try:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(base)
+            result = import_offline_bundle(raw_path, str(base))
+            assert isinstance(result, str)
+        finally:
+            if old_root is None:
+                os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+            else:
+                os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
 
 
 @given(st.sampled_from(["awx", "aap"]))

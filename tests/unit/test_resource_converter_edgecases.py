@@ -61,7 +61,7 @@ class TestNormalizeTemplateValueEdgeCases:
 
     def test_normalize_with_multiple_node_refs(self):
         """Test string with multiple node references."""
-        value = "http://node['web']['host']:node['web']['port']"
+        value = "http://node['web']['host']:node['web']['port']"  # NOSONAR
         result = _normalize_template_value(value)
         assert "web_host" in result
         assert "web_port" in result
@@ -190,6 +190,7 @@ class TestConvertResourceEdgeCases:
             "cookbook_file", "/etc/nginx/conf", "create", props
         )
         assert "/etc/nginx/conf" in result
+        assert "ansible.builtin.copy" in result or "copy" in result
 
     def test_convert_with_node_attributes_in_properties(self):
         """Test resource with node attributes in property values."""

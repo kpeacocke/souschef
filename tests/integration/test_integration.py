@@ -16,6 +16,7 @@ from souschef.server import (
     convert_resource_to_task,
     generate_compose_from_habitat,
     generate_inspec_from_recipe,
+    import_offline_bundle,
     list_cookbook_structure,
     list_directory,
     parse_attributes,
@@ -108,6 +109,26 @@ class TestRealFileOperations:
         assert "metadata.rb" in result
         assert "recipes" in result
         assert "attributes" in result
+
+    def test_import_offline_bundle_integration(self, tmp_path, monkeypatch):
+        """Test importing an offline bundle archive."""
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
+        source_dir = tmp_path / "bundle_source"
+        source_dir.mkdir()
+        (source_dir / "manifest.json").write_text("{}")
+
+        from souschef.filesystem.operations import create_tar_gz_archive
+
+        archive_path = tmp_path / "bundle.tar.gz"
+        create_tar_gz_archive(str(source_dir), str(archive_path))
+
+        target_dir = tmp_path / "bundle_target"
+        result = import_offline_bundle(str(archive_path), str(target_dir))
+
+        payload = json.loads(result)
+        assert payload["status"] == "success"
+        assert (target_dir / "manifest.json").exists()
 
 
 def test_validate_user_provided_url_with_allowlist_env(monkeypatch: pytest.MonkeyPatch):

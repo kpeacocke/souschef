@@ -12,7 +12,10 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
 
-import streamlit as st
+try:
+    import streamlit as st
+except ImportError:
+    st = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     import networkx as nx

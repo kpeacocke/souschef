@@ -14,8 +14,15 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-import streamlit as st
+try:
+    import pandas as pd
+except ImportError:
+    pd = None  # type: ignore[assignment]
+
+try:
+    import streamlit as st
+except ImportError:
+    st = None  # type: ignore[assignment]
 
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

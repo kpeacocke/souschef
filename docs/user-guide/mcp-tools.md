@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-SousChef provides **43 specialised MCP tools** for comprehensive Chef-to-Ansible migration and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **44 specialised MCP tools** for comprehensive Chef-to-Ansible migration and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
@@ -8,9 +8,9 @@ SousChef provides **43 specialised MCP tools** for comprehensive Chef-to-Ansible
 !!! info "About the Tool Count"
     **Complete tool inventory available in source code**
 
-    This guide documents the **43 primary user-facing tools** (38 Chef migration + 5 Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
+    This guide documents the **44 primary user-facing tools** (39 Chef migration + 5 Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
 
-    As a user, you'll primarily interact with these 43 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
+    As a user, you'll primarily interact with these 44 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
 
     See `souschef/server.py` for the complete authoritative list of all MCP tools.
 
