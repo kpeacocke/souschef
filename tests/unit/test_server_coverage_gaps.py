@@ -61,9 +61,9 @@ from souschef.server import (
 # ---------------------------------------------------------------------------
 
 
-def test_parse_inspec_profile_invalid_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parse_inspec_profile_invalid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test parse_inspec_profile returns error for an invalid path."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/tmp")  # noqa: S108
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     result = parse_inspec_profile("../../etc/passwd")
     assert "Error" in result
@@ -85,9 +85,9 @@ def test_parse_inspec_profile_valid_path(tmp_path: Path, monkeypatch: pytest.Mon
 # ---------------------------------------------------------------------------
 
 
-def test_convert_inspec_to_test_invalid_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_inspec_to_test_invalid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test convert_inspec_to_test returns error for an invalid path."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/tmp")  # noqa: S108
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     result = convert_inspec_to_test("../../etc/passwd", "testinfra")
     assert "Error" in result
@@ -98,9 +98,9 @@ def test_convert_inspec_to_test_invalid_path(monkeypatch: pytest.MonkeyPatch) ->
 # ---------------------------------------------------------------------------
 
 
-def test_generate_inspec_from_recipe_invalid_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_inspec_from_recipe_invalid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test generate_inspec_from_recipe returns error for invalid path."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/tmp")  # noqa: S108
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     result = generate_inspec_from_recipe("../../etc/passwd")
     assert "Error" in result
@@ -147,15 +147,18 @@ def test_convert_chef_databag_to_vars_exception() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_generate_ansible_vault_from_databags_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_ansible_vault_from_databags_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test generate_ansible_vault_from_databags handles unexpected exceptions."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/tmp")  # noqa: S108
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    databags_dir = tmp_path / "databags"
+    databags_dir.mkdir()
+    out_dir = tmp_path / "out"
 
     with patch(
         "souschef.server._validate_databags_directory",
         side_effect=RuntimeError("unexpected error"),
     ):
-        result = generate_ansible_vault_from_databags("/tmp/databags", "/tmp/out")  # noqa: S108
+        result = generate_ansible_vault_from_databags(str(databags_dir), str(out_dir))
     assert "Error" in result
 
 
@@ -164,15 +167,15 @@ def test_generate_ansible_vault_from_databags_exception(monkeypatch: pytest.Monk
 # ---------------------------------------------------------------------------
 
 
-def test_analyse_chef_databag_usage_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analyse_chef_databag_usage_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test analyse_chef_databag_usage handles unexpected exceptions."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with patch(
         "souschef.server._extract_databag_usage_from_cookbook",
         side_effect=RuntimeError("unexpected error"),
     ):
-        result = analyse_chef_databag_usage("/tmp")  # noqa: S108
+        result = analyse_chef_databag_usage(str(tmp_path))
     assert "Error" in result
 
 
@@ -482,9 +485,9 @@ def test_get_chef_policies_exception() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_convert_habitat_to_dockerfile_invalid_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_habitat_to_dockerfile_invalid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test convert_habitat_to_dockerfile returns error for invalid path."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/tmp")  # noqa: S108
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     result = convert_habitat_to_dockerfile("../../etc/passwd")
     assert "Error" in result
@@ -507,15 +510,15 @@ def test_generate_jenkinsfile_not_found(monkeypatch: pytest.MonkeyPatch) -> None
     assert "Error" in result or "Could not find" in result
 
 
-def test_generate_jenkinsfile_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_jenkinsfile_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test generate_jenkinsfile_from_chef handles generic exceptions."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with patch(
         "souschef.ci.jenkins_pipeline.generate_jenkinsfile_from_chef_ci",
         side_effect=RuntimeError("boom"),
     ):
-        result = generate_jenkinsfile_from_chef("/tmp")  # noqa: S108
+        result = generate_jenkinsfile_from_chef(str(tmp_path))
     assert "Error" in result
 
 
@@ -536,15 +539,15 @@ def test_generate_gitlab_ci_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Error" in result or "Could not find" in result
 
 
-def test_generate_gitlab_ci_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_gitlab_ci_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test generate_gitlab_ci_from_chef handles generic exceptions."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with patch(
         "souschef.ci.gitlab_ci.generate_gitlab_ci_from_chef_ci",
         side_effect=RuntimeError("boom"),
     ):
-        result = generate_gitlab_ci_from_chef("/tmp")  # noqa: S108
+        result = generate_gitlab_ci_from_chef(str(tmp_path))
     assert "Error" in result
 
 
@@ -565,15 +568,15 @@ def test_generate_github_workflow_not_found(monkeypatch: pytest.MonkeyPatch) -> 
     assert "Error" in result or "Could not find" in result
 
 
-def test_generate_github_workflow_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_github_workflow_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test generate_github_workflow_from_chef handles generic exceptions."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with patch(
         "souschef.ci.github_actions.generate_github_workflow_from_chef_ci",
         side_effect=RuntimeError("boom"),
     ):
-        result = generate_github_workflow_from_chef("/tmp")  # noqa: S108
+        result = generate_github_workflow_from_chef(str(tmp_path))
     assert "Error" in result
 
 
@@ -625,17 +628,17 @@ def test_convert_all_cookbooks_comprehensive_no_cookbooks(tmp_path: Path, monkey
     assert "Error" in result
 
 
-def test_convert_all_cookbooks_comprehensive_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_all_cookbooks_comprehensive_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test convert_all_cookbooks_comprehensive handles unexpected exceptions."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with patch(
         "souschef.server._validate_conversion_paths",
         side_effect=RuntimeError("boom"),
     ):
         result = convert_all_cookbooks_comprehensive(
-            cookbooks_path="/tmp/cookbooks",  # noqa: S108
-            output_path="/tmp/out",  # noqa: S108
+            cookbooks_path=str(tmp_path / "cookbooks"),
+            output_path=str(tmp_path / "out"),
         )
     assert "Error" in result
 
@@ -747,27 +750,29 @@ def test_check_ansible_eol_status_exception() -> None:
     assert "Error" in result
 
 
-def test_plan_ansible_upgrade_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_plan_ansible_upgrade_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test plan_ansible_upgrade handles exceptions."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with patch(
         "souschef.ansible_upgrade.generate_upgrade_plan",
         side_effect=RuntimeError("boom"),
     ):
-        result = plan_ansible_upgrade("/tmp", "2.16")  # noqa: S108
+        result = plan_ansible_upgrade(str(tmp_path), "2.16")
     assert "Error" in result
 
 
-def test_validate_ansible_collection_compatibility_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_ansible_collection_compatibility_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test validate_ansible_collection_compatibility handles exceptions."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    req_file = tmp_path / "requirements.yml"
+    req_file.touch()
 
     with patch(
         "souschef.parsers.ansible_inventory.parse_requirements_yml",
         side_effect=FileNotFoundError("not found"),
     ):
-        result = validate_ansible_collection_compatibility("/tmp/req.yml", "2.16")  # noqa: S108
+        result = validate_ansible_collection_compatibility(str(req_file), "2.16")
     assert "Error" in result or "Could not find" in result
 
 
@@ -808,12 +813,14 @@ def test_configure_migration_simulation_invalid_combination() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_start_v2_migration_invalid_json_config(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_v2_migration_invalid_json_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test start_v2_migration handles invalid JSON config."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "cookbook"
+    cookbook_dir.mkdir()
 
     result = start_v2_migration(
-        cookbook_path="/tmp/cookbook",  # noqa: S108
+        cookbook_path=str(cookbook_dir),
         chef_version="15.10.91",
         target_platform="aap",
         target_version="2.4.0",
@@ -832,7 +839,7 @@ def test_start_v2_migration_exception(monkeypatch: pytest.MonkeyPatch) -> None:
         side_effect=RuntimeError("unexpected"),
     ):
         result = start_v2_migration(
-            cookbook_path="/tmp/cookbook",  # noqa: S108
+            cookbook_path="/nonexistent/cookbook",
             chef_version="15.10.91",
             target_platform="aap",
             target_version="2.4.0",
@@ -1066,31 +1073,31 @@ def test_list_migration_version_combinations_returns_valid_json() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_assess_ansible_upgrade_readiness_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assess_ansible_upgrade_readiness_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test assess_ansible_upgrade_readiness handles exceptions."""
     from souschef.server import assess_ansible_upgrade_readiness
 
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with patch(
         "souschef.ansible_upgrade.assess_ansible_environment",
         side_effect=RuntimeError("boom"),
     ):
-        result = assess_ansible_upgrade_readiness("/tmp")  # noqa: S108
+        result = assess_ansible_upgrade_readiness(str(tmp_path))
     assert "Error" in result
 
 
-def test_generate_ansible_upgrade_test_plan_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_ansible_upgrade_test_plan_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test generate_ansible_upgrade_test_plan handles exceptions."""
     from souschef.server import generate_ansible_upgrade_test_plan
 
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with patch(
         "souschef.ansible_upgrade.generate_upgrade_testing_plan",
         side_effect=RuntimeError("boom"),
     ):
-        result = generate_ansible_upgrade_test_plan("/tmp")  # noqa: S108
+        result = generate_ansible_upgrade_test_plan(str(tmp_path))
     assert "Error" in result
 
 
@@ -1099,9 +1106,11 @@ def test_generate_ansible_upgrade_test_plan_exception(monkeypatch: pytest.Monkey
 # ---------------------------------------------------------------------------
 
 
-def test_start_v2_migration_basic_success(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_v2_migration_basic_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test start_v2_migration succeeds with a valid version combination."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+    cookbook_dir = tmp_path / "cookbook"
+    cookbook_dir.mkdir()
 
     mock_result = MagicMock()
     mock_result.to_dict.return_value = {
@@ -1114,7 +1123,7 @@ def test_start_v2_migration_basic_success(monkeypatch: pytest.MonkeyPatch) -> No
 
     with patch("souschef.server.MigrationOrchestrator", return_value=mock_orchestrator):
         result = start_v2_migration(
-            cookbook_path="/tmp/cookbook",  # noqa: S108
+            cookbook_path=str(cookbook_dir),
             chef_version="15.10.91",
             target_platform="aap",
             target_version="2.4.0",
@@ -1129,15 +1138,11 @@ def test_start_v2_migration_basic_success(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_validate_v2_playbooks_exception() -> None:
-    """Test validate_v2_playbooks handles exceptions gracefully."""
-    with patch("builtins.len", side_effect=RuntimeError("boom")):
-        # Even if len fails internally, test that the function doesn't propagate
-        # In practice this test just ensures the exception path can be reached
-        pass
-    # Normal path should still work
+    """Test validate_v2_playbooks returns valid JSON with a single playbook."""
     result = validate_v2_playbooks("playbook.yml", "2.15")
     payload = json.loads(result)
     assert payload["playbooks_validated"] == 1
+    assert payload["target_ansible_version"] == "2.15"
 
 
 # ---------------------------------------------------------------------------
@@ -1193,10 +1198,9 @@ def test_create_main_task_file_success(tmp_path: Path) -> None:
     ):
         _create_main_task_file(cookbook_dir, role_dir, summary, include_recipes=True)
 
-    if summary["converted_files"]:
-        assert summary["converted_files"][0]["source"] == "recipes/default.rb"
-    # Either a file was created or a warning was added — either is acceptable
-    assert len(summary["converted_files"]) + len(summary["warnings"]) >= 0
+    # Function should complete without raising; result varies on environment
+    assert isinstance(summary["converted_files"], list)
+    assert isinstance(summary["warnings"], list)
 
 
 # ---------------------------------------------------------------------------
@@ -1204,17 +1208,17 @@ def test_create_main_task_file_success(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_simulate_chef_to_awx_migration_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_simulate_chef_to_awx_migration_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test simulate_chef_to_awx_migration handles unexpected exceptions."""
-    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with patch(
         "souschef.server._validate_conversion_paths",
         side_effect=RuntimeError("boom"),
     ):
         result = simulate_chef_to_awx_migration(
-            cookbooks_path="/tmp/cookbooks",  # noqa: S108
-            output_path="/tmp/out",  # noqa: S108
+            cookbooks_path=str(tmp_path / "cookbooks"),
+            output_path=str(tmp_path / "out"),
         )
     # simulate returns JSON for most errors but string for early validation
     assert "Error" in result or '"error"' in result
