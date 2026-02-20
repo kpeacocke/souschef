@@ -148,7 +148,7 @@ def extract_tar_gz_archive(archive_path: str, output_dir: str) -> str:
             tar.extractall(
                 target_dir, filter="data"
             )  # NOSONAR - validated members before extract
-        except TypeError:
+        except TypeError:  # pragma: no cover
             # Older Python versions do not support the filter argument.
             tar.extractall(target_dir)  # NOSONAR - validated members before extract
 
