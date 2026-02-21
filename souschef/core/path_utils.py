@@ -140,7 +140,7 @@ def _validate_relative_parts(parts: tuple[str, ...]) -> Path:
             raise ValueError(f"Path traversal attempt: {part}")
 
     relative = Path(*parts)
-    if relative.is_absolute():
+    if relative.is_absolute():  # pragma: no cover
         raise ValueError(f"Path traversal attempt: {relative}")
 
     return relative

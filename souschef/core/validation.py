@@ -281,7 +281,7 @@ class ValidationEngine:
         """
         try:
             import yaml
-        except ImportError:
+        except ImportError:  # pragma: no cover
             # YAML library unavailable, skip validation
             return
 

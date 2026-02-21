@@ -48,7 +48,7 @@ from souschef.parsers.recipe import parse_recipe
 # Optional AI provider imports
 try:
     import requests
-except ImportError:
+except ImportError:  # pragma: no cover
     requests = None  # type: ignore[assignment]
 
 try:
