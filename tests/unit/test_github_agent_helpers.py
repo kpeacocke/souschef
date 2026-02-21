@@ -33,7 +33,7 @@ class TestValidateGitHubToken:
         token = _validate_github_token()
         assert token == "ghp_test123"
 
-    @patch.dict("os.environ", {"GH_TOKEN": "ghp_test456"})
+    @patch.dict("os.environ", {"GH_TOKEN": "ghp_test456"}, clear=True)
     def test_validate_token_from_gh_token_env(self):
         """Test token validation from GH_TOKEN environment variable."""
         token = _validate_github_token()
