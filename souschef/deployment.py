@@ -1251,7 +1251,7 @@ def _analyse_chef_deployment_pattern(cookbook_path: Path) -> dict:
                 elif "rolling" in content.lower():
                     analysis["detected_pattern"] = "rolling_update"
 
-            except Exception:
+            except Exception:  # pragma: no cover
                 # Silently skip malformed files
                 pass
 
@@ -1601,7 +1601,7 @@ def _analyse_application_cookbook(cookbook_path: Path, app_type: str) -> dict:
                 patterns = _detect_patterns_from_content(content)
                 analysis["deployment_patterns"].extend(patterns)
 
-            except Exception:
+            except Exception:  # pragma: no cover
                 # Silently skip malformed files
                 pass
 

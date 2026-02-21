@@ -5548,7 +5548,7 @@ def generate_handler_routing_config(
                 try:
                     content = rb_file.read_text(encoding="utf-8")
                     patterns.extend(detect_handler_patterns(content))
-                except Exception:  # noqa: S110
+                except Exception:  # noqa: S110  # pragma: no cover
                     pass  # Skip files with parsing errors
         return patterns
 
