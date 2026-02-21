@@ -1017,30 +1017,37 @@ def test_generate_playbook_with_ai_exception(tmp_path: Path) -> None:
 # core/metrics.py
 # ---------------------------------------------------------------------------
 def test_validate_metrics_consistency_invalid_weeks_format() -> None:
-    """Invalid weeks format adds error – metrics.py:356,368."""
+    """Invalid weeks format adds error – metrics.py:338,346,352-356,366-368."""
     from souschef.core.metrics import validate_metrics_consistency
 
-    # Range format with bad values
-    _, errors = validate_metrics_consistency(
-        days=5.0,
-        weeks="invalid-format weeks",
-        hours=40.0,
-        complexity="Medium",
+    # Test hours mismatch (line 338)
+    _, errors1 = validate_metrics_consistency(
+        days=5.0, weeks="1-2 weeks", hours=10.0, complexity="Medium"
     )
-    assert any("weeks" in e.lower() or "invalid" in e.lower() for e in errors)
+    assert any("mismatch" in e.lower() for e in errors1)
+
+    # Test "week" not in weeks (line 346)
+    _, errors2 = validate_metrics_consistency(
+        days=1.0, weeks="3 months", hours=8.0, complexity="Low"
+    )
+    assert any("Invalid weeks" in e for e in errors2)
+
+    # Test range mismatch (lines 352-356): valid range that doesn't match
+    _, errors3 = validate_metrics_consistency(
+        days=100.0, weeks="1-2 weeks", hours=800.0, complexity="High"
+    )
+    assert any("mismatch" in e.lower() or "weeks" in e.lower() for e in errors3)
 
 
 def test_validate_metrics_consistency_single_week_invalid() -> None:
-    """Single week ValueError format – metrics.py:368."""
+    """Single week format mismatch – metrics.py:366-368."""
     from souschef.core.metrics import validate_metrics_consistency
 
+    # Test single week mismatch (lines 366-368): "1 week" but 100 days
     _, errors = validate_metrics_consistency(
-        days=0.5,
-        weeks="abc weeks",
-        hours=4.0,
-        complexity="Low",
+        days=100.0, weeks="1 week", hours=800.0, complexity="High"
     )
-    assert any("weeks" in e.lower() or "invalid" in e.lower() for e in errors)
+    assert any("mismatch" in e.lower() or "weeks" in e.lower() for e in errors)
 
 
 # ---------------------------------------------------------------------------
