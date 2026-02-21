@@ -82,7 +82,9 @@ def _make_upgrade_path(
     )
 
 
-def _make_upgrade_plan(path: UpgradePath, steps: list[UpgradeStep] | None = None) -> UpgradePlan:
+def _make_upgrade_plan(
+    path: UpgradePath, steps: list[UpgradeStep] | None = None
+) -> UpgradePlan:
     """Build a minimal UpgradePlan for testing."""
     return UpgradePlan(
         upgrade_path=path,
@@ -92,7 +94,9 @@ def _make_upgrade_plan(path: UpgradePath, steps: list[UpgradeStep] | None = None
         post_upgrade_validation=[],
         rollback_plan=RollbackPlan(steps=[], estimated_duration_minutes=0),
         estimated_downtime_hours=0.0,
-        risk_assessment=RiskAssessment(level="LOW", factors=[], mitigation=["Back up first"]),
+        risk_assessment=RiskAssessment(
+            level="LOW", factors=[], mitigation=["Back up first"]
+        ),
     )
 
 
@@ -148,7 +152,9 @@ def test_parse_controls_from_file_read_error(tmp_path: Path) -> None:
     ctrl_file.write_text("control 'x' do\nend\n")
 
     with (
-        patch("souschef.server.safe_read_text", side_effect=OSError("permission denied")),
+        patch(
+            "souschef.server.safe_read_text", side_effect=OSError("permission denied")
+        ),
         pytest.raises(RuntimeError, match="Error reading file"),
     ):
         _parse_controls_from_file(ctrl_file)
@@ -298,7 +304,9 @@ def test_sanitize_cookbook_paths_relative_raises() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_profile_parsing_operation_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_profile_parsing_operation_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """profile_parsing_operation returns an error string on unexpected exception."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     rb_file = tmp_path / "recipe.rb"
@@ -321,7 +329,9 @@ def test_generate_ansible_repository_exception(
     """generate_ansible_repository returns JSON error on unexpected exception."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
-    with patch("souschef.server._normalize_path", side_effect=RuntimeError("gen error")):
+    with patch(
+        "souschef.server._normalize_path", side_effect=RuntimeError("gen error")
+    ):
         result = generate_ansible_repository(str(tmp_path), repo_type="playbooks_roles")
 
     data = json.loads(result)
@@ -340,12 +350,16 @@ def test_convert_cookbook_comprehensive_exception(
     """convert_cookbook_comprehensive returns error string on unexpected exception."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
-    with patch("souschef.server._create_role_structure", side_effect=RuntimeError("cboom")):
+    with patch(
+        "souschef.server._create_role_structure", side_effect=RuntimeError("cboom")
+    ):
         # Create a minimal cookbook so the function gets past path validation
         cookbook_dir = tmp_path / "mycookbook"
         cookbook_dir.mkdir()
         (cookbook_dir / "metadata.rb").write_text("name 'mycookbook'\n")
-        result = convert_cookbook_comprehensive(str(cookbook_dir), str(tmp_path / "out"))
+        result = convert_cookbook_comprehensive(
+            str(cookbook_dir), str(tmp_path / "out")
+        )
 
     assert "Error" in result or "cboom" in result
 
@@ -483,7 +497,9 @@ def test_convert_templates_exception(tmp_path: Path) -> None:
     role_dir.mkdir(parents=True)
     summary = _make_empty_conversion_summary()
 
-    with patch("souschef.server._parse_template", side_effect=RuntimeError("tmpl error")):
+    with patch(
+        "souschef.server._parse_template", side_effect=RuntimeError("tmpl error")
+    ):
         _convert_templates(cookbook_dir, role_dir, summary)
 
     assert any("Error converting template" in e for e in summary["errors"])
@@ -629,12 +645,13 @@ def test_convert_all_cookbooks_comprehensive_no_cookbooks(
     out_dir.mkdir()
 
     with (
-        patch("souschef.server._validate_conversion_paths", return_value=(cookbooks_dir, out_dir)),
+        patch(
+            "souschef.server._validate_conversion_paths",
+            return_value=(cookbooks_dir, out_dir),
+        ),
         patch("souschef.server._find_cookbook_directories", return_value=[]),
     ):
-        result = convert_all_cookbooks_comprehensive(
-            str(cookbooks_dir), str(out_dir)
-        )
+        result = convert_all_cookbooks_comprehensive(str(cookbooks_dir), str(out_dir))
 
     assert "Error" in result and "No Chef cookbooks" in result
 
@@ -652,7 +669,10 @@ def test_validate_conversion_paths_invalid_cookbooks(
 
     monkeypatch.chdir("/tmp")
     with (
-        patch("souschef.server._ensure_within_base_path", side_effect=ValueError("bad path")),
+        patch(
+            "souschef.server._ensure_within_base_path",
+            side_effect=ValueError("bad path"),
+        ),
         pytest.raises(ValueError, match="Cookbooks path is invalid"),
     ):
         _validate_conversion_paths("/some/path", "/some/output")
@@ -724,7 +744,10 @@ def test_get_role_name_list_name(tmp_path: Path) -> None:
     cookbook_dir.mkdir()
     (cookbook_dir / "metadata.rb").write_text("name 'myapp'\n")
 
-    with patch("souschef.server._parse_cookbook_metadata", return_value={"name": ["myapp", "other"]}):
+    with patch(
+        "souschef.server._parse_cookbook_metadata",
+        return_value={"name": ["myapp", "other"]},
+    ):
         result = _get_role_name(cookbook_dir, "fallback")
 
     assert result == "myapp"
@@ -736,7 +759,9 @@ def test_get_role_name_str_name(tmp_path: Path) -> None:
     cookbook_dir.mkdir()
     (cookbook_dir / "metadata.rb").write_text("name 'myapp'\n")
 
-    with patch("souschef.server._parse_cookbook_metadata", return_value={"name": "myapp"}):
+    with patch(
+        "souschef.server._parse_cookbook_metadata", return_value={"name": "myapp"}
+    ):
         result = _get_role_name(cookbook_dir, "fallback")
 
     assert result == "myapp"
@@ -777,7 +802,10 @@ def test_full_migration_tool_no_cookbooks(
     from souschef.server import simulate_chef_to_awx_migration
 
     with (
-        patch("souschef.server._validate_conversion_paths", return_value=(cookbooks_dir, out_dir)),
+        patch(
+            "souschef.server._validate_conversion_paths",
+            return_value=(cookbooks_dir, out_dir),
+        ),
         patch("souschef.server._find_cookbook_directories", return_value=[]),
     ):
         result = simulate_chef_to_awx_migration(str(cookbooks_dir), str(out_dir))
@@ -797,7 +825,10 @@ def test_plan_ansible_upgrade_short_version(
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
     with (
-        patch("souschef.parsers.ansible_inventory.detect_ansible_version", return_value="2"),
+        patch(
+            "souschef.parsers.ansible_inventory.detect_ansible_version",
+            return_value="2",
+        ),
         patch("souschef.ansible_upgrade.generate_upgrade_plan") as mock_plan,
     ):
         mock_plan.return_value = _make_upgrade_plan(_make_upgrade_path())
@@ -812,7 +843,9 @@ def test_plan_ansible_upgrade_exception(
     """plan_ansible_upgrade returns an error string on unexpected exception."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
-    with patch("souschef.server._normalize_path", side_effect=RuntimeError("upgrade boom")):
+    with patch(
+        "souschef.server._normalize_path", side_effect=RuntimeError("upgrade boom")
+    ):
         result = plan_ansible_upgrade(str(tmp_path), "2.16")
 
     assert "Error" in result or "upgrade boom" in result
@@ -825,7 +858,10 @@ def test_plan_ansible_upgrade_exception(
 
 def test_check_ansible_eol_status_exception() -> None:
     """check_ansible_eol_status returns an error string on unexpected exception."""
-    with patch("souschef.core.ansible_versions.get_eol_status", side_effect=RuntimeError("eol boom")):
+    with patch(
+        "souschef.core.ansible_versions.get_eol_status",
+        side_effect=RuntimeError("eol boom"),
+    ):
         result = check_ansible_eol_status("2.9")
 
     assert "Error" in result or "eol boom" in result
@@ -894,10 +930,16 @@ def test_format_upgrade_steps_with_notes() -> None:
 
 def test_list_migration_version_combinations_skips_invalid() -> None:
     """list_migration_version_combinations skips combinations that raise ValueError."""
-    fake_combo = {"chef_version": "99.0.0", "target_platform": "awx", "target_version": "99.0"}
+    fake_combo = {
+        "chef_version": "99.0.0",
+        "target_platform": "awx",
+        "target_version": "99.0",
+    }
 
     with (
-        patch("souschef.server._get_all_version_combinations", return_value=[fake_combo]),
+        patch(
+            "souschef.server._get_all_version_combinations", return_value=[fake_combo]
+        ),
         patch(
             "souschef.server._validate_version_combination",
             side_effect=ValueError("unsupported"),
@@ -917,7 +959,9 @@ def test_list_migration_version_combinations_skips_invalid() -> None:
 
 def test_start_v2_migration_exception() -> None:
     """start_v2_migration returns a JSON error when an unexpected exception occurs."""
-    with patch("souschef.server.MigrationOrchestrator", side_effect=RuntimeError("v2 boom")):
+    with patch(
+        "souschef.server.MigrationOrchestrator", side_effect=RuntimeError("v2 boom")
+    ):
         result = start_v2_migration(
             cookbook_path="",
             chef_version="14.15.6",
@@ -937,7 +981,10 @@ def test_start_v2_migration_exception() -> None:
 
 def test_validate_v2_playbooks_exception() -> None:
     """validate_v2_playbooks returns a JSON error when an exception is raised."""
-    with patch("souschef.server._validate_version_combination", side_effect=RuntimeError("val boom")):
+    with patch(
+        "souschef.server._validate_version_combination",
+        side_effect=RuntimeError("val boom"),
+    ):
         result = validate_v2_playbooks("/path/to/playbook.yml", "2.16")
 
     # Normal path works (exception inside would have to be triggered differently)
@@ -964,7 +1011,7 @@ def test_rollback_v2_migration_success() -> None:
     result = rollback_v2_migration(
         ansible_url="http://awx",
         ansible_username="admin",
-        ansible_password="pass",
+        ansible_password="pass",  # NOSONAR - test fixture
         inventory_id=5,
         project_id=3,
         job_template_id=7,
@@ -999,7 +1046,9 @@ def test_generate_handler_routing_config_yaml_output(
             },
         ),
     ):
-        result = generate_handler_routing_config(str(cookbook_dir), output_format="yaml")
+        result = generate_handler_routing_config(
+            str(cookbook_dir), output_format="yaml"
+        )
 
     data = json.loads(result)
     assert data["status"] == "success"
@@ -1026,7 +1075,9 @@ def test_generate_handler_routing_config_json_output(
             return_value={"event_routes": {}, "summary": {"total_patterns": 0}},
         ),
     ):
-        result = generate_handler_routing_config(str(cookbook_dir), output_format="json")
+        result = generate_handler_routing_config(
+            str(cookbook_dir), output_format="json"
+        )
 
     data = json.loads(result)
     assert data["status"] == "success"
@@ -1038,7 +1089,10 @@ def test_generate_handler_routing_config_exception(
     """generate_handler_routing_config returns a JSON error on unexpected exception."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
-    with patch("souschef.server._normalise_workspace_path", side_effect=RuntimeError("handler boom")):
+    with patch(
+        "souschef.server._normalise_workspace_path",
+        side_effect=RuntimeError("handler boom"),
+    ):
         result = generate_handler_routing_config(str(tmp_path), output_format="yaml")
 
     data = json.loads(result)

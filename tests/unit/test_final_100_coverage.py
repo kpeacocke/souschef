@@ -91,13 +91,20 @@ def test_generate_inventory_both_format(tmp_path: Path) -> None:
     env_dir = tmp_path / "environments"
     env_dir.mkdir()
     (env_dir / "production.json").write_text(
-        json.dumps({"name": "production", "default_attributes": {}, "override_attributes": {}})
+        json.dumps(
+            {"name": "production", "default_attributes": {}, "override_attributes": {}}
+        )
     )
     result = generate_inventory_from_chef_environments(
         str(env_dir),
         output_format="both",
     )
-    assert "INI" in result or "ini" in result.lower() or "YAML" in result or "ini" in result
+    assert (
+        "INI" in result
+        or "ini" in result.lower()
+        or "YAML" in result
+        or "ini" in result
+    )
 
 
 def test_analyse_usage_pattern_recommendations_empty() -> None:
@@ -117,9 +124,11 @@ def test_create_role_structure_path_traversal(tmp_path: Path) -> None:
     """RuntimeError raised for unsafe role path – server.py:3853."""
     from souschef.server import _create_role_structure
 
-    with patch("souschef.server.os.path.commonpath", return_value="/different/path"):
-        with pytest.raises(RuntimeError, match="Unsafe role path"):
-            _create_role_structure(tmp_path, "somerole")
+    with (
+        patch("souschef.server.os.path.commonpath", return_value="/different/path"),
+        pytest.raises(RuntimeError, match="Unsafe role path"),
+    ):
+        _create_role_structure(tmp_path, "somerole")
 
 
 def test_convert_recipes_path_traversal(tmp_path: Path) -> None:
@@ -127,9 +136,11 @@ def test_convert_recipes_path_traversal(tmp_path: Path) -> None:
     from souschef.server import _convert_recipes
 
     summary: dict = {"warnings": [], "errors": [], "converted_files": []}
-    with patch("souschef.server.os.path.commonpath", return_value="/different/path"):
-        with pytest.raises(RuntimeError, match="Unsafe recipes path"):
-            _convert_recipes(tmp_path, tmp_path / "role", summary)
+    with (
+        patch("souschef.server.os.path.commonpath", return_value="/different/path"),
+        pytest.raises(RuntimeError, match="Unsafe recipes path"),
+    ):
+        _convert_recipes(tmp_path, tmp_path / "role", summary)
 
 
 def test_convert_recipes_oserror_on_write(tmp_path: Path) -> None:
@@ -139,7 +150,9 @@ def test_convert_recipes_oserror_on_write(tmp_path: Path) -> None:
     # Create recipes dir with one rb file
     recipes_dir = tmp_path / "recipes"
     recipes_dir.mkdir()
-    (recipes_dir / "default.rb").write_text("package 'nginx' do\naction :install\nend\n")
+    (recipes_dir / "default.rb").write_text(
+        "package 'nginx' do\naction :install\nend\n"
+    )
     role_dir = tmp_path / "role"
     role_dir.mkdir()
 
@@ -148,7 +161,9 @@ def test_convert_recipes_oserror_on_write(tmp_path: Path) -> None:
     with patch("souschef.server.safe_write_text", side_effect=OSError("disk full")):
         _convert_recipes(tmp_path, role_dir, summary)
 
-    assert any("disk full" in str(e) or "task file" in str(e) for e in summary["errors"])
+    assert any(
+        "disk full" in str(e) or "task file" in str(e) for e in summary["errors"]
+    )
 
 
 def test_convert_templates_json_decode_error(tmp_path: Path) -> None:
@@ -165,15 +180,21 @@ def test_convert_templates_json_decode_error(tmp_path: Path) -> None:
     with patch("souschef.server._parse_template", return_value="not_valid_json"):
         _convert_templates(tmp_path, role_dir, summary)
 
-    assert any("Invalid JSON" in str(e) or "template" in str(e) for e in summary["errors"])
+    assert any(
+        "Invalid JSON" in str(e) or "template" in str(e) for e in summary["errors"]
+    )
 
 
 def test_validate_conversion_paths_bad_output(tmp_path: Path) -> None:
     """ValueError for bad output path – server.py:4252-4253."""
-    with pytest.raises(ValueError, match="Output path"), patch(
-        "souschef.server._ensure_within_base_path",
-        side_effect=[tmp_path / "cookbooks", ValueError("escapes")],
-    ), patch("souschef.core.path_utils.safe_exists", return_value=True):
+    with (
+        pytest.raises(ValueError, match="Output path"),
+        patch(
+            "souschef.server._ensure_within_base_path",
+            side_effect=[tmp_path / "cookbooks", ValueError("escapes")],
+        ),
+        patch("souschef.core.path_utils.safe_exists", return_value=True),
+    ):
         _validate_conversion_paths(str(tmp_path), "/../../bad")
 
 
@@ -219,7 +240,10 @@ def test_plan_ansible_upgrade_with_env_ansible_exe(tmp_path: Path) -> None:
     ansible_exe.touch()
     ansible_exe.chmod(0o755)
 
-    with patch("souschef.parsers.ansible_inventory.detect_ansible_version", return_value="2.16.0"):
+    with patch(
+        "souschef.parsers.ansible_inventory.detect_ansible_version",
+        return_value="2.16.0",
+    ):
         result = plan_ansible_upgrade(str(tmp_path), "2.17")
     assert isinstance(result, str)
 
@@ -279,9 +303,11 @@ def test_parse_collections_file_import_error(tmp_path: Path) -> None:
     test_file = tmp_path / "requirements.yml"
     test_file.write_text("collections:\n  - name: test\n")
 
-    with patch.dict("sys.modules", {"yaml": None}):
-        with pytest.raises(ValueError, match="PyYAML"):
-            _parse_collections_file(str(test_file))
+    with (
+        patch.dict("sys.modules", {"yaml": None}),
+        pytest.raises(ValueError, match="PyYAML"),
+    ):
+        _parse_collections_file(str(test_file))
 
 
 def test_parse_collections_file_invalid_path() -> None:
@@ -299,9 +325,11 @@ def test_parse_collections_file_oserror_reading(tmp_path: Path) -> None:
     test_file = tmp_path / "requirements.yml"
     test_file.write_text("collections:\n  - name: test\n")
 
-    with patch("pathlib.Path.open", side_effect=OSError("permission denied")):
-        with pytest.raises(ValueError, match="Cannot read"):
-            _parse_collections_file(str(test_file))
+    with (
+        patch("pathlib.Path.open", side_effect=OSError("permission denied")),
+        pytest.raises(ValueError, match="Cannot read"),
+    ):
+        _parse_collections_file(str(test_file))
 
 
 def test_display_plan_section_empty_items() -> None:
@@ -318,7 +346,7 @@ def test_analyse_cookbook_complexity_zero_recipes(tmp_path: Path) -> None:
 
     result = _analyse_cookbook_for_assessment(tmp_path)
     assert result["complexity"] == "Low"
-    assert result["estimated_hours"] == 0.5
+    assert abs(result["estimated_hours"] - 0.5) < 0.01
 
 
 def test_cli_cookbook_dry_run(tmp_path: Path) -> None:
@@ -333,7 +361,11 @@ def test_cli_cookbook_dry_run(tmp_path: Path) -> None:
         cli,
         ["cookbook", str(tmp_path), "--output", "/tmp/out", "--dry-run"],
     )
-    assert result.exit_code == 0 or "Would save" in result.output or "dry" in result.output.lower()
+    assert (
+        result.exit_code == 0
+        or "Would save" in result.output
+        or "dry" in result.output.lower()
+    )
 
 
 def test_cli_recipe_convert_invalid_output(tmp_path: Path) -> None:
@@ -353,7 +385,13 @@ def test_cli_recipe_convert_invalid_output(tmp_path: Path) -> None:
     ):
         result = runner.invoke(
             cli,
-            ["convert-recipe", str(tmp_path), "default", "--output", "/nonexistent/x/out"],
+            [
+                "convert-recipe",
+                str(tmp_path),
+                "default",
+                "--output",
+                "/nonexistent/x/out",
+            ],
         )
     # Just ensure it either succeeds or shows an error
     assert result.exit_code in (0, 1, 2)
@@ -368,9 +406,7 @@ def test_assess_cookbook_exists_safe_oserror(tmp_path: Path) -> None:
 
     # Pass a path that raises OSError on exists()
     with patch("pathlib.Path.exists", side_effect=OSError("access denied")):
-        result = assess_chef_migration_complexity(
-            str(tmp_path), "full", "rhel"
-        )
+        result = assess_chef_migration_complexity(str(tmp_path), "full", "rhel")
     assert isinstance(result, str)
 
 
@@ -409,18 +445,22 @@ def test_assess_cookbook_path_traversal(tmp_path: Path) -> None:
     """Path traversal raises RuntimeError – assessment.py:2782."""
     from souschef.assessment import _get_recipe_content_sample
 
-    with pytest.raises(RuntimeError, match="Path traversal"):
-        with patch("os.path.commonpath", return_value="/different/path"):
-            _get_recipe_content_sample(tmp_path)
+    with (
+        pytest.raises(RuntimeError, match="Path traversal"),
+        patch("os.path.commonpath", return_value="/different/path"),
+    ):
+        _get_recipe_content_sample(tmp_path)
 
 
 def test_get_metadata_content_path_traversal(tmp_path: Path) -> None:
     """Path traversal in _get_metadata_content – assessment.py:2828."""
     from souschef.assessment import _get_metadata_content
 
-    with pytest.raises(RuntimeError, match="Path traversal"):
-        with patch("os.path.commonpath", return_value="/different/path"):
-            _get_metadata_content(tmp_path)
+    with (
+        pytest.raises(RuntimeError, match="Path traversal"),
+        patch("os.path.commonpath", return_value="/different/path"),
+    ):
+        _get_metadata_content(tmp_path)
 
 
 def test_call_ai_api_openai_returns_none() -> None:
@@ -436,12 +476,15 @@ def test_call_ai_api_watson_returns_none() -> None:
     """_call_watson_api returns None – assessment.py:2992."""
     from souschef.assessment import _call_ai_api
 
-    with patch("souschef.assessment._call_watson_api", return_value=None):
-        with patch("souschef.assessment.validate_user_provided_url", return_value="http://test"):
-            result = _call_ai_api(
-                "prompt", "watson", "key", "model", 0.0, 100,
-                base_url="http://test.url"
-            )
+    with (
+        patch("souschef.assessment._call_watson_api", return_value=None),
+        patch(
+            "souschef.assessment.validate_user_provided_url", return_value="http://test"
+        ),
+    ):
+        result = _call_ai_api(
+            "prompt", "watson", "key", "model", 0.0, 100, base_url="http://test.url"
+        )
     assert result is None
 
 
@@ -451,7 +494,7 @@ def test_assess_cookbook_with_ai_exception() -> None:
 
     # Pass malformed assessment to trigger exception
     result = calculate_activity_breakdown(
-        {"cookbook_name": "test", "complexity_score": "not_a_number", "metrics": {}}
+        {"cookbook_name": "test", "complexity_score": "not_a_number", "metrics": {}}  # type: ignore[arg-type]
     )
     assert "error" in result
 
@@ -460,7 +503,7 @@ def test_call_ai_api_watson_branch() -> None:
     """Watson branch in _call_ai_api – assessment.py:2862."""
     from souschef.assessment import _call_ai_api
 
-    with patch("souschef.assessment._call_watson_api", return_value="result") as mock_watson:
+    with patch("souschef.assessment._call_watson_api", return_value="result"):
         result = _call_ai_api("prompt", "watson", "key", "model", 0.0, 100)
     assert result == "result"
 
@@ -488,7 +531,9 @@ def test_fetch_run_list_with_policy() -> None:
     mock_client.get_policy.return_value = {"run_list": []}
     mock_client.get_node.return_value = {"run_list": []}
 
-    with patch("souschef.migration_v2.build_chef_server_client", return_value=mock_client):
+    with patch(
+        "souschef.migration_v2.build_chef_server_client", return_value=mock_client
+    ):
         # chef_policy path
         run_list, payload = orch._fetch_run_list(
             chef_server_url="https://chef.example.com",
@@ -516,7 +561,9 @@ def test_fetch_run_list_with_node() -> None:
         "automatic": {"hostname": "test"},
     }
 
-    with patch("souschef.migration_v2.build_chef_server_client", return_value=mock_client):
+    with patch(
+        "souschef.migration_v2.build_chef_server_client", return_value=mock_client
+    ):
         run_list, payload = orch._fetch_run_list(
             chef_server_url="https://chef.example.com",
             chef_organisation="myorg",
@@ -567,7 +614,9 @@ def test_chef_node_payload_processing(tmp_path: Path) -> None:
             "os": "linux",
         }
     }
-    orch._build_variable_context(cookbook_path=str(tmp_path), chef_node_payload=chef_node_payload)
+    orch._build_variable_context(
+        cookbook_path=str(tmp_path), chef_node_payload=chef_node_payload
+    )
     # Should not raise
 
 
@@ -617,14 +666,14 @@ def test_run_playbook_validation_with_warnings(tmp_path: Path) -> None:
     with patch("subprocess.run", return_value=mock_proc):
         orch._run_playbook_validation([playbook_file])
 
-    assert any("ansible-lint" in str(w) or "lint" in str(w) for w in mock_result.warnings)
+    assert any(
+        "ansible-lint" in str(w) or "lint" in str(w) for w in mock_result.warnings
+    )
 
 
 def test_load_migration_result_non_dict_payload() -> None:
     """Non-dict JSON payload hits continue – migration_v2.py:2278."""
     from souschef.migration_v2 import MigrationOrchestrator
-
-    orch = MigrationOrchestrator("15.10.91", "awx", "22.0.0")
 
     # Create a conversion with a non-dict payload (list)
     mock_conv = MagicMock()
@@ -653,9 +702,11 @@ def test_detect_python_version_path_escape(tmp_path: Path) -> None:
     python_exe = bin_dir / "python3"
     python_exe.touch()
 
-    with patch("souschef.ansible_upgrade._is_path_within", return_value=False):
-        with pytest.raises(ValueError, match="escapes"):
-            detect_python_version(str(env_path))
+    with (
+        patch("souschef.ansible_upgrade._is_path_within", return_value=False),
+        pytest.raises(ValueError, match="escapes"),
+    ):
+        detect_python_version(str(env_path))
 
 
 def test_detect_ansible_version_with_executable(tmp_path: Path) -> None:
@@ -674,7 +725,9 @@ def test_detect_ansible_version_with_executable(tmp_path: Path) -> None:
         "current_version_full": "unknown",
         "compatibility_issues": [],
     }
-    with patch("souschef.ansible_upgrade.detect_ansible_version", return_value="2.16.3"):
+    with patch(
+        "souschef.ansible_upgrade.detect_ansible_version", return_value="2.16.3"
+    ):
         _detect_ansible_version_info(str(env_path), result)
 
     assert result["current_version"] == "2.16"
@@ -907,12 +960,14 @@ def test_convert_guards_with_not_if_array() -> None:
     """not_if array conditions extended – playbook.py:2741-2742."""
     from souschef.converters.playbook import _extract_chef_guards
 
-    resource = {"type": "package", "name": "nginx", "action": "install", "properties": ""}
+    resource = {
+        "type": "package",
+        "name": "nginx",
+        "action": "install",
+        "properties": "",
+    }
     raw_content = (
-        "package 'nginx' do\n"
-        "  not_if { [ 'a', 'b' ] }\n"
-        "  action :install\n"
-        "end\n"
+        "package 'nginx' do\n  not_if { [ 'a', 'b' ] }\n  action :install\nend\n"
     )
     result = _extract_chef_guards(resource, raw_content)
     # Guards may or may not find match, just ensure no crash
@@ -923,7 +978,12 @@ def test_extract_chef_guards_multiple_conditions() -> None:
     """Multiple when conditions returns list – playbook.py:2806."""
     from souschef.converters.playbook import _extract_chef_guards
 
-    resource = {"type": "package", "name": "nginx", "action": "install", "properties": ""}
+    resource = {
+        "type": "package",
+        "name": "nginx",
+        "action": "install",
+        "properties": "",
+    }
     raw_content = (
         "package 'nginx' do\n"
         "  only_if 'which nginx'\n"
@@ -972,7 +1032,7 @@ def test_handle_directory_block_with_interpolation(tmp_path: Path) -> None:
     """Path interpolation replaced in dir check – playbook.py:3018."""
     from souschef.converters.playbook import _convert_chef_block_to_ansible
 
-    block = 'File.directory?("#{node[\'dir\']}/sub")'
+    block = "File.directory?(\"#{node['dir']}/sub\")"
     result = _convert_chef_block_to_ansible(block, positive=True)
     assert isinstance(result, str)
 
@@ -986,7 +1046,9 @@ def test_generate_playbook_with_ai_path_traversal(tmp_path: Path) -> None:
     recipe_file = tmp_path / "default.rb"
     recipe_file.write_text("package 'nginx'\n")
 
-    with patch("souschef.converters.playbook.safe_exists", side_effect=ValueError("traversal")):
+    with patch(
+        "souschef.converters.playbook.safe_exists", side_effect=ValueError("traversal")
+    ):
         result = generate_playbook_with_ai(str(recipe_file))
     assert "Path traversal" in result or "Error" in result
 
@@ -1003,13 +1065,17 @@ def test_generate_playbook_with_ai_exception(tmp_path: Path) -> None:
     with (
         patch("souschef.converters.playbook.safe_exists", return_value=True),
         patch("souschef.converters.playbook.safe_read_text", return_value="content"),
-        patch("souschef.converters.playbook.parse_recipe", return_value="recipe content"),
+        patch(
+            "souschef.converters.playbook.parse_recipe", return_value="recipe content"
+        ),
         patch(
             "souschef.converters.playbook._initialize_ai_client",
             side_effect=RuntimeError("ai failed"),
         ),
     ):
-        result = generate_playbook_with_ai(str(recipe_file), ai_provider="anthropic", api_key="key")
+        result = generate_playbook_with_ai(
+            str(recipe_file), ai_provider="anthropic", api_key="key"
+        )
     assert "AI conversion failed" in result or "Error" in result
 
 
@@ -1144,10 +1210,22 @@ def test_consolidate_to_loop_with_similar_tasks() -> None:
     from souschef.converters.playbook_optimizer import optimize_task_loops
 
     tasks = [
-        {"name": "install pkg1", "ansible.builtin.package": {"name": "pkg1", "state": "present"}},
-        {"name": "install pkg2", "ansible.builtin.package": {"name": "pkg2", "state": "present"}},
-        {"name": "install pkg3", "ansible.builtin.package": {"name": "pkg3", "state": "present"}},
-        {"name": "install pkg4", "ansible.builtin.package": {"name": "pkg4", "state": "present"}},
+        {
+            "name": "install pkg1",
+            "ansible.builtin.package": {"name": "pkg1", "state": "present"},
+        },
+        {
+            "name": "install pkg2",
+            "ansible.builtin.package": {"name": "pkg2", "state": "present"},
+        },
+        {
+            "name": "install pkg3",
+            "ansible.builtin.package": {"name": "pkg3", "state": "present"},
+        },
+        {
+            "name": "install pkg4",
+            "ansible.builtin.package": {"name": "pkg4", "state": "present"},
+        },
     ]
     result = optimize_task_loops(tasks)
     assert isinstance(result, list)
@@ -1172,9 +1250,7 @@ def test_parse_attributes_multiline_array_reconstruction(tmp_path: Path) -> None
     from souschef.parsers.attributes import parse_attributes
 
     attr_file = tmp_path / "default.rb"
-    attr_file.write_text(
-        "default['packages'] = [\n  'nginx',\n  'curl',\n  'git'\n]\n"
-    )
+    attr_file.write_text("default['packages'] = [\n  'nginx',\n  'curl',\n  'git'\n]\n")
     result = parse_attributes(str(attr_file))
     assert isinstance(result, str)
 
@@ -1330,10 +1406,12 @@ def test_validate_cookbook_path_exit() -> None:
     """_prompt_cookbook_path sys.exit(1) on 'exit' result – wizard.py:76."""
     from souschef.migration_wizard import _prompt_cookbook_path
 
-    with patch("souschef.migration_wizard._validate_cookbook_path", return_value="exit"):
-        with patch("builtins.input", return_value="some/path"):
-            with pytest.raises(SystemExit):
-                _prompt_cookbook_path()
+    with (
+        patch("souschef.migration_wizard._validate_cookbook_path", return_value="exit"),
+        patch("builtins.input", return_value="some/path"),
+        pytest.raises(SystemExit),
+    ):
+        _prompt_cookbook_path()
 
 
 def test_validate_cookbook_path_retry() -> None:
@@ -1341,10 +1419,13 @@ def test_validate_cookbook_path_retry() -> None:
     from souschef.migration_wizard import _prompt_cookbook_path
 
     # First call returns "retry", second returns a valid path
-    with patch(
-        "souschef.migration_wizard._validate_cookbook_path",
-        side_effect=["retry", "/valid/path"],
-    ), patch("builtins.input", return_value="some/path"):
+    with (
+        patch(
+            "souschef.migration_wizard._validate_cookbook_path",
+            side_effect=["retry", "/valid/path"],
+        ),
+        patch("builtins.input", return_value="some/path"),
+    ):
         result = _prompt_cookbook_path()
     assert result == "/valid/path"
 
@@ -1389,7 +1470,10 @@ def test_cli_v2_run_migration_with_output_path(tmp_path: Path) -> None:
 
         mock_result = MagicMock()
         mock_result.status = MigrationStatus.CONVERTED
-        mock_result.to_dict.return_value = {"migration_id": "test", "status": "converted"}
+        mock_result.to_dict.return_value = {
+            "migration_id": "test",
+            "status": "converted",
+        }
         mock_migrate.return_value = mock_result
 
         _run_v2_migration(
@@ -1498,9 +1582,7 @@ def test_analyse_ansible_project_rolling_update_detection(tmp_path: Path) -> Non
     from souschef.deployment import _analyse_chef_deployment_pattern
 
     # Create a deployment file with "rolling" keyword
-    (tmp_path / "deploy_rolling.rb").write_text(
-        "# rolling update deployment\n"
-    )
+    (tmp_path / "deploy_rolling.rb").write_text("# rolling update deployment\n")
     result = _analyse_chef_deployment_pattern(tmp_path)
     assert isinstance(result, dict)
 
@@ -1510,7 +1592,9 @@ def test_analyse_ansible_project_malformed_file(tmp_path: Path) -> None:
     from souschef.deployment import _analyse_application_cookbook
 
     (tmp_path / "broken.rb").write_text(": not: valid: content {{{{ ")
-    with patch("pathlib.Path.read_text", side_effect=UnicodeDecodeError("utf-8", b"", 0, 1, "")):
+    with patch(
+        "pathlib.Path.read_text", side_effect=UnicodeDecodeError("utf-8", b"", 0, 1, "")
+    ):
         result = _analyse_application_cookbook(tmp_path, "web")
     assert isinstance(result, dict)
 
@@ -1605,7 +1689,9 @@ def test_download_cookbook_continue_on_download_error(tmp_path: Path) -> None:
     mock_client.get_cookbook_version.return_value = {
         "cookbook_name": "nginx",
         "version": "1.0.0",
-        "files": [{"path": "files/default/nginx.conf", "url": "http://example.com/nginx.conf"}],
+        "files": [
+            {"path": "files/default/nginx.conf", "url": "http://example.com/nginx.conf"}
+        ],
         "recipes": [],
         "attributes": [],
         "definitions": [],

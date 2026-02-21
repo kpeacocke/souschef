@@ -108,7 +108,9 @@ class TestInspecConvert:
     ) -> None:
         """inspec_convert calls convert_inspec_to_test and echoes result."""
         inspec_file = tmp_path / "control.rb"
-        inspec_file.write_text("control 'test-1' do\n  describe file('/etc') do\n  end\nend\n")
+        inspec_file.write_text(
+            "control 'test-1' do\n  describe file('/etc') do\n  end\nend\n"
+        )
 
         with patch("souschef.cli.convert_inspec_to_test", return_value="converted"):
             result = runner.invoke(cli, ["inspec-convert", str(inspec_file)])
@@ -151,10 +153,16 @@ class TestGenerateGitlabCi:
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         """GitLab CI output with cookstyle shows lint job."""
-        with patch(
-            "souschef.cli.generate_gitlab_ci_from_chef",
-            return_value="cookstyle:\n  script: cookstyle",
-        ), patch("souschef.cli._safe_write_file", return_value=tmp_path / ".gitlab-ci.yml"):
+        with (
+            patch(
+                "souschef.cli.generate_gitlab_ci_from_chef",
+                return_value="cookstyle:\n  script: cookstyle",
+            ),
+            patch(
+                "souschef.cli._safe_write_file",
+                return_value=tmp_path / ".gitlab-ci.yml",
+            ),
+        ):
             result = runner.invoke(cli, ["generate-gitlab-ci", str(FIXTURES_DIR)])
         assert result.exit_code == 0
         assert "Lint" in result.output
@@ -163,10 +171,16 @@ class TestGenerateGitlabCi:
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         """GitLab CI output with chefspec shows unit test job."""
-        with patch(
-            "souschef.cli.generate_gitlab_ci_from_chef",
-            return_value="chefspec:\n  script: rspec",
-        ), patch("souschef.cli._safe_write_file", return_value=tmp_path / ".gitlab-ci.yml"):
+        with (
+            patch(
+                "souschef.cli.generate_gitlab_ci_from_chef",
+                return_value="chefspec:\n  script: rspec",
+            ),
+            patch(
+                "souschef.cli._safe_write_file",
+                return_value=tmp_path / ".gitlab-ci.yml",
+            ),
+        ):
             result = runner.invoke(cli, ["generate-gitlab-ci", str(FIXTURES_DIR)])
         assert result.exit_code == 0
         assert "Unit Tests" in result.output
@@ -175,17 +189,21 @@ class TestGenerateGitlabCi:
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         """GitLab CI output with kitchen shows integration test job."""
-        with patch(
-            "souschef.cli.generate_gitlab_ci_from_chef",
-            return_value="kitchen-converge:\n  script: kitchen test",
-        ), patch("souschef.cli._safe_write_file", return_value=tmp_path / ".gitlab-ci.yml"):
+        with (
+            patch(
+                "souschef.cli.generate_gitlab_ci_from_chef",
+                return_value="kitchen-converge:\n  script: kitchen test",
+            ),
+            patch(
+                "souschef.cli._safe_write_file",
+                return_value=tmp_path / ".gitlab-ci.yml",
+            ),
+        ):
             result = runner.invoke(cli, ["generate-gitlab-ci", str(FIXTURES_DIR)])
         assert result.exit_code == 0
         assert "Integration Tests" in result.output
 
-    def test_gitlab_ci_exception_exits_with_error(
-        self, runner: CliRunner
-    ) -> None:
+    def test_gitlab_ci_exception_exits_with_error(self, runner: CliRunner) -> None:
         """Exception during GitLab CI generation exits with code 1."""
         with patch(
             "souschef.cli.generate_gitlab_ci_from_chef",
@@ -208,15 +226,17 @@ class TestGenerateGithubWorkflow:
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         """GitHub workflow output with lint shows lint job."""
-        with patch(
-            "souschef.cli.generate_github_workflow_from_chef",
-            return_value="lint:\n  runs-on: ubuntu",
-        ), patch("souschef.cli._resolve_output_path", return_value=tmp_path / "ci.yml"), patch.object(
-            Path, "write_text", return_value=None
+        with (
+            patch(
+                "souschef.cli.generate_github_workflow_from_chef",
+                return_value="lint:\n  runs-on: ubuntu",
+            ),
+            patch(
+                "souschef.cli._resolve_output_path", return_value=tmp_path / "ci.yml"
+            ),
+            patch.object(Path, "write_text", return_value=None),
         ):
-            result = runner.invoke(
-                cli, ["generate-github-workflow", str(FIXTURES_DIR)]
-            )
+            result = runner.invoke(cli, ["generate-github-workflow", str(FIXTURES_DIR)])
         assert result.exit_code == 0
         assert "Lint" in result.output
 
@@ -224,15 +244,17 @@ class TestGenerateGithubWorkflow:
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         """GitHub workflow output with unit-test shows unit test job."""
-        with patch(
-            "souschef.cli.generate_github_workflow_from_chef",
-            return_value="unit-test:\n  runs-on: ubuntu",
-        ), patch("souschef.cli._resolve_output_path", return_value=tmp_path / "ci.yml"), patch.object(
-            Path, "write_text", return_value=None
+        with (
+            patch(
+                "souschef.cli.generate_github_workflow_from_chef",
+                return_value="unit-test:\n  runs-on: ubuntu",
+            ),
+            patch(
+                "souschef.cli._resolve_output_path", return_value=tmp_path / "ci.yml"
+            ),
+            patch.object(Path, "write_text", return_value=None),
         ):
-            result = runner.invoke(
-                cli, ["generate-github-workflow", str(FIXTURES_DIR)]
-            )
+            result = runner.invoke(cli, ["generate-github-workflow", str(FIXTURES_DIR)])
         assert result.exit_code == 0
         assert "Unit Tests" in result.output
 
@@ -240,15 +262,17 @@ class TestGenerateGithubWorkflow:
         self, runner: CliRunner, tmp_path: Path
     ) -> None:
         """GitHub workflow output with integration-test shows integration job."""
-        with patch(
-            "souschef.cli.generate_github_workflow_from_chef",
-            return_value="integration-test:\n  runs-on: ubuntu",
-        ), patch("souschef.cli._resolve_output_path", return_value=tmp_path / "ci.yml"), patch.object(
-            Path, "write_text", return_value=None
+        with (
+            patch(
+                "souschef.cli.generate_github_workflow_from_chef",
+                return_value="integration-test:\n  runs-on: ubuntu",
+            ),
+            patch(
+                "souschef.cli._resolve_output_path", return_value=tmp_path / "ci.yml"
+            ),
+            patch.object(Path, "write_text", return_value=None),
         ):
-            result = runner.invoke(
-                cli, ["generate-github-workflow", str(FIXTURES_DIR)]
-            )
+            result = runner.invoke(cli, ["generate-github-workflow", str(FIXTURES_DIR)])
         assert result.exit_code == 0
         assert "Integration Tests" in result.output
 
@@ -260,9 +284,7 @@ class TestGenerateGithubWorkflow:
             "souschef.cli.generate_github_workflow_from_chef",
             side_effect=RuntimeError("fail"),
         ):
-            result = runner.invoke(
-                cli, ["generate-github-workflow", str(FIXTURES_DIR)]
-            )
+            result = runner.invoke(cli, ["generate-github-workflow", str(FIXTURES_DIR)])
         assert result.exit_code == 1
         assert "Error" in result.output
 
@@ -339,9 +361,7 @@ class TestProfileCookbook:
         assert result.exit_code == 0
         assert output_file.exists()
 
-    def test_profile_cookbook_to_stdout(
-        self, runner: CliRunner
-    ) -> None:
+    def test_profile_cookbook_to_stdout(self, runner: CliRunner) -> None:
         """Profile command prints to stdout when no --output."""
         with patch(
             "souschef.cli.generate_cookbook_performance_report",
@@ -378,7 +398,7 @@ class TestProfileOperation:
         recipe_file.write_text("package 'nginx'\n")
 
         mock_result = MagicMock()
-        mock_result.__str__ = lambda self: "profile output"
+        mock_result.__str__ = lambda self: "profile output"  # type: ignore[method-assign]
         mock_result.function_stats = {"top_functions": "func stats here"}
 
         with patch(
@@ -401,7 +421,7 @@ class TestProfileOperation:
         recipe_file.write_text("package 'nginx'\n")
 
         mock_result = MagicMock()
-        mock_result.__str__ = lambda self: "basic profile output"
+        mock_result.__str__ = lambda self: "basic profile output"  # type: ignore[method-assign]
 
         with patch("souschef.cli.profile_function", return_value=(None, mock_result)):
             result = runner.invoke(
@@ -418,9 +438,7 @@ class TestProfileOperation:
         recipe_file = tmp_path / "default.rb"
         recipe_file.write_text("package 'nginx'\n")
 
-        with patch(
-            "souschef.cli.profile_function", side_effect=RuntimeError("fail")
-        ):
+        with patch("souschef.cli.profile_function", side_effect=RuntimeError("fail")):
             result = runner.invoke(
                 cli, ["profile-operation", "recipe", str(recipe_file)]
             )
@@ -466,13 +484,17 @@ class TestConvertRecipe:
 class TestAssessCookbook:
     """Tests for assess-cookbook command."""
 
-    def test_assess_cookbook_json_format(
-        self, runner: CliRunner
-    ) -> None:
+    def test_assess_cookbook_json_format(self, runner: CliRunner) -> None:
         """assess-cookbook with --format json outputs valid JSON."""
         result = runner.invoke(
             cli,
-            ["assess-cookbook", "--cookbook-path", str(FIXTURES_DIR), "--format", "json"],
+            [
+                "assess-cookbook",
+                "--cookbook-path",
+                str(FIXTURES_DIR),
+                "--format",
+                "json",
+            ],
         )
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -782,7 +804,8 @@ class TestQueryChefNodes:
         import os
 
         env = {
-            k: v for k, v in os.environ.items()
+            k: v
+            for k, v in os.environ.items()
             if k not in ("CHEF_SERVER_URL", "CHEF_CLIENT_NAME", "CHEF_CLIENT_KEY_PATH")
         }
         result = runner.invoke(
@@ -797,7 +820,11 @@ class TestQueryChefNodes:
         """Missing CHEF_CLIENT_NAME exits with error."""
         import os
 
-        env = {k: v for k, v in os.environ.items() if k not in ("CHEF_CLIENT_NAME", "CHEF_CLIENT_KEY_PATH")}
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("CHEF_CLIENT_NAME", "CHEF_CLIENT_KEY_PATH")
+        }
         env["CHEF_SERVER_URL"] = "https://chef.example.com"
         result = runner.invoke(
             cli,
@@ -822,9 +849,7 @@ class TestQueryChefNodes:
         assert result.exit_code == 1
         assert "CHEF_CLIENT_KEY_PATH" in result.output
 
-    def test_exception_during_query_exits_with_error(
-        self, runner: CliRunner
-    ) -> None:
+    def test_exception_during_query_exits_with_error(self, runner: CliRunner) -> None:
         """Exception during node query exits with code 1."""
         import os
 
@@ -994,7 +1019,9 @@ class TestAnsibleAssess:
             "python_version": "3.11.0",
             "installed_collections": [f"ns.col{i}" for i in range(15)],
         }
-        with patch("souschef.cli.assess_ansible_environment", return_value=mock_assessment):
+        with patch(
+            "souschef.cli.assess_ansible_environment", return_value=mock_assessment
+        ):
             result = runner.invoke(cli, ["ansible", "assess"])
         assert result.exit_code == 0
         assert "Installed Collections" in result.output
@@ -1008,7 +1035,9 @@ class TestAnsibleAssess:
             "python_version": "3.11.0",
             "eol_date": "2023-06-30",
         }
-        with patch("souschef.cli.assess_ansible_environment", return_value=mock_assessment):
+        with patch(
+            "souschef.cli.assess_ansible_environment", return_value=mock_assessment
+        ):
             result = runner.invoke(cli, ["ansible", "assess"])
         assert result.exit_code == 0
         assert "EOL" in result.output
@@ -1021,7 +1050,9 @@ class TestAnsibleAssess:
             "python_version": "3.11.0",
             "warnings": ["Ansible version is EOL", "Consider upgrading"],
         }
-        with patch("souschef.cli.assess_ansible_environment", return_value=mock_assessment):
+        with patch(
+            "souschef.cli.assess_ansible_environment", return_value=mock_assessment
+        ):
             result = runner.invoke(cli, ["ansible", "assess"])
         assert result.exit_code == 0
         assert "Warnings" in result.output
@@ -1036,17 +1067,20 @@ class TestAnsibleAssess:
             "current_version_full": "unknown",
             "python_version": "3.11.0",
         }
-        with patch("souschef.cli.assess_ansible_environment", return_value=mock_assessment), patch(
-            "souschef.cli.format_version_display",
-            side_effect=ValueError("unknown version"),
+        with (
+            patch(
+                "souschef.cli.assess_ansible_environment", return_value=mock_assessment
+            ),
+            patch(
+                "souschef.cli.format_version_display",
+                side_effect=ValueError("unknown version"),
+            ),
         ):
             result = runner.invoke(cli, ["ansible", "assess"])
         assert result.exit_code == 0
         assert "unknown" in result.output
 
-    def test_ansible_assess_exception_exits_with_error(
-        self, runner: CliRunner
-    ) -> None:
+    def test_ansible_assess_exception_exits_with_error(self, runner: CliRunner) -> None:
         """Exception during assessment exits with code 1."""
         with patch(
             "souschef.cli.assess_ansible_environment",
@@ -1079,20 +1113,28 @@ class TestAnsiblePlan:
                 "estimated_effort_days": 3,
             }
         }
-        with patch("souschef.cli.generate_upgrade_plan", return_value=mock_plan), patch(
-            "souschef.cli.format_version_display",
-            side_effect=KeyError("not found"),
+        with (
+            patch("souschef.cli.generate_upgrade_plan", return_value=mock_plan),
+            patch(
+                "souschef.cli.format_version_display",
+                side_effect=KeyError("not found"),
+            ),
         ):
             result = runner.invoke(
                 cli,
-                ["ansible", "plan", "--current-version", "5.0", "--target-version", "7.0"],
+                [
+                    "ansible",
+                    "plan",
+                    "--current-version",
+                    "5.0",
+                    "--target-version",
+                    "7.0",
+                ],
             )
         assert result.exit_code == 0
         assert "5.0" in result.output and "7.0" in result.output
 
-    def test_ansible_plan_exception_exits_with_error(
-        self, runner: CliRunner
-    ) -> None:
+    def test_ansible_plan_exception_exits_with_error(self, runner: CliRunner) -> None:
         """Exception during plan generation exits with code 1."""
         with patch(
             "souschef.cli.generate_upgrade_plan",
@@ -1100,7 +1142,14 @@ class TestAnsiblePlan:
         ):
             result = runner.invoke(
                 cli,
-                ["ansible", "plan", "--current-version", "5.0", "--target-version", "7.0"],
+                [
+                    "ansible",
+                    "plan",
+                    "--current-version",
+                    "5.0",
+                    "--target-version",
+                    "7.0",
+                ],
             )
         assert result.exit_code == 1
         assert "Error" in result.output
@@ -1160,20 +1209,21 @@ class TestAnsibleEol:
         self, runner: CliRunner
     ) -> None:
         """Version format error falls back to plain version display."""
-        with patch(
-            "souschef.cli.get_eol_status",
-            return_value={"is_eol": False, "eol_date": "2025-06-01"},
-        ), patch(
-            "souschef.cli.format_version_display",
-            side_effect=ValueError("unknown"),
+        with (
+            patch(
+                "souschef.cli.get_eol_status",
+                return_value={"is_eol": False, "eol_date": "2025-06-01"},
+            ),
+            patch(
+                "souschef.cli.format_version_display",
+                side_effect=ValueError("unknown"),
+            ),
         ):
             result = runner.invoke(cli, ["ansible", "eol", "--version", "7.0"])
         assert result.exit_code == 0
         assert "7.0" in result.output
 
-    def test_ansible_eol_exception_exits_with_error(
-        self, runner: CliRunner
-    ) -> None:
+    def test_ansible_eol_exception_exits_with_error(self, runner: CliRunner) -> None:
         """Exception during EOL check exits with code 1."""
         with patch(
             "souschef.cli.get_eol_status",
@@ -1286,9 +1336,7 @@ class TestParseCollectionsFile:
 
         valid = tmp_path / "requirements.yml"
         valid.write_text(
-            "collections:\n"
-            "  - ansible.posix: '1.0.0'\n"
-            "  - community.general: '5.0.0'\n"
+            "collections:\n  - ansible.posix: '1.0.0'\n  - community.general: '5.0.0'\n"
         )
 
         result = _parse_collections_file(str(valid))
@@ -1373,9 +1421,7 @@ class TestAnsibleValidateCollections:
     ) -> None:
         """Exception during validation exits with code 1."""
         collections_file = tmp_path / "requirements.yml"
-        collections_file.write_text(
-            "collections:\n  - ansible.posix: '1.0.0'\n"
-        )
+        collections_file.write_text("collections:\n  - ansible.posix: '1.0.0'\n")
 
         with patch(
             "souschef.cli.validate_collection_compatibility",
@@ -1411,9 +1457,7 @@ class TestAnsibleDetectPython:
         assert result.exit_code == 0
         assert "3.11" in result.output
 
-    def test_detect_python_exception_exits_with_error(
-        self, runner: CliRunner
-    ) -> None:
+    def test_detect_python_exception_exits_with_error(self, runner: CliRunner) -> None:
         """Exception during detection exits with code 1."""
         with patch(
             "souschef.cli.detect_python_version",

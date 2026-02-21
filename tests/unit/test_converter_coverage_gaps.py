@@ -53,7 +53,10 @@ class TestHabitatConverter:
         )
 
         with (
-            patch("souschef.converters.habitat.parse_habitat_plan", return_value=valid_json),
+            patch(
+                "souschef.converters.habitat.parse_habitat_plan",
+                return_value=valid_json,
+            ),
             patch(
                 "souschef.converters.habitat._format_compose_yaml",
                 side_effect=Exception("yaml error"),
@@ -162,9 +165,7 @@ class TestTemplateConverter:
         result = convert_cookbook_templates(str(tmp_path))
         assert result["templates_failed"] >= 1
 
-    def test_convert_cookbook_templates_generic_exception(
-        self, tmp_path: Path
-    ) -> None:
+    def test_convert_cookbook_templates_generic_exception(self, tmp_path: Path) -> None:
         """convert_cookbook_templates returns failure dict when glob raises exception."""
         from souschef.converters.template import convert_cookbook_templates
 
@@ -196,7 +197,7 @@ class TestChefServer:
         )
         client = ChefServerClient.__new__(ChefServerClient)
         client._config = config
-        client._timeout = 10
+        client._timeout = 10  # type: ignore[attr-defined]
         return client
 
     def test_normalise_server_url_preserves_existing_path(self) -> None:
@@ -249,7 +250,7 @@ class TestChefServer:
         )
         client = ChefServerClient.__new__(ChefServerClient)
         client._config = config
-        client._timeout = 10
+        client._timeout = 10  # type: ignore[attr-defined]
 
         mock_response = MagicMock()
         mock_response.json.return_value = ["not", "a", "dict"]
@@ -271,7 +272,7 @@ class TestChefServer:
         )
         client = ChefServerClient.__new__(ChefServerClient)
         client._config = config
-        client._timeout = 10
+        client._timeout = 10  # type: ignore[attr-defined]
 
         mock_response = MagicMock()
         mock_response.json.return_value = [1, 2, 3]
@@ -293,7 +294,7 @@ class TestChefServer:
         )
         client = ChefServerClient.__new__(ChefServerClient)
         client._config = config
-        client._timeout = 10
+        client._timeout = 10  # type: ignore[attr-defined]
 
         mock_response = MagicMock()
         mock_response.json.return_value = "not a dict"
@@ -315,7 +316,7 @@ class TestChefServer:
         )
         client = ChefServerClient.__new__(ChefServerClient)
         client._config = config
-        client._timeout = 10
+        client._timeout = 10  # type: ignore[attr-defined]
 
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -390,7 +391,10 @@ class TestChefServer:
         from souschef.core.chef_server import get_chef_cookbook_version
 
         mock_client = MagicMock()
-        mock_client.get_cookbook_version.return_value = {"name": "myapp", "version": "1.0.0"}
+        mock_client.get_cookbook_version.return_value = {
+            "name": "myapp",
+            "version": "1.0.0",
+        }
 
         with patch(
             "souschef.core.chef_server._build_client_from_env",
@@ -413,4 +417,3 @@ class TestChefServer:
         ):
             result = list_chef_policies()
         assert isinstance(result, list)
-

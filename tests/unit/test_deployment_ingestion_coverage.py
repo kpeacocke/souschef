@@ -40,9 +40,7 @@ class TestDeployment:
             "souschef.deployment.validate_user_provided_url",
             side_effect=ValueError("bad URL"),
         ):
-            result = generate_awx_inventory_source_from_chef(
-                "not_a_url", "myorg"
-            )
+            result = generate_awx_inventory_source_from_chef("not_a_url", "myorg")
         assert "error" in result.lower()
 
     def test_analyse_application_patterns_detects_blue_green_pattern(
@@ -113,21 +111,21 @@ class TestDeployment:
         """_assess_complexity_from_resource_count returns medium for 31 resources."""
         from souschef.deployment import _assess_complexity_from_resource_count
 
-        complexity, effort, risk = _assess_complexity_from_resource_count(31)
+        _, effort, _ = _assess_complexity_from_resource_count(31)
         assert effort  # non-empty
 
     def test_assess_complexity_low_high_boundary(self) -> None:
         """_assess_complexity_from_resource_count returns appropriate complexity for 20."""
         from souschef.deployment import _assess_complexity_from_resource_count
 
-        complexity, effort, risk = _assess_complexity_from_resource_count(20)
+        _, effort, _ = _assess_complexity_from_resource_count(20)
         assert effort
 
     def test_assess_complexity_over_50(self) -> None:
         """_assess_complexity_from_resource_count returns high for > 50 resources."""
         from souschef.deployment import _assess_complexity_from_resource_count
 
-        complexity, effort, risk = _assess_complexity_from_resource_count(51)
+        _, effort, _ = _assess_complexity_from_resource_count(51)
         assert effort
 
 
@@ -234,7 +232,7 @@ class TestIngestion:
         mock_client = MagicMock()
         mock_client.list_cookbook_versions.return_value = []
 
-        spec = CookbookSpec(name="myapp", version=None)
+        spec = CookbookSpec(name="myapp", version=None)  # type: ignore[arg-type]
         warnings: list[str] = []
         result = _normalise_spec(client=mock_client, spec=spec, warnings=warnings)
         assert result.name == "myapp"
@@ -297,7 +295,10 @@ class TestIngestion:
         mock_client.list_cookbook_versions.return_value = ["1.0.0"]
         mock_client.get_cookbook_version.return_value = {
             "recipes": [
-                {"path": "recipes/default.rb", "url": "https://chef.example.com/recipe"},
+                {
+                    "path": "recipes/default.rb",
+                    "url": "https://chef.example.com/recipe",
+                },
             ]
         }
         mock_client.download_url.side_effect = RuntimeError("download failed")
@@ -355,7 +356,9 @@ class TestMigrationWizard:
             result = _validate_cookbook_path(str(tmp_path))
         assert result == "retry"
 
-    def test_validate_cookbook_path_nonexistent_user_retries(self, tmp_path: Path) -> None:
+    def test_validate_cookbook_path_nonexistent_user_retries(
+        self, tmp_path: Path
+    ) -> None:
         """_validate_cookbook_path returns 'retry' when path doesn't exist and user retries."""
         from souschef.migration_wizard import _validate_cookbook_path
 
@@ -363,7 +366,9 @@ class TestMigrationWizard:
             result = _validate_cookbook_path(str(tmp_path / "nonexistent"))
         assert result == "retry"
 
-    def test_validate_cookbook_path_nonexistent_user_exits(self, tmp_path: Path) -> None:
+    def test_validate_cookbook_path_nonexistent_user_exits(
+        self, tmp_path: Path
+    ) -> None:
         """_validate_cookbook_path returns 'exit' when path doesn't exist and user exits."""
         from souschef.migration_wizard import _validate_cookbook_path
 

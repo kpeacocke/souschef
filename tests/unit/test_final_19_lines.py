@@ -120,7 +120,12 @@ def test_extract_chef_guards_multiple_conditions() -> None:
 
     # Inline format: all guards on the same line after 'do' (before '\nend')
     # This matches the REGEX_QUOTE_DO_END pattern which captures non-newline content
-    resource = {"type": "package", "name": "nginx", "action": "install", "properties": ""}
+    resource = {
+        "type": "package",
+        "name": "nginx",
+        "action": "install",
+        "properties": "",
+    }
     raw = "package 'nginx' do; only_if 'which nginx'; not_if 'test -f /tmp/skip'\nend\n"
     guards = _extract_chef_guards(resource, raw)
     # With 2 conditions, 'when' should be a list
@@ -246,13 +251,17 @@ def test_download_cookbook_skips_item_without_path(tmp_path: Path) -> None:
 
     spec = CookbookSpec(name="mycookbook", version="1.0.0")
 
-    with patch("souschef.ingestion._normalise_spec", return_value=spec), patch(
-        "souschef.ingestion._collect_cookbook_items",
-        return_value=[
-            {"url": "https://example.com/file.rb"},  # no path
-            {"path": "recipes/default.rb"},  # no url
-        ],
-    ), patch("souschef.ingestion._write_cookbook_metadata"):
+    with (
+        patch("souschef.ingestion._normalise_spec", return_value=spec),
+        patch(
+            "souschef.ingestion._collect_cookbook_items",
+            return_value=[
+                {"url": "https://example.com/file.rb"},  # no path
+                {"path": "recipes/default.rb"},  # no url
+            ],
+        ),
+        patch("souschef.ingestion._write_cookbook_metadata"),
+    ):
         _download_cookbook(
             client=mock_client,
             spec=spec,
@@ -292,11 +301,13 @@ def test_download_cookbook_cache_dir_exists_rmtree(tmp_path: Path) -> None:
     mock_client = MagicMock()
     mock_client.get_cookbook_version.return_value = {}
 
-    with patch("souschef.ingestion._normalise_spec", return_value=spec), patch(
-        "souschef.ingestion._collect_cookbook_items", return_value=[]
-    ), patch(
-        "souschef.ingestion._write_cookbook_metadata",
-        side_effect=_create_cache_side_effect,
+    with (
+        patch("souschef.ingestion._normalise_spec", return_value=spec),
+        patch("souschef.ingestion._collect_cookbook_items", return_value=[]),
+        patch(
+            "souschef.ingestion._write_cookbook_metadata",
+            side_effect=_create_cache_side_effect,
+        ),
     ):
         _download_cookbook(
             client=mock_client,
@@ -359,15 +370,15 @@ def test_prepare_cookbook_source_offline_bundle_and_warnings(tmp_path: Path) -> 
         warnings=["dependency X not resolved"],
     )
 
-    with patch(
-        "souschef.migration_v2.fetch_cookbooks_from_chef_server",
-        return_value=fetch_result,
-    ), patch(
-        "souschef.migration_v2._get_workspace_root", return_value=tmp_path
-    ), patch(
-        "souschef.migration_v2._safe_join", return_value=tmp_path / ".souschef"
+    with (
+        patch(
+            "souschef.migration_v2.fetch_cookbooks_from_chef_server",
+            return_value=fetch_result,
+        ),
+        patch("souschef.migration_v2._get_workspace_root", return_value=tmp_path),
+        patch("souschef.migration_v2._safe_join", return_value=tmp_path / ".souschef"),
     ):
-        path, payload = orch._prepare_cookbook_source(
+        _, _ = orch._prepare_cookbook_source(
             cookbook_path="",
             chef_server_url="https://chef.example.com",
             chef_organisation="myorg",

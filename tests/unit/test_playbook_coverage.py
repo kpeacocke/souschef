@@ -5,9 +5,12 @@ Covers error paths, edge cases, and rarely-triggered branches not
 reached by existing test suites.
 """
 
+import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from souschef.converters.playbook import (
     _build_project_guidance_parts,
@@ -37,6 +40,22 @@ from souschef.converters.playbook import (
     get_chef_nodes,
 )
 from souschef.core.constants import ERROR_PREFIX
+
+
+# Override workspace root to actual workspace for path traversal testing
+@pytest.fixture(autouse=True)
+def constrained_workspace_root():
+    """Override workspace root to actual workspace for security testing."""
+    old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+    # Set to actual workspace root to test path containment
+    os.environ["SOUSCHEF_WORKSPACE_ROOT"] = "/workspaces/souschef"
+    yield
+    # Clean up
+    if old_root is None:
+        os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+    else:
+        os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+
 
 # ---------------------------------------------------------------------------
 # Lines 51-52: requests optional import (tested via _call_lightspeed_api with
@@ -118,7 +137,9 @@ def test_generate_playbook_with_ai_import_error(tmp_path: Path) -> None:
             "souschef.converters.playbook._normalize_path",
             return_value=recipe_file,
         ),
-        patch("souschef.converters.playbook._get_workspace_root", return_value=tmp_path),
+        patch(
+            "souschef.converters.playbook._get_workspace_root", return_value=tmp_path
+        ),
         patch(
             "souschef.converters.playbook._ensure_within_base_path",
             return_value=recipe_file,
@@ -490,15 +511,19 @@ def test_validate_and_fix_playbook_fixed_invalid_yaml() -> None:
     bad_playbook = "---\n- hosts: all\n  tasks:\n  - name: test\n    invalid: [unclosed"
     mock_client = MagicMock()
 
-    with patch(
-        "souschef.converters.playbook._run_ansible_lint",
-        return_value="some-lint-error",
-    ), patch(
-        "souschef.converters.playbook._call_ai_api",
-        return_value="still: invalid: yaml: [",
-    ), patch(
-        "souschef.converters.playbook._clean_ai_playbook_response",
-        return_value="still: invalid: yaml: [",
+    with (
+        patch(
+            "souschef.converters.playbook._run_ansible_lint",
+            return_value="some-lint-error",
+        ),
+        patch(
+            "souschef.converters.playbook._call_ai_api",
+            return_value="still: invalid: yaml: [",
+        ),
+        patch(
+            "souschef.converters.playbook._clean_ai_playbook_response",
+            return_value="still: invalid: yaml: [",
+        ),
     ):
         result = _validate_and_fix_playbook(
             bad_playbook, mock_client, "openai", "gpt-4", 0.5, 1024
@@ -513,12 +538,15 @@ def test_validate_and_fix_playbook_fix_exception() -> None:
     playbook = "---\n- hosts: all\n  tasks: []"
     mock_client = MagicMock()
 
-    with patch(
-        "souschef.converters.playbook._run_ansible_lint",
-        return_value="lint-error",
-    ), patch(
-        "souschef.converters.playbook._call_ai_api",
-        side_effect=RuntimeError("AI boom"),
+    with (
+        patch(
+            "souschef.converters.playbook._run_ansible_lint",
+            return_value="lint-error",
+        ),
+        patch(
+            "souschef.converters.playbook._call_ai_api",
+            side_effect=RuntimeError("AI boom"),
+        ),
     ):
         result = _validate_and_fix_playbook(
             playbook, mock_client, "openai", "gpt-4", 0.5, 1024
@@ -589,7 +617,9 @@ def test_get_chef_nodes_exception_returns_empty() -> None:
     from souschef.core import chef_server as chef_server_module
 
     with patch.object(
-        chef_server_module, "get_chef_nodes", side_effect=RuntimeError("connection error")
+        chef_server_module,
+        "get_chef_nodes",
+        side_effect=RuntimeError("connection error"),
     ):
         result = get_chef_nodes("role:webserver")
 
@@ -731,10 +761,10 @@ def test_convert_ruby_array_to_yaml_exception() -> None:
 
 def test_update_nesting_depths_brackets() -> None:
     """Test _update_nesting_depths tracks bracket depth correctly."""
-    brace, bracket = _update_nesting_depths("[", 0, 0)
+    _, bracket = _update_nesting_depths("[", 0, 0)
     assert bracket == 1
 
-    brace, bracket = _update_nesting_depths("]", 0, bracket)
+    _, bracket = _update_nesting_depths("]", 0, bracket)
     assert bracket == 0
 
 
@@ -746,7 +776,9 @@ def test_should_split_at_comma_in_quotes() -> None:
 
 def test_should_split_at_comma_outside_quotes() -> None:
     """Test _should_split_at_comma returns True outside quotes."""
-    result = _should_split_at_comma(",", in_quotes=False, brace_depth=0, bracket_depth=0)
+    result = _should_split_at_comma(
+        ",", in_quotes=False, brace_depth=0, bracket_depth=0
+    )
     assert result is True
 
 
@@ -823,7 +855,7 @@ def test_extract_chef_guards_notify_list_created(tmp_path: Path) -> None:
     }
     raw = (
         'service "nginx" do\n'
-        '  action :restart\n'
+        "  action :restart\n"
         '  only_if { File.exist?("/etc/nginx/nginx.conf") }\n'
         "end\n"
     )
@@ -840,11 +872,7 @@ def test_extract_chef_guards_notify_list_created(tmp_path: Path) -> None:
 
 def test_extract_nodejs_npm_version_found() -> None:
     """Test _extract_nodejs_npm_version finds version in recipe."""
-    raw = (
-        'nodejs_npm "express" do\n'
-        '  version "4.18.2"\n'
-        "end\n"
-    )
+    raw = 'nodejs_npm "express" do\n  version "4.18.2"\nend\n'
     version = _extract_nodejs_npm_version(raw, "express")
 
     assert version is not None
@@ -885,9 +913,7 @@ def test_extract_chef_guards_multiple_conditions(tmp_path: Path) -> None:
         "name": "run_script",
         "action": "run",
         "properties": "",
-        "guards": (
-            'only_if "/bin/test -f /tmp/a"\nnot_if "/bin/test -f /tmp/b"'
-        ),
+        "guards": ('only_if "/bin/test -f /tmp/a"\nnot_if "/bin/test -f /tmp/b"'),
     }
     raw = (
         'execute "run_script" do\n'
@@ -1015,11 +1041,7 @@ def test_extract_guards_simple_string_not_if() -> None:
         "properties": "",
         "guards": 'not_if "/usr/bin/which app"',
     }
-    raw = (
-        'execute "install_app" do\n'
-        '  not_if "/usr/bin/which app"\n'
-        "end\n"
-    )
+    raw = 'execute "install_app" do\n  not_if "/usr/bin/which app"\nend\n'
 
     guards = _extract_chef_guards(resource, raw)
 

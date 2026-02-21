@@ -9555,9 +9555,9 @@ end""",
             "data_bag:secrets",
             "data_bag:certificates AND environment:production",
             # Network-based searches
-            "ipaddress:10.0.0.*",  # NOSONAR - test fixture
+            "ipaddress:192.0.2.*",  # RFC 5737 documentation IP pattern
             "network.interfaces.eth0.addresses:192.168.*",  # NOSONAR - test fixture
-            "network.default_gateway:10.0.0.1",  # NOSONAR - test fixture
+            "network.default_gateway:192.0.2.1",  # RFC 5737 documentation IP
             # Time-based searches
             "automatic.ohai_time:[1609459200 TO *]",
             "chef_packages.chef.version:[15.0 TO *]",
@@ -17028,7 +17028,7 @@ def test_get_chef_nodes_success():
             "roles": ["webserver"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "10.0.1.10",  # NOSONAR - RFC 1918 private IP in test data
+            "ipaddress": "192.0.2.110",  # RFC 5737 documentation IP
             "fqdn": "web-server-01.example.com",
         },
         {
@@ -17036,7 +17036,7 @@ def test_get_chef_nodes_success():
             "roles": ["database"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "10.0.2.10",  # NOSONAR - RFC 1918 private IP in test data
+            "ipaddress": "198.51.100.10",  # RFC 5737 documentation IP
             "fqdn": "db-server-01.example.com",
         },
     ]

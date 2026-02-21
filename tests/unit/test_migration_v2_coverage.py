@@ -77,8 +77,7 @@ def test_migrate_cookbook_chef_server_missing_config(tmp_path: Path) -> None:
         )
 
     assert any(
-        "missing configuration" in str(w.get("message", ""))
-        for w in result.warnings
+        "missing configuration" in str(w.get("message", "")) for w in result.warnings
     )
 
 
@@ -106,8 +105,7 @@ def test_migrate_cookbook_chef_server_missing_client_key(tmp_path: Path) -> None
         )
 
     assert any(
-        "missing client key" in str(w.get("message", ""))
-        for w in result.warnings
+        "missing client key" in str(w.get("message", "")) for w in result.warnings
     )
 
 
@@ -420,9 +418,7 @@ def test_process_recipe_handlers_rescue_notifies(tmp_path: Path) -> None:
     orch._process_recipe_handlers(str(cookbook_dir))
 
     assert orch.result is not None
-    assert any(
-        w.get("type") == "handler" for w in orch.result.warnings
-    )
+    assert any(w.get("type") == "handler" for w in orch.result.warnings)
 
 
 def test_process_recipe_handlers_read_exception(tmp_path: Path) -> None:
@@ -509,9 +505,7 @@ def test_run_playbook_validation_passes(tmp_path: Path) -> None:
         orch._run_playbook_validation([playbook_file])
 
     assert orch.result is not None
-    assert not any(
-        w.get("phase") == "validation" for w in orch.result.warnings
-    )
+    assert not any(w.get("phase") == "validation" for w in orch.result.warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -527,7 +521,9 @@ def test_run_playbook_validation_not_found(tmp_path: Path) -> None:
     orch = _make_orchestrator()
     _init_result(orch)
 
-    with patch("subprocess.run", side_effect=FileNotFoundError("ansible-lint not found")):
+    with patch(
+        "subprocess.run", side_effect=FileNotFoundError("ansible-lint not found")
+    ):
         orch._run_playbook_validation([playbook_file])
 
     assert orch.result is not None
@@ -549,8 +545,7 @@ def test_run_playbook_validation_timeout(tmp_path: Path) -> None:
 
     assert orch.result is not None
     assert any(
-        "timed out" in str(w.get("message", "")).lower()
-        for w in orch.result.warnings
+        "timed out" in str(w.get("message", "")).lower() for w in orch.result.warnings
     )
 
 
@@ -567,8 +562,7 @@ def test_run_playbook_validation_generic_exception(tmp_path: Path) -> None:
 
     assert orch.result is not None
     assert any(
-        "Validation error" in str(w.get("message", ""))
-        for w in orch.result.warnings
+        "Validation error" in str(w.get("message", "")) for w in orch.result.warnings
     )
 
 
@@ -695,8 +689,7 @@ def test_populate_inventory_add_host_exception() -> None:
         orch._populate_inventory_from_chef_nodes(mock_client, inventory_id=1)
 
     assert any(
-        "Failed to add host" in str(w.get("message", ""))
-        for w in orch.result.warnings
+        "Failed to add host" in str(w.get("message", "")) for w in orch.result.warnings
     )
 
 
@@ -712,7 +705,7 @@ def test_extract_chef_environments_non_dict_node() -> None:
     assert orch.result is not None
     orch.result.chef_nodes = ["not-a-dict", 99]  # type: ignore[list-item]
 
-    envs, roles, env_map, roles_map = orch._extract_chef_environments_and_roles()
+    envs, roles, _, _ = orch._extract_chef_environments_and_roles()
 
     assert len(envs) == 0
     assert len(roles) == 0
@@ -726,7 +719,7 @@ def test_extract_chef_environments_no_hostname() -> None:
     orch.result.chef_nodes = [{"name": None, "ipaddress": None}]
 
     with patch.object(orch, "_resolve_chef_hostname", return_value=None):
-        envs, roles, env_map, roles_map = orch._extract_chef_environments_and_roles()
+        _, _, env_map, _ = orch._extract_chef_environments_and_roles()
 
     assert len(env_map) == 0
 
@@ -877,9 +870,7 @@ def test_load_state_fallback_direct_payload() -> None:
     mock_storage = MagicMock()
     mock_storage.get_conversion_history.return_value = [mock_entry]
 
-    result = MigrationOrchestrator.load_state(
-        target_id, storage_manager=mock_storage
-    )
+    result = MigrationOrchestrator.load_state(target_id, storage_manager=mock_storage)
 
     assert result is not None
     assert result.migration_id == target_id

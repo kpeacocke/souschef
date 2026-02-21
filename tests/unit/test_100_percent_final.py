@@ -100,9 +100,7 @@ class TestAnsibleUpgradeGaps:
         }
         # "not_a_version" is an invalid specifier → SpecifierSet will raise
         _handle_version_specifier(result, "my.collection", "not_a_version", "1.0.0")
-        assert any(
-            "unparseable" in w for w in result["warnings"]
-        ), result["warnings"]
+        assert any("unparseable" in w for w in result["warnings"]), result["warnings"]
 
 
 # ===========================
@@ -241,7 +239,7 @@ class TestAssessmentGaps:
                 max_tokens=1000,
             )
         assert result["complexity_score"] == 55
-        assert result["estimated_effort_days"] == 3.0
+        assert abs(result["estimated_effort_days"] - 3.0) < 0.01
 
 
 # ===========================
@@ -252,9 +250,7 @@ class TestAssessmentGaps:
 class TestCliGaps:
     """Cover remaining branches in cli.py."""
 
-    def test_convert_cookbook_template_fails(
-        self, tmp_path: Path
-    ) -> None:
+    def test_convert_cookbook_template_fails(self, tmp_path: Path) -> None:
         """Line 559: template conversion returns failure → echo 'Failed to convert'."""
         from click.testing import CliRunner
 
@@ -342,7 +338,7 @@ class TestCliGaps:
                     "--client-name",
                     "admin",
                     "--client-key-path",
-                    "/tmp/admin.pem",
+                    "/workspaces/souschef/test-fixtures/admin.pem",
                 ],
             )
         assert result.exit_code == 1 or "Error" in result.output
@@ -359,7 +355,7 @@ class TestCliGaps:
                 "roles": ["web"],
                 "environment": "prod",
                 "platform": "ubuntu",
-                "ip": "10.0.0.1",
+                "ip": "192.0.2.1",  # RFC 5737 documentation IP
             }
         ]
         runner = CliRunner()
@@ -376,7 +372,7 @@ class TestCliGaps:
                     "--client-name",
                     "admin",
                     "--client-key-path",
-                    "/tmp/admin.pem",
+                    "/workspaces/souschef/test-fixtures/admin.pem",
                 ],
             )
         assert "node1" in result.output or result.exit_code == 0
@@ -556,9 +552,7 @@ class TestCliV2CommandsGaps:
         }
 
         runner = CliRunner()
-        with patch(
-            "souschef.cli_v2_commands.MigrationOrchestrator"
-        ) as mock_orch_cls:
+        with patch("souschef.cli_v2_commands.MigrationOrchestrator") as mock_orch_cls:
             mock_orch = MagicMock()
             mock_orch.migrate_cookbook.return_value = mock_result
             mock_orch_cls.return_value = mock_orch
@@ -672,7 +666,7 @@ class TestPlaybookConverterGaps:
         # Lines that don't start with VALUE_PREFIX and don't have an attribute separator
         # The while-loop exhausts all lines → hits the else clause (line 2037: i += 1)
         lines = ["some random line", "another random line"]
-        value_lines, new_i = _find_and_collect_value_lines(lines, 0)
+        _, new_i = _find_and_collect_value_lines(lines, 0)
         assert new_i == 3  # exhausted + 1
 
     def test_process_subscribes_invalid_target_format(self) -> None:
@@ -754,7 +748,9 @@ class TestAnsibleVersionsGaps:
         }
         cache_file.write_text(json.dumps(cache_data))
 
-        with patch("souschef.core.ansible_versions._get_cache_path", return_value=cache_file):
+        with patch(
+            "souschef.core.ansible_versions._get_cache_path", return_value=cache_file
+        ):
             result = _load_ai_cache()
         assert result is None
 
@@ -784,7 +780,9 @@ class TestCachingGaps:
         existing.write_text("data")
 
         # Patch Path.open to raise OSError when called on an existing file
-        with patch("souschef.core.caching.Path.open", side_effect=OSError("no permission")):
+        with patch(
+            "souschef.core.caching.Path.open", side_effect=OSError("no permission")
+        ):
             result = cache._get_file_hash(str(existing))
         assert result is None
 
@@ -813,7 +811,7 @@ class TestErrorHandlingGaps:
         from souschef.core.error_handling import validate_hostname
 
         # "abc.def.ghi.jkl" looks IP-like (4 parts with dots) but non-numeric
-        valid, error = validate_hostname("abc.def.ghi.jkl")
+        valid, _ = validate_hostname("abc.def.ghi.jkl")
         # Should not raise; falls through to DNS validation path
         assert isinstance(valid, bool)
 
@@ -826,16 +824,16 @@ class TestErrorHandlingGaps:
 class TestDeploymentGaps:
     """Cover remaining branches in deployment.py."""
 
-    def test_analyse_current_deployment_rolling_pattern(
-        self, tmp_path: Path
-    ) -> None:
+    def test_analyse_current_deployment_rolling_pattern(self, tmp_path: Path) -> None:
         """Line 1252: content contains 'rolling' → detected_pattern = 'rolling_update'."""
         from souschef.deployment import _analyse_chef_deployment_pattern
 
         # Create a recipe file with "rolling" content
         recipes_dir = tmp_path / "recipes"
         recipes_dir.mkdir()
-        (recipes_dir / "deploy.rb").write_text("# rolling deployment strategy\npackage 'nginx'")
+        (recipes_dir / "deploy.rb").write_text(
+            "# rolling deployment strategy\npackage 'nginx'"
+        )
 
         result = _analyse_chef_deployment_pattern(tmp_path)
         assert result.get("detected_pattern") == "rolling_update"
@@ -946,7 +944,10 @@ class TestIngestionGaps:
         (cookbook_dir / "old.rb").write_text("old content")
 
         mock_client = MagicMock()
-        mock_client.get_cookbook_version.return_value = {"name": "mybook", "version": "1.0.0"}
+        mock_client.get_cookbook_version.return_value = {
+            "name": "mybook",
+            "version": "1.0.0",
+        }
         warnings: list[str] = []
 
         _download_cookbook(
@@ -971,14 +972,19 @@ class TestIngestionGaps:
         mock_client.get_cookbook_version.return_value = {
             "name": "failbook",
             "version": "2.0.0",
-            "files": [{"path": "recipes/default.rb", "url": "https://example.com/file"}],
+            "files": [
+                {"path": "recipes/default.rb", "url": "https://example.com/file"}
+            ],
         }
         mock_client.download_url.side_effect = RuntimeError("network error")
         warnings: list[str] = []
 
-        with patch("souschef.ingestion._collect_cookbook_items", return_value=[
-            {"path": "recipes/default.rb", "url": "https://example.com/file"}
-        ]):
+        with patch(
+            "souschef.ingestion._collect_cookbook_items",
+            return_value=[
+                {"path": "recipes/default.rb", "url": "https://example.com/file"}
+            ],
+        ):
             _download_cookbook(
                 client=mock_client,
                 spec=spec,
@@ -1066,11 +1072,15 @@ class TestMigrationV2Gaps:
         )
 
         with (
-            patch("souschef.migration_v2.MigrationOrchestrator.__init__", return_value=None),
+            patch(
+                "souschef.migration_v2.MigrationOrchestrator.__init__",
+                return_value=None,
+            ),
         ):
             orch = MigrationOrchestrator.__new__(MigrationOrchestrator)
             orch.migration_id = "test-123"
             from datetime import datetime as _dt
+
             orch.result = MigrationResult(
                 status=MigrationStatus.IN_PROGRESS,
                 migration_id="test-123",
@@ -1084,19 +1094,31 @@ class TestMigrationV2Gaps:
             )
 
             with (
-                patch.object(orch, "_fetch_run_list", return_value=(["role[nginx]"], None)),
-                patch.object(orch, "_extract_cookbooks_from_run_list", return_value=["nginx"]),
+                patch.object(
+                    orch, "_fetch_run_list", return_value=(["role[nginx]"], None)
+                ),
+                patch.object(
+                    orch, "_extract_cookbooks_from_run_list", return_value=["nginx"]
+                ),
                 patch.object(orch, "_resolve_primary_cookbook", return_value="nginx"),
-                patch("souschef.migration_v2.fetch_cookbooks_from_chef_server", return_value=mock_fetch),
-                patch("souschef.migration_v2._get_workspace_root", return_value=tmp_path),
-                patch("souschef.migration_v2._safe_join", return_value=tmp_path / ".souschef" / "chef-downloads"),
+                patch(
+                    "souschef.migration_v2.fetch_cookbooks_from_chef_server",
+                    return_value=mock_fetch,
+                ),
+                patch(
+                    "souschef.migration_v2._get_workspace_root", return_value=tmp_path
+                ),
+                patch(
+                    "souschef.migration_v2._safe_join",
+                    return_value=tmp_path / ".souschef" / "chef-downloads",
+                ),
             ):
-                result_path, payload = orch._prepare_cookbook_source(
+                result_path, _ = orch._prepare_cookbook_source(
                     cookbook_path="",
                     chef_server_url="https://chef.example.com",
                     chef_organisation="myorg",
                     chef_client_name="admin",
-                    chef_client_key_path="/tmp/admin.pem",
+                    chef_client_key_path="/workspaces/souschef/test-fixtures/admin.pem",
                     chef_client_key=None,
                     chef_node="node1",
                     chef_policy=None,
@@ -1145,9 +1167,7 @@ class TestParsersHabitatGaps:
         plan_file = tmp_path / "plan.sh"
         # pkg_deps with nested parens to exercise the paren tracking
         plan_file.write_text(
-            "pkg_name=myapp\n"
-            "pkg_version=1.0.0\n"
-            "pkg_deps=(core/glibc (core/libpng))\n"
+            "pkg_name=myapp\npkg_version=1.0.0\npkg_deps=(core/glibc (core/libpng))\n"
         )
         result = parse_habitat_plan(str(plan_file))
         assert isinstance(result, str)
@@ -1161,9 +1181,7 @@ class TestParsersHabitatGaps:
 class TestParsersRecipeGaps:
     """Cover remaining branches in parsers/recipe.py."""
 
-    def test_parse_recipe_skips_oversized_resource_body(
-        self, tmp_path: Path
-    ) -> None:
+    def test_parse_recipe_skips_oversized_resource_body(self, tmp_path: Path) -> None:
         """Line 226: resource body exceeds MAX_RESOURCE_BODY_LENGTH → skipped."""
         from souschef.parsers import recipe as recipe_mod
         from souschef.parsers.recipe import parse_recipe
@@ -1174,10 +1192,7 @@ class TestParsersRecipeGaps:
             recipe_mod.MAX_RESOURCE_BODY_LENGTH = 10
             recipe_file = tmp_path / "default.rb"
             recipe_file.write_text(
-                "package 'nginx' do\n"
-                "  # " + "x" * 50 + "\n"
-                "  action :install\n"
-                "end\n"
+                "package 'nginx' do\n  # " + "x" * 50 + "\n  action :install\nend\n"
             )
             result = parse_recipe(str(recipe_file))
             assert isinstance(result, str)

@@ -29,7 +29,9 @@ class TestGitHubActions:
         }
         job = _build_lint_job(patterns, enable_cache=False)
         step_names = [step.get("name", "") for step in job.get("steps", [])]
-        assert any("Foodcritic" in name or "foodcritic" in name.lower() for name in step_names)
+        assert any(
+            "Foodcritic" in name or "foodcritic" in name.lower() for name in step_names
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +121,9 @@ class TestCookbookSpecific:
                 }
             },
         ):
-            result = build_cookbook_resource_params("myapp_resource", "myapp", "install", {})
+            result = build_cookbook_resource_params(
+                "myapp_resource", "myapp", "install", {}
+            )
         assert result is None
 
 
@@ -246,21 +250,20 @@ class TestChefServerRemainingLines:
         with patch.object(
             client,
             "list_cookbooks",
-            return_value=[{"name": "other_cookbook", "versions": [{"version": "1.0.0"}]}],
+            return_value=[
+                {"name": "other_cookbook", "versions": [{"version": "1.0.0"}]}
+            ],
         ):
             result = client.list_cookbook_versions("nonexistent")
         assert result == []
 
     def test_validate_chef_server_connection_connection_error(self) -> None:
         """_validate_chef_server_connection returns failure on ConnectionError."""
-        import souschef.core.chef_server as chef_server_module
         from souschef.core.chef_server import _validate_chef_server_connection
-
-        chef_connection_error = chef_server_module.ConnectionError
 
         with patch(
             "souschef.core.chef_server._build_client_from_env",
-            side_effect=chef_connection_error("connection refused"),
+            side_effect=ConnectionError("connection refused"),
         ):
             ok, msg = _validate_chef_server_connection(
                 "https://chef.example.com",
@@ -302,7 +305,7 @@ class TestErrorHandlingRemainingLines:
         from souschef.core.error_handling import validate_hostname
 
         # IP-like pattern with a non-numeric octet (e.g. 256.1.1.1)
-        valid, msg = validate_hostname("256.1.1.1")
+        valid, _ = validate_hostname("256.1.1.1")
         # 256 is out of IPv4 range; should fall through to DNS validation
         # Since it's not a valid DNS name either (starts with digit segments),
         # or it may be treated as valid DNS - we just want to exercise the code path
@@ -416,7 +419,6 @@ class TestMetrics:
         """estimated_days_formatted_with_souschef returns decimal format."""
         from souschef.core.metrics import EffortMetrics
 
-        # 1.5 * 0.5 = 0.75 (not integer)
         metrics = EffortMetrics(estimated_days=1.5)
         result = metrics.estimated_days_formatted_with_souschef
         assert "days" in result

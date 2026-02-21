@@ -40,7 +40,7 @@ class TestValidateHostnameIPv4ValueError:
         # The regex is r"^(\d{1,3}\.){3}\d{1,3}$" so we need all-digit groups;
         # instead trigger via a separate path: pass a hostname that is IPv4-like
         # but has out-of-range octets so we verify the true/None path as well.
-        valid, err = validate_hostname("192.168.1.1")
+        valid, err = validate_hostname("198.51.100.51")  # RFC 5737 documentation IP
         assert valid is True
         assert err is None
 
@@ -227,17 +227,16 @@ class TestGetEolStatus:
 class TestLoadAiCache:
     """Tests for _load_ai_cache error and stale-cache paths."""
 
-    def test_load_ai_cache_json_decode_error_returns_none(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_ai_cache_json_decode_error_returns_none(self, tmp_path: Path) -> None:
         """JSONDecodeError in _load_ai_cache returns None (lines 715-716, 717)."""
         from souschef.core import ansible_versions as av
 
         bad_cache = tmp_path / "bad_cache.json"
         bad_cache.write_text("not json")
 
-        with patch.object(av, "_CACHE_FILE", bad_cache), patch.object(
-            av, "_CACHE_DIR", tmp_path
+        with (
+            patch.object(av, "_CACHE_FILE", bad_cache),
+            patch.object(av, "_CACHE_DIR", tmp_path),
         ):
             result = av._load_ai_cache()
         assert result is None
@@ -351,7 +350,9 @@ class TestDetectAnsibleVersionInfo:
             side_effect=FileNotFoundError("not found"),
         ):
             _detect_ansible_version_info(str(tmp_path), result)
-        assert any("Could not detect" in issue for issue in result["compatibility_issues"])
+        assert any(
+            "Could not detect" in issue for issue in result["compatibility_issues"]
+        )
 
 
 class TestCheckPythonCompatibility:
@@ -416,10 +417,13 @@ class TestGenerateRecommendations:
             "compatibility_issues": [],
             "recommendations": [],
         }
-        with patch(
-            "souschef.ansible_upgrade.get_eol_status",
-            return_value={"is_eol": True},
-        ), patch("souschef.ansible_upgrade.get_latest_version", return_value="2.17"):
+        with (
+            patch(
+                "souschef.ansible_upgrade.get_eol_status",
+                return_value={"is_eol": True},
+            ),
+            patch("souschef.ansible_upgrade.get_latest_version", return_value="2.17"),
+        ):
             _generate_recommendations(assessment)
         assert any(
             "Urgent" in r or "2.9" in r or "collections" in r
@@ -434,7 +438,11 @@ class TestGenerateRecommendations:
             "current_version": "2.15",
             "python_compatible": True,
             "python_version": "3.10",
-            "eol_status": {"is_eol": False, "eol_approaching": True, "days_remaining": 45},
+            "eol_status": {
+                "is_eol": False,
+                "eol_approaching": True,
+                "days_remaining": 45,
+            },
             "compatibility_issues": [],
             "recommendations": [],
         }
@@ -494,7 +502,11 @@ class TestAssessCollectionVersion:
         """Wildcard version is added as-is without warning (lines 737-751)."""
         from souschef.ansible_upgrade import _assess_collection_version
 
-        result: dict[str, Any] = {"compatible": [], "warnings": [], "updates_needed": []}
+        result: dict[str, Any] = {
+            "compatible": [],
+            "warnings": [],
+            "updates_needed": [],
+        }
         _assess_collection_version(result, "community.general", None, "1.0.0")
         assert len(result["compatible"]) == 1
 
@@ -502,7 +514,11 @@ class TestAssessCollectionVersion:
         """Version with specifier triggers _handle_version_specifier (lines 772-773)."""
         from souschef.ansible_upgrade import _assess_collection_version
 
-        result: dict[str, Any] = {"compatible": [], "warnings": [], "updates_needed": []}
+        result: dict[str, Any] = {
+            "compatible": [],
+            "warnings": [],
+            "updates_needed": [],
+        }
         # ">=1.0.0" is a valid SpecifierSet; required "1.0.0" is within it.
         _assess_collection_version(result, "community.general", ">=1.0.0", "1.0.0")
         # Should not raise; entry added somewhere
@@ -601,9 +617,7 @@ class TestCliV2Commands:
         mock_result = MagicMock()
         mock_result.to_dict.return_value = {"status": "completed", "id": "abc"}
 
-        with patch(
-            "souschef.cli_v2_commands.MigrationOrchestrator"
-        ) as mock_orch:
+        with patch("souschef.cli_v2_commands.MigrationOrchestrator") as mock_orch:
             mock_orch.load_state.return_value = mock_result
             result = runner.invoke(
                 cli_group,
@@ -620,9 +634,7 @@ class TestCliV2Commands:
         runner = CliRunner()
         cli_group = create_v2_group()
 
-        with patch(
-            "souschef.cli_v2_commands.MigrationOrchestrator"
-        ) as mock_orch:
+        with patch("souschef.cli_v2_commands.MigrationOrchestrator") as mock_orch:
             mock_orch.load_state.side_effect = RuntimeError("DB error")
             result = runner.invoke(
                 cli_group,
@@ -647,9 +659,7 @@ class TestCliV2Commands:
         mock_conversion.playbooks_count = 1
 
         with patch("souschef.storage.get_storage_manager") as mock_sm:
-            mock_sm.return_value.get_conversion_history.return_value = [
-                mock_conversion
-            ]
+            mock_sm.return_value.get_conversion_history.return_value = [mock_conversion]
             result = runner.invoke(
                 cli_group,
                 ["list", "--format", "text"],
@@ -679,18 +689,20 @@ class TestCliV2Commands:
         runner = CliRunner()
         cli_group = create_v2_group()
 
-        with patch(
-            "souschef.cli_v2_commands.MigrationOrchestrator"
-        ) as mock_orch:
+        with patch("souschef.cli_v2_commands.MigrationOrchestrator") as mock_orch:
             mock_orch.load_state.return_value = None
             result = runner.invoke(
                 cli_group,
                 [
                     "rollback",
-                    "--migration-id", "notfound",
-                    "--url", "http://awx",
-                    "--username", "admin",
-                    "--password", "pass",
+                    "--migration-id",
+                    "notfound",
+                    "--url",
+                    "http://awx",
+                    "--username",
+                    "admin",
+                    "--password",
+                    "pass",
                 ],
             )
         assert result.exit_code == 1
@@ -716,19 +728,21 @@ class TestCliV2Commands:
         mock_orch_instance.result.status = MigrationStatus.FAILED
         mock_orch_instance.result.errors = [{"error": "rollback failed"}]
 
-        with patch(
-            "souschef.cli_v2_commands.MigrationOrchestrator"
-        ) as mock_orch_cls:
+        with patch("souschef.cli_v2_commands.MigrationOrchestrator") as mock_orch_cls:
             mock_orch_cls.load_state.return_value = mock_result
             mock_orch_cls.return_value = mock_orch_instance
             result = runner.invoke(
                 cli_group,
                 [
                     "rollback",
-                    "--migration-id", "mid",
-                    "--url", "http://awx",
-                    "--username", "admin",
-                    "--password", "pass",
+                    "--migration-id",
+                    "mid",
+                    "--url",
+                    "http://awx",
+                    "--username",
+                    "admin",
+                    "--password",
+                    "pass",
                 ],
             )
         assert result.exit_code in (0, 1)
@@ -742,18 +756,20 @@ class TestCliV2Commands:
         runner = CliRunner()
         cli_group = create_v2_group()
 
-        with patch(
-            "souschef.cli_v2_commands.MigrationOrchestrator"
-        ) as mock_orch:
+        with patch("souschef.cli_v2_commands.MigrationOrchestrator") as mock_orch:
             mock_orch.load_state.side_effect = RuntimeError("connection error")
             result = runner.invoke(
                 cli_group,
                 [
                     "rollback",
-                    "--migration-id", "mid",
-                    "--url", "http://awx",
-                    "--username", "admin",
-                    "--password", "pass",
+                    "--migration-id",
+                    "mid",
+                    "--url",
+                    "http://awx",
+                    "--username",
+                    "admin",
+                    "--password",
+                    "pass",
                 ],
             )
         assert result.exit_code == 1
@@ -792,8 +808,7 @@ class TestDeploymentFormatHelpers:
             "total_templates": 7,
             "total_files": 21,
             "cookbooks": {
-                f"cb{i}": {"recipes": ["r1"], "attributes": ["a1"]}
-                for i in range(7)
+                f"cb{i}": {"recipes": ["r1"], "attributes": ["a1"]} for i in range(7)
             },
         }
         result = _format_cookbooks_analysis(analysis)
@@ -1135,8 +1150,9 @@ class TestMigrationWizardHelpers:
         existing_dir.mkdir()
         (existing_dir / "existing.yml").write_text("---")
 
-        with patch("builtins.input", side_effect=[str(existing_dir), "n"]), pytest.raises(
-            SystemExit
+        with (
+            patch("builtins.input", side_effect=[str(existing_dir), "n"]),
+            pytest.raises(SystemExit),
         ):
             _prompt_output_directory()
 
@@ -1173,9 +1189,7 @@ class TestAnsibleInventoryParsers:
         with pytest.raises(FileNotFoundError):
             parse_inventory_file(str(tmp_path / "missing.ini"))
 
-    def test_validate_ansible_executable_not_executable(
-        self, tmp_path: Path
-    ) -> None:
+    def test_validate_ansible_executable_not_executable(self, tmp_path: Path) -> None:
         """Non-executable ansible path raises ValueError (line 316)."""
         from souschef.parsers.ansible_inventory import _validate_ansible_executable
 
@@ -1196,15 +1210,16 @@ class TestAnsibleInventoryParsers:
         ansible_exec.write_text("#!/bin/sh\nexec true\n")
         ansible_exec.chmod(0o755)
 
-        with patch(
-            "souschef.parsers.ansible_inventory.subprocess.run",
-            side_effect=subprocess.TimeoutExpired(["ansible"], 10),
-        ), pytest.raises(RuntimeError, match="timed out"):
+        with (
+            patch(
+                "souschef.parsers.ansible_inventory.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(["ansible"], 10),
+            ),
+            pytest.raises(RuntimeError, match="timed out"),
+        ):
             detect_ansible_version(str(ansible_exec))
 
-    def test_detect_ansible_version_called_process_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_detect_ansible_version_called_process_error(self, tmp_path: Path) -> None:
         """CalledProcessError raises RuntimeError (lines 383-384)."""
         import subprocess
 
@@ -1214,10 +1229,13 @@ class TestAnsibleInventoryParsers:
         ansible_exec.write_text("#!/bin/sh\nexec true\n")
         ansible_exec.chmod(0o755)
 
-        with patch(
-            "souschef.parsers.ansible_inventory.subprocess.run",
-            side_effect=subprocess.CalledProcessError(1, "ansible", stderr="err"),
-        ), pytest.raises(RuntimeError, match="failed"):
+        with (
+            patch(
+                "souschef.parsers.ansible_inventory.subprocess.run",
+                side_effect=subprocess.CalledProcessError(1, "ansible", stderr="err"),
+            ),
+            pytest.raises(RuntimeError, match="failed"),
+        ):
             detect_ansible_version(str(ansible_exec))
 
     def test_parse_requirements_yml_not_a_file(self, tmp_path: Path) -> None:
@@ -1317,10 +1335,10 @@ class TestParsersAttributes:
         """Closing quote transitions out of string state (line 216+)."""
         from souschef.parsers.attributes import _update_string_state
 
-        in_string, string_char = _update_string_state('"', False, None, "", [])
+        in_string, _ = _update_string_state('"', False, None, "", [])
         assert in_string is True
         # Now close it.
-        in_string2, string_char2 = _update_string_state('"', True, '"', "", [])
+        in_string2, _ = _update_string_state('"', True, '"', "", [])
         assert in_string2 is False
 
     def test_is_value_complete_with_percent_w_syntax(self) -> None:
@@ -1379,15 +1397,13 @@ class TestProfilingHelpers:
         )
         d = pt.to_dict()
         assert d["phase_name"] == "parse"
-        assert d["duration"] == 1.0
+        assert abs(d["duration"] - 1.0) < 0.01
 
     def test_migration_performance_profile_add_phase(self) -> None:
         """add_phase appends to phases list (line 201)."""
         from souschef.profiling import MigrationPerformanceProfile, PhaseTiming
 
-        profile = MigrationPerformanceProfile(
-            migration_id="m1", total_duration=5.0
-        )
+        profile = MigrationPerformanceProfile(migration_id="m1", total_duration=5.0)
         pt = PhaseTiming("parse", 0.0, 1.0, 1.0)
         profile.add_phase(pt)
         assert len(profile.phases) == 1
@@ -1396,9 +1412,7 @@ class TestProfilingHelpers:
         """to_dict returns expected keys (line 211)."""
         from souschef.profiling import MigrationPerformanceProfile
 
-        profile = MigrationPerformanceProfile(
-            migration_id="m1", total_duration=5.0
-        )
+        profile = MigrationPerformanceProfile(migration_id="m1", total_duration=5.0)
         d = profile.to_dict()
         assert d["migration_id"] == "m1"
         assert "phases" in d
@@ -1432,9 +1446,7 @@ class TestProfilingHelpers:
 
         empty_dir = tmp_path / "recipes"
         empty_dir.mkdir()
-        result = _profile_directory_files(
-            empty_dir, lambda x: "", "parse_recipes"
-        )
+        result = _profile_directory_files(empty_dir, lambda x: "", "parse_recipes")
         assert result is None
 
     def test_add_performance_recommendations_slow_operation(
@@ -1447,7 +1459,9 @@ class TestProfilingHelpers:
             _add_performance_recommendations,
         )
 
-        report = PerformanceReport(cookbook_name="test_cb", total_time=2.0, total_memory=0)
+        report = PerformanceReport(
+            cookbook_name="test_cb", total_time=2.0, total_memory=0
+        )
         slow_result = ProfileResult(
             operation_name="parse_recipes",
             execution_time=2.0,
@@ -1457,9 +1471,7 @@ class TestProfilingHelpers:
         _add_performance_recommendations(report)
         assert len(report.recommendations) > 0
 
-    def test_add_performance_recommendations_high_memory(
-        self, tmp_path: Path
-    ) -> None:
+    def test_add_performance_recommendations_high_memory(self, tmp_path: Path) -> None:
         """High memory usage adds recommendation (lines 772-773)."""
         from souschef.profiling import (
             PerformanceReport,
@@ -1474,9 +1486,7 @@ class TestProfilingHelpers:
         _add_performance_recommendations(report)
         assert any("memory" in r.lower() for r in report.recommendations)
 
-    def test_add_performance_recommendations_many_recipes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_add_performance_recommendations_many_recipes(self, tmp_path: Path) -> None:
         """parse_recipes total with slow execution adds recommendation (lines 782-786)."""
         from souschef.profiling import (
             PerformanceReport,
@@ -1484,7 +1494,9 @@ class TestProfilingHelpers:
             _add_performance_recommendations,
         )
 
-        report = PerformanceReport(cookbook_name="test_cb", total_time=6.0, total_memory=0)
+        report = PerformanceReport(
+            cookbook_name="test_cb", total_time=6.0, total_memory=0
+        )
         slow_result = ProfileResult(
             operation_name="parse_recipes (total: 60)",
             execution_time=6.0,
@@ -1504,7 +1516,9 @@ class TestProfilingHelpers:
             _add_performance_recommendations,
         )
 
-        report = PerformanceReport(cookbook_name="test_cb", total_time=4.0, total_memory=0)
+        report = PerformanceReport(
+            cookbook_name="test_cb", total_time=4.0, total_memory=0
+        )
         slow_result = ProfileResult(
             operation_name="parse_templates (total: 30)",
             execution_time=4.0,
@@ -1531,16 +1545,12 @@ class TestStorageDatabaseCoverage:
             results = sm.get_conversion_history(cookbook_name="nginx")
         assert isinstance(results, list)
 
-    def test_generate_cache_key_hash_failure_is_stable(
-        self, tmp_path: Path
-    ) -> None:
+    def test_generate_cache_key_hash_failure_is_stable(self, tmp_path: Path) -> None:
         """Hash failure for non-existent cookbook path keeps cache key stable (lines 892-894)."""
         from souschef.storage.database import StorageManager
 
         with StorageManager(tmp_path / "test.db") as sm:
-            key = sm.generate_cache_key(
-                "/nonexistent/path", "openai", "gpt-4"
-            )
+            key = sm.generate_cache_key("/nonexistent/path", "openai", "gpt-4")
         assert len(key) == 64  # SHA256 hex digest
 
     def test_save_analysis_returns_id(self, tmp_path: Path) -> None:
@@ -1605,19 +1615,20 @@ class TestPostgresStorageManagerCoverage:
             mgr = PostgresStorageManager.__new__(PostgresStorageManager)
             mgr.dsn = "postgresql://localhost/test"
             # Manually inject mocked psycopg so _ensure_database_exists passes.
-            with patch.object(
-                mgr, "_get_psycopg", return_value=mock_psycopg
-            ), patch.object(mgr, "_connect", return_value=mock_conn):
+            with (
+                patch.object(mgr, "_get_psycopg", return_value=mock_psycopg),
+                patch.object(mgr, "_connect", return_value=mock_conn),
+            ):
                 result = mgr.save_analysis(
-                        cookbook_name="test",
-                        cookbook_path="/tmp/test",
-                        cookbook_version="1.0.0",
-                        complexity="low",
-                        estimated_hours=1.0,
-                        estimated_hours_with_souschef=0.5,
-                        recommendations="rec",
-                        analysis_data={},
-                    )
+                    cookbook_name="test",
+                    cookbook_path="/tmp/test",
+                    cookbook_version="1.0.0",
+                    complexity="low",
+                    estimated_hours=1.0,
+                    estimated_hours_with_souschef=0.5,
+                    recommendations="rec",
+                    analysis_data={},
+                )
         assert result is None
 
     def test_get_analysis_history_without_cookbook_name(self) -> None:
@@ -1638,8 +1649,9 @@ class TestPostgresStorageManagerCoverage:
         ):
             mgr = PostgresStorageManager.__new__(PostgresStorageManager)
             mgr.dsn = "postgresql://localhost/test"
-            with patch.object(
-                mgr, "_get_psycopg", return_value=mock_psycopg
-            ), patch.object(mgr, "_connect", return_value=mock_conn):
+            with (
+                patch.object(mgr, "_get_psycopg", return_value=mock_psycopg),
+                patch.object(mgr, "_connect", return_value=mock_conn),
+            ):
                 results = mgr.get_analysis_history()
         assert results == []

@@ -8,8 +8,8 @@ from souschef.api_clients import ChefServerClient
 
 # Test fixtures for IP addresses used in mocked node data
 # These are intentional test fixtures for unit tests, not production values
-TEST_NODE_IP_1 = "10.0.0.1"  # NOSONAR - test fixture
-TEST_NODE_IP_2 = "10.0.0.2"  # NOSONAR - test fixture
+TEST_NODE_IP_1 = "192.0.2.1"  # RFC 5737 documentation IP
+TEST_NODE_IP_2 = "192.0.2.2"  # RFC 5737 documentation IP
 
 
 class TestChefServerClient:

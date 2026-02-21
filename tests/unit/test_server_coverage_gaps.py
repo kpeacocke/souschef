@@ -61,7 +61,9 @@ from souschef.server import (
 # ---------------------------------------------------------------------------
 
 
-def test_parse_inspec_profile_invalid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parse_inspec_profile_invalid_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test parse_inspec_profile returns error for an invalid path."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -69,7 +71,9 @@ def test_parse_inspec_profile_invalid_path(tmp_path: Path, monkeypatch: pytest.M
     assert "Error" in result
 
 
-def test_parse_inspec_profile_valid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parse_inspec_profile_valid_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test parse_inspec_profile with a valid path that has no controls dir."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     profile_dir = tmp_path / "profile"
@@ -85,7 +89,9 @@ def test_parse_inspec_profile_valid_path(tmp_path: Path, monkeypatch: pytest.Mon
 # ---------------------------------------------------------------------------
 
 
-def test_convert_inspec_to_test_invalid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_inspec_to_test_invalid_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test convert_inspec_to_test returns error for an invalid path."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -98,7 +104,9 @@ def test_convert_inspec_to_test_invalid_path(tmp_path: Path, monkeypatch: pytest
 # ---------------------------------------------------------------------------
 
 
-def test_generate_inspec_from_recipe_invalid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_inspec_from_recipe_invalid_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_inspec_from_recipe returns error for invalid path."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -106,7 +114,9 @@ def test_generate_inspec_from_recipe_invalid_path(tmp_path: Path, monkeypatch: p
     assert "Error" in result
 
 
-def test_generate_inspec_from_recipe_parse_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_inspec_from_recipe_parse_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_inspec_from_recipe when recipe parse fails."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     recipe_file = tmp_path / "recipe.rb"
@@ -117,7 +127,9 @@ def test_generate_inspec_from_recipe_parse_error(tmp_path: Path, monkeypatch: py
     assert "Error" in result
 
 
-def test_generate_inspec_from_recipe_no_resources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_inspec_from_recipe_no_resources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_inspec_from_recipe when no resources are found."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     recipe_file = tmp_path / "recipe.rb"
@@ -135,10 +147,11 @@ def test_generate_inspec_from_recipe_no_resources(tmp_path: Path, monkeypatch: p
 
 def test_convert_chef_databag_to_vars_exception() -> None:
     """Test convert_chef_databag_to_vars handles unexpected exceptions."""
-    with patch("souschef.server._convert_databag_to_ansible_vars", side_effect=RuntimeError("boom")):
-        result = convert_chef_databag_to_vars(
-            '{"id": "test"}', "mydb", "myitem"
-        )
+    with patch(
+        "souschef.server._convert_databag_to_ansible_vars",
+        side_effect=RuntimeError("boom"),
+    ):
+        result = convert_chef_databag_to_vars('{"id": "test"}', "mydb", "myitem")
     assert "Error" in result
 
 
@@ -147,7 +160,9 @@ def test_convert_chef_databag_to_vars_exception() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_generate_ansible_vault_from_databags_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_ansible_vault_from_databags_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_ansible_vault_from_databags handles unexpected exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     databags_dir = tmp_path / "databags"
@@ -167,7 +182,9 @@ def test_generate_ansible_vault_from_databags_exception(tmp_path: Path, monkeypa
 # ---------------------------------------------------------------------------
 
 
-def test_analyse_chef_databag_usage_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analyse_chef_databag_usage_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test analyse_chef_databag_usage handles unexpected exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -201,7 +218,9 @@ def test_convert_chef_environment_to_inventory_group_exception() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_generate_inventory_from_chef_environments_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_inventory_from_chef_environments_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Test generate_inventory_from_chef_environments handles exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
 
@@ -218,7 +237,9 @@ def test_generate_inventory_from_chef_environments_exception(monkeypatch: pytest
 # ---------------------------------------------------------------------------
 
 
-def test_analyse_chef_environment_usage_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_analyse_chef_environment_usage_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Test analyse_chef_environment_usage handles unexpected exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
 
@@ -283,8 +304,18 @@ def test_format_environment_usage_patterns_empty() -> None:
 def test_format_environment_usage_patterns_with_env_name() -> None:
     """Test _format_environment_usage_patterns includes environment names."""
     patterns = [
-        {"type": "node.chef_environment", "file": "recipe.rb", "line": 5, "environment_name": "prod"},
-        {"type": "node.chef_environment", "file": "recipe.rb", "line": 6, "environment_name": None},
+        {
+            "type": "node.chef_environment",
+            "file": "recipe.rb",
+            "line": 5,
+            "environment_name": "prod",
+        },
+        {
+            "type": "node.chef_environment",
+            "file": "recipe.rb",
+            "line": 6,
+            "environment_name": None,
+        },
     ]
     result = _format_environment_usage_patterns(patterns)
     assert "prod" in result
@@ -293,7 +324,12 @@ def test_format_environment_usage_patterns_with_env_name() -> None:
 def test_format_environment_usage_patterns_truncated() -> None:
     """Test _format_environment_usage_patterns truncates long lists."""
     patterns = [
-        {"type": "node.chef_environment", "file": f"recipe{i}.rb", "line": i, "environment_name": "prod"}
+        {
+            "type": "node.chef_environment",
+            "file": f"recipe{i}.rb",
+            "line": i,
+            "environment_name": "prod",
+        }
         for i in range(20)
     ]
     result = _format_environment_usage_patterns(patterns)
@@ -352,8 +388,18 @@ def test_analyse_usage_pattern_recommendations_empty() -> None:
 def test_analyse_usage_pattern_recommendations_with_encrypted() -> None:
     """Test _analyse_usage_patterns detects encrypted usage."""
     patterns = [
-        {"type": "encrypted_data_bag_item", "databag_name": "secrets", "file": "recipe.rb", "line": 1},
-        {"type": "data_bag_item", "databag_name": "users", "file": "recipe.rb", "line": 2},
+        {
+            "type": "encrypted_data_bag_item",
+            "databag_name": "secrets",
+            "file": "recipe.rb",
+            "line": 1,
+        },
+        {
+            "type": "data_bag_item",
+            "databag_name": "users",
+            "file": "recipe.rb",
+            "line": 2,
+        },
     ]
     result = _analyse_usage_patterns(patterns)
     assert any("encrypted" in r.lower() for r in result)
@@ -362,7 +408,12 @@ def test_analyse_usage_pattern_recommendations_with_encrypted() -> None:
 def test_analyse_usage_pattern_recommendations_with_search() -> None:
     """Test _analyse_usage_patterns detects search patterns."""
     patterns = [
-        {"type": "search_data_bag", "databag_name": "nodes", "file": "recipe.rb", "line": 1},
+        {
+            "type": "search_data_bag",
+            "databag_name": "nodes",
+            "file": "recipe.rb",
+            "line": 1,
+        },
     ]
     result = _analyse_usage_patterns(patterns)
     assert any("search" in r.lower() for r in result)
@@ -408,7 +459,12 @@ def test_format_usage_patterns_with_error() -> None:
 def test_format_usage_patterns_truncated() -> None:
     """Test _format_usage_patterns truncates long lists."""
     patterns = [
-        {"type": "data_bag_item", "file": f"recipe{i}.rb", "line": i, "databag_name": "db"}
+        {
+            "type": "data_bag_item",
+            "file": f"recipe{i}.rb",
+            "line": i,
+            "databag_name": "db",
+        }
         for i in range(15)
     ]
     result = _format_usage_patterns(patterns)
@@ -446,7 +502,9 @@ def test_parse_assessment_data_empty_string() -> None:
 
 def test_get_chef_roles_exception() -> None:
     """Test get_chef_roles handles exceptions from _list_chef_roles."""
-    with patch("souschef.server._list_chef_roles", side_effect=ConnectionError("refused")):
+    with patch(
+        "souschef.server._list_chef_roles", side_effect=ConnectionError("refused")
+    ):
         result = get_chef_roles()
     payload = json.loads(result)
     assert payload["status"] == "error"
@@ -455,7 +513,10 @@ def test_get_chef_roles_exception() -> None:
 
 def test_get_chef_environments_exception() -> None:
     """Test get_chef_environments handles exceptions."""
-    with patch("souschef.server._list_chef_environments", side_effect=ConnectionError("refused")):
+    with patch(
+        "souschef.server._list_chef_environments",
+        side_effect=ConnectionError("refused"),
+    ):
         result = get_chef_environments()
     payload = json.loads(result)
     assert payload["status"] == "error"
@@ -464,7 +525,9 @@ def test_get_chef_environments_exception() -> None:
 
 def test_get_chef_cookbooks_exception() -> None:
     """Test get_chef_cookbooks handles exceptions."""
-    with patch("souschef.server._list_chef_cookbooks", side_effect=ConnectionError("refused")):
+    with patch(
+        "souschef.server._list_chef_cookbooks", side_effect=ConnectionError("refused")
+    ):
         result = get_chef_cookbooks()
     payload = json.loads(result)
     assert payload["status"] == "error"
@@ -473,7 +536,9 @@ def test_get_chef_cookbooks_exception() -> None:
 
 def test_get_chef_policies_exception() -> None:
     """Test get_chef_policies handles exceptions."""
-    with patch("souschef.server._list_chef_policies", side_effect=ConnectionError("refused")):
+    with patch(
+        "souschef.server._list_chef_policies", side_effect=ConnectionError("refused")
+    ):
         result = get_chef_policies()
     payload = json.loads(result)
     assert payload["status"] == "error"
@@ -485,7 +550,9 @@ def test_get_chef_policies_exception() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_convert_habitat_to_dockerfile_invalid_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_habitat_to_dockerfile_invalid_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test convert_habitat_to_dockerfile returns error for invalid path."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -510,7 +577,9 @@ def test_generate_jenkinsfile_not_found(monkeypatch: pytest.MonkeyPatch) -> None
     assert "Error" in result or "Could not find" in result
 
 
-def test_generate_jenkinsfile_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_jenkinsfile_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_jenkinsfile_from_chef handles generic exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -539,7 +608,9 @@ def test_generate_gitlab_ci_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "Error" in result or "Could not find" in result
 
 
-def test_generate_gitlab_ci_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_gitlab_ci_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_gitlab_ci_from_chef handles generic exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -568,7 +639,9 @@ def test_generate_github_workflow_not_found(monkeypatch: pytest.MonkeyPatch) -> 
     assert "Error" in result or "Could not find" in result
 
 
-def test_generate_github_workflow_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_github_workflow_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_github_workflow_from_chef handles generic exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -585,7 +658,9 @@ def test_generate_github_workflow_exception(tmp_path: Path, monkeypatch: pytest.
 # ---------------------------------------------------------------------------
 
 
-def test_simulate_chef_to_awx_migration_invalid_platform(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_simulate_chef_to_awx_migration_invalid_platform(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test simulate_chef_to_awx_migration rejects invalid platform."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -597,7 +672,9 @@ def test_simulate_chef_to_awx_migration_invalid_platform(tmp_path: Path, monkeyp
     assert "Error" in result
 
 
-def test_simulate_chef_to_awx_migration_no_cookbooks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_simulate_chef_to_awx_migration_no_cookbooks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test simulate_chef_to_awx_migration returns error when no cookbooks found."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     empty_dir = tmp_path / "cookbooks"
@@ -615,7 +692,9 @@ def test_simulate_chef_to_awx_migration_no_cookbooks(tmp_path: Path, monkeypatch
 # ---------------------------------------------------------------------------
 
 
-def test_convert_all_cookbooks_comprehensive_no_cookbooks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_all_cookbooks_comprehensive_no_cookbooks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test convert_all_cookbooks_comprehensive returns error when no cookbooks found."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     empty_dir = tmp_path / "cookbooks"
@@ -628,7 +707,9 @@ def test_convert_all_cookbooks_comprehensive_no_cookbooks(tmp_path: Path, monkey
     assert "Error" in result
 
 
-def test_convert_all_cookbooks_comprehensive_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_all_cookbooks_comprehensive_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test convert_all_cookbooks_comprehensive handles unexpected exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -724,7 +805,11 @@ def test_generate_conversion_report_with_errors_and_warnings(tmp_path: Path) -> 
         "cookbook_name": "mycookbook",
         "role_name": "my_role",
         "converted_files": [
-            {"type": "task", "source": "recipes/default.rb", "target": "my_role/tasks/default.yml"}
+            {
+                "type": "task",
+                "source": "recipes/default.rb",
+                "target": "my_role/tasks/default.yml",
+            }
         ],
         "errors": ["Failed to parse recipe: parse error"],
         "warnings": ["No attributes found in attrs.rb"],
@@ -745,12 +830,17 @@ def test_generate_conversion_report_with_errors_and_warnings(tmp_path: Path) -> 
 
 def test_check_ansible_eol_status_exception() -> None:
     """Test check_ansible_eol_status handles exceptions."""
-    with patch("souschef.core.ansible_versions.get_eol_status", side_effect=ValueError("unknown")):
+    with patch(
+        "souschef.core.ansible_versions.get_eol_status",
+        side_effect=ValueError("unknown"),
+    ):
         result = check_ansible_eol_status("99.99")
     assert "Error" in result
 
 
-def test_plan_ansible_upgrade_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_plan_ansible_upgrade_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test plan_ansible_upgrade handles exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -762,7 +852,9 @@ def test_plan_ansible_upgrade_exception(tmp_path: Path, monkeypatch: pytest.Monk
     assert "Error" in result
 
 
-def test_validate_ansible_collection_compatibility_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_validate_ansible_collection_compatibility_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test validate_ansible_collection_compatibility handles exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     req_file = tmp_path / "requirements.yml"
@@ -813,7 +905,9 @@ def test_configure_migration_simulation_invalid_combination() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_start_v2_migration_invalid_json_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_v2_migration_invalid_json_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test start_v2_migration handles invalid JSON config."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     cookbook_dir = tmp_path / "cookbook"
@@ -859,7 +953,7 @@ def test_deploy_v2_migration_returns_status() -> None:
         migration_id="test-migration-1",
         ansible_url="https://awx.example.com",
         ansible_username="admin",
-        ansible_password="secret",
+        ansible_password="secret",  # NOSONAR - test fixture
     )
     payload = json.loads(result)
     assert payload["status"] == "deployment_ready"
@@ -893,7 +987,7 @@ def test_rollback_v2_migration_with_resources() -> None:
     result = rollback_v2_migration(
         ansible_url="https://awx.example.com",
         ansible_username="admin",
-        ansible_password="secret",
+        ansible_password="secret",  # NOSONAR - test fixture
         inventory_id=1,
         project_id=2,
         job_template_id=3,
@@ -908,7 +1002,7 @@ def test_rollback_v2_migration_no_resources() -> None:
     result = rollback_v2_migration(
         ansible_url="https://awx.example.com",
         ansible_username="admin",
-        ansible_password="secret",
+        ansible_password="secret",  # NOSONAR - test fixture
     )
     payload = json.loads(result)
     assert payload["status"] == "rollback_complete"
@@ -922,7 +1016,9 @@ def test_rollback_v2_migration_no_resources() -> None:
 
 def test_query_chef_server_exception() -> None:
     """Test query_chef_server handles connection errors."""
-    with patch("souschef.server.ChefServerClient", side_effect=ConnectionError("refused")):
+    with patch(
+        "souschef.server.ChefServerClient", side_effect=ConnectionError("refused")
+    ):
         result = query_chef_server(
             chef_url="https://chef.example.com",
             organization="myorg",
@@ -963,7 +1059,9 @@ def test_parse_chef_handler_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload["status"] in ("file_not_found", "parse_error") or "error" in payload
 
 
-def test_parse_chef_handler_parse_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parse_chef_handler_parse_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test parse_chef_handler returns parse_error on exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     handler_file = tmp_path / "handler.rb"
@@ -983,16 +1081,23 @@ def test_parse_chef_handler_parse_error(tmp_path: Path, monkeypatch: pytest.Monk
 # ---------------------------------------------------------------------------
 
 
-def test_convert_chef_handler_to_ansible_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_chef_handler_to_ansible_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Test convert_chef_handler_to_ansible returns file_not_found."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
 
     result = convert_chef_handler_to_ansible("/nonexistent/handler.rb")
     payload = json.loads(result)
-    assert payload["status"] in ("file_not_found", "conversion_error") or "error" in payload
+    assert (
+        payload["status"] in ("file_not_found", "conversion_error")
+        or "error" in payload
+    )
 
 
-def test_convert_chef_handler_to_ansible_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_chef_handler_to_ansible_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test convert_chef_handler_to_ansible handles exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     handler_file = tmp_path / "handler.rb"
@@ -1012,7 +1117,9 @@ def test_convert_chef_handler_to_ansible_exception(tmp_path: Path, monkeypatch: 
 # ---------------------------------------------------------------------------
 
 
-def test_generate_handler_routing_config_not_a_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_handler_routing_config_not_a_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_handler_routing_config rejects non-directory paths."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     file_path = tmp_path / "not_a_dir.rb"
@@ -1023,11 +1130,15 @@ def test_generate_handler_routing_config_not_a_directory(tmp_path: Path, monkeyp
     assert payload["status"] == "error" or "error" in payload
 
 
-def test_generate_handler_routing_config_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_handler_routing_config_exception(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Test generate_handler_routing_config handles unexpected exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
 
-    with patch("souschef.server._normalise_workspace_path", side_effect=RuntimeError("boom")):
+    with patch(
+        "souschef.server._normalise_workspace_path", side_effect=RuntimeError("boom")
+    ):
         result = generate_handler_routing_config("/some/cookbook")
     payload = json.loads(result)
     assert payload["status"] == "error"
@@ -1038,7 +1149,9 @@ def test_generate_handler_routing_config_exception(monkeypatch: pytest.MonkeyPat
 # ---------------------------------------------------------------------------
 
 
-def test_generate_handler_routing_config_json_format(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_handler_routing_config_json_format(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_handler_routing_config with json output format."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     cookbook_dir = tmp_path / "cookbook"
@@ -1073,7 +1186,9 @@ def test_list_migration_version_combinations_returns_valid_json() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_assess_ansible_upgrade_readiness_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assess_ansible_upgrade_readiness_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test assess_ansible_upgrade_readiness handles exceptions."""
     from souschef.server import assess_ansible_upgrade_readiness
 
@@ -1087,7 +1202,9 @@ def test_assess_ansible_upgrade_readiness_exception(tmp_path: Path, monkeypatch:
     assert "Error" in result
 
 
-def test_generate_ansible_upgrade_test_plan_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_ansible_upgrade_test_plan_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_ansible_upgrade_test_plan handles exceptions."""
     from souschef.server import generate_ansible_upgrade_test_plan
 
@@ -1106,7 +1223,9 @@ def test_generate_ansible_upgrade_test_plan_exception(tmp_path: Path, monkeypatc
 # ---------------------------------------------------------------------------
 
 
-def test_start_v2_migration_basic_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_start_v2_migration_basic_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test start_v2_migration succeeds with a valid version combination."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     cookbook_dir = tmp_path / "cookbook"
@@ -1187,7 +1306,9 @@ def test_create_main_task_file_success(tmp_path: Path) -> None:
     cookbook_dir.mkdir()
     recipes_dir = cookbook_dir / "recipes"
     recipes_dir.mkdir()
-    (recipes_dir / "default.rb").write_text("package 'nginx' do\n  action :install\nend\n")
+    (recipes_dir / "default.rb").write_text(
+        "package 'nginx' do\n  action :install\nend\n"
+    )
     role_dir = tmp_path / "role"
     role_dir.mkdir()
     summary: dict = {"converted_files": [], "warnings": []}
@@ -1208,7 +1329,9 @@ def test_create_main_task_file_success(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_simulate_chef_to_awx_migration_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_simulate_chef_to_awx_migration_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test simulate_chef_to_awx_migration handles unexpected exceptions."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
 
@@ -1251,7 +1374,7 @@ def test_deploy_v2_migration_exception() -> None:
         migration_id="test-id",
         ansible_url="https://awx.example.com",
         ansible_username="admin",
-        ansible_password="pass",
+        ansible_password="pass",  # NOSONAR - test fixture
     )
     payload = json.loads(result)
     assert "status" in payload
@@ -1267,7 +1390,7 @@ def test_rollback_v2_migration_partial_resources() -> None:
     result = rollback_v2_migration(
         ansible_url="https://awx.example.com",
         ansible_username="admin",
-        ansible_password="secret",
+        ansible_password="secret",  # NOSONAR - test fixture
         project_id=5,
     )
     payload = json.loads(result)
@@ -1284,7 +1407,10 @@ def test_rollback_v2_migration_partial_resources() -> None:
 def test_query_chef_server_success() -> None:
     """Test query_chef_server returns success response."""
     mock_client = MagicMock()
-    mock_client.search_nodes.return_value = {"total": 2, "rows": [{"name": "node1"}, {"name": "node2"}]}
+    mock_client.search_nodes.return_value = {
+        "total": 2,
+        "rows": [{"name": "node1"}, {"name": "node2"}],
+    }
     with patch("souschef.server.ChefServerClient", return_value=mock_client):
         result = query_chef_server(
             chef_url="https://chef.example.com",
@@ -1303,7 +1429,9 @@ def test_query_chef_server_success() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_generate_handler_routing_config_yaml_format(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_handler_routing_config_yaml_format(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test generate_handler_routing_config with yaml output format (default)."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     cookbook_dir = tmp_path / "cookbook"
@@ -1322,7 +1450,9 @@ def test_generate_handler_routing_config_yaml_format(tmp_path: Path, monkeypatch
 # ---------------------------------------------------------------------------
 
 
-def test_parse_chef_handler_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parse_chef_handler_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test parse_chef_handler successfully parses a handler file."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     handler_file = tmp_path / "my_handler.rb"
@@ -1345,7 +1475,9 @@ def test_parse_chef_handler_success(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 # ---------------------------------------------------------------------------
 
 
-def test_convert_chef_handler_to_ansible_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_convert_chef_handler_to_ansible_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Test convert_chef_handler_to_ansible successfully converts a handler."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
     handler_file = tmp_path / "my_handler.rb"

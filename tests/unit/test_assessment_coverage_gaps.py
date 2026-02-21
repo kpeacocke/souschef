@@ -365,7 +365,9 @@ class TestParseThorfile:
         from souschef.assessment import _parse_thorfile
 
         thorfile = tmp_path / "Thorfile"
-        thorfile.write_text("class MyCookbook < Thor\n  desc 'test', 'run tests'\n  def test; end\nend\n")
+        thorfile.write_text(
+            "class MyCookbook < Thor\n  desc 'test', 'run tests'\n  def test; end\nend\n"
+        )
 
         with patch.object(Path, "read_text", side_effect=OSError("read error")):
             result = _parse_thorfile(tmp_path)
@@ -597,9 +599,7 @@ class TestAssessSingleCookbookWithAi:
         )
         assert "error" in result
 
-    def test_no_api_key_falls_back_to_rule_based(
-        self, tmp_path: Path
-    ) -> None:
+    def test_no_api_key_falls_back_to_rule_based(self, tmp_path: Path) -> None:
         """Missing API key triggers rule-based fallback."""
         from souschef.assessment import assess_single_cookbook_with_ai
 
@@ -634,11 +634,12 @@ class TestAssessSingleCookbookWithAi:
 
         (tmp_path / "metadata.rb").write_text("name 'test'\n")
 
-        with patch(
-            "souschef.assessment._is_ai_available", return_value=True
-        ), patch(
-            "souschef.assessment._assess_single_cookbook_with_ai",
-            return_value=_make_assessment(complexity=50.0, effort=5.0),
+        with (
+            patch("souschef.assessment._is_ai_available", return_value=True),
+            patch(
+                "souschef.assessment._assess_single_cookbook_with_ai",
+                return_value=_make_assessment(complexity=50.0, effort=5.0),
+            ),
         ):
             result = assess_single_cookbook_with_ai(
                 str(tmp_path),
@@ -653,11 +654,12 @@ class TestAssessSingleCookbookWithAi:
 
         (tmp_path / "metadata.rb").write_text("name 'test'\n")
 
-        with patch(
-            "souschef.assessment._is_ai_available", return_value=True
-        ), patch(
-            "souschef.assessment._assess_single_cookbook_with_ai",
-            return_value=_make_assessment(complexity=85.0, effort=20.0),
+        with (
+            patch("souschef.assessment._is_ai_available", return_value=True),
+            patch(
+                "souschef.assessment._assess_single_cookbook_with_ai",
+                return_value=_make_assessment(complexity=85.0, effort=20.0),
+            ),
         ):
             result = assess_single_cookbook_with_ai(
                 str(tmp_path),
@@ -760,7 +762,7 @@ class TestAnalyseCookbookMetricsWithAi:
 
         (tmp_path / "metadata.rb").write_text("name 'test'\n")
 
-        assessments, metrics = _analyse_cookbook_metrics_with_ai(
+        _, metrics = _analyse_cookbook_metrics_with_ai(
             [tmp_path], "anthropic", "", "model", 0.3, 512
         )
         assert metrics["total_cookbooks"] == 1
@@ -991,9 +993,7 @@ class TestCallAnthropicApi:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "content": [{"text": "assessment result"}]
-        }
+        mock_response.json.return_value = {"content": [{"text": "assessment result"}]}
         mock_requests = MagicMock()
         mock_requests.post.return_value = mock_response
         with patch("souschef.assessment.requests", mock_requests):
@@ -1087,7 +1087,12 @@ class TestCallWatsonApi:
 
         with patch("souschef.assessment.APIClient", mock_client_class):
             result = _call_watson_api(
-                "prompt", "key", "model", 0.3, 512, base_url="https://watson.example.com"
+                "prompt",
+                "key",
+                "model",
+                0.3,
+                512,
+                base_url="https://watson.example.com",
             )
         assert result == "Hello"
 
@@ -1111,9 +1116,18 @@ class TestGenerateAiMigrationRecommendations:
             "estimated_effort_days": 5,
         }
 
-        with patch("souschef.assessment._call_ai_api", return_value="• Use phased approach"):
+        with patch(
+            "souschef.assessment._call_ai_api", return_value="• Use phased approach"
+        ):
             result = _generate_ai_migration_recommendations(
-                assessments, metrics, "ansible_awx", "anthropic", "key", "model", 0.3, 512
+                assessments,
+                metrics,
+                "ansible_awx",
+                "anthropic",
+                "key",
+                "model",
+                0.3,
+                512,
             )
         assert "phased" in result
 
@@ -1130,7 +1144,14 @@ class TestGenerateAiMigrationRecommendations:
 
         with patch("souschef.assessment._call_ai_api", return_value=None):
             result = _generate_ai_migration_recommendations(
-                assessments, metrics, "ansible_awx", "anthropic", "key", "model", 0.3, 512
+                assessments,
+                metrics,
+                "ansible_awx",
+                "anthropic",
+                "key",
+                "model",
+                0.3,
+                512,
             )
         assert isinstance(result, str)
         assert len(result) > 0
@@ -1146,9 +1167,18 @@ class TestGenerateAiMigrationRecommendations:
             "estimated_effort_days": 5,
         }
 
-        with patch("souschef.assessment._call_ai_api", side_effect=RuntimeError("boom")):
+        with patch(
+            "souschef.assessment._call_ai_api", side_effect=RuntimeError("boom")
+        ):
             result = _generate_ai_migration_recommendations(
-                assessments, metrics, "ansible_awx", "anthropic", "key", "model", 0.3, 512
+                assessments,
+                metrics,
+                "ansible_awx",
+                "anthropic",
+                "key",
+                "model",
+                0.3,
+                512,
             )
         assert isinstance(result, str)
 
@@ -1188,7 +1218,9 @@ class TestCreateAiMigrationRoadmap:
         from souschef.assessment import _create_ai_migration_roadmap
 
         assessments = [_make_assessment()]
-        with patch("souschef.assessment._call_ai_api", side_effect=RuntimeError("fail")):
+        with patch(
+            "souschef.assessment._call_ai_api", side_effect=RuntimeError("fail")
+        ):
             result = _create_ai_migration_roadmap(
                 assessments, "anthropic", "key", "model", 0.3, 512
             )

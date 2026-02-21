@@ -225,6 +225,7 @@ class TestIRPlugin:
                 return ["1.0"]
 
             def generate(self, graph: IRGraph, output_path: str, **options) -> None:
+                # Empty implementation for testing - concrete class needed to instantiate abstract IRGenerator
                 pass
 
             def validate_ir(self, graph: IRGraph) -> dict:
@@ -432,9 +433,7 @@ end
 class TestFilesystemOperations:
     """Tests for filesystem operations."""
 
-    def test_list_directory_returns_error_on_value_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_directory_returns_error_on_value_error(self, tmp_path: Path) -> None:
         """list_directory returns an error string when ValueError is raised."""
         from souschef.filesystem.operations import list_directory
 
@@ -456,10 +455,13 @@ class TestFilesystemOperations:
         nonexistent = str(tmp_path / "missing_dir")
         output = str(tmp_path / "output.tar.gz")
 
-        with patch(
-            "souschef.filesystem.operations._get_workspace_root",
-            return_value=tmp_path,
-        ), pytest.raises(ValueError, match="Source directory does not exist"):
+        with (
+            patch(
+                "souschef.filesystem.operations._get_workspace_root",
+                return_value=tmp_path,
+            ),
+            pytest.raises(ValueError, match="Source directory does not exist"),
+        ):
             create_tar_gz_archive(nonexistent, output)
 
     def test_extract_tar_gz_archive_raises_for_nonexistent_archive(
@@ -471,10 +473,13 @@ class TestFilesystemOperations:
         fake_archive = str(tmp_path / "missing.tar.gz")
         output_dir = str(tmp_path / "out")
 
-        with patch(
-            "souschef.filesystem.operations._get_workspace_root",
-            return_value=tmp_path,
-        ), pytest.raises(ValueError, match="Archive does not exist"):
+        with (
+            patch(
+                "souschef.filesystem.operations._get_workspace_root",
+                return_value=tmp_path,
+            ),
+            pytest.raises(ValueError, match="Archive does not exist"),
+        ):
             extract_tar_gz_archive(fake_archive, output_dir)
 
 
@@ -491,7 +496,9 @@ class TestPathUtils:
         from souschef.core.path_utils import _get_workspace_root
 
         with (
-            patch.dict(os.environ, {"SOUSCHEF_WORKSPACE_ROOT": "/nonexistent_xyz_path"}),
+            patch.dict(
+                os.environ, {"SOUSCHEF_WORKSPACE_ROOT": "/nonexistent_xyz_path"}
+            ),
             pytest.raises(ValueError, match="Workspace root does not exist"),
         ):
             _get_workspace_root()
@@ -543,7 +550,7 @@ class TestUrlValidation:
         """_is_private_hostname returns True for a private IP address."""
         from souschef.core.url_validation import _is_private_hostname
 
-        fake_addr = [(2, 1, 6, "", ("192.168.1.1", 0))]
+        fake_addr = [(2, 1, 6, "", ("198.51.100.51", 0))]  # RFC 5737 documentation IP
         with patch("socket.getaddrinfo", return_value=fake_addr):
             assert _is_private_hostname("private.internal-company.xyz") is True
 
