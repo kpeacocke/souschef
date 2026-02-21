@@ -1,4 +1,5 @@
-"""Final targeted tests to reach 100% coverage.
+"""
+Final targeted tests to reach 100% coverage.
 
 Each test is precisely targeted at a specific uncovered line or branch.
 """
@@ -6,13 +7,9 @@ Each test is precisely targeted at a specific uncovered line or branch.
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
-
+from unittest.mock import MagicMock, patch
 
 # ===========================
 # ansible_upgrade.py
@@ -74,8 +71,10 @@ class TestAnsibleUpgradeGaps:
 
     def test_check_python_compatibility_python_version_no_dot(self) -> None:
         """Line 304: python_version without dots → py_major_minor = version itself."""
-        from souschef.ansible_upgrade import _check_python_compatibility
-        from souschef.ansible_upgrade import ANSIBLE_VERSIONS
+        from souschef.ansible_upgrade import (
+            ANSIBLE_VERSIONS,
+            _check_python_compatibility,
+        )
 
         # Pick any real version that has incompatible python
         version = next(iter(ANSIBLE_VERSIONS))
@@ -189,7 +188,7 @@ class TestAssessmentGaps:
     def test_assess_single_cookbook_with_ai_no_complexity_in_ai_analysis(
         self, tmp_path: Path
     ) -> None:
-        """Lines 2669, 2675: ai_analysis present but missing 'complexity_score'/'estimated_effort_days'."""
+        """Lines 2670-2671, 2676-2677: ai_analysis missing keys → else branches (rule-based fallback)."""
         from souschef.assessment import _assess_single_cookbook_with_ai
 
         # Minimal cookbook dir
@@ -216,6 +215,34 @@ class TestAssessmentGaps:
         assert "complexity_score" in result
         assert "estimated_effort_days" in result
 
+    def test_assess_single_cookbook_with_ai_with_complexity_in_ai_analysis(
+        self, tmp_path: Path
+    ) -> None:
+        """Lines 2669, 2675: ai_analysis HAS 'complexity_score' and 'estimated_effort_days' → TRUE branches."""
+        from souschef.assessment import _assess_single_cookbook_with_ai
+
+        (tmp_path / "recipes").mkdir()
+        (tmp_path / "recipes" / "default.rb").write_text("")
+
+        ai_analysis: dict[str, Any] = {
+            "complexity_score": 55,
+            "estimated_effort_days": 3.0,
+            "recommendations": ["r1"],
+        }
+        with patch(
+            "souschef.assessment._get_ai_cookbook_analysis", return_value=ai_analysis
+        ):
+            result = _assess_single_cookbook_with_ai(
+                cookbook_path=tmp_path,
+                ai_provider="anthropic",
+                api_key="key",
+                model="claude-3",
+                temperature=0.5,
+                max_tokens=1000,
+            )
+        assert result["complexity_score"] == 55
+        assert result["estimated_effort_days"] == 3.0
+
 
 # ===========================
 # cli.py
@@ -228,16 +255,20 @@ class TestCliGaps:
     def test_convert_cookbook_template_fails(
         self, tmp_path: Path
     ) -> None:
-        """Line 559: template conversion returns no jinja2_template."""
+        """Line 559: template conversion returns failure → echo 'Failed to convert'."""
         from click.testing import CliRunner
+
         from souschef.cli import cli
 
         cookbook_dir = tmp_path / "cookbook"
         cookbook_dir.mkdir()
         (cookbook_dir / "metadata.rb").write_text("name 'test'\nversion '1.0.0'")
+        # The `cookbook` command uses cookbook_dir/templates/default/*.erb
         templates_dir = cookbook_dir / "templates" / "default"
         templates_dir.mkdir(parents=True)
         (templates_dir / "app.conf.erb").write_text("<%= @name %>")
+        output_dir = tmp_path / "out"
+        output_dir.mkdir()
 
         runner = CliRunner()
         with patch(
@@ -247,11 +278,10 @@ class TestCliGaps:
             result = runner.invoke(
                 cli,
                 [
-                    "convert-cookbook",
-                    "--cookbook-path",
+                    "cookbook",
                     str(cookbook_dir),
-                    "--output-path",
-                    str(tmp_path / "out"),
+                    "--output",
+                    str(output_dir),
                 ],
                 catch_exceptions=False,
             )
@@ -262,6 +292,7 @@ class TestCliGaps:
     ) -> None:
         """Lines 1428-1429: assessment_file provided → read_text called."""
         from click.testing import CliRunner
+
         from souschef.cli import cli
 
         cookbook_dir = tmp_path / "cookbook"
@@ -290,8 +321,9 @@ class TestCliGaps:
         assert result.exit_code == 0
 
     def test_query_chef_nodes_exception(self) -> None:
-        """Lines 1701-1702: Exception from Chef Server query → error message."""
+        """Exception path: error from get_chef_nodes → error message and exit 1."""
         from click.testing import CliRunner
+
         from souschef.cli import cli
 
         runner = CliRunner()
@@ -313,11 +345,46 @@ class TestCliGaps:
                     "/tmp/admin.pem",
                 ],
             )
-        assert result.exit_code != 0 or "Error" in result.output
+        assert result.exit_code == 1 or "Error" in result.output
+
+    def test_query_chef_nodes_success_with_nodes(self) -> None:
+        """Lines 1701-1702: nodes found → output nodes."""
+        from click.testing import CliRunner
+
+        from souschef.cli import cli
+
+        mock_nodes = [
+            {
+                "name": "node1",
+                "roles": ["web"],
+                "environment": "prod",
+                "platform": "ubuntu",
+                "ip": "10.0.0.1",
+            }
+        ]
+        runner = CliRunner()
+        with patch(
+            "souschef.core.chef_server.get_chef_nodes",
+            return_value=mock_nodes,
+        ):
+            result = runner.invoke(
+                cli,
+                [
+                    "query-chef-nodes",
+                    "--server-url",
+                    "https://chef.example.com",
+                    "--client-name",
+                    "admin",
+                    "--client-key-path",
+                    "/tmp/admin.pem",
+                ],
+            )
+        assert "node1" in result.output or result.exit_code == 0
 
     def test_convert_template_ai_no_ai_flag(self, tmp_path: Path) -> None:
-        """Line 1721: ai=False → click.echo('Using rule-based...')."""
+        """Lines 1746-1748: success with warnings → warnings displayed."""
         from click.testing import CliRunner
+
         from souschef.cli import cli
 
         erb_file = tmp_path / "app.conf.erb"
@@ -326,18 +393,25 @@ class TestCliGaps:
         runner = CliRunner()
         with patch(
             "souschef.converters.template.convert_template_with_ai",
-            return_value={"success": True, "jinja2_output": "output", "conversion_method": "rule-based"},
+            return_value={
+                "success": True,
+                "jinja2_output": "output",
+                "conversion_method": "rule-based",
+                "warnings": ["some warning"],
+            },
         ):
             result = runner.invoke(
                 cli,
                 ["convert-template-ai", str(erb_file)],
                 catch_exceptions=False,
             )
-        assert "rule-based" in result.output.lower() or result.exit_code == 0
+        assert result.exit_code == 0
+        assert "some warning" in result.output
 
     def test_convert_template_ai_failure(self, tmp_path: Path) -> None:
         """Lines 1746-1749: result.get('success') is False → error message."""
         from click.testing import CliRunner
+
         from souschef.cli import cli
 
         erb_file = tmp_path / "app.conf.erb"
@@ -357,6 +431,7 @@ class TestCliGaps:
     def test_convert_template_ai_exception(self, tmp_path: Path) -> None:
         """Lines 1752-1755: exception in convert_template_with_ai."""
         from click.testing import CliRunner
+
         from souschef.cli import cli
 
         erb_file = tmp_path / "app.conf.erb"
@@ -376,6 +451,7 @@ class TestCliGaps:
     def test_configure_migration_interactive_mode(self) -> None:
         """Line 1885: interactive=True → get_migration_config_from_user called."""
         from click.testing import CliRunner
+
         from souschef.cli import cli
 
         runner = CliRunner()
@@ -396,6 +472,7 @@ class TestCliGaps:
     def test_history_delete_cancelled(self) -> None:
         """Lines 2014-2015: user says No to confirmation → cancelled message."""
         from click.testing import CliRunner
+
         from souschef.cli import cli
 
         runner = CliRunner()
@@ -412,8 +489,9 @@ class TestCliGaps:
         assert "cancelled" in result.output.lower()
 
     def test_history_delete_analysis_type(self) -> None:
-        """Line 2023: history_type == 'analysis' → delete_analysis called."""
+        """Lines 2019-2020: history_type == 'analysis' → delete_analysis called."""
         from click.testing import CliRunner
+
         from souschef.cli import cli
 
         runner = CliRunner()
@@ -430,6 +508,26 @@ class TestCliGaps:
         mock_storage.delete_analysis.assert_called_once()
         assert "success" in result.output.lower() or result.exit_code == 0
 
+    def test_history_delete_conversion_success(self) -> None:
+        """Line 2023: history_type == 'conversion' → delete_conversion → success msg."""
+        from click.testing import CliRunner
+
+        from souschef.cli import cli
+
+        runner = CliRunner()
+        mock_storage = MagicMock()
+        mock_storage.delete_conversion.return_value = True
+        with (
+            patch("souschef.storage.get_storage_manager", return_value=mock_storage),
+        ):
+            result = runner.invoke(
+                cli,
+                ["history", "delete", "--type", "conversion", "--id", "5", "--yes"],
+                catch_exceptions=False,
+            )
+        mock_storage.delete_conversion.assert_called_once_with(5)
+        assert "success" in result.output.lower() or result.exit_code == 0
+
 
 # ===========================
 # cli_v2_commands.py
@@ -442,6 +540,7 @@ class TestCliV2CommandsGaps:
     def test_run_migration_exits_on_failed_status(self, tmp_path: Path) -> None:
         """Line 380: result.status == MigrationStatus.FAILED → sys.exit(1)."""
         from click.testing import CliRunner
+
         from souschef.cli_v2_commands import v2_migrate
         from souschef.migration_v2 import MigrationResult, MigrationStatus
 
@@ -765,7 +864,7 @@ class TestGeneratorsRepoGaps:
 
     def test_determine_repo_type_medium_high_complexity(self, tmp_path: Path) -> None:
         """Line 148: complexity_score > 50 and num_roles >= 2 → COLLECTION."""
-        from souschef.generators.repo import _analyse_with_ai, RepoType
+        from souschef.generators.repo import RepoType, _analyse_with_ai
 
         mock_assessment = {
             "complexity_score": 60,  # > 50
@@ -829,7 +928,7 @@ class TestIngestionGaps:
         self, tmp_path: Path
     ) -> None:
         """Line 307: use_cache + cache_dir exists + cookbook_dir exists → shutil.rmtree + copytree."""
-        from souschef.ingestion import _download_cookbook, CookbookSpec
+        from souschef.ingestion import CookbookSpec, _download_cookbook
 
         cache_root = tmp_path / "cache"
         destination = tmp_path / "dest"
@@ -863,7 +962,7 @@ class TestIngestionGaps:
 
     def test_download_cookbook_download_failure(self, tmp_path: Path) -> None:
         """Line 320: client.download_url raises → warning appended."""
-        from souschef.ingestion import _download_cookbook, CookbookSpec
+        from souschef.ingestion import CookbookSpec, _download_cookbook
 
         spec = CookbookSpec(name="failbook", version="2.0.0")
         destination = tmp_path / "dest"
@@ -892,7 +991,7 @@ class TestIngestionGaps:
 
     def test_download_cookbook_saves_to_cache(self, tmp_path: Path) -> None:
         """Line 338: after download with use_cache=True → copy to cache."""
-        from souschef.ingestion import _download_cookbook, CookbookSpec
+        from souschef.ingestion import CookbookSpec, _download_cookbook
 
         spec = CookbookSpec(name="cachebook", version="3.0.0")
         destination = tmp_path / "dest"
@@ -944,6 +1043,70 @@ class TestMigrationV2Gaps:
             storage_manager=mock_storage,
         )
         assert result is None
+
+    def test_prepare_cookbook_source_from_chef_server(self, tmp_path: Path) -> None:
+        """Lines 688-760: _prepare_cookbook_source with Chef Server config."""
+        from souschef.ingestion import CookbookFetchResult, CookbookSpec
+        from souschef.migration_v2 import (
+            MigrationOrchestrator,
+            MigrationResult,
+            MigrationStatus,
+        )
+
+        cookbook_root = tmp_path / "cookbooks" / "nginx"
+        cookbook_root.mkdir(parents=True)
+
+        mock_fetch = CookbookFetchResult(
+            root_dir=tmp_path,
+            cookbooks=[CookbookSpec(name="nginx", version="1.0.0")],
+            dependency_graph={},
+            manifest_path=tmp_path / "manifest.json",
+            offline_bundle_path=None,
+            warnings=[],
+        )
+
+        with (
+            patch("souschef.migration_v2.MigrationOrchestrator.__init__", return_value=None),
+        ):
+            orch = MigrationOrchestrator.__new__(MigrationOrchestrator)
+            orch.migration_id = "test-123"
+            from datetime import datetime as _dt
+            orch.result = MigrationResult(
+                status=MigrationStatus.IN_PROGRESS,
+                migration_id="test-123",
+                chef_version="15.10.91",
+                target_platform="awx",
+                target_version="2.4.0",
+                ansible_version="2.17.0",
+                created_at=_dt.now().isoformat(),
+                updated_at=_dt.now().isoformat(),
+                source_cookbook=str(tmp_path),
+            )
+
+            with (
+                patch.object(orch, "_fetch_run_list", return_value=(["role[nginx]"], None)),
+                patch.object(orch, "_extract_cookbooks_from_run_list", return_value=["nginx"]),
+                patch.object(orch, "_resolve_primary_cookbook", return_value="nginx"),
+                patch("souschef.migration_v2.fetch_cookbooks_from_chef_server", return_value=mock_fetch),
+                patch("souschef.migration_v2._get_workspace_root", return_value=tmp_path),
+                patch("souschef.migration_v2._safe_join", return_value=tmp_path / ".souschef" / "chef-downloads"),
+            ):
+                result_path, payload = orch._prepare_cookbook_source(
+                    cookbook_path="",
+                    chef_server_url="https://chef.example.com",
+                    chef_organisation="myorg",
+                    chef_client_name="admin",
+                    chef_client_key_path="/tmp/admin.pem",
+                    chef_client_key=None,
+                    chef_node="node1",
+                    chef_policy=None,
+                    cookbook_name="nginx",
+                    cookbook_version="1.0.0",
+                    dependency_depth="all",
+                    use_cache=False,
+                    offline_bundle_path=None,
+                )
+        assert "nginx" in result_path
 
 
 # ===========================

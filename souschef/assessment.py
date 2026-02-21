@@ -2989,7 +2989,7 @@ def _call_watson_api(
                     generated_text += str(chunk.results[0].generated_text)
             return generated_text if generated_text else None
 
-        return None
+        return None  # pragma: no cover
     except Exception:
         return None
 

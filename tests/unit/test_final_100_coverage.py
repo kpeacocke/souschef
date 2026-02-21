@@ -8,8 +8,6 @@ migration_v2.py, ansible_upgrade.py, converters/playbook.py, and small modules.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -172,13 +170,11 @@ def test_convert_templates_json_decode_error(tmp_path: Path) -> None:
 
 def test_validate_conversion_paths_bad_output(tmp_path: Path) -> None:
     """ValueError for bad output path – server.py:4252-4253."""
-    with pytest.raises(ValueError, match="Output path"):
-        with patch(
-            "souschef.server._ensure_within_base_path",
-            side_effect=[tmp_path / "cookbooks", ValueError("escapes")],
-        ):
-            with patch("souschef.core.path_utils.safe_exists", return_value=True):
-                _validate_conversion_paths(str(tmp_path), "/../../bad")
+    with pytest.raises(ValueError, match="Output path"), patch(
+        "souschef.server._ensure_within_base_path",
+        side_effect=[tmp_path / "cookbooks", ValueError("escapes")],
+    ), patch("souschef.core.path_utils.safe_exists", return_value=True):
+        _validate_conversion_paths(str(tmp_path), "/../../bad")
 
 
 def test_get_role_name_none_metadata(tmp_path: Path) -> None:
@@ -553,8 +549,8 @@ def test_fetch_run_list_no_node_no_policy() -> None:
 
 
 def test_chef_node_payload_processing(tmp_path: Path) -> None:
-    """automatic attrs from chef_node_payload – migration_v2.py:874-876."""
-    from souschef.migration_v2 import MigrationOrchestrator, MigrationResult
+    """Automatic attrs from chef_node_payload – migration_v2.py:874-876."""
+    from souschef.migration_v2 import MigrationOrchestrator
 
     orch = MigrationOrchestrator("15.10.91", "awx", "22.0.0")
     orch.result = MagicMock()
@@ -871,7 +867,7 @@ def test_convert_resource_to_task_dict_nodejs_npm_version() -> None:
 
 
 def test_convert_resource_to_task_dict_with_guards() -> None:
-    """guards update task – playbook.py:2479."""
+    """Guards update task – playbook.py:2479."""
     from souschef.converters.playbook import _convert_resource_to_task_dict
 
     resource = {
@@ -983,7 +979,9 @@ def test_handle_directory_block_with_interpolation(tmp_path: Path) -> None:
 
 def test_generate_playbook_with_ai_path_traversal(tmp_path: Path) -> None:
     """ValueError in safe_exists returns traversal error – playbook.py:169-170."""
-    from souschef.converters.playbook import generate_playbook_from_recipe_with_ai as generate_playbook_with_ai
+    from souschef.converters.playbook import (
+        generate_playbook_from_recipe_with_ai as generate_playbook_with_ai,
+    )
 
     recipe_file = tmp_path / "default.rb"
     recipe_file.write_text("package 'nginx'\n")
@@ -995,7 +993,9 @@ def test_generate_playbook_with_ai_path_traversal(tmp_path: Path) -> None:
 
 def test_generate_playbook_with_ai_exception(tmp_path: Path) -> None:
     """Exception during AI conversion returns error – playbook.py:240-241."""
-    from souschef.converters.playbook import generate_playbook_from_recipe_with_ai as generate_playbook_with_ai
+    from souschef.converters.playbook import (
+        generate_playbook_from_recipe_with_ai as generate_playbook_with_ai,
+    )
 
     recipe_file = tmp_path / "default.rb"
     recipe_file.write_text("package 'nginx'\n")
@@ -1103,7 +1103,10 @@ def test_parse_recipe_case_body_too_large(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 def test_convert_resource_to_ansible_fallback() -> None:
     """Fallback to _get_default_params – resource.py:402."""
-    from souschef.converters.resource import RESOURCE_PARAM_BUILDERS, _build_module_params
+    from souschef.converters.resource import (
+        RESOURCE_PARAM_BUILDERS,
+        _build_module_params,
+    )
 
     # Inject a string builder that is not 'service' or 'file'
     original = RESOURCE_PARAM_BUILDERS.copy()
@@ -1154,7 +1157,7 @@ def test_consolidate_to_loop_with_similar_tasks() -> None:
 # parsers/attributes.py
 # ---------------------------------------------------------------------------
 def test_parse_attributes_automatic_precedence(tmp_path: Path) -> None:
-    """automatic precedence returns None – attributes.py:154."""
+    """Automatic precedence returns None – attributes.py:154."""
     from souschef.parsers.attributes import parse_attributes
 
     attr_file = tmp_path / "default.rb"
@@ -1341,9 +1344,8 @@ def test_validate_cookbook_path_retry() -> None:
     with patch(
         "souschef.migration_wizard._validate_cookbook_path",
         side_effect=["retry", "/valid/path"],
-    ):
-        with patch("builtins.input", return_value="some/path"):
-            result = _prompt_cookbook_path()
+    ), patch("builtins.input", return_value="some/path"):
+        result = _prompt_cookbook_path()
     assert result == "/valid/path"
 
 
@@ -1532,7 +1534,7 @@ def test_generate_deployment_strategy_db_recommendations(tmp_path: Path) -> None
 # ---------------------------------------------------------------------------
 def test_resolve_cookbook_spec_no_constraint() -> None:
     """No constraint uses latest version – ingestion.py:243."""
-    from souschef.ingestion import CookbookSpec, _select_dependency_version
+    from souschef.ingestion import _select_dependency_version
 
     mock_client = MagicMock()
     mock_client.list_cookbook_versions.return_value = ["2.0.0", "1.0.0"]
@@ -1548,7 +1550,7 @@ def test_resolve_cookbook_spec_no_constraint() -> None:
 
 
 def test_download_cookbook_rmtree_existing(tmp_path: Path) -> None:
-    """rmtree called on existing cookbook_dir – ingestion.py:307."""
+    """Rmtree called on existing cookbook_dir – ingestion.py:307."""
     from souschef.ingestion import CookbookSpec, _download_cookbook
 
     cache_root = tmp_path / "cache"
