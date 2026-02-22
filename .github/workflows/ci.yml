@@ -91,7 +91,7 @@ jobs:
           cache: true
 
       - name: Set up Terraform CLI
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@d300f6e7e1f2c2aebba49dc07fed286da4f8c7f1 # v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
