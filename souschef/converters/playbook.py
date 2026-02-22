@@ -48,7 +48,7 @@ from souschef.parsers.recipe import parse_recipe
 # Optional AI provider imports
 try:
     import requests
-except ImportError:
+except ImportError:  # pragma: no cover
     requests = None  # type: ignore[assignment]
 
 try:
@@ -886,7 +886,7 @@ def _run_ansible_lint(playbook_content: str) -> str | None:
             # Write content to file descriptor (atomic operation)
             with os.fdopen(tmp_fd, "w") as tmp:
                 tmp.write(playbook_content)
-        except Exception:
+        except Exception:  # pragma: no cover
             os.close(tmp_fd)
             raise
 

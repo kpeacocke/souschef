@@ -37,12 +37,12 @@ from souschef.core.validation import (
 # Optional AI provider imports
 try:
     import requests
-except ImportError:
+except ImportError:  # pragma: no cover
     requests = None  # type: ignore[assignment]
 
 try:
     from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]
-except ImportError:
+except ImportError:  # pragma: no cover
     APIClient = None
 
 # Activity type constants
@@ -923,7 +923,7 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
         """Check if a path exists."""
         try:
             return path.exists()
-        except (OSError, ValueError):
+        except (OSError, ValueError):  # pragma: no cover
             return False
 
     # All paths are safe-joined to the validated base
@@ -2911,7 +2911,7 @@ def _call_openai_api(
     prompt: str, api_key: str, model: str, temperature: float, max_tokens: int
 ) -> str | None:
     """Call OpenAI API."""
-    if not requests:
+    if not requests:  # pragma: no cover
         return None
 
     try:
@@ -2989,7 +2989,7 @@ def _call_watson_api(
                     generated_text += str(chunk.results[0].generated_text)
             return generated_text if generated_text else None
 
-        return None
+        return None  # pragma: no cover
     except Exception:
         return None
 

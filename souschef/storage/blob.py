@@ -30,7 +30,7 @@ class BlobStorage(ABC):
             Storage key for the uploaded content.
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def download(self, storage_key: str, local_path: Path) -> Path:
@@ -45,7 +45,7 @@ class BlobStorage(ABC):
             Path to downloaded file.
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def delete(self, storage_key: str) -> bool:
@@ -59,7 +59,7 @@ class BlobStorage(ABC):
             True if deleted successfully.
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def list_keys(self, prefix: str = "") -> list[str]:
@@ -73,7 +73,7 @@ class BlobStorage(ABC):
             List of storage keys.
 
         """
-        pass
+        pass  # pragma: no cover
 
 
 class LocalBlobStorage(BlobStorage):

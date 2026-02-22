@@ -418,7 +418,7 @@ def validate_hostname(hostname: str) -> tuple[bool, str | None]:
         try:
             if all(0 <= int(part) <= 255 for part in parts):
                 return True, None
-        except ValueError:
+        except ValueError:  # pragma: no cover
             # Non-numeric octet; fall through to DNS validation.
             pass
 

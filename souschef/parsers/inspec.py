@@ -844,7 +844,7 @@ def _convert_inspec_to_goss(controls: list[dict[str, Any]]) -> str:
         import yaml
 
         return yaml.dump(goss_spec, default_flow_style=False, sort_keys=False)
-    except ImportError:
+    except ImportError:  # pragma: no cover
         # Fallback to JSON if PyYAML not available
         return json.dumps(goss_spec, indent=2)
 

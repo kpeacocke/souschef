@@ -257,7 +257,7 @@ def test_display_upgrade_plan_outputs_sections(monkeypatch: pytest.MonkeyPatch) 
         }
     }
 
-    _display_upgrade_plan(plan)
+    _display_upgrade_plan(plan)  # type: ignore[arg-type]
 
     assert any("Upgrade Path" in message for message in messages)
     assert any("Intermediate Versions" in message for message in messages)

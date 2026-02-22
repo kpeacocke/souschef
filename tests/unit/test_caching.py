@@ -313,10 +313,10 @@ class TestCacheManager:
         manager = CacheManager()
         test_file = tmp_path / "inventory.ini"
         test_file.write_text(
-            "[servers]\nhost1 ansible_host=10.0.0.1\n"
-        )  # NOSONAR - test fixture
+            "[servers]\nhost1 ansible_host=192.0.2.1\n"
+        )  # RFC 5737 documentation IP
 
-        inventory = {"hosts": {"host1": "10.0.0.1"}}  # NOSONAR - test fixture
+        inventory = {"hosts": {"host1": "192.0.2.1"}}  # RFC 5737 documentation IP
         manager.cache_inventory(str(test_file), inventory)
 
         # Should return same inventory
@@ -325,7 +325,7 @@ class TestCacheManager:
 
         # Change file should invalidate
         test_file.write_text(
-            "[servers]\nhost2 ansible_host=10.0.0.2\n"
+            "[servers]\nhost2 ansible_host=192.0.2.2\n"
         )  # NOSONAR - test fixture
         assert manager.get_inventory(str(test_file)) is None
 

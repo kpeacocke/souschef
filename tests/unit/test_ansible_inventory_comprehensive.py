@@ -140,8 +140,8 @@ db1.example.com
             inventory_file = Path(tmpdir) / "inventory"
             inventory_file.write_text("""
 [webservers]
-web1.example.com ansible_host=192.168.1.10 ansible_port=22
-web2.example.com ansible_host=192.168.1.11 ansible_user=admin
+web1.example.com ansible_host=198.51.100.60 ansible_port=22
+web2.example.com ansible_host=198.51.100.61 ansible_user=admin
 """)
 
             result = parse_inventory_ini(str(inventory_file))
@@ -149,7 +149,7 @@ web2.example.com ansible_host=192.168.1.11 ansible_user=admin
             assert "web1.example.com" in result["hosts"]
             assert (
                 result["hosts"]["web1.example.com"]["vars"]["ansible_host"]
-                == "192.168.1.10"  # NOSONAR
+                == "198.51.100.60"  # RFC 5737 documentation IP
             )
             assert (
                 result["hosts"]["web2.example.com"]["vars"]["ansible_user"] == "admin"

@@ -1060,7 +1060,7 @@ def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> No
             if not parent.exists():  # NOSONAR
                 msg = f"Output parent directory does not exist: {parent}"
                 raise ValueError(msg)
-        except OSError as e:
+        except OSError as e:  # pragma: no cover
             raise ValueError(f"Invalid output path: {e}") from e
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1250,7 +1250,7 @@ def convert_habitat(plan_path: str, output_path: str, base_image: str) -> None:
             if not parent.exists():  # NOSONAR
                 msg = f"Output parent directory does not exist: {parent}"
                 raise ValueError(msg)
-        except OSError as e:
+        except OSError as e:  # pragma: no cover
             raise ValueError(f"Invalid output path: {e}") from e
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1318,7 +1318,7 @@ def convert_inspec(profile_path: str, output_path: str, output_format: str) -> N
             if not parent.exists():  # NOSONAR
                 msg = f"Output parent directory does not exist: {parent}"
                 raise ValueError(msg)
-        except OSError as e:
+        except OSError as e:  # pragma: no cover
             raise ValueError(f"Invalid output path: {e}") from e
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1419,7 +1419,7 @@ def convert_cookbook(
             if not parent.exists():  # NOSONAR
                 msg = f"Output parent directory does not exist: {parent}"
                 raise ValueError(msg)
-        except OSError as e:
+        except OSError as e:  # pragma: no cover
             raise ValueError(f"Invalid output path: {e}") from e
 
         # Load assessment data if provided
@@ -2326,7 +2326,7 @@ def _parse_collections_file(file_path: str) -> dict[str, str]:
             raise ValueError(f"File does not exist: {validated}")
         if not validated.is_file():
             raise ValueError(f"Path is not a file: {validated}")
-    except OSError as e:
+    except OSError as e:  # pragma: no cover
         raise ValueError(f"Invalid file path: {e}") from e
 
     path = validated

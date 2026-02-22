@@ -36,7 +36,7 @@ def large_ini_inventory(tmp_path):
     inventory_content += "\n[databases]\n"
     for i in range(300):
         inventory_content += (
-            f"db_{i:04d} ansible_host=10.0.0.{i % 255}\n"  # NOSONAR - test fixture
+            f"db_{i:04d} ansible_host=192.0.2.{i % 255}\n"  # RFC 5737 documentation IP
         )
 
     inventory_content += "\n[monitoring]\n"
@@ -75,7 +75,7 @@ def large_yaml_inventory(tmp_path):
                 "databases": {
                     "hosts": {
                         f"db_{i:04d}": {
-                            "ansible_host": f"10.0.0.{i % 255}",  # NOSONAR - test fixture
+                            "ansible_host": f"192.0.2.{i % 255}",  # RFC 5737 documentation IP
                             "db_port": 5432,
                             "max_connections": 100 + (i % 50),
                             "backup_enabled": i % 2 == 0,
@@ -317,9 +317,7 @@ class TestRegressionBaselines:
         # Standard test inventory
         inventory_content = "[servers]\n"
         for i in range(100):
-            inventory_content += (
-                f"server_{i:03d} ansible_host=10.0.0.{i}\n"  # NOSONAR - test fixture
-            )
+            inventory_content += f"server_{i:03d} ansible_host=192.0.2.{i}\n"  # RFC 5737 documentation IP
 
         inventory_file = tmp_path / "inventory.ini"
         inventory_file.write_text(inventory_content)
@@ -343,7 +341,7 @@ class TestRegressionBaselines:
             "all": {
                 "hosts": {
                     f"server_{i:03d}": {
-                        "ansible_host": f"10.0.0.{i}",  # NOSONAR - test fixture
+                        "ansible_host": f"192.0.2.{i}",  # RFC 5737 documentation IP
                         "custom_var": f"value_{i}",
                     }
                     for i in range(100)
@@ -393,7 +391,7 @@ class TestComplexScenarios:
                         "vars": {"env": "prod", "backup_level": "full"},
                         "hosts": {
                             f"prod_server_{i:03d}": {
-                                "ansible_host": f"10.1.0.{i}",
+                                "ansible_host": f"198.51.100.{i}",  # RFC 5737 documentation IP
                                 "role": "web" if i % 2 == 0 else "app",
                             }
                             for i in range(200)
@@ -403,7 +401,7 @@ class TestComplexScenarios:
                         "vars": {"env": "stage", "backup_level": "incremental"},
                         "hosts": {
                             f"stage_server_{i:03d}": {
-                                "ansible_host": f"10.2.0.{i}",
+                                "ansible_host": f"203.0.113.{i}",  # RFC 5737 documentation IP
                                 "role": "web"
                                 if i % 3 == 0
                                 else "app"
