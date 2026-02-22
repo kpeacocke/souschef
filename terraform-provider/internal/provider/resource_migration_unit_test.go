@@ -8,11 +8,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
-const (
-	nonexistentSousChefPath = "nonexistent-souschef-for-test"
-	expectedPanicMsg        = "Expected panic: %v"
-)
-
 // TestMigrationResourceImplementsInterface verifies interface implementation
 func TestMigrationResourceImplementsInterface(t *testing.T) {
 	var _ resource.Resource = &migrationResource{}

@@ -7,10 +7,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
-const (
-	expectedPanicMsg = "Expected panic: %v"
-)
-
 // TestBatchMigrationResourceImplementsInterface verifies the resource implements the correct interface
 func TestBatchMigrationResourceImplementsInterface(t *testing.T) {
 	var _ resource.Resource = &batchMigrationResource{}
