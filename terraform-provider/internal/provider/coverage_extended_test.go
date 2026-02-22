@@ -11,6 +11,17 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
+const (
+	// testDirPermissions defines readable/writable/executable directory permissions for temporary test directories
+	testDirPermissions = 0o755
+	// readonlyDirPermissions defines read-only directory permissions to test permission-denied scenarios
+	readonlyDirPermissions = 0o555
+	// testFilePermissions defines readable/writable file permissions for temporary test files
+	testFilePermissions = 0o644
+	// executableFilePermissions defines readable/writable/executable file permissions for test scripts
+	executableFilePermissions = 0o755
+)
+
 // TestHabitatMigrationCreateGeneratesOutput tests habitat create workflow
 func TestHabitatMigrationCreateGeneratesOutput(t *testing.T) {
 	r := &habitatMigrationResource{
@@ -23,13 +34,13 @@ func TestHabitatMigrationCreateGeneratesOutput(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	planPath := filepath.Join(tmpDir, "plan.sh")
-	os.WriteFile(planPath, []byte("#!/bin/bash\necho 'test'\n"), 0755)
+	os.WriteFile(planPath, []byte("#!/bin/bash\necho 'test'\n"), executableFilePermissions)
 
 	outputPath := filepath.Join(tmpDir, "output")
-	os.MkdirAll(outputPath, 0755)
+	os.MkdirAll(outputPath, testDirPermissions)
 
 	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
-	os.WriteFile(dockerfilePath, []byte("FROM ubuntu:latest\nRUN echo test\n"), 0644)
+	os.WriteFile(dockerfilePath, []byte("FROM ubuntu:latest\nRUN echo test\n"), testFilePermissions)
 
 	planValue := tftypes.NewValue(
 		tftypes.Object{
@@ -87,7 +98,7 @@ func TestMigrationCreateMissingOutputDirectory(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cookbookPath := filepath.Join(tmpDir, "cookbook")
-	os.MkdirAll(cookbookPath, 0755)
+	os.MkdirAll(cookbookPath, testDirPermissions)
 
 	nonexistentOutput := filepath.Join(tmpDir, "nonexistent_output")
 
@@ -146,10 +157,10 @@ func TestInSpecMigrationCreateWithFormat(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	profilePath := filepath.Join(tmpDir, "profile")
-	os.MkdirAll(profilePath, 0755)
+	os.MkdirAll(profilePath, testDirPermissions)
 
 	outputPath := filepath.Join(tmpDir, "output")
-	os.MkdirAll(outputPath, 0755)
+	os.MkdirAll(outputPath, testDirPermissions)
 
 	planValue := tftypes.NewValue(
 		tftypes.Object{
@@ -239,10 +250,10 @@ func TestHabitatMigrationDeleteFromReadonlyDirectory(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dockerfilePath := filepath.Join(tmpDir, "Dockerfile")
-	os.WriteFile(dockerfilePath, []byte("FROM ubuntu\n"), 0644)
+	os.WriteFile(dockerfilePath, []byte("FROM ubuntu\n"), testFilePermissions)
 
 	// Make directory read-only
-	os.Chmod(tmpDir, 0555)
+	os.Chmod(tmpDir, readonlyDirPermissions)
 
 	stateValue := tftypes.NewValue(
 		tftypes.Object{
@@ -277,7 +288,7 @@ func TestHabitatMigrationDeleteFromReadonlyDirectory(t *testing.T) {
 		State: state,
 	}
 
-	defer os.Chmod(tmpDir, 0755)
+	defer os.Chmod(tmpDir, testDirPermissions)
 
 	r.Delete(context.Background(), req, resp)
 
