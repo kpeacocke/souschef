@@ -11,6 +11,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
+const (
+	// testDirPermissions defines readable/writable/executable directory permissions for temporary test directories
+	testDirPermissions = 0o755
+	// readonlyDirPermissions defines read-only directory permissions to test permission-denied scenarios
+	readonlyDirPermissions = 0o555
+	// testFilePermissions defines readable/writable file permissions for temporary test files
+	testFilePermissions = 0o644
+)
+
 // TestProviderConfigureNilData tests provider Configure with nil data
 func TestProviderConfigureNilData(t *testing.T) {
 	req := resource.ConfigureRequest{
@@ -52,11 +61,11 @@ func TestHabitatMigrationCreateMinimalState(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "output")
-	os.MkdirAll(outputPath, 0755)
+	os.MkdirAll(outputPath, testDirPermissions)
 
 	// Create dummy output file
 	dockerfile := filepath.Join(outputPath, "Dockerfile")
-	os.WriteFile(dockerfile, []byte("FROM ubuntu\n"), 0644)
+	os.WriteFile(dockerfile, []byte("FROM ubuntu\n"), testFilePermissions)
 
 	planValue := tftypes.NewValue(
 		tftypes.Object{
@@ -105,11 +114,11 @@ func TestInSpecMigrationCreateMinimalState(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "output")
-	os.MkdirAll(outputPath, 0755)
+	os.MkdirAll(outputPath, testDirPermissions)
 
 	// Pre-create test file
 	testFile := filepath.Join(outputPath, "test_default.py")
-	os.WriteFile(testFile, []byte("# test\n"), 0644)
+	os.WriteFile(testFile, []byte("# test\n"), testFilePermissions)
 
 	planValue := tftypes.NewValue(
 		tftypes.Object{
@@ -158,11 +167,11 @@ func TestBatchMigrationCreateEmptySourceList(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "output")
-	os.MkdirAll(outputPath, 0755)
+	os.MkdirAll(outputPath, testDirPermissions)
 
 	// Create playbook file
 	playbookFile := filepath.Join(outputPath, "site.yml")
-	os.WriteFile(playbookFile, []byte("---\n"), 0644)
+	os.WriteFile(playbookFile, []byte("---\n"), testFilePermissions)
 
 	planValue := tftypes.NewValue(
 		tftypes.Object{
@@ -211,15 +220,15 @@ func TestMigrationCreateWithReadOnlyOutput(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "output")
-	os.MkdirAll(outputPath, 0755)
+	os.MkdirAll(outputPath, testDirPermissions)
 
 	// Create playbook file first
 	playbookFile := filepath.Join(outputPath, "site.yml")
-	os.WriteFile(playbookFile, []byte("---\n"), 0644)
+	os.WriteFile(playbookFile, []byte("---\n"), testFilePermissions)
 
 	// Make readonly
-	os.Chmod(outputPath, 0555)
-	defer os.Chmod(outputPath, 0755)
+	os.Chmod(outputPath, readonlyDirPermissions)
+	defer os.Chmod(outputPath, testDirPermissions)
 
 	planValue := tftypes.NewValue(
 		tftypes.Object{
