@@ -290,7 +290,7 @@ func TestInspecMigrationImportStateTestFileNotFound(t *testing.T) {
 		r.ImportState(context.Background(), req, resp)
 
 		if !resp.Diagnostics.HasError() {
-			t.Errorf("Expected error when test file doesn't exist for format: %s", format)
+			t.Errorf(errorTestFileNotFound, format)
 		}
 	}
 }
@@ -329,7 +329,7 @@ func TestInspecMigrationImportStateTestFileReadError(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("Expected error when test file can't be read")
+		t.Error(errorTestFileCantBeRead)
 	}
 }
 
