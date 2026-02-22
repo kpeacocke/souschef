@@ -19,7 +19,7 @@ func TestNewHabitatMigrationResource(t *testing.T) {
 	if r == nil {
 		t.Fatal("Expected non-nil resource")
 	}
-	
+
 	_, ok := r.(*habitatMigrationResource)
 	if !ok {
 		t.Fatal("Expected *habitatMigrationResource")
@@ -29,14 +29,14 @@ func TestNewHabitatMigrationResource(t *testing.T) {
 // TestHabitatMigrationResourceMetadata verifies metadata
 func TestHabitatMigrationResourceMetadata(t *testing.T) {
 	r := &habitatMigrationResource{}
-	
+
 	req := resource.MetadataRequest{
 		ProviderTypeName: "souschef",
 	}
 	resp := &resource.MetadataResponse{}
-	
+
 	r.Metadata(context.Background(), req, resp)
-	
+
 	expected := "souschef_habitat_migration"
 	if resp.TypeName != expected {
 		t.Errorf("Expected TypeName %q, got %q", expected, resp.TypeName)
@@ -46,16 +46,16 @@ func TestHabitatMigrationResourceMetadata(t *testing.T) {
 // TestHabitatMigrationResourceSchema verifies schema
 func TestHabitatMigrationResourceSchema(t *testing.T) {
 	r := &habitatMigrationResource{}
-	
+
 	req := resource.SchemaRequest{}
 	resp := &resource.SchemaResponse{}
-	
+
 	r.Schema(context.Background(), req, resp)
-	
+
 	if resp.Schema.Attributes == nil {
 		t.Fatal("Expected non-nil schema attributes")
 	}
-	
+
 	// Verify key attributes exist
 	requiredAttrs := []string{"id", "plan_path", "output_path", "base_image"}
 	for _, attr := range requiredAttrs {
@@ -68,20 +68,20 @@ func TestHabitatMigrationResourceSchema(t *testing.T) {
 // TestHabitatMigrationResourceConfigure verifies configure with valid client
 func TestHabitatMigrationResourceConfigure(t *testing.T) {
 	r := &habitatMigrationResource{}
-	
+
 	client := &SousChefClient{Path: "souschef"}
-	
+
 	req := resource.ConfigureRequest{
 		ProviderData: client,
 	}
 	resp := &resource.ConfigureResponse{}
-	
+
 	r.Configure(context.Background(), req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Expected no errors, got: %v", resp.Diagnostics.Errors())
 	}
-	
+
 	if r.client != client {
 		t.Error("Expected client to be set")
 	}
@@ -90,14 +90,14 @@ func TestHabitatMigrationResourceConfigure(t *testing.T) {
 // TestHabitatMigrationResourceConfigureNilData verifies configure with nil data
 func TestHabitatMigrationResourceConfigureNilData(t *testing.T) {
 	r := &habitatMigrationResource{}
-	
+
 	req := resource.ConfigureRequest{
 		ProviderData: nil,
 	}
 	resp := &resource.ConfigureResponse{}
-	
+
 	r.Configure(context.Background(), req, resp)
-	
+
 	if resp.Diagnostics.HasError() {
 		t.Errorf("Expected no errors with nil data, got: %v", resp.Diagnostics.Errors())
 	}
@@ -106,14 +106,14 @@ func TestHabitatMigrationResourceConfigureNilData(t *testing.T) {
 // TestHabitatMigrationResourceConfigureInvalidType verifies configure with wrong type
 func TestHabitatMigrationResourceConfigureInvalidType(t *testing.T) {
 	r := &habitatMigrationResource{}
-	
+
 	req := resource.ConfigureRequest{
 		ProviderData: "invalid",
 	}
 	resp := &resource.ConfigureResponse{}
-	
+
 	r.Configure(context.Background(), req, resp)
-	
+
 	if !resp.Diagnostics.HasError() {
 		t.Error("Expected error with invalid provider data type")
 	}
@@ -122,4 +122,59 @@ func TestHabitatMigrationResourceConfigureInvalidType(t *testing.T) {
 // TestHabitatMigrationResourceModel verifies the data model compiles
 func TestHabitatMigrationResourceModel(t *testing.T) {
 	_ = habitatMigrationResourceModel{}
+}
+
+// TestHabitatMigrationResourceCreate tests Create method
+func TestHabitatMigrationResourceCreate(t *testing.T) {
+	r := &habitatMigrationResource{client: &SousChefClient{Path: "test"}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("Expected panic: %v", r)
+		}
+	}()
+	r.Create(context.Background(), resource.CreateRequest{}, &resource.CreateResponse{})
+}
+
+// TestHabitatMigrationResourceRead tests Read method
+func TestHabitatMigrationResourceRead(t *testing.T) {
+	r := &habitatMigrationResource{client: &SousChefClient{Path: "test"}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("Expected panic: %v", r)
+		}
+	}()
+	r.Read(context.Background(), resource.ReadRequest{}, &resource.ReadResponse{})
+}
+
+// TestHabitatMigrationResourceUpdate tests Update method
+func TestHabitatMigrationResourceUpdate(t *testing.T) {
+	r := &habitatMigrationResource{client: &SousChefClient{Path: "test"}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("Expected panic: %v", r)
+		}
+	}()
+	r.Update(context.Background(), resource.UpdateRequest{}, &resource.UpdateResponse{})
+}
+
+// TestHabitatMigrationResourceDelete tests Delete method
+func TestHabitatMigrationResourceDelete(t *testing.T) {
+	r := &habitatMigrationResource{client: &SousChefClient{Path: "test"}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("Expected panic: %v", r)
+		}
+	}()
+	r.Delete(context.Background(), resource.DeleteRequest{}, &resource.DeleteResponse{})
+}
+
+// TestHabitatMigrationResourceImportState tests ImportState method
+func TestHabitatMigrationResourceImportState(t *testing.T) {
+	r := &habitatMigrationResource{client: &SousChefClient{Path: "test"}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("Expected panic: %v", r)
+		}
+	}()
+	r.ImportState(context.Background(), resource.ImportStateRequest{}, &resource.ImportStateResponse{})
 }

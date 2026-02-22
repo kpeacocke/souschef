@@ -32,11 +32,32 @@ func TestAccBatchMigrationResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.default"),
 				),
 			},
+			// Update testing - add second recipe to trigger Update path
+			{
+				Config: testAccBatchMigrationResourceConfig("test", testBatchCookbookPath, testBatchOutputPath, []string{"default", "server"}),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "cookbook_path", testBatchCookbookPath),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "recipe_names.#", "2"),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "recipe_names.0", "default"),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "recipe_names.1", "server"),
+					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbook_count"),
+					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.default"),
+					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.server"),
+				),
+			},
+			// Update back testing - remove recipe to test another scenario
+			{
+				Config: testAccBatchMigrationResourceConfig("test", testBatchCookbookPath, testBatchOutputPath, []string{"default"}),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "recipe_names.#", "1"),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "recipe_names.0", "default"),
+				),
+			},
 			// ImportState testing
 			{
 				ResourceName:      testBatchMigrationResourceName,
 				ImportState:       true,
-				ImportStateId:     fmt.Sprintf("%s|%s|default", testBatchCookbookPath, testBatchOutputPath),
+				ImportStateId:     fmt.Sprintf("%s|%s|default,server", testBatchCookbookPath, testBatchOutputPath),
 				ImportStateVerify: true,
 			},
 		},

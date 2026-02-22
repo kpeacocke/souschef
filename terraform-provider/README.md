@@ -50,7 +50,7 @@ provider "souschef" {
 
 ## Testing
 
-**Current Test Coverage:** 10.4% (55 passing unit tests)  
+**Current Test Coverage:** 10.4% (55 passing unit tests)
 See [TESTING.md](TESTING.md) for comprehensive testing documentation.
 
 ### Quick Start
