@@ -144,14 +144,14 @@ func TestProviderAvailability(t *testing.T) {
 	// Test that Resources method returns all 4 resources
 	p := &SousChefProvider{}
 	resources := p.Resources(context.Background())
-	
+
 	if len(resources) != 4 {
 		t.Errorf("Expected 4 resources, got %d", len(resources))
 	}
-	
+
 	// Test that DataSources method returns both data sources
 	dataSources := p.DataSources(context.Background())
-	
+
 	if len(dataSources) != 2 {
 		t.Errorf("Expected 2 data sources, got %d", len(dataSources))
 	}
@@ -161,16 +161,16 @@ func TestProviderAvailability(t *testing.T) {
 func TestNewProviderFactory(t *testing.T) {
 	factory := New("1.2.3")
 	p := factory()
-	
+
 	if p == nil {
 		t.Fatal("Provider factory returned nil")
 	}
-	
+
 	scp, ok := p.(*SousChefProvider)
 	if !ok {
 		t.Fatal("Factory did not return *SousChefProvider")
 	}
-	
+
 	if scp.version != "1.2.3" {
 		t.Errorf("Expected version 1.2.3, got %s", scp.version)
 	}
