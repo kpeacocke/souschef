@@ -7,18 +7,22 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// TestSousChefProviderConfigure_AllCodePaths tests all execution paths in Configure
+const (
+	testSousChefPath = "/usr/bin/souschef"
+)
+
+// TestSousChefProviderConfigureAllCodePaths tests all execution paths in Configure
 // including the IsUnknown() error path that requires dynamic value scenarios
-func TestSousChefProviderConfigure_AllCodePaths(t *testing.T) {
+func TestSousChefProviderConfigureAllCodePaths(t *testing.T) {
 	// We can't easily mock the framework's Config.Get() to return unknown values
 	// because the framework does type checking internally. This test documents
 	// that the IsUnknown() path exists but requires Terraform runtime context.
 	// The path is exercised when terraform apply uses a variable with an unknown value.
 
 	// Test 1: Successful configuration with explicit path
-	resp1 := &SousChefClient{Path: "/usr/bin/souschef"}
+	resp1 := &SousChefClient{Path: testSousChefPath}
 
-	if resp1.Path != "/usr/bin/souschef" {
+	if resp1.Path != testSousChefPath {
 		t.Error("Expected path to be set")
 	}
 
@@ -40,8 +44,8 @@ func TestSousChefProviderConfigure_AllCodePaths(t *testing.T) {
 	}
 }
 
-// TestProviderFactory_Complete confirms provider factory creates valid provider
-func TestProviderFactory_Complete(t *testing.T) {
+// TestProviderFactoryComplete confirms provider factory creates valid provider
+func TestProviderFactoryComplete(t *testing.T) {
 	p := New("1.0.0")
 	provider := p()
 
@@ -78,11 +82,11 @@ func TestProviderFactory_Complete(t *testing.T) {
 	}
 }
 
-// TestSousChefClient_Complete confirms client is properly initialized
-func TestSousChefClient_Complete(t *testing.T) {
+// TestSousChefClientComplete confirms client is properly initialized
+func TestSousChefClientComplete(t *testing.T) {
 	paths := []string{
 		"souschef",
-		"/usr/bin/souschef",
+		testSousChefPath,
 		"/usr/local/bin/souschef",
 		"./souschef",
 		"",
@@ -96,10 +100,10 @@ func TestSousChefClient_Complete(t *testing.T) {
 	}
 }
 
-// TestConfigureUncovered_DocumentedLimitation  documents the uncovered IsUnknown() path
+// TestConfigureUncoveredDocumentedLimitation documents the uncovered IsUnknown() path
 // The path is logically reachable but requires Terraform runtime with dynamic/unknown values
 // which is not simulated by framework test helpers
-func TestConfigureUncovered_DocumentedLimitation(t *testing.T) {
+func TestConfigureUncoveredDocumentedLimitation(t *testing.T) {
 	// The code path that adds error when config.SousChefPath.IsUnknown() is true
 	// requires a value that Terraform's framework marks as unknown, which only happens
 	// during terraform plan with references to unresolved variables or computed attributes.

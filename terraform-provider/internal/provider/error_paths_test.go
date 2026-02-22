@@ -13,6 +13,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
+const (
+	expectedNoErrorsMsg = "Expected no errors, got: %v"
+	gotExpectedErrorMsg = "Got expected error: %v"
+	testIDValue         = "test-id"
+)
+
 // TestProviderConfigureWithConfig tests provider configuration with a simulated config
 func TestProviderConfigureWithConfig(t *testing.T) {
 	p := &SousChefProvider{}

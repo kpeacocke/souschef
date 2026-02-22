@@ -11,6 +11,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
+const (
+	nonexistentOutputPath = "/nonexistent/path/to/output"
+	oldContentValue       = "old content"
+)
+
 // TestMigrationDeletePlaceholderFile tests delete when trying to delete file in restricted directory
 func TestMigrationDeletePlaceholderFile(t *testing.T) {
 	r := &migrationResource{
@@ -206,10 +211,10 @@ func TestMigrationReadFileNotFoundRemovesState(t *testing.T) {
 		map[string]tftypes.Value{
 			"id":              tftypes.NewValue(tftypes.String, "cookbook-default"),
 			"cookbook_path":   tftypes.NewValue(tftypes.String, "/tmp/cookbook"),
-			"output_path":     tftypes.NewValue(tftypes.String, "/nonexistent/path/to/output"),
+			"output_path":     tftypes.NewValue(tftypes.String, nonexistentOutputPath),
 			"recipe_name":     tftypes.NewValue(tftypes.String, "default"),
 			"cookbook_name":   tftypes.NewValue(tftypes.String, "cookbook"),
-			"playbook_content": tftypes.NewValue(tftypes.String, "old content"),
+			"playbook_content": tftypes.NewValue(tftypes.String, oldContentValue),
 		},
 	)
 
@@ -252,10 +257,10 @@ func TestHabitatMigrationReadFileNotFoundRemovesState(t *testing.T) {
 		map[string]tftypes.Value{
 			"id":                 tftypes.NewValue(tftypes.String, "habitat-test"),
 			"plan_path":          tftypes.NewValue(tftypes.String, "/tmp/plan.sh"),
-			"output_path":        tftypes.NewValue(tftypes.String, "/nonexistent/path/to/output"),
+			"output_path":        tftypes.NewValue(tftypes.String, nonexistentOutputPath),
 			"base_image":         tftypes.NewValue(tftypes.String, "ubuntu:latest"),
 			"package_name":       tftypes.NewValue(tftypes.String, "test"),
-			"dockerfile_content": tftypes.NewValue(tftypes.String, "old content"),
+			"dockerfile_content": tftypes.NewValue(tftypes.String, oldContentValue),
 		},
 	)
 
@@ -300,10 +305,10 @@ func TestInSpecMigrationReadFileNotFoundRemovesState(t *testing.T) {
 		map[string]tftypes.Value{
 			"id":            tftypes.NewValue(tftypes.String, "inspec-test"),
 			"profile_path":  tftypes.NewValue(tftypes.String, "/tmp/profile"),
-			"output_path":   tftypes.NewValue(tftypes.String, "/nonexistent/path/to/output"),
+			"output_path":   tftypes.NewValue(tftypes.String, nonexistentOutputPath),
 			"output_format": tftypes.NewValue(tftypes.String, "testinfra"),
 			"profile_name":  tftypes.NewValue(tftypes.String, "default"),
-			"test_content":  tftypes.NewValue(tftypes.String, "old content"),
+			"test_content":  tftypes.NewValue(tftypes.String, oldContentValue),
 		},
 	)
 
