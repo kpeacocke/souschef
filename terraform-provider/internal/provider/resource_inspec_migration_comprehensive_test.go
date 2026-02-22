@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	resourceInspecMigrationTest = resourceInspecMigrationTest
+	resourceInspecMigrationTest = "souschef_inspec_migration.test"
 )
 
 // TestAccInSpecMigrationResourceAllFormats tests all output formats comprehensively

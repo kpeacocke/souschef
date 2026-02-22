@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	resourceHabitatMigrationTest = resourceHabitatMigrationTest
-	ubuntuImageAttr              = ubuntuImageAttr
+	resourceHabitatMigrationTest = "souschef_habitat_migration.test"
+	ubuntuImageAttr              = "ubuntu:22.04"
 )
 
 // TestAccHabitatMigrationResourceComprehensive tests all habitat migration operations

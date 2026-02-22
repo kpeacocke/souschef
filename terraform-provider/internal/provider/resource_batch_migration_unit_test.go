@@ -7,6 +7,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
+const (
+	expectedPanicMsg = "Expected panic: %v"
+)
+
 // TestBatchMigrationResourceImplementsInterface verifies the resource implements the correct interface
 func TestBatchMigrationResourceImplementsInterface(t *testing.T) {
 	var _ resource.Resource = &batchMigrationResource{}
@@ -133,7 +137,7 @@ func TestBatchMigrationResourceCreate(t *testing.T) {
 	resp := &resource.CreateResponse{}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.Create(context.Background(), req, resp)
@@ -144,7 +148,7 @@ func TestBatchMigrationResourceRead(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: "test"}}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.Read(context.Background(), resource.ReadRequest{}, &resource.ReadResponse{})
@@ -155,7 +159,7 @@ func TestBatchMigrationResourceUpdate(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: "test"}}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.Update(context.Background(), resource.UpdateRequest{}, &resource.UpdateResponse{})
@@ -166,7 +170,7 @@ func TestBatchMigrationResourceDelete(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: "test"}}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.Delete(context.Background(), resource.DeleteRequest{}, &resource.DeleteResponse{})
@@ -177,7 +181,7 @@ func TestBatchMigrationResourceImportState(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: "test"}}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.ImportState(context.Background(), resource.ImportStateRequest{}, &resource.ImportStateResponse{})

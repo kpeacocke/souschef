@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	resourceBatchMigrationTest = resourceBatchMigrationTest
-	playbookCountAttr          = playbookCountAttr
-	recipeNamesCountAttrComp   = recipeNamesCountAttrComp
+	resourceBatchMigrationTest = "souschef_batch_migration.test"
+	playbookCountAttr          = "playbook_count"
+	recipeNamesCountAttrComp   = "recipe_names.#"
 )
 
 // TestAccBatchMigrationResourceMultipleRecipes tests various recipe combinations

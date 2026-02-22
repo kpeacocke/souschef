@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	batchIDFormat = batchIDFormat
+	batchIDFormat = "%s-batch"
 )
 
 const errorReadingBatchPlaybook = "Error reading playbook"

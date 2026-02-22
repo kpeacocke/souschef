@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	invalidImportIDMsg = invalidImportIDMsg
+	invalidImportIDMsg = "Invalid import ID"
 )
 
 // TestBatchMigrationImportStateInvalidID tests ImportState with invalid ID format

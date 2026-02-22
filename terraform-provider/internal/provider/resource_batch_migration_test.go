@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	recipeNamesCountAttr = recipeNamesCountAttr
-	recipeNamesFirstAttr = recipeNamesFirstAttr
+	recipeNamesCountAttr = "recipe_names.#"
+	recipeNamesFirstAttr = "recipe_names.0"
 )
 
 var (

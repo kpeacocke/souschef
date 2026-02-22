@@ -7,6 +7,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
+const (
+	expectedPanicMsg = "Expected panic: %v"
+)
+
 // TestInSpecMigrationResourceImplementsInterface verifies the resource implements the correct interface
 func TestInSpecMigrationResourceImplementsInterface(t *testing.T) {
 	var _ resource.Resource = &inspecMigrationResource{}
@@ -129,7 +133,7 @@ func TestInSpecMigrationResourceCreate(t *testing.T) {
 	r := &inspecMigrationResource{client: &SousChefClient{Path: "test"}}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.Create(context.Background(), resource.CreateRequest{}, &resource.CreateResponse{})
@@ -140,7 +144,7 @@ func TestInSpecMigrationResourceRead(t *testing.T) {
 	r := &inspecMigrationResource{client: &SousChefClient{Path: "test"}}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.Read(context.Background(), resource.ReadRequest{}, &resource.ReadResponse{})
@@ -151,7 +155,7 @@ func TestInSpecMigrationResourceUpdate(t *testing.T) {
 	r := &inspecMigrationResource{client: &SousChefClient{Path: "test"}}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.Update(context.Background(), resource.UpdateRequest{}, &resource.UpdateResponse{})
@@ -162,7 +166,7 @@ func TestInSpecMigrationResourceDelete(t *testing.T) {
 	r := &inspecMigrationResource{client: &SousChefClient{Path: "test"}}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.Delete(context.Background(), resource.DeleteRequest{}, &resource.DeleteResponse{})
@@ -173,7 +177,7 @@ func TestInSpecMigrationResourceImportState(t *testing.T) {
 	r := &inspecMigrationResource{client: &SousChefClient{Path: "test"}}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 	r.ImportState(context.Background(), resource.ImportStateRequest{}, &resource.ImportStateResponse{})

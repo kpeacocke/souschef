@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	nonexistentSousChefPath = nonexistentSousChefPath
-	expectedPanicMsg        = expectedPanicMsg
+	nonexistentSousChefPath = "nonexistent-souschef-for-test"
+	expectedPanicMsg        = "Expected panic: %v"
 )
 
 // TestMigrationResourceImplementsInterface verifies interface implementation
