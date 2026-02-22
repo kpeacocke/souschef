@@ -316,11 +316,11 @@ New test file: `error_paths_test.go` with 9 test functions covering:
 - **Provider Configuration**
   - `TestProviderConfigureWithConfig` - Custom souschef_path
   - `TestProviderConfigureWithDefault` - Default path handling
-  
+
 - **Data Source Operations**
   - `TestDataSourceAssessmentWithConfig` - Assessment with real config
   - `TestDataSourceCostEstimateReadWithConfig` - Cost estimation with defaults
-  
+
 - **Resource CRUD Operations**
   - `TestResourceMigrationCreateWithConfig` - Create with temp directories
   - `TestResourceMigrationReadNonexistentFile` - Read when playbook missing

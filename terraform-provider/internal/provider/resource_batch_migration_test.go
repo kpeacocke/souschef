@@ -57,7 +57,7 @@ func TestAccBatchMigrationResource(t *testing.T) {
 			{
 				ResourceName:      testBatchMigrationResourceName,
 				ImportState:       true,
-				ImportStateId:     fmt.Sprintf("%s|%s|default,server", testBatchCookbookPath, testBatchOutputPath),
+				ImportStateId:     fmt.Sprintf("%s|%s|default", testBatchCookbookPath, testBatchOutputPath),
 				ImportStateVerify: true,
 			},
 		},

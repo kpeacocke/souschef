@@ -246,6 +246,14 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
+	// Get current state to preserve ID and cookbook_name
+	var state batchMigrationResourceModel
+	diags = req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Re-run conversion for all recipes
 	cookbookPath := plan.CookbookPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
@@ -253,6 +261,9 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 	for i, name := range plan.RecipeNames {
 		recipeNames[i] = name.ValueString()
 	}
+
+	// Extract cookbook name from path
+	cookbookName := filepath.Base(cookbookPath)
 
 	playbooks := make(map[string]string)
 	for _, recipeName := range recipeNames {
@@ -291,6 +302,8 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 
 	plan.Playbooks = playbooksMap
 	plan.PlaybookCount = types.Int64Value(int64(len(playbooks)))
+	plan.CookbookName = types.StringValue(cookbookName)
+	plan.ID = types.StringValue(fmt.Sprintf("%s-batch", cookbookName))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)

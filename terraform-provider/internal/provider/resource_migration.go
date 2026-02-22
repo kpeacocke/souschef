@@ -219,6 +219,9 @@ func (r *migrationResource) Update(ctx context.Context, req resource.UpdateReque
 	cookbookPath := plan.CookbookPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
 
+	// Extract cookbook name from path
+	cookbookName := filepath.Base(cookbookPath)
+
 	cmd := exec.CommandContext(ctx, r.client.Path, "convert-recipe",
 		"--cookbook-path", cookbookPath,
 		"--recipe-name", recipeName,
@@ -246,6 +249,8 @@ func (r *migrationResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	plan.PlaybookContent = types.StringValue(string(content))
+	plan.CookbookName = types.StringValue(cookbookName)
+	plan.ID = types.StringValue(fmt.Sprintf("%s-%s", cookbookName, recipeName))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
