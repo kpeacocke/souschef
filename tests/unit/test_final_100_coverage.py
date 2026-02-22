@@ -359,7 +359,7 @@ def test_cli_cookbook_dry_run(tmp_path: Path) -> None:
     (tmp_path / "metadata.rb").write_text('name "test"\n')
     result = runner.invoke(
         cli,
-        ["cookbook", str(tmp_path), "--output", "/tmp/out", "--dry-run"],
+        ["cookbook", str(tmp_path), "--output", str(tmp_path / "out"), "--dry-run"],
     )
     assert (
         result.exit_code == 0
@@ -479,11 +479,12 @@ def test_call_ai_api_watson_returns_none() -> None:
     with (
         patch("souschef.assessment._call_watson_api", return_value=None),
         patch(
-            "souschef.assessment.validate_user_provided_url", return_value="http://test"
+            "souschef.assessment.validate_user_provided_url",
+            return_value="https://test",
         ),
     ):
         result = _call_ai_api(
-            "prompt", "watson", "key", "model", 0.0, 100, base_url="http://test.url"
+            "prompt", "watson", "key", "model", 0.0, 100, base_url="https://test.url"
         )
     assert result is None
 
@@ -539,7 +540,7 @@ def test_fetch_run_list_with_policy() -> None:
             chef_server_url="https://chef.example.com",
             chef_organisation="myorg",
             chef_client_name="testclient",
-            chef_client_key_path="/tmp/key.pem",
+            chef_client_key_path="/workspaces/souschef/key.pem",
             chef_client_key=None,
             chef_node=None,
             chef_policy="mypolicy",
@@ -568,7 +569,7 @@ def test_fetch_run_list_with_node() -> None:
             chef_server_url="https://chef.example.com",
             chef_organisation="myorg",
             chef_client_name="testclient",
-            chef_client_key_path="/tmp/key.pem",
+            chef_client_key_path="/workspaces/souschef/key.pem",
             chef_client_key=None,
             chef_node="mynode",
             chef_policy=None,
@@ -1690,7 +1691,10 @@ def test_download_cookbook_continue_on_download_error(tmp_path: Path) -> None:
         "cookbook_name": "nginx",
         "version": "1.0.0",
         "files": [
-            {"path": "files/default/nginx.conf", "url": "http://example.com/nginx.conf"}
+            {
+                "path": "files/default/nginx.conf",
+                "url": "https://example.com/nginx.conf",
+            }
         ],
         "recipes": [],
         "attributes": [],

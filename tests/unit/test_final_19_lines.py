@@ -383,7 +383,7 @@ def test_prepare_cookbook_source_offline_bundle_and_warnings(tmp_path: Path) -> 
             chef_server_url="https://chef.example.com",
             chef_organisation="myorg",
             chef_client_name="admin",
-            chef_client_key_path="/tmp/key.pem",
+            chef_client_key_path="/workspaces/souschef/key.pem",
             chef_client_key=None,
             chef_node=None,
             chef_policy=None,

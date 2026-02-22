@@ -29,7 +29,9 @@ def _make_orchestrator() -> MigrationOrchestrator:
     )
 
 
-def _init_result(orch: MigrationOrchestrator, cookbook_path: str = "/tmp/cb") -> None:
+def _init_result(
+    orch: MigrationOrchestrator, cookbook_path: str = "/workspaces/souschef/cb"
+) -> None:
     """Initialise a MigrationResult on the orchestrator."""
     from datetime import datetime
 
@@ -197,7 +199,7 @@ def test_build_migration_report_with_optional_fields() -> None:
     orch = _make_orchestrator()
     _init_result(orch)
     assert orch.result is not None
-    orch.result.offline_bundle_path = "/tmp/offline.tar.gz"
+    orch.result.offline_bundle_path = "/workspaces/souschef/offline.tar.gz"
     orch.result.run_list = ["cookbook1::default", "cookbook2::install"]
 
     report = orch._build_migration_report()
@@ -861,7 +863,7 @@ def test_load_state_fallback_direct_payload() -> None:
         "ansible_version": "2.15",
         "created_at": datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat(),
-        "source_cookbook": "/tmp/cb",
+        "source_cookbook": "/workspaces/souschef/cb",
     }
 
     mock_entry = MagicMock()

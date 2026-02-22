@@ -429,8 +429,8 @@ class TestMigrationWizard:
         from souschef.migration_wizard import _confirm_configuration
 
         config = {
-            "cookbook_path": "/tmp/cookbook",
-            "output_dir": "/tmp/output",
+            "cookbook_path": "/workspaces/souschef/cookbook",
+            "output_dir": "/workspaces/souschef/output",
             "chef_version": "14.0",
             "ansible_version": "2.14",
             "resource_patterns": {"packages": True, "services": False},

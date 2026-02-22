@@ -295,7 +295,7 @@ class TestErrorHandling:
         """validate_hostname returns (True, None) for a valid IPv4 address."""
         from souschef.core.error_handling import validate_hostname
 
-        valid, msg = validate_hostname("192.168.1.1")
+        valid, msg = validate_hostname("192.0.2.1")
         assert valid is True
         assert msg is None
 
@@ -419,7 +419,7 @@ action :create do
     content new_resource.name
   end
 end
-"""
+"""  # NOSONAR - Test fixture containing Chef Ruby code with /tmp path
         result = analyse_resource_complexity(resource_body)
         # The 'provides' directive adds 2 to complexity_score
         assert result["complexity_score"] >= 2
@@ -558,7 +558,9 @@ class TestUrlValidation:
         """_is_private_hostname returns False for a public IP address."""
         from souschef.core.url_validation import _is_private_hostname
 
-        fake_addr = [(2, 1, 6, "", ("8.8.8.8", 0))]
+        fake_addr = [
+            (2, 1, 6, "", ("1.1.1.1", 0))  # NOSONAR - Test fixture simulating public IP
+        ]
         with patch("socket.getaddrinfo", return_value=fake_addr):
             assert _is_private_hostname("public.company-cloud.xyz") is False
 
@@ -599,7 +601,9 @@ class TestHTTPClient:
         from souschef.core.http_client import HTTPClient
 
         with pytest.raises(SousChefError):
-            HTTPClient(base_url="http://example.com")
+            HTTPClient(
+                base_url="http://example.com"  # NOSONAR - Testing HTTP rejection
+            )
 
     def test_http_client_rejects_invalid_max_retries(self) -> None:
         """HTTPClient raises SousChefError for max_retries > 10."""

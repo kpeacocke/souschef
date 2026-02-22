@@ -575,7 +575,7 @@ class TestCliV2Commands:
                     [
                         "migrate",
                         "--cookbook",
-                        "/tmp/fake_cookbook",
+                        "/workspaces/souschef/fake_cookbook",
                         "--output",
                         "out.json",
                     ],
@@ -601,7 +601,7 @@ class TestCliV2Commands:
             mock_run.return_value = (mock_result, None)
             result = runner.invoke(
                 cli_group,
-                ["migrate", "--cookbook", "/tmp/fake"],
+                ["migrate", "--cookbook", "/workspaces/souschef/fake"],
             )
         assert result.exit_code in (0, 1, 2)
 
@@ -698,7 +698,7 @@ class TestCliV2Commands:
                     "--migration-id",
                     "notfound",
                     "--url",
-                    "http://awx",
+                    "https://awx",
                     "--username",
                     "admin",
                     "--password",
@@ -738,7 +738,7 @@ class TestCliV2Commands:
                     "--migration-id",
                     "mid",
                     "--url",
-                    "http://awx",
+                    "https://awx",
                     "--username",
                     "admin",
                     "--password",
@@ -765,7 +765,7 @@ class TestCliV2Commands:
                     "--migration-id",
                     "mid",
                     "--url",
-                    "http://awx",
+                    "https://awx",
                     "--username",
                     "admin",
                     "--password",
@@ -1621,7 +1621,7 @@ class TestPostgresStorageManagerCoverage:
             ):
                 result = mgr.save_analysis(
                     cookbook_name="test",
-                    cookbook_path="/tmp/test",
+                    cookbook_path="/workspaces/souschef/test",
                     cookbook_version="1.0.0",
                     complexity="low",
                     estimated_hours=1.0,

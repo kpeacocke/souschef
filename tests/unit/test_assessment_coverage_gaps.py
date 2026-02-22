@@ -34,7 +34,7 @@ def _make_assessment(
     """Build a minimal assessment dict suitable for formatter helpers."""
     return {
         "cookbook_name": name,
-        "cookbook_path": f"/tmp/{name}",
+        "cookbook_path": f"/workspaces/souschef/{name}",
         "metrics": {
             "recipe_count": recipe_count,
             "resource_count": resource_count,

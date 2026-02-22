@@ -667,7 +667,7 @@ def test_validate_conversion_paths_invalid_cookbooks(
     """_validate_conversion_paths raises ValueError for an invalid cookbooks path."""
     from souschef.server import _validate_conversion_paths
 
-    monkeypatch.chdir("/tmp")
+    monkeypatch.chdir("/workspaces/souschef")
     with (
         patch(
             "souschef.server._ensure_within_base_path",
@@ -1009,7 +1009,7 @@ def test_validate_v2_playbooks_returns_valid() -> None:
 def test_rollback_v2_migration_success() -> None:
     """rollback_v2_migration returns rollback_complete status with deleted resources."""
     result = rollback_v2_migration(
-        ansible_url="http://awx",
+        ansible_url="https://awx",
         ansible_username="admin",
         ansible_password="pass",  # NOSONAR - test fixture
         inventory_id=5,

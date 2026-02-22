@@ -856,7 +856,7 @@ class TestQueryChefNodes:
         env = dict(os.environ)
         env["CHEF_SERVER_URL"] = "https://chef.example.com"
         env["CHEF_CLIENT_NAME"] = "admin"
-        env["CHEF_CLIENT_KEY_PATH"] = "/tmp/key.pem"
+        env["CHEF_CLIENT_KEY_PATH"] = "/workspaces/souschef/key.pem"
 
         with patch(
             "souschef.core.chef_server.get_chef_nodes",
@@ -877,7 +877,7 @@ class TestQueryChefNodes:
         env = dict(os.environ)
         env["CHEF_SERVER_URL"] = "https://chef.example.com"
         env["CHEF_CLIENT_NAME"] = "admin"
-        env["CHEF_CLIENT_KEY_PATH"] = "/tmp/key.pem"
+        env["CHEF_CLIENT_KEY_PATH"] = "/workspaces/souschef/key.pem"
 
         with patch(
             "souschef.core.chef_server.get_chef_nodes",
