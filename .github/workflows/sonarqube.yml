@@ -96,7 +96,7 @@ jobs:
         TF_ACC=1 timeout 150 go test ./internal/provider -coverprofile=coverage.out -timeout 100s
         echo "Go coverage generated:"
         ls -lh coverage.out
-        
+
         # Also generate JSON test report for SonarQube
         TF_ACC=1 timeout 150 go test ./internal/provider -json > test-report.json -timeout 100s 2>&1 || true
         echo "Go test report generated:"
