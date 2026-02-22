@@ -1,0 +1,119 @@
+package provider
+
+import (
+	"context"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+)
+
+// TestProviderImplementsInterface verifies the provider implements the expected interfaces
+func TestProviderImplementsInterface(t *testing.T) {
+	var _ provider.Provider = &SousChefProvider{}
+}
+
+// TestProviderMetadata verifies provider metadata is correctly set
+func TestProviderMetadata(t *testing.T) {
+	p := &SousChefProvider{version: "test"}
+	
+	req := provider.MetadataRequest{}
+	resp := &provider.MetadataResponse{}
+	
+	p.Metadata(context.Background(), req, resp)
+	
+	if resp.TypeName != "souschef" {
+		t.Errorf("Expected provider type name 'souschef', got '%s'", resp.TypeName)
+	}
+	
+	if resp.Version != "test" {
+		t.Errorf("Expected version 'test', got '%s'", resp.Version)
+	}
+}
+
+// TestProviderSchema verifies provider schema is defined
+func TestProviderSchema(t *testing.T) {
+	p := &SousChefProvider{}
+	
+	req := provider.SchemaRequest{}
+	resp := &provider.SchemaResponse{}
+	
+	p.Schema(context.Background(), req, resp)
+	
+	if resp.Schema.Attributes == nil {
+		t.Fatal("Expected schema attributes to be defined")
+	}
+	
+	if _, exists := resp.Schema.Attributes["souschef_path"]; !exists {
+		t.Error("Expected 'souschef_path' attribute in schema")
+	}
+}
+
+// TestProviderResources verifies provider returns expected resources
+func TestProviderResources(t *testing.T) {
+	p := &SousChefProvider{}
+	
+	resources := p.Resources(context.Background())
+	
+	expectedResourceCount := 4
+	if len(resources) != expectedResourceCount {
+		t.Errorf("Expected %d resources, got %d", expectedResourceCount, len(resources))
+	}
+	
+	// Verify each factory returns a valid resource
+	for i, factory := range resources {
+		r := factory()
+		if r == nil {
+			t.Errorf("Resource factory %d returned nil", i)
+		}
+	}
+}
+
+// TestProviderDataSources verifies provider returns expected data sources
+func TestProviderDataSources(t *testing.T) {
+	p := &SousChefProvider{}
+	
+	dataSources := p.DataSources(context.Background())
+	
+	expectedDataSourceCount := 2
+	if len(dataSources) != expectedDataSourceCount {
+		t.Errorf("Expected %d data sources, got %d", expectedDataSourceCount, len(dataSources))
+	}
+	
+	// Verify each factory returns a valid data source
+	for i, factory := range dataSources {
+		ds := factory()
+		if ds == nil {
+			t.Errorf("DataSource factory %d returned nil", i)
+		}
+	}
+}
+
+// TestProviderFactory verifies the provider factory function
+func TestProviderFactory(t *testing.T) {
+	factory := New("test")
+	p := factory()
+	
+	if p == nil {
+		t.Fatal("Expected provider factory to return provider, got nil")
+	}
+	
+	sousChefProvider, ok := p.(*SousChefProvider)
+	if !ok {
+		t.Fatal("Expected provider factory to return *SousChefProvider")
+	}
+	
+	if sousChefProvider.version != "test" {
+		t.Errorf("Expected provider version 'test', got '%s'", sousChefProvider.version)
+	}
+}
+
+// TestSousChefClient verifies client struct
+func TestSousChefClient(t *testing.T) {
+	client := &SousChefClient{
+		Path: "/usr/local/bin/souschef",
+	}
+	
+	if client.Path != "/usr/local/bin/souschef" {
+		t.Errorf("Expected path '/usr/local/bin/souschef', got '%s'", client.Path)
+	}
+}

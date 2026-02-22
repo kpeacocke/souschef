@@ -10,7 +10,7 @@ import (
 var (
 	testHabitatMigrationResourceName = "souschef_habitat_migration.test"
 	testHabitatPlanPath              = getFixturePath("habitat_package") + "/plan.sh"
-	testHabitatOutputPath            = "/tmp/docker"
+	testHabitatOutputPath            = "/workspaces/souschef/test-output/docker"
 )
 
 func TestAccHabitatMigrationResource(t *testing.T) {

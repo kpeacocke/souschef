@@ -50,64 +50,61 @@ provider "souschef" {
 
 ## Testing
 
-### Unit Tests
+**Current Test Coverage:** 10.4% (55 passing unit tests)  
+See [TESTING.md](TESTING.md) for comprehensive testing documentation.
 
-Run the Go unit tests:
-
-```bash
-# Run all tests
-go test -v ./...
-
-# Run tests with coverage
-go test -v -cover ./...
-
-# Run specific test
-go test -v -run TestAccAssessmentDataSource ./internal/provider
-```
-
-### Acceptance Tests
-
-The provider includes acceptance tests that require a full Terraform environment:
+### Quick Start
 
 ```bash
-# Set environment variable to enable acceptance tests
-export TF_ACC=1
-
-# Run acceptance tests
+# Run unit tests (fast, no external dependencies)
 go test -v ./internal/provider
 
 # Run with coverage
-go test -v -cover -coverprofile=coverage.out ./internal/provider
+go test -v -cover ./internal/provider
+
+# Generate coverage report
+go test -coverprofile=coverage.out ./internal/provider
 go tool cover -html=coverage.out -o coverage.html
+
+# Run acceptance tests (requires TF_ACC=1 and SousChef CLI)
+TF_ACC=1 go test -v ./internal/provider
 ```
+
+### Test Types
+
+**Unit Tests** (55 passing, default)
+- All provider framework integration code
+- Metadata, schema, and configuration logic
+- Error handling and validation
+- No external dependencies required
+
+**Acceptance Tests** (6 tests, require `TF_ACC=1`)
+- Full CRUD operations
+- CLI integration
+- End-to-end workflows
+- Require SousChef CLI installed
 
 ### VS Code Integration
 
-The Go tests are integrated with VS Code's test explorer. Make sure you have:
+The Go tests are integrated with VS Code's test explorer:
 
-1. The Go extension installed (`golang.Go`)
-2. The test environment is automatically set up when running tests
+1. Install Go extension (`golang.Go`)
+2. Use VS Code tasks:
+   - "Run Go Tests (terraform-provider)"
+   - "Run Go Tests with Coverage (terraform-provider)"
 
 ### Test Environment Setup
 
-The test environment file is automatically created when you run Go tests in VS Code:
-
 ```bash
-# VS Code tasks automatically handle this:
-# - "Run Go Tests (terraform-provider)"
-# - "Run Go Tests with Coverage (terraform-provider)"
-```
-
-If you need to customize the test environment, edit `terraform-provider/.env.test` after it has been created:
-
-```bash
-# Copy the example environment file (if needed manually)
+# Copy test environment file (if needed manually)
 cp .env.test.example .env.test
 
-# Edit as needed for your environment
+# Edit for your environment
 # TF_ACC=1
 # SOUSCHEF_API_URL=http://localhost:3000
 ```
+
+**Note:** VS Code tasks automatically create `.env.test` if it doesn't exist.
 
 ## Resources
 

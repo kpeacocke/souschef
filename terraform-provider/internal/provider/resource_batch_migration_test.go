@@ -10,7 +10,7 @@ import (
 var (
 	testBatchMigrationResourceName = "souschef_batch_migration.test"
 	testBatchCookbookPath          = getFixturePath("sample_cookbook")
-	testBatchOutputPath            = "/tmp/ansible/batch"
+	testBatchOutputPath            = "/workspaces/souschef/test-output/ansible/batch"
 )
 
 func TestAccBatchMigrationResource(t *testing.T) {
