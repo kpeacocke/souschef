@@ -55,7 +55,7 @@ func TestProviderConfigureWithConfig(t *testing.T) {
 	p.Configure(context.Background(), req, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("Expected no errors, got: %v", resp.Diagnostics.Errors())
+		t.Errorf(expectedNoErrorsMsg, resp.Diagnostics.Errors())
 	}
 
 	if resp.ResourceData == nil {
@@ -111,7 +111,7 @@ func TestProviderConfigureWithDefault(t *testing.T) {
 	p.Configure(context.Background(), req, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("Expected no errors, got: %v", resp.Diagnostics.Errors())
+		t.Errorf(expectedNoErrorsMsg, resp.Diagnostics.Errors())
 	}
 
 	client, ok := resp.ResourceData.(*SousChefClient)
@@ -185,7 +185,7 @@ func TestDataSourceAssessmentWithConfig(t *testing.T) {
 	if !resp.Diagnostics.HasError() {
 		t.Log("Expected CLI error, but may have succeeded if souschef is installed")
 	} else {
-		t.Logf("Got expected error: %v", resp.Diagnostics.Errors())
+		t.Logf(gotExpectedErrorMsg, resp.Diagnostics.Errors())
 	}
 }
 
@@ -258,7 +258,7 @@ func TestResourceMigrationCreateWithConfig(t *testing.T) {
 	if !resp.Diagnostics.HasError() {
 		t.Log("Expected CLI error")
 	} else {
-		t.Logf("Got expected error: %v", resp.Diagnostics.Errors())
+		t.Logf(gotExpectedErrorMsg, resp.Diagnostics.Errors())
 	}
 }
 
@@ -289,7 +289,7 @@ func TestResourceMigrationReadNonexistentFile(t *testing.T) {
 			},
 		},
 		map[string]tftypes.Value{
-			"id":               tftypes.NewValue(tftypes.String, "test-id"),
+			"id":               tftypes.NewValue(tftypes.String, testIDValue),
 			"cookbook_path":    tftypes.NewValue(tftypes.String, tmpDir),
 			"output_path":      tftypes.NewValue(tftypes.String, tmpDir),
 			"recipe_name":      tftypes.NewValue(tftypes.String, "default"),
@@ -315,7 +315,7 @@ func TestResourceMigrationReadNonexistentFile(t *testing.T) {
 	// The resource should be removed from state
 	var model migrationResourceModel
 	diags := resp.State.Get(context.Background(), &model)
-	if diags.HasError() || model.ID.ValueString() == "test-id" {
+	if diags.HasError() || model.ID.ValueString() == testIDValue {
 		t.Log("Resource should have been removed from state when file doesn't exist")
 	}
 }
@@ -399,7 +399,7 @@ func TestResourceMigrationUpdate(t *testing.T) {
 	if !resp.Diagnostics.HasError() {
 		t.Log("Expected CLI error")
 	} else {
-		t.Logf("Got expected error: %v", resp.Diagnostics.Errors())
+		t.Logf(gotExpectedErrorMsg, resp.Diagnostics.Errors())
 	}
 }
 
@@ -438,7 +438,7 @@ func TestResourceMigrationDelete(t *testing.T) {
 			},
 		},
 		map[string]tftypes.Value{
-			"id":               tftypes.NewValue(tftypes.String, "test-id"),
+			"id":               tftypes.NewValue(tftypes.String, testIDValue),
 			"cookbook_path":    tftypes.NewValue(tftypes.String, tmpDir),
 			"output_path":      tftypes.NewValue(tftypes.String, outputPath),
 			"recipe_name":      tftypes.NewValue(tftypes.String, "default"),
@@ -464,7 +464,7 @@ func TestResourceMigrationDelete(t *testing.T) {
 	}
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("Expected no errors, got: %v", resp.Diagnostics.Errors())
+		t.Errorf(expectedNoErrorsMsg, resp.Diagnostics.Errors())
 	}
 }
 

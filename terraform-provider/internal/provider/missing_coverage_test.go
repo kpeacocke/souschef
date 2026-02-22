@@ -11,6 +11,21 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
+const (
+	planShFilename              = "plan.sh"
+	bashShebang                 = "#!/bin/bash\n"
+	invalidFormatErrorMsg       = "Expected error for invalid format: %s"
+	planShFullPath              = "/tmp/plan.sh"
+	errorReadingFileWithPerms   = "Expected error when reading file with no permissions"
+	errorPlanFileNotFound       = "Expected error when plan file doesn't exist"
+	errorDockerfileNotFound     = "Expected error when Dockerfile doesn't exist"
+	errorProfilePathNotFound    = "Expected error when profile path doesn't exist"
+	errorTestFileNotFound       = "Expected error when test file doesn't exist for format: %s"
+	errorTestFileCantBeRead     = "Expected error when test file can't be read"
+	errorCookbookPathNotFound   = "Expected error when cookbook path doesn't exist"
+	errorPlaybookFileNotFound   = "Expected error when playbook file doesn't exist"
+)
+
 // TestHabitatMigrationReadFileReadError tests Read failure when file I/O fails
 func TestHabitatMigrationReadFileReadError(t *testing.T) {
 	r := &habitatMigrationResource{
@@ -47,7 +62,7 @@ func TestHabitatMigrationReadFileReadError(t *testing.T) {
 		},
 		map[string]tftypes.Value{
 			"id":                 tftypes.NewValue(tftypes.String, "habitat-test"),
-			"plan_path":          tftypes.NewValue(tftypes.String, "/tmp/plan.sh"),
+			"plan_path":          tftypes.NewValue(tftypes.String, planShFullPath),
 			"output_path":        tftypes.NewValue(tftypes.String, outputPath),
 			"base_image":         tftypes.NewValue(tftypes.String, "ubuntu:latest"),
 			"package_name":       tftypes.NewValue(tftypes.String, "test"),
@@ -74,7 +89,7 @@ func TestHabitatMigrationReadFileReadError(t *testing.T) {
 
 	// Should have error
 	if !resp.Diagnostics.HasError() {
-		t.Error("Expected error when reading file with no permissions")
+		t.Error(errorReadingFileWithPerms)
 	}
 }
 
@@ -101,7 +116,7 @@ func TestHabitatMigrationImportStatePlanPathNotFound(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("Expected error when plan file doesn't exist")
+		t.Error(errorPlanFileNotFound)
 	}
 }
 
@@ -123,8 +138,8 @@ func TestHabitatMigrationImportStateDockerfileNotFound(t *testing.T) {
 	os.MkdirAll(outputPath, 0755)
 
 	// Create plan file
-	planPath := filepath.Join(planDir, "plan.sh")
-	os.WriteFile(planPath, []byte("#!/bin/bash\n"), 0755)
+	planPath := filepath.Join(planDir, planShFilename)
+	os.WriteFile(planPath, []byte(bashShebang), 0755)
 
 	// Don't create Dockerfile
 	req := resource.ImportStateRequest{
@@ -139,7 +154,7 @@ func TestHabitatMigrationImportStateDockerfileNotFound(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("Expected error when Dockerfile doesn't exist")
+	t.Error(errorDockerfileNotFound)
 	}
 }
 
@@ -172,7 +187,7 @@ func TestHabitatMigrationImportStateInvalidIDFormat(t *testing.T) {
 		r.ImportState(context.Background(), req, resp)
 
 		if !resp.Diagnostics.HasError() {
-			t.Errorf("Expected error for invalid format: %s", id)
+	t.Errorf(invalidFormatErrorMsg, id)
 		}
 	}
 }
@@ -207,7 +222,7 @@ func TestInspecMigrationImportStateInvalidIDFormat(t *testing.T) {
 		r.ImportState(context.Background(), req, resp)
 
 		if !resp.Diagnostics.HasError() {
-			t.Errorf("Expected error for invalid format: %s", id)
+			t.Errorf(invalidFormatErrorMsg, id)
 		}
 	}
 }
@@ -239,7 +254,7 @@ func TestInspecMigrationImportStateProfileNotFound(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("Expected error when profile path doesn't exist")
+	t.Error(errorProfilePathNotFound)
 	}
 }
 
