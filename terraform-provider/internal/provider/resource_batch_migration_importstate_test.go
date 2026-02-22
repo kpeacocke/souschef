@@ -12,6 +12,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
+const (
+	invalidImportIDMsg = invalidImportIDMsg
+)
+
 // TestBatchMigrationImportStateInvalidID tests ImportState with invalid ID format
 func TestBatchMigrationImportStateInvalidID(t *testing.T) {
 	r := &batchMigrationResource{
@@ -33,19 +37,19 @@ func TestBatchMigrationImportStateInvalidID(t *testing.T) {
 			name:        "missing pipes",
 			importID:    "just-one-part",
 			expectError: true,
-			errorMsg:    "Invalid import ID",
+			errorMsg:    invalidImportIDMsg,
 		},
 		{
 			name:        "only two parts",
 			importID:    "/path/to/cookbook|/output",
 			expectError: true,
-			errorMsg:    "Invalid import ID",
+			errorMsg:    invalidImportIDMsg,
 		},
 		{
 			name:        "too many parts",
 			importID:    "/path/to/cookbook|/output|recipe1|extra",
 			expectError: true,
-			errorMsg:    "Invalid import ID",
+			errorMsg:    invalidImportIDMsg,
 		},
 	}
 

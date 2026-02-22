@@ -148,23 +148,23 @@ func TestDataSourceAssessmentWithConfig(t *testing.T) {
 	configValue := tftypes.NewValue(
 		tftypes.Object{
 			AttributeTypes: map[string]tftypes.Type{
-				"cookbook_path":    tftypes.String,
-				"id":               tftypes.String,
-				"complexity":       tftypes.String,
-				"recipe_count":     tftypes.Number,
-				"resource_count":   tftypes.Number,
-				"estimated_hours":  tftypes.Number,
-				"recommendations":  tftypes.String,
+				"cookbook_path":   tftypes.String,
+				"id":              tftypes.String,
+				"complexity":      tftypes.String,
+				"recipe_count":    tftypes.Number,
+				"resource_count":  tftypes.Number,
+				"estimated_hours": tftypes.Number,
+				"recommendations": tftypes.String,
 			},
 		},
 		map[string]tftypes.Value{
-			"cookbook_path":    tftypes.NewValue(tftypes.String, cookbookPath),
-			"id":               tftypes.NewValue(tftypes.String, nil),
-			"complexity":       tftypes.NewValue(tftypes.String, nil),
-			"recipe_count":     tftypes.NewValue(tftypes.Number, nil),
-			"resource_count":   tftypes.NewValue(tftypes.Number, nil),
-			"estimated_hours":  tftypes.NewValue(tftypes.Number, nil),
-			"recommendations":  tftypes.NewValue(tftypes.String, nil),
+			"cookbook_path":   tftypes.NewValue(tftypes.String, cookbookPath),
+			"id":              tftypes.NewValue(tftypes.String, nil),
+			"complexity":      tftypes.NewValue(tftypes.String, nil),
+			"recipe_count":    tftypes.NewValue(tftypes.Number, nil),
+			"resource_count":  tftypes.NewValue(tftypes.Number, nil),
+			"estimated_hours": tftypes.NewValue(tftypes.Number, nil),
+			"recommendations": tftypes.NewValue(tftypes.String, nil),
 		},
 	)
 
@@ -248,7 +248,7 @@ func TestResourceMigrationCreateWithConfig(t *testing.T) {
 	resp := &resource.CreateResponse{}
 	resp.State = tfsdk.State{
 		Schema: schemaResp.Schema,
-		Raw: tftypes.NewValue(schemaResp.Schema.Type().TerraformType(context.Background()), nil),
+		Raw:    tftypes.NewValue(schemaResp.Schema.Type().TerraformType(context.Background()), nil),
 	}
 
 	// This will fail at CLI execution, but exercises the Create code path

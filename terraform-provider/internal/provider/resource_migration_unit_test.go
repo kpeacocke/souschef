@@ -8,6 +8,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
+const (
+	nonexistentSousChefPath = nonexistentSousChefPath
+	expectedPanicMsg        = expectedPanicMsg
+)
+
 // TestMigrationResourceImplementsInterface verifies interface implementation
 func TestMigrationResourceImplementsInterface(t *testing.T) {
 	var _ resource.Resource = &migrationResource{}
@@ -157,7 +162,7 @@ func TestMigrationResourceModel(t *testing.T) {
 // TestMigrationResourceCreate tests Create method
 func TestMigrationResourceCreate(t *testing.T) {
 	r := &migrationResource{
-		client: &SousChefClient{Path: "nonexistent-souschef-for-test"},
+		client: &SousChefClient{Path: nonexistentSousChefPath},
 	}
 
 	req := resource.CreateRequest{}
@@ -165,7 +170,7 @@ func TestMigrationResourceCreate(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 
@@ -175,7 +180,7 @@ func TestMigrationResourceCreate(t *testing.T) {
 // TestMigrationResourceRead tests Read method
 func TestMigrationResourceRead(t *testing.T) {
 	r := &migrationResource{
-		client: &SousChefClient{Path: "nonexistent-souschef-for-test"},
+		client: &SousChefClient{Path: nonexistentSousChefPath},
 	}
 
 	req := resource.ReadRequest{}
@@ -183,7 +188,7 @@ func TestMigrationResourceRead(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 
@@ -193,7 +198,7 @@ func TestMigrationResourceRead(t *testing.T) {
 // TestMigrationResourceUpdate tests Update method
 func TestMigrationResourceUpdate(t *testing.T) {
 	r := &migrationResource{
-		client: &SousChefClient{Path: "nonexistent-souschef-for-test"},
+		client: &SousChefClient{Path: nonexistentSousChefPath},
 	}
 
 	req := resource.UpdateRequest{}
@@ -201,7 +206,7 @@ func TestMigrationResourceUpdate(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 
@@ -211,7 +216,7 @@ func TestMigrationResourceUpdate(t *testing.T) {
 // TestMigrationResourceDelete tests Delete method
 func TestMigrationResourceDelete(t *testing.T) {
 	r := &migrationResource{
-		client: &SousChefClient{Path: "nonexistent-souschef-for-test"},
+		client: &SousChefClient{Path: nonexistentSousChefPath},
 	}
 
 	req := resource.DeleteRequest{}
@@ -219,7 +224,7 @@ func TestMigrationResourceDelete(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 
@@ -229,7 +234,7 @@ func TestMigrationResourceDelete(t *testing.T) {
 // TestMigrationResourceImportState tests ImportState method
 func TestMigrationResourceImportState(t *testing.T) {
 	r := &migrationResource{
-		client: &SousChefClient{Path: "nonexistent-souschef-for-test"},
+		client: &SousChefClient{Path: nonexistentSousChefPath},
 	}
 
 	req := resource.ImportStateRequest{}
@@ -237,7 +242,7 @@ func TestMigrationResourceImportState(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Expected panic: %v", r)
+			t.Logf(expectedPanicMsg, r)
 		}
 	}()
 

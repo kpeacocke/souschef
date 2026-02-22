@@ -10,9 +10,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
+const (
+	resourceBatchMigrationTest = resourceBatchMigrationTest
+	playbookCountAttr          = playbookCountAttr
+	recipeNamesCountAttrComp   = recipeNamesCountAttrComp
+)
+
 // TestAccBatchMigrationResourceMultipleRecipes tests various recipe combinations
 func TestAccBatchMigrationResourceMultipleRecipes(t *testing.T) {
-	recipeCombinations := []struct{
+	recipeCombinations := []struct {
 		name    string
 		recipes []string
 	}{
@@ -33,8 +39,8 @@ func TestAccBatchMigrationResourceMultipleRecipes(t *testing.T) {
 					{
 						Config: testAccBatchMigrationResourceConfigRecipes(testBatchCookbookPath, outputPath, combo.recipes),
 						Check: resource.ComposeAggregateTestCheckFunc(
-							resource.TestCheckResourceAttr("souschef_batch_migration.test", "recipe_names.#", fmt.Sprintf("%d", len(combo.recipes))),
-							resource.TestCheckResourceAttrSet("souschef_batch_migration.test", "playbook_count"),
+							resource.TestCheckResourceAttr(resourceBatchMigrationTest, recipeNamesCountAttrComp, fmt.Sprintf("%d", len(combo.recipes))),
+							resource.TestCheckResourceAttrSet(resourceBatchMigrationTest, playbookCountAttr),
 						),
 					},
 				},
@@ -58,14 +64,14 @@ func TestAccBatchMigrationResourceReadRefresh(t *testing.T) {
 			{
 				RefreshState: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("souschef_batch_migration.test", "cookbook_name"),
-					resource.TestCheckResourceAttrSet("souschef_batch_migration.test", "playbook_count"),
+					resource.TestCheckResourceAttrSet(resourceBatchMigrationTest, "cookbook_name"),
+					resource.TestCheckResourceAttrSet(resourceBatchMigrationTest, playbookCountAttr),
 				),
 			},
 			{
 				RefreshState: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_batch_migration.test", "recipe_names.#", "1"),
+					resource.TestCheckResourceAttr(resourceBatchMigrationTest, recipeNamesCountAttrComp, "1"),
 				),
 			},
 		},
@@ -111,32 +117,32 @@ func TestAccBatchMigrationResourceUpdateRecipeList(t *testing.T) {
 			{
 				Config: testAccBatchMigrationResourceConfigRecipes(testBatchCookbookPath, outputPath, []string{"default"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_batch_migration.test", "recipe_names.#", "1"),
-					resource.TestCheckResourceAttr("souschef_batch_migration.test", "playbook_count", "1"),
+					resource.TestCheckResourceAttr(resourceBatchMigrationTest, recipeNamesCountAttrComp, "1"),
+					resource.TestCheckResourceAttr(resourceBatchMigrationTest, playbookCountAttr, "1"),
 				),
 			},
 			// Add server
 			{
 				Config: testAccBatchMigrationResourceConfigRecipes(testBatchCookbookPath, outputPath, []string{"default", "server"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_batch_migration.test", "recipe_names.#", "2"),
-					resource.TestCheckResourceAttr("souschef_batch_migration.test", "playbook_count", "2"),
+					resource.TestCheckResourceAttr(resourceBatchMigrationTest, recipeNamesCountAttrComp, "2"),
+					resource.TestCheckResourceAttr(resourceBatchMigrationTest, playbookCountAttr, "2"),
 				),
 			},
 			// Back to just default
 			{
 				Config: testAccBatchMigrationResourceConfigRecipes(testBatchCookbookPath, outputPath, []string{"default"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_batch_migration.test", "recipe_names.#", "1"),
-					resource.TestCheckResourceAttr("souschef_batch_migration.test", "playbook_count", "1"),
+					resource.TestCheckResourceAttr(resourceBatchMigrationTest, recipeNamesCountAttrComp, "1"),
+					resource.TestCheckResourceAttr(resourceBatchMigrationTest, playbookCountAttr, "1"),
 				),
 			},
 			// Just server
 			{
 				Config: testAccBatchMigrationResourceConfigRecipes(testBatchCookbookPath, outputPath, []string{"server"}),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_batch_migration.test", "recipe_names.#", "1"),
-					resource.TestCheckResourceAttr("souschef_batch_migration.test", "recipe_names.0", "server"),
+					resource.TestCheckResourceAttr(resourceBatchMigrationTest, recipeNamesCountAttrComp, "1"),
+					resource.TestCheckResourceAttr(resourceBatchMigrationTest, "recipe_names.0", "server"),
 				),
 			},
 		},

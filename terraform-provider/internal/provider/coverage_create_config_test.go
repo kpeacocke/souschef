@@ -114,12 +114,12 @@ func TestInSpecMigrationCreateMinimalState(t *testing.T) {
 	planValue := tftypes.NewValue(
 		tftypes.Object{
 			AttributeTypes: map[string]tftypes.Type{
-				"id":           tftypes.String,
-				"profile_path": tftypes.String,
-				"output_path":  tftypes.String,
+				"id":            tftypes.String,
+				"profile_path":  tftypes.String,
+				"output_path":   tftypes.String,
 				"output_format": tftypes.String,
-				"profile_name": tftypes.String,
-				"test_content": tftypes.String,
+				"profile_name":  tftypes.String,
+				"test_content":  tftypes.String,
 			},
 		},
 		map[string]tftypes.Value{
@@ -167,21 +167,21 @@ func TestBatchMigrationCreateEmptySourceList(t *testing.T) {
 	planValue := tftypes.NewValue(
 		tftypes.Object{
 			AttributeTypes: map[string]tftypes.Type{
-				"id":                 tftypes.String,
-				"source_cookbooks":   tftypes.String,
-				"output_path":        tftypes.String,
-				"playbook_content":   tftypes.String,
-				"migration_date":     tftypes.String,
-				"total_recipes":      tftypes.String,
+				"id":               tftypes.String,
+				"source_cookbooks": tftypes.String,
+				"output_path":      tftypes.String,
+				"playbook_content": tftypes.String,
+				"migration_date":   tftypes.String,
+				"total_recipes":    tftypes.String,
 			},
 		},
 		map[string]tftypes.Value{
-			"id":                 tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
-			"source_cookbooks":   tftypes.NewValue(tftypes.String, ""),
-			"output_path":        tftypes.NewValue(tftypes.String, outputPath),
-			"playbook_content":   tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
-			"migration_date":     tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
-			"total_recipes":      tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+			"id":               tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+			"source_cookbooks": tftypes.NewValue(tftypes.String, ""),
+			"output_path":      tftypes.NewValue(tftypes.String, outputPath),
+			"playbook_content": tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+			"migration_date":   tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
+			"total_recipes":    tftypes.NewValue(tftypes.String, tftypes.UnknownValue),
 		},
 	)
 

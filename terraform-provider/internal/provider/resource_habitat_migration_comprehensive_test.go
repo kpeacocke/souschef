@@ -10,10 +10,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
+const (
+	resourceHabitatMigrationTest = resourceHabitatMigrationTest
+	ubuntuImageAttr              = ubuntuImageAttr
+)
+
 // TestAccHabitatMigrationResourceComprehensive tests all habitat migration operations
 func TestAccHabitatMigrationResourceComprehensive(t *testing.T) {
 	baseImages := []string{
-		"ubuntu:22.04",
+		ubuntuImageAttr,
 		"debian:12",
 		"alpine:3.18",
 		"centos:8",
@@ -37,12 +42,12 @@ func testHabitatWithBaseImage(t *testing.T, baseImage string) {
 			{
 				Config: testAccHabitatMigrationResourceConfigBase(testHabitatPlanPath, outputPath, baseImage),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_habitat_migration.test", "plan_path", testHabitatPlanPath),
-					resource.TestCheckResourceAttr("souschef_habitat_migration.test", "output_path", outputPath),
-					resource.TestCheckResourceAttr("souschef_habitat_migration.test", "base_image", baseImage),
-					resource.TestCheckResourceAttrSet("souschef_habitat_migration.test", "id"),
-					resource.TestCheckResourceAttrSet("souschef_habitat_migration.test", "package_name"),
-					resource.TestCheckResourceAttrSet("souschef_habitat_migration.test", "dockerfile_content"),
+					resource.TestCheckResourceAttr(resourceHabitatMigrationTest, "plan_path", testHabitatPlanPath),
+					resource.TestCheckResourceAttr(resourceHabitatMigrationTest, "output_path", outputPath),
+					resource.TestCheckResourceAttr(resourceHabitatMigrationTest, "base_image", baseImage),
+					resource.TestCheckResourceAttrSet(resourceHabitatMigrationTest, "id"),
+					resource.TestCheckResourceAttrSet(resourceHabitatMigrationTest, "package_name"),
+					resource.TestCheckResourceAttrSet(resourceHabitatMigrationTest, "dockerfile_content"),
 				),
 			},
 		},
@@ -62,8 +67,8 @@ func TestAccHabitatMigrationResourceDefaultBaseImage(t *testing.T) {
 			{
 				Config: testAccHabitatMigrationResourceConfigNoBase(testHabitatPlanPath, outputPath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_habitat_migration.test", "base_image", "ubuntu:latest"),
-					resource.TestCheckResourceAttrSet("souschef_habitat_migration.test", "dockerfile_content"),
+					resource.TestCheckResourceAttr(resourceHabitatMigrationTest, "base_image", "ubuntu:latest"),
+					resource.TestCheckResourceAttrSet(resourceHabitatMigrationTest, "dockerfile_content"),
 				),
 			},
 		},
@@ -80,7 +85,7 @@ func TestAccHabitatMigrationResourceDeleteVerification(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccHabitatMigrationResourceConfigBase(testHabitatPlanPath, outputPath, "ubuntu:22.04"),
+				Config: testAccHabitatMigrationResourceConfigBase(testHabitatPlanPath, outputPath, ubuntuImageAttr),
 			},
 		},
 		CheckDestroy: func(s *terraform.State) error {
@@ -110,9 +115,9 @@ func TestAccHabitatMigrationResourceMultipleOutputPaths(t *testing.T) {
 				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 				Steps: []resource.TestStep{
 					{
-						Config: testAccHabitatMigrationResourceConfigBase(testHabitatPlanPath, outputPath, "ubuntu:22.04"),
+						Config: testAccHabitatMigrationResourceConfigBase(testHabitatPlanPath, outputPath, ubuntuImageAttr),
 						Check: resource.ComposeAggregateTestCheckFunc(
-							resource.TestCheckResourceAttr("souschef_habitat_migration.test", "output_path", outputPath),
+							resource.TestCheckResourceAttr(resourceHabitatMigrationTest, "output_path", outputPath),
 						),
 					},
 				},

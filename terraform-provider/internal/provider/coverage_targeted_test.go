@@ -36,20 +36,20 @@ func TestMigrationDeletePlaceholderFile(t *testing.T) {
 	stateValue := tftypes.NewValue(
 		tftypes.Object{
 			AttributeTypes: map[string]tftypes.Type{
-				"id":              tftypes.String,
-				"cookbook_path":   tftypes.String,
-				"output_path":     tftypes.String,
-				"recipe_name":     tftypes.String,
-				"cookbook_name":   tftypes.String,
+				"id":               tftypes.String,
+				"cookbook_path":    tftypes.String,
+				"output_path":      tftypes.String,
+				"recipe_name":      tftypes.String,
+				"cookbook_name":    tftypes.String,
 				"playbook_content": tftypes.String,
 			},
 		},
 		map[string]tftypes.Value{
-			"id":              tftypes.NewValue(tftypes.String, "cookbook-default"),
-			"cookbook_path":   tftypes.NewValue(tftypes.String, "/tmp/cookbook"),
-			"output_path":     tftypes.NewValue(tftypes.String, tmpDir),
-			"recipe_name":     tftypes.NewValue(tftypes.String, "default"),
-			"cookbook_name":   tftypes.NewValue(tftypes.String, "cookbook"),
+			"id":               tftypes.NewValue(tftypes.String, "cookbook-default"),
+			"cookbook_path":    tftypes.NewValue(tftypes.String, "/tmp/cookbook"),
+			"output_path":      tftypes.NewValue(tftypes.String, tmpDir),
+			"recipe_name":      tftypes.NewValue(tftypes.String, "default"),
+			"cookbook_name":    tftypes.NewValue(tftypes.String, "cookbook"),
 			"playbook_content": tftypes.NewValue(tftypes.String, "content\n"),
 		},
 	)
@@ -130,8 +130,6 @@ func TestHabitatMigrationDeleteSuccessPath(t *testing.T) {
 	}
 }
 
-
-
 // TestInSpecMigrationDeleteSuccessPath tests successful InSpec migration deletion
 func TestInSpecMigrationDeleteSuccessPath(t *testing.T) {
 	r := &inspecMigrationResource{
@@ -150,12 +148,12 @@ func TestInSpecMigrationDeleteSuccessPath(t *testing.T) {
 	stateValue := tftypes.NewValue(
 		tftypes.Object{
 			AttributeTypes: map[string]tftypes.Type{
-				"id":           tftypes.String,
-				"profile_path": tftypes.String,
-				"output_path":  tftypes.String,
+				"id":            tftypes.String,
+				"profile_path":  tftypes.String,
+				"output_path":   tftypes.String,
 				"output_format": tftypes.String,
-				"profile_name": tftypes.String,
-				"test_content": tftypes.String,
+				"profile_name":  tftypes.String,
+				"test_content":  tftypes.String,
 			},
 		},
 		map[string]tftypes.Value{
@@ -200,20 +198,20 @@ func TestMigrationReadFileNotFoundRemovesState(t *testing.T) {
 	stateValue := tftypes.NewValue(
 		tftypes.Object{
 			AttributeTypes: map[string]tftypes.Type{
-				"id":              tftypes.String,
-				"cookbook_path":   tftypes.String,
-				"output_path":     tftypes.String,
-				"recipe_name":     tftypes.String,
-				"cookbook_name":   tftypes.String,
+				"id":               tftypes.String,
+				"cookbook_path":    tftypes.String,
+				"output_path":      tftypes.String,
+				"recipe_name":      tftypes.String,
+				"cookbook_name":    tftypes.String,
 				"playbook_content": tftypes.String,
 			},
 		},
 		map[string]tftypes.Value{
-			"id":              tftypes.NewValue(tftypes.String, "cookbook-default"),
-			"cookbook_path":   tftypes.NewValue(tftypes.String, "/tmp/cookbook"),
-			"output_path":     tftypes.NewValue(tftypes.String, nonexistentOutputPath),
-			"recipe_name":     tftypes.NewValue(tftypes.String, "default"),
-			"cookbook_name":   tftypes.NewValue(tftypes.String, "cookbook"),
+			"id":               tftypes.NewValue(tftypes.String, "cookbook-default"),
+			"cookbook_path":    tftypes.NewValue(tftypes.String, "/tmp/cookbook"),
+			"output_path":      tftypes.NewValue(tftypes.String, nonexistentOutputPath),
+			"recipe_name":      tftypes.NewValue(tftypes.String, "default"),
+			"cookbook_name":    tftypes.NewValue(tftypes.String, "cookbook"),
 			"playbook_content": tftypes.NewValue(tftypes.String, oldContentValue),
 		},
 	)
@@ -279,8 +277,6 @@ func TestHabitatMigrationReadFileNotFoundRemovesState(t *testing.T) {
 	r.Read(context.Background(), req, resp)
 }
 
-
-
 // TestInSpecMigrationReadFileNotFoundRemovesState tests that missing test file removes from state
 func TestInSpecMigrationReadFileNotFoundRemovesState(t *testing.T) {
 	r := &inspecMigrationResource{
@@ -294,12 +290,12 @@ func TestInSpecMigrationReadFileNotFoundRemovesState(t *testing.T) {
 	stateValue := tftypes.NewValue(
 		tftypes.Object{
 			AttributeTypes: map[string]tftypes.Type{
-				"id":           tftypes.String,
-				"profile_path": tftypes.String,
-				"output_path":  tftypes.String,
+				"id":            tftypes.String,
+				"profile_path":  tftypes.String,
+				"output_path":   tftypes.String,
 				"output_format": tftypes.String,
-				"profile_name": tftypes.String,
-				"test_content": tftypes.String,
+				"profile_name":  tftypes.String,
+				"test_content":  tftypes.String,
 			},
 		},
 		map[string]tftypes.Value{

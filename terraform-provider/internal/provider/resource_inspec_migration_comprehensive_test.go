@@ -10,6 +10,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
+const (
+	resourceInspecMigrationTest = resourceInspecMigrationTest
+)
+
 // TestAccInSpecMigrationResourceAllFormats tests all output formats comprehensively
 func TestAccInSpecMigrationResourceAllFormats(t *testing.T) {
 	formats := []string{"testinfra", "serverspec", "goss", "ansible"}
@@ -32,19 +36,19 @@ func testInSpecAllFormatOps(t *testing.T, format string) {
 			{
 				Config: testAccInSpecMigrationResourceConfigFmt(testInSpecProfilePath, outputPath, format),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_inspec_migration.test", "output_format", format),
-					resource.TestCheckResourceAttr("souschef_inspec_migration.test", "profile_path", testInSpecProfilePath),
-					resource.TestCheckResourceAttr("souschef_inspec_migration.test", "output_path", outputPath),
-					resource.TestCheckResourceAttrSet("souschef_inspec_migration.test", "id"),
-					resource.TestCheckResourceAttrSet("souschef_inspec_migration.test", "profile_name"),
-					resource.TestCheckResourceAttrSet("souschef_inspec_migration.test", "test_content"),
+					resource.TestCheckResourceAttr(resourceInspecMigrationTest, "output_format", format),
+					resource.TestCheckResourceAttr(resourceInspecMigrationTest, "profile_path", testInSpecProfilePath),
+					resource.TestCheckResourceAttr(resourceInspecMigrationTest, "output_path", outputPath),
+					resource.TestCheckResourceAttrSet(resourceInspecMigrationTest, "id"),
+					resource.TestCheckResourceAttrSet(resourceInspecMigrationTest, "profile_name"),
+					resource.TestCheckResourceAttrSet(resourceInspecMigrationTest, "test_content"),
 				),
 			},
 			// Read/Refresh
 			{
 				RefreshState: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_inspec_migration.test", "output_format", format),
+					resource.TestCheckResourceAttr(resourceInspecMigrationTest, "output_format", format),
 				),
 			},
 		},
@@ -63,13 +67,13 @@ func TestAccInSpecMigrationResourceUpdateAllPaths(t *testing.T) {
 			{
 				Config: testAccInSpecMigrationResourceConfigFmt(testInSpecProfilePath, outputPath1, "testinfra"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_inspec_migration.test", "output_path", outputPath1),
+					resource.TestCheckResourceAttr(resourceInspecMigrationTest, "output_path", outputPath1),
 				),
 			},
 			{
 				Config: testAccInSpecMigrationResourceConfigFmt(testInSpecProfilePath, outputPath2, "testinfra"),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_inspec_migration.test", "output_path", outputPath2),
+					resource.TestCheckResourceAttr(resourceInspecMigrationTest, "output_path", outputPath2),
 				),
 			},
 		},

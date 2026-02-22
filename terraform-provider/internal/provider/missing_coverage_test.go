@@ -12,18 +12,18 @@ import (
 )
 
 const (
-	planShFilename              = "plan.sh"
-	bashShebang                 = "#!/bin/bash\n"
-	invalidFormatErrorMsg       = "Expected error for invalid format: %s"
-	planShFullPath              = "/tmp/plan.sh"
-	errorReadingFileWithPerms   = "Expected error when reading file with no permissions"
-	errorPlanFileNotFound       = "Expected error when plan file doesn't exist"
-	errorDockerfileNotFound     = "Expected error when Dockerfile doesn't exist"
-	errorProfilePathNotFound    = "Expected error when profile path doesn't exist"
-	errorTestFileNotFound       = "Expected error when test file doesn't exist for format: %s"
-	errorTestFileCantBeRead     = "Expected error when test file can't be read"
-	errorCookbookPathNotFound   = "Expected error when cookbook path doesn't exist"
-	errorPlaybookFileNotFound   = "Expected error when playbook file doesn't exist"
+	planShFilename            = "plan.sh"
+	bashShebang               = "#!/bin/bash\n"
+	invalidFormatErrorMsg     = "Expected error for invalid format: %s"
+	planShFullPath            = "/tmp/plan.sh"
+	errorReadingFileWithPerms = "Expected error when reading file with no permissions"
+	errorPlanFileNotFound     = "Expected error when plan file doesn't exist"
+	errorDockerfileNotFound   = "Expected error when Dockerfile doesn't exist"
+	errorProfilePathNotFound  = "Expected error when profile path doesn't exist"
+	errorTestFileNotFound     = "Expected error when test file doesn't exist for format: %s"
+	errorTestFileCantBeRead   = "Expected error when test file can't be read"
+	errorCookbookPathNotFound = "Expected error when cookbook path doesn't exist"
+	errorPlaybookFileNotFound = "Expected error when playbook file doesn't exist"
 )
 
 // TestHabitatMigrationReadFileReadError tests Read failure when file I/O fails
@@ -154,7 +154,7 @@ func TestHabitatMigrationImportStateDockerfileNotFound(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-	t.Error(errorDockerfileNotFound)
+		t.Error(errorDockerfileNotFound)
 	}
 }
 
@@ -187,7 +187,7 @@ func TestHabitatMigrationImportStateInvalidIDFormat(t *testing.T) {
 		r.ImportState(context.Background(), req, resp)
 
 		if !resp.Diagnostics.HasError() {
-	t.Errorf(invalidFormatErrorMsg, id)
+			t.Errorf(invalidFormatErrorMsg, id)
 		}
 	}
 }
@@ -205,8 +205,8 @@ func TestInspecMigrationImportStateInvalidIDFormat(t *testing.T) {
 
 	testCases := []string{
 		"only_one_part",
-		"part1|part2",                    // missing format
-		"part1|part2|format|extra_part",  // too many parts
+		"part1|part2",                   // missing format
+		"part1|part2|format|extra_part", // too many parts
 	}
 
 	for _, id := range testCases {
@@ -254,7 +254,7 @@ func TestInspecMigrationImportStateProfileNotFound(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-	t.Error(errorProfilePathNotFound)
+		t.Error(errorProfilePathNotFound)
 	}
 }
 
@@ -345,11 +345,11 @@ func TestBatchMigrationImportStateInvalidIDFormat(t *testing.T) {
 	r.Schema(context.Background(), schemaReq, schemaResp)
 
 	testCases := []string{
-		"cookbook_path|output",                          // missing recipe count
-		"cookbook_path|output|abc",                      // invalid recipe count (not a number)
-		"cookbook_path|output|0",                        // recipe count is zero
-		"cookbook_path|output|2|recipe1",                // recipe count says 2 but only 1 provided
-		"cookbook_path|output|2|recipe1|recipe2|extra",  // recipe count says 2 but 3 provided
+		"cookbook_path|output",                         // missing recipe count
+		"cookbook_path|output|abc",                     // invalid recipe count (not a number)
+		"cookbook_path|output|0",                       // recipe count is zero
+		"cookbook_path|output|2|recipe1",               // recipe count says 2 but only 1 provided
+		"cookbook_path|output|2|recipe1|recipe2|extra", // recipe count says 2 but 3 provided
 	}
 
 	for _, id := range testCases {
@@ -365,7 +365,7 @@ func TestBatchMigrationImportStateInvalidIDFormat(t *testing.T) {
 		r.ImportState(context.Background(), req, resp)
 
 		if !resp.Diagnostics.HasError() {
-			t.Errorf("Expected error for invalid format: %s", id)
+			t.Errorf(invalidFormatErrorMsg, id)
 		}
 	}
 }
@@ -397,7 +397,7 @@ func TestBatchMigrationImportStateCookbookPathNotFound(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("Expected error when cookbook path doesn't exist")
+		t.Error(errorCookbookPathNotFound)
 	}
 }
 
@@ -431,7 +431,7 @@ func TestBatchMigrationImportStatePlaybookNotFound(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("Expected error when playbook file doesn't exist")
+		t.Error(errorPlaybookFileNotFound)
 	}
 }
 
@@ -462,7 +462,7 @@ func TestMigrationImportStateCookbookPathNotFound(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("Expected error when cookbook path doesn't exist")
+		t.Error(errorCookbookPathNotFound)
 	}
 }
 
@@ -496,7 +496,7 @@ func TestMigrationImportStatePlaybookNotFound(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("Expected error when playbook file doesn't exist")
+		t.Error(errorPlaybookFileNotFound)
 	}
 }
 
@@ -529,7 +529,7 @@ func TestMigrationImportStateInvalidIDFormat(t *testing.T) {
 		r.ImportState(context.Background(), req, resp)
 
 		if !resp.Diagnostics.HasError() {
-			t.Errorf("Expected error for invalid format: %s", id)
+			t.Errorf(invalidFormatErrorMsg, id)
 		}
 	}
 }

@@ -119,13 +119,13 @@ func TestBatchMigrationResourceConfigureInvalidType(t *testing.T) {
 	}
 }
 
-//TestBatchMigrationResourceModel verifies the data model compiles
+// TestBatchMigrationResourceModel verifies the data model compiles
 func TestBatchMigrationResourceModel(t *testing.T) {
 	_ = batchMigrationResourceModel{}
 }
 
 // TestBatchMigrationResourceCreate tests Create method
-func TestBatchMigrationResourceCreate(t * testing.T) {
+func TestBatchMigrationResourceCreate(t *testing.T) {
 	r := &batchMigrationResource{
 		client: &SousChefClient{Path: "nonexistent-souschef-for-test"},
 	}
