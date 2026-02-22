@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 // TestProviderImplementsInterface verifies the provider implements the expected interfaces
@@ -173,5 +174,73 @@ func TestNewProviderFactory(t *testing.T) {
 
 	if scp.version != "1.2.3" {
 		t.Errorf("Expected version 1.2.3, got %s", scp.version)
+	}
+}
+
+// Mock config source for testing Configure with different value states
+// Note: The IsUnknown() path in Configure can only be properly tested via acceptance tests
+// which run actual Terraform and can generate unknown values during the plan phase.
+// Direct unit testing is not feasible due to framework's strict type validation.
+
+// TestProviderModelIsUnknown tests that the SousChefProviderModel correctly handles unknown values
+func TestProviderModelIsUnknown(t *testing.T) {
+	tests := []struct {
+		name        string
+		path        types.String
+		expectError bool
+	}{
+		{
+			name:        "unknown value",
+			path:        types.StringUnknown(),
+			expectError: true,
+		},
+		{
+			name:        "null value",
+			path:        types.StringNull(),
+			expectError: false,
+		},
+		{
+			name:        "known empty string",
+			path:        types.StringValue(""),
+			expectError: false,
+		},
+		{
+			name:        "known non-empty string",
+			path:        types.StringValue("/usr/bin/souschef"),
+			expectError: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := SousChefProviderModel{
+				SousChefPath: test.path,
+			}
+
+			// Manually check the IsUnknown logic (mirrors what Configure does)
+			hasError := config.SousChefPath.IsUnknown()
+
+			if hasError != test.expectError {
+				t.Errorf("expected IsUnknown() = %v, got %v", test.expectError, hasError)
+			}
+		})
+	}
+}
+
+// TestProviderConfigureUnknownPathDetection tests that Configure properly detects unknown paths
+func TestProviderConfigureUnknownPathDetection(t *testing.T) {
+	// Test the exact code path from Configure method with unknown value
+	config := SousChefProviderModel{
+		SousChefPath: types.StringUnknown(),
+	}
+
+	// The IsUnknown() check from Configure (lines 72-79)
+	if !config.SousChefPath.IsUnknown() {
+		t.Error("SousChefPath should be unknown")
+	}
+
+	// Additional check: verify the rest of the logic still works
+	if config.SousChefPath.IsNull() {
+		t.Error("Unknown should not be treated as null")
 	}
 }

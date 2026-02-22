@@ -146,3 +146,14 @@ output "provider_available" {
 		},
 	})
 }
+
+// TestAccProviderConfigureWithUnknownValue tests the IsUnknown() code path
+// Note: Due to Terraform's validation phase, achieving true unknown values at
+// provider configuration time in tests is not supported by the framework.
+// This test documents the limitation.
+func TestAccProviderConfigureWithUnknownValue(t *testing.T) {
+	// Skip this test - the IsUnknown() path requires provider attributes to be
+	// computed from resource/data source outputs, which cannot be set during
+	// the test framework's provider configuration phase.
+	t.Skip("IsUnknown() path requires runtime Terraform evaluation not supported in tests")
+}
