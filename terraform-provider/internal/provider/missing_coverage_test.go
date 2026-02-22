@@ -555,8 +555,8 @@ func TestHabitatMigrationUpdatePreservesID(t *testing.T) {
 	os.MkdirAll(planDir, 0755)
 	os.MkdirAll(outputPath, 0755)
 
-	planPath := filepath.Join(planDir, "plan.sh")
-	os.WriteFile(planPath, []byte("#!/bin/bash\n"), 0755)
+	planPath := filepath.Join(planDir, planShFilename)
+	os.WriteFile(planPath, []byte(bashShebang), 0755)
 
 	// Create initial state with specific ID
 	stateValue := tftypes.NewValue(
@@ -644,8 +644,8 @@ func TestMultipleImportStateErrorPaths(t *testing.T) {
 		os.MkdirAll(planDir, 0755)
 		os.MkdirAll(outputPath, 0755)
 
-		planPath := filepath.Join(planDir, "plan.sh")
-		os.WriteFile(planPath, []byte("#!/bin/bash\n"), 0755)
+		planPath := filepath.Join(planDir, planShFilename)
+		os.WriteFile(planPath, []byte(bashShebang), 0755)
 
 		dockerfilePath := filepath.Join(outputPath, "Dockerfile")
 		os.WriteFile(dockerfilePath, []byte("FROM ubuntu\n"), 0644)
