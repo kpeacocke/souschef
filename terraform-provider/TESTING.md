@@ -10,7 +10,7 @@
 ### Quick Stats
 - **150+ comprehensive tests** covering all resources, data sources, and error paths
 - **4 resources** fully tested: migration, batch_migration, habitat_migration, inspec_migration
-- **2 data sources** fully tested: assessment, cost_estimate  
+- **2 data sources** fully tested: assessment, cost_estimate
 - **24 functions below 100%** coverage (ranging from 56% to 92.6%)
 - **Remaining gap:** 17.4% to reach 100% coverage
 

@@ -13,7 +13,7 @@ import (
 // TestAccInSpecMigrationResourceAllFormats tests all output formats comprehensively
 func TestAccInSpecMigrationResourceAllFormats(t *testing.T) {
 	formats := []string{"testinfra", "serverspec", "goss", "ansible"}
-	
+
 	for _, format := range formats {
 		t.Run(format, func(t *testing.T) {
 			testInSpecAllFormatOps(t, format)
@@ -23,7 +23,7 @@ func TestAccInSpecMigrationResourceAllFormats(t *testing.T) {
 
 func testInSpecAllFormatOps(t *testing.T, format string) {
 	outputPath := fmt.Sprintf("/workspaces/souschef/test-output/inspec/%s", format)
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -55,7 +55,7 @@ func testInSpecAllFormatOps(t *testing.T, format string) {
 func TestAccInSpecMigrationResourceUpdateAllPaths(t *testing.T) {
 	outputPath1 := "/workspaces/souschef/test-output/inspec/update1"
 	outputPath2 := "/workspaces/souschef/test-output/inspec/update2"
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -79,10 +79,10 @@ func TestAccInSpecMigrationResourceUpdateAllPaths(t *testing.T) {
 // TestAccInSpecMigrationResourceDeleteCleanup tests delete operation and file cleanup
 func TestAccInSpecMigrationResourceDeleteCleanup(t *testing.T) {
 	outputPath := "/workspaces/souschef/test-output/inspec/delete_test"
-	
+
 	// Ensure directory exists
 	os.MkdirAll(outputPath, 0755)
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

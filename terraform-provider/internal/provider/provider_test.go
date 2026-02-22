@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 // testAccProtoV6ProviderFactories are used to instantiate a provider during
@@ -75,4 +76,73 @@ func getFixturePath(fixtureName string) string {
 
 	// Clean the path to resolve .. components
 	return filepath.Clean(fixturesPath)
+}
+
+// TestAccProviderConfigure tests provider configuration with explicit path
+func TestAccProviderConfigure(t *testing.T) {
+	testAccPreCheck(t)
+
+	sousChefPath := os.Getenv("TF_VAR_souschef_path")
+	if sousChefPath == "" {
+		t.Skip("TF_VAR_souschef_path not set")
+	}
+
+	config := `
+variable "souschef_path" {
+  type = string
+}
+
+provider "souschef" {
+  souschef_path = var.souschef_path
+}
+
+output "configured" {
+  value = "true"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckOutput("configured", "true"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccProviderConfigureDefault tests provider with default souschef path (no explicit configuration)
+func TestAccProviderConfigureDefault(t *testing.T) {
+	testAccPreCheck(t)
+
+	config := `
+variable "souschef_path" {
+  type = string
+}
+
+provider "souschef" {
+  souschef_path = var.souschef_path
+}
+
+output "provider_available" {
+  value = "true"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckOutput("provider_available", "true"),
+				),
+			},
+		},
+	})
 }

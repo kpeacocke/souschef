@@ -12,7 +12,7 @@ import (
 func TestAccMigrationResourceUpdateOutputPath(t *testing.T) {
 	outputPath1 := "/workspaces/souschef/test-output/ansible/test1"
 	outputPath2 := "/workspaces/souschef/test-output/ansible/test2"
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

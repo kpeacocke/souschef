@@ -20,12 +20,12 @@ func TestAccBatchMigrationResourceMultipleRecipes(t *testing.T) {
 		{"double", []string{"default", "server"}},
 		{"triple", []string{"default", "server", "default"}}, // Duplicate to test handling
 	}
-	
+
 	for _, combo := range recipeCombinations {
 		t.Run(combo.name, func(t *testing.T) {
 			outputPath := fmt.Sprintf("/workspaces/souschef/test-output/batch/%s", combo.name)
 			os.MkdirAll(outputPath, 0755)
-			
+
 			resource.Test(t, resource.TestCase{
 				PreCheck:                 func() { testAccPreCheck(t) },
 				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -47,7 +47,7 @@ func TestAccBatchMigrationResourceMultipleRecipes(t *testing.T) {
 func TestAccBatchMigrationResourceReadRefresh(t *testing.T) {
 	outputPath := "/workspaces/souschef/test-output/batch/refresh"
 	os.MkdirAll(outputPath, 0755)
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -77,7 +77,7 @@ func TestAccBatchMigrationResourceDeleteMultiple(t *testing.T) {
 	outputPath := "/workspaces/souschef/test-output/batch/delete_multi"
 	os.MkdirAll(outputPath, 0755)
 	recipes := []string{"default", "server"}
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -102,7 +102,7 @@ func TestAccBatchMigrationResourceDeleteMultiple(t *testing.T) {
 func TestAccBatchMigrationResourceUpdateRecipeList(t *testing.T) {
 	outputPath := "/workspaces/souschef/test-output/batch/update_list"
 	os.MkdirAll(outputPath, 0755)
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -152,7 +152,7 @@ func testAccBatchMigrationResourceConfigRecipes(cookbookPath, outputPath string,
 		recipesHCL += fmt.Sprintf("%q", recipe)
 	}
 	recipesHCL += "]"
-	
+
 	return fmt.Sprintf(`
 variable "souschef_path" {
   type = string

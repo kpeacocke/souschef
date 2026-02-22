@@ -18,7 +18,7 @@ func TestAccHabitatMigrationResourceComprehensive(t *testing.T) {
 		"alpine:3.18",
 		"centos:8",
 	}
-	
+
 	for _, baseImage := range baseImages {
 		t.Run(baseImage, func(t *testing.T) {
 			testHabitatWithBaseImage(t, baseImage)
@@ -29,7 +29,7 @@ func TestAccHabitatMigrationResourceComprehensive(t *testing.T) {
 func testHabitatWithBaseImage(t *testing.T, baseImage string) {
 	outputPath := fmt.Sprintf("/workspaces/souschef/test-output/habitat/%s", filepath.Base(baseImage))
 	os.MkdirAll(outputPath, 0755)
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -53,7 +53,7 @@ func testHabitatWithBaseImage(t *testing.T, baseImage string) {
 func TestAccHabitatMigrationResourceDefaultBaseImage(t *testing.T) {
 	outputPath := "/workspaces/souschef/test-output/habitat/default"
 	os.MkdirAll(outputPath, 0755)
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -74,7 +74,7 @@ func TestAccHabitatMigrationResourceDefaultBaseImage(t *testing.T) {
 func TestAccHabitatMigrationResourceDeleteVerification(t *testing.T) {
 	outputPath := "/workspaces/souschef/test-output/habitat/delete_verify"
 	os.MkdirAll(outputPath, 0755)
-	
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -100,11 +100,11 @@ func TestAccHabitatMigrationResourceMultipleOutputPaths(t *testing.T) {
 		"/workspaces/souschef/test-output/habitat/out2",
 		"/workspaces/souschef/test-output/habitat/out3",
 	}
-	
+
 	for i, outputPath := range outputPaths {
 		t.Run(fmt.Sprintf("output%d", i+1), func(t *testing.T) {
 			os.MkdirAll(outputPath, 0755)
-			
+
 			resource.Test(t, resource.TestCase{
 				PreCheck:                 func() { testAccPreCheck(t) },
 				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
