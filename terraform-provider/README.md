@@ -4,7 +4,7 @@ This Terraform provider enables infrastructure-as-code management of Chef to Ans
 
 ## Requirements
 
-- [Terraform](https://www.terraform.io/downloads.html) >= 1.0
+- [Terraform](https://www.terraform.io/downloads.html) >= 1.0 (CLI required for acceptance tests; installed in the devcontainer and CI)
 - [Go](https://golang.org/doc/install) >= 1.21 (for building)
 - [SousChef](https://github.com/kpeacocke/souschef) CLI installed (>= 2.4.0)
 
@@ -50,7 +50,7 @@ provider "souschef" {
 
 ## Testing
 
-**Current Test Coverage:** 10.4% (55 passing unit tests)
+**Current Test Coverage:** 85.6% with acceptance tests (49.6% unit-only)
 See [TESTING.md](TESTING.md) for comprehensive testing documentation.
 
 ### Quick Start
@@ -72,13 +72,13 @@ TF_ACC=1 go test -v ./internal/provider
 
 ### Test Types
 
-**Unit Tests** (55 passing, default)
+**Unit Tests** (100+ passing, default)
 - All provider framework integration code
 - Metadata, schema, and configuration logic
 - Error handling and validation
 - No external dependencies required
 
-**Acceptance Tests** (6 tests, require `TF_ACC=1`)
+**Acceptance Tests** (50+ scenarios, require `TF_ACC=1` and Terraform CLI)
 - Full CRUD operations
 - CLI integration
 - End-to-end workflows

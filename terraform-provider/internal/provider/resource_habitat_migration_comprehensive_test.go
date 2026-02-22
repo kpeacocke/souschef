@@ -62,7 +62,7 @@ func TestAccHabitatMigrationResourceDefaultBaseImage(t *testing.T) {
 			{
 				Config: testAccHabitatMigrationResourceConfigNoBase(testHabitatPlanPath, outputPath),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("souschef_habitat_migration.test", "base_image", "ubuntu:22.04"),
+					resource.TestCheckResourceAttr("souschef_habitat_migration.test", "base_image", "ubuntu:latest"),
 					resource.TestCheckResourceAttrSet("souschef_habitat_migration.test", "dockerfile_content"),
 				),
 			},

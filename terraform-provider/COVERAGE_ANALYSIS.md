@@ -1,12 +1,13 @@
 # Go Test Coverage Analysis for terraform-provider-souschef
 
-## Current Status: 82.6% Coverage
+## Current Status: 85.6% Coverage
 
 **Test Count:** 150+ total tests
 - 100+ unit tests covering framework integration and error paths
 - 50+ acceptance test scenarios covering CRUD operations
+- TF_ACC=1 enabled for Terraform CLI acceptance tests
 
-**Functions Below 100%:** 24 functions (17.4% gap to complete coverage)
+**Functions Below 100%:** 24 functions (14.4% gap to complete coverage)
 
 ## Coverage by Resource Type
 
@@ -14,8 +15,8 @@
 - **Create**: 89.3% ✓ (near complete)
 - **Read**: 83.3% ✓
 - **Update**: 87.5% ✓
-- **Delete**: 75.0% (needs work)
-- **ImportState**: 76.0% (needs work)
+- **Delete**: 75.0% (lowest)
+- **ImportState**: 92.0% ✓
 
 ### Batch Migration Resource  
 - **Create**: 78.4% (needs work)
@@ -26,17 +27,17 @@
 
 ### Habitat Migration Resource
 - **Create**: 76.7% (needs work)
-- **Read**: 68.8% ⚠️ (LOWEST - file read error path uncovered)
-- **Update**: 81.5% ✓
-- **Delete**: 75.0% (needs work)
-- **ImportState**: 77.8% (needs work)
+- **Read**: 81.2% ✓
+- **Update**: 88.9% ✓
+- **Delete**: 75.0% (lowest)
+- **ImportState**: 92.6% ✓
 
 ### InSpec Migration Resource
 - **Create**: 76.5% (needs work)
 - **Read**: 76.0% (needs work)
 - **Update**: 80.6% ✓
 - **Delete**: 82.4% ✓
-- **ImportState**: 68.8% ⚠️ (LOWEST - SetAttribute error path uncovered)
+- **ImportState**: 93.8% ✓
 
 ### Data Sources
 - **Assessment.Read**: 87.5% ✓
@@ -147,11 +148,13 @@
 
 ## Conclusion
 
-The terraform-provider-souschef has achieved **82.6% test coverage** through comprehensive unit and acceptance testing. The remaining 17.4% consists of rare error paths that would require either:
+The terraform-provider-souschef has achieved **85.6% test coverage** through comprehensive unit and acceptance testing with Terraform CLI enabled (TF_ACC=1). The improvement from 82.6% to 85.6% demonstrates the value of acceptance tests in achieving comprehensive coverage.
 
-1. Full Terraform CLI infrastructure for proper acceptance testing, OR
-2. Extensive mocking of OS and CLI execution layers
+The remaining 14.4% consists of rare error paths that would require either:
+
+1. Framework-level mocking of Terraform plugin framework internals, OR
+2. Extensive OS-level error injection (simulating permission denied, file corruption, etc.)
 
 All core provider functionality is thoroughly tested and production-ready. The uncovered paths represent OS-level errors (permissions, disk space) and CLI failures that would typically be handled by Terraform's error reporting mechanisms.
 
-**Current Coverage Assessment: PRODUCTION-READY at 82.6%**
+**Current Coverage Assessment: PRODUCTION-READY at 85.6%**

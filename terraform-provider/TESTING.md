@@ -143,9 +143,14 @@ go test -v ./internal/provider
 
 **Requirements:**
 - `TF_ACC=1` environment variable
+- Terraform CLI installed and in PATH
 - SousChef CLI installed and in PATH
 - Test fixtures in place
 - Write permissions for output directories
+
+**Devcontainer and CI:**
+- Terraform CLI is installed in the devcontainer image and CI workflow
+- SousChef CLI is installed via Poetry in CI, and via `.venv/bin/souschef` in the devcontainer
 
 ### Specific Test Patterns
 ```bash

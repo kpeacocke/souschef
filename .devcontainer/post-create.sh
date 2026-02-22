@@ -90,6 +90,14 @@ go mod download
 go mod tidy
 cd /workspaces/souschef
 
+# Verify Terraform CLI is available
+if command -v terraform &> /dev/null; then
+    TERRAFORM_VERSION=$(terraform version -json 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('terraform_version','unknown'))" || terraform version | head -n1)
+    echo "Terraform CLI available: $TERRAFORM_VERSION"
+else
+    echo "Terraform CLI not found in PATH"
+fi
+
 # Verify CodeQL installation (if available)
 if command -v codeql &> /dev/null; then
     CODEQL_VERSION=$(codeql version --format=text 2>/dev/null | head -n1 || echo "unknown")
