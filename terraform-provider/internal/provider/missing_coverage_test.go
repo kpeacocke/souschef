@@ -24,6 +24,8 @@ const (
 	errorTestFileCantBeRead   = "Expected error when test file can't be read"
 	errorCookbookPathNotFound = "Expected error when cookbook path doesn't exist"
 	errorPlaybookFileNotFound = "Expected error when playbook file doesn't exist"
+	// testFilePermissions defines readable file permissions for temporary test files
+	testFilePermissions = 0o600
 )
 
 // TestHabitatMigrationReadFileReadError tests Read failure when file I/O fails
@@ -82,7 +84,7 @@ func TestHabitatMigrationReadFileReadError(t *testing.T) {
 	resp.State = state
 
 	// Restore permissions and read again for final cleanup
-	defer os.Chmod(dockerfilePath, 0644)
+	defer os.Chmod(dockerfilePath, testFilePermissions)
 
 	// Read should fail with permission error
 	r.Read(context.Background(), req, resp)
@@ -315,7 +317,7 @@ func TestInspecMigrationImportStateTestFileReadError(t *testing.T) {
 	// Create test file with no read permissions
 	testFilePath := filepath.Join(outputPath, "test_default.py")
 	os.WriteFile(testFilePath, []byte("def test_something():\n    pass\n"), 0000)
-	defer os.Chmod(testFilePath, 0644)
+	defer os.Chmod(testFilePath, testFilePermissions)
 
 	req := resource.ImportStateRequest{
 		ID: profilePath + "|" + outputPath + "|testinfra",
