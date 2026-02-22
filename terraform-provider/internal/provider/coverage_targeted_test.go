@@ -14,6 +14,12 @@ import (
 const (
 	nonexistentOutputPath = "/nonexistent/path/to/output"
 	oldContentValue       = "old content"
+	// testDirPermissions defines readable/writable/executable directory permissions for temporary test directories
+	testDirPermissions = 0o755
+	// readonlyDirPermissions defines read-only directory permissions to test permission-denied scenarios
+	readonlyDirPermissions = 0o555
+	// testFilePermissions defines readable/writable file permissions for temporary test files
+	testFilePermissions = 0o644
 )
 
 // TestMigrationDeletePlaceholderFile tests delete when trying to delete file in restricted directory
@@ -28,10 +34,10 @@ func TestMigrationDeletePlaceholderFile(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	playbookPath := filepath.Join(tmpDir, "default.yml")
-	os.WriteFile(playbookPath, []byte("content\n"), 0644)
+	os.WriteFile(playbookPath, []byte("content\n"), testFilePermissions)
 
 	// Make directory read-only to cause permission error on file deletion
-	os.Chmod(tmpDir, 0555)
+	os.Chmod(tmpDir, readonlyDirPermissions)
 
 	stateValue := tftypes.NewValue(
 		tftypes.Object{
@@ -66,7 +72,7 @@ func TestMigrationDeletePlaceholderFile(t *testing.T) {
 		State: state,
 	}
 
-	defer os.Chmod(tmpDir, 0755)
+	defer os.Chmod(tmpDir, testDirPermissions)
 
 	r.Delete(context.Background(), req, resp)
 
@@ -87,7 +93,7 @@ func TestHabitatMigrationDeleteSuccessPath(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	dockerfilePath := filepath.Join(tmpDir, "Dockerfile")
-	os.WriteFile(dockerfilePath, []byte("FROM ubuntu\n"), 0644)
+	os.WriteFile(dockerfilePath, []byte("FROM ubuntu\n"), testFilePermissions)
 
 	stateValue := tftypes.NewValue(
 		tftypes.Object{
@@ -143,7 +149,7 @@ func TestInSpecMigrationDeleteSuccessPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Create the test file with correct name for testinfra format
 	testPath := filepath.Join(tmpDir, "test_inspec.py")
-	os.WriteFile(testPath, []byte("test\n"), 0644)
+	os.WriteFile(testPath, []byte("test\n"), testFilePermissions)
 
 	stateValue := tftypes.NewValue(
 		tftypes.Object{
