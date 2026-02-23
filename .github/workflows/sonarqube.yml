@@ -72,7 +72,7 @@ jobs:
 
     - name: Install dependencies
       if: steps.check-token.outputs.has_token == 'true'
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Generate coverage for SonarCloud
       if: steps.check-token.outputs.has_token == 'true'
