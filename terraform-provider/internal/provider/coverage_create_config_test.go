@@ -11,15 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-const (
-	// testDirPermissions defines readable/writable/executable directory permissions for temporary test directories
-	testDirPermissions = 0o755
-	// readonlyDirPermissions defines read-only directory permissions to test permission-denied scenarios
-	readonlyDirPermissions = 0o555
-	// testFilePermissions defines readable/writable file permissions for temporary test files
-	testFilePermissions = 0o644
-)
-
 // TestProviderConfigureNilData tests provider Configure with nil data
 func TestProviderConfigureNilData(t *testing.T) {
 	req := resource.ConfigureRequest{

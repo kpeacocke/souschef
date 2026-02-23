@@ -14,12 +14,6 @@ import (
 const (
 	nonexistentOutputPath = "/nonexistent/path/to/output"
 	oldContentValue       = "old content"
-	// testDirPermissions defines readable/writable/executable directory permissions for temporary test directories
-	testDirPermissions = 0o755
-	// readonlyDirPermissions defines read-only directory permissions to test permission-denied scenarios
-	readonlyDirPermissions = 0o555
-	// testFilePermissions defines readable/writable file permissions for temporary test files
-	testFilePermissions = 0o644
 )
 
 // TestMigrationDeletePlaceholderFile tests delete when trying to delete file in restricted directory

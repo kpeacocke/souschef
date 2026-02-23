@@ -24,8 +24,7 @@ const (
 	errorTestFileCantBeRead   = "Expected error when test file can't be read"
 	errorCookbookPathNotFound = "Expected error when cookbook path doesn't exist"
 	errorPlaybookFileNotFound = "Expected error when playbook file doesn't exist"
-	// testFilePermissions defines readable file permissions for temporary test files
-	testFilePermissions = 0o600
+
 )
 
 // TestHabitatMigrationReadFileReadError tests Read failure when file I/O fails
