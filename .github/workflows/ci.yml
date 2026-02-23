@@ -64,6 +64,13 @@ jobs:
     - name: Run tests with coverage
       run: poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
 
+    - name: Upload Python coverage
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4
+      with:
+        name: python-coverage
+        path: coverage.xml
+        retention-days: 1
+
   test-terraform-provider:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -105,15 +112,30 @@ jobs:
     # Run unit tests first (no TF_ACC) so failures surface quickly.
     # Acceptance tests (TF_ACC=1) also execute resource.Test cases
     # that require a live Terraform binary and the souschef CLI.
-    - name: Run Go unit tests
+    - name: Run Go unit tests with coverage
       working-directory: terraform-provider
-      run: go test ./internal/provider -v -timeout 5m
+      run: go test ./internal/provider -v -timeout 5m -coverprofile=coverage.out -covermode=atomic
+
+    - name: Convert Go coverage to Cobertura format
+      working-directory: terraform-provider
+      run: |
+        go install github.com/boumenot/files-cover/cmd/files-cover@latest
+        go install github.com/jandelgado/gcov2lcov@latest
+        gcov2lcov -infile=coverage.out -outfile=coverage.lcov || true
 
     - name: Run Terraform provider acceptance tests
       env:
         TF_ACC: "1"
       working-directory: terraform-provider
       run: go test ./internal/provider -v -timeout 15m
+
+    - name: Upload Go coverage
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4
+      if: always()
+      with:
+        name: go-coverage
+        path: terraform-provider/coverage.lcov
+        retention-days: 1
 
   test-cli:
     runs-on: ubuntu-latest

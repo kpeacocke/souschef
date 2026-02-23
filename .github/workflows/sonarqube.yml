@@ -78,8 +78,25 @@ jobs:
       if: steps.check-token.outputs.has_token == 'true'
       run: |
         poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
-        echo "Coverage generated:"
+        echo "Python coverage generated:"
         ls -lh coverage.xml
+
+    - name: Download coverage artifacts from CI workflow
+      if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
+      uses: actions/download-artifact@65a9edc5881444af0b87c459a03ad7a2ab1aeadf # v4
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        run-id: ${{ github.event.workflow_run.id }}
+        path: coverage-artifacts
+
+    - name: Prepare coverage files
+      if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
+      run: |
+        if [ -f coverage-artifacts/go-coverage/coverage.lcov ]; then
+          cp coverage-artifacts/go-coverage/coverage.lcov terraform-provider/coverage.lcov
+          echo "Go coverage found and copied"
+        fi
+        ls -lh coverage-artifacts/ 2>/dev/null || echo "No coverage artifacts found"
 
     - name: Run SonarCloud analysis
       if: steps.check-token.outputs.has_token == 'true'
