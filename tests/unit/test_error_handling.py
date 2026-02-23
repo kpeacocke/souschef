@@ -170,8 +170,8 @@ class TestHostnameValidation:
             "example.com",
             "my-server.example.co.uk",
             "server1.example.com",
-            "192.168.1.1",  # NOSONAR - test fixture
-            "10.0.0.1",  # NOSONAR - test fixture
+            "198.51.100.51",  # RFC 5737 documentation IP
+            "192.0.2.1",  # RFC 5737 documentation IP
             "255.255.255.255",
             "srv-01",
             "database",

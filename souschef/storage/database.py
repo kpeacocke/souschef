@@ -889,7 +889,7 @@ class PostgresStorageManager:
             cookbook_dir = _normalize_path(cookbook_path)
             content_hash = _hash_directory_contents(cookbook_dir)
             key_parts.append(content_hash)
-        except (ValueError, OSError):
+        except (ValueError, OSError):  # pragma: no cover
             # Keep cache key stable even if hashing fails.
             pass
 

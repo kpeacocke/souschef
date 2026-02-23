@@ -15,6 +15,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+const (
+	batchIDFormat = "%s-batch"
+)
+
 const errorReadingBatchPlaybook = "Error reading playbook"
 
 // Ensure the implementation satisfies the expected interfaces
@@ -175,7 +179,7 @@ func (r *batchMigrationResource) Create(ctx context.Context, req resource.Create
 	}
 
 	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf("%s-batch", cookbookName))
+	plan.ID = types.StringValue(fmt.Sprintf(batchIDFormat, cookbookName))
 	plan.CookbookName = types.StringValue(cookbookName)
 	plan.PlaybookCount = types.Int64Value(int64(len(playbooks)))
 	plan.Playbooks = playbooksMap
@@ -246,6 +250,14 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
+	// Get current state to preserve ID and cookbook_name
+	var state batchMigrationResourceModel
+	diags = req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Re-run conversion for all recipes
 	cookbookPath := plan.CookbookPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
@@ -253,6 +265,9 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 	for i, name := range plan.RecipeNames {
 		recipeNames[i] = name.ValueString()
 	}
+
+	// Extract cookbook name from path
+	cookbookName := filepath.Base(cookbookPath)
 
 	playbooks := make(map[string]string)
 	for _, recipeName := range recipeNames {
@@ -291,6 +306,8 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 
 	plan.Playbooks = playbooksMap
 	plan.PlaybookCount = types.Int64Value(int64(len(playbooks)))
+	plan.CookbookName = types.StringValue(cookbookName)
+	plan.ID = types.StringValue(fmt.Sprintf(batchIDFormat, cookbookName))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -405,5 +422,5 @@ func (r *batchMigrationResource) ImportState(ctx context.Context, req resource.I
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cookbook_name"), cookbookName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("playbook_count"), int64(len(playbooks)))...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("playbooks"), playbooksMap)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf("%s-batch", cookbookName))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf(batchIDFormat, cookbookName))...)
 }

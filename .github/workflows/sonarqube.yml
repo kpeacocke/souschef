@@ -16,6 +16,7 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.13"
+  GO_VERSION: "1.24"
 
 jobs:
   sonarcloud:
@@ -53,6 +54,12 @@ jobs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
+    - name: Set up Go ${{ env.GO_VERSION }}
+      if: steps.check-token.outputs.has_token == 'true'
+      uses: actions/setup-go@1f57aee2e13f2855f0e1b0e3b7e3c2e8b7b5f8e6d # v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
     - name: Install Poetry
       if: steps.check-token.outputs.has_token == 'true'
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a # v1
@@ -80,6 +87,20 @@ jobs:
         poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
         echo "Coverage generated:"
         ls -lh coverage.xml
+
+    - name: Generate Go test coverage for SonarCloud
+      if: steps.check-token.outputs.has_token == 'true'
+      run: |
+        cd terraform-provider
+        echo "Running Go tests with coverage..."
+        TF_ACC=1 timeout 150 go test ./internal/provider -coverprofile=coverage.out -timeout 100s
+        echo "Go coverage generated:"
+        ls -lh coverage.out
+
+        # Also generate JSON test report for SonarQube
+        TF_ACC=1 timeout 150 go test ./internal/provider -json > test-report.json -timeout 100s 2>&1 || true
+        echo "Go test report generated:"
+        ls -lh test-report.json
 
     - name: Run SonarCloud analysis
       if: steps.check-token.outputs.has_token == 'true'

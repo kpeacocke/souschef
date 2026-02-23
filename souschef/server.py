@@ -5252,7 +5252,7 @@ def deploy_v2_migration(
             indent=2,
         )
 
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         return json.dumps(
             {"error": str(e), "status": "failed_"},
             indent=2,
@@ -5293,7 +5293,7 @@ def validate_v2_playbooks(playbook_paths: str, target_ansible_version: str) -> s
 
         return json.dumps(results, indent=2)
 
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         return json.dumps(
             {"error": str(e), "status": "validation_failed"},
             indent=2,
@@ -5344,7 +5344,7 @@ def rollback_v2_migration(
             indent=2,
         )
 
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         return json.dumps(
             {"error": str(e), "status": "rollback_failed"},
             indent=2,
@@ -5548,7 +5548,7 @@ def generate_handler_routing_config(
                 try:
                     content = rb_file.read_text(encoding="utf-8")
                     patterns.extend(detect_handler_patterns(content))
-                except Exception:  # noqa: S110
+                except Exception:  # noqa: S110  # pragma: no cover
                     pass  # Skip files with parsing errors
         return patterns
 

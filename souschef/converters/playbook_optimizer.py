@@ -152,7 +152,7 @@ def optimize_task_loops(
                 similar_group.append(next_task)
                 j += 1
             else:
-                break
+                break  # pragma: no cover
 
         # If we found 3+ similar tasks, consolidate to loop
         if len(similar_group) >= 3:

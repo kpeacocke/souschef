@@ -455,7 +455,7 @@ class TestChefServerIntegration:
             {
                 "name": "web-1.example.com",
                 "fqdn": "web-1.example.com",
-                "ipaddress": "192.168.1.10",  # NOSONAR - test fixture
+                "ipaddress": "198.51.100.60",  # RFC 5737 documentation IP
                 "environment": "production",
                 "roles": ["web", "common"],
                 "platform": "ubuntu",
@@ -464,7 +464,7 @@ class TestChefServerIntegration:
             {
                 "name": "db-1.example.com",
                 "fqdn": "db-1.example.com",
-                "ipaddress": "192.168.1.20",  # NOSONAR - test fixture
+                "ipaddress": "198.51.100.70",  # RFC 5737 documentation IP
                 "environment": "production",
                 "roles": ["database", "common"],
                 "platform": "ubuntu",
@@ -472,7 +472,7 @@ class TestChefServerIntegration:
             },
             {
                 "name": "cache-1",
-                "ipaddress": "192.168.1.30",  # NOSONAR - test fixture
+                "ipaddress": "198.51.100.80",  # RFC 5737 documentation IP
                 "environment": "staging",
                 "roles": ["cache", "common"],
                 "platform": "centos",
@@ -917,9 +917,9 @@ class TestInventoryGrouping:
             json=Mock(
                 return_value={
                     "results": [
-                        {"id": 1, "name": "10.0.1.1"},  # NOSONAR - test fixture
-                        {"id": 2, "name": "10.0.2.1"},  # NOSONAR - test fixture
-                        {"id": 3, "name": "10.0.3.1"},  # NOSONAR - test fixture
+                        {"id": 1, "name": "192.0.2.11"},  # RFC 5737 documentation IP
+                        {"id": 2, "name": "198.51.100.1"},  # RFC 5737 documentation IP
+                        {"id": 3, "name": "203.0.113.1"},  # RFC 5737 documentation IP
                     ]
                 }
             )

@@ -44,6 +44,14 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list && \
     npm \
     unzip \
     wget && \
+    # Install Terraform CLI from HashiCorp APT repository
+    install -m 0755 -d /usr/share/keyrings && \
+    curl -fsSL --proto '=https' --tlsv1.2 https://apt.releases.hashicorp.com/gpg \
+        | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
+        | tee /etc/apt/sources.list.d/hashicorp.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends terraform && \
     # Install Poetry (enforce HTTPS and TLS 1.2+)
     curl -sSL --proto '=https' --tlsv1.2 https://install.python-poetry.org | python3 - && \
     ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \

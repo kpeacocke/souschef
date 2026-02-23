@@ -314,9 +314,9 @@ class TestIRToAWXWorkflow:
 
         # Add host nodes
         hosts = [
-            ("web-01", "10.0.1.10", "webservers"),  # NOSONAR - test fixture
-            ("web-02", "10.0.1.11", "webservers"),  # NOSONAR - test fixture
-            ("db-01", "10.0.1.20", "databases"),  # NOSONAR - test fixture
+            ("web-01", "192.0.2.110", "webservers"),  # RFC 5737 documentation IP
+            ("web-02", "192.0.2.111", "webservers"),  # RFC 5737 documentation IP
+            ("db-01", "192.0.2.120", "databases"),  # RFC 5737 documentation IP
         ]
 
         for hostname, ip, group in hosts:
@@ -501,8 +501,8 @@ class TestEndToEndChefToAWXWorkflow:
             json={
                 "name": "prod-web-01",
                 "variables": json.dumps(
-                    {"ansible_host": "10.0.1.10"}
-                ),  # NOSONAR - test fixture
+                    {"ansible_host": "192.0.2.110"}  # RFC 5737 documentation IP
+                ),
             },
             headers={"Authorization": "Bearer test-token"},
             timeout=10,

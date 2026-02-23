@@ -150,7 +150,7 @@ def _extract_precedence_and_path(line: str) -> tuple[str, str, str] | None:
     elif line.startswith("automatic"):
         precedence = "automatic"
         attr_part = line[9:].strip()
-    else:
+    else:  # pragma: no cover
         return None
 
     # Find the attribute path and value

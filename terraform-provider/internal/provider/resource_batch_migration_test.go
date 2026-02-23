@@ -7,10 +7,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
+const (
+	recipeNamesCountAttr = "recipe_names.#"
+	recipeNamesFirstAttr = "recipe_names.0"
+)
+
 var (
 	testBatchMigrationResourceName = "souschef_batch_migration.test"
 	testBatchCookbookPath          = getFixturePath("sample_cookbook")
-	testBatchOutputPath            = "/tmp/ansible/batch"
+	testBatchOutputPath            = "/workspaces/souschef/test-output/ansible/batch"
 )
 
 func TestAccBatchMigrationResource(t *testing.T) {
@@ -24,12 +29,33 @@ func TestAccBatchMigrationResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "cookbook_path", testBatchCookbookPath),
 					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "output_path", testBatchOutputPath),
-					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "recipe_names.#", "1"),
-					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "recipe_names.0", "default"),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, recipeNamesCountAttr, "1"),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, recipeNamesFirstAttr, "default"),
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "id"),
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "cookbook_name"),
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbook_count"),
 					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.default"),
+				),
+			},
+			// Update testing - add second recipe to trigger Update path
+			{
+				Config: testAccBatchMigrationResourceConfig("test", testBatchCookbookPath, testBatchOutputPath, []string{"default", "server"}),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "cookbook_path", testBatchCookbookPath),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, recipeNamesCountAttr, "2"),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, recipeNamesFirstAttr, "default"),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, "recipe_names.1", "server"),
+					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbook_count"),
+					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.default"),
+					resource.TestCheckResourceAttrSet(testBatchMigrationResourceName, "playbooks.server"),
+				),
+			},
+			// Update back testing - remove recipe to test another scenario
+			{
+				Config: testAccBatchMigrationResourceConfig("test", testBatchCookbookPath, testBatchOutputPath, []string{"default"}),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, recipeNamesCountAttr, "1"),
+					resource.TestCheckResourceAttr(testBatchMigrationResourceName, recipeNamesFirstAttr, "default"),
 				),
 			},
 			// ImportState testing

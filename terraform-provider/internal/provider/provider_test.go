@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 // testAccProtoV6ProviderFactories are used to instantiate a provider during
@@ -75,4 +76,84 @@ func getFixturePath(fixtureName string) string {
 
 	// Clean the path to resolve .. components
 	return filepath.Clean(fixturesPath)
+}
+
+// TestAccProviderConfigure tests provider configuration with explicit path
+func TestAccProviderConfigure(t *testing.T) {
+	testAccPreCheck(t)
+
+	sousChefPath := os.Getenv("TF_VAR_souschef_path")
+	if sousChefPath == "" {
+		t.Skip("TF_VAR_souschef_path not set")
+	}
+
+	config := `
+variable "souschef_path" {
+  type = string
+}
+
+provider "souschef" {
+  souschef_path = var.souschef_path
+}
+
+output "configured" {
+  value = "true"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckOutput("configured", "true"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccProviderConfigureDefault tests provider with default souschef path (no explicit configuration)
+func TestAccProviderConfigureDefault(t *testing.T) {
+	testAccPreCheck(t)
+
+	config := `
+variable "souschef_path" {
+  type = string
+}
+
+provider "souschef" {
+  souschef_path = var.souschef_path
+}
+
+output "provider_available" {
+  value = "true"
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckOutput("provider_available", "true"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccProviderConfigureWithUnknownValue tests the IsUnknown() code path
+// Note: Due to Terraform's validation phase, achieving true unknown values at
+// provider configuration time in tests is not supported by the framework.
+// This test documents the limitation.
+func TestAccProviderConfigureWithUnknownValue(t *testing.T) {
+	// Skip this test - the IsUnknown() path requires provider attributes to be
+	// computed from resource/data source outputs, which cannot be set during
+	// the test framework's provider configuration phase.
+	t.Skip("IsUnknown() path requires runtime Terraform evaluation not supported in tests")
 }

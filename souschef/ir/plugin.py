@@ -26,13 +26,13 @@ class SourceParser(ABC):
     @abstractmethod
     def source_type(self) -> SourceType:
         """Return the source tool type this parser handles."""
-        pass
+        pass  # pragma: no cover
 
     @property
     @abstractmethod
     def supported_versions(self) -> list[str]:
         """Return list of supported versions for the source tool."""
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def parse(self, source_path: str, **options: Any) -> IRGraph:  # noqa: ARG002
@@ -51,7 +51,7 @@ class SourceParser(ABC):
             ValueError: If source format is invalid.
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def validate(self, source_path: str) -> dict[str, Any]:  # noqa: ARG002
@@ -68,7 +68,7 @@ class SourceParser(ABC):
             - "warnings": list of warning messages
 
         """
-        pass
+        pass  # pragma: no cover
 
     def get_metadata(self) -> dict[str, str]:
         """
@@ -97,13 +97,13 @@ class TargetGenerator(ABC):
     @abstractmethod
     def target_type(self) -> TargetType:
         """Return the target system type this generator handles."""
-        pass
+        pass  # pragma: no cover
 
     @property
     @abstractmethod
     def supported_versions(self) -> list[str]:
         """Return list of supported versions for the target system."""
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def generate(self, graph: IRGraph, output_path: str, **options: Any) -> None:  # noqa: ARG002
@@ -120,7 +120,7 @@ class TargetGenerator(ABC):
             IOError: If output cannot be written.
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def validate_ir(self, graph: IRGraph) -> dict[str, Any]:
@@ -137,7 +137,7 @@ class TargetGenerator(ABC):
             - "warnings": list of warning messages
 
         """
-        pass
+        pass  # pragma: no cover
 
     def get_metadata(self) -> dict[str, str]:
         """

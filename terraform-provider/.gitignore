@@ -20,6 +20,9 @@ coverage.html
 test-*.txt
 test-results*.txt
 
+# Local test environment configuration
+.env.test
+
 # Crash log files
 crash.log
 

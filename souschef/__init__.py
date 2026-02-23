@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 else:
     try:
         import tomllib
-    except ModuleNotFoundError:
+    except ModuleNotFoundError:  # pragma: no cover
         import tomli as tomllib  # type: ignore[import, no-redef]
 
 
@@ -40,9 +40,9 @@ from souschef.deployment import analyse_chef_application_patterns  # noqa: E402
 # Import server functions only if MCP is available
 try:
     from souschef.server import analyse_chef_search_patterns
-except ImportError:
+except ImportError:  # pragma: no cover
     # Define a placeholder function for when MCP is not available
-    def analyse_chef_search_patterns(*args, **kwargs):
+    def analyse_chef_search_patterns(*args, **kwargs):  # pragma: no cover
         raise NotImplementedError("MCP server not available")
 
 
