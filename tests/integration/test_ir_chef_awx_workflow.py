@@ -211,9 +211,9 @@ class TestChefToIRWorkflow:
 
             # Link recipes to dependencies
             for recipe in cookbook_data["recipes"]:
-                recipe_node = graph.get_node(f"recipe-{recipe}")
-                if recipe_node:
-                    recipe_node.dependencies.append(f"dep-{dep_name}")
+                dep_recipe_node: IRNode | None = graph.get_node(f"recipe-{recipe}")
+                if dep_recipe_node:
+                    dep_recipe_node.dependencies.append(f"dep-{dep_name}")
 
         # Validate dependencies
         unresolved = graph.validate_dependencies()

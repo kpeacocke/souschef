@@ -1,5 +1,7 @@
 """Unit tests for the conversion rules engine module."""
 
+from typing import Any
+
 from souschef.converters.conversion_rules import (
     ConversionRule,
     RuleEngine,
@@ -399,7 +401,7 @@ class TestRuleEngine:
         engine.register_rule(low_rule)
         engine.register_rule(critical_rule)
 
-        resource = {}
+        resource: dict[str, Any] = {}
         matched = engine.find_matching_rule(resource)
         assert matched == critical_rule
 
@@ -626,10 +628,10 @@ class TestRuleEngineIntegration:
         assert svc_rule is not None
 
         # Test custom
-        _, custom_rule = engine.apply_rule(
+        _, custom_matched_rule = engine.apply_rule(
             {"type": "custom_svc_test", "body": "custom_svc_test"}
         )
-        assert custom_rule is not None
+        assert custom_matched_rule is not None
 
     def test_rule_priority_affects_selection(self) -> None:
         """Test that priority affects rule selection."""

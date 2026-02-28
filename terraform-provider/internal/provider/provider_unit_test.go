@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 )
 
 func TestSousChefProviderNew(t *testing.T) {
@@ -121,8 +120,8 @@ func TestSousChefProviderResourcesImplementInterfaces(t *testing.T) {
 
 	for i, factory := range resources {
 		r := factory()
-		if _, ok := r.(resource.Resource); !ok {
-			t.Errorf("resource %d does not implement resource.Resource", i)
+		if r == nil {
+			t.Errorf("resource %d returned nil", i)
 		}
 	}
 }
@@ -133,8 +132,8 @@ func TestSousChefProviderDataSourcesImplementInterfaces(t *testing.T) {
 
 	for i, factory := range dataSources {
 		ds := factory()
-		if _, ok := ds.(datasource.DataSource); !ok {
-			t.Errorf("data source %d does not implement datasource.DataSource", i)
+		if ds == nil {
+			t.Errorf("data source %d returned nil", i)
 		}
 	}
 }
@@ -191,9 +190,6 @@ func TestProviderProtocol6WithError(t *testing.T) {
 		t.Fatal("expected non-nil provider server")
 	}
 
-	if _, ok := server.(tfprotov6.ProviderServer); !ok {
-		t.Fatal("expected server to implement tfprotov6.ProviderServer")
-	}
 }
 
 func TestGetFixturePath(t *testing.T) {

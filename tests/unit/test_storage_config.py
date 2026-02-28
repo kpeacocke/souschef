@@ -25,6 +25,27 @@ def test_load_database_settings_postgres_aliases():
     assert settings.backend == "postgres"
 
 
+def test_load_database_settings_invalid_backend_defaults():
+    """Invalid backend values should default to sqlite."""
+    settings = load_database_settings(env={"SOUSCHEF_DB_BACKEND": "invalid"})
+
+    assert settings.backend == "sqlite"
+
+
+def test_load_database_settings_empty_values():
+    """Empty values should normalise to None where appropriate."""
+    settings = load_database_settings(
+        env={
+            "SOUSCHEF_DB_BACKEND": "sqlite",
+            "SOUSCHEF_DB_PATH": "   ",
+            "SOUSCHEF_DB_DSN": "",
+        }
+    )
+
+    assert settings.sqlite_path is None
+    assert settings.postgres_dsn is None
+
+
 def test_build_postgres_dsn_uses_override():
     """Test PostgreSQL DSN uses explicit DSN when provided."""
     settings = DatabaseSettings(
@@ -75,6 +96,13 @@ def test_load_blob_settings_minio_alias():
     settings = load_blob_settings(env={"SOUSCHEF_STORAGE_BACKEND": "minio"})
 
     assert settings.backend == "s3"
+
+
+def test_load_blob_settings_invalid_backend_defaults():
+    """Invalid blob backend values should default to local."""
+    settings = load_blob_settings(env={"SOUSCHEF_STORAGE_BACKEND": "invalid"})
+
+    assert settings.backend == "local"
 
 
 def test_load_blob_settings_overrides():

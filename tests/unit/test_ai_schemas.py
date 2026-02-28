@@ -19,7 +19,7 @@ class TestAnsibleTask:
         """Test creating a minimal task."""
         # Note: Pylance flags missing optional parameters, but Pydantic's Field(None, ...)
         # makes them optional. This is a Pylance limitation with Pydantic schemas.
-        task = AnsibleTask(name="Install package", module="package")  # type: ignore[call-arg]
+        task = AnsibleTask(name="Install package", module="package")
         assert task.name == "Install package"
         assert task.module == "package"
         assert task.parameters == {}
@@ -53,13 +53,13 @@ class TestAnsibleTask:
     def test_task_missing_required_fields(self):
         """Test that required fields are enforced."""
         with pytest.raises(ValidationError):
-            AnsibleTask()  # type: ignore[call-arg]
+            AnsibleTask()
 
         with pytest.raises(ValidationError):
-            AnsibleTask(name="Test")  # Missing module  # type: ignore[call-arg]
+            AnsibleTask(name="Test")  # Missing module
 
         with pytest.raises(ValidationError):
-            AnsibleTask(module="package")  # Missing name  # type: ignore[call-arg]
+            AnsibleTask(module="package")  # Missing name
 
 
 class TestAnsibleHandler:
@@ -87,13 +87,13 @@ class TestAnsibleHandler:
     def test_handler_missing_required_fields(self):
         """Test that required fields are enforced."""
         with pytest.raises(ValidationError):
-            AnsibleHandler()  # type: ignore[call-arg]
+            AnsibleHandler()
 
         with pytest.raises(ValidationError):
-            AnsibleHandler(name="Test")  # type: ignore[call-arg]
+            AnsibleHandler(name="Test")
 
         with pytest.raises(ValidationError):
-            AnsibleHandler(module="service")  # type: ignore[call-arg]
+            AnsibleHandler(module="service")
 
 
 class TestAnsiblePlaybook:
@@ -101,7 +101,7 @@ class TestAnsiblePlaybook:
 
     def test_minimal_playbook(self):
         """Test creating a minimal playbook."""
-        playbook = AnsiblePlaybook(name="Test Playbook")  # type: ignore[call-arg]
+        playbook = AnsiblePlaybook(name="Test Playbook")
         assert playbook.name == "Test Playbook"
         assert playbook.hosts == "all"
         assert playbook.become is None
@@ -111,7 +111,7 @@ class TestAnsiblePlaybook:
 
     def test_full_playbook(self):
         """Test creating a complete playbook."""
-        task = AnsibleTask(name="Install nginx", module="package")  # type: ignore[call-arg]
+        task = AnsibleTask(name="Install nginx", module="package")
         handler = AnsibleHandler(name="restart nginx", module="service")
 
         playbook = AnsiblePlaybook(
@@ -137,11 +137,11 @@ class TestAnsiblePlaybook:
     def test_playbook_with_multiple_tasks(self):
         """Test playbook with multiple tasks."""
         tasks = [
-            AnsibleTask(name="Task 1", module="package"),  # type: ignore[call-arg]
-            AnsibleTask(name="Task 2", module="service"),  # type: ignore[call-arg]
-            AnsibleTask(name="Task 3", module="template"),  # type: ignore[call-arg]
+            AnsibleTask(name="Task 1", module="package"),
+            AnsibleTask(name="Task 2", module="service"),
+            AnsibleTask(name="Task 3", module="template"),
         ]
-        playbook = AnsiblePlaybook(name="Multi-task", tasks=tasks)  # type: ignore[call-arg]
+        playbook = AnsiblePlaybook(name="Multi-task", tasks=tasks)
         assert len(playbook.tasks) == 3
         assert playbook.tasks[0].name == "Task 1"
         assert playbook.tasks[1].name == "Task 2"
@@ -150,7 +150,7 @@ class TestAnsiblePlaybook:
     def test_playbook_missing_required_fields(self):
         """Test that required fields are enforced."""
         with pytest.raises(ValidationError):
-            AnsiblePlaybook()  # Missing name  # type: ignore[call-arg]
+            AnsiblePlaybook()  # Missing name
 
 
 class TestConversionResult:
@@ -158,16 +158,16 @@ class TestConversionResult:
 
     def test_minimal_conversion_result(self):
         """Test creating a minimal conversion result."""
-        playbook = AnsiblePlaybook(name="Test")  # type: ignore[call-arg]
-        result = ConversionResult(playbook=playbook)  # type: ignore[call-arg]
+        playbook = AnsiblePlaybook(name="Test")
+        result = ConversionResult(playbook=playbook)
         assert result.playbook.name == "Test"
         assert result.notes is None
         assert result.confidence is None
 
     def test_full_conversion_result(self):
         """Test creating a complete conversion result."""
-        task = AnsibleTask(name="Install package", module="package")  # type: ignore[call-arg]
-        playbook = AnsiblePlaybook(name="Test", tasks=[task])  # type: ignore[call-arg]
+        task = AnsibleTask(name="Install package", module="package")
+        playbook = AnsiblePlaybook(name="Test", tasks=[task])
 
         result = ConversionResult(
             playbook=playbook,
@@ -185,32 +185,32 @@ class TestConversionResult:
 
     def test_confidence_validation(self):
         """Test confidence score validation."""
-        playbook = AnsiblePlaybook(name="Test")  # type: ignore[call-arg]
+        playbook = AnsiblePlaybook(name="Test")
 
         # Valid confidence scores
-        result1 = ConversionResult(playbook=playbook, confidence=0.0)  # type: ignore[call-arg]
+        result1 = ConversionResult(playbook=playbook, confidence=0.0)
         assert result1.confidence is not None
         assert abs(result1.confidence - 0.0) < 0.001
 
-        result2 = ConversionResult(playbook=playbook, confidence=1.0)  # type: ignore[call-arg]
+        result2 = ConversionResult(playbook=playbook, confidence=1.0)
         assert result2.confidence is not None
         assert abs(result2.confidence - 1.0) < 0.001
 
-        result3 = ConversionResult(playbook=playbook, confidence=0.5)  # type: ignore[call-arg]
+        result3 = ConversionResult(playbook=playbook, confidence=0.5)
         assert result3.confidence is not None
         assert abs(result3.confidence - 0.5) < 0.001
 
         # Invalid confidence scores
         with pytest.raises(ValidationError):
-            ConversionResult(playbook=playbook, confidence=-0.1)  # type: ignore[call-arg]
+            ConversionResult(playbook=playbook, confidence=-0.1)
 
         with pytest.raises(ValidationError):
-            ConversionResult(playbook=playbook, confidence=1.5)  # type: ignore[call-arg]
+            ConversionResult(playbook=playbook, confidence=1.5)
 
     def test_conversion_result_missing_required_fields(self):
         """Test that required fields are enforced."""
         with pytest.raises(ValidationError):
-            ConversionResult()  # Missing playbook  # type: ignore[call-arg]
+            ConversionResult()  # Missing playbook
 
 
 class TestTemplateConversion:
@@ -218,7 +218,7 @@ class TestTemplateConversion:
 
     def test_minimal_template_conversion(self):
         """Test creating a minimal template conversion."""
-        conversion = TemplateConversion(jinja2_template="Hello {{ name }}")  # type: ignore[call-arg]
+        conversion = TemplateConversion(jinja2_template="Hello {{ name }}")
         assert conversion.jinja2_template == "Hello {{ name }}"
         assert conversion.variable_mappings is None
         assert conversion.notes is None
@@ -232,7 +232,7 @@ class TestTemplateConversion:
                 "node['port']": "port",
             },
             notes=["ERB syntax converted to Jinja2", "Verify variable scoping"],
-        )  # type: ignore[call-arg]
+        )
 
         assert conversion.jinja2_template == "Server: {{ server_name }}:{{ port }}"
         assert conversion.variable_mappings is not None
@@ -251,7 +251,7 @@ class TestTemplateConversion:
                 "node['app']['port']": "app_port",
                 "node['app']['user']": "app_user",
             },
-        )  # type: ignore[call-arg]  # type: ignore[call-arg]
+        )
 
         assert conversion.variable_mappings is not None
         assert len(conversion.variable_mappings) == 3
@@ -260,7 +260,7 @@ class TestTemplateConversion:
     def test_template_conversion_missing_required_fields(self):
         """Test that required fields are enforced."""
         with pytest.raises(ValidationError):
-            TemplateConversion()  # Missing jinja2_template  # type: ignore[call-arg]
+            TemplateConversion()  # Missing jinja2_template
 
 
 class TestSchemaIntegration:
@@ -275,7 +275,7 @@ class TestSchemaIntegration:
                 module="package",
                 parameters={"name": "nginx", "state": "present"},
                 notify=["restart nginx"],
-            ),  # type: ignore[call-arg]
+            ),
             AnsibleTask(
                 name="Configure nginx",
                 module="template",
@@ -284,7 +284,7 @@ class TestSchemaIntegration:
                     "dest": "/etc/nginx/nginx.conf",
                 },
                 notify=["restart nginx"],
-            ),  # type: ignore[call-arg]
+            ),
         ]
 
         # Create handler
@@ -327,7 +327,7 @@ class TestSchemaIntegration:
         """Test that schemas can be serialized to dict."""
         task = AnsibleTask(
             name="Test task", module="package", parameters={"name": "nginx"}
-        )  # type: ignore[call-arg]
+        )
         task_dict = task.model_dump()
 
         assert task_dict["name"] == "Test task"

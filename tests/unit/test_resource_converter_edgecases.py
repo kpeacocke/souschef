@@ -1,6 +1,10 @@
 """Comprehensive edge case tests for resource converter."""
 
+from unittest.mock import patch
+
 from souschef.converters.resource import (
+    _build_module_params,
+    _convert_chef_resource_to_ansible,
     _normalize_template_value,
     _parse_properties,
     convert_resource_to_task,
@@ -115,6 +119,16 @@ class TestConvertResourceEdgeCases:
         assert isinstance(result, str)
         assert len(result) > 0
 
+    def test_convert_resource_to_task_exception(self):
+        """Test conversion error handling returns message."""
+        with patch(
+            "souschef.converters.resource._convert_chef_resource_to_ansible",
+            side_effect=RuntimeError("boom"),
+        ):
+            result = convert_resource_to_task("package", "nginx")
+
+        assert "An error occurred" in result
+
     def test_convert_file_resource_with_builder(self):
         """Test file resource conversion."""
         result = convert_resource_to_task("file", "/path/to/file", "create")
@@ -129,6 +143,47 @@ class TestConvertResourceEdgeCases:
         # Should use cookbook-specific params if available
         assert isinstance(result, str)
         assert len(result) > 0
+
+    def test_convert_include_recipe_with_config(self):
+        """Test include_recipe uses cookbook config overrides."""
+        cookbook_config = {
+            "module": "ansible.builtin.include_role",
+            "params": {"name": "apache"},
+        }
+        with patch(
+            "souschef.converters.resource.get_cookbook_package_config",
+            return_value=cookbook_config,
+        ):
+            task = _convert_chef_resource_to_ansible(
+                "include_recipe",
+                "apache::default",
+                "create",
+                "",
+            )
+
+        assert "ansible.builtin.include_role" in task
+        assert task["ansible.builtin.include_role"]["name"] == "apache"
+
+    def test_build_module_params_returns_cookbook_params(self):
+        """Test cookbook-specific params are returned when provided."""
+        cookbook_params = {"name": "custom"}
+        with patch(
+            "souschef.converters.resource.build_cookbook_resource_params",
+            return_value=cookbook_params,
+        ):
+            params = _build_module_params("service", "nginx", "start", {})
+
+        assert params == cookbook_params
+
+    def test_build_module_params_unknown_builder_string(self):
+        """Test unknown builder string falls back to defaults."""
+        with patch.dict(
+            "souschef.converters.resource.RESOURCE_PARAM_BUILDERS",
+            {"mystery": "unknown"},
+        ):
+            params = _build_module_params("mystery", "item", "create", {})
+
+        assert params["name"] == "item"
 
     def test_convert_with_complex_properties(self):
         """Test resource with complex property values."""

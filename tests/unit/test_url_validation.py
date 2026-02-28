@@ -2,7 +2,11 @@
 
 import pytest
 
-from souschef.core.url_validation import validate_user_provided_url
+from souschef.core.url_validation import (
+    _is_private_hostname,
+    _matches_allowlist,
+    validate_user_provided_url,
+)
 
 
 def test_https_required() -> None:
@@ -30,6 +34,11 @@ def test_allowlist_allows_localhost(monkeypatch: pytest.MonkeyPatch) -> None:
     assert validate_user_provided_url("https://localhost") == "https://localhost"
 
 
+def test_allowlist_ignores_empty_entries() -> None:
+    """Test allowlist matching skips empty entries."""
+    assert _matches_allowlist("api.example.com", {"", "api.example.com"})
+
+
 def test_fully_qualified_domain_required() -> None:
     """Test that non-qualified hostnames are rejected."""
     with pytest.raises(ValueError, match="fully qualified"):
@@ -52,6 +61,12 @@ def test_default_url_used_when_empty() -> None:
         default_url="https://api.example.com",
     )
     assert result == "https://api.example.com"
+
+
+def test_default_url_required_when_empty() -> None:
+    """Test empty URL without default raises an error."""
+    with pytest.raises(ValueError, match="Base URL is required"):
+        validate_user_provided_url("")
 
 
 def test_allowlist_env_var_empty(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -113,6 +128,12 @@ def test_username_password_rejected() -> None:
         validate_user_provided_url("https://user:pass@example.com")
 
 
+def test_missing_hostname_rejected() -> None:
+    """Test that URLs without a hostname are rejected."""
+    with pytest.raises(ValueError, match="hostname"):
+        validate_user_provided_url("https://")
+
+
 def test_allowed_hosts_blocks_other_hosts() -> None:
     """Test provider-specific allowed hosts enforcement."""
     with pytest.raises(ValueError, match="not permitted"):
@@ -131,3 +152,56 @@ def test_allowed_hosts_allows_exact_host() -> None:
         )
         == "https://api.redhat.com"
     )
+
+
+def test_private_hostname_allows_unresolved(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test private hostname check allows unresolved DNS entries."""
+
+    def fake_getaddrinfo(*_args, **_kwargs):
+        return []
+
+    monkeypatch.setattr(
+        "souschef.core.url_validation.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    assert _is_private_hostname("example.invalid") is False
+
+
+def test_private_hostname_blocks_private_ip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test private hostname check blocks private IP resolutions."""
+
+    def fake_getaddrinfo(*_args, **_kwargs):
+        return [(0, 0, 0, "", ("10.0.0.1", 443))]
+
+    monkeypatch.setattr(
+        "souschef.core.url_validation.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    assert _is_private_hostname("example.invalid") is True
+
+
+def test_private_hostname_allows_public_ip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test private hostname check allows public IP resolutions."""
+
+    def fake_getaddrinfo(*_args, **_kwargs):
+        return [(0, 0, 0, "", ("8.8.8.8", 443))]
+
+    monkeypatch.setattr(
+        "souschef.core.url_validation.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    assert _is_private_hostname("example.invalid") is False
+
+
+def test_private_hostname_oserror_fails_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test private hostname check fails open on OSError (network timeout, etc)."""
+
+    def fake_getaddrinfo(*_args, **_kwargs):
+        raise OSError("Network unreachable")
+
+    monkeypatch.setattr(
+        "souschef.core.url_validation.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    # Should return False (fail open) to allow requests when DNS unavailable
+    assert _is_private_hostname("example.com") is False

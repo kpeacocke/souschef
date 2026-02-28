@@ -13,8 +13,10 @@ import pytest
 
 from souschef.core.path_utils import (
     _ensure_within_base_path,
+    _get_workspace_root,
     _normalize_path,
     _safe_join,
+    _validate_relative_parts,
     _validated_candidate,
     safe_exists,
     safe_glob,
@@ -160,6 +162,34 @@ class TestPathContainmentSecurity:
 class TestNormalizePathSecurity:
     """Test path normalization against null byte injection and invalid paths."""
 
+    def test_workspace_root_env_missing_path(self, tmp_path, monkeypatch):
+        """Test workspace root rejects missing paths."""
+        missing_path = tmp_path / "missing"
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(missing_path))
+
+        with pytest.raises(ValueError, match="Workspace root does not exist"):
+            _get_workspace_root()
+
+    def test_workspace_root_env_not_directory(self, tmp_path, monkeypatch):
+        """Test workspace root rejects non-directory paths."""
+        file_path = tmp_path / "workspace.txt"
+        file_path.write_text("content")
+        monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(file_path))
+
+        with pytest.raises(ValueError, match="Workspace root is not a directory"):
+            _get_workspace_root()
+
+    def test_validate_relative_parts_detects_absolute_result(self, monkeypatch):
+        """Test relative parts validation catches absolute results."""
+
+        def fake_is_absolute(self):
+            return "/" in str(self)
+
+        monkeypatch.setattr(Path, "is_absolute", fake_is_absolute)
+
+        with pytest.raises(ValueError, match="Path traversal attempt"):
+            _validate_relative_parts(("safe", "path"))
+
     def test_normalize_path_null_byte_injection(self):
         """Test that null bytes in paths are rejected (CWE-158)."""
         attack_path = "cookbook/recipe.rb\x00.txt"
@@ -193,7 +223,7 @@ class TestNormalizePathSecurity:
     def test_normalize_path_invalid_type(self):
         """Test that invalid types are rejected."""
         with pytest.raises(ValueError, match="must be a string or Path"):
-            _normalize_path(123)  # type: ignore[arg-type]
+            _normalize_path(123)
 
     def test_normalize_path_home_directory_expansion(self):
         """Test that home directory paths are expanded correctly."""

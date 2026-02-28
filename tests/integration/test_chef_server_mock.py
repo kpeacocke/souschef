@@ -486,7 +486,7 @@ class TestChefServerMockAuthHeaders:
 
         # Verify request was made with correct query params
         assert len(responses.calls) == 1
-        assert "q=role%3Awebserver" in responses.calls[0].request.url
+        assert "q=role%3Awebserver" in responses.calls[0].request.url  # type: ignore[operator]
 
 
 class TestChefServerMockSecretsRedaction:

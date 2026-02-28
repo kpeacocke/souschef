@@ -16,9 +16,11 @@ from souschef.ci.github_actions import (
 from souschef.ci.gitlab_ci import (
     _build_lint_jobs,
     _build_test_jobs,
+    _create_gitlab_job,
     generate_gitlab_ci_from_chef_ci,
 )
 from souschef.ci.jenkins_pipeline import (
+    _create_lint_stage,
     _create_stage,
     _generate_declarative_pipeline,
     _generate_scripted_pipeline,
@@ -577,6 +579,26 @@ def test_gitlab_build_lint_jobs_with_foodcritic_only():
     assert "yamllint" in jobs[0]
 
 
+def test_gitlab_create_job_with_branches_and_artifacts():
+    """Test GitLab job creation includes branches and artifacts."""
+    job = _create_gitlab_job(
+        name="test:job",
+        stage="test",
+        script=["  - echo test"],
+        allow_failure=True,
+        artifacts=True,
+        when="manual",
+        only_branches=["main", "develop"],
+    )
+
+    assert "allow_failure: true" in job
+    assert "artifacts:" in job
+    assert "when: manual" in job
+    assert "only:" in job
+    assert "- main" in job
+    assert "- develop" in job
+
+
 def test_gitlab_ci_artifact_configuration():
     """Test artifact configuration in jobs."""
     ci_patterns = {
@@ -602,6 +624,13 @@ def test_jenkins_with_foodcritic():
         patterns = analyse_chef_ci_patterns(tmpdir)
 
         assert "foodcritic" in patterns["lint_tools"]
+
+
+def test_jenkins_lint_stage_with_unknown_tool():
+    """Test lint stage returns None for unknown lint tools."""
+    result = _create_lint_stage({"lint_tools": ["unknown"]})
+
+    assert result is None
 
 
 def test_gitlab_with_foodcritic():
@@ -667,6 +696,26 @@ def test_gitlab_kitchen_yaml_read_exception():
 
         assert patterns["has_kitchen"] is True
         assert patterns["test_suites"] == []
+
+
+def test_parse_kitchen_platforms_from_yaml():
+    """Test that kitchen platforms are parsed correctly."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmppath = Path(tmpdir)
+        kitchen_file = tmppath / ".kitchen.yml"
+        kitchen_file.write_text(
+            """suites:
+  - name: default
+platforms:
+  - name: ubuntu-22.04
+  - name: debian-12
+"""
+        )
+
+        patterns = analyse_chef_ci_patterns(tmpdir)
+
+        assert "ubuntu-22.04" in patterns["kitchen_platforms"]
+        assert "debian-12" in patterns["kitchen_platforms"]
 
 
 # GitHub Actions Workflow Tests
@@ -797,6 +846,14 @@ def test_github_build_lint_job():
     assert job["runs-on"] == "ubuntu-latest"
     assert any("Cookstyle" in step.get("name", "") for step in job["steps"])
     assert any("cache" in step.get("name", "").lower() for step in job["steps"])
+
+
+def test_github_build_lint_job_with_foodcritic_only():
+    """Test lint job includes Foodcritic step when enabled."""
+    patterns = {"has_cookstyle": False, "has_foodcritic": True}
+    job = _build_lint_job(patterns, enable_cache=False)
+
+    assert any("Foodcritic" in step.get("name", "") for step in job["steps"])
 
 
 def test_github_build_lint_job_without_cache():

@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -127,7 +126,7 @@ func (r *migrationResource) Create(ctx context.Context, req resource.CreateReque
 	outputPath := plan.OutputPath.ValueString()
 
 	// Call souschef CLI to convert recipe
-	cmd := exec.CommandContext(ctx, r.client.Path, "convert-recipe",
+	cmd := execCommandContext(ctx, r.client.Path, "convert-recipe",
 		"--cookbook-path", cookbookPath,
 		"--recipe-name", recipeName,
 		"--output-path", outputPath,
@@ -148,7 +147,7 @@ func (r *migrationResource) Create(ctx context.Context, req resource.CreateReque
 
 	// Read generated playbook
 	playbookPath := filepath.Join(outputPath, recipeName+".yml")
-	content, err := os.ReadFile(playbookPath)
+	content, err := osReadFile(playbookPath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errorReadingPlaybook,
@@ -184,13 +183,13 @@ func (r *migrationResource) Read(ctx context.Context, req resource.ReadRequest, 
 	outputPath := state.OutputPath.ValueString()
 	playbookPath := filepath.Join(outputPath, recipeName+".yml")
 
-	if _, err := os.Stat(playbookPath); os.IsNotExist(err) {
+	if _, err := osStat(playbookPath); os.IsNotExist(err) {
 		resp.State.RemoveResource(ctx)
 		return
 	}
 
 	// Read current content
-	content, err := os.ReadFile(playbookPath)
+	content, err := osReadFile(playbookPath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errorReadingPlaybook,
@@ -219,7 +218,7 @@ func (r *migrationResource) Update(ctx context.Context, req resource.UpdateReque
 	cookbookPath := plan.CookbookPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
 
-	cmd := exec.CommandContext(ctx, r.client.Path, "convert-recipe",
+	cmd := execCommandContext(ctx, r.client.Path, "convert-recipe",
 		"--cookbook-path", cookbookPath,
 		"--recipe-name", recipeName,
 		"--output-path", outputPath,
@@ -236,7 +235,7 @@ func (r *migrationResource) Update(ctx context.Context, req resource.UpdateReque
 
 	// Read updated playbook
 	playbookPath := filepath.Join(outputPath, recipeName+".yml")
-	content, err := os.ReadFile(playbookPath)
+	content, err := osReadFile(playbookPath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errorReadingPlaybook,
@@ -265,7 +264,7 @@ func (r *migrationResource) Delete(ctx context.Context, req resource.DeleteReque
 	outputPath := state.OutputPath.ValueString()
 	playbookPath := filepath.Join(outputPath, recipeName+".yml")
 
-	if err := os.Remove(playbookPath); err != nil && !os.IsNotExist(err) {
+	if err := osRemove(playbookPath); err != nil && !os.IsNotExist(err) {
 		resp.Diagnostics.AddError(
 			"Error deleting playbook",
 			fmt.Sprintf("Could not delete playbook: %s", err),
@@ -295,7 +294,7 @@ func (r *migrationResource) ImportState(ctx context.Context, req resource.Import
 	recipeName := parts[2]
 
 	// Validate that the cookbook exists
-	if _, err := os.Stat(cookbookPath); os.IsNotExist(err) {
+	if _, err := osStat(cookbookPath); os.IsNotExist(err) {
 		resp.Diagnostics.AddError(
 			"Cookbook not found",
 			fmt.Sprintf("Cookbook path does not exist: %s", cookbookPath),
@@ -305,7 +304,7 @@ func (r *migrationResource) ImportState(ctx context.Context, req resource.Import
 
 	// Check if playbook exists
 	playbookPath := filepath.Join(outputPath, recipeName+".yml")
-	if _, err := os.Stat(playbookPath); os.IsNotExist(err) {
+	if _, err := osStat(playbookPath); os.IsNotExist(err) {
 		resp.Diagnostics.AddError(
 			"Playbook not found",
 			fmt.Sprintf("Playbook does not exist: %s", playbookPath),
@@ -314,7 +313,7 @@ func (r *migrationResource) ImportState(ctx context.Context, req resource.Import
 	}
 
 	// Read playbook content
-	content, err := os.ReadFile(playbookPath)
+	content, err := osReadFile(playbookPath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errorReadingPlaybook,

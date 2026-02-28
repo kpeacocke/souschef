@@ -12,6 +12,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
+const (
+	errFailedCreateOutputDirMissing = "failed to create output dir: %v"
+)
+
 func TestAssessmentDataSourceConfigureNilClient(t *testing.T) {
 	ds := &assessmentDataSource{}
 	req := datasource.ConfigureRequest{ProviderData: nil}
@@ -202,7 +206,7 @@ func TestBatchMigrationImportStateFilesPresent(t *testing.T) {
 		t.Fatalf("failed to create cookbook dir: %v", err)
 	}
 	if err := os.MkdirAll(outputDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create output dir: %v", err)
+		t.Fatalf(errFailedCreateOutputDirMissing, err)
 	}
 
 	// Create playbook files for each recipe
@@ -248,7 +252,7 @@ func TestHabitatMigrationImportStateMissingDockerfile(t *testing.T) {
 		t.Fatalf("failed to create plan file: %v", err)
 	}
 	if err := os.MkdirAll(outputDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create output dir: %v", err)
+		t.Fatalf(errFailedCreateOutputDirMissing, err)
 	}
 
 	r := &habitatMigrationResource{client: &SousChefClient{Path: "souschef"}}
@@ -276,7 +280,7 @@ func TestHabitatMigrationImportStatePlanFilePresent(t *testing.T) {
 		t.Fatalf("failed to create plan file: %v", err)
 	}
 	if err := os.MkdirAll(outputDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create output dir: %v", err)
+		t.Fatalf(errFailedCreateOutputDirMissing, err)
 	}
 
 	dockerfilePath := filepath.Join(outputDir, "Dockerfile")
@@ -323,7 +327,7 @@ func TestInSpecMigrationImportStateMissingTestFile(t *testing.T) {
 		t.Fatalf("failed to create profile dir: %v", err)
 	}
 	if err := os.MkdirAll(outputDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create output dir: %v", err)
+		t.Fatalf(errFailedCreateOutputDirMissing, err)
 	}
 
 	r := &inspecMigrationResource{client: &SousChefClient{Path: "souschef"}}
@@ -351,7 +355,7 @@ func TestInSpecMigrationImportStateTestFilePresent(t *testing.T) {
 		t.Fatalf("failed to create profile dir: %v", err)
 	}
 	if err := os.MkdirAll(outputDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create output dir: %v", err)
+		t.Fatalf(errFailedCreateOutputDirMissing, err)
 	}
 
 	testContent := "import pytest\n\ndef test_hello():\n    assert True\n"

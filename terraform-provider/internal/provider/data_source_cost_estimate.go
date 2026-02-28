@@ -151,21 +151,7 @@ func (d *costEstimateDataSource) Read(ctx context.Context, req datasource.ReadRe
 	resourceCount := int64(10) // Placeholder
 	complexity := "Medium"
 
-	var estimatedHours float64
-	switch complexity {
-	case "Low":
-		estimatedHours = float64(resourceCount) * 0.5
-	case "Medium":
-		estimatedHours = float64(resourceCount) * 1.0
-	case "High":
-		estimatedHours = float64(resourceCount) * 1.5
-	default:
-		estimatedHours = float64(resourceCount) * 1.0
-	}
-
-	// Calculate costs
-	labourCost := estimatedHours * developerRate
-	totalCost := labourCost + infraCost
+	estimatedHours, labourCost, totalCost := calculateCostEstimate(complexity, resourceCount, developerRate, infraCost)
 
 	recommendations := fmt.Sprintf(
 		"Cookbook requires approximately %.1f hours of migration effort. "+
@@ -189,4 +175,23 @@ func (d *costEstimateDataSource) Read(ctx context.Context, req datasource.ReadRe
 
 	diags = resp.State.Set(ctx, &config)
 	resp.Diagnostics.Append(diags...)
+}
+
+func calculateCostEstimate(complexity string, resourceCount int64, developerRate float64, infraCost float64) (float64, float64, float64) {
+	var estimatedHours float64
+	switch complexity {
+	case "Low":
+		estimatedHours = float64(resourceCount) * 0.5
+	case "Medium":
+		estimatedHours = float64(resourceCount) * 1.0
+	case "High":
+		estimatedHours = float64(resourceCount) * 1.5
+	default:
+		estimatedHours = float64(resourceCount) * 1.0
+	}
+
+	labourCost := estimatedHours * developerRate
+	totalCost := labourCost + infraCost
+
+	return estimatedHours, labourCost, totalCost
 }

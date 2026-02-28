@@ -79,9 +79,22 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
         return f"An error occurred: {e}"
 
 
-def _extract_precedence_and_path(line: str) -> tuple[str, str, str] | None:
-    """Extract precedence and attribute path from a line."""
-    precedence_types = (
+def _extract_precedence_and_path(
+    line: str, _precedence_types: tuple[str, ...] | None = None
+) -> tuple[str, str, str] | None:
+    """
+    Extract precedence and attribute path from a line.
+
+    Args:
+        line: The line to parse.
+        _precedence_types: Optional tuple of precedence types for testing.
+
+    Returns:
+        Tuple of (precedence, attribute_path, value_start) or None if not an
+        attribute line.
+
+    """
+    precedence_types = _precedence_types or (
         "default",
         "force_default",
         "normal",

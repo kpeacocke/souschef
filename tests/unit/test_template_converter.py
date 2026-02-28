@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -106,6 +107,29 @@ def test_convert_template_file_directory(tmp_path):
     assert "not a file" in result["error"].lower()
 
 
+def test_convert_template_unicode_decode_error(tmp_path):
+    """Test conversion handles Unicode decode errors."""
+    template_file = tmp_path / "bad.erb"
+    template_file.write_bytes(b"\xff\xfe\xff")
+
+    result = convert_template_file(str(template_file))
+
+    assert result["success"] is False
+    assert "decode" in result["error"].lower()
+
+
+def test_convert_template_file_exception(tmp_path):
+    """Test conversion handles unexpected exceptions."""
+    template_file = tmp_path / "error.erb"
+    template_file.write_text("<%= @value %>")
+
+    with patch("pathlib.Path.resolve", side_effect=OSError("boom")):
+        result = convert_template_file(str(template_file))
+
+    assert result["success"] is False
+    assert "Conversion failed" in result["error"]
+
+
 def test_convert_template_variables_extracted(temp_erb_template):
     """Test that variables are properly extracted from template."""
     result = convert_template_file(str(temp_erb_template))
@@ -133,6 +157,39 @@ def test_convert_cookbook_templates_success(temp_cookbook_with_templates):
     for template_result in result["results"]:
         assert template_result["success"] is True
         assert template_result["jinja2_file"].endswith(".j2")
+
+
+def test_convert_cookbook_templates_failure_count(tmp_path, monkeypatch):
+    """Test failed template conversions increment failure count."""
+    cookbook_dir = tmp_path / "test_cookbook"
+    cookbook_dir.mkdir()
+    templates_dir = cookbook_dir / "templates" / "default"
+    templates_dir.mkdir(parents=True)
+    (templates_dir / "bad.erb").write_text("<%= @value %>")
+
+    monkeypatch.setattr(
+        "souschef.converters.template.convert_template_file",
+        lambda _path: {"success": False, "error": "failed"},
+    )
+
+    result = convert_cookbook_templates(str(cookbook_dir))
+
+    assert result["templates_failed"] == 1
+    assert result["success"] is False
+
+
+def test_convert_cookbook_templates_exception(tmp_path, monkeypatch):
+    """Test cookbook conversion handles exceptions."""
+
+    def raise_oserror(_self):
+        raise OSError("boom")
+
+    monkeypatch.setattr(Path, "resolve", raise_oserror)
+
+    result = convert_cookbook_templates(str(tmp_path))
+
+    assert result["success"] is False
+    assert "Failed to convert" in result["error"]
 
 
 def test_convert_cookbook_templates_no_templates(tmp_path):

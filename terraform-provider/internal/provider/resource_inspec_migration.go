@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -50,6 +49,21 @@ const (
 	errReadingTestFile  = "Error reading test file"
 	inspecIDFormat      = "inspec-%s-%s"
 )
+
+func inspecTestFilename(outputFormat string) string {
+	switch outputFormat {
+	case "testinfra":
+		return testinfraFilename
+	case "serverspec":
+		return serverspecFilename
+	case "goss":
+		return gossFilename
+	case "ansible":
+		return ansibleFilename
+	default:
+		return defaultTestFilename
+	}
+}
 
 // Metadata returns the resource type name
 func (r *inspecMigrationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -122,7 +136,7 @@ func (r *inspecMigrationResource) Create(ctx context.Context, req resource.Creat
 	outputFormat := plan.OutputFormat.ValueString()
 
 	// Create output directory
-	if err := os.MkdirAll(outputPath, 0755); err != nil {
+	if err := osMkdirAll(outputPath, 0755); err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating output directory",
 			fmt.Sprintf("Could not create directory %s: %s", outputPath, err),
@@ -131,7 +145,7 @@ func (r *inspecMigrationResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	// Call souschef CLI to convert InSpec profile
-	cmd := exec.CommandContext(ctx, r.client.Path, "convert-inspec",
+	cmd := execCommandContext(ctx, r.client.Path, "convert-inspec",
 		"--profile-path", profilePath,
 		"--output-path", outputPath,
 		"--format", outputFormat)
@@ -145,24 +159,9 @@ func (r *inspecMigrationResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	// Determine output file extension based on format
-	var testFilename string
-	switch outputFormat {
-	case "testinfra":
-		testFilename = testinfraFilename
-	case "serverspec":
-		testFilename = serverspecFilename
-	case "goss":
-		testFilename = gossFilename
-	case "ansible":
-		testFilename = ansibleFilename
-	default:
-		testFilename = defaultTestFilename
-	}
-
 	// Read generated test file
-	testFilePath := filepath.Join(outputPath, testFilename)
-	content, err := os.ReadFile(testFilePath)
+	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
+	content, err := osReadFile(testFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errReadingTestFile,
@@ -195,28 +194,14 @@ func (r *inspecMigrationResource) Read(ctx context.Context, req resource.ReadReq
 	outputPath := state.OutputPath.ValueString()
 	outputFormat := state.OutputFormat.ValueString()
 
-	var testFilename string
-	switch outputFormat {
-	case "testinfra":
-		testFilename = "test_spec.py"
-	case "serverspec":
-		testFilename = "spec_helper.rb"
-	case "goss":
-		testFilename = "goss.yaml"
-	case "ansible":
-		testFilename = "assert.yml"
-	default:
-		testFilename = "test.txt"
-	}
+	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
 
-	testFilePath := filepath.Join(outputPath, testFilename)
-
-	if _, err := os.Stat(testFilePath); os.IsNotExist(err) {
+	if _, err := osStat(testFilePath); os.IsNotExist(err) {
 		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	content, err := os.ReadFile(testFilePath)
+	content, err := osReadFile(testFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errReadingTestFile,
@@ -244,7 +229,7 @@ func (r *inspecMigrationResource) Update(ctx context.Context, req resource.Updat
 	outputPath := plan.OutputPath.ValueString()
 	outputFormat := plan.OutputFormat.ValueString()
 
-	cmd := exec.CommandContext(ctx, r.client.Path, "convert-inspec",
+	cmd := execCommandContext(ctx, r.client.Path, "convert-inspec",
 		"--profile-path", profilePath,
 		"--output-path", outputPath,
 		"--format", outputFormat)
@@ -258,22 +243,8 @@ func (r *inspecMigrationResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	var testFilename string
-	switch outputFormat {
-	case "testinfra":
-		testFilename = testinfraFilename
-	case "serverspec":
-		testFilename = serverspecFilename
-	case "goss":
-		testFilename = gossFilename
-	case "ansible":
-		testFilename = ansibleFilename
-	default:
-		testFilename = defaultTestFilename
-	}
-
-	testFilePath := filepath.Join(outputPath, testFilename)
-	content, err := os.ReadFile(testFilePath)
+	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
+	content, err := osReadFile(testFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errReadingTestFile,
@@ -306,22 +277,8 @@ func (r *inspecMigrationResource) Delete(ctx context.Context, req resource.Delet
 	outputPath := state.OutputPath.ValueString()
 	outputFormat := state.OutputFormat.ValueString()
 
-	var testFilename string
-	switch outputFormat {
-	case "testinfra":
-		testFilename = testinfraFilename
-	case "serverspec":
-		testFilename = serverspecFilename
-	case "goss":
-		testFilename = gossFilename
-	case "ansible":
-		testFilename = ansibleFilename
-	default:
-		testFilename = defaultTestFilename
-	}
-
-	testFilePath := filepath.Join(outputPath, testFilename)
-	if err := os.Remove(testFilePath); err != nil && !os.IsNotExist(err) {
+	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
+	if err := osRemove(testFilePath); err != nil && !os.IsNotExist(err) {
 		resp.Diagnostics.AddWarning(
 			"Error deleting test file",
 			fmt.Sprintf("Could not delete test file: %s", err),
@@ -346,7 +303,7 @@ func (r *inspecMigrationResource) ImportState(ctx context.Context, req resource.
 	outputFormat := parts[2]
 
 	// Validate that the profile directory exists
-	if _, err := os.Stat(profilePath); os.IsNotExist(err) {
+	if _, err := osStat(profilePath); os.IsNotExist(err) {
 		resp.Diagnostics.AddError(
 			"Profile not found",
 			fmt.Sprintf("Profile path does not exist: %s", profilePath),
@@ -354,24 +311,9 @@ func (r *inspecMigrationResource) ImportState(ctx context.Context, req resource.
 		return
 	}
 
-	// Determine test filename based on output format
-	var testFilename string
-	switch outputFormat {
-	case "testinfra":
-		testFilename = testinfraFilename
-	case "serverspec":
-		testFilename = serverspecFilename
-	case "goss":
-		testFilename = gossFilename
-	case "ansible":
-		testFilename = ansibleFilename
-	default:
-		testFilename = defaultTestFilename
-	}
-
 	// Check if test file exists
-	testFilePath := filepath.Join(outputPath, testFilename)
-	if _, err := os.Stat(testFilePath); os.IsNotExist(err) {
+	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
+	if _, err := osStat(testFilePath); os.IsNotExist(err) {
 		resp.Diagnostics.AddError(
 			"Test file not found",
 			fmt.Sprintf("Test file does not exist: %s", testFilePath),
@@ -380,7 +322,7 @@ func (r *inspecMigrationResource) ImportState(ctx context.Context, req resource.
 	}
 
 	// Read test content
-	content, err := os.ReadFile(testFilePath)
+	content, err := osReadFile(testFilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errReadingTestFile,

@@ -3,7 +3,7 @@
 from unittest.mock import patch
 
 import networkx as nx
-import plotly.graph_objects as go  # type: ignore[import-untyped]
+import plotly.graph_objects as go
 
 from souschef.ui.app import ProgressTracker, create_dependency_graph
 from souschef.ui.pages.ai_settings import (
@@ -1123,8 +1123,8 @@ Community Cookbooks:
         traces = _create_plotly_edge_traces(graph, pos)
 
         assert len(traces) == 2  # Regular edges and circular edges
-        assert traces[0].line.color == "#888"  # type: ignore[attr-defined]  # Regular edge color
-        assert traces[1].line.color == "red"  # type: ignore[attr-defined]  # Circular edge color
+        assert traces[0].line.color == "#888"  # Regular edge color
+        assert traces[1].line.color == "red"  # Circular edge color
 
     def test_create_plotly_node_trace(self):
         """Test creating Plotly node trace."""
@@ -1141,9 +1141,9 @@ Community Cookbooks:
         trace = _create_plotly_node_trace(graph, pos)
 
         assert trace.mode == "markers+text"
-        assert len(trace.x) == 3  # type: ignore
-        assert len(trace.y) == 3  # type: ignore
-        assert len(trace.marker.color) == 3  # type: ignore
+        assert len(trace.x) == 3
+        assert len(trace.y) == 3
+        assert len(trace.marker.color) == 3
 
     def test_create_plotly_figure_layout(self):
         """Test creating Plotly figure layout."""
@@ -1152,11 +1152,11 @@ Community Cookbooks:
         layout = _create_plotly_figure_layout(10, "spring")
 
         assert (
-            layout.title.text == "Cookbook Dependency Graph (10 nodes, spring layout)"  # type: ignore
+            layout.title.text == "Cookbook Dependency Graph (10 nodes, spring layout)"
         )
         assert layout.showlegend is True
-        assert layout.xaxis.showgrid is False  # type: ignore
-        assert layout.yaxis.showgrid is False  # type: ignore
+        assert layout.xaxis.showgrid is False
+        assert layout.yaxis.showgrid is False
 
     def test_apply_graph_filters_circular_only(self):
         """Test applying circular dependencies only filter."""
@@ -1482,12 +1482,12 @@ Community Cookbooks:
 
         trace = _create_plotly_node_trace(graph, pos)
 
-        assert len(trace.marker.color) == 3  # type: ignore
+        assert len(trace.marker.color) == 3
         # Check that colors are assigned correctly
-        assert trace.marker.color[0] == "lightgreen"  # type: ignore  # Community cookbook
-        assert trace.marker.color[1] == "lightblue"  # type: ignore  # Has dependencies
+        assert trace.marker.color[0] == "lightgreen"  # Community cookbook
+        assert trace.marker.color[1] == "lightblue"  # Has dependencies
         assert (
-            trace.marker.color[2] == "red"  # type: ignore
+            trace.marker.color[2] == "red"
         )  # Involved in circular dep (has incoming circular edge)
 
     def test_apply_graph_filters_combined(self):

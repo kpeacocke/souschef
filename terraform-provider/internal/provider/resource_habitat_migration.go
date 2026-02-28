@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -127,7 +126,7 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 	}
 
 	// Create output directory
-	if err := os.MkdirAll(outputPath, 0755); err != nil {
+	if err := osMkdirAll(outputPath, 0755); err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating output directory",
 			fmt.Sprintf("Could not create directory %s: %s", outputPath, err),
@@ -136,7 +135,7 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 	}
 
 	// Call souschef CLI to convert Habitat plan
-	cmd := exec.CommandContext(ctx, r.client.Path, "convert-habitat",
+	cmd := execCommandContext(ctx, r.client.Path, "convert-habitat",
 		"--plan-path", planPath,
 		"--output-path", outputPath,
 		"--base-image", baseImage)
@@ -152,7 +151,7 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 
 	// Read generated Dockerfile
 	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
-	content, err := os.ReadFile(dockerfilePath)
+	content, err := osReadFile(dockerfilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errReadingDockerfile,
@@ -185,12 +184,12 @@ func (r *habitatMigrationResource) Read(ctx context.Context, req resource.ReadRe
 
 	dockerfilePath := filepath.Join(state.OutputPath.ValueString(), "Dockerfile")
 
-	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
+	if _, err := osStat(dockerfilePath); os.IsNotExist(err) {
 		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	content, err := os.ReadFile(dockerfilePath)
+	content, err := osReadFile(dockerfilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errReadingDockerfile,
@@ -221,7 +220,7 @@ func (r *habitatMigrationResource) Update(ctx context.Context, req resource.Upda
 		baseImage = plan.BaseImage.ValueString()
 	}
 
-	cmd := exec.CommandContext(ctx, r.client.Path, "convert-habitat",
+	cmd := execCommandContext(ctx, r.client.Path, "convert-habitat",
 		"--plan-path", planPath,
 		"--output-path", outputPath,
 		"--base-image", baseImage)
@@ -236,7 +235,7 @@ func (r *habitatMigrationResource) Update(ctx context.Context, req resource.Upda
 	}
 
 	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
-	content, err := os.ReadFile(dockerfilePath)
+	content, err := osReadFile(dockerfilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errReadingDockerfile,
@@ -268,7 +267,7 @@ func (r *habitatMigrationResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	dockerfilePath := filepath.Join(state.OutputPath.ValueString(), "Dockerfile")
-	if err := os.Remove(dockerfilePath); err != nil && !os.IsNotExist(err) {
+	if err := osRemove(dockerfilePath); err != nil && !os.IsNotExist(err) {
 		resp.Diagnostics.AddWarning(
 			"Error deleting Dockerfile",
 			fmt.Sprintf("Could not delete Dockerfile: %s", err),
@@ -296,7 +295,7 @@ func (r *habitatMigrationResource) ImportState(ctx context.Context, req resource
 	}
 
 	// Validate that the plan file exists
-	if _, err := os.Stat(planPath); os.IsNotExist(err) {
+	if _, err := osStat(planPath); os.IsNotExist(err) {
 		resp.Diagnostics.AddError(
 			"Plan file not found",
 			fmt.Sprintf("Plan file does not exist: %s", planPath),
@@ -306,7 +305,7 @@ func (r *habitatMigrationResource) ImportState(ctx context.Context, req resource
 
 	// Check if Dockerfile exists
 	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
-	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
+	if _, err := osStat(dockerfilePath); os.IsNotExist(err) {
 		resp.Diagnostics.AddError(
 			"Dockerfile not found",
 			fmt.Sprintf("Dockerfile does not exist: %s", dockerfilePath),
@@ -315,7 +314,7 @@ func (r *habitatMigrationResource) ImportState(ctx context.Context, req resource
 	}
 
 	// Read Dockerfile content
-	content, err := os.ReadFile(dockerfilePath)
+	content, err := osReadFile(dockerfilePath)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			errReadingDockerfile,

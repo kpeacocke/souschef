@@ -10,6 +10,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
+const (
+	errUnexpectedNilProviderData     = "unexpected error on nil provider data: %v"
+	errExpectedWrongProviderDataType = "expected error when provider data is wrong type"
+	errFailedCreateCookbookDir       = "failed to create cookbook dir: %v"
+	errFailedCreateOutputDir         = "failed to create output dir: %v"
+	errExpectedInvalidImportID       = "expected error for invalid import ID"
+)
+
 func TestMigrationResourceConfigureNilClient(t *testing.T) {
 	r := &migrationResource{}
 	req := resource.ConfigureRequest{ProviderData: nil}
@@ -18,7 +26,7 @@ func TestMigrationResourceConfigureNilClient(t *testing.T) {
 	r.Configure(context.Background(), req, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("unexpected error on nil provider data: %v", resp.Diagnostics)
+		t.Errorf(errUnexpectedNilProviderData, resp.Diagnostics)
 	}
 }
 
@@ -30,7 +38,7 @@ func TestMigrationResourceConfigureInvalidType(t *testing.T) {
 	r.Configure(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("expected error when provider data is wrong type")
+		t.Error(errExpectedWrongProviderDataType)
 	}
 }
 
@@ -59,10 +67,10 @@ func TestMigrationResourceReadMissingPlaybook(t *testing.T) {
 	outputDir := filepath.Join(tmpDir, "output")
 
 	if err := os.MkdirAll(cookbookDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create cookbook dir: %v", err)
+		t.Fatalf(errFailedCreateCookbookDir, err)
 	}
 	if err := os.MkdirAll(outputDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create output dir: %v", err)
+		t.Fatalf(errFailedCreateOutputDir, err)
 	}
 
 	r := &migrationResource{client: &SousChefClient{Path: "souschef"}}
@@ -88,7 +96,7 @@ func TestMigrationImportStateInvalidID(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("expected error for invalid import ID")
+		t.Error(errExpectedInvalidImportID)
 	}
 }
 
@@ -126,10 +134,10 @@ func TestMigrationImportStateMissingPlaybook(t *testing.T) {
 	outputDir := filepath.Join(tmpDir, "output")
 
 	if err := os.MkdirAll(cookbookDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create cookbook dir: %v", err)
+		t.Fatalf(errFailedCreateCookbookDir, err)
 	}
 	if err := os.MkdirAll(outputDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create output dir: %v", err)
+		t.Fatalf(errFailedCreateOutputDir, err)
 	}
 
 	r := &migrationResource{client: &SousChefClient{Path: "souschef"}}
@@ -155,10 +163,10 @@ func TestMigrationImportStateValidFilesPresent(t *testing.T) {
 	outputDir := filepath.Join(tmpDir, "output")
 
 	if err := os.MkdirAll(cookbookDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create cookbook dir: %v", err)
+		t.Fatalf(errFailedCreateCookbookDir, err)
 	}
 	if err := os.MkdirAll(outputDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create output dir: %v", err)
+		t.Fatalf(errFailedCreateOutputDir, err)
 	}
 
 	playbookContent := "---\n- hosts: all\n  tasks: []\n"
@@ -184,7 +192,7 @@ func TestBatchMigrationResourceConfigureNilClient(t *testing.T) {
 	r.Configure(context.Background(), req, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("unexpected error on nil provider data: %v", resp.Diagnostics)
+		t.Errorf(errUnexpectedNilProviderData, resp.Diagnostics)
 	}
 }
 
@@ -196,7 +204,7 @@ func TestBatchMigrationResourceConfigureInvalidType(t *testing.T) {
 	r.Configure(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("expected error when provider data is wrong type")
+		t.Error(errExpectedWrongProviderDataType)
 	}
 }
 
@@ -209,7 +217,7 @@ func TestBatchMigrationImportStateInvalidID(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("expected error for invalid import ID")
+		t.Error(errExpectedInvalidImportID)
 	}
 }
 
@@ -221,7 +229,7 @@ func TestHabitatMigrationResourceConfigureNilClient(t *testing.T) {
 	r.Configure(context.Background(), req, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("unexpected error on nil provider data: %v", resp.Diagnostics)
+		t.Errorf(errUnexpectedNilProviderData, resp.Diagnostics)
 	}
 }
 
@@ -233,7 +241,7 @@ func TestHabitatMigrationResourceConfigureInvalidType(t *testing.T) {
 	r.Configure(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("expected error when provider data is wrong type")
+		t.Error(errExpectedWrongProviderDataType)
 	}
 }
 
@@ -246,7 +254,7 @@ func TestHabitatMigrationImportStateInvalidID(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("expected error for invalid import ID")
+		t.Error(errExpectedInvalidImportID)
 	}
 }
 
@@ -258,7 +266,7 @@ func TestInSpecMigrationResourceConfigureNilClient(t *testing.T) {
 	r.Configure(context.Background(), req, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("unexpected error on nil provider data: %v", resp.Diagnostics)
+		t.Errorf(errUnexpectedNilProviderData, resp.Diagnostics)
 	}
 }
 
@@ -270,7 +278,7 @@ func TestInSpecMigrationResourceConfigureInvalidType(t *testing.T) {
 	r.Configure(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("expected error when provider data is wrong type")
+		t.Error(errExpectedWrongProviderDataType)
 	}
 }
 
@@ -283,7 +291,7 @@ func TestInSpecMigrationImportStateInvalidID(t *testing.T) {
 	r.ImportState(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("expected error for invalid import ID")
+		t.Error(errExpectedInvalidImportID)
 	}
 }
 
@@ -297,10 +305,10 @@ func TestMigrationResourceReadonlyOutputDir(t *testing.T) {
 	outputDir := filepath.Join(tmpDir, "readonly-output")
 
 	if err := os.MkdirAll(cookbookDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create cookbook dir: %v", err)
+		t.Fatalf(errFailedCreateCookbookDir, err)
 	}
 	if err := os.MkdirAll(outputDir, testDirPermissions); err != nil {
-		t.Fatalf("failed to create output dir: %v", err)
+		t.Fatalf(errFailedCreateOutputDir, err)
 	}
 
 	// Make output dir read-only

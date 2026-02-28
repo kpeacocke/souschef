@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from souschef.storage.blob import (
+    BlobStorage,
     LocalBlobStorage,
     S3BlobStorage,
     get_blob_storage,
@@ -23,8 +24,37 @@ DUMMY_ACCESS_ID = _sample_value("example-access")
 DUMMY_CREDENTIAL = _sample_value("example-credential")
 
 
+class DummyBlobStorage(BlobStorage):
+    """Concrete stub to exercise abstract base behaviour."""
+
+    def upload(self, local_path: Path, storage_key: str) -> str:
+        super().upload(local_path, storage_key)  # type: ignore[safe-super]
+        return storage_key
+
+    def download(self, storage_key: str, local_path: Path) -> Path:
+        super().download(storage_key, local_path)  # type: ignore[safe-super]
+        return local_path
+
+    def delete(self, storage_key: str) -> bool:
+        super().delete(storage_key)  # type: ignore[safe-super]
+        return True
+
+    def list_keys(self, prefix: str = "") -> list[str]:
+        super().list_keys(prefix)  # type: ignore[safe-super]
+        return []
+
+
 class TestLocalBlobStorageEdgeCases:
     """Tests for LocalBlobStorage edge cases and error paths."""
+
+    def test_abstract_blob_storage_methods(self, tmp_path: Path) -> None:
+        """Test abstract methods are exercised through a stub."""
+        storage = DummyBlobStorage()
+
+        assert storage.upload(tmp_path, "key") == "key"
+        assert storage.download("key", tmp_path) == tmp_path
+        assert storage.delete("key") is True
+        assert storage.list_keys() == []
 
     def test_init_with_none_base_path_uses_default(self):
         """Test that None base_path uses default tmp location."""

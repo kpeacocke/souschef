@@ -430,7 +430,7 @@ class TestIRVersionManager:
         """Test registering migrations."""
         manager = IRVersionManager()
 
-        def transform(data):  # type: ignore[no-untyped-def]
+        def transform(data):
             return data
 
         migration = SchemaMigration(
@@ -445,7 +445,7 @@ class TestIRVersionManager:
         """Test finding migration paths."""
         manager = IRVersionManager()
 
-        def transform(data):  # type: ignore[no-untyped-def]
+        def transform(data):
             return data
 
         migration = SchemaMigration(
@@ -483,10 +483,10 @@ class TestPluginRegistry:
             def supported_versions(self) -> list[str]:
                 return ["14.0", "15.0"]
 
-            def parse(self, source_path: str, **options):  # type: ignore[no-untyped-def]
+            def parse(self, source_path: str, **options):
                 pass
 
-            def validate(self, source_path: str):  # type: ignore[no-untyped-def]
+            def validate(self, source_path: str):
                 pass
 
         registry.register_parser(SourceType.CHEF, MockParser)
@@ -505,10 +505,10 @@ class TestPluginRegistry:
             def supported_versions(self) -> list[str]:
                 return ["2.10", "2.11"]
 
-            def generate(self, graph: IRGraph, output_path: str, **options):  # type: ignore[no-untyped-def]
+            def generate(self, graph: IRGraph, output_path: str, **options):
                 pass
 
-            def validate_ir(self, graph: IRGraph):  # type: ignore[no-untyped-def]
+            def validate_ir(self, graph: IRGraph):
                 pass
 
         registry.register_generator(TargetType.ANSIBLE, MockGenerator)
@@ -527,10 +527,10 @@ class TestPluginRegistry:
             def supported_versions(self) -> list[str]:
                 return ["14.0"]
 
-            def parse(self, source_path: str, **options):  # type: ignore[no-untyped-def]
+            def parse(self, source_path: str, **options):
                 pass
 
-            def validate(self, source_path: str):  # type: ignore[no-untyped-def]
+            def validate(self, source_path: str):
                 pass
 
         registry.register_parser(SourceType.CHEF, MockParser)
@@ -557,10 +557,10 @@ class TestPluginRegistry:
             def supported_versions(self) -> list[str]:
                 return ["14.0"]
 
-            def parse(self, source_path: str, **options):  # type: ignore[no-untyped-def]
+            def parse(self, source_path: str, **options):
                 pass
 
-            def validate(self, source_path: str):  # type: ignore[no-untyped-def]
+            def validate(self, source_path: str):
                 pass
 
         registry.register_parser(SourceType.CHEF, MockParser)
@@ -581,10 +581,10 @@ class TestPluginRegistry:
             def supported_versions(self) -> list[str]:
                 return ["14.0"]
 
-            def parse(self, source_path: str, **options):  # type: ignore[no-untyped-def]
+            def parse(self, source_path: str, **options):
                 pass
 
-            def validate(self, source_path: str):  # type: ignore[no-untyped-def]
+            def validate(self, source_path: str):
                 pass
 
         registry.register_parser(SourceType.CHEF, MockParser)

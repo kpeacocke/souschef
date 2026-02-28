@@ -1,5 +1,13 @@
 """Comprehensive tests for souschef package initialization."""
 
+import builtins
+import importlib
+import sys
+import types
+from pathlib import Path
+
+import pytest
+
 import souschef
 
 
@@ -77,3 +85,64 @@ class TestPackageInit:
         from souschef import converters
 
         assert converters is not None
+
+    def test_tomli_fallback_when_tomllib_missing(self, monkeypatch):
+        """Test tomli fallback is used when tomllib is unavailable."""
+        real_import = builtins.__import__
+        fake_tomli = types.ModuleType("tomli")
+
+        def fake_load(_f):
+            return {"tool": {"poetry": {"version": "0.0.0"}}}
+
+        fake_tomli.load = fake_load
+        monkeypatch.setitem(sys.modules, "tomli", fake_tomli)
+
+        def guarded_import(name, *args, **kwargs):
+            if name == "tomllib":
+                raise ModuleNotFoundError("tomllib missing")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+        try:
+            reloaded = importlib.reload(souschef)
+            assert reloaded.__version__ == "0.0.0"
+        finally:
+            monkeypatch.setattr(builtins, "__import__", real_import)
+            sys.modules.pop("tomli", None)
+            importlib.reload(souschef)
+
+    def test_get_version_handles_oserror(self, monkeypatch):
+        """Test version lookup returns unknown on OSError."""
+        original_open = Path.open
+
+        def raise_oserror(*_args, **_kwargs):
+            raise OSError("boom")
+
+        monkeypatch.setattr(Path, "open", raise_oserror)
+
+        try:
+            reloaded = importlib.reload(souschef)
+            assert reloaded.__version__ == "unknown"
+        finally:
+            monkeypatch.setattr(Path, "open", original_open)
+            importlib.reload(souschef)
+
+    def test_server_import_error_uses_placeholder(self, monkeypatch):
+        """Test server import error creates placeholder function."""
+        real_import = builtins.__import__
+
+        def guarded_import(name, *args, **kwargs):
+            if name == "souschef.server":
+                raise ImportError("server missing")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+        try:
+            reloaded = importlib.reload(souschef)
+            with pytest.raises(NotImplementedError, match="MCP server not available"):
+                reloaded.analyse_chef_search_patterns()
+        finally:
+            monkeypatch.setattr(builtins, "__import__", real_import)
+            importlib.reload(souschef)

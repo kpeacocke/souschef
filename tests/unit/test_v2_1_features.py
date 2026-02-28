@@ -12,6 +12,8 @@ from souschef.converters.conversion_audit import (
     ResourceConversionRecord,
 )
 from souschef.converters.playbook_optimizer import (
+    _create_loop_consolidated_task,
+    _extract_module_name,
     calculate_optimization_metrics,
     consolidate_duplicate_tasks,
     detect_duplicate_tasks,
@@ -117,6 +119,12 @@ class TestPlaybookOptimization:
         duplicates = detect_duplicate_tasks(tasks)
         assert len(duplicates) > 0
 
+    def test_extract_module_name_unknown(self) -> None:
+        """Test module name detection returns None for unknown modules."""
+        task = {"name": "Unknown task", "custom": {"value": 1}}
+
+        assert _extract_module_name(task) is None
+
     def test_consolidate_duplicate_tasks_empty(self) -> None:
         """Test consolidation with empty task list."""
         tasks: list[dict] = []
@@ -158,6 +166,22 @@ class TestPlaybookOptimization:
         ]
         result = optimize_task_loops(tasks)
         assert isinstance(result, list)
+
+    def test_optimize_task_loops_breaks_on_different_modules(self) -> None:
+        """Test loop optimisation stops when modules differ."""
+        tasks = [
+            {"name": "Install pkg", "package": {"name": "pkg1"}},
+            {"name": "Restart service", "service": {"name": "nginx"}},
+            {"name": "Install pkg2", "package": {"name": "pkg2"}},
+        ]
+
+        result = optimize_task_loops(tasks)
+
+        assert len(result) == len(tasks)
+
+    def test_create_loop_consolidated_task_empty(self) -> None:
+        """Test loop consolidation returns empty dict for empty input."""
+        assert _create_loop_consolidated_task([], None) == {}
 
     def test_calculate_optimization_metrics(self) -> None:
         """Test optimization metrics calculation."""
@@ -293,3 +317,13 @@ class TestConversionAuditTrail:
         assert "quality_score" in trail_dict["summary"]
         quality_score = trail_dict["summary"]["quality_score"]
         assert 0 <= quality_score <= 100
+
+    def test_audit_trail_quality_score_empty(self) -> None:
+        """Test quality score is 100 when no records exist."""
+        trail = ConversionAuditTrail(
+            migration_id="test_002",
+            cookbook_name="empty",
+        )
+
+        trail_dict = trail.to_dict()
+        assert trail_dict["summary"]["quality_score"] == 100.0
