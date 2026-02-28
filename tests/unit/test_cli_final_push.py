@@ -315,11 +315,7 @@ class TestLine2510DetectPythonParsing:
 
     def test_detect_python_shows_major_minor(self, runner):
         """Lines 2510-2512: Python version major.minor display."""
-        from souschef import ansible_upgrade
-
-        with patch.object(
-            ansible_upgrade, "detect_python_version", return_value="3.11.7"
-        ):
+        with patch("souschef.cli.detect_python_version", return_value="3.11.7"):
             result = runner.invoke(cli, ["ansible", "detect-python"])
             assert result.exit_code == 0
             # Should show major.minor (3.11)
