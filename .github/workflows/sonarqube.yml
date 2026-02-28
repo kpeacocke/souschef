@@ -83,7 +83,7 @@ jobs:
 
     - name: Download coverage artifacts from CI workflow
       if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
-      uses: actions/download-artifact@65a9edc5881444af0b87c459a03ad7a2ab1aeadf # v4
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         run-id: ${{ github.event.workflow_run.id }}
