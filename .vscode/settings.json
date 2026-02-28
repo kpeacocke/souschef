@@ -517,7 +517,6 @@
     "go.testExplorer.packageDisplayMode": "hierarchical",
     "go.testExplorer.showDynamicSubtests": true,
     "go.testExplorer.showTestCoverage": true,
-    "python-envs.pythonProjects": [],
     "snyk.advanced.autoSelectOrganization": false,
     "codeQL.createQuery.qlPackLocation": "/Users/kpeacocke/code/souschef",
     "python-envs.defaultEnvManager": "ms-python.python:system",

@@ -1,5 +1,7 @@
 """Tests for v2.1 advanced features: guards, optimization, and audit trail."""
 
+import pytest
+
 from souschef.converters.advanced_resource import (
     estimate_conversion_complexity,
     parse_resource_guards,
@@ -326,4 +328,4 @@ class TestConversionAuditTrail:
         )
 
         trail_dict = trail.to_dict()
-        assert trail_dict["summary"]["quality_score"] == 100.0
+        assert trail_dict["summary"]["quality_score"] == pytest.approx(100.0)

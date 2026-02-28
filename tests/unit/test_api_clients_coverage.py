@@ -8,7 +8,7 @@ import contextlib
 from unittest.mock import MagicMock, patch
 
 import pytest
-import requests
+import requests  # type: ignore[import-unresolved]
 
 from souschef.api_clients import (
     AAPClient,
@@ -84,7 +84,7 @@ class TestTowerClient:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -100,7 +100,7 @@ class TestTowerClient:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.post = MagicMock(  # type: ignore[method-assign]
@@ -115,7 +115,7 @@ class TestTowerClient:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -131,7 +131,7 @@ class TestTowerClient:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.post = MagicMock(  # type: ignore[method-assign]
@@ -146,7 +146,7 @@ class TestTowerClient:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -171,7 +171,7 @@ class TestAWXClient:
         client = AWXClient(
             server_url="https://awx.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
             version="24.6.1",
         )
 
@@ -188,7 +188,7 @@ class TestAWXClient:
         client = AWXClient(
             server_url="https://awx.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
             version="24.6.1",
         )
 
@@ -204,7 +204,7 @@ class TestAWXClient:
         client = AWXClient(
             server_url="https://awx.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
             version="24.6.1",
         )
 
@@ -221,7 +221,7 @@ class TestAWXClient:
         client = AWXClient(
             server_url="https://awx.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
             version="24.6.1",
         )
 
@@ -247,7 +247,7 @@ class TestAAPClient:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -263,7 +263,7 @@ class TestAAPClient:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.post = MagicMock(  # type: ignore[method-assign]
@@ -278,7 +278,7 @@ class TestAAPClient:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -294,7 +294,7 @@ class TestAAPClient:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -315,7 +315,7 @@ class TestAAPClient:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -339,7 +339,7 @@ class TestGetAnsibleClient:
             platform="tower",
             platform_version="3.8.6",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
         assert isinstance(client, TowerClient)
 
@@ -350,7 +350,7 @@ class TestGetAnsibleClient:
             platform="awx",
             platform_version="24.6.1",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
         assert isinstance(client, AWXClient)
 
@@ -361,7 +361,7 @@ class TestGetAnsibleClient:
             platform="aap",
             platform_version="2.4.0",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
         assert isinstance(client, AAPClient)
 
@@ -373,7 +373,7 @@ class TestGetAnsibleClient:
                 platform="unknown",
                 platform_version="1.0.0",
                 username="admin",
-                password="secret",
+                password="secret",  # noqa: S2068
             )
 
 
@@ -394,7 +394,7 @@ class TestAnsiblePlatformBase:
         client = _ConcreteClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         assert client.get_api_version() == ""
@@ -404,7 +404,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -421,7 +421,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.post = MagicMock(  # type: ignore[method-assign]
@@ -436,7 +436,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -453,7 +453,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.post = MagicMock(  # type: ignore[method-assign]
@@ -468,7 +468,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -482,7 +482,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.post = MagicMock(  # type: ignore[method-assign]
@@ -497,7 +497,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.post = MagicMock(  # type: ignore[method-assign]
@@ -512,7 +512,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.delete = MagicMock(  # type: ignore[method-assign]
@@ -526,7 +526,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.delete = MagicMock(  # type: ignore[method-assign]
@@ -540,7 +540,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -554,7 +554,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.delete = MagicMock(  # type: ignore[method-assign]
@@ -568,7 +568,7 @@ class TestAnsiblePlatformBase:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -586,7 +586,7 @@ class TestTowerApiVersion:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -601,7 +601,7 @@ class TestTowerApiVersion:
         client = TowerClient(
             server_url="https://tower.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.get = MagicMock(  # type: ignore[method-assign]
@@ -619,7 +619,7 @@ class TestAwxClientCoverage:
         client = AWXClient(
             server_url="https://awx.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
             version="24.6.1",
         )
 
@@ -634,7 +634,7 @@ class TestAwxClientCoverage:
         client = AWXClient(
             server_url="https://awx.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
             version="24.6.1",
         )
 
@@ -650,7 +650,7 @@ class TestAwxClientCoverage:
         client = AWXClient(
             server_url="https://awx.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
             version="20.1.0",
         )
 
@@ -662,7 +662,7 @@ class TestAwxClientCoverage:
         client = AWXClient(
             server_url="https://awx.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
             version="24.6.1",
         )
 
@@ -682,7 +682,7 @@ class TestAapClientCoverage:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.get = MagicMock(  # type: ignore[method-assign]
@@ -696,7 +696,7 @@ class TestAapClientCoverage:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()
@@ -711,7 +711,7 @@ class TestAapClientCoverage:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.post = MagicMock(  # type: ignore[method-assign]
@@ -726,7 +726,7 @@ class TestAapClientCoverage:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         client.session.patch = MagicMock(  # type: ignore[method-assign]
@@ -740,7 +740,7 @@ class TestAapClientCoverage:
         client = AAPClient(
             server_url="https://aap.example.com",
             username="admin",
-            password="secret",
+            password="secret",  # noqa: S2068
         )
 
         mock_response = MagicMock()

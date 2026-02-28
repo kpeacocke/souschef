@@ -11,12 +11,12 @@ import souschef.cli as cli_module
 
 def _invoke(cmd: str, **kwargs: Any) -> Any:
     """Invoke a top-level CLI command callback directly."""
-    return cli_module.cli.commands[cmd].callback(**kwargs)  # type: ignore[attr-defined,misc]
+    return cli_module.cli.commands[cmd].callback(**kwargs)  # type: ignore
 
 
 def _invoke_group(group: str, cmd: str, **kwargs: Any) -> Any:
     """Invoke a grouped CLI command callback directly."""
-    return cli_module.cli.commands[group].commands[cmd].callback(**kwargs)  # type: ignore[attr-defined,misc]
+    return cli_module.cli.commands[group].commands[cmd].callback(**kwargs)  # type: ignore
 
 
 def test_line_405_template_summary_more(

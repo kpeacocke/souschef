@@ -125,7 +125,7 @@ def test_allowlist_env_var_respects_override(monkeypatch: pytest.MonkeyPatch) ->
 def test_username_password_rejected() -> None:
     """Test that URLs with embedded credentials are rejected."""
     with pytest.raises(ValueError, match="credentials"):
-        validate_user_provided_url("https://user:pass@example.com")
+        validate_user_provided_url("https://user:pass@example.com")  # noqa: S2068
 
 
 def test_missing_hostname_rejected() -> None:

@@ -529,7 +529,7 @@ def test_get_ai_cookbook_analysis_exception(
     monkeypatch.setattr(
         assessment,
         "_get_recipe_content_sample",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")),  # noqa: S7500
     )
     result = assessment._get_ai_cookbook_analysis(
         tmp_path, {}, "anthropic", "key", "m", 0.1, 100
@@ -587,7 +587,7 @@ def test_call_ai_api_watson_invalid_url(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(
         assessment,
         "validate_user_provided_url",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad")),  # noqa: S7500
     )
     result = assessment._call_ai_api(
         "prompt",
@@ -644,8 +644,8 @@ def test_call_watson_api_no_response(monkeypatch: pytest.MonkeyPatch) -> None:
     """Watson API with no response should return None."""
 
     class Dummy:
-        def __init__(self, *args, **kwargs):
-            pass
+        def __init__(self, *args, **kwargs):  # noqa: S1186
+            pass  # Intentionally empty - this is a dummy class for mocking purposes
 
     monkeypatch.setattr(assessment, "APIClient", Dummy)
     result = assessment._call_watson_api("p", "k", "m", 0.1, 100)
@@ -693,7 +693,7 @@ def test_generate_ai_recommendations_exception(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(
         assessment,
         "_call_ai_api",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")),  # noqa: S7500
     )
     monkeypatch.setattr(
         assessment,
@@ -733,7 +733,7 @@ def test_create_ai_roadmap_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         assessment,
         "_call_ai_api",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")),  # noqa: S7500
     )
     monkeypatch.setattr(
         assessment, "_create_migration_roadmap", lambda *_args, **_kwargs: "fallback"
@@ -814,7 +814,7 @@ def test_calculate_activity_breakdown_exception(
     monkeypatch.setattr(
         assessment,
         "_normalize_path",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad")),  # noqa: S7500
     )
     result = assessment.calculate_activity_breakdown("/tmp")
 
@@ -1051,7 +1051,7 @@ def test_assess_complexity_with_ai_exception(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(
         assessment,
         "_process_cookbook_assessment_with_ai",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")),  # noqa: S7500
     )
 
     result = assessment.assess_chef_migration_complexity_with_ai("/tmp")
