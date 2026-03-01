@@ -24,8 +24,10 @@ def _get_workspace_root() -> Path:
     env_root = os.getenv("SOUSCHEF_WORKSPACE_ROOT")
     base_path = _normalize_path(env_root) if env_root else _trusted_workspace_root()
 
-    if not base_path.exists():  # NOSONAR
+    # NOSONAR: S6549 - intentional existence check on trusted workspace root
+    if not base_path.exists():
         raise ValueError(f"Workspace root does not exist: {base_path}")
+    # NOSONAR: S6549 - intentional directory check on trusted workspace root
     if not base_path.is_dir():
         raise ValueError(f"Workspace root is not a directory: {base_path}")
 
@@ -203,6 +205,7 @@ def safe_exists(path_obj: Path, base_path: Path) -> bool:
     """Check existence after enforcing base containment."""
     safe_base = _normalize_trusted_base(base_path)
     candidate: Path = _validated_candidate(path_obj, safe_base)
+    # NOSONAR: S6549 - containment validated by _validated_candidate()
     return candidate.exists()
 
 
@@ -210,6 +213,7 @@ def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
     """Check directory-ness after enforcing base containment."""
     safe_base = _normalize_trusted_base(base_path)
     candidate: Path = _validated_candidate(path_obj, safe_base)
+    # NOSONAR: S6549 - containment validated by _validated_candidate()
     return candidate.is_dir()
 
 
@@ -217,6 +221,7 @@ def safe_is_file(path_obj: Path, base_path: Path) -> bool:
     """Check file-ness after enforcing base containment."""
     safe_base = _normalize_trusted_base(base_path)
     candidate: Path = _validated_candidate(path_obj, safe_base)
+    # NOSONAR: S6549 - containment validated by _validated_candidate()
     return candidate.is_file()
 
 
@@ -237,7 +242,8 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     safe_dir: Path = _validated_candidate(_normalize_path(dir_path), safe_base)
 
     results: list[Path] = []
-    for result in safe_dir.glob(pattern):  # noqa # NOSONAR: S6549
+    # NOSONAR: S6549 - pattern validated, containment enforced
+    for result in safe_dir.glob(pattern):
         # Validated: pattern checked above, result checked below for containment
         validated_result: Path = _validated_candidate(Path(result), safe_base)
         results.append(validated_result)
@@ -255,7 +261,8 @@ def safe_mkdir(
     # layer for defence-in-depth against path traversal.
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    safe_path.mkdir(parents=parents, exist_ok=exist_ok)  # nosonar
+    # NOSONAR: S6549 - containment validated by _validated_candidate()
+    safe_path.mkdir(parents=parents, exist_ok=exist_ok)
 
 
 def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
@@ -280,7 +287,8 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
     # layer for defence-in-depth against path traversal.
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    return safe_path.read_text(encoding=encoding)  # nosonar
+    # NOSONAR: S6549 - containment validated by _validated_candidate()
+    return safe_path.read_text(encoding=encoding)
 
 
 def safe_write_text(
@@ -302,7 +310,8 @@ def safe_write_text(
     # layer for defence-in-depth against path traversal.
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
-    safe_path.write_text(text, encoding=encoding)  # nosonar
+    # NOSONAR: S6549 - containment validated by _validated_candidate()
+    safe_path.write_text(text, encoding=encoding)
 
 
 def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
@@ -327,7 +336,8 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
     results: list[Path] = []
-    for item in safe_path.iterdir():  # nosonar
+    # NOSONAR: S6549 - containment validated by _validated_candidate()
+    for item in safe_path.iterdir():
         # Validate each item stays within base
         validated_item: Path = _validated_candidate(item, safe_base)
         results.append(validated_item)
@@ -368,6 +378,7 @@ def _check_symlink_safety(path_obj: Path, base_path: Path | None = None) -> None
     try:
         current = target
         while current != current.parent:  # Until we reach filesystem root
+            # NOSONAR: S6549 - intentional symlink detection for security validation
             if current.is_symlink():
                 msg = (
                     f"Symlink detected in path {target}: {current} -> "
