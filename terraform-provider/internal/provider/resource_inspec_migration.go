@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -108,6 +109,36 @@ func (r *inspecMigrationResource) Configure(ctx context.Context, req resource.Co
 	r.client = configureResource(req, resp)
 }
 
+// executeInSpecConversion executes the InSpec profile conversion and updates the model state.
+func (r *inspecMigrationResource) executeInSpecConversion(
+	ctx context.Context,
+	model *inspecMigrationResourceModel,
+	diagnostics *diag.Diagnostics,
+) {
+	profilePath := model.ProfilePath.ValueString()
+	outputPath := model.OutputPath.ValueString()
+	outputFormat := model.OutputFormat.ValueString()
+
+	// Call souschef CLI to convert InSpec profile
+	args := []string{"convert-inspec", "--profile-path", profilePath, "--output-path", outputPath, "--format", outputFormat}
+	if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting InSpec profile", diagnostics); !ok {
+		return
+	}
+
+	// Read generated test file
+	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
+	content := readGeneratedFile(testFilePath, errReadingTestFile, diagnostics)
+	if diagnostics.HasError() {
+		return
+	}
+
+	// Extract profile name from path and set state
+	profileName := filepath.Base(profilePath)
+	model.ID = types.StringValue(fmt.Sprintf(inspecIDFormat, profileName, outputFormat))
+	model.ProfileName = types.StringValue(profileName)
+	model.TestContent = types.StringValue(string(content))
+}
+
 // Create creates the resource and sets the initial Terraform state
 func (r *inspecMigrationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan inspecMigrationResourceModel
@@ -117,35 +148,16 @@ func (r *inspecMigrationResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	profilePath := plan.ProfilePath.ValueString()
-	outputPath := plan.OutputPath.ValueString()
-	outputFormat := plan.OutputFormat.ValueString()
-
 	// Create output directory
-	if !createOutputDirectory(outputPath, &resp.Diagnostics) {
+	if !createOutputDirectory(plan.OutputPath.ValueString(), &resp.Diagnostics) {
 		return
 	}
 
-	// Call souschef CLI to convert InSpec profile
-	args := []string{"convert-inspec", "--profile-path", profilePath, "--output-path", outputPath, "--format", outputFormat}
-	if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting InSpec profile", &resp.Diagnostics); !ok {
-		return
-	}
-
-	// Read generated test file
-	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
-	content := readGeneratedFile(testFilePath, errReadingTestFile, &resp.Diagnostics)
+	// Execute conversion and set state
+	r.executeInSpecConversion(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// Extract profile name from path
-	profileName := filepath.Base(profilePath)
-
-	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf(inspecIDFormat, profileName, outputFormat))
-	plan.ProfileName = types.StringValue(profileName)
-	plan.TestContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -191,28 +203,11 @@ func (r *inspecMigrationResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	profilePath := plan.ProfilePath.ValueString()
-	outputPath := plan.OutputPath.ValueString()
-	outputFormat := plan.OutputFormat.ValueString()
-
-	args := []string{"convert-inspec", "--profile-path", profilePath, "--output-path", outputPath, "--format", outputFormat}
-	if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting InSpec profile", &resp.Diagnostics); !ok {
-		return
-	}
-
-	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
-	content := readGeneratedFile(testFilePath, errReadingTestFile, &resp.Diagnostics)
+	// Execute conversion and set state
+	r.executeInSpecConversion(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// Extract profile name from path
-	profileName := filepath.Base(profilePath)
-
-	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf(inspecIDFormat, profileName, outputFormat))
-	plan.ProfileName = types.StringValue(profileName)
-	plan.TestContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
