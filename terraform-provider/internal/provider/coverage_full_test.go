@@ -14,6 +14,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// Test string constants to avoid duplication warnings.
+// Note: testTmpCookbook, testConvertRecipe, testUnexpectedDiagnostics are defined in coverage_edge_cases_test.go
+// Note: testFailedToWritePlaybook is defined in coverage_final_test.go
+const (
+	testUnexpectedError = "unexpected error: %v"
+	testDefaultYml      = "default.yml"
+)
+
 func TestCalculateCostEstimate(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -80,7 +88,7 @@ func TestParseBatchRecipeNames(t *testing.T) {
 
 	names, err := parseBatchRecipeNames("default,install")
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf(testUnexpectedError, err)
 	}
 	if len(names) != 2 {
 		t.Fatalf("expected 2 recipe names, got %d", len(names))
@@ -89,7 +97,7 @@ func TestParseBatchRecipeNames(t *testing.T) {
 	// Test with whitespace around names
 	namesWithSpaces, err := parseBatchRecipeNames("  default , install  ")
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf(testUnexpectedError, err)
 	}
 	if len(namesWithSpaces) != 2 || namesWithSpaces[0] != "default" || namesWithSpaces[1] != "install" {
 		t.Fatalf("expected trimmed names, got %v", namesWithSpaces)
@@ -98,13 +106,12 @@ func TestParseBatchRecipeNames(t *testing.T) {
 	// Test with single recipe
 	singleName, err := parseBatchRecipeNames("custom")
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf(testUnexpectedError, err)
 	}
 	if len(singleName) != 1 || singleName[0] != "custom" {
 		t.Fatalf("expected single name, got %v", singleName)
 	}
 }
-
 
 func TestProviderConfigureUnknownPath(t *testing.T) {
 	p := &SousChefProvider{}
@@ -129,7 +136,7 @@ func TestProviderConfigureDefaultsAndCustomPath(t *testing.T) {
 	p.Configure(context.Background(), provider.ConfigureRequest{Config: defaultConfig}, defaultResp)
 
 	if defaultResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", defaultResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, defaultResp.Diagnostics)
 	}
 
 	client, ok := defaultResp.ResourceData.(*SousChefClient)
@@ -151,13 +158,13 @@ func TestAssessmentDataSourceRead(t *testing.T) {
 	ds := &assessmentDataSource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newDataSourceSchema(t, ds)
 
-	config := newDataSourceConfig(t, schema, assessmentDataSourceModel{CookbookPath: types.StringValue("/tmp/cookbook")})
+	config := newDataSourceConfig(t, schema, assessmentDataSourceModel{CookbookPath: types.StringValue(testTmpCookbook)})
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schema}}
 
 	ds.Read(context.Background(), datasource.ReadRequest{Config: config}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 
 	var state assessmentDataSourceModel
@@ -174,7 +181,7 @@ func TestAssessmentDataSourceReadErrors(t *testing.T) {
 	schema := newDataSourceSchema(t, ds)
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", "assess-cookbook")
-	config := newDataSourceConfig(t, schema, assessmentDataSourceModel{CookbookPath: types.StringValue("/tmp/cookbook")})
+	config := newDataSourceConfig(t, schema, assessmentDataSourceModel{CookbookPath: types.StringValue(testTmpCookbook)})
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	ds.Read(context.Background(), datasource.ReadRequest{Config: config}, resp)
 	if !resp.Diagnostics.HasError() {
@@ -195,7 +202,7 @@ func TestCostEstimateDataSourceRead(t *testing.T) {
 	schema := newDataSourceSchema(t, ds)
 
 	config := newDataSourceConfig(t, schema, costEstimateDataSourceModel{
-		CookbookPath:        types.StringValue("/tmp/cookbook"),
+		CookbookPath:        types.StringValue(testTmpCookbook),
 		DeveloperHourlyRate: types.Float64Value(200),
 		InfrastructureCost:  types.Float64Value(1000),
 	})
@@ -204,7 +211,7 @@ func TestCostEstimateDataSourceRead(t *testing.T) {
 	ds.Read(context.Background(), datasource.ReadRequest{Config: config}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 }
 
@@ -214,7 +221,7 @@ func TestMigrationResourceUpdateAndRead(t *testing.T) {
 
 	outputDir := t.TempDir()
 	plan := newPlan(t, schema, migrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(outputDir),
 		RecipeName:   types.StringValue("default"),
 	})
@@ -222,7 +229,7 @@ func TestMigrationResourceUpdateAndRead(t *testing.T) {
 
 	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
 	if updateResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", updateResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
 	}
 
 	state := newState(t, schema, migrationResourceModel{
@@ -232,7 +239,7 @@ func TestMigrationResourceUpdateAndRead(t *testing.T) {
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
 	if readResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", readResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
 	}
 }
 
@@ -240,13 +247,14 @@ func TestMigrationResourceUpdateErrors(t *testing.T) {
 	r := &migrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)
 
+	outputDir := t.TempDir()
 	plan := newPlan(t, schema, migrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
-		OutputPath:   types.StringValue(t.TempDir()),
+		CookbookPath: types.StringValue(testTmpCookbook),
+		OutputPath:   types.StringValue(outputDir),
 		RecipeName:   types.StringValue("default"),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-recipe")
+	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertRecipe)
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, resp)
 	if !resp.Diagnostics.HasError() {
@@ -254,7 +262,7 @@ func TestMigrationResourceUpdateErrors(t *testing.T) {
 	}
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", "")
-	t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", "convert-recipe")
+	t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", testConvertRecipe)
 	resp = &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, resp)
 	if !resp.Diagnostics.HasError() {
@@ -268,7 +276,7 @@ func TestMigrationResourceCreateSuccess(t *testing.T) {
 
 	outputDir := t.TempDir()
 	plan := newPlan(t, schema, migrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(outputDir),
 		RecipeName:   types.StringValue("myrecipe"),
 	})
@@ -276,7 +284,7 @@ func TestMigrationResourceCreateSuccess(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if createResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", createResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
 	}
 
 	// Verify the playbook was created with correct path
@@ -288,7 +296,7 @@ func TestMigrationResourceCreateSuccess(t *testing.T) {
 	// Test with null recipe name (should default to "default")
 	outputDir2 := t.TempDir()
 	plan2 := newPlan(t, schema, migrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(outputDir2),
 		RecipeName:   types.StringNull(),
 	})
@@ -296,11 +304,11 @@ func TestMigrationResourceCreateSuccess(t *testing.T) {
 	createResp2 := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan2}, createResp2)
 	if createResp2.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", createResp2.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, createResp2.Diagnostics)
 	}
 
 	// Verify it used "default" recipe name
-	defaultPath := filepath.Join(outputDir2, "default.yml")
+	defaultPath := filepath.Join(outputDir2, testDefaultYml)
 	if _, err := os.Stat(defaultPath); os.IsNotExist(err) {
 		t.Fatalf("playbook should have been created at %s with default recipe name", defaultPath)
 	}
@@ -311,12 +319,12 @@ func TestMigrationResourceCreateErrors(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	plan := newPlan(t, schema, migrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(t.TempDir()),
 		RecipeName:   types.StringNull(),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-recipe")
+	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertRecipe)
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
 	if !resp.Diagnostics.HasError() {
@@ -324,7 +332,7 @@ func TestMigrationResourceCreateErrors(t *testing.T) {
 	}
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", "")
-	t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", "convert-recipe")
+	t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", testConvertRecipe)
 	resp = &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
 	if !resp.Diagnostics.HasError() {
@@ -337,9 +345,9 @@ func TestMigrationResourceReadAndDeleteErrors(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	outputDir := t.TempDir()
-	playbookPath := filepath.Join(outputDir, "default.yml")
+	playbookPath := filepath.Join(outputDir, testDefaultYml)
 	if err := os.WriteFile(playbookPath, []byte("data"), 0000); err != nil {
-		t.Fatalf("failed to write playbook: %v", err)
+		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 
 	state := newState(t, schema, migrationResourceModel{
@@ -387,7 +395,7 @@ func TestMigrationResourceReadRemovesMissingPlaybook(t *testing.T) {
 
 	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
 	if readResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", readResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
 	}
 	if !readResp.State.Raw.IsNull() {
 		t.Fatal("expected resource to be removed when playbook is missing")
@@ -400,16 +408,16 @@ func TestMigrationResourceImportStateSuccessAndErrors(t *testing.T) {
 
 	cookbookDir := t.TempDir()
 	outputDir := t.TempDir()
-	playbookPath := filepath.Join(outputDir, "default.yml")
+	playbookPath := filepath.Join(outputDir, testDefaultYml)
 	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to write playbook: %v", err)
+		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 
 	resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
 	req := resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|default"}
 	r.ImportState(context.Background(), req, resp)
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 
 	if err := os.Chmod(playbookPath, noPermissions); err != nil {
@@ -455,7 +463,7 @@ func TestDeleteOperationsWithWarnings(t *testing.T) {
 	inspecDeleteResp := &resource.DeleteResponse{}
 	inspecR.Delete(context.Background(), resource.DeleteRequest{State: inspecState}, inspecDeleteResp)
 	if inspecDeleteResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", inspecDeleteResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, inspecDeleteResp.Diagnostics)
 	}
 
 	// Verify file was deleted
@@ -471,7 +479,7 @@ func TestMigrationDeleteSuccess(t *testing.T) {
 	outputDir := t.TempDir()
 	playbookPath := filepath.Join(outputDir, "success.yml")
 	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to write playbook: %v", err)
+		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 
 	state := newState(t, schema, migrationResourceModel{
@@ -483,7 +491,7 @@ func TestMigrationDeleteSuccess(t *testing.T) {
 	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 
 	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", deleteResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
 	}
 
 	// Verify file was deleted
@@ -497,43 +505,43 @@ func TestBatchMigrationDeleteSuccess(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	outputDir := t.TempDir()
-	recipe1Path := filepath.Join(outputDir, "default.yml")
+	recipe1Path := filepath.Join(outputDir, testDefaultYml)
 	recipe2Path := filepath.Join(outputDir, "install.yml")
 
 	if err := os.WriteFile(recipe1Path, []byte("content1"), 0644); err != nil {
-		t.Fatalf("failed to write recipe 1: %v", err)
+		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 	if err := os.WriteFile(recipe2Path, []byte("content2"), 0644); err != nil {
-		t.Fatalf("failed to write recipe 2: %v", err)
+		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 
 	// Create state with proper Map initialization
 	emptyPlaybooks, _ := types.MapValueFrom(context.Background(), types.StringType, map[string]string{})
 
 	state := newState(t, schema, batchMigrationResourceModel{
-		ID:            types.StringValue("batch-test"),
+		ID: types.StringValue("batch-test"),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
 			types.StringValue("install"),
 		},
-		OutputPath:   types.StringValue(outputDir),
-		CookbookName: types.StringValue("test"),
+		OutputPath:    types.StringValue(outputDir),
+		CookbookName:  types.StringValue("test"),
 		PlaybookCount: types.Int64Value(2),
-		Playbooks:    emptyPlaybooks,
+		Playbooks:     emptyPlaybooks,
 	})
 
 	deleteResp := &resource.DeleteResponse{}
 	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 
 	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", deleteResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
 	}
 
 	// Verify files were deleted
 	if _, err := os.Stat(recipe1Path); err == nil {
-		t.Fatal("recipe 1 should have been deleted")
+		t.Fatal("recipe1 should have been deleted")
 	}
 	if _, err := os.Stat(recipe2Path); err == nil {
-		t.Fatal("recipe 2 should have been deleted")
+		t.Fatal("recipe2 should have been deleted")
 	}
 }

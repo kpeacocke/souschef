@@ -346,14 +346,14 @@ func TestBatchMigrationReadWithUnreadablePlaybook(t *testing.T) {
 	defer os.Chmod(playbookPath, testFilePermissions)
 
 	state := newState(t, schema, batchMigrationResourceModel{
-		ID:            types.StringValue("test"),
+		ID: types.StringValue("test"),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
 		},
-		OutputPath:   types.StringValue(outputDir),
-		CookbookName: types.StringValue("test"),
+		OutputPath:    types.StringValue(outputDir),
+		CookbookName:  types.StringValue("test"),
 		PlaybookCount: types.Int64Value(1),
-		Playbooks:    types.MapNull(types.StringType),
+		Playbooks:     types.MapNull(types.StringType),
 	})
 
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
@@ -370,11 +370,11 @@ func TestHabitatMigrationCreateWithMissingPlan(t *testing.T) {
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertHabitat)
 	plan := newPlan(t, schema, habitatMigrationResourceModel{
-		PlanPath:   types.StringValue("/nonexistent/plan.sh"),
-		OutputPath: types.StringValue(t.TempDir()),
-		BaseImage:  types.StringNull(),
-		PackageName: types.StringNull(),
-		ID:         types.StringNull(),
+		PlanPath:          types.StringValue("/nonexistent/plan.sh"),
+		OutputPath:        types.StringValue(t.TempDir()),
+		BaseImage:         types.StringNull(),
+		PackageName:       types.StringNull(),
+		ID:                types.StringNull(),
 		DockerfileContent: types.StringNull(),
 	})
 
@@ -396,11 +396,11 @@ func TestHabitatMigrationUpdateWithUnreadableDockerfile(t *testing.T) {
 	}
 
 	plan := newPlan(t, schema, habitatMigrationResourceModel{
-		PlanPath:   types.StringValue(planPath),
-		OutputPath: types.StringValue(t.TempDir()),
-		BaseImage:  types.StringNull(),
-		PackageName: types.StringNull(),
-		ID:         types.StringNull(),
+		PlanPath:          types.StringValue(planPath),
+		OutputPath:        types.StringValue(t.TempDir()),
+		BaseImage:         types.StringNull(),
+		PackageName:       types.StringNull(),
+		ID:                types.StringNull(),
 		DockerfileContent: types.StringNull(),
 	})
 
@@ -419,12 +419,12 @@ func TestInSpecMigrationCreateWithMissingProfile(t *testing.T) {
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertInSpec)
 	plan := newPlan(t, schema, inspecMigrationResourceModel{
-		ProfilePath:   types.StringValue("/nonexistent/profile"),
-		OutputPath:    types.StringValue(t.TempDir()),
-		OutputFormat:  types.StringValue("testinfra"),
-		ID:            types.StringNull(),
-		ProfileName:   types.StringNull(),
-		TestContent:   types.StringNull(),
+		ProfilePath:  types.StringValue("/nonexistent/profile"),
+		OutputPath:   types.StringValue(t.TempDir()),
+		OutputFormat: types.StringValue("testinfra"),
+		ID:           types.StringNull(),
+		ProfileName:  types.StringNull(),
+		TestContent:  types.StringNull(),
 	})
 
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
@@ -440,12 +440,12 @@ func TestInSpecMigrationUpdateWithUnreadableTestFile(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	plan := newPlan(t, schema, inspecMigrationResourceModel{
-		ProfilePath:   types.StringValue(testTmpProfile),
-		OutputPath:    types.StringValue(t.TempDir()),
-		OutputFormat:  types.StringValue("testinfra"),
-		ID:            types.StringNull(),
-		ProfileName:   types.StringNull(),
-		TestContent:   types.StringNull(),
+		ProfilePath:  types.StringValue(testTmpProfile),
+		OutputPath:   types.StringValue(t.TempDir()),
+		OutputFormat: types.StringValue("testinfra"),
+		ID:           types.StringNull(),
+		ProfileName:  types.StringNull(),
+		TestContent:  types.StringNull(),
 	})
 
 	t.Setenv("SOUSCHEF_TEST_CHMOD", testConvertInSpec)
@@ -462,14 +462,14 @@ func TestBatchMigrationReadWithMissingPlaybook(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	state := newState(t, schema, batchMigrationResourceModel{
-		ID:            types.StringValue("test"),
+		ID: types.StringValue("test"),
 		RecipeNames: []types.String{
 			types.StringValue("missing"),
 		},
-		OutputPath:   types.StringValue(t.TempDir()),
-		CookbookName: types.StringValue("test"),
+		OutputPath:    types.StringValue(t.TempDir()),
+		CookbookName:  types.StringValue("test"),
 		PlaybookCount: types.Int64Value(0),
-		Playbooks:    types.MapNull(types.StringType),
+		Playbooks:     types.MapNull(types.StringType),
 	})
 
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
@@ -486,12 +486,12 @@ func TestHabitatMigrationReadWithMissingDockerfile(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	state := newState(t, schema, habitatMigrationResourceModel{
-		PlanPath:   types.StringValue(testTmpPlanSh),
-		OutputPath: types.StringValue(t.TempDir()),
-		PackageName: types.StringValue("test"),
-		ID:         types.StringValue("test"),
+		PlanPath:          types.StringValue(testTmpPlanSh),
+		OutputPath:        types.StringValue(t.TempDir()),
+		PackageName:       types.StringValue("test"),
+		ID:                types.StringValue("test"),
 		DockerfileContent: types.StringNull(),
-		BaseImage:  types.StringNull(),
+		BaseImage:         types.StringNull(),
 	})
 
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
@@ -730,14 +730,14 @@ func TestDeleteWarningsWithDirectoryTargets(t *testing.T) {
 	}
 
 	batchState := newState(t, batchSchema, batchMigrationResourceModel{
-		ID:            types.StringValue("batch-test"),
+		ID: types.StringValue("batch-test"),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
 		},
-		OutputPath:   types.StringValue(batchOutput),
-		CookbookName: types.StringValue("test"),
+		OutputPath:    types.StringValue(batchOutput),
+		CookbookName:  types.StringValue("test"),
 		PlaybookCount: types.Int64Value(1),
-		Playbooks:    types.MapNull(types.StringType),
+		Playbooks:     types.MapNull(types.StringType),
 	})
 	batchResp := &resource.DeleteResponse{}
 	batch.Delete(context.Background(), resource.DeleteRequest{State: batchState}, batchResp)
