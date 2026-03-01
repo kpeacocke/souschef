@@ -315,11 +315,3 @@ func badState(schema resourceschema.Schema, attrName string) tfsdk.State {
 
 	return tfsdk.State{Schema: schema, Raw: raw}
 }
-
-// writeFile is a test helper that creates a file with content and fatals on error.
-func writeFile(t *testing.T, path string, content []byte, perm os.FileMode) {
-	t.Helper()
-	if err := os.WriteFile(path, content, perm); err != nil {
-		t.Fatalf(testFailedToWriteFile, err)
-	}
-}
