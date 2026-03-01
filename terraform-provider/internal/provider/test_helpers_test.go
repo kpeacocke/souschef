@@ -6,20 +6,11 @@ import (
 	"testing"
 )
 
-// File permission constants used in provider tests.
-const (
-	// testFilePermissions is the standard read/write permission for test files.
-	testFilePermissions = os.FileMode(0o644)
-	// testDirPermissions is the standard read/write/execute permission for test directories.
-	testDirPermissions = os.FileMode(0o755)
-	// executableFilePermissions is the permission for executable test files.
-	executableFilePermissions = os.FileMode(0o755)
-	// readonlyDirPermissions is the read-only permission for test directories.
-	readonlyDirPermissions = os.FileMode(0o444)
-	// noPermissions is used in tests to simulate permission errors.
-	// This is safe in test context as it only applies to temporary test fixtures.
-	noPermissions = os.FileMode(0o000)
-)
+// executableFilePermissions is the permission for executable test files.
+const executableFilePermissions = os.FileMode(0o755)
+
+// readonlyDirPermissions is the read-only permission for test directories.
+const readonlyDirPermissions = os.FileMode(0o444)
 
 // ValidateConfigValue asserts that the actual configuration value matches the expected value.
 // It reports test failures via t if the values do not match.

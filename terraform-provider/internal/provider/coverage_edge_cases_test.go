@@ -14,23 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-// Test string constants to avoid duplication warnings.
-const (
-	testUnexpectedDiagnostics   = "unexpected diagnostics: %v"
-	testTmpCookbook             = "/tmp/cookbook"
-	testTmpPlanSh               = "/tmp/plan.sh"
-	testTmpProfile              = "/tmp/profile"
-	testConvertRecipe           = "convert-recipe"
-	testConvertHabitat          = "convert-habitat"
-	testConvertInSpec           = "convert-inspec"
-	testPlanSh                  = "plan.sh"
-	testPkgNameMyapp            = "pkg_name=myapp\n"
-	testFailedToWritePlan       = "failed to write plan: %v"
-	testFailedToWriteFile       = "failed to write file: %v"
-	testFailedToCreateDirectory = "failed to create directory: %v"
-	testFileName                = "file.txt"
-)
-
 func TestResourceConfigureNilClient(t *testing.T) {
 	// Test Configure with nil provider data
 	r := &batchMigrationResource{}
@@ -54,69 +37,93 @@ func TestResourceConfigureValidClient(t *testing.T) {
 	}
 }
 
-func TestBatchConfigureValidClient(t *testing.T) {
-	r := &batchMigrationResource{}
-	client := &SousChefClient{Path: "test"}
-	resp := &resource.ConfigureResponse{}
-	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: client}, resp)
+func TestResourceConfiguresWithValidClient(t *testing.T) {
+	// Table-driven test for all resource types
+	tests := []struct {
+		name     string
+		resource interface {
+			Configure(context.Context, resource.ConfigureRequest, *resource.ConfigureResponse)
+		}
+	}{
+		{
+			name:     "Batch",
+			resource: &batchMigrationResource{},
+		},
+		{
+			name:     "Habitat",
+			resource: &habitatMigrationResource{},
+		},
+		{
+			name:     "InSpec",
+			resource: &inspecMigrationResource{},
+		},
+	}
 
-	if resp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+	client := &SousChefClient{Path: "test"}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &resource.ConfigureResponse{}
+			tt.resource.Configure(context.Background(),
+				resource.ConfigureRequest{ProviderData: client}, resp)
+
+			if resp.Diagnostics.HasError() {
+				t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+			}
+		})
 	}
 }
 
-func TestHabitatConfigureValidClient(t *testing.T) {
-	r := &habitatMigrationResource{}
+func TestDataSourceConfiguresWithValidClient(t *testing.T) {
+	// Table-driven test for datasource configurations
+	tests := []struct {
+		name           string
+		ds             interface{}
+		getCfg         func(interface{}) *SousChefClient
+		expectError    bool
+		expectClientOn bool
+	}{
+		{
+			name:        "Assessment",
+			ds:          &assessmentDataSource{},
+			getCfg:      func(i interface{}) *SousChefClient { return i.(*assessmentDataSource).client },
+			expectError: false,
+		},
+		{
+			name:        "CostEstimate",
+			ds:          &costEstimateDataSource{},
+			getCfg:      func(i interface{}) *SousChefClient { return i.(*costEstimateDataSource).client },
+			expectError: false,
+		},
+	}
+
 	client := &SousChefClient{Path: "test"}
-	resp := &resource.ConfigureResponse{}
-	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: client}, resp)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			switch ds := tt.ds.(type) {
+			case *assessmentDataSource:
+				resp := &datasource.ConfigureResponse{}
+				ds.Configure(context.Background(),
+					datasource.ConfigureRequest{ProviderData: client}, resp)
 
-	if resp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-	}
-}
+				if resp.Diagnostics.HasError() && !tt.expectError {
+					t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+				}
+				if ds.client != client {
+					t.Fatalf("client not configured properly")
+				}
+			case *costEstimateDataSource:
+				resp := &datasource.ConfigureResponse{}
+				ds.Configure(context.Background(),
+					datasource.ConfigureRequest{ProviderData: client}, resp)
 
-func TestInSpecConfigureValidClient(t *testing.T) {
-	r := &inspecMigrationResource{}
-	client := &SousChefClient{Path: "test"}
-	resp := &resource.ConfigureResponse{}
-	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: client}, resp)
-
-	if resp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-	}
-}
-
-func TestDataSourceConfigureWithClient(t *testing.T) {
-	// Test DataSource Configure
-	ds := &assessmentDataSource{}
-	client := &SousChefClient{Path: "test"}
-	resp := &datasource.ConfigureResponse{}
-	ds.Configure(context.Background(), datasource.ConfigureRequest{ProviderData: client}, resp)
-
-	if resp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-	}
-
-	// Make sure client was saved
-	if ds.client != client {
-		t.Fatalf("client not configured properly")
-	}
-}
-
-func TestCostEstimateDataSourceConfigureValidClient(t *testing.T) {
-	// Test Configure with valid client
-	ds := &costEstimateDataSource{}
-	client := &SousChefClient{Path: "test"}
-	resp := &datasource.ConfigureResponse{}
-	ds.Configure(context.Background(), datasource.ConfigureRequest{ProviderData: client}, resp)
-
-	if resp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-	}
-
-	if ds.client != client {
-		t.Fatalf("client not configured properly")
+				if resp.Diagnostics.HasError() && !tt.expectError {
+					t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+				}
+				if ds.client != client {
+					t.Fatalf("client not configured properly")
+				}
+			}
+		})
 	}
 }
 

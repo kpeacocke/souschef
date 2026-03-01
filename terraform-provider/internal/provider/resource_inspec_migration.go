@@ -4,7 +4,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -106,20 +105,7 @@ func (r *inspecMigrationResource) Schema(ctx context.Context, req resource.Schem
 
 // Configure adds the provider configured client to the resource
 func (r *inspecMigrationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*SousChefClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *SousChefClient, got: %T", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.client = configureResource(req, resp)
 }
 
 // Create creates the resource and sets the initial Terraform state
@@ -136,37 +122,20 @@ func (r *inspecMigrationResource) Create(ctx context.Context, req resource.Creat
 	outputFormat := plan.OutputFormat.ValueString()
 
 	// Create output directory
-	if err := osMkdirAll(outputPath, 0755); err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating output directory",
-			fmt.Sprintf("Could not create directory %s: %s", outputPath, err),
-		)
+	if !createOutputDirectory(outputPath, &resp.Diagnostics) {
 		return
 	}
 
 	// Call souschef CLI to convert InSpec profile
-	cmd := execCommandContext(ctx, r.client.Path, "convert-inspec",
-		"--profile-path", profilePath,
-		"--output-path", outputPath,
-		"--format", outputFormat)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error converting InSpec profile",
-			fmt.Sprintf("Could not convert profile: %s\nOutput: %s", err, string(output)),
-		)
+	args := []string{"convert-inspec", "--profile-path", profilePath, "--output-path", outputPath, "--format", outputFormat}
+	if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting InSpec profile", &resp.Diagnostics); !ok {
 		return
 	}
 
 	// Read generated test file
 	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
-	content, err := osReadFile(testFilePath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errReadingTestFile,
-			fmt.Sprintf("Could not read generated test file: %s", err),
-		)
+	content := readGeneratedFile(testFilePath, errReadingTestFile, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -196,21 +165,18 @@ func (r *inspecMigrationResource) Read(ctx context.Context, req resource.ReadReq
 
 	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
 
-	if _, err := osStat(testFilePath); os.IsNotExist(err) {
-		resp.State.RemoveResource(ctx)
+	// Check if file exists and read content
+	if !readFileAndSetState(
+		ctx,
+		testFilePath,
+		"test_content",
+		func(content string) { state.TestContent = types.StringValue(content) },
+		errReadingTestFile,
+		&resp.Diagnostics,
+		resp.State.RemoveResource,
+	) {
 		return
 	}
-
-	content, err := osReadFile(testFilePath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errReadingTestFile,
-			fmt.Sprintf("Could not read test file: %s", err),
-		)
-		return
-	}
-
-	state.TestContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -229,27 +195,14 @@ func (r *inspecMigrationResource) Update(ctx context.Context, req resource.Updat
 	outputPath := plan.OutputPath.ValueString()
 	outputFormat := plan.OutputFormat.ValueString()
 
-	cmd := execCommandContext(ctx, r.client.Path, "convert-inspec",
-		"--profile-path", profilePath,
-		"--output-path", outputPath,
-		"--format", outputFormat)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error converting InSpec profile",
-			fmt.Sprintf("Could not convert profile: %s\nOutput: %s", err, string(output)),
-		)
+	args := []string{"convert-inspec", "--profile-path", profilePath, "--output-path", outputPath, "--format", outputFormat}
+	if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting InSpec profile", &resp.Diagnostics); !ok {
 		return
 	}
 
 	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
-	content, err := osReadFile(testFilePath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errReadingTestFile,
-			fmt.Sprintf("Could not read updated test file: %s", err),
-		)
+	content := readGeneratedFile(testFilePath, errReadingTestFile, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -278,12 +231,7 @@ func (r *inspecMigrationResource) Delete(ctx context.Context, req resource.Delet
 	outputFormat := state.OutputFormat.ValueString()
 
 	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
-	if err := osRemove(testFilePath); err != nil && !os.IsNotExist(err) {
-		resp.Diagnostics.AddWarning(
-			"Error deleting test file",
-			fmt.Sprintf("Could not delete test file: %s", err),
-		)
-	}
+	deleteGeneratedFile(testFilePath, "test file", &resp.Diagnostics)
 }
 
 // ImportState imports an existing resource into Terraform
@@ -303,31 +251,19 @@ func (r *inspecMigrationResource) ImportState(ctx context.Context, req resource.
 	outputFormat := parts[2]
 
 	// Validate that the profile directory exists
-	if _, err := osStat(profilePath); os.IsNotExist(err) {
-		resp.Diagnostics.AddError(
-			"Profile not found",
-			fmt.Sprintf("Profile path does not exist: %s", profilePath),
-		)
+	if !checkFileExists(profilePath, "Profile", &resp.Diagnostics) {
 		return
 	}
 
 	// Check if test file exists
 	testFilePath := filepath.Join(outputPath, inspecTestFilename(outputFormat))
-	if _, err := osStat(testFilePath); os.IsNotExist(err) {
-		resp.Diagnostics.AddError(
-			"Test file not found",
-			fmt.Sprintf("Test file does not exist: %s", testFilePath),
-		)
+	if !checkFileExists(testFilePath, "Test file", &resp.Diagnostics) {
 		return
 	}
 
 	// Read test content
-	content, err := osReadFile(testFilePath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errReadingTestFile,
-			fmt.Sprintf("Could not read test file: %s", err),
-		)
+	content := readGeneratedFile(testFilePath, errReadingTestFile, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 

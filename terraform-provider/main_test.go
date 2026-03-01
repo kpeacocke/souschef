@@ -41,7 +41,7 @@ func TestRunUsesServeOpts(t *testing.T) {
 
 func TestRunWithInvalidFlag(t *testing.T) {
 	// Test with an unknown flag
-	if err := run([]string{"-invalid-flag"}); err == nil {
+	if run([]string{"-invalid-flag"}) == nil {
 		t.Fatal("expected error for invalid flag")
 	}
 }
@@ -57,7 +57,7 @@ func TestRunWithServeError(t *testing.T) {
 		return testError{msg: "test error"}
 	}
 
-	if err := run([]string{}); err == nil {
+	if run([]string{}) == nil {
 		t.Fatal("expected error from serve")
 	}
 }

@@ -12,10 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-const (
-	testExpectedConvertError = "expected diagnostics for convert error"
-)
-
 func TestBatchMigrationResourceCreateUpdateReadDelete(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)

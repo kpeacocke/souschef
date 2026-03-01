@@ -315,3 +315,67 @@ func badState(schema resourceschema.Schema, attrName string) tfsdk.State {
 
 	return tfsdk.State{Schema: schema, Raw: raw}
 }
+
+// writeFile is a test helper that creates a file with content and fatals on error.
+func writeFile(t *testing.T, path string, content []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, content, perm); err != nil {
+		t.Fatalf(testFailedToWriteFile, err)
+	}
+}
+
+// mkdirAll is a test helper that creates a directory and fatals on error.
+func mkdirAll(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, testDirPermissions); err != nil {
+		t.Fatalf(testFailedToCreateDirectory, err)
+	}
+}
+
+// chmod is a test helper that changes file permissions and fatals on error.
+func chmod(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.Chmod(path, perm); err != nil {
+		t.Fatalf("failed to chmod %s: %v", path, err)
+	}
+}
+
+// tempFile creates a temporary file with content and returns its path.
+func tempFile(t *testing.T, dir, name string, content []byte) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	writeFile(t, path, content, testFilePermissions)
+	return path
+}
+
+// tempDir with file helper
+func tempDirWithFile(t *testing.T, fileName string, content []byte) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	path := tempFile(t, dir, fileName, content)
+	return dir, path
+}
+
+// assertCreateResponseError checks that CreateResponse has an error diagnostic.
+func assertCreateResponseError(t *testing.T, resp *resource.CreateResponse, msgPrefix string) {
+	t.Helper()
+	if !resp.Diagnostics.HasError() {
+		t.Fatalf("%s: expected diagnostics from create", msgPrefix)
+	}
+}
+
+// assertCreateResponseSuccess checks that CreateResponse has no errors.
+func assertCreateResponseSuccess(t *testing.T, resp *resource.CreateResponse, msgPrefix string) {
+	t.Helper()
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("%s: %v", msgPrefix, resp.Diagnostics)
+	}
+}
+
+// assertDeleteResponseSuccess checks that DeleteResponse has no errors.
+func assertDeleteResponseSuccess(t *testing.T, resp *resource.DeleteResponse, msgPrefix string) {
+	t.Helper()
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("%s: %v", msgPrefix, resp.Diagnostics)
+	}
+}

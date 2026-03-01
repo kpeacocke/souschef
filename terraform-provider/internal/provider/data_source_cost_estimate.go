@@ -118,6 +118,11 @@ func (d *costEstimateDataSource) Configure(_ context.Context, req datasource.Con
 	d.client = client
 }
 
+// getClient returns the configured SousChef client. Used for testing.
+func (d *costEstimateDataSource) getClient() *SousChefClient {
+	return d.client
+}
+
 // Read refreshes the Terraform state with the latest data
 func (d *costEstimateDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config costEstimateDataSourceModel

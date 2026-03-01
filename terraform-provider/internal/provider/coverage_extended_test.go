@@ -18,6 +18,114 @@ const (
 	errExpectedInvalidImportID       = "expected error for invalid import ID"
 )
 
+// Table-driven tests for resource configurations across all resource types
+// Eliminates duplication of resource ConfigureNilClient and ConfigureInvalidType tests
+
+type resourceConfigureTest struct {
+	name     string
+	resource interface {
+		Configure(context.Context, resource.ConfigureRequest, *resource.ConfigureResponse)
+	}
+	providerData interface{}
+	expectError  bool
+	errorType    string
+}
+
+func TestAllResourceConfigures(t *testing.T) {
+	tests := []resourceConfigureTest{
+		// Migration Resource Tests
+		{
+			name:         "MigrationConfigureNilClient",
+			resource:     &migrationResource{},
+			providerData: nil,
+			expectError:  false,
+		},
+		{
+			name:         "MigrationConfigureInvalidType",
+			resource:     &migrationResource{},
+			providerData: "not-a-client",
+			expectError:  true,
+			errorType:    errExpectedWrongProviderDataType,
+		},
+		// Batch Migration Resource Tests
+		{
+			name:         "BatchMigrationConfigureNilClient",
+			resource:     &batchMigrationResource{},
+			providerData: nil,
+			expectError:  false,
+		},
+		{
+			name:         "BatchMigrationConfigureInvalidType",
+			resource:     &batchMigrationResource{},
+			providerData: 42,
+			expectError:  true,
+			errorType:    errExpectedWrongProviderDataType,
+		},
+		// Habitat Migration Resource Tests
+		{
+			name:         "HabitatMigrationConfigureNilClient",
+			resource:     &habitatMigrationResource{},
+			providerData: nil,
+			expectError:  false,
+		},
+		{
+			name:         "HabitatMigrationConfigureInvalidType",
+			resource:     &habitatMigrationResource{},
+			providerData: true,
+			expectError:  true,
+			errorType:    errExpectedWrongProviderDataType,
+		},
+		// InSpec Migration Resource Tests
+		{
+			name:         "InSpecMigrationConfigureNilClient",
+			resource:     &inspecMigrationResource{},
+			providerData: nil,
+			expectError:  false,
+		},
+		{
+			name:         "InSpecMigrationConfigureInvalidType",
+			resource:     &inspecMigrationResource{},
+			providerData: struct{}{},
+			expectError:  true,
+			errorType:    errExpectedWrongProviderDataType,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &resource.ConfigureResponse{}
+			tt.resource.Configure(context.Background(),
+				resource.ConfigureRequest{ProviderData: tt.providerData}, resp)
+
+			if tt.expectError && !resp.Diagnostics.HasError() {
+				t.Error(tt.errorType)
+			}
+			if !tt.expectError && resp.Diagnostics.HasError() {
+				t.Errorf(errUnexpectedNilProviderData, resp.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestMigrationResourceConfigureValidClient(t *testing.T) {
+	r := &migrationResource{}
+	client := &SousChefClient{Path: "souschef"}
+	req := resource.ConfigureRequest{ProviderData: client}
+	resp := &resource.ConfigureResponse{}
+
+	r.Configure(context.Background(), req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Errorf("unexpected error configuring resource: %v", resp.Diagnostics)
+	}
+
+	if r.client == nil {
+		t.Fatal("expected client to be set after Configure")
+	}
+
+	ValidateConfigValue(t, r.client.Path, "souschef")
+}
+
 func TestMigrationResourceConfigureNilClient(t *testing.T) {
 	r := &migrationResource{}
 	req := resource.ConfigureRequest{ProviderData: nil}
@@ -42,23 +150,28 @@ func TestMigrationResourceConfigureInvalidType(t *testing.T) {
 	}
 }
 
-func TestMigrationResourceConfigureValidClient(t *testing.T) {
-	r := &migrationResource{}
-	client := &SousChefClient{Path: "souschef"}
-	req := resource.ConfigureRequest{ProviderData: client}
+func TestBatchMigrationResourceConfigureNilClient(t *testing.T) {
+	r := &batchMigrationResource{}
+	req := resource.ConfigureRequest{ProviderData: nil}
 	resp := &resource.ConfigureResponse{}
 
 	r.Configure(context.Background(), req, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("unexpected error configuring resource: %v", resp.Diagnostics)
+		t.Errorf(errUnexpectedNilProviderData, resp.Diagnostics)
 	}
+}
 
-	if r.client == nil {
-		t.Fatal("expected client to be set after Configure")
+func TestBatchMigrationResourceConfigureInvalidType(t *testing.T) {
+	r := &batchMigrationResource{}
+	req := resource.ConfigureRequest{ProviderData: 42}
+	resp := &resource.ConfigureResponse{}
+
+	r.Configure(context.Background(), req, resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Error(errExpectedWrongProviderDataType)
 	}
-
-	ValidateConfigValue(t, r.client.Path, "souschef")
 }
 
 func TestMigrationResourceReadMissingPlaybook(t *testing.T) {
@@ -184,30 +297,6 @@ func TestMigrationImportStateValidFilesPresent(t *testing.T) {
 	}
 }
 
-func TestBatchMigrationResourceConfigureNilClient(t *testing.T) {
-	r := &batchMigrationResource{}
-	req := resource.ConfigureRequest{ProviderData: nil}
-	resp := &resource.ConfigureResponse{}
-
-	r.Configure(context.Background(), req, resp)
-
-	if resp.Diagnostics.HasError() {
-		t.Errorf(errUnexpectedNilProviderData, resp.Diagnostics)
-	}
-}
-
-func TestBatchMigrationResourceConfigureInvalidType(t *testing.T) {
-	r := &batchMigrationResource{}
-	req := resource.ConfigureRequest{ProviderData: 42}
-	resp := &resource.ConfigureResponse{}
-
-	r.Configure(context.Background(), req, resp)
-
-	if !resp.Diagnostics.HasError() {
-		t.Error(errExpectedWrongProviderDataType)
-	}
-}
-
 func TestBatchMigrationImportStateInvalidID(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: "souschef"}}
 
@@ -221,30 +310,6 @@ func TestBatchMigrationImportStateInvalidID(t *testing.T) {
 	}
 }
 
-func TestHabitatMigrationResourceConfigureNilClient(t *testing.T) {
-	r := &habitatMigrationResource{}
-	req := resource.ConfigureRequest{ProviderData: nil}
-	resp := &resource.ConfigureResponse{}
-
-	r.Configure(context.Background(), req, resp)
-
-	if resp.Diagnostics.HasError() {
-		t.Errorf(errUnexpectedNilProviderData, resp.Diagnostics)
-	}
-}
-
-func TestHabitatMigrationResourceConfigureInvalidType(t *testing.T) {
-	r := &habitatMigrationResource{}
-	req := resource.ConfigureRequest{ProviderData: true}
-	resp := &resource.ConfigureResponse{}
-
-	r.Configure(context.Background(), req, resp)
-
-	if !resp.Diagnostics.HasError() {
-		t.Error(errExpectedWrongProviderDataType)
-	}
-}
-
 func TestHabitatMigrationImportStateInvalidID(t *testing.T) {
 	r := &habitatMigrationResource{client: &SousChefClient{Path: "souschef"}}
 
@@ -255,30 +320,6 @@ func TestHabitatMigrationImportStateInvalidID(t *testing.T) {
 
 	if !resp.Diagnostics.HasError() {
 		t.Error(errExpectedInvalidImportID)
-	}
-}
-
-func TestInSpecMigrationResourceConfigureNilClient(t *testing.T) {
-	r := &inspecMigrationResource{}
-	req := resource.ConfigureRequest{ProviderData: nil}
-	resp := &resource.ConfigureResponse{}
-
-	r.Configure(context.Background(), req, resp)
-
-	if resp.Diagnostics.HasError() {
-		t.Errorf(errUnexpectedNilProviderData, resp.Diagnostics)
-	}
-}
-
-func TestInSpecMigrationResourceConfigureInvalidType(t *testing.T) {
-	r := &inspecMigrationResource{}
-	req := resource.ConfigureRequest{ProviderData: struct{}{}}
-	resp := &resource.ConfigureResponse{}
-
-	r.Configure(context.Background(), req, resp)
-
-	if !resp.Diagnostics.HasError() {
-		t.Error(errExpectedWrongProviderDataType)
 	}
 }
 

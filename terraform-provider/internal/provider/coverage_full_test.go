@@ -14,12 +14,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Test string constants to avoid duplication warnings.
-// Note: testTmpCookbook, testConvertRecipe, testUnexpectedDiagnostics are defined in coverage_edge_cases_test.go
-// Note: testFailedToWritePlaybook is defined in coverage_final_test.go
+// Test error messages (other constants imported from test_constants.go).
 const (
 	testUnexpectedError = "unexpected error: %v"
-	testDefaultYml      = "default.yml"
 )
 
 func TestCalculateCostEstimate(t *testing.T) {

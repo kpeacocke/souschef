@@ -12,13 +12,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Test string constants to avoid duplication warnings.
-const (
-	testUnexpectedDiagnosticsMsg = "unexpected diagnostics: %v"
-	testTmpCookbookPath          = "/tmp/cookbook"
-	testFailedToWritePlaybook    = "failed to write playbook: %v"
-)
-
 // Comprehensive tests for 100% coverage of Delete operations with directory obstacles
 func TestMigrationDeleteWithDirectory(t *testing.T) {
 	r := &migrationResource{}
@@ -65,14 +58,14 @@ func TestBatchMigrationDeleteWithReadOnlyFile(t *testing.T) {
 	emptyPlaybooks, _ := types.MapValueFrom(context.Background(), types.StringType, map[string]string{})
 
 	state := newState(t, schema, batchMigrationResourceModel{
-		ID:            types.StringValue("batch-test"),
+		ID: types.StringValue("batch-test"),
 		RecipeNames: []types.String{
 			types.StringValue("readonly"),
 		},
-		OutputPath:   types.StringValue(outputDir),
-		CookbookName: types.StringValue("test"),
+		OutputPath:    types.StringValue(outputDir),
+		CookbookName:  types.StringValue("test"),
 		PlaybookCount: types.Int64Value(1),
-		Playbooks:    emptyPlaybooks,
+		Playbooks:     emptyPlaybooks,
 	})
 
 	deleteResp := &resource.DeleteResponse{}
@@ -139,7 +132,7 @@ func TestBatchMigrationCreateAndReadWithMultipleRecipes(t *testing.T) {
 
 	outputDir := t.TempDir()
 	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue(testTmpCookbookPath),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(outputDir),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
@@ -155,7 +148,7 @@ func TestBatchMigrationCreateAndReadWithMultipleRecipes(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if createResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnosticsMsg, createResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
 	}
 
 	// Verify all playbooks were created
@@ -179,18 +172,18 @@ func TestHabitatMigrationCreateWithCustomBaseImage(t *testing.T) {
 	}
 
 	plan := newPlan(t, schema, habitatMigrationResourceModel{
-		PlanPath:   types.StringValue(planPath),
-		OutputPath: types.StringValue(outputDir),
-		BaseImage:  types.StringValue("mycompany/custom-base:3.0"),
-		PackageName: types.StringNull(),
-		ID:         types.StringNull(),
+		PlanPath:          types.StringValue(planPath),
+		OutputPath:        types.StringValue(outputDir),
+		BaseImage:         types.StringValue("mycompany/custom-base:3.0"),
+		PackageName:       types.StringNull(),
+		ID:                types.StringNull(),
 		DockerfileContent: types.StringNull(),
 	})
 
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if createResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnosticsMsg, createResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
 	}
 }
 

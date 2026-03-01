@@ -16,6 +16,64 @@ const (
 	errFailedCreateOutputDirMissing = "failed to create output dir: %v"
 )
 
+// Table-driven tests for DataSource configurations
+// Eliminates duplication of Configure test patterns across data sources
+
+type dataSourceConfigureTest struct {
+	name string
+	ds   interface {
+		Configure(context.Context, datasource.ConfigureRequest, *datasource.ConfigureResponse)
+	}
+	providerData interface{}
+	expectError  bool
+}
+
+func TestAllDataSourceConfigures(t *testing.T) {
+	tests := []dataSourceConfigureTest{
+		// Assessment DataSource Tests
+		{
+			name:         "AssessmentConfigureNilClient",
+			ds:           &assessmentDataSource{},
+			providerData: nil,
+			expectError:  false,
+		},
+		{
+			name:         "AssessmentConfigureInvalidType",
+			ds:           &assessmentDataSource{},
+			providerData: "invalid",
+			expectError:  true,
+		},
+		// CostEstimate DataSource Tests
+		{
+			name:         "CostEstimateConfigureNilClient",
+			ds:           &costEstimateDataSource{},
+			providerData: nil,
+			expectError:  false,
+		},
+		{
+			name:         "CostEstimateConfigureInvalidType",
+			ds:           &costEstimateDataSource{},
+			providerData: 123,
+			expectError:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &datasource.ConfigureResponse{}
+			tt.ds.Configure(context.Background(),
+				datasource.ConfigureRequest{ProviderData: tt.providerData}, resp)
+
+			if tt.expectError && !resp.Diagnostics.HasError() {
+				t.Error("expected error when provider data is wrong type")
+			}
+			if !tt.expectError && resp.Diagnostics.HasError() {
+				t.Errorf("unexpected error on nil provider data: %v", resp.Diagnostics)
+			}
+		})
+	}
+}
+
 func TestAssessmentDataSourceConfigureNilClient(t *testing.T) {
 	ds := &assessmentDataSource{}
 	req := datasource.ConfigureRequest{ProviderData: nil}
