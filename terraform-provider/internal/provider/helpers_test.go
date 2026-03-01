@@ -323,11 +323,3 @@ func writeFile(t *testing.T, path string, content []byte, perm os.FileMode) {
 		t.Fatalf(testFailedToWriteFile, err)
 	}
 }
-
-// tempFile creates a temporary file with content and returns its path.
-func tempFile(t *testing.T, dir, name string, content []byte) string {
-	t.Helper()
-	path := filepath.Join(dir, name)
-	writeFile(t, path, content, testFilePermissions)
-	return path
-}
