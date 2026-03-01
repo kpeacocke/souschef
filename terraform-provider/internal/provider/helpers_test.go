@@ -20,71 +20,86 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
+const (
+	scriptWhileArgsLoop  = "    while [ $# -gt 0 ]; do\n"
+	scriptCaseFirstArg   = "      case \"$1\" in\n"
+	scriptOutputPathArg  = "        --output-path) out=\"$2\"; shift 2 ;;\n"
+	scriptDefaultShift   = "        *) shift ;;\n"
+	scriptCaseEnd        = "      esac\n"
+	scriptLoopDone       = "    done\n"
+	scriptForcedError    = "      echo \"forced error\" >&2\n"
+	scriptExitFailure    = "      exit 1\n"
+	scriptIfEnd          = "    fi\n"
+	scriptExitSuccess    = "      exit 0\n"
+	scriptMakeOutputPath = "    mkdir -p \"$out\"\n"
+	scriptCaseClauseEnd  = "    ;;\n"
+)
+
 const fakeSousChefScript = "#!/bin/sh\n" +
 	"set -e\n" +
 	"cmd=\"$1\"\n" +
 	"shift\n" +
 	"case \"$cmd\" in\n" +
 	"  convert-recipe)\n" +
-	"    while [ $# -gt 0 ]; do\n" +
-	"      case \"$1\" in\n" +
-	"        --output-path) out=\"$2\"; shift 2 ;;\n" +
+	scriptWhileArgsLoop +
+	scriptCaseFirstArg +
+	scriptOutputPathArg +
 	"        --recipe-name) recipe=\"$2\"; shift 2 ;;\n" +
 	"        --cookbook-path) shift 2 ;;\n" +
-	"        *) shift ;;\n" +
-	"      esac\n" +
-	"    done\n" +
+	scriptDefaultShift +
+	scriptCaseEnd +
+	scriptLoopDone +
 	"    if [ \"$SOUSCHEF_TEST_FAIL\" = \"convert-recipe\" ]; then\n" +
-	"      echo \"forced error\" >&2\n" +
-	"      exit 1\n" +
-	"    fi\n" +
+	scriptForcedError +
+	scriptExitFailure +
+	scriptIfEnd +
 	"    if [ \"$SOUSCHEF_TEST_SKIP_WRITE\" = \"convert-recipe\" ]; then\n" +
-	"      exit 0\n" +
-	"    fi\n" +
-	"    mkdir -p \"$out\"\n" +
+	scriptExitSuccess +
+	scriptIfEnd +
+	scriptMakeOutputPath +
 	"    echo \"recipe: $recipe\" > \"$out/$recipe.yml\"\n" +
 	"    if [ \"$SOUSCHEF_TEST_CHMOD\" = \"convert-recipe\" ]; then\n" +
 	"      chmod 000 \"$out/$recipe.yml\"\n" +
-	"    fi\n" +
-	"    ;;\n" +
+	scriptIfEnd +
+	scriptCaseClauseEnd +
 	"  convert-habitat)\n" +
-	"    while [ $# -gt 0 ]; do\n" +
-	"      case \"$1\" in\n" +
-	"        --output-path) out=\"$2\"; shift 2 ;;\n" +
+	scriptWhileArgsLoop +
+	scriptCaseFirstArg +
+	scriptOutputPathArg +
 	"        --plan-path) shift 2 ;;\n" +
 	"        --base-image) shift 2 ;;\n" +
-	"        *) shift ;;\n" +
-	"      esac\n" +
-	"    done\n" +
+	scriptDefaultShift +
+	scriptCaseEnd +
+	scriptLoopDone +
 	"    if [ \"$SOUSCHEF_TEST_FAIL\" = \"convert-habitat\" ]; then\n" +
-	"      echo \"forced error\" >&2\n" +
-	"      exit 1\n" +
-	"    fi\n" +
+	scriptForcedError +
+	scriptExitFailure +
+	scriptIfEnd +
 	"    if [ \"$SOUSCHEF_TEST_SKIP_WRITE\" = \"convert-habitat\" ]; then\n" +
-	"      exit 0\n" +
-	"    fi\n" +
-	"    mkdir -p \"$out\"\n" +
+	scriptExitSuccess +
+	scriptIfEnd +
+	scriptMakeOutputPath +
 	"    echo \"FROM ubuntu:latest\" > \"$out/Dockerfile\"\n" +
 	"    if [ \"$SOUSCHEF_TEST_CHMOD\" = \"convert-habitat\" ]; then\n" +
 	"      chmod 000 \"$out/Dockerfile\"\n" +
-	"    fi\n" +
-	"    ;;\n" +
+	scriptIfEnd +
+	scriptCaseClauseEnd +
 	"  convert-inspec)\n" +
-	"    while [ $# -gt 0 ]; do\n" +
-	"      case \"$1\" in\n" +
-	"        --output-path) out=\"$2\"; shift 2 ;;\n" +
+	scriptWhileArgsLoop +
+	scriptCaseFirstArg +
+	scriptOutputPathArg +
 	"        --format) format=\"$2\"; shift 2 ;;\n" +
 	"        --profile-path) shift 2 ;;\n" +
-	"        *) shift ;;\n" +
-	"      esac\n" +
-	"    done\n" +
+	scriptDefaultShift +
+	scriptCaseEnd +
+	scriptLoopDone +
 	"    if [ \"$SOUSCHEF_TEST_FAIL\" = \"convert-inspec\" ]; then\n" +
-	"      echo \"forced error\" >&2\n" +
-	"      exit 1\n" +
-	"    fi\n" +
+	scriptForcedError +
+	scriptExitFailure +
+	scriptIfEnd +
 	"    if [ \"$SOUSCHEF_TEST_SKIP_WRITE\" = \"convert-inspec\" ]; then\n" +
-	"      exit 0\n" +
-	"    fi\n" +
+	scriptExitSuccess +
+	scriptIfEnd +
 	"    case \"$format\" in\n" +
 	"      testinfra) filename=\"test_spec.py\" ;;\n" +
 	"      serverspec) filename=\"spec_helper.rb\" ;;\n" +
@@ -92,27 +107,27 @@ const fakeSousChefScript = "#!/bin/sh\n" +
 	"      ansible) filename=\"assert.yml\" ;;\n" +
 	"      *) filename=\"test.txt\" ;;\n" +
 	"    esac\n" +
-	"    mkdir -p \"$out\"\n" +
+	scriptMakeOutputPath +
 	"    echo \"test content\" > \"$out/$filename\"\n" +
 	"    if [ \"$SOUSCHEF_TEST_CHMOD\" = \"convert-inspec\" ]; then\n" +
 	"      chmod 000 \"$out/$filename\"\n" +
-	"    fi\n" +
-	"    ;;\n" +
+	scriptIfEnd +
+	scriptCaseClauseEnd +
 	"  assess-cookbook)\n" +
 	"    if [ \"$SOUSCHEF_TEST_FAIL\" = \"assess-cookbook\" ]; then\n" +
-	"      echo \"forced error\" >&2\n" +
-	"      exit 1\n" +
-	"    fi\n" +
+	scriptForcedError +
+	scriptExitFailure +
+	scriptIfEnd +
 	"    if [ \"$SOUSCHEF_TEST_BAD_JSON\" = \"1\" ]; then\n" +
 	"      echo \"{bad json\"\n" +
-	"      exit 0\n" +
-	"    fi\n" +
+	scriptExitSuccess +
+	scriptIfEnd +
 	"    echo '{\"complexity\":\"Low\",\"recipe_count\":2,\"resource_count\":5,\"estimated_hours\":3.5,\"recommendations\":\"ok\"}'\n" +
-	"    ;;\n" +
+	scriptCaseClauseEnd +
 	"  *)\n" +
 	"    echo \"unknown command\" >&2\n" +
-	"    exit 1\n" +
-	"    ;;\n" +
+	scriptExitFailure +
+	scriptCaseClauseEnd +
 	"esac\n"
 
 func newFakeSousChef(t *testing.T) string {

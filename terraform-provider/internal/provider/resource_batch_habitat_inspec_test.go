@@ -12,6 +12,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+const (
+	testExpectedConvertError = "expected diagnostics for convert error"
+)
+
 func TestBatchMigrationResourceCreateUpdateReadDelete(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)
@@ -32,19 +36,19 @@ func TestBatchMigrationResourceCreateUpdateReadDelete(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if createResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", createResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
 	}
 
 	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
 	if updateResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", updateResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
 	}
 
 	state := newState(t, schema, batchMigrationResourceModel{
-		OutputPath:  types.StringValue(outputDir),
-		RecipeNames: []types.String{types.StringValue("default")},
-		ID:          types.StringNull(),
+		OutputPath:    types.StringValue(outputDir),
+		RecipeNames:   []types.String{types.StringValue("default")},
+		ID:            types.StringNull(),
 		CookbookName:  types.StringNull(),
 		PlaybookCount: types.Int64Null(),
 		Playbooks:     types.MapNull(types.StringType),
@@ -52,13 +56,13 @@ func TestBatchMigrationResourceCreateUpdateReadDelete(t *testing.T) {
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
 	if readResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", readResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
 	}
 
 	deleteResp := &resource.DeleteResponse{}
 	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", deleteResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
 	}
 
 	defaultPath := filepath.Join(outputDir, "default.yml")
@@ -92,7 +96,7 @@ func TestBatchMigrationResourceErrors(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for convert error")
+		t.Fatal(testExpectedConvertError)
 	}
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", "")
@@ -105,9 +109,9 @@ func TestBatchMigrationResourceErrors(t *testing.T) {
 
 	outputDir := t.TempDir()
 	state := newState(t, schema, batchMigrationResourceModel{
-		OutputPath:  types.StringValue(outputDir),
-		RecipeNames: []types.String{types.StringValue("missing")},
-		ID:          types.StringNull(),
+		OutputPath:    types.StringValue(outputDir),
+		RecipeNames:   []types.String{types.StringValue("missing")},
+		ID:            types.StringNull(),
 		CookbookName:  types.StringNull(),
 		PlaybookCount: types.Int64Null(),
 		Playbooks:     types.MapNull(types.StringType),
@@ -115,7 +119,7 @@ func TestBatchMigrationResourceErrors(t *testing.T) {
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
 	if readResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", readResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
 	}
 
 	if !readResp.State.Raw.IsNull() {
@@ -144,7 +148,7 @@ func TestBatchMigrationImportStateErrorsAndSuccess(t *testing.T) {
 	req := resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|default"}
 	r.ImportState(context.Background(), req, resp)
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 
 	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
@@ -167,16 +171,16 @@ func TestHabitatMigrationResourceCoverage(t *testing.T) {
 	r := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)
 
-	planPath := filepath.Join(t.TempDir(), "plan.sh")
-	if err := os.WriteFile(planPath, []byte("pkg_name=myapp\n"), 0644); err != nil {
-		t.Fatalf("failed to write plan: %v", err)
+	planPath := filepath.Join(t.TempDir(), testPlanSh)
+	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+		t.Fatalf(testFailedToWritePlan, err)
 	}
 
 	outputDir := t.TempDir()
 	plan := newPlan(t, schema, habitatMigrationResourceModel{
-		PlanPath:  types.StringValue(planPath),
-		OutputPath: types.StringValue(outputDir),
-		BaseImage: types.StringNull(),
+		PlanPath:          types.StringValue(planPath),
+		OutputPath:        types.StringValue(outputDir),
+		BaseImage:         types.StringNull(),
 		ID:                types.StringNull(),
 		PackageName:       types.StringNull(),
 		DockerfileContent: types.StringNull(),
@@ -184,7 +188,7 @@ func TestHabitatMigrationResourceCoverage(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if createResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", createResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
 	}
 
 	missingState := newState(t, schema, habitatMigrationResourceModel{
@@ -193,7 +197,7 @@ func TestHabitatMigrationResourceCoverage(t *testing.T) {
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	r.Read(context.Background(), resource.ReadRequest{State: missingState}, readResp)
 	if readResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", readResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
 	}
 	if !readResp.State.Raw.IsNull() {
 		t.Fatal("expected resource to be removed when dockerfile is missing")
@@ -202,7 +206,7 @@ func TestHabitatMigrationResourceCoverage(t *testing.T) {
 	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
 	if updateResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", updateResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
 	}
 
 	state := newState(t, schema, habitatMigrationResourceModel{
@@ -211,7 +215,7 @@ func TestHabitatMigrationResourceCoverage(t *testing.T) {
 	readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
 	if readResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", readResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
 	}
 
 	dockerfilePath := filepath.Join(outputDir, "Dockerfile")
@@ -230,7 +234,7 @@ func TestHabitatMigrationResourceCoverage(t *testing.T) {
 		OutputPath: types.StringValue(outputDir),
 	})}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", deleteResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
 	}
 
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
@@ -241,7 +245,7 @@ func TestHabitatMigrationResourceCoverage(t *testing.T) {
 		OutputPath: types.StringValue(outputDir),
 	})}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", deleteResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
 	}
 }
 
@@ -249,15 +253,15 @@ func TestHabitatMigrationResourceErrors(t *testing.T) {
 	r := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)
 
-	planPath := filepath.Join(t.TempDir(), "plan.sh")
-	if err := os.WriteFile(planPath, []byte("pkg_name=myapp\n"), 0644); err != nil {
-		t.Fatalf("failed to write plan: %v", err)
+	planPath := filepath.Join(t.TempDir(), testPlanSh)
+	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+		t.Fatalf(testFailedToWritePlan, err)
 	}
 
 	plan := newPlan(t, schema, habitatMigrationResourceModel{
-		PlanPath:  types.StringValue(planPath),
-		OutputPath: types.StringValue(t.TempDir()),
-		BaseImage: types.StringValue("debian:stable"),
+		PlanPath:          types.StringValue(planPath),
+		OutputPath:        types.StringValue(t.TempDir()),
+		BaseImage:         types.StringValue("debian:stable"),
 		ID:                types.StringNull(),
 		PackageName:       types.StringNull(),
 		DockerfileContent: types.StringNull(),
@@ -267,7 +271,7 @@ func TestHabitatMigrationResourceErrors(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for convert error")
+		t.Fatal(testExpectedConvertError)
 	}
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", "")
@@ -295,9 +299,9 @@ func TestHabitatMigrationImportStateCoverage(t *testing.T) {
 		t.Fatal("expected diagnostics for invalid import ID")
 	}
 
-	planPath := filepath.Join(t.TempDir(), "plan.sh")
-	if err := os.WriteFile(planPath, []byte("pkg_name=myapp\n"), 0644); err != nil {
-		t.Fatalf("failed to write plan: %v", err)
+	planPath := filepath.Join(t.TempDir(), testPlanSh)
+	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+		t.Fatalf(testFailedToWritePlan, err)
 	}
 	outputDir := t.TempDir()
 	dockerfilePath := filepath.Join(outputDir, "Dockerfile")
@@ -309,7 +313,7 @@ func TestHabitatMigrationImportStateCoverage(t *testing.T) {
 	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
 	r.ImportState(context.Background(), req, resp)
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 
 	if err := os.Chmod(dockerfilePath, noPermissions); err != nil {
@@ -340,7 +344,7 @@ func TestInSpecMigrationResourceCoverage(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if createResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", createResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
 	}
 
 	missingState := newState(t, schema, inspecMigrationResourceModel{
@@ -350,7 +354,7 @@ func TestInSpecMigrationResourceCoverage(t *testing.T) {
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	r.Read(context.Background(), resource.ReadRequest{State: missingState}, readResp)
 	if readResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", readResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
 	}
 	if !readResp.State.Raw.IsNull() {
 		t.Fatal("expected resource to be removed when test file is missing")
@@ -359,7 +363,7 @@ func TestInSpecMigrationResourceCoverage(t *testing.T) {
 	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
 	if updateResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", updateResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
 	}
 
 	state := newState(t, schema, inspecMigrationResourceModel{
@@ -369,7 +373,7 @@ func TestInSpecMigrationResourceCoverage(t *testing.T) {
 	readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
 	if readResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", readResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
 	}
 
 	testFilePath := filepath.Join(outputDir, testinfraFilename)
@@ -385,7 +389,7 @@ func TestInSpecMigrationResourceCoverage(t *testing.T) {
 	deleteResp := &resource.DeleteResponse{}
 	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", deleteResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
 	}
 
 	if err := os.MkdirAll(filepath.Join(outputDir, testinfraFilename), 0755); err != nil {
@@ -413,7 +417,7 @@ func TestInSpecMigrationResourceErrors(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for convert error")
+		t.Fatal(testExpectedConvertError)
 	}
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", "")
@@ -452,7 +456,7 @@ func TestInSpecMigrationImportStateCoverage(t *testing.T) {
 	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
 	r.ImportState(context.Background(), req, resp)
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 
 	if err := os.Chmod(testFilePath, noPermissions); err != nil {
