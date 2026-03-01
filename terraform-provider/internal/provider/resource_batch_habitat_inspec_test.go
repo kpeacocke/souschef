@@ -14,6 +14,80 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+const failedToChmodFileFmt = "failed to chmod file: %v"
+
+// testResourceCreatePhase executes and validates the Create operation.
+func testResourceCreatePhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, plan tfsdk.Plan) {
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if createResp.Diagnostics.HasError() {
+		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
+	}
+}
+
+// testResourceReadMissingPhase validates that reading a missing file removes the resource.
+func testResourceReadMissingPhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, state tfsdk.State, missingMsg string) {
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
+	}
+	if !readResp.State.Raw.IsNull() {
+		t.Fatal(missingMsg)
+	}
+}
+
+// testResourceUpdatePhase executes and validates the Update operation.
+func testResourceUpdatePhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, plan tfsdk.Plan) {
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
+	if updateResp.Diagnostics.HasError() {
+		t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
+	}
+}
+
+// testResourceReadExistingPhase executes and validates reading an existing file.
+func testResourceReadExistingPhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, state tfsdk.State) {
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
+	}
+}
+
+// testResourceReadPermissionErrorPhase validates that permission errors are handled.
+func testResourceReadPermissionErrorPhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, state tfsdk.State, filePath, fileErrMsg string) {
+	if err := os.Chmod(filePath, noPermissions); err != nil {
+		t.Fatalf(failedToChmodFileFmt, err)
+	}
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+	if !readResp.Diagnostics.HasError() {
+		t.Fatal(fileErrMsg)
+	}
+}
+
+// testResourceDeletePhase executes and validates the Delete operation.
+func testResourceDeletePhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, state tfsdk.State) {
+	deleteResp := &resource.DeleteResponse{}
+	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
+	}
+}
+
+// testResourceDeleteAsDirectoryPhase recreates the file as a directory and validates deletion.
+func testResourceDeleteAsDirectoryPhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, state tfsdk.State, filePath string) {
+	if err := os.MkdirAll(filePath, 0755); err != nil {
+		t.Fatalf("failed to recreate as dir: %v", err)
+	}
+	deleteResp := &resource.DeleteResponse{}
+	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	if deleteResp.Diagnostics.HasError() {
+		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
+	}
+}
+
 func TestBatchMigrationResourceCreateUpdateReadDelete(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)
@@ -240,68 +314,31 @@ func TestHabitatAndInSpecResourceCoverage(t *testing.T) {
 			setupPath := tt.setupFile(t)
 			outputDir := t.TempDir()
 
-			// Create
+			// Create phase
 			plan := tt.createResourceFn(t, r, schema, setupPath, outputDir)
-			createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-			r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-			if createResp.Diagnostics.HasError() {
-				t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
-			}
+			testResourceCreatePhase(t, r, schema, plan)
 
 			// Read missing file - should be removed
 			missingState := tt.createStateFn(t, r, schema, t.TempDir())
-			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-			r.Read(context.Background(), resource.ReadRequest{State: missingState}, readResp)
-			if readResp.Diagnostics.HasError() {
-				t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
-			}
-			if !readResp.State.Raw.IsNull() {
-				t.Fatal(tt.missingMsg)
-			}
+			testResourceReadMissingPhase(t, r, schema, missingState, tt.missingMsg)
 
-			// Update
+			// Update phase
 			updatePlan := tt.createResourceFn(t, r, schema, setupPath, outputDir)
-			updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-			r.Update(context.Background(), resource.UpdateRequest{Plan: updatePlan}, updateResp)
-			if updateResp.Diagnostics.HasError() {
-				t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
-			}
+			testResourceUpdatePhase(t, r, schema, updatePlan)
 
 			// Read existing file
 			state := tt.createStateFn(t, r, schema, outputDir)
-			readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-			r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-			if readResp.Diagnostics.HasError() {
-				t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
-			}
+			testResourceReadExistingPhase(t, r, schema, state)
 
 			// Read with permission error
 			filePath := filepath.Join(outputDir, tt.outputFile)
-			if err := os.Chmod(filePath, noPermissions); err != nil {
-				t.Fatalf("failed to chmod file: %v", err)
-			}
-			readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-			r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-			if !readResp.Diagnostics.HasError() {
-				t.Fatal(tt.fileErrMsg)
-			}
+			testResourceReadPermissionErrorPhase(t, r, schema, state, filePath, tt.fileErrMsg)
 
 			// Delete file
-			deleteResp := &resource.DeleteResponse{}
-			r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
-			if deleteResp.Diagnostics.HasError() {
-				t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
-			}
+			testResourceDeletePhase(t, r, schema, state)
 
 			// Delete as directory
-			if err := os.MkdirAll(filePath, 0755); err != nil {
-				t.Fatalf("failed to recreate as dir: %v", err)
-			}
-			deleteResp = &resource.DeleteResponse{}
-			r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
-			if deleteResp.Diagnostics.HasError() {
-				t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
-			}
+			testResourceDeleteAsDirectoryPhase(t, r, schema, state, filePath)
 		})
 	}
 }
@@ -393,16 +430,49 @@ func TestHabitatAndInSpecResourceErrors(t *testing.T) {
 	}
 }
 
+func testImportStatePhase(t *testing.T, r resource.ResourceWithImportState, schema resourceschema.Schema, invalidImportID, validImportIDFmt string, setupImportPath func(t *testing.T) (string, string), setupOutputFile func(t *testing.T, outputDir string) string) {
+	// Invalid import ID
+	resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
+	r.ImportState(context.Background(), resource.ImportStateRequest{ID: invalidImportID}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for invalid import ID")
+	}
+
+	// Setup files
+	path, outputDir := setupImportPath(t)
+	filePath := setupOutputFile(t, outputDir)
+
+	// Valid import
+	req := resource.ImportStateRequest{ID: fmt.Sprintf(validImportIDFmt, path, outputDir)}
+	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
+	r.ImportState(context.Background(), req, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+	}
+
+	// Permission error
+	if err := os.Chmod(filePath, noPermissions); err != nil {
+		t.Fatalf(failedToChmodFileFmt, err)
+	}
+	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
+	r.ImportState(context.Background(), req, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected diagnostics for unreadable file")
+	}
+}
+
 func TestHabitatAndInSpecImportStateCoverage(t *testing.T) {
 	habTests := []struct {
 		name             string
+		resource         interface{}
 		invalidImportID  string
 		setupImportPath  func(t *testing.T) (string, string)
 		setupOutputFile  func(t *testing.T, outputDir string) string
 		validImportIDFmt string
 	}{
 		{
-			name:            "habitat",
+			name:     "habitat",
+			resource: &habitatMigrationResource{},
 			invalidImportID: "missing|",
 			setupImportPath: func(t *testing.T) (string, string) {
 				planPath := filepath.Join(t.TempDir(), testPlanSh)
@@ -421,7 +491,8 @@ func TestHabitatAndInSpecImportStateCoverage(t *testing.T) {
 			validImportIDFmt: "%s|%s|",
 		},
 		{
-			name:            "inspec",
+			name:     "inspec",
+			resource: &inspecMigrationResource{},
 			invalidImportID: "invalid",
 			setupImportPath: func(t *testing.T) (string, string) {
 				return t.TempDir(), t.TempDir()
@@ -439,73 +510,10 @@ func TestHabitatAndInSpecImportStateCoverage(t *testing.T) {
 
 	for _, tt := range habTests {
 		t.Run(tt.name, func(t *testing.T) {
-			var schema resourceschema.Schema
-
-			if tt.name == "habitat" {
-				r := &habitatMigrationResource{}
-				schema = newResourceSchema(t, r)
-
-				// Invalid import ID
-				resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-				r.ImportState(context.Background(), resource.ImportStateRequest{ID: tt.invalidImportID}, resp)
-				if !resp.Diagnostics.HasError() {
-					t.Fatal("expected diagnostics for invalid import ID")
-				}
-
-				// Setup files
-				path, outputDir := tt.setupImportPath(t)
-				filePath := tt.setupOutputFile(t, outputDir)
-
-				// Valid import
-				req := resource.ImportStateRequest{ID: fmt.Sprintf(tt.validImportIDFmt, path, outputDir)}
-				resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-				r.ImportState(context.Background(), req, resp)
-				if resp.Diagnostics.HasError() {
-					t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-				}
-
-				// Permission error
-				if err := os.Chmod(filePath, noPermissions); err != nil {
-					t.Fatalf("failed to chmod file: %v", err)
-				}
-				resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-				r.ImportState(context.Background(), req, resp)
-				if !resp.Diagnostics.HasError() {
-					t.Fatal("expected diagnostics for unreadable file")
-				}
-			} else {
-				r := &inspecMigrationResource{}
-				schema = newResourceSchema(t, r)
-
-				// Invalid import ID
-				resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-				r.ImportState(context.Background(), resource.ImportStateRequest{ID: tt.invalidImportID}, resp)
-				if !resp.Diagnostics.HasError() {
-					t.Fatal("expected diagnostics for invalid import ID")
-				}
-
-				// Setup files
-				path, outputDir := tt.setupImportPath(t)
-				filePath := tt.setupOutputFile(t, outputDir)
-
-				// Valid import
-				req := resource.ImportStateRequest{ID: fmt.Sprintf(tt.validImportIDFmt, path, outputDir)}
-				resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-				r.ImportState(context.Background(), req, resp)
-				if resp.Diagnostics.HasError() {
-					t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-				}
-
-				// Permission error
-				if err := os.Chmod(filePath, noPermissions); err != nil {
-					t.Fatalf("failed to chmod file: %v", err)
-				}
-				resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-				r.ImportState(context.Background(), req, resp)
-				if !resp.Diagnostics.HasError() {
-					t.Fatal("expected diagnostics for unreadable file")
-				}
-			}
+			r := tt.resource.(resource.Resource)
+			rImport := tt.resource.(resource.ResourceWithImportState)
+			schema := newResourceSchema(t, r)
+			testImportStatePhase(t, rImport, schema, tt.invalidImportID, tt.validImportIDFmt, tt.setupImportPath, tt.setupOutputFile)
 		})
 	}
 }
