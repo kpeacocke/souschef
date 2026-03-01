@@ -16,7 +16,6 @@ import (
 const (
 	testUnexpectedDiagnosticsMsg = "unexpected diagnostics: %v"
 	testTmpCookbookPath          = "/tmp/cookbook"
-	testConvertRecipeCmd         = "convert-recipe"
 	testFailedToWritePlaybook    = "failed to write playbook: %v"
 )
 
