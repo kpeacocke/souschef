@@ -16,17 +16,19 @@ import (
 
 // Test string constants to avoid duplication warnings.
 const (
-	testUnexpectedDiagnostics = "unexpected diagnostics: %v"
-	testTmpCookbook           = "/tmp/cookbook"
-	testTmpPlanSh             = "/tmp/plan.sh"
-	testTmpProfile            = "/tmp/profile"
-	testConvertRecipe         = "convert-recipe"
-	testConvertHabitat        = "convert-habitat"
-	testConvertInSpec         = "convert-inspec"
-	testPlanSh                = "plan.sh"
-	testPkgNameMyapp          = "pkg_name=myapp\n"
-	testFailedToWritePlan     = "failed to write plan: %v"
-	testFailedToWriteFile     = "failed to write file: %v"
+	testUnexpectedDiagnostics   = "unexpected diagnostics: %v"
+	testTmpCookbook             = "/tmp/cookbook"
+	testTmpPlanSh               = "/tmp/plan.sh"
+	testTmpProfile              = "/tmp/profile"
+	testConvertRecipe           = "convert-recipe"
+	testConvertHabitat          = "convert-habitat"
+	testConvertInSpec           = "convert-inspec"
+	testPlanSh                  = "plan.sh"
+	testPkgNameMyapp            = "pkg_name=myapp\n"
+	testFailedToWritePlan       = "failed to write plan: %v"
+	testFailedToWriteFile       = "failed to write file: %v"
+	testFailedToCreateDirectory = "failed to create directory: %v"
+	testFileName                = "file.txt"
 )
 
 func TestResourceConfigureNilClient(t *testing.T) {
@@ -676,9 +678,9 @@ func TestDeleteWarningsWithDirectoryTargets(t *testing.T) {
 	habitatOutput := t.TempDir()
 	habitatPath := filepath.Join(habitatOutput, "Dockerfile")
 	if err := os.MkdirAll(habitatPath, 0755); err != nil {
-		t.Fatalf("failed to create directory: %v", err)
+		t.Fatalf(testFailedToCreateDirectory, err)
 	}
-	if err := os.WriteFile(filepath.Join(habitatPath, "file.txt"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(habitatPath, testFileName), []byte("x"), 0644); err != nil {
 		t.Fatalf(testFailedToWriteFile, err)
 	}
 
@@ -698,9 +700,9 @@ func TestDeleteWarningsWithDirectoryTargets(t *testing.T) {
 	inspecOutput := t.TempDir()
 	inspecPath := filepath.Join(inspecOutput, "test_spec.py")
 	if err := os.MkdirAll(inspecPath, 0755); err != nil {
-		t.Fatalf("failed to create directory: %v", err)
+		t.Fatalf(testFailedToCreateDirectory, err)
 	}
-	if err := os.WriteFile(filepath.Join(inspecPath, "file.txt"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(inspecPath, testFileName), []byte("x"), 0644); err != nil {
 		t.Fatalf(testFailedToWriteFile, err)
 	}
 
@@ -721,9 +723,9 @@ func TestDeleteWarningsWithDirectoryTargets(t *testing.T) {
 	batchOutput := t.TempDir()
 	batchPath := filepath.Join(batchOutput, "default.yml")
 	if err := os.MkdirAll(batchPath, 0755); err != nil {
-		t.Fatalf("failed to create directory: %v", err)
+		t.Fatalf(testFailedToCreateDirectory, err)
 	}
-	if err := os.WriteFile(filepath.Join(batchPath, "file.txt"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(batchPath, testFileName), []byte("x"), 0644); err != nil {
 		t.Fatalf(testFailedToWriteFile, err)
 	}
 
