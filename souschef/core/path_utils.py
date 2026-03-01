@@ -149,13 +149,18 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
     safe_base = _normalize_trusted_base(base_path)
     base_resolved = os.path.realpath(str(safe_base))
 
-    raw_value = str(path_obj)
-    if "\x00" in raw_value:
-        raise ValueError(f"Path contains null bytes: {raw_value!r}")
-    if not re.fullmatch(r"[A-Za-z0-9_./\\~:-]+", raw_value):
-        raise ValueError(f"Path contains invalid characters: {raw_value!r}")
+    # If path_obj is already a Path object, use it directly without string validation
+    if isinstance(path_obj, Path):
+        raw_path = path_obj.expanduser()
+    else:
+        # Only apply character validation to string inputs (user-controlled data)
+        raw_value = str(path_obj)
+        if "\x00" in raw_value:
+            raise ValueError(f"Path contains null bytes: {raw_value!r}")
+        if not re.fullmatch(r"[A-Za-z0-9_./\\~:-]+", raw_value):
+            raise ValueError(f"Path contains invalid characters: {raw_value!r}")
+        raw_path = Path(raw_value).expanduser()
 
-    raw_path = Path(raw_value).expanduser()
     if raw_path.is_absolute():
         candidate_resolved = os.path.realpath(str(raw_path))
     else:

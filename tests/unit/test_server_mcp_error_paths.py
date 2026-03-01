@@ -45,7 +45,7 @@ class TestInSpecErrorPaths:
         control_file.write_text("control 'test'")
 
         with (
-            patch("souschef.server.safe_read_text", side_effect=OSError("read failed")),
+            patch("pathlib.Path.read_text", side_effect=OSError("read failed")),
             pytest.raises(RuntimeError, match="Error reading file"),
         ):
             server._parse_controls_from_file(control_file)
