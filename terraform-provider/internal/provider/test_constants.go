@@ -5,13 +5,14 @@ import "os"
 
 const (
 	// Diagnostic messages
-	testUnexpectedDiagnostics   = "unexpected diagnostics: %v"
-	testExpectedConvertError    = "expected diagnostics for convert error"
-	testFailedToWritePlaybook   = "failed to write playbook: %v"
-	testFailedToWritePlan       = "failed to write plan: %v"
-	testFailedToWriteFile       = "failed to write file: %v"
-	testFailedToCreateDirectory = "failed to create directory: %v"
-	testFailedToCreateFile      = "failed to create file in directory: %v"
+	testUnexpectedDiagnostics    = "unexpected diagnostics: %v"
+	testExpectedConvertError     = "expected diagnostics for convert error"
+	testFailedToWritePlaybook    = "failed to write playbook: %v"
+	testFailedToWritePlan        = "failed to write plan: %v"
+	testFailedToWriteFile        = "failed to write file: %v"
+	testFailedToCreateDirectory  = "failed to create directory: %v"
+	testConfigureErrorMsg        = "expected error when provider data is wrong type"
+	testUnexpectedNilDataMsg     = "unexpected error on nil provider data: %v"
 
 	// File paths
 	testTmpCookbook  = "/tmp/cookbook"

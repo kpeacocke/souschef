@@ -109,7 +109,7 @@ func checkFileExists(filePath, fileType string, diagnostics *diag.Diagnostics) b
 func readFileAndSetState(
 	ctx context.Context,
 	filePath string,
-	fieldName string,
+	_ string, // unused: fieldName
 	contentSetter func(string),
 	errorTitle string,
 	diagnostics *diag.Diagnostics,
@@ -139,17 +139,4 @@ func stringSliceFromTypesList(typesList []types.String) []string {
 		result[i] = v.ValueString()
 	}
 	return result
-}
-
-// setStateAttributes is a helper for ImportState that sets multiple attributes.
-// It appends all diagnostics from setting attributes.
-func setStateAttributes(
-	ctx context.Context,
-	stateSetAttr func(context.Context, interface{}, interface{}) diag.Diagnostics,
-	attributes map[interface{}]interface{},
-	diagnostics *diag.Diagnostics,
-) {
-	for path, value := range attributes {
-		diagnostics.Append(stateSetAttr(ctx, path, value)...)
-	}
 }

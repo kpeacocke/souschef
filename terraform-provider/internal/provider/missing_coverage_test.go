@@ -65,10 +65,10 @@ func TestAllDataSourceConfigures(t *testing.T) {
 				datasource.ConfigureRequest{ProviderData: tt.providerData}, resp)
 
 			if tt.expectError && !resp.Diagnostics.HasError() {
-				t.Error("expected error when provider data is wrong type")
+				t.Error(testConfigureErrorMsg)
 			}
 			if !tt.expectError && resp.Diagnostics.HasError() {
-				t.Errorf("unexpected error on nil provider data: %v", resp.Diagnostics)
+				t.Errorf(testUnexpectedNilDataMsg, resp.Diagnostics)
 			}
 		})
 	}
@@ -82,7 +82,7 @@ func TestAssessmentDataSourceConfigureNilClient(t *testing.T) {
 	ds.Configure(context.Background(), req, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("unexpected error on nil provider data: %v", resp.Diagnostics)
+		t.Errorf(testUnexpectedNilDataMsg, resp.Diagnostics)
 	}
 }
 
@@ -94,7 +94,7 @@ func TestAssessmentDataSourceConfigureInvalidType(t *testing.T) {
 	ds.Configure(context.Background(), req, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Error("expected error when provider data is wrong type")
+		t.Error(testConfigureErrorMsg)
 	}
 }
 
@@ -125,7 +125,7 @@ func TestCostEstimateDataSourceConfigureNilClient(t *testing.T) {
 	ds.Configure(context.Background(), req, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Errorf("unexpected error on nil provider data: %v", resp.Diagnostics)
+		t.Errorf(testUnexpectedNilDataMsg, resp.Diagnostics)
 	}
 }
 

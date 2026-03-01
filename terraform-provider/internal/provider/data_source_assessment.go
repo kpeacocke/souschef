@@ -100,11 +100,6 @@ func (d *assessmentDataSource) Configure(_ context.Context, req datasource.Confi
 	d.client = client
 }
 
-// getClient returns the configured SousChef client. Used for testing.
-func (d *assessmentDataSource) getClient() *SousChefClient {
-	return d.client
-}
-
 // Read refreshes the Terraform state with the latest data.
 func (d *assessmentDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	var config assessmentDataSourceModel

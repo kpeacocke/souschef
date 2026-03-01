@@ -73,56 +73,54 @@ func TestResourceConfiguresWithValidClient(t *testing.T) {
 	}
 }
 
+func testDataSourceConfigureValidClientHelper(t *testing.T, ds interface{}, client *SousChefClient) {
+	t.Helper()
+	switch d := ds.(type) {
+	case *assessmentDataSource:
+		resp := &datasource.ConfigureResponse{}
+		d.Configure(context.Background(),
+			datasource.ConfigureRequest{ProviderData: client}, resp)
+
+		if resp.Diagnostics.HasError() {
+			t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+		}
+		if d.client != client {
+			t.Fatalf("client not configured properly")
+		}
+	case *costEstimateDataSource:
+		resp := &datasource.ConfigureResponse{}
+		d.Configure(context.Background(),
+			datasource.ConfigureRequest{ProviderData: client}, resp)
+
+		if resp.Diagnostics.HasError() {
+			t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+		}
+		if d.client != client {
+			t.Fatalf("client not configured properly")
+		}
+	}
+}
+
 func TestDataSourceConfiguresWithValidClient(t *testing.T) {
 	// Table-driven test for datasource configurations
 	tests := []struct {
-		name           string
-		ds             interface{}
-		getCfg         func(interface{}) *SousChefClient
-		expectError    bool
-		expectClientOn bool
+		name string
+		ds   interface{}
 	}{
 		{
-			name:        "Assessment",
-			ds:          &assessmentDataSource{},
-			getCfg:      func(i interface{}) *SousChefClient { return i.(*assessmentDataSource).client },
-			expectError: false,
+			name: "Assessment",
+			ds:   &assessmentDataSource{},
 		},
 		{
-			name:        "CostEstimate",
-			ds:          &costEstimateDataSource{},
-			getCfg:      func(i interface{}) *SousChefClient { return i.(*costEstimateDataSource).client },
-			expectError: false,
+			name: "CostEstimate",
+			ds:   &costEstimateDataSource{},
 		},
 	}
 
 	client := &SousChefClient{Path: "test"}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			switch ds := tt.ds.(type) {
-			case *assessmentDataSource:
-				resp := &datasource.ConfigureResponse{}
-				ds.Configure(context.Background(),
-					datasource.ConfigureRequest{ProviderData: client}, resp)
-
-				if resp.Diagnostics.HasError() && !tt.expectError {
-					t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-				}
-				if ds.client != client {
-					t.Fatalf("client not configured properly")
-				}
-			case *costEstimateDataSource:
-				resp := &datasource.ConfigureResponse{}
-				ds.Configure(context.Background(),
-					datasource.ConfigureRequest{ProviderData: client}, resp)
-
-				if resp.Diagnostics.HasError() && !tt.expectError {
-					t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-				}
-				if ds.client != client {
-					t.Fatalf("client not configured properly")
-				}
-			}
+			testDataSourceConfigureValidClientHelper(t, tt.ds, client)
 		})
 	}
 }
