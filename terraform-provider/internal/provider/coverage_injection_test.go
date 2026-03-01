@@ -13,62 +13,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
-	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
-
-func withTypesMapValueFrom(t *testing.T, fn func(context.Context, attr.Type, any) (types.Map, diag.Diagnostics)) {
-	t.Helper()
-	original := typesMapValueFrom
-	typesMapValueFrom = fn
-	t.Cleanup(func() {
-		typesMapValueFrom = original
-	})
-}
-
-func withOsRemove(t *testing.T, fn func(string) error) {
-	t.Helper()
-	original := osRemove
-	osRemove = fn
-	t.Cleanup(func() {
-		osRemove = original
-	})
-}
-
-func withOsReadFile(t *testing.T, fn func(string) ([]byte, error)) {
-	t.Helper()
-	original := osReadFile
-	osReadFile = fn
-	t.Cleanup(func() {
-		osReadFile = original
-	})
-}
-
-func badPlan(schema resourceschema.Schema, attrName string) tfsdk.Plan {
-	raw := tftypes.NewValue(tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			attrName: tftypes.Number,
-		},
-	}, map[string]tftypes.Value{
-		attrName: tftypes.NewValue(tftypes.Number, 1),
-	})
-
-	return tfsdk.Plan{Schema: schema, Raw: raw}
-}
-
-func badState(schema resourceschema.Schema, attrName string) tfsdk.State {
-	raw := tftypes.NewValue(tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			attrName: tftypes.Number,
-		},
-	}, map[string]tftypes.Value{
-		attrName: tftypes.NewValue(tftypes.Number, 1),
-	})
-
-	return tfsdk.State{Schema: schema, Raw: raw}
-}
 
 func TestBatchMapValueFromErrors(t *testing.T) {
 	errDiag := diag.Diagnostics{diag.NewErrorDiagnostic("map error", "forced map error")}

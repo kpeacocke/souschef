@@ -228,6 +228,8 @@ from souschef.parsers.inspec import (  # noqa: F401, codeql[py/unused-import]
     _convert_inspec_to_testinfra,
     _extract_inspec_describe_blocks,
     _generate_inspec_from_resource,
+    _parse_controls_from_directory,
+    _parse_controls_from_file,
     _parse_inspec_control,
 )
 from souschef.parsers.inspec import (
@@ -659,63 +661,6 @@ def _extract_resource_subscriptions(
                 )
 
     return subscriptions
-
-
-def _parse_controls_from_directory(profile_path: Path) -> list[dict[str, Any]]:
-    """
-    Parse all control files from an InSpec profile directory.
-
-    Args:
-        profile_path: Path to the InSpec profile directory.
-
-    Returns:
-        List of parsed controls.
-
-    Raises:
-        FileNotFoundError: If controls directory doesn't exist.
-        RuntimeError: If error reading control files.
-
-    """
-    controls_dir = _safe_join(profile_path, "controls")
-    if not controls_dir.exists():  # NOSONAR
-        raise FileNotFoundError(f"No controls directory found in {profile_path}")
-
-    controls = []
-    for control_file in safe_glob(controls_dir, "*.rb", profile_path):
-        try:
-            content = safe_read_text(control_file, profile_path)
-            file_controls = _parse_inspec_control(content)
-            for ctrl in file_controls:
-                ctrl["file"] = str(control_file.relative_to(profile_path))
-            controls.extend(file_controls)
-        except Exception as e:
-            raise RuntimeError(f"Error reading {control_file}: {e}") from e
-
-    return controls
-
-
-def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
-    """
-    Parse controls from a single InSpec control file.
-
-    Args:
-        profile_path: Path to the control file.
-
-    Returns:
-        List of parsed controls.
-
-    Raises:
-        RuntimeError: If error reading the file.
-
-    """
-    try:
-        content = safe_read_text(profile_path, profile_path.parent)
-        controls = _parse_inspec_control(content)
-        for ctrl in controls:
-            ctrl["file"] = profile_path.name
-        return controls
-    except Exception as e:
-        raise RuntimeError(f"Error reading file: {e}") from e
 
 
 @mcp.tool()

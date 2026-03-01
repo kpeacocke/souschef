@@ -10,11 +10,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	providerschema "github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
@@ -241,4 +243,60 @@ func newConfigValue(t *testing.T, schemaType attr.Type, val interface{}) tftypes
 	}
 
 	return terraformValue
+}
+
+// withTypesMapValueFrom temporarily overrides the typesMapValueFrom function for testing.
+func withTypesMapValueFrom(t *testing.T, fn func(context.Context, attr.Type, any) (types.Map, diag.Diagnostics)) {
+	t.Helper()
+	original := typesMapValueFrom
+	typesMapValueFrom = fn
+	t.Cleanup(func() {
+		typesMapValueFrom = original
+	})
+}
+
+// withOsRemove temporarily overrides the osRemove function for testing.
+func withOsRemove(t *testing.T, fn func(string) error) {
+	t.Helper()
+	original := osRemove
+	osRemove = fn
+	t.Cleanup(func() {
+		osRemove = original
+	})
+}
+
+// withOsReadFile temporarily overrides the osReadFile function for testing.
+func withOsReadFile(t *testing.T, fn func(string) ([]byte, error)) {
+	t.Helper()
+	original := osReadFile
+	osReadFile = fn
+	t.Cleanup(func() {
+		osReadFile = original
+	})
+}
+
+// badPlan creates a tfsdk.Plan with an invalid attribute type for error testing.
+func badPlan(schema resourceschema.Schema, attrName string) tfsdk.Plan {
+	raw := tftypes.NewValue(tftypes.Object{
+		AttributeTypes: map[string]tftypes.Type{
+			attrName: tftypes.Number,
+		},
+	}, map[string]tftypes.Value{
+		attrName: tftypes.NewValue(tftypes.Number, 1),
+	})
+
+	return tfsdk.Plan{Schema: schema, Raw: raw}
+}
+
+// badState creates a tfsdk.State with an invalid attribute type for error testing.
+func badState(schema resourceschema.Schema, attrName string) tfsdk.State {
+	raw := tftypes.NewValue(tftypes.Object{
+		AttributeTypes: map[string]tftypes.Type{
+			attrName: tftypes.Number,
+		},
+	}, map[string]tftypes.Value{
+		attrName: tftypes.NewValue(tftypes.Number, 1),
+	})
+
+	return tfsdk.State{Schema: schema, Raw: raw}
 }

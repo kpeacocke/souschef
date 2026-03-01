@@ -22,7 +22,9 @@ def test_parse_controls_from_directory_read_error(tmp_path: Path) -> None:
     control_file.write_text("control 'x' do end")
 
     with (
-        patch("souschef.server.safe_read_text", side_effect=OSError("read failed")),
+        patch(
+            "souschef.parsers.inspec.safe_read_text", side_effect=OSError("read failed")
+        ),
         pytest.raises(RuntimeError),
     ):
         _parse_controls_from_directory(tmp_path)
@@ -76,7 +78,7 @@ def test_parse_controls_from_file_error(tmp_path: Path) -> None:
     control_file.write_text("control 'x' do end")
 
     with (
-        patch("souschef.server.safe_read_text", side_effect=OSError("read failed")),
+        patch("pathlib.Path.read_text", side_effect=OSError("read failed")),
         pytest.raises(RuntimeError),
     ):
         _parse_controls_from_file(control_file)
