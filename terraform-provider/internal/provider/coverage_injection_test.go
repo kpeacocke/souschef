@@ -18,6 +18,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
+const permissionDeniedErr = "permission denied"
+
 func TestBatchMapValueFromErrors(t *testing.T) {
 	errDiag := diag.Diagnostics{diag.NewErrorDiagnostic("map error", "forced map error")}
 	withTypesMapValueFrom(t, func(_ context.Context, _ attr.Type, _ any) (types.Map, diag.Diagnostics) {
@@ -141,7 +143,7 @@ func TestDeleteHandlesErrors(t *testing.T) {
 			name:      "migration_reports_error",
 			resource:  &migrationResource{},
 			state:     newState(t, newResourceSchema(t, &migrationResource{}), migrationResourceModel{RecipeName: types.StringValue("test"), OutputPath: types.StringValue(t.TempDir())}),
-			errorType: errors.New("permission denied"),
+			errorType: errors.New(permissionDeniedErr),
 			checkPred: func(d diag.Diagnostics) bool { return d.HasError() },
 			checkMsg:  "expected diagnostics for migration delete error",
 		},
@@ -149,7 +151,7 @@ func TestDeleteHandlesErrors(t *testing.T) {
 			name:      "habitat_reports_warning",
 			resource:  &habitatMigrationResource{},
 			state:     newState(t, newResourceSchema(t, &habitatMigrationResource{}), habitatMigrationResourceModel{PlanPath: types.StringValue("/tmp/plan.sh"), OutputPath: types.StringValue(t.TempDir())}),
-			errorType: errors.New("permission denied"),
+			errorType: errors.New(permissionDeniedErr),
 			checkPred: func(d diag.Diagnostics) bool { return len(d) > 0 },
 			checkMsg:  "expected warning diagnostics for habitat delete error",
 		},
@@ -157,7 +159,7 @@ func TestDeleteHandlesErrors(t *testing.T) {
 			name:      "inspec_reports_warning",
 			resource:  &inspecMigrationResource{},
 			state:     newState(t, newResourceSchema(t, &inspecMigrationResource{}), inspecMigrationResourceModel{ProfilePath: types.StringValue("/tmp/profile"), OutputPath: types.StringValue(t.TempDir()), OutputFormat: types.StringValue("testinfra")}),
-			errorType: errors.New("permission denied"),
+			errorType: errors.New(permissionDeniedErr),
 			checkPred: func(d diag.Diagnostics) bool { return len(d) > 0 },
 			checkMsg:  "expected warning diagnostics for inspec delete error",
 		},
@@ -172,7 +174,7 @@ func TestDeleteHandlesErrors(t *testing.T) {
 				PlaybookCount: types.Int64Value(1),
 				Playbooks:     types.MapNull(types.StringType),
 			}),
-			errorType: errors.New("permission denied"),
+			errorType: errors.New(permissionDeniedErr),
 			checkPred: func(d diag.Diagnostics) bool { return len(d) > 0 },
 			checkMsg:  "expected warning diagnostics for batch delete error",
 		},
