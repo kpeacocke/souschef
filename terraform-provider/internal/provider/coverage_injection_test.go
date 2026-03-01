@@ -52,20 +52,20 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 	}
 
 	outputDir := t.TempDir()
-	playbookPath := filepath.Join(outputDir, "default.yml")
+	playbookPath := filepath.Join(outputDir, testDefaultYml)
 	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to write playbook: %v", err)
+		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 
 	state := newState(t, schema, batchMigrationResourceModel{
-		ID:            types.StringValue("test"),
+		ID: types.StringValue("test"),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
 		},
-		OutputPath:   types.StringValue(outputDir),
-		CookbookName: types.StringValue("test"),
+		OutputPath:    types.StringValue(outputDir),
+		CookbookName:  types.StringValue("test"),
 		PlaybookCount: types.Int64Value(1),
-		Playbooks:    types.MapNull(types.StringType),
+		Playbooks:     types.MapNull(types.StringType),
 	})
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
@@ -75,9 +75,9 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 
 	cookbookDir := t.TempDir()
 	outputDir = t.TempDir()
-	playbookPath = filepath.Join(outputDir, "default.yml")
+	playbookPath = filepath.Join(outputDir, testDefaultYml)
 	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to write playbook: %v", err)
+		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 
 	importResp := &resource.ImportStateResponse{State: newEmptyState(schema)}
@@ -136,14 +136,14 @@ func TestDeleteIgnoresMissingFiles(t *testing.T) {
 	batch := &batchMigrationResource{}
 	batchSchema := newResourceSchema(t, batch)
 	batchState := newState(t, batchSchema, batchMigrationResourceModel{
-		ID:            types.StringValue("batch"),
+		ID: types.StringValue("batch"),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
 		},
-		OutputPath:   types.StringValue(t.TempDir()),
-		CookbookName: types.StringValue("test"),
+		OutputPath:    types.StringValue(t.TempDir()),
+		CookbookName:  types.StringValue("test"),
 		PlaybookCount: types.Int64Value(1),
-		Playbooks:    types.MapNull(types.StringType),
+		Playbooks:     types.MapNull(types.StringType),
 	})
 	batchResp := &resource.DeleteResponse{}
 	batch.Delete(context.Background(), resource.DeleteRequest{State: batchState}, batchResp)
@@ -201,14 +201,14 @@ func TestDeleteReportsPermissionError(t *testing.T) {
 	batch := &batchMigrationResource{}
 	batchSchema := newResourceSchema(t, batch)
 	batchState := newState(t, batchSchema, batchMigrationResourceModel{
-		ID:            types.StringValue("batch"),
+		ID: types.StringValue("batch"),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
 		},
-		OutputPath:   types.StringValue(t.TempDir()),
-		CookbookName: types.StringValue("test"),
+		OutputPath:    types.StringValue(t.TempDir()),
+		CookbookName:  types.StringValue("test"),
 		PlaybookCount: types.Int64Value(1),
-		Playbooks:    types.MapNull(types.StringType),
+		Playbooks:     types.MapNull(types.StringType),
 	})
 	batchResp := &resource.DeleteResponse{}
 	batch.Delete(context.Background(), resource.DeleteRequest{State: batchState}, batchResp)
@@ -381,9 +381,9 @@ func TestBatchImportStateReadError(t *testing.T) {
 
 	cookbookDir := t.TempDir()
 	outputDir := t.TempDir()
-	playbookPath := filepath.Join(outputDir, "default.yml")
+	playbookPath := filepath.Join(outputDir, testDefaultYml)
 	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to write playbook: %v", err)
+		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 
 	withOsReadFile(t, func(string) ([]byte, error) {
