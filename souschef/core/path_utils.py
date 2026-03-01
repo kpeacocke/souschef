@@ -171,6 +171,9 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
     relative_parts = _validate_relative_parts(parts)
 
     # Join and validate the full path using the shared containment check.
+    # nosonar: CWE-22 (path traversal) - relative_parts is sanitised by
+    # _validate_relative_parts() which rejects '..' and absolute paths.
+    # Post-construction validation via _validated_candidate() adds defence-in-depth.
     candidate = base_resolved / relative_parts
     return _validated_candidate(candidate, base_resolved)
 
@@ -247,6 +250,9 @@ def safe_mkdir(
 ) -> None:
     """Create directory after enforcing base containment."""
     safe_base = _normalize_trusted_base(base_path)
+    # nosonar: CWE-22 - _normalize_path() is a sanitiser that validates null
+    # bytes and resolves symlinks/traversal. _validated_candidate() adds second
+    # layer for defence-in-depth against path traversal.
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
     safe_path.mkdir(parents=parents, exist_ok=exist_ok)  # nosonar
@@ -269,6 +275,9 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
 
     """
     safe_base = _normalize_trusted_base(base_path)
+    # nosonar: CWE-22 - _normalize_path() is a sanitiser that validates null
+    # bytes and resolves symlinks/traversal. _validated_candidate() adds second
+    # layer for defence-in-depth against path traversal.
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
     return safe_path.read_text(encoding=encoding)  # nosonar
@@ -288,6 +297,9 @@ def safe_write_text(
 
     """
     safe_base = _normalize_trusted_base(base_path)
+    # nosonar: CWE-22 - _normalize_path() is a sanitiser that validates null
+    # bytes and resolves symlinks/traversal. _validated_candidate() adds second
+    # layer for defence-in-depth against path traversal.
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
     safe_path.write_text(text, encoding=encoding)  # nosonar
@@ -309,6 +321,9 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
 
     """
     safe_base = _normalize_trusted_base(base_path)
+    # nosonar: CWE-22 - _normalize_path() is a sanitiser that validates null
+    # bytes and resolves symlinks/traversal. _validated_candidate() adds second
+    # layer for defence-in-depth against path traversal.
     safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
 
     results: list[Path] = []

@@ -14,6 +14,21 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
+// Test string constants to avoid duplication warnings.
+const (
+	testUnexpectedDiagnostics = "unexpected diagnostics: %v"
+	testTmpCookbook           = "/tmp/cookbook"
+	testTmpPlanSh             = "/tmp/plan.sh"
+	testTmpProfile            = "/tmp/profile"
+	testConvertRecipe         = "convert-recipe"
+	testConvertHabitat        = "convert-habitat"
+	testConvertInSpec         = "convert-inspec"
+	testPlanSh                = "plan.sh"
+	testPkgNameMyapp          = "pkg_name=myapp\n"
+	testFailedToWritePlan     = "failed to write plan: %v"
+	testFailedToWriteFile     = "failed to write file: %v"
+)
+
 func TestResourceConfigureNilClient(t *testing.T) {
 	// Test Configure with nil provider data
 	r := &batchMigrationResource{}
@@ -33,7 +48,7 @@ func TestResourceConfigureValidClient(t *testing.T) {
 	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: client}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 }
 
@@ -44,7 +59,7 @@ func TestBatchConfigureValidClient(t *testing.T) {
 	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: client}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 }
 
@@ -55,7 +70,7 @@ func TestHabitatConfigureValidClient(t *testing.T) {
 	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: client}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 }
 
@@ -66,7 +81,7 @@ func TestInSpecConfigureValidClient(t *testing.T) {
 	r.Configure(context.Background(), resource.ConfigureRequest{ProviderData: client}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 }
 
@@ -78,7 +93,7 @@ func TestDataSourceConfigureWithClient(t *testing.T) {
 	ds.Configure(context.Background(), datasource.ConfigureRequest{ProviderData: client}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 
 	// Make sure client was saved
@@ -95,7 +110,7 @@ func TestCostEstimateDataSourceConfigureValidClient(t *testing.T) {
 	ds.Configure(context.Background(), datasource.ConfigureRequest{ProviderData: client}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 
 	if ds.client != client {
@@ -131,7 +146,7 @@ func TestCostEstimateDataSourceReadDefaults(t *testing.T) {
 	schema := newDataSourceSchema(t, ds)
 
 	config := newDataSourceConfig(t, schema, costEstimateDataSourceModel{
-		CookbookPath:        types.StringValue("/tmp/cookbook"),
+		CookbookPath:        types.StringValue(testTmpCookbook),
 		DeveloperHourlyRate: types.Float64Null(),
 		InfrastructureCost:  types.Float64Null(),
 	})
@@ -140,7 +155,7 @@ func TestCostEstimateDataSourceReadDefaults(t *testing.T) {
 	ds.Read(context.Background(), datasource.ReadRequest{Config: config}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
 	}
 }
 
@@ -157,7 +172,7 @@ func TestHabitatMigrationDeleteWithPermissionError(t *testing.T) {
 	}
 
 	state := newState(t, schema, habitatMigrationResourceModel{
-		PlanPath:   types.StringValue("/tmp/plan.sh"),
+		PlanPath:   types.StringValue(testTmpPlanSh),
 		OutputPath: types.StringValue(outputDir),
 	})
 
@@ -196,7 +211,7 @@ func TestInSpecMigrationDeleteWithDifferentFormats(t *testing.T) {
 		}
 
 		state := newState(t, schema, inspecMigrationResourceModel{
-			ProfilePath:  types.StringValue("/tmp/profile"),
+			ProfilePath:  types.StringValue(testTmpProfile),
 			OutputPath:   types.StringValue(testDir),
 			OutputFormat: types.StringValue(f.format),
 		})
@@ -247,7 +262,7 @@ func TestBatchMigrationCreateWithMissingOutput(t *testing.T) {
 
 	// Force the fake CLI to not write output
 	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(t.TempDir()),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
@@ -258,7 +273,7 @@ func TestBatchMigrationCreateWithMissingOutput(t *testing.T) {
 		Playbooks:     types.MapNull(types.StringType),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", "convert-recipe")
+	t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", testConvertRecipe)
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 
@@ -272,7 +287,7 @@ func TestBatchMigrationCreateWithUnreadablePlaybook(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(t.TempDir()),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
@@ -283,7 +298,7 @@ func TestBatchMigrationCreateWithUnreadablePlaybook(t *testing.T) {
 		Playbooks:     types.MapNull(types.StringType),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_CHMOD", "convert-recipe")
+	t.Setenv("SOUSCHEF_TEST_CHMOD", testConvertRecipe)
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 
@@ -297,7 +312,7 @@ func TestBatchMigrationUpdateWithUnreadablePlaybook(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(t.TempDir()),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
@@ -308,7 +323,7 @@ func TestBatchMigrationUpdateWithUnreadablePlaybook(t *testing.T) {
 		Playbooks:     types.MapNull(types.StringType),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_CHMOD", "convert-recipe")
+	t.Setenv("SOUSCHEF_TEST_CHMOD", testConvertRecipe)
 	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
 
@@ -351,7 +366,7 @@ func TestHabitatMigrationCreateWithMissingPlan(t *testing.T) {
 	r := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)
 
-	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-habitat")
+	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertHabitat)
 	plan := newPlan(t, schema, habitatMigrationResourceModel{
 		PlanPath:   types.StringValue("/nonexistent/plan.sh"),
 		OutputPath: types.StringValue(t.TempDir()),
@@ -373,9 +388,9 @@ func TestHabitatMigrationUpdateWithUnreadableDockerfile(t *testing.T) {
 	r := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)
 
-	planPath := filepath.Join(t.TempDir(), "plan.sh")
-	if err := os.WriteFile(planPath, []byte("pkg_name=myapp\n"), 0644); err != nil {
-		t.Fatalf("failed to write plan: %v", err)
+	planPath := filepath.Join(t.TempDir(), testPlanSh)
+	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+		t.Fatalf(testFailedToWritePlan, err)
 	}
 
 	plan := newPlan(t, schema, habitatMigrationResourceModel{
@@ -387,7 +402,7 @@ func TestHabitatMigrationUpdateWithUnreadableDockerfile(t *testing.T) {
 		DockerfileContent: types.StringNull(),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_CHMOD", "convert-habitat")
+	t.Setenv("SOUSCHEF_TEST_CHMOD", testConvertHabitat)
 	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
 
@@ -400,7 +415,7 @@ func TestInSpecMigrationCreateWithMissingProfile(t *testing.T) {
 	r := &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)
 
-	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-inspec")
+	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertInSpec)
 	plan := newPlan(t, schema, inspecMigrationResourceModel{
 		ProfilePath:   types.StringValue("/nonexistent/profile"),
 		OutputPath:    types.StringValue(t.TempDir()),
@@ -423,7 +438,7 @@ func TestInSpecMigrationUpdateWithUnreadableTestFile(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	plan := newPlan(t, schema, inspecMigrationResourceModel{
-		ProfilePath:   types.StringValue("/tmp/profile"),
+		ProfilePath:   types.StringValue(testTmpProfile),
 		OutputPath:    types.StringValue(t.TempDir()),
 		OutputFormat:  types.StringValue("testinfra"),
 		ID:            types.StringNull(),
@@ -431,7 +446,7 @@ func TestInSpecMigrationUpdateWithUnreadableTestFile(t *testing.T) {
 		TestContent:   types.StringNull(),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_CHMOD", "convert-inspec")
+	t.Setenv("SOUSCHEF_TEST_CHMOD", testConvertInSpec)
 	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
 	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
 
@@ -469,7 +484,7 @@ func TestHabitatMigrationReadWithMissingDockerfile(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	state := newState(t, schema, habitatMigrationResourceModel{
-		PlanPath:   types.StringValue("/tmp/plan.sh"),
+		PlanPath:   types.StringValue(testTmpPlanSh),
 		OutputPath: types.StringValue(t.TempDir()),
 		PackageName: types.StringValue("test"),
 		ID:         types.StringValue("test"),
@@ -491,7 +506,7 @@ func TestInSpecMigrationReadWithMissingTestFile(t *testing.T) {
 	schema := newResourceSchema(t, r)
 
 	state := newState(t, schema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue("/tmp/profile"),
+		ProfilePath:  types.StringValue(testTmpProfile),
 		OutputPath:   types.StringValue(t.TempDir()),
 		OutputFormat: types.StringValue("testinfra"),
 		ProfileName:  types.StringValue("test"),
@@ -512,14 +527,14 @@ func TestCreateOutputPathError(t *testing.T) {
 	// Ensure create returns diagnostics when output path is a file.
 	filePath := filepath.Join(t.TempDir(), "output-file")
 	if err := os.WriteFile(filePath, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to write file: %v", err)
+		t.Fatalf(testFailedToWriteFile, err)
 	}
 
 	// Migration resource
 	migration := &migrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	migrationSchema := newResourceSchema(t, migration)
 	plan := newPlan(t, migrationSchema, migrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(filePath),
 		RecipeName:   types.StringValue("default"),
 	})
@@ -533,7 +548,7 @@ func TestCreateOutputPathError(t *testing.T) {
 	batch := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	batchSchema := newResourceSchema(t, batch)
 	batchPlan := newPlan(t, batchSchema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(filePath),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
@@ -550,9 +565,9 @@ func TestCreateOutputPathError(t *testing.T) {
 	}
 
 	// Habitat migration resource
-	planPath := filepath.Join(t.TempDir(), "plan.sh")
-	if err := os.WriteFile(planPath, []byte("pkg_name=myapp\n"), 0644); err != nil {
-		t.Fatalf("failed to write plan: %v", err)
+	planPath := filepath.Join(t.TempDir(), testPlanSh)
+	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+		t.Fatalf(testFailedToWritePlan, err)
 	}
 	habitat := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	habitatSchema := newResourceSchema(t, habitat)
@@ -574,7 +589,7 @@ func TestCreateOutputPathError(t *testing.T) {
 	inspec := &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	inspecSchema := newResourceSchema(t, inspec)
 	inspecPlan := newPlan(t, inspecSchema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue("/tmp/profile"),
+		ProfilePath:  types.StringValue(testTmpProfile),
 		OutputPath:   types.StringValue(filePath),
 		OutputFormat: types.StringValue("testinfra"),
 		ID:           types.StringNull(),
@@ -593,7 +608,7 @@ func TestUpdateCommandFailures(t *testing.T) {
 	batch := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	batchSchema := newResourceSchema(t, batch)
 	batchPlan := newPlan(t, batchSchema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbook),
 		OutputPath:   types.StringValue(t.TempDir()),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
@@ -604,7 +619,7 @@ func TestUpdateCommandFailures(t *testing.T) {
 		Playbooks:     types.MapNull(types.StringType),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-recipe")
+	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertRecipe)
 	batchResp := &resource.UpdateResponse{State: tfsdk.State{Schema: batchSchema}}
 	batch.Update(context.Background(), resource.UpdateRequest{Plan: batchPlan}, batchResp)
 	if !batchResp.Diagnostics.HasError() {
@@ -612,9 +627,9 @@ func TestUpdateCommandFailures(t *testing.T) {
 	}
 
 	// Habitat update command failure
-	planPath := filepath.Join(t.TempDir(), "plan.sh")
-	if err := os.WriteFile(planPath, []byte("pkg_name=myapp\n"), 0644); err != nil {
-		t.Fatalf("failed to write plan: %v", err)
+	planPath := filepath.Join(t.TempDir(), testPlanSh)
+	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+		t.Fatalf(testFailedToWritePlan, err)
 	}
 	habitat := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	habitatSchema := newResourceSchema(t, habitat)
@@ -627,7 +642,7 @@ func TestUpdateCommandFailures(t *testing.T) {
 		DockerfileContent: types.StringNull(),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-habitat")
+	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertHabitat)
 	habitatResp := &resource.UpdateResponse{State: tfsdk.State{Schema: habitatSchema}}
 	habitat.Update(context.Background(), resource.UpdateRequest{Plan: habitatPlan}, habitatResp)
 	if !habitatResp.Diagnostics.HasError() {
@@ -638,7 +653,7 @@ func TestUpdateCommandFailures(t *testing.T) {
 	inspec := &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	inspecSchema := newResourceSchema(t, inspec)
 	inspecPlan := newPlan(t, inspecSchema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue("/tmp/profile"),
+		ProfilePath:  types.StringValue(testTmpProfile),
 		OutputPath:   types.StringValue(t.TempDir()),
 		OutputFormat: types.StringValue("testinfra"),
 		ID:           types.StringNull(),
@@ -646,7 +661,7 @@ func TestUpdateCommandFailures(t *testing.T) {
 		TestContent:  types.StringNull(),
 	})
 
-	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-inspec")
+	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertInSpec)
 	inspecResp := &resource.UpdateResponse{State: tfsdk.State{Schema: inspecSchema}}
 	inspec.Update(context.Background(), resource.UpdateRequest{Plan: inspecPlan}, inspecResp)
 	if !inspecResp.Diagnostics.HasError() {
@@ -664,11 +679,11 @@ func TestDeleteWarningsWithDirectoryTargets(t *testing.T) {
 		t.Fatalf("failed to create directory: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(habitatPath, "file.txt"), []byte("x"), 0644); err != nil {
-		t.Fatalf("failed to write file: %v", err)
+		t.Fatalf(testFailedToWriteFile, err)
 	}
 
 	habitatState := newState(t, habitatSchema, habitatMigrationResourceModel{
-		PlanPath:   types.StringValue("/tmp/plan.sh"),
+		PlanPath:   types.StringValue(testTmpPlanSh),
 		OutputPath: types.StringValue(habitatOutput),
 	})
 	habitatResp := &resource.DeleteResponse{}
@@ -686,11 +701,11 @@ func TestDeleteWarningsWithDirectoryTargets(t *testing.T) {
 		t.Fatalf("failed to create directory: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(inspecPath, "file.txt"), []byte("x"), 0644); err != nil {
-		t.Fatalf("failed to write file: %v", err)
+		t.Fatalf(testFailedToWriteFile, err)
 	}
 
 	inspecState := newState(t, inspecSchema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue("/tmp/profile"),
+		ProfilePath:  types.StringValue(testTmpProfile),
 		OutputPath:   types.StringValue(inspecOutput),
 		OutputFormat: types.StringValue("testinfra"),
 	})
@@ -709,7 +724,7 @@ func TestDeleteWarningsWithDirectoryTargets(t *testing.T) {
 		t.Fatalf("failed to create directory: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(batchPath, "file.txt"), []byte("x"), 0644); err != nil {
-		t.Fatalf("failed to write file: %v", err)
+		t.Fatalf(testFailedToWriteFile, err)
 	}
 
 	batchState := newState(t, batchSchema, batchMigrationResourceModel{

@@ -12,6 +12,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// Test string constants to avoid duplication warnings.
+const (
+	testUnexpectedDiagnosticsMsg = "unexpected diagnostics: %v"
+	testTmpCookbookPath          = "/tmp/cookbook"
+	testConvertRecipeCmd         = "convert-recipe"
+	testFailedToWritePlaybook    = "failed to write playbook: %v"
+)
+
 // Comprehensive tests for 100% coverage of Delete operations with directory obstacles
 func TestMigrationDeleteWithDirectory(t *testing.T) {
 	r := &migrationResource{}
@@ -132,7 +140,7 @@ func TestBatchMigrationCreateAndReadWithMultipleRecipes(t *testing.T) {
 
 	outputDir := t.TempDir()
 	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
+		CookbookPath: types.StringValue(testTmpCookbookPath),
 		OutputPath:   types.StringValue(outputDir),
 		RecipeNames: []types.String{
 			types.StringValue("default"),
@@ -148,7 +156,7 @@ func TestBatchMigrationCreateAndReadWithMultipleRecipes(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if createResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", createResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnosticsMsg, createResp.Diagnostics)
 	}
 
 	// Verify all playbooks were created
@@ -183,7 +191,7 @@ func TestHabitatMigrationCreateWithCustomBaseImage(t *testing.T) {
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
 	if createResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", createResp.Diagnostics)
+		t.Fatalf(testUnexpectedDiagnosticsMsg, createResp.Diagnostics)
 	}
 }
 
