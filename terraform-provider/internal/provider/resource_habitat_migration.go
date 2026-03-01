@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -104,39 +105,16 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	planPath := plan.PlanPath.ValueString()
-	outputPath := plan.OutputPath.ValueString()
-	baseImage := defaultBaseImage
-	if !plan.BaseImage.IsNull() && plan.BaseImage.ValueString() != "" {
-		baseImage = plan.BaseImage.ValueString()
-	}
-
 	// Create output directory
-	if !createOutputDirectory(outputPath, &resp.Diagnostics) {
+	if !createOutputDirectory(plan.OutputPath.ValueString(), &resp.Diagnostics) {
 		return
 	}
 
-	// Call souschef CLI to convert Habitat plan
-	args := []string{"convert-habitat", "--plan-path", planPath, "--output-path", outputPath, "--base-image", baseImage}
-	if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting Habitat plan", &resp.Diagnostics); !ok {
-		return
-	}
-
-	// Read generated Dockerfile
-	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
-	content := readGeneratedFile(dockerfilePath, errReadingDockerfile, &resp.Diagnostics)
+	// Execute conversion and set state
+	r.executeHabitatConversion(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// Extract package name from plan path
-	packageName := filepath.Base(filepath.Dir(planPath))
-
-	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf(habitatIDFormat, packageName))
-	plan.BaseImage = types.StringValue(baseImage)
-	plan.PackageName = types.StringValue(packageName)
-	plan.DockerfileContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -179,32 +157,11 @@ func (r *habitatMigrationResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	planPath := plan.PlanPath.ValueString()
-	outputPath := plan.OutputPath.ValueString()
-	baseImage := defaultBaseImage
-	if !plan.BaseImage.IsNull() && plan.BaseImage.ValueString() != "" {
-		baseImage = plan.BaseImage.ValueString()
-	}
-
-	args := []string{"convert-habitat", "--plan-path", planPath, "--output-path", outputPath, "--base-image", baseImage}
-	if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting Habitat plan", &resp.Diagnostics); !ok {
-		return
-	}
-
-	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
-	content := readGeneratedFile(dockerfilePath, errReadingDockerfile, &resp.Diagnostics)
+	// Execute conversion and set state
+	r.executeHabitatConversion(ctx, &plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// Extract package name from plan path
-	packageName := filepath.Base(filepath.Dir(planPath))
-
-	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf(habitatIDFormat, packageName))
-	plan.BaseImage = types.StringValue(baseImage)
-	plan.PackageName = types.StringValue(packageName)
-	plan.DockerfileContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -221,6 +178,39 @@ func (r *habitatMigrationResource) Delete(ctx context.Context, req resource.Dele
 
 	dockerfilePath := filepath.Join(state.OutputPath.ValueString(), "Dockerfile")
 	deleteGeneratedFile(dockerfilePath, "Dockerfile", &resp.Diagnostics)
+}
+
+// executeHabitatConversion is a helper that encapsulates the common logic for Create and Update.
+// It executes the habitat conversion, reads the output, and updates the model state.
+func (r *habitatMigrationResource) executeHabitatConversion(ctx context.Context, model *habitatMigrationResourceModel, diagnostics *diag.Diagnostics) {
+	planPath := model.PlanPath.ValueString()
+	outputPath := model.OutputPath.ValueString()
+	baseImage := defaultBaseImage
+	if !model.BaseImage.IsNull() && model.BaseImage.ValueString() != "" {
+		baseImage = model.BaseImage.ValueString()
+	}
+
+	// Call souschef CLI to convert Habitat plan
+	args := []string{"convert-habitat", "--plan-path", planPath, "--output-path", outputPath, "--base-image", baseImage}
+	if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting Habitat plan", diagnostics); !ok {
+		return
+	}
+
+	// Read generated Dockerfile
+	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
+	content := readGeneratedFile(dockerfilePath, errReadingDockerfile, diagnostics)
+	if diagnostics.HasError() {
+		return
+	}
+
+	// Extract package name from plan path
+	packageName := filepath.Base(filepath.Dir(planPath))
+
+	// Set state
+	model.ID = types.StringValue(fmt.Sprintf(habitatIDFormat, packageName))
+	model.BaseImage = types.StringValue(baseImage)
+	model.PackageName = types.StringValue(packageName)
+	model.DockerfileContent = types.StringValue(string(content))
 }
 
 // ImportState imports an existing resource into Terraform
