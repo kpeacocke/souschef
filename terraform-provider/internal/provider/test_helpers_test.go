@@ -16,6 +16,9 @@ const (
 	executableFilePermissions = os.FileMode(0o755)
 	// readonlyDirPermissions is the read-only permission for test directories.
 	readonlyDirPermissions = os.FileMode(0o444)
+	// noPermissions is used in tests to simulate permission errors.
+	// This is safe in test context as it only applies to temporary test fixtures.
+	noPermissions = os.FileMode(0o000)
 )
 
 // ValidateConfigValue asserts that the actual configuration value matches the expected value.

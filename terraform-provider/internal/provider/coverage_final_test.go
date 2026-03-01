@@ -40,7 +40,7 @@ func TestMigrationDeleteWithDirectory(t *testing.T) {
 		t.Fatal("expected diagnostics when directory cannot be deleted")
 	}
 
-	os.Chmod(dirPath, 0755)
+	os.Chmod(dirPath, testDirPermissions)
 }
 
 // Test batch delete with read-only file
@@ -53,7 +53,7 @@ func TestBatchMigrationDeleteWithReadOnlyFile(t *testing.T) {
 	if err := os.WriteFile(recipe1Path, []byte("content"), 0444); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
-	defer os.Chmod(recipe1Path, 0644) // cleanup
+	defer os.Chmod(recipe1Path, testFilePermissions) // cleanup
 
 	emptyPlaybooks, _ := types.MapValueFrom(context.Background(), types.StringType, map[string]string{})
 
@@ -86,7 +86,7 @@ func TestHabitatMigrationDeleteWithReadOnlyDockerfile(t *testing.T) {
 	if err := os.WriteFile(dockerfilePath, []byte("FROM ubuntu"), 0444); err != nil {
 		t.Fatalf("failed to write dockerfile: %v", err)
 	}
-	defer os.Chmod(dockerfilePath, 0644)
+	defer os.Chmod(dockerfilePath, testFilePermissions)
 
 	state := newState(t, schema, habitatMigrationResourceModel{
 		PlanPath:   types.StringValue("/tmp/plan.sh"),
@@ -110,7 +110,7 @@ func TestInSpecMigrationDeleteWithReadOnlyFile(t *testing.T) {
 	if err := os.WriteFile(testFilePath, []byte("test"), 0444); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
-	defer os.Chmod(testFilePath, 0644)
+	defer os.Chmod(testFilePath, testFilePermissions)
 
 	state := newState(t, schema, inspecMigrationResourceModel{
 		ProfilePath:  types.StringValue("/tmp/profile"),

@@ -412,7 +412,7 @@ func TestMigrationResourceImportStateSuccessAndErrors(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	if err := os.Chmod(playbookPath, 0000); err != nil {
+	if err := os.Chmod(playbookPath, noPermissions); err != nil {
 		t.Fatalf("failed to chmod playbook: %v", err)
 	}
 	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}

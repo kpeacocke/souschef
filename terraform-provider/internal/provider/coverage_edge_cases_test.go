@@ -171,7 +171,7 @@ func TestHabitatMigrationDeleteWithPermissionError(t *testing.T) {
 	}
 
 	// Clean up - restore permissions
-	os.Chmod(dockerfilePath, 0644)
+	os.Chmod(dockerfilePath, testFilePermissions)
 }
 
 func TestInSpecMigrationDeleteWithDifferentFormats(t *testing.T) {
@@ -226,7 +226,7 @@ func TestMigrationReadWithUnreadablePlaybook(t *testing.T) {
 	if err := os.WriteFile(playbookPath, []byte("content"), 0000); err != nil {
 		t.Fatalf("failed to write playbook: %v", err)
 	}
-	defer os.Chmod(playbookPath, 0644) // cleanup
+	defer os.Chmod(playbookPath, testFilePermissions) // cleanup
 
 	state := newState(t, schema, migrationResourceModel{
 		RecipeName: types.StringValue("test"),
@@ -326,7 +326,7 @@ func TestBatchMigrationReadWithUnreadablePlaybook(t *testing.T) {
 	if err := os.WriteFile(playbookPath, []byte("data"), 0000); err != nil {
 		t.Fatalf("failed to write playbook: %v", err)
 	}
-	defer os.Chmod(playbookPath, 0644)
+	defer os.Chmod(playbookPath, testFilePermissions)
 
 	state := newState(t, schema, batchMigrationResourceModel{
 		ID:            types.StringValue("test"),

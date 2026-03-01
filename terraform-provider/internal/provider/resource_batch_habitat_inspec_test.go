@@ -153,7 +153,7 @@ func TestBatchMigrationImportStateErrorsAndSuccess(t *testing.T) {
 		t.Fatal("expected diagnostics for missing playbook")
 	}
 
-	if err := os.Chmod(playbookPath, 0000); err != nil {
+	if err := os.Chmod(playbookPath, noPermissions); err != nil {
 		t.Fatalf("failed to chmod playbook: %v", err)
 	}
 	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
@@ -215,7 +215,7 @@ func TestHabitatMigrationResourceCoverage(t *testing.T) {
 	}
 
 	dockerfilePath := filepath.Join(outputDir, "Dockerfile")
-	if err := os.Chmod(dockerfilePath, 0000); err != nil {
+	if err := os.Chmod(dockerfilePath, noPermissions); err != nil {
 		t.Fatalf("failed to chmod dockerfile: %v", err)
 	}
 	readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
@@ -312,7 +312,7 @@ func TestHabitatMigrationImportStateCoverage(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	if err := os.Chmod(dockerfilePath, 0000); err != nil {
+	if err := os.Chmod(dockerfilePath, noPermissions); err != nil {
 		t.Fatalf("failed to chmod dockerfile: %v", err)
 	}
 	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
@@ -373,7 +373,7 @@ func TestInSpecMigrationResourceCoverage(t *testing.T) {
 	}
 
 	testFilePath := filepath.Join(outputDir, testinfraFilename)
-	if err := os.Chmod(testFilePath, 0000); err != nil {
+	if err := os.Chmod(testFilePath, noPermissions); err != nil {
 		t.Fatalf("failed to chmod test file: %v", err)
 	}
 	readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
@@ -455,7 +455,7 @@ func TestInSpecMigrationImportStateCoverage(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	if err := os.Chmod(testFilePath, 0000); err != nil {
+	if err := os.Chmod(testFilePath, noPermissions); err != nil {
 		t.Fatalf("failed to chmod test file: %v", err)
 	}
 	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
