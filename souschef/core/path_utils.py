@@ -162,11 +162,11 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
         raw_path = Path(raw_value).expanduser()
 
     if raw_path.is_absolute():
-        candidate_resolved = os.path.realpath(str(raw_path))  # nosonar
+        candidate_resolved = os.path.realpath(str(raw_path))
     else:
         relative = _validate_relative_parts(raw_path.parts)
         joined = Path(base_resolved) / relative
-        candidate_resolved = os.path.realpath(str(joined))  # nosonar
+        candidate_resolved = os.path.realpath(str(joined))
 
     try:
         common = os.path.commonpath([candidate_resolved, base_resolved])
@@ -298,8 +298,8 @@ def safe_write_text(
         encoding: Text encoding (default: 'utf-8').
 
     """
-    safe_path = _resolve_path_under_base(path_obj, base_path)  # nosonar
-    safe_path.write_text(text, encoding=encoding)  # nosonar
+    safe_path = _resolve_path_under_base(path_obj, base_path)
+    safe_path.write_text(text, encoding=encoding)
 
 
 def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
