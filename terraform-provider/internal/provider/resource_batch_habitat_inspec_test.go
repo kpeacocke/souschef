@@ -3,11 +3,13 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -163,304 +165,347 @@ func TestBatchMigrationImportStateErrorsAndSuccess(t *testing.T) {
 	}
 }
 
-func TestHabitatMigrationResourceCoverage(t *testing.T) {
-	r := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	planPath := filepath.Join(t.TempDir(), testPlanSh)
-	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlan, err)
+func TestHabitatAndInSpecResourceCoverage(t *testing.T) {
+	tests := []struct {
+		name             string
+		resource         interface{}
+		setupFile        func(t *testing.T) string
+		createResourceFn func(*testing.T, resource.Resource, resourceschema.Schema, string, string) tfsdk.Plan
+		createStateFn    func(*testing.T, resource.Resource, resourceschema.Schema, string) tfsdk.State
+		outputFile       string
+		missingMsg       string
+		fileErrMsg       string
+	}{
+		{
+			name:     "habitat",
+			resource: &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}},
+			setupFile: func(t *testing.T) string {
+				planPath := filepath.Join(t.TempDir(), testPlanSh)
+				if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+					t.Fatalf(testFailedToWritePlan, err)
+				}
+				return planPath
+			},
+			createResourceFn: func(t *testing.T, res resource.Resource, schema resourceschema.Schema, setupPath string, outputDir string) tfsdk.Plan {
+				return newPlan(t, schema, habitatMigrationResourceModel{
+					PlanPath:          types.StringValue(setupPath),
+					OutputPath:        types.StringValue(outputDir),
+					BaseImage:         types.StringNull(),
+					ID:                types.StringNull(),
+					PackageName:       types.StringNull(),
+					DockerfileContent: types.StringNull(),
+				})
+			},
+			createStateFn: func(t *testing.T, res resource.Resource, schema resourceschema.Schema, outputDir string) tfsdk.State {
+				return newState(t, schema, habitatMigrationResourceModel{
+					OutputPath: types.StringValue(outputDir),
+				})
+			},
+			outputFile: "Dockerfile",
+			missingMsg: "expected resource to be removed when dockerfile is missing",
+			fileErrMsg: "expected diagnostics for unreadable dockerfile",
+		},
+		{
+			name:     "inspec",
+			resource: &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}},
+			setupFile: func(t *testing.T) string {
+				return t.TempDir()
+			},
+			createResourceFn: func(t *testing.T, res resource.Resource, schema resourceschema.Schema, setupPath string, outputDir string) tfsdk.Plan {
+				return newPlan(t, schema, inspecMigrationResourceModel{
+					ProfilePath:  types.StringValue(setupPath),
+					OutputPath:   types.StringValue(outputDir),
+					OutputFormat: types.StringValue("testinfra"),
+					ID:           types.StringNull(),
+					ProfileName:  types.StringNull(),
+					TestContent:  types.StringNull(),
+				})
+			},
+			createStateFn: func(t *testing.T, res resource.Resource, schema resourceschema.Schema, outputDir string) tfsdk.State {
+				return newState(t, schema, inspecMigrationResourceModel{
+					OutputPath:   types.StringValue(outputDir),
+					OutputFormat: types.StringValue("testinfra"),
+				})
+			},
+			outputFile: testinfraFilename,
+			missingMsg: "expected resource to be removed when test file is missing",
+			fileErrMsg: "expected diagnostics for unreadable test file",
+		},
 	}
 
-	outputDir := t.TempDir()
-	plan := newPlan(t, schema, habitatMigrationResourceModel{
-		PlanPath:          types.StringValue(planPath),
-		OutputPath:        types.StringValue(outputDir),
-		BaseImage:         types.StringNull(),
-		ID:                types.StringNull(),
-		PackageName:       types.StringNull(),
-		DockerfileContent: types.StringNull(),
-	})
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if createResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := tt.resource.(resource.Resource)
+			schema := newResourceSchema(t, r)
+			setupPath := tt.setupFile(t)
+			outputDir := t.TempDir()
 
-	missingState := newState(t, schema, habitatMigrationResourceModel{
-		OutputPath: types.StringValue(t.TempDir()),
-	})
-	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: missingState}, readResp)
-	if readResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
-	}
-	if !readResp.State.Raw.IsNull() {
-		t.Fatal("expected resource to be removed when dockerfile is missing")
-	}
+			// Create
+			plan := tt.createResourceFn(t, r, schema, setupPath, outputDir)
+			createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+			r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+			if createResp.Diagnostics.HasError() {
+				t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
+			}
 
-	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-	if updateResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
-	}
+			// Read missing file - should be removed
+			missingState := tt.createStateFn(t, r, schema, t.TempDir())
+			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+			r.Read(context.Background(), resource.ReadRequest{State: missingState}, readResp)
+			if readResp.Diagnostics.HasError() {
+				t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
+			}
+			if !readResp.State.Raw.IsNull() {
+				t.Fatal(tt.missingMsg)
+			}
 
-	state := newState(t, schema, habitatMigrationResourceModel{
-		OutputPath: types.StringValue(outputDir),
-	})
-	readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-	if readResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
-	}
+			// Update
+			updatePlan := tt.createResourceFn(t, r, schema, setupPath, outputDir)
+			updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+			r.Update(context.Background(), resource.UpdateRequest{Plan: updatePlan}, updateResp)
+			if updateResp.Diagnostics.HasError() {
+				t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
+			}
 
-	dockerfilePath := filepath.Join(outputDir, "Dockerfile")
-	if err := os.Chmod(dockerfilePath, noPermissions); err != nil {
-		t.Fatalf("failed to chmod dockerfile: %v", err)
-	}
-	readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-	if !readResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for unreadable dockerfile")
-	}
+			// Read existing file
+			state := tt.createStateFn(t, r, schema, outputDir)
+			readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+			r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if readResp.Diagnostics.HasError() {
+				t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
+			}
 
-	dirPath := filepath.Join(outputDir, "Dockerfile")
-	deleteResp := &resource.DeleteResponse{}
-	r.Delete(context.Background(), resource.DeleteRequest{State: newState(t, schema, habitatMigrationResourceModel{
-		OutputPath: types.StringValue(outputDir),
-	})}, deleteResp)
-	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
-	}
+			// Read with permission error
+			filePath := filepath.Join(outputDir, tt.outputFile)
+			if err := os.Chmod(filePath, noPermissions); err != nil {
+				t.Fatalf("failed to chmod file: %v", err)
+			}
+			readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+			r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+			if !readResp.Diagnostics.HasError() {
+				t.Fatal(tt.fileErrMsg)
+			}
 
-	if err := os.MkdirAll(dirPath, 0755); err != nil {
-		t.Fatalf("failed to recreate dir: %v", err)
-	}
-	deleteResp = &resource.DeleteResponse{}
-	r.Delete(context.Background(), resource.DeleteRequest{State: newState(t, schema, habitatMigrationResourceModel{
-		OutputPath: types.StringValue(outputDir),
-	})}, deleteResp)
-	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
-	}
-}
+			// Delete file
+			deleteResp := &resource.DeleteResponse{}
+			r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+			if deleteResp.Diagnostics.HasError() {
+				t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
+			}
 
-func TestHabitatMigrationResourceErrors(t *testing.T) {
-	r := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	planPath := filepath.Join(t.TempDir(), testPlanSh)
-	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlan, err)
-	}
-
-	plan := newPlan(t, schema, habitatMigrationResourceModel{
-		PlanPath:          types.StringValue(planPath),
-		OutputPath:        types.StringValue(t.TempDir()),
-		BaseImage:         types.StringValue("debian:stable"),
-		ID:                types.StringNull(),
-		PackageName:       types.StringNull(),
-		DockerfileContent: types.StringNull(),
-	})
-
-	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-habitat")
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if !createResp.Diagnostics.HasError() {
-		t.Fatal(testExpectedConvertError)
-	}
-
-	t.Setenv("SOUSCHEF_TEST_FAIL", "")
-	t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", "convert-habitat")
-	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-	if !updateResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for missing dockerfile")
-	}
-
-	createResp = &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for missing dockerfile on create")
-	}
-}
-
-func TestHabitatMigrationImportStateCoverage(t *testing.T) {
-	r := &habitatMigrationResource{}
-	schema := newResourceSchema(t, r)
-
-	resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), resource.ImportStateRequest{ID: "missing|"}, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for invalid import ID")
-	}
-
-	planPath := filepath.Join(t.TempDir(), testPlanSh)
-	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlan, err)
-	}
-	outputDir := t.TempDir()
-	dockerfilePath := filepath.Join(outputDir, "Dockerfile")
-	if err := os.WriteFile(dockerfilePath, []byte("FROM ubuntu"), 0644); err != nil {
-		t.Fatalf("failed to write dockerfile: %v", err)
-	}
-
-	req := resource.ImportStateRequest{ID: planPath + "|" + outputDir + "|"}
-	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), req, resp)
-	if resp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-	}
-
-	if err := os.Chmod(dockerfilePath, noPermissions); err != nil {
-		t.Fatalf("failed to chmod dockerfile: %v", err)
-	}
-	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), req, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for unreadable dockerfile")
+			// Delete as directory
+			if err := os.MkdirAll(filePath, 0755); err != nil {
+				t.Fatalf("failed to recreate as dir: %v", err)
+			}
+			deleteResp = &resource.DeleteResponse{}
+			r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+			if deleteResp.Diagnostics.HasError() {
+				t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
+			}
+		})
 	}
 }
 
-func TestInSpecMigrationResourceCoverage(t *testing.T) {
-	r := &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	profileDir := t.TempDir()
-	outputDir := t.TempDir()
-	plan := newPlan(t, schema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue(profileDir),
-		OutputPath:   types.StringValue(outputDir),
-		OutputFormat: types.StringValue("testinfra"),
-		ID:           types.StringNull(),
-		ProfileName:  types.StringNull(),
-		TestContent:  types.StringNull(),
-	})
-
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if createResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
+func TestHabitatAndInSpecResourceErrors(t *testing.T) {
+	tests := []struct {
+		name           string
+		resource       interface{}
+		setupFile      func(t *testing.T) string
+		setupPlan      func(t *testing.T, schema resourceschema.Schema, path string) tfsdk.Plan
+		convertCommand string
+		missingMsg     string
+	}{
+		{
+			name:     "habitat",
+			resource: &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}},
+			setupFile: func(t *testing.T) string {
+				planPath := filepath.Join(t.TempDir(), testPlanSh)
+				if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+					t.Fatalf(testFailedToWritePlan, err)
+				}
+				return planPath
+			},
+			setupPlan: func(t *testing.T, schema resourceschema.Schema, path string) tfsdk.Plan {
+				return newPlan(t, schema, habitatMigrationResourceModel{
+					PlanPath:          types.StringValue(path),
+					OutputPath:        types.StringValue(t.TempDir()),
+					BaseImage:         types.StringValue("debian:stable"),
+					ID:                types.StringNull(),
+					PackageName:       types.StringNull(),
+					DockerfileContent: types.StringNull(),
+				})
+			},
+			convertCommand: testConvertHabitat,
+			missingMsg:     "expected diagnostics for missing dockerfile",
+		},
+		{
+			name:     "inspec",
+			resource: &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}},
+			setupFile: func(t *testing.T) string {
+				return t.TempDir()
+			},
+			setupPlan: func(t *testing.T, schema resourceschema.Schema, path string) tfsdk.Plan {
+				return newPlan(t, schema, inspecMigrationResourceModel{
+					ProfilePath:  types.StringValue(path),
+					OutputPath:   types.StringValue(t.TempDir()),
+					OutputFormat: types.StringValue("serverspec"),
+					ID:           types.StringNull(),
+					ProfileName:  types.StringNull(),
+					TestContent:  types.StringNull(),
+				})
+			},
+			convertCommand: testConvertInSpec,
+			missingMsg:     "expected diagnostics for missing test file",
+		},
 	}
 
-	missingState := newState(t, schema, inspecMigrationResourceModel{
-		OutputPath:   types.StringValue(t.TempDir()),
-		OutputFormat: types.StringValue("testinfra"),
-	})
-	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: missingState}, readResp)
-	if readResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
-	}
-	if !readResp.State.Raw.IsNull() {
-		t.Fatal("expected resource to be removed when test file is missing")
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := tt.resource.(resource.Resource)
+			schema := newResourceSchema(t, r)
+			setupPath := tt.setupFile(t)
+			plan := tt.setupPlan(t, schema, setupPath)
 
-	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-	if updateResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
-	}
+			// Test convert error
+			t.Setenv("SOUSCHEF_TEST_FAIL", tt.convertCommand)
+			createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+			r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+			if !createResp.Diagnostics.HasError() {
+				t.Fatal(testExpectedConvertError)
+			}
 
-	state := newState(t, schema, inspecMigrationResourceModel{
-		OutputPath:   types.StringValue(outputDir),
-		OutputFormat: types.StringValue("testinfra"),
-	})
-	readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-	if readResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
-	}
+			// Test missing file on update
+			t.Setenv("SOUSCHEF_TEST_FAIL", "")
+			t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", tt.convertCommand)
+			updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+			r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
+			if !updateResp.Diagnostics.HasError() {
+				t.Fatal(tt.missingMsg)
+			}
 
-	testFilePath := filepath.Join(outputDir, testinfraFilename)
-	if err := os.Chmod(testFilePath, noPermissions); err != nil {
-		t.Fatalf("failed to chmod test file: %v", err)
-	}
-	readResp = &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-	if !readResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for unreadable test file")
-	}
-
-	deleteResp := &resource.DeleteResponse{}
-	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
-	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
-	}
-
-	if err := os.MkdirAll(filepath.Join(outputDir, testinfraFilename), 0755); err != nil {
-		t.Fatalf("failed to create directory test file: %v", err)
-	}
-	deleteResp = &resource.DeleteResponse{}
-	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
-}
-
-func TestInSpecMigrationResourceErrors(t *testing.T) {
-	r := &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	profileDir := t.TempDir()
-	plan := newPlan(t, schema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue(profileDir),
-		OutputPath:   types.StringValue(t.TempDir()),
-		OutputFormat: types.StringValue("serverspec"),
-		ID:           types.StringNull(),
-		ProfileName:  types.StringNull(),
-		TestContent:  types.StringNull(),
-	})
-
-	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-inspec")
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if !createResp.Diagnostics.HasError() {
-		t.Fatal(testExpectedConvertError)
-	}
-
-	t.Setenv("SOUSCHEF_TEST_FAIL", "")
-	t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", "convert-inspec")
-	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-	if !updateResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for missing test file")
-	}
-
-	createResp = &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for missing test file on create")
+			// Test missing file on create
+			createResp = &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+			r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+			if !createResp.Diagnostics.HasError() {
+				t.Fatalf("%s on create", tt.missingMsg)
+			}
+		})
 	}
 }
 
-func TestInSpecMigrationImportStateCoverage(t *testing.T) {
-	r := &inspecMigrationResource{}
-	schema := newResourceSchema(t, r)
-
-	resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), resource.ImportStateRequest{ID: "invalid"}, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for invalid import ID")
+func TestHabitatAndInSpecImportStateCoverage(t *testing.T) {
+	habTests := []struct {
+		name             string
+		invalidImportID  string
+		setupImportPath  func(t *testing.T) (string, string)
+		setupOutputFile  func(t *testing.T, outputDir string) string
+		validImportIDFmt string
+	}{
+		{
+			name:            "habitat",
+			invalidImportID: "missing|",
+			setupImportPath: func(t *testing.T) (string, string) {
+				planPath := filepath.Join(t.TempDir(), testPlanSh)
+				if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+					t.Fatalf(testFailedToWritePlan, err)
+				}
+				return planPath, t.TempDir()
+			},
+			setupOutputFile: func(t *testing.T, outputDir string) string {
+				dockerfilePath := filepath.Join(outputDir, "Dockerfile")
+				if err := os.WriteFile(dockerfilePath, []byte("FROM ubuntu"), 0644); err != nil {
+					t.Fatalf("failed to write dockerfile: %v", err)
+				}
+				return dockerfilePath
+			},
+			validImportIDFmt: "%s|%s|",
+		},
+		{
+			name:            "inspec",
+			invalidImportID: "invalid",
+			setupImportPath: func(t *testing.T) (string, string) {
+				return t.TempDir(), t.TempDir()
+			},
+			setupOutputFile: func(t *testing.T, outputDir string) string {
+				testFilePath := filepath.Join(outputDir, testinfraFilename)
+				if err := os.WriteFile(testFilePath, []byte("content"), 0644); err != nil {
+					t.Fatalf("failed to write test file: %v", err)
+				}
+				return testFilePath
+			},
+			validImportIDFmt: "%s|%s|testinfra",
+		},
 	}
 
-	profileDir := t.TempDir()
-	outputDir := t.TempDir()
-	testFilePath := filepath.Join(outputDir, testinfraFilename)
-	if err := os.WriteFile(testFilePath, []byte("content"), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
+	for _, tt := range habTests {
+		t.Run(tt.name, func(t *testing.T) {
+			var schema resourceschema.Schema
 
-	req := resource.ImportStateRequest{ID: profileDir + "|" + outputDir + "|testinfra"}
-	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), req, resp)
-	if resp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-	}
+			if tt.name == "habitat" {
+				r := &habitatMigrationResource{}
+				schema = newResourceSchema(t, r)
 
-	if err := os.Chmod(testFilePath, noPermissions); err != nil {
-		t.Fatalf("failed to chmod test file: %v", err)
-	}
-	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), req, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for unreadable test file")
+				// Invalid import ID
+				resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
+				r.ImportState(context.Background(), resource.ImportStateRequest{ID: tt.invalidImportID}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected diagnostics for invalid import ID")
+				}
+
+				// Setup files
+				path, outputDir := tt.setupImportPath(t)
+				filePath := tt.setupOutputFile(t, outputDir)
+
+				// Valid import
+				req := resource.ImportStateRequest{ID: fmt.Sprintf(tt.validImportIDFmt, path, outputDir)}
+				resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
+				r.ImportState(context.Background(), req, resp)
+				if resp.Diagnostics.HasError() {
+					t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+				}
+
+				// Permission error
+				if err := os.Chmod(filePath, noPermissions); err != nil {
+					t.Fatalf("failed to chmod file: %v", err)
+				}
+				resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
+				r.ImportState(context.Background(), req, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected diagnostics for unreadable file")
+				}
+			} else {
+				r := &inspecMigrationResource{}
+				schema = newResourceSchema(t, r)
+
+				// Invalid import ID
+				resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
+				r.ImportState(context.Background(), resource.ImportStateRequest{ID: tt.invalidImportID}, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected diagnostics for invalid import ID")
+				}
+
+				// Setup files
+				path, outputDir := tt.setupImportPath(t)
+				filePath := tt.setupOutputFile(t, outputDir)
+
+				// Valid import
+				req := resource.ImportStateRequest{ID: fmt.Sprintf(tt.validImportIDFmt, path, outputDir)}
+				resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
+				r.ImportState(context.Background(), req, resp)
+				if resp.Diagnostics.HasError() {
+					t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+				}
+
+				// Permission error
+				if err := os.Chmod(filePath, noPermissions); err != nil {
+					t.Fatalf("failed to chmod file: %v", err)
+				}
+				resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
+				r.ImportState(context.Background(), req, resp)
+				if !resp.Diagnostics.HasError() {
+					t.Fatal("expected diagnostics for unreadable file")
+				}
+			}
+		})
 	}
 }
