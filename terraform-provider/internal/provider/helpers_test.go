@@ -333,3 +333,24 @@ func createTestPlaybookFile(t *testing.T, outputDir string) {
 		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 }
+
+// newBatchMigrationTestFixture creates a batch migration resource, schema, and plan for testing
+func newBatchMigrationTestFixture(t *testing.T) (*batchMigrationResource, resourceschema.Schema, tfsdk.Plan) {
+	t.Helper()
+	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
+	schema := newResourceSchema(t, r)
+
+	plan := newPlan(t, schema, batchMigrationResourceModel{
+		CookbookPath: types.StringValue("/tmp/cookbook"),
+		OutputPath:   types.StringValue(t.TempDir()),
+		RecipeNames: []types.String{
+			types.StringValue("default"),
+		},
+		ID:            types.StringNull(),
+		CookbookName:  types.StringNull(),
+		PlaybookCount: types.Int64Null(),
+		Playbooks:     types.MapNull(types.StringType),
+	})
+
+	return r, schema, plan
+}

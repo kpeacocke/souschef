@@ -167,20 +167,7 @@ func TestBatchMigrationResourceCreateUpdateReadDelete(t *testing.T) {
 }
 
 func TestBatchMigrationResourceErrors(t *testing.T) {
-	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
-		OutputPath:   types.StringValue(t.TempDir()),
-		RecipeNames: []types.String{
-			types.StringValue("default"),
-		},
-		ID:            types.StringNull(),
-		CookbookName:  types.StringNull(),
-		PlaybookCount: types.Int64Null(),
-		Playbooks:     types.MapNull(types.StringType),
-	})
+	r, schema, plan := newBatchMigrationTestFixture(t)
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", "convert-recipe")
 	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}

@@ -25,20 +25,7 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 		return types.MapNull(types.StringType), errDiag
 	})
 
-	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue("/tmp/cookbook"),
-		OutputPath:   types.StringValue(t.TempDir()),
-		RecipeNames: []types.String{
-			types.StringValue("default"),
-		},
-		ID:            types.StringNull(),
-		CookbookName:  types.StringNull(),
-		PlaybookCount: types.Int64Null(),
-		Playbooks:     types.MapNull(types.StringType),
-	})
+	r, schema, plan := newBatchMigrationTestFixture(t)
 
 	outputDir := t.TempDir()
 	createTestPlaybookFile(t, outputDir)
