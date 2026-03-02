@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -114,6 +115,26 @@ func (r *batchMigrationResource) Configure(ctx context.Context, req resource.Con
 	r.client = configureResource(req, resp)
 }
 
+// executeBatchConversion converts Chef recipes to Ansible playbooks
+func (r *batchMigrationResource) executeBatchConversion(ctx context.Context, cookbookPath string, outputPath string, recipeNames []string, diags *diag.Diagnostics) map[string]string {
+	playbooks := make(map[string]string)
+	for _, recipeName := range recipeNames {
+		args := []string{"convert-recipe", "--cookbook-path", cookbookPath, "--recipe-name", recipeName, "--output-path", outputPath}
+		if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting recipe", diags); !ok {
+			return nil
+		}
+
+		playbookPath := filepath.Join(outputPath, recipeName+".yml")
+		content := readGeneratedFile(playbookPath, errorReadingBatchPlaybook, diags)
+		if diags.HasError() {
+			return nil
+		}
+
+		playbooks[recipeName] = content
+	}
+	return playbooks
+}
+
 // Create creates the resource and sets the initial Terraform state
 func (r *batchMigrationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan batchMigrationResourceModel
@@ -132,23 +153,10 @@ func (r *batchMigrationResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
-	// Convert each recipe
-	playbooks := make(map[string]string)
-	for _, recipeName := range recipeNames {
-		// Call souschef CLI to convert recipe
-		args := []string{"convert-recipe", "--cookbook-path", cookbookPath, "--recipe-name", recipeName, "--output-path", outputPath}
-		if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting recipe", &resp.Diagnostics); !ok {
-			return
-		}
-
-		// Read generated playbook
-		playbookPath := filepath.Join(outputPath, recipeName+".yml")
-		content := readGeneratedFile(playbookPath, errorReadingBatchPlaybook, &resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		playbooks[recipeName] = content
+	// Convert recipes to playbooks
+	playbooks := r.executeBatchConversion(ctx, cookbookPath, outputPath, recipeNames, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	// Extract cookbook name from path
@@ -226,27 +234,17 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	// Re-run conversion for all recipes
 	cookbookPath := plan.CookbookPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
 	recipeNames := stringSliceFromTypesList(plan.RecipeNames)
 
-	playbooks := make(map[string]string)
-	for _, recipeName := range recipeNames {
-		args := []string{"convert-recipe", "--cookbook-path", cookbookPath, "--recipe-name", recipeName, "--output-path", outputPath}
-		if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting recipe", &resp.Diagnostics); !ok {
-			return
-		}
-
-		playbookPath := filepath.Join(outputPath, recipeName+".yml")
-		content := readGeneratedFile(playbookPath, errorReadingBatchPlaybook, &resp.Diagnostics)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-
-		playbooks[recipeName] = content
+	// Convert recipes to playbooks
+	playbooks := r.executeBatchConversion(ctx, cookbookPath, outputPath, recipeNames, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
+	// Convert playbooks map to types.Map
 	playbooksMap, mapDiags := typesMapValueFrom(ctx, types.StringType, playbooks)
 	resp.Diagnostics.Append(mapDiags...)
 	if resp.Diagnostics.HasError() {
