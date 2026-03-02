@@ -212,46 +212,45 @@ func TestDeleteHandlesErrors(t *testing.T) {
 	}
 }
 
+// testConfigError executes config validation and verifies expected error
+func testConfigError(t *testing.T, configExecutor func(config tfsdk.Config) diag.Diagnostics, fieldName string, errorMsg string) {
+	t.Helper()
+	badValue := tftypes.NewValue(tftypes.Object{
+		AttributeTypes: map[string]tftypes.Type{
+			fieldName: tftypes.Number,
+		},
+	}, map[string]tftypes.Value{
+		fieldName: tftypes.NewValue(tftypes.Number, 1),
+	})
+
+	// Create a minimal schema just for the config structure
+	config := tfsdk.Config{Raw: badValue}
+	diags := configExecutor(config)
+	if !diags.HasError() {
+		t.Fatal(errorMsg)
+	}
+}
+
 func TestProviderConfigureConfigError(t *testing.T) {
 	p := &SousChefProvider{}
 	schema := newProviderSchema(t, p)
-
-	badValue := tftypes.NewValue(tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			"souschef_path": tftypes.Number,
-		},
-	}, map[string]tftypes.Value{
-		"souschef_path": tftypes.NewValue(tftypes.Number, 1),
-	})
-
-	config := tfsdk.Config{Schema: schema, Raw: badValue}
-	resp := &provider.ConfigureResponse{}
-
-	p.Configure(context.Background(), provider.ConfigureRequest{Config: config}, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for invalid provider config")
-	}
+	testConfigError(t, func(config tfsdk.Config) diag.Diagnostics {
+		config.Schema = schema
+		resp := &provider.ConfigureResponse{}
+		p.Configure(context.Background(), provider.ConfigureRequest{Config: config}, resp)
+		return resp.Diagnostics
+	}, "souschef_path", "expected diagnostics for invalid provider config")
 }
 
 func TestCostEstimateDataSourceReadConfigError(t *testing.T) {
 	ds := &costEstimateDataSource{}
 	schema := newDataSourceSchema(t, ds)
-
-	badValue := tftypes.NewValue(tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			"cookbook_path": tftypes.Number,
-		},
-	}, map[string]tftypes.Value{
-		"cookbook_path": tftypes.NewValue(tftypes.Number, 1),
-	})
-
-	config := tfsdk.Config{Schema: schema, Raw: badValue}
-	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schema}}
-
-	ds.Read(context.Background(), datasource.ReadRequest{Config: config}, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for invalid cost estimate config")
-	}
+	testConfigError(t, func(config tfsdk.Config) diag.Diagnostics {
+		config.Schema = schema
+		resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schema}}
+		ds.Read(context.Background(), datasource.ReadRequest{Config: config}, resp)
+		return resp.Diagnostics
+	}, "cookbook_path", "expected diagnostics for invalid cost estimate config")
 }
 
 func TestResourcePlanStateGetDiagnostics(t *testing.T) {
