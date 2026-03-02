@@ -124,11 +124,7 @@ func TestBatchMigrationCreateAndReadWithMultipleRecipes(t *testing.T) {
 		Playbooks:     types.MapNull(types.StringType),
 	})
 
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if createResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
-	}
+	testResourceCreatePhase(t, r, schema, plan)
 
 	// Verify all playbooks were created
 	for _, recipe := range []string{"default", "install", "configure"} {
@@ -159,11 +155,7 @@ func TestHabitatMigrationCreateWithCustomBaseImage(t *testing.T) {
 		DockerfileContent: types.StringNull(),
 	})
 
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if createResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
-	}
+	testResourceCreatePhase(t, r, schema, plan)
 }
 
 // Test inspec migration with all format variations
@@ -184,10 +176,6 @@ func TestInSpecMigrationWithAllFormats(t *testing.T) {
 			TestContent:  types.StringNull(),
 		})
 
-		createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-		r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-		if createResp.Diagnostics.HasError() {
-			t.Fatalf("unexpected diagnostics for %s format: %v", format, createResp.Diagnostics)
-		}
+		testResourceCreatePhase(t, r, schema, plan)
 	}
 }
