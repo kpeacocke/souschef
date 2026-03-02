@@ -59,58 +59,41 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 	})
 
 	// Test operations that encounter map conversion errors
-	testOps := []struct {
-		name string
-		op   func() diag.Diagnostics
-	}{
-		{
-			name: "create",
-			op: func() diag.Diagnostics {
-				createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-				r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-				return createResp.Diagnostics
-			},
-		},
-		{
-			name: "update",
-			op: func() diag.Diagnostics {
-				updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-				r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-				return updateResp.Diagnostics
-			},
-		},
-		{
-			name: "read",
-			op: func() diag.Diagnostics {
-				readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-				r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-				return readResp.Diagnostics
-			},
-		},
-		{
-			name: "import",
-			op: func() diag.Diagnostics {
-				cookbookDir := t.TempDir()
-				outputDir := t.TempDir()
-				playbookPath := filepath.Join(outputDir, testDefaultYml)
-				if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-					t.Fatalf(testFailedToWritePlaybook, err)
-				}
-				importResp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-				r.ImportState(context.Background(), resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|default"}, importResp)
-				return importResp.Diagnostics
-			},
-		},
-	}
+	// Create operation
+	testLifecycleOperation(t, "create map conversion", func() diag.Diagnostics {
+		createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+		r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+		return createResp.Diagnostics
+	})
 
-	for _, op := range testOps {
-		t.Run(op.name, func(t *testing.T) {
-			diags := op.op()
-			if !diags.HasError() {
-				t.Errorf("expected diagnostics from map conversion in %s", op.name)
-			}
+	// Update operation
+	testLifecycleOperation(t, "update map conversion", func() diag.Diagnostics {
+		updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+		r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
+		return updateResp.Diagnostics
+	})
+
+	// Read operation
+	testLifecycleOperation(t, "read map conversion", func() diag.Diagnostics {
+		readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+		r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+		return readResp.Diagnostics
+	})
+
+	// Import operation
+	t.Run("import", func(t *testing.T) {
+		cookbookDir := t.TempDir()
+		outputDir := t.TempDir()
+		playbookPath := filepath.Join(outputDir, testDefaultYml)
+		if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
+			t.Fatalf(testFailedToWritePlaybook, err)
+		}
+		testLifecycleOperation(t, "import map conversion", func() diag.Diagnostics {
+			importResp := &resource.ImportStateResponse{State: newEmptyState(schema)}
+			r.ImportState(context.Background(), resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|default"}, importResp)
+			return importResp.Diagnostics
 		})
-	}
+	})
 }
 
 // testLifecycleOperation executes a lifecycle operation and checks for errors
