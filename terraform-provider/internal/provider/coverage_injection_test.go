@@ -42,10 +42,7 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 	})
 
 	outputDir := t.TempDir()
-	playbookPath := filepath.Join(outputDir, testDefaultYml)
-	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlaybook, err)
-	}
+	createTestPlaybookFile(t, outputDir)
 
 	state := newState(t, schema, batchMigrationResourceModel{
 		ID: types.StringValue("test"),
@@ -82,15 +79,10 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 
 	// Import operation
 	t.Run("import", func(t *testing.T) {
-		cookbookDir := t.TempDir()
-		outputDir := t.TempDir()
-		playbookPath := filepath.Join(outputDir, testDefaultYml)
-		if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-			t.Fatalf(testFailedToWritePlaybook, err)
-		}
+		cookbookDir, importOutputDir := setupBatchImportTestFiles(t)
 		testLifecycleOperation(t, "import map conversion", func() diag.Diagnostics {
 			importResp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-			r.ImportState(context.Background(), resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|default"}, importResp)
+			r.ImportState(context.Background(), resource.ImportStateRequest{ID: cookbookDir + "|" + importOutputDir + "|default"}, importResp)
 			return importResp.Diagnostics
 		})
 	})
@@ -316,6 +308,24 @@ func TestResourcePlanStateGetDiagnostics(t *testing.T) {
 	}
 }
 
+// setupBatchImportTestFiles creates temporary cookbook, output directories and playbook file
+func setupBatchImportTestFiles(t *testing.T) (string, string) {
+	t.Helper()
+	cookbookDir := t.TempDir()
+	outputDir := t.TempDir()
+	createTestPlaybookFile(t, outputDir)
+	return cookbookDir, outputDir
+}
+
+// createTestPlaybookFile creates a test playbook file in the given directory
+func createTestPlaybookFile(t *testing.T, outputDir string) {
+	t.Helper()
+	playbookPath := filepath.Join(outputDir, testDefaultYml)
+	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
+		t.Fatalf(testFailedToWritePlaybook, err)
+	}
+}
+
 // testImportStateDiagnosticsError executes ImportState and verifies expected diagnostics error
 func testImportStateDiagnosticsError(t *testing.T, r *batchMigrationResource, id string, errMsg string) {
 	t.Helper()
@@ -330,13 +340,7 @@ func testImportStateDiagnosticsError(t *testing.T, r *batchMigrationResource, id
 
 func TestBatchImportStateReadError(t *testing.T) {
 	r := &batchMigrationResource{}
-
-	cookbookDir := t.TempDir()
-	outputDir := t.TempDir()
-	playbookPath := filepath.Join(outputDir, testDefaultYml)
-	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlaybook, err)
-	}
+	cookbookDir, outputDir := setupBatchImportTestFiles(t)
 
 	withOsReadFile(t, func(string) ([]byte, error) {
 		return nil, errors.New("read error")
@@ -347,9 +351,6 @@ func TestBatchImportStateReadError(t *testing.T) {
 
 func TestBatchImportStateRecipeNamesError(t *testing.T) {
 	r := &batchMigrationResource{}
-
-	cookbookDir := t.TempDir()
-	outputDir := t.TempDir()
-
+	cookbookDir, outputDir := setupBatchImportTestFiles(t)
 	testImportStateDiagnosticsError(t, r, cookbookDir+"|"+outputDir+"| , ", "expected diagnostics for invalid recipe names")
 }
