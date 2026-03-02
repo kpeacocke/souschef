@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
@@ -530,22 +531,20 @@ func TestInSpecMigrationReadWithMissingTestFile(t *testing.T) {
 	}
 }
 
-func testCreateOutputPathErrorHelper(t *testing.T, r resource.Resource, filePath string) {
+// createTestPlanForResource creates a plan for the given resource type with the specified outputPath.
+func createTestPlanForResource(t *testing.T, schema resourceschema.Schema, r resource.Resource, outputPath string) tfsdk.Plan {
 	t.Helper()
-	schema := newResourceSchema(t, r)
-	var plan tfsdk.Plan
-
 	switch r.(type) {
 	case *migrationResource:
-		plan = newPlan(t, schema, migrationResourceModel{
+		return newPlan(t, schema, migrationResourceModel{
 			CookbookPath: types.StringValue(testTmpCookbook),
-			OutputPath:   types.StringValue(filePath),
+			OutputPath:   types.StringValue(outputPath),
 			RecipeName:   types.StringValue("default"),
 		})
 	case *batchMigrationResource:
-		plan = newPlan(t, schema, batchMigrationResourceModel{
+		return newPlan(t, schema, batchMigrationResourceModel{
 			CookbookPath:  types.StringValue(testTmpCookbook),
-			OutputPath:    types.StringValue(filePath),
+			OutputPath:    types.StringValue(outputPath),
 			RecipeNames:   []types.String{types.StringValue("default")},
 			ID:            types.StringNull(),
 			CookbookName:  types.StringNull(),
@@ -557,24 +556,65 @@ func testCreateOutputPathErrorHelper(t *testing.T, r resource.Resource, filePath
 		if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
 			t.Fatalf(testFailedToWritePlan, err)
 		}
-		plan = newPlan(t, schema, habitatMigrationResourceModel{
+		return newPlan(t, schema, habitatMigrationResourceModel{
 			PlanPath:          types.StringValue(planPath),
-			OutputPath:        types.StringValue(filePath),
+			OutputPath:        types.StringValue(outputPath),
 			BaseImage:         types.StringNull(),
 			PackageName:       types.StringNull(),
 			ID:                types.StringNull(),
 			DockerfileContent: types.StringNull(),
 		})
 	case *inspecMigrationResource:
-		plan = newPlan(t, schema, inspecMigrationResourceModel{
+		return newPlan(t, schema, inspecMigrationResourceModel{
 			ProfilePath:  types.StringValue(testTmpProfile),
-			OutputPath:   types.StringValue(filePath),
+			OutputPath:   types.StringValue(outputPath),
 			OutputFormat: types.StringValue("testinfra"),
 			ID:           types.StringNull(),
 			ProfileName:  types.StringNull(),
 			TestContent:  types.StringNull(),
 		})
+	default:
+		t.Fatalf("unsupported resource type: %T", r)
+		return tfsdk.Plan{}
 	}
+}
+
+// createTestStateForResource creates a state for the given resource type with the specified outputPath.
+func createTestStateForResource(t *testing.T, schema resourceschema.Schema, r resource.Resource, outputPath string) tfsdk.State {
+	t.Helper()
+	switch r.(type) {
+	case *habitatMigrationResource:
+		return newState(t, schema, habitatMigrationResourceModel{
+			PlanPath:   types.StringValue(testTmpPlanSh),
+			OutputPath: types.StringValue(outputPath),
+		})
+	case *inspecMigrationResource:
+		return newState(t, schema, inspecMigrationResourceModel{
+			ProfilePath:  types.StringValue(testTmpProfile),
+			OutputPath:   types.StringValue(outputPath),
+			OutputFormat: types.StringValue("testinfra"),
+		})
+	case *batchMigrationResource:
+		return newState(t, schema, batchMigrationResourceModel{
+			ID: types.StringValue("batch-test"),
+			RecipeNames: []types.String{
+				types.StringValue("default"),
+			},
+			OutputPath:    types.StringValue(outputPath),
+			CookbookName:  types.StringValue("test"),
+			PlaybookCount: types.Int64Value(1),
+			Playbooks:     types.MapNull(types.StringType),
+		})
+	default:
+		t.Fatalf("unsupported resource type: %T", r)
+		return tfsdk.State{}
+	}
+}
+
+func testCreateOutputPathErrorHelper(t *testing.T, r resource.Resource, filePath string) {
+	t.Helper()
+	schema := newResourceSchema(t, r)
+	plan := createTestPlanForResource(t, schema, r, filePath)
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
 	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
@@ -610,42 +650,7 @@ func TestCreateOutputPathError(t *testing.T) {
 func testUpdateCommandFailureHelper(t *testing.T, r resource.Resource, convertCmd string) {
 	t.Helper()
 	schema := newResourceSchema(t, r)
-	var plan tfsdk.Plan
-
-	switch r.(type) {
-	case *batchMigrationResource:
-		plan = newPlan(t, schema, batchMigrationResourceModel{
-			CookbookPath:  types.StringValue(testTmpCookbook),
-			OutputPath:    types.StringValue(t.TempDir()),
-			RecipeNames:   []types.String{types.StringValue("default")},
-			ID:            types.StringNull(),
-			CookbookName:  types.StringNull(),
-			PlaybookCount: types.Int64Null(),
-			Playbooks:     types.MapNull(types.StringType),
-		})
-	case *habitatMigrationResource:
-		planPath := filepath.Join(t.TempDir(), testPlanSh)
-		if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
-			t.Fatalf(testFailedToWritePlan, err)
-		}
-		plan = newPlan(t, schema, habitatMigrationResourceModel{
-			PlanPath:          types.StringValue(planPath),
-			OutputPath:        types.StringValue(t.TempDir()),
-			BaseImage:         types.StringNull(),
-			PackageName:       types.StringNull(),
-			ID:                types.StringNull(),
-			DockerfileContent: types.StringNull(),
-		})
-	case *inspecMigrationResource:
-		plan = newPlan(t, schema, inspecMigrationResourceModel{
-			ProfilePath:  types.StringValue(testTmpProfile),
-			OutputPath:   types.StringValue(t.TempDir()),
-			OutputFormat: types.StringValue("testinfra"),
-			ID:           types.StringNull(),
-			ProfileName:  types.StringNull(),
-			TestContent:  types.StringNull(),
-		})
-	}
+	plan := createTestPlanForResource(t, schema, r, t.TempDir())
 
 	t.Setenv("SOUSCHEF_TEST_FAIL", convertCmd)
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
@@ -685,31 +690,7 @@ func testDeleteWarningHelper(t *testing.T, r resource.Resource, outputFileName s
 		t.Fatalf(testFailedToWriteFile, err)
 	}
 
-	var state tfsdk.State
-	switch r.(type) {
-	case *habitatMigrationResource:
-		state = newState(t, schema, habitatMigrationResourceModel{
-			PlanPath:   types.StringValue(testTmpPlanSh),
-			OutputPath: types.StringValue(outputDir),
-		})
-	case *inspecMigrationResource:
-		state = newState(t, schema, inspecMigrationResourceModel{
-			ProfilePath:  types.StringValue(testTmpProfile),
-			OutputPath:   types.StringValue(outputDir),
-			OutputFormat: types.StringValue("testinfra"),
-		})
-	case *batchMigrationResource:
-		state = newState(t, schema, batchMigrationResourceModel{
-			ID: types.StringValue("batch-test"),
-			RecipeNames: []types.String{
-				types.StringValue("default"),
-			},
-			OutputPath:    types.StringValue(outputDir),
-			CookbookName:  types.StringValue("test"),
-			PlaybookCount: types.Int64Value(1),
-			Playbooks:     types.MapNull(types.StringType),
-		})
-	}
+	state := createTestStateForResource(t, schema, r, outputDir)
 
 	resp := &resource.DeleteResponse{}
 	r.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
