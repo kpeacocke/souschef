@@ -315,3 +315,21 @@ func badState(schema resourceschema.Schema, attrName string) tfsdk.State {
 
 	return tfsdk.State{Schema: schema, Raw: raw}
 }
+
+// setupBatchImportTestFiles creates temporary cookbook, output directories and playbook file
+func setupBatchImportTestFiles(t *testing.T) (string, string) {
+	t.Helper()
+	cookbookDir := t.TempDir()
+	outputDir := t.TempDir()
+	createTestPlaybookFile(t, outputDir)
+	return cookbookDir, outputDir
+}
+
+// createTestPlaybookFile creates a test playbook file in the given directory
+func createTestPlaybookFile(t *testing.T, outputDir string) {
+	t.Helper()
+	playbookPath := filepath.Join(outputDir, testDefaultYml)
+	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
+		t.Fatalf(testFailedToWritePlaybook, err)
+	}
+}

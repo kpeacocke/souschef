@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -305,24 +304,6 @@ func TestResourcePlanStateGetDiagnostics(t *testing.T) {
 				return deleteResp.Diagnostics
 			})
 		})
-	}
-}
-
-// setupBatchImportTestFiles creates temporary cookbook, output directories and playbook file
-func setupBatchImportTestFiles(t *testing.T) (string, string) {
-	t.Helper()
-	cookbookDir := t.TempDir()
-	outputDir := t.TempDir()
-	createTestPlaybookFile(t, outputDir)
-	return cookbookDir, outputDir
-}
-
-// createTestPlaybookFile creates a test playbook file in the given directory
-func createTestPlaybookFile(t *testing.T, outputDir string) {
-	t.Helper()
-	playbookPath := filepath.Join(outputDir, testDefaultYml)
-	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlaybook, err)
 	}
 }
 
