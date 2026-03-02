@@ -41,18 +41,6 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 		Playbooks:     types.MapNull(types.StringType),
 	})
 
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics from map conversion in create")
-	}
-
-	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-	if !updateResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics from map conversion in update")
-	}
-
 	outputDir := t.TempDir()
 	playbookPath := filepath.Join(outputDir, testDefaultYml)
 	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
@@ -69,23 +57,59 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 		PlaybookCount: types.Int64Value(1),
 		Playbooks:     types.MapNull(types.StringType),
 	})
-	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-	if !readResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics from map conversion in read")
+
+	// Test operations that encounter map conversion errors
+	testOps := []struct {
+		name string
+		op   func() diag.Diagnostics
+	}{
+		{
+			name: "create",
+			op: func() diag.Diagnostics {
+				createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+				return createResp.Diagnostics
+			},
+		},
+		{
+			name: "update",
+			op: func() diag.Diagnostics {
+				updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
+				return updateResp.Diagnostics
+			},
+		},
+		{
+			name: "read",
+			op: func() diag.Diagnostics {
+				readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+				r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
+				return readResp.Diagnostics
+			},
+		},
+		{
+			name: "import",
+			op: func() diag.Diagnostics {
+				cookbookDir := t.TempDir()
+				outputDir := t.TempDir()
+				playbookPath := filepath.Join(outputDir, testDefaultYml)
+				if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
+					t.Fatalf(testFailedToWritePlaybook, err)
+				}
+				importResp := &resource.ImportStateResponse{State: newEmptyState(schema)}
+				r.ImportState(context.Background(), resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|default"}, importResp)
+				return importResp.Diagnostics
+			},
+		},
 	}
 
-	cookbookDir := t.TempDir()
-	outputDir = t.TempDir()
-	playbookPath = filepath.Join(outputDir, testDefaultYml)
-	if err := os.WriteFile(playbookPath, []byte("content"), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlaybook, err)
-	}
-
-	importResp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|default"}, importResp)
-	if !importResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics from map conversion in import")
+	for _, op := range testOps {
+		t.Run(op.name, func(t *testing.T) {
+			diags := op.op()
+			if !diags.HasError() {
+				t.Errorf("expected diagnostics from map conversion in %s", op.name)
+			}
+		})
 	}
 }
 
@@ -239,9 +263,42 @@ func TestCostEstimateDataSourceReadConfigError(t *testing.T) {
 }
 
 func TestResourcePlanStateGetDiagnostics(t *testing.T) {
+	// Helper to test bad plan/state errors on a resource
+	testResourceLifecycleErrors := func(t *testing.T, r resource.Resource, fieldName string) {
+		schema := newResourceSchema(t, r)
+
+		// Test Create with bad plan
+		createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+		r.Create(context.Background(), resource.CreateRequest{Plan: badPlan(schema, fieldName)}, createResp)
+		if !createResp.Diagnostics.HasError() {
+			t.Errorf("expected diagnostics for create plan")
+		}
+
+		// Test Update with bad plan
+		updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+		r.Update(context.Background(), resource.UpdateRequest{Plan: badPlan(schema, fieldName)}, updateResp)
+		if !updateResp.Diagnostics.HasError() {
+			t.Errorf("expected diagnostics for update plan")
+		}
+
+		// Test Read with bad state
+		readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+		r.Read(context.Background(), resource.ReadRequest{State: badState(schema, fieldName)}, readResp)
+		if !readResp.Diagnostics.HasError() {
+			t.Errorf("expected diagnostics for read state")
+		}
+
+		// Test Delete with bad state
+		deleteResp := &resource.DeleteResponse{}
+		r.Delete(context.Background(), resource.DeleteRequest{State: badState(schema, fieldName)}, deleteResp)
+		if !deleteResp.Diagnostics.HasError() {
+			t.Errorf("expected diagnostics for delete state")
+		}
+	}
+
 	tests := []struct {
 		name      string
-		resource  interface{}
+		resource  resource.Resource
 		fieldName string
 	}{
 		{
@@ -268,36 +325,7 @@ func TestResourcePlanStateGetDiagnostics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := tt.resource.(resource.Resource)
-			schema := newResourceSchema(t, r)
-
-			// Test Create with bad plan
-			createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-			r.Create(context.Background(), resource.CreateRequest{Plan: badPlan(schema, tt.fieldName)}, createResp)
-			if !createResp.Diagnostics.HasError() {
-				t.Fatalf("expected diagnostics for %s create plan", tt.name)
-			}
-
-			// Test Update with bad plan
-			updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-			r.Update(context.Background(), resource.UpdateRequest{Plan: badPlan(schema, tt.fieldName)}, updateResp)
-			if !updateResp.Diagnostics.HasError() {
-				t.Fatalf("expected diagnostics for %s update plan", tt.name)
-			}
-
-			// Test Read with bad state
-			readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-			r.Read(context.Background(), resource.ReadRequest{State: badState(schema, tt.fieldName)}, readResp)
-			if !readResp.Diagnostics.HasError() {
-				t.Fatalf("expected diagnostics for %s read state", tt.name)
-			}
-
-			// Test Delete with bad state
-			deleteResp := &resource.DeleteResponse{}
-			r.Delete(context.Background(), resource.DeleteRequest{State: badState(schema, tt.fieldName)}, deleteResp)
-			if !deleteResp.Diagnostics.HasError() {
-				t.Fatalf("expected diagnostics for %s delete state", tt.name)
-			}
+			testResourceLifecycleErrors(t, tt.resource, tt.fieldName)
 		})
 	}
 }
