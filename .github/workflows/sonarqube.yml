@@ -95,7 +95,7 @@ jobs:
         set -e
         echo "Checking for coverage artifacts..."
         ls -lh coverage-artifacts/ 2>/dev/null || echo "No coverage-artifacts directory found"
-        
+
         # Find and copy Go coverage
         if [ -f coverage-artifacts/go-coverage/coverage.lcov ]; then
           echo "Found Go coverage at coverage-artifacts/go-coverage/coverage.lcov"
@@ -108,7 +108,7 @@ jobs:
           find coverage-artifacts -name "coverage.lcov" 2>/dev/null || echo "No coverage.lcov files found"
           find coverage-artifacts -type f 2>/dev/null || echo "No files in coverage-artifacts"
         fi
-        
+
         # Verify Python coverage
         if [ -f coverage.xml ]; then
           echo "✓ Python coverage found at coverage.xml"
@@ -116,7 +116,7 @@ jobs:
         else
           echo "⚠ Python coverage (coverage.xml) not found"
         fi
-        
+
         # Final verification
         echo ""
         echo "Coverage files ready for SonarCloud:"
