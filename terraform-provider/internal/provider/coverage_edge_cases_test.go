@@ -238,297 +238,104 @@ func TestInSpecMigrationDeleteWithDifferentFormats(t *testing.T) {
 	}
 }
 
-func TestMigrationReadWithUnreadablePlaybook(t *testing.T) {
-	r := &migrationResource{}
+// testReadWithUnreadableFile tests Read when output file has no read permissions
+func testReadWithUnreadableFile(t *testing.T, r resource.Resource, outputDir, fileName string) {
+	t.Helper()
 	schema := newResourceSchema(t, r)
-
-	outputDir := t.TempDir()
-	playbookPath := filepath.Join(outputDir, "test.yml")
+	filePath := filepath.Join(outputDir, fileName)
 
 	// Create file with no read permissions
-	if err := os.WriteFile(playbookPath, []byte("content"), 0000); err != nil {
-		t.Fatalf("failed to write playbook: %v", err)
+	if err := os.WriteFile(filePath, []byte("content"), 0000); err != nil {
+		t.Fatalf("failed to write file: %v", err)
 	}
-	defer os.Chmod(playbookPath, testFilePermissions) // cleanup
+	defer os.Chmod(filePath, testFilePermissions) // cleanup
 
-	state := newState(t, schema, migrationResourceModel{
-		RecipeName: types.StringValue("test"),
-		OutputPath: types.StringValue(outputDir),
-	})
+	state := createTestStateForResource(t, schema, r, outputDir)
 
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
 	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
 
 	if !readResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for unreadable playbook")
+		t.Fatalf("expected diagnostics for unreadable file in %T", r)
 	}
+}
+
+func TestMigrationReadWithUnreadablePlaybook(t *testing.T) {
+	r := &migrationResource{}
+	outputDir := t.TempDir()
+	testReadWithUnreadableFile(t, r, outputDir, "test.yml")
 }
 
 func TestBatchMigrationCreateWithMissingOutput(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	// Force the fake CLI to not write output
-	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue(testTmpCookbook),
-		OutputPath:   types.StringValue(t.TempDir()),
-		RecipeNames: []types.String{
-			types.StringValue("default"),
-		},
-		ID:            types.StringNull(),
-		CookbookName:  types.StringNull(),
-		PlaybookCount: types.Int64Null(),
-		Playbooks:     types.MapNull(types.StringType),
-	})
-
-	t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", testConvertRecipe)
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-
-	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics when output file is not created")
-	}
+	testCreateWithEnvironmentFailure(t, r, "SOUSCHEF_TEST_SKIP_WRITE", testConvertRecipe)
 }
 
 func TestBatchMigrationCreateWithUnreadablePlaybook(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue(testTmpCookbook),
-		OutputPath:   types.StringValue(t.TempDir()),
-		RecipeNames: []types.String{
-			types.StringValue("default"),
-		},
-		ID:            types.StringNull(),
-		CookbookName:  types.StringNull(),
-		PlaybookCount: types.Int64Null(),
-		Playbooks:     types.MapNull(types.StringType),
-	})
-
-	t.Setenv("SOUSCHEF_TEST_CHMOD", testConvertRecipe)
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-
-	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics when playbook is unreadable")
-	}
+	testCreateWithEnvironmentFailure(t, r, "SOUSCHEF_TEST_CHMOD", testConvertRecipe)
 }
 
 func TestBatchMigrationUpdateWithUnreadablePlaybook(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	plan := newPlan(t, schema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue(testTmpCookbook),
-		OutputPath:   types.StringValue(t.TempDir()),
-		RecipeNames: []types.String{
-			types.StringValue("default"),
-		},
-		ID:            types.StringNull(),
-		CookbookName:  types.StringNull(),
-		PlaybookCount: types.Int64Null(),
-		Playbooks:     types.MapNull(types.StringType),
-	})
-
-	t.Setenv("SOUSCHEF_TEST_CHMOD", testConvertRecipe)
-	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-
-	if !updateResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics when playbook is unreadable")
-	}
+	testUpdateWithEnvironmentFailure(t, r, "SOUSCHEF_TEST_CHMOD", testConvertRecipe)
 }
 
 func TestBatchMigrationReadWithUnreadablePlaybook(t *testing.T) {
 	r := &batchMigrationResource{}
-	schema := newResourceSchema(t, r)
-
 	outputDir := t.TempDir()
-	playbookPath := filepath.Join(outputDir, "default.yml")
-	if err := os.WriteFile(playbookPath, []byte("data"), 0000); err != nil {
-		t.Fatalf("failed to write playbook: %v", err)
-	}
-	defer os.Chmod(playbookPath, testFilePermissions)
-
-	state := newState(t, schema, batchMigrationResourceModel{
-		ID: types.StringValue("test"),
-		RecipeNames: []types.String{
-			types.StringValue("default"),
-		},
-		OutputPath:    types.StringValue(outputDir),
-		CookbookName:  types.StringValue("test"),
-		PlaybookCount: types.Int64Value(1),
-		Playbooks:     types.MapNull(types.StringType),
-	})
-
-	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-
-	if !readResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for unreadable playbook")
-	}
+	testReadWithUnreadableFile(t, r, outputDir, "default.yml")
 }
 
 func TestHabitatMigrationCreateWithMissingPlan(t *testing.T) {
 	r := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertHabitat)
-	plan := newPlan(t, schema, habitatMigrationResourceModel{
-		PlanPath:          types.StringValue("/nonexistent/plan.sh"),
-		OutputPath:        types.StringValue(t.TempDir()),
-		BaseImage:         types.StringNull(),
-		PackageName:       types.StringNull(),
-		ID:                types.StringNull(),
-		DockerfileContent: types.StringNull(),
-	})
-
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-
-	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics when conversion fails")
-	}
+	testCreateWithEnvironmentFailure(t, r, "SOUSCHEF_TEST_FAIL", testConvertHabitat)
 }
 
 func TestHabitatMigrationUpdateWithUnreadableDockerfile(t *testing.T) {
 	r := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	planPath := filepath.Join(t.TempDir(), testPlanSh)
-	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlan, err)
-	}
-
-	plan := newPlan(t, schema, habitatMigrationResourceModel{
-		PlanPath:          types.StringValue(planPath),
-		OutputPath:        types.StringValue(t.TempDir()),
-		BaseImage:         types.StringNull(),
-		PackageName:       types.StringNull(),
-		ID:                types.StringNull(),
-		DockerfileContent: types.StringNull(),
-	})
-
-	t.Setenv("SOUSCHEF_TEST_CHMOD", testConvertHabitat)
-	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-
-	if !updateResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics when Dockerfile is unreadable")
-	}
+	testUpdateWithEnvironmentFailure(t, r, "SOUSCHEF_TEST_CHMOD", testConvertHabitat)
 }
 
 func TestInSpecMigrationCreateWithMissingProfile(t *testing.T) {
 	r := &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	schema := newResourceSchema(t, r)
-
-	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertInSpec)
-	plan := newPlan(t, schema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue("/nonexistent/profile"),
-		OutputPath:   types.StringValue(t.TempDir()),
-		OutputFormat: types.StringValue("testinfra"),
-		ID:           types.StringNull(),
-		ProfileName:  types.StringNull(),
-		TestContent:  types.StringNull(),
-	})
-
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-
-	if !createResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics when conversion fails")
-	}
+	testCreateWithEnvironmentFailure(t, r, "SOUSCHEF_TEST_FAIL", testConvertInSpec)
 }
 
 func TestInSpecMigrationUpdateWithUnreadableTestFile(t *testing.T) {
 	r := &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
+	testUpdateWithEnvironmentFailure(t, r, "SOUSCHEF_TEST_CHMOD", testConvertInSpec)
+}
+
+// testReadMissingFileRemovesResource tests that reading with a missing output file removes the resource
+func testReadMissingFileRemovesResource(t *testing.T, r resource.Resource) {
+	t.Helper()
 	schema := newResourceSchema(t, r)
+	// Create state with non-existent output directory
+	state := createTestStateForResource(t, schema, r, t.TempDir())
 
-	plan := newPlan(t, schema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue(testTmpProfile),
-		OutputPath:   types.StringValue(t.TempDir()),
-		OutputFormat: types.StringValue("testinfra"),
-		ID:           types.StringNull(),
-		ProfileName:  types.StringNull(),
-		TestContent:  types.StringNull(),
-	})
+	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
 
-	t.Setenv("SOUSCHEF_TEST_CHMOD", testConvertInSpec)
-	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-
-	if !updateResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics when test file is unreadable")
+	// Should remove the resource when file doesn't exist
+	if !readResp.State.Raw.IsNull() {
+		t.Fatalf("expected resource to be removed when file not found for %T", r)
 	}
 }
 
 func TestBatchMigrationReadWithMissingPlaybook(t *testing.T) {
 	r := &batchMigrationResource{}
-	schema := newResourceSchema(t, r)
-
-	state := newState(t, schema, batchMigrationResourceModel{
-		ID: types.StringValue("test"),
-		RecipeNames: []types.String{
-			types.StringValue("missing"),
-		},
-		OutputPath:    types.StringValue(t.TempDir()),
-		CookbookName:  types.StringValue("test"),
-		PlaybookCount: types.Int64Value(0),
-		Playbooks:     types.MapNull(types.StringType),
-	})
-
-	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-
-	// Should remove the resource when no playbooks exist
-	if !readResp.State.Raw.IsNull() {
-		t.Fatal("expected resource to be removed when no playbooks found")
-	}
+	testReadMissingFileRemovesResource(t, r)
 }
 
 func TestHabitatMigrationReadWithMissingDockerfile(t *testing.T) {
 	r := &habitatMigrationResource{}
-	schema := newResourceSchema(t, r)
-
-	state := newState(t, schema, habitatMigrationResourceModel{
-		PlanPath:          types.StringValue(testTmpPlanSh),
-		OutputPath:        types.StringValue(t.TempDir()),
-		PackageName:       types.StringValue("test"),
-		ID:                types.StringValue("test"),
-		DockerfileContent: types.StringNull(),
-		BaseImage:         types.StringNull(),
-	})
-
-	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-
-	// Should remove the resource when Dockerfile doesn't exist
-	if !readResp.State.Raw.IsNull() {
-		t.Fatal("expected resource to be removed when Dockerfile not found")
-	}
+	testReadMissingFileRemovesResource(t, r)
 }
 
 func TestInSpecMigrationReadWithMissingTestFile(t *testing.T) {
 	r := &inspecMigrationResource{}
-	schema := newResourceSchema(t, r)
-
-	state := newState(t, schema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue(testTmpProfile),
-		OutputPath:   types.StringValue(t.TempDir()),
-		OutputFormat: types.StringValue("testinfra"),
-		ProfileName:  types.StringValue("test"),
-		ID:           types.StringValue("test"),
-		TestContent:  types.StringNull(),
-	})
-
-	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-
-	// Should remove the resource when test file doesn't exist
-	if !readResp.State.Raw.IsNull() {
-		t.Fatal("expected resource to be removed when test file not found")
-	}
+	testReadMissingFileRemovesResource(t, r)
 }
 
 // createTestPlanForResource creates a plan for the given resource type with the specified outputPath.
@@ -583,6 +390,11 @@ func createTestPlanForResource(t *testing.T, schema resourceschema.Schema, r res
 func createTestStateForResource(t *testing.T, schema resourceschema.Schema, r resource.Resource, outputPath string) tfsdk.State {
 	t.Helper()
 	switch r.(type) {
+	case *migrationResource:
+		return newState(t, schema, migrationResourceModel{
+			RecipeName: types.StringValue("test"),
+			OutputPath: types.StringValue(outputPath),
+		})
 	case *habitatMigrationResource:
 		return newState(t, schema, habitatMigrationResourceModel{
 			PlanPath:   types.StringValue(testTmpPlanSh),
@@ -608,6 +420,34 @@ func createTestStateForResource(t *testing.T, schema resourceschema.Schema, r re
 	default:
 		t.Fatalf("unsupported resource type: %T", r)
 		return tfsdk.State{}
+	}
+}
+
+// testCreateWithEnvironmentFailure tests Create with an environment variable set to trigger failure
+func testCreateWithEnvironmentFailure(t *testing.T, r resource.Resource, envVar, envValue string) {
+	t.Helper()
+	schema := newResourceSchema(t, r)
+	plan := createTestPlanForResource(t, schema, r, t.TempDir())
+
+	t.Setenv(envVar, envValue)
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatalf("expected diagnostics for %T create with %s=%s", r, envVar, envValue)
+	}
+}
+
+// testUpdateWithEnvironmentFailure tests Update with an environment variable set to trigger failure
+func testUpdateWithEnvironmentFailure(t *testing.T, r resource.Resource, envVar, envValue string) {
+	t.Helper()
+	schema := newResourceSchema(t, r)
+	plan := createTestPlanForResource(t, schema, r, t.TempDir())
+
+	t.Setenv(envVar, envValue)
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatalf("expected diagnostics for %T update with %s=%s", r, envVar, envValue)
 	}
 }
 
