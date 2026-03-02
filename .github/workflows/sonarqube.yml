@@ -92,11 +92,36 @@ jobs:
     - name: Prepare coverage files
       if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
       run: |
+        set -e
+        echo "Checking for coverage artifacts..."
+        ls -lh coverage-artifacts/ 2>/dev/null || echo "No coverage-artifacts directory found"
+        
+        # Find and copy Go coverage
         if [ -f coverage-artifacts/go-coverage/coverage.lcov ]; then
+          echo "Found Go coverage at coverage-artifacts/go-coverage/coverage.lcov"
+          mkdir -p terraform-provider
           cp coverage-artifacts/go-coverage/coverage.lcov terraform-provider/coverage.lcov
-          echo "Go coverage found and copied"
+          echo "✓ Go coverage copied to terraform-provider/coverage.lcov"
+          ls -lh terraform-provider/coverage.lcov
+        else
+          echo "⚠ Go coverage not found at coverage-artifacts/go-coverage/coverage.lcov"
+          find coverage-artifacts -name "coverage.lcov" 2>/dev/null || echo "No coverage.lcov files found"
+          find coverage-artifacts -type f 2>/dev/null || echo "No files in coverage-artifacts"
         fi
-        ls -lh coverage-artifacts/ 2>/dev/null || echo "No coverage artifacts found"
+        
+        # Verify Python coverage
+        if [ -f coverage.xml ]; then
+          echo "✓ Python coverage found at coverage.xml"
+          ls -lh coverage.xml
+        else
+          echo "⚠ Python coverage (coverage.xml) not found"
+        fi
+        
+        # Final verification
+        echo ""
+        echo "Coverage files ready for SonarCloud:"
+        ls -lh terraform-provider/coverage.lcov 2>/dev/null || echo "  - Go coverage: MISSING"
+        ls -lh coverage.xml 2>/dev/null || echo "  - Python coverage: MISSING"
 
     - name: Run SonarCloud analysis
       if: steps.check-token.outputs.has_token == 'true'
