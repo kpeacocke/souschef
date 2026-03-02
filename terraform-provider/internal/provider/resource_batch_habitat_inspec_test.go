@@ -88,6 +88,22 @@ func testResourceDeleteAsDirectoryPhase(t *testing.T, r resource.Resource, state
 	}
 }
 
+// testResourceImportStateHelper executes ImportState and validates the response.
+func testResourceImportStateHelper(t *testing.T, r resource.ResourceWithImportState, schema resourceschema.Schema, importID string, expectError bool, errorMsg string) {
+	t.Helper()
+	resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
+	r.ImportState(context.Background(), resource.ImportStateRequest{ID: importID}, resp)
+	if expectError {
+		if !resp.Diagnostics.HasError() {
+			t.Fatal(errorMsg)
+		}
+	} else {
+		if resp.Diagnostics.HasError() {
+			t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
+		}
+	}
+}
+
 func TestBatchMigrationResourceCreateUpdateReadDelete(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
 	schema := newResourceSchema(t, r)
@@ -105,18 +121,12 @@ func TestBatchMigrationResourceCreateUpdateReadDelete(t *testing.T) {
 		PlaybookCount: types.Int64Null(),
 		Playbooks:     types.MapNull(types.StringType),
 	})
-	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-	if createResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, createResp.Diagnostics)
-	}
 
-	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-	if updateResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, updateResp.Diagnostics)
-	}
+	// Create and Update phases
+	testResourceCreatePhase(t, r, schema, plan)
+	testResourceUpdatePhase(t, r, schema, plan)
 
+	// Read phase
 	state := newState(t, schema, batchMigrationResourceModel{
 		OutputPath:    types.StringValue(outputDir),
 		RecipeNames:   []types.String{types.StringValue("default")},
@@ -125,27 +135,17 @@ func TestBatchMigrationResourceCreateUpdateReadDelete(t *testing.T) {
 		PlaybookCount: types.Int64Null(),
 		Playbooks:     types.MapNull(types.StringType),
 	})
-	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-	r.Read(context.Background(), resource.ReadRequest{State: state}, readResp)
-	if readResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, readResp.Diagnostics)
-	}
+	testResourceReadExistingPhase(t, r, schema, state)
 
-	deleteResp := &resource.DeleteResponse{}
-	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
-	if deleteResp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, deleteResp.Diagnostics)
-	}
+	// Delete phase
+	testResourceDeletePhase(t, r, state)
 
+	// Delete as directory phase
 	defaultPath := filepath.Join(outputDir, "default.yml")
 	if err := os.Remove(defaultPath); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("failed to remove playbook: %v", err)
 	}
-	if err := os.MkdirAll(defaultPath, 0755); err != nil {
-		t.Fatalf("failed to create directory playbook: %v", err)
-	}
-	deleteResp = &resource.DeleteResponse{}
-	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+	testResourceDeleteAsDirectoryPhase(t, r, state, defaultPath)
 }
 
 func TestBatchMigrationResourceErrors(t *testing.T) {
@@ -203,12 +203,10 @@ func TestBatchMigrationImportStateErrorsAndSuccess(t *testing.T) {
 	r := &batchMigrationResource{}
 	schema := newResourceSchema(t, r)
 
-	resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), resource.ImportStateRequest{ID: "|/tmp/output|"}, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for empty recipe names")
-	}
+	// Test empty recipe names
+	testResourceImportStateHelper(t, r, schema, "|/tmp/output|", true, "expected diagnostics for empty recipe names")
 
+	// Setup test files
 	cookbookDir := t.TempDir()
 	outputDir := t.TempDir()
 	playbookPath := filepath.Join(outputDir, "default.yml")
@@ -216,27 +214,19 @@ func TestBatchMigrationImportStateErrorsAndSuccess(t *testing.T) {
 		t.Fatalf("failed to write playbook: %v", err)
 	}
 
-	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-	req := resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|default"}
-	r.ImportState(context.Background(), req, resp)
-	if resp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-	}
+	// Test valid import
+	validImportID := cookbookDir + "|" + outputDir + "|default"
+	testResourceImportStateHelper(t, r, schema, validImportID, false, "")
 
-	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|missing"}, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for missing playbook")
-	}
+	// Test missing playbook
+	missingImportID := cookbookDir + "|" + outputDir + "|missing"
+	testResourceImportStateHelper(t, r, schema, missingImportID, true, "expected diagnostics for missing playbook")
 
+	// Test unreadable playbook
 	if err := os.Chmod(playbookPath, noPermissions); err != nil {
 		t.Fatalf("failed to chmod playbook: %v", err)
 	}
-	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), req, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for unreadable playbook")
-	}
+	testResourceImportStateHelper(t, r, schema, validImportID, true, "expected diagnostics for unreadable playbook")
 }
 
 func TestHabitatAndInSpecResourceCoverage(t *testing.T) {
@@ -432,33 +422,21 @@ func TestHabitatAndInSpecResourceErrors(t *testing.T) {
 
 func testImportStatePhase(t *testing.T, r resource.ResourceWithImportState, schema resourceschema.Schema, invalidImportID, validImportIDFmt string, setupImportPath func(t *testing.T) (string, string), setupOutputFile func(t *testing.T, outputDir string) string) {
 	// Invalid import ID
-	resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), resource.ImportStateRequest{ID: invalidImportID}, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for invalid import ID")
-	}
+	testResourceImportStateHelper(t, r, schema, invalidImportID, true, "expected diagnostics for invalid import ID")
 
 	// Setup files
 	path, outputDir := setupImportPath(t)
 	filePath := setupOutputFile(t, outputDir)
 
 	// Valid import
-	req := resource.ImportStateRequest{ID: fmt.Sprintf(validImportIDFmt, path, outputDir)}
-	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), req, resp)
-	if resp.Diagnostics.HasError() {
-		t.Fatalf(testUnexpectedDiagnostics, resp.Diagnostics)
-	}
+	validImportID := fmt.Sprintf(validImportIDFmt, path, outputDir)
+	testResourceImportStateHelper(t, r, schema, validImportID, false, "")
 
 	// Permission error
 	if err := os.Chmod(filePath, noPermissions); err != nil {
 		t.Fatalf(failedToChmodFileFmt, err)
 	}
-	resp = &resource.ImportStateResponse{State: newEmptyState(schema)}
-	r.ImportState(context.Background(), req, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for unreadable file")
-	}
+	testResourceImportStateHelper(t, r, schema, validImportID, true, "expected diagnostics for unreadable file")
 }
 
 func TestHabitatAndInSpecImportStateCoverage(t *testing.T) {
