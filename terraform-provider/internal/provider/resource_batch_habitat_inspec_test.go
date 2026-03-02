@@ -46,6 +46,24 @@ func testResourceUpdatePhase(t *testing.T, r resource.Resource, schema resources
 	}
 }
 
+// testResourceCreateErrorPhase executes Create and expects an error.
+func testResourceCreateErrorPhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, plan tfsdk.Plan, errorMsg string) {
+	createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal(errorMsg)
+	}
+}
+
+// testResourceUpdateErrorPhase executes Update and expects an error.
+func testResourceUpdateErrorPhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, plan tfsdk.Plan, errorMsg string) {
+	updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal(errorMsg)
+	}
+}
+
 // testResourceReadExistingPhase executes and validates reading an existing file.
 func testResourceReadExistingPhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, state tfsdk.State) {
 	readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
@@ -395,27 +413,15 @@ func TestHabitatAndInSpecResourceErrors(t *testing.T) {
 
 			// Test convert error
 			t.Setenv("SOUSCHEF_TEST_FAIL", tt.convertCommand)
-			createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-			r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-			if !createResp.Diagnostics.HasError() {
-				t.Fatal(testExpectedConvertError)
-			}
+			testResourceCreateErrorPhase(t, r, schema, plan, testExpectedConvertError)
 
 			// Test missing file on update
 			t.Setenv("SOUSCHEF_TEST_FAIL", "")
 			t.Setenv("SOUSCHEF_TEST_SKIP_WRITE", tt.convertCommand)
-			updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-			r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, updateResp)
-			if !updateResp.Diagnostics.HasError() {
-				t.Fatal(tt.missingMsg)
-			}
+			testResourceUpdateErrorPhase(t, r, schema, plan, tt.missingMsg)
 
 			// Test missing file on create
-			createResp = &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-			r.Create(context.Background(), resource.CreateRequest{Plan: plan}, createResp)
-			if !createResp.Diagnostics.HasError() {
-				t.Fatalf("%s on create", tt.missingMsg)
-			}
+			testResourceCreateErrorPhase(t, r, schema, plan, tt.missingMsg+" on create")
 		})
 	}
 }
