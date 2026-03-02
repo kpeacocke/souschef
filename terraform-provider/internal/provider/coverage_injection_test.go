@@ -90,10 +90,32 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 }
 
 func TestDeleteHandlesErrors(t *testing.T) {
+	// Helper to create resource delete test state
+	createDeleteTestState := func(r resource.Resource, outputDir string) tfsdk.State {
+		schema := newResourceSchema(t, r)
+		switch r.(type) {
+		case *migrationResource:
+			return newState(t, schema, migrationResourceModel{RecipeName: types.StringValue("test"), OutputPath: types.StringValue(outputDir)})
+		case *habitatMigrationResource:
+			return newState(t, schema, habitatMigrationResourceModel{PlanPath: types.StringValue("/tmp/plan.sh"), OutputPath: types.StringValue(outputDir)})
+		case *inspecMigrationResource:
+			return newState(t, schema, inspecMigrationResourceModel{ProfilePath: types.StringValue("/tmp/profile"), OutputPath: types.StringValue(outputDir), OutputFormat: types.StringValue("testinfra")})
+		case *batchMigrationResource:
+			return newState(t, schema, batchMigrationResourceModel{
+				ID:            types.StringValue("batch"),
+				RecipeNames:   []types.String{types.StringValue("default")},
+				OutputPath:    types.StringValue(outputDir),
+				CookbookName:  types.StringValue("test"),
+				PlaybookCount: types.Int64Value(1),
+				Playbooks:     types.MapNull(types.StringType),
+			})
+		}
+		return tfsdk.State{}
+	}
+
 	tests := []struct {
 		name      string
 		resource  resource.Resource
-		state     tfsdk.State
 		errorType error
 		checkPred func(diag.Diagnostics) bool
 		checkMsg  string
@@ -102,7 +124,6 @@ func TestDeleteHandlesErrors(t *testing.T) {
 		{
 			name:      "migration_ignores_missing",
 			resource:  &migrationResource{},
-			state:     newState(t, newResourceSchema(t, &migrationResource{}), migrationResourceModel{RecipeName: types.StringValue("missing"), OutputPath: types.StringValue(t.TempDir())}),
 			errorType: os.ErrNotExist,
 			checkPred: func(d diag.Diagnostics) bool { return !d.HasError() },
 			checkMsg:  "unexpected diagnostics for missing migration file",
@@ -110,7 +131,6 @@ func TestDeleteHandlesErrors(t *testing.T) {
 		{
 			name:      "habitat_ignores_missing",
 			resource:  &habitatMigrationResource{},
-			state:     newState(t, newResourceSchema(t, &habitatMigrationResource{}), habitatMigrationResourceModel{PlanPath: types.StringValue("/tmp/plan.sh"), OutputPath: types.StringValue(t.TempDir())}),
 			errorType: os.ErrNotExist,
 			checkPred: func(d diag.Diagnostics) bool { return !d.HasError() },
 			checkMsg:  "unexpected diagnostics for missing dockerfile",
@@ -118,22 +138,13 @@ func TestDeleteHandlesErrors(t *testing.T) {
 		{
 			name:      "inspec_ignores_missing",
 			resource:  &inspecMigrationResource{},
-			state:     newState(t, newResourceSchema(t, &inspecMigrationResource{}), inspecMigrationResourceModel{ProfilePath: types.StringValue("/tmp/profile"), OutputPath: types.StringValue(t.TempDir()), OutputFormat: types.StringValue("testinfra")}),
 			errorType: os.ErrNotExist,
 			checkPred: func(d diag.Diagnostics) bool { return !d.HasError() },
 			checkMsg:  "unexpected diagnostics for missing test file",
 		},
 		{
-			name:     "batch_ignores_missing",
-			resource: &batchMigrationResource{},
-			state: newState(t, newResourceSchema(t, &batchMigrationResource{}), batchMigrationResourceModel{
-				ID:            types.StringValue("batch"),
-				RecipeNames:   []types.String{types.StringValue("default")},
-				OutputPath:    types.StringValue(t.TempDir()),
-				CookbookName:  types.StringValue("test"),
-				PlaybookCount: types.Int64Value(1),
-				Playbooks:     types.MapNull(types.StringType),
-			}),
+			name:      "batch_ignores_missing",
+			resource:  &batchMigrationResource{},
 			errorType: os.ErrNotExist,
 			checkPred: func(d diag.Diagnostics) bool { return !d.HasError() },
 			checkMsg:  "unexpected diagnostics for missing batch files",
@@ -142,7 +153,6 @@ func TestDeleteHandlesErrors(t *testing.T) {
 		{
 			name:      "migration_reports_error",
 			resource:  &migrationResource{},
-			state:     newState(t, newResourceSchema(t, &migrationResource{}), migrationResourceModel{RecipeName: types.StringValue("test"), OutputPath: types.StringValue(t.TempDir())}),
 			errorType: errors.New(permissionDeniedErr),
 			checkPred: func(d diag.Diagnostics) bool { return d.HasError() },
 			checkMsg:  "expected diagnostics for migration delete error",
@@ -150,7 +160,6 @@ func TestDeleteHandlesErrors(t *testing.T) {
 		{
 			name:      "habitat_reports_warning",
 			resource:  &habitatMigrationResource{},
-			state:     newState(t, newResourceSchema(t, &habitatMigrationResource{}), habitatMigrationResourceModel{PlanPath: types.StringValue("/tmp/plan.sh"), OutputPath: types.StringValue(t.TempDir())}),
 			errorType: errors.New(permissionDeniedErr),
 			checkPred: func(d diag.Diagnostics) bool { return len(d) > 0 },
 			checkMsg:  "expected warning diagnostics for habitat delete error",
@@ -158,22 +167,13 @@ func TestDeleteHandlesErrors(t *testing.T) {
 		{
 			name:      "inspec_reports_warning",
 			resource:  &inspecMigrationResource{},
-			state:     newState(t, newResourceSchema(t, &inspecMigrationResource{}), inspecMigrationResourceModel{ProfilePath: types.StringValue("/tmp/profile"), OutputPath: types.StringValue(t.TempDir()), OutputFormat: types.StringValue("testinfra")}),
 			errorType: errors.New(permissionDeniedErr),
 			checkPred: func(d diag.Diagnostics) bool { return len(d) > 0 },
 			checkMsg:  "expected warning diagnostics for inspec delete error",
 		},
 		{
-			name:     "batch_reports_warning",
-			resource: &batchMigrationResource{},
-			state: newState(t, newResourceSchema(t, &batchMigrationResource{}), batchMigrationResourceModel{
-				ID:            types.StringValue("batch"),
-				RecipeNames:   []types.String{types.StringValue("default")},
-				OutputPath:    types.StringValue(t.TempDir()),
-				CookbookName:  types.StringValue("test"),
-				PlaybookCount: types.Int64Value(1),
-				Playbooks:     types.MapNull(types.StringType),
-			}),
+			name:      "batch_reports_warning",
+			resource:  &batchMigrationResource{},
 			errorType: errors.New(permissionDeniedErr),
 			checkPred: func(d diag.Diagnostics) bool { return len(d) > 0 },
 			checkMsg:  "expected warning diagnostics for batch delete error",
@@ -186,8 +186,9 @@ func TestDeleteHandlesErrors(t *testing.T) {
 				return tt.errorType
 			})
 
+			state := createDeleteTestState(tt.resource, t.TempDir())
 			resp := &resource.DeleteResponse{}
-			tt.resource.Delete(context.Background(), resource.DeleteRequest{State: tt.state}, resp)
+			tt.resource.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
 			if !tt.checkPred(resp.Diagnostics) {
 				t.Fatalf("%s: %v", tt.checkMsg, resp.Diagnostics)
 			}
