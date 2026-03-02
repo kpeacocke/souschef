@@ -121,7 +121,7 @@ func TestReadGeneratedFile(t *testing.T) {
 func TestExecuteSousChefCommand(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		withExecCommandContext(t, func(ctx context.Context, name string, args ...string) *exec.Cmd {
-			cmd := exec.Command("echo", "test output")
+			cmd := exec.Command("/bin/echo", "test output")
 			return cmd
 		})
 		diags := &diag.Diagnostics{}
@@ -139,7 +139,7 @@ func TestExecuteSousChefCommand(t *testing.T) {
 
 	t.Run("command failure", func(t *testing.T) {
 		withExecCommandContext(t, func(ctx context.Context, name string, args ...string) *exec.Cmd {
-			cmd := exec.Command("false")
+			cmd := exec.Command("/usr/bin/false")
 			return cmd
 		})
 		diags := &diag.Diagnostics{}
