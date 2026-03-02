@@ -179,7 +179,7 @@ func TestDeleteGeneratedFile(t *testing.T) {
 
 	t.Run("delete error (should warn)", func(t *testing.T) {
 		withOsRemove(t, func(string) error {
-			return errors.New("permission denied")
+			return errors.New(permissionDenied)
 		})
 		diags := &diag.Diagnostics{}
 		deleteGeneratedFile(testFilePath, "playbook", diags)
@@ -228,7 +228,7 @@ func TestCheckFileExists(t *testing.T) {
 
 	t.Run("other stat error (returns true)", func(t *testing.T) {
 		withOsStat(t, func(string) (os.FileInfo, error) {
-			return nil, errors.New("permission denied")
+			return nil, errors.New(permissionDenied)
 		})
 		diags := &diag.Diagnostics{}
 		result := checkFileExists(testFilePath, "playbook", diags)
@@ -239,7 +239,7 @@ func TestCheckFileExists(t *testing.T) {
 	})
 }
 
-func readFileAndSetStateTestHelper(t *testing.T, statError error, readError error, expectRemove bool) (bool, *diag.Diagnostics) {
+func setupReadFileAndSetStateMocks(t *testing.T, statError error, readError error) {
 	t.Helper()
 	withOsStat(t, func(string) (os.FileInfo, error) {
 		return nil, statError
@@ -253,68 +253,102 @@ func readFileAndSetStateTestHelper(t *testing.T, statError error, readError erro
 			return nil, readError
 		})
 	}
-	diags := &diag.Diagnostics{}
-	contentSet := false
-	removeResourceCalled := false
-	result := readFileAndSetState(
-		context.Background(),
-		testFilePath,
-		"unused",
-		func(content string) {
-			if statError != nil || readError != nil {
-				t.Error("should not set content on error")
-			} else {
-				contentSet = true
-				if content != "state content" {
-					t.Errorf("expected 'state content', got '%s'", content)
-				}
-			}
-		},
-		readState,
-		diags,
-		func(ctx context.Context) {
-			removeResourceCalled = true
-		},
-	)
-	if statError == nil && readError == nil {
-		if !result {
-			t.Error(expectedTrue)
-		}
-		if !contentSet {
-			t.Error("expected content to be set")
-		}
-		if diags.HasError() {
-			t.Errorf(unexpectedError, diags)
-		}
-	} else if statError == os.ErrNotExist {
-		if result {
-			t.Error(expectedFalse)
-		}
-		if !removeResourceCalled {
-			t.Error("expected removeResource to be called")
-		}
-	} else if readError != nil {
-		if result {
-			t.Error(expectedFalse)
-		}
-		if !diags.HasError() {
-			t.Error(expectedErrorDiagnostic)
-		}
+}
+
+func verifySuccessfulRead(t *testing.T, result bool, contentSet bool, diags *diag.Diagnostics) {
+	t.Helper()
+	if !result {
+		t.Error(expectedTrue)
 	}
-	return result, diags
+	if !contentSet {
+		t.Error("expected content to be set")
+	}
+	if diags.HasError() {
+		t.Errorf(unexpectedError, diags)
+	}
+}
+
+func verifyFileNotFound(t *testing.T, result bool, removeResourceCalled bool) {
+	t.Helper()
+	if result {
+		t.Error(expectedFalse)
+	}
+	if !removeResourceCalled {
+		t.Error("expected removeResource to be called")
+	}
+}
+
+func verifyReadFailure(t *testing.T, result bool, diags *diag.Diagnostics) {
+	t.Helper()
+	if result {
+		t.Error(expectedFalse)
+	}
+	if !diags.HasError() {
+		t.Error(expectedErrorDiagnostic)
+	}
 }
 
 func TestReadFileAndSetState(t *testing.T) {
 	t.Run("file exists and is read successfully", func(t *testing.T) {
-		readFileAndSetStateTestHelper(t, nil, nil, false)
+		setupReadFileAndSetStateMocks(t, nil, nil)
+		diags := &diag.Diagnostics{}
+		contentSet := false
+		result := readFileAndSetState(
+			context.Background(),
+			testFilePath,
+			"unused",
+			func(content string) {
+				contentSet = true
+				if content != "state content" {
+					t.Errorf("expected 'state content', got '%s'", content)
+				}
+			},
+			readState,
+			diags,
+			func(ctx context.Context) {
+				t.Error("should not remove resource")
+			},
+		)
+		verifySuccessfulRead(t, result, contentSet, diags)
 	})
 
 	t.Run("file not found (removes resource)", func(t *testing.T) {
-		readFileAndSetStateTestHelper(t, os.ErrNotExist, nil, true)
+		setupReadFileAndSetStateMocks(t, os.ErrNotExist, nil)
+		diags := &diag.Diagnostics{}
+		removeResourceCalled := false
+		result := readFileAndSetState(
+			context.Background(),
+			testFilePath,
+			"unused",
+			func(content string) {
+				t.Error("should not set content")
+			},
+			readState,
+			diags,
+			func(ctx context.Context) {
+				removeResourceCalled = true
+			},
+		)
+		verifyFileNotFound(t, result, removeResourceCalled)
 	})
 
 	t.Run("read fails", func(t *testing.T) {
-		readFileAndSetStateTestHelper(t, nil, errors.New("read error"), false)
+		setupReadFileAndSetStateMocks(t, nil, errors.New("read error"))
+		diags := &diag.Diagnostics{}
+		result := readFileAndSetState(
+			context.Background(),
+			testFilePath,
+			"unused",
+			func(content string) {
+				t.Error("should not set content on error")
+			},
+			readState,
+			diags,
+			func(ctx context.Context) {
+				t.Error("should not remove resource when read fails")
+			},
+		)
+		verifyReadFailure(t, result, diags)
 	})
 }
 
