@@ -12,6 +12,16 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+const (
+	expectedErrorDiagnostic = "expected error diagnostic"
+	expectedTrue            = "expected true"
+	unexpectedError         = "unexpected error: %v"
+	permissionDenied        = "permission denied"
+	expectedFalse           = "expected false"
+	testFilePath            = "/test.txt"
+	readState               = "Read State"
+)
+
 func TestConfigureResource(t *testing.T) {
 	t.Run("with nil provider data", func(t *testing.T) {
 		req := resource.ConfigureRequest{ProviderData: nil}
@@ -43,7 +53,7 @@ func TestConfigureResource(t *testing.T) {
 			t.Errorf("expected nil, got %v", result)
 		}
 		if !resp.Diagnostics.HasError() {
-			t.Error("expected error diagnostic")
+			t.Error(expectedErrorDiagnostic)
 		}
 	})
 }
@@ -56,24 +66,24 @@ func TestCreateOutputDirectory(t *testing.T) {
 		diags := &diag.Diagnostics{}
 		result := createOutputDirectory("/test", diags)
 		if !result {
-			t.Error("expected true")
+			t.Error(expectedTrue)
 		}
 		if diags.HasError() {
-			t.Errorf("unexpected error: %v", diags)
+			t.Errorf(unexpectedError, diags)
 		}
 	})
 
 	t.Run("mkdir fails", func(t *testing.T) {
 		withOsMkdirAll(t, func(string, os.FileMode) error {
-			return errors.New("permission denied")
+			return errors.New(permissionDenied)
 		})
 		diags := &diag.Diagnostics{}
 		result := createOutputDirectory("/test", diags)
 		if result {
-			t.Error("expected false")
+			t.Error(expectedFalse)
 		}
 		if !diags.HasError() {
-			t.Error("expected error diagnostic")
+			t.Error(expectedErrorDiagnostic)
 		}
 	})
 }
@@ -84,12 +94,12 @@ func TestReadGeneratedFile(t *testing.T) {
 			return []byte("test content"), nil
 		})
 		diags := &diag.Diagnostics{}
-		result := readGeneratedFile("/test.txt", "Test Read", diags)
+		result := readGeneratedFile(testFilePath, "Test Read", diags)
 		if result != "test content" {
 			t.Errorf("expected 'test content', got '%s'", result)
 		}
 		if diags.HasError() {
-			t.Errorf("unexpected error: %v", diags)
+			t.Errorf(unexpectedError, diags)
 		}
 	})
 
@@ -98,12 +108,12 @@ func TestReadGeneratedFile(t *testing.T) {
 			return nil, errors.New("file not found")
 		})
 		diags := &diag.Diagnostics{}
-		result := readGeneratedFile("/test.txt", "Test Read", diags)
+		result := readGeneratedFile(testFilePath, "Test Read", diags)
 		if result != "" {
 			t.Errorf("expected empty string, got '%s'", result)
 		}
 		if !diags.HasError() {
-			t.Error("expected error diagnostic")
+			t.Error(expectedErrorDiagnostic)
 		}
 	})
 }
@@ -123,7 +133,7 @@ func TestExecuteSousChefCommand(t *testing.T) {
 			t.Error("expected output")
 		}
 		if diags.HasError() {
-			t.Errorf("unexpected error: %v", diags)
+			t.Errorf(unexpectedError, diags)
 		}
 	})
 
@@ -138,7 +148,7 @@ func TestExecuteSousChefCommand(t *testing.T) {
 			t.Error("expected failure")
 		}
 		if !diags.HasError() {
-			t.Error("expected error diagnostic")
+			t.Error(expectedErrorDiagnostic)
 		}
 	})
 }
@@ -149,9 +159,9 @@ func TestDeleteGeneratedFile(t *testing.T) {
 			return nil
 		})
 		diags := &diag.Diagnostics{}
-		deleteGeneratedFile("/test.txt", "playbook", diags)
+		deleteGeneratedFile(testFilePath, "playbook", diags)
 		if diags.HasError() {
-			t.Errorf("unexpected error: %v", diags)
+			t.Errorf(unexpectedError, diags)
 		}
 	})
 
@@ -160,10 +170,10 @@ func TestDeleteGeneratedFile(t *testing.T) {
 			return os.ErrNotExist
 		})
 		diags := &diag.Diagnostics{}
-		deleteGeneratedFile("/test.txt", "playbook", diags)
+		deleteGeneratedFile(testFilePath, "playbook", diags)
 		// Should not error for non-existent file
 		if diags.HasError() {
-			t.Errorf("unexpected error: %v", diags)
+			t.Errorf(unexpectedError, diags)
 		}
 	})
 
@@ -172,7 +182,7 @@ func TestDeleteGeneratedFile(t *testing.T) {
 			return errors.New("permission denied")
 		})
 		diags := &diag.Diagnostics{}
-		deleteGeneratedFile("/test.txt", "playbook", diags)
+		deleteGeneratedFile(testFilePath, "playbook", diags)
 		// Check that a warning was added (warnings > 0)
 		foundWarning := false
 		for _, d := range *diags {
@@ -193,12 +203,12 @@ func TestCheckFileExists(t *testing.T) {
 			return nil, nil
 		})
 		diags := &diag.Diagnostics{}
-		result := checkFileExists("/test.txt", "playbook", diags)
+		result := checkFileExists(testFilePath, "playbook", diags)
 		if !result {
-			t.Error("expected true")
+			t.Error(expectedTrue)
 		}
 		if diags.HasError() {
-			t.Errorf("unexpected error: %v", diags)
+			t.Errorf(unexpectedError, diags)
 		}
 	})
 
@@ -207,9 +217,9 @@ func TestCheckFileExists(t *testing.T) {
 			return nil, os.ErrNotExist
 		})
 		diags := &diag.Diagnostics{}
-		result := checkFileExists("/test.txt", "playbook", diags)
+		result := checkFileExists(testFilePath, "playbook", diags)
 		if result {
-			t.Error("expected false")
+			t.Error(expectedFalse)
 		}
 		if !diags.HasError() {
 			t.Error("expected error diagnostic")
@@ -221,7 +231,7 @@ func TestCheckFileExists(t *testing.T) {
 			return nil, errors.New("permission denied")
 		})
 		diags := &diag.Diagnostics{}
-		result := checkFileExists("/test.txt", "playbook", diags)
+		result := checkFileExists(testFilePath, "playbook", diags)
 		// Non-NotExist errors are treated as file exists (function only checks IsNotExist)
 		if !result {
 			t.Error("expected true for non-NotExist error")
@@ -229,145 +239,136 @@ func TestCheckFileExists(t *testing.T) {
 	})
 }
 
-func TestReadFileAndSetState(t *testing.T) {
-	t.Run("file exists and is read successfully", func(t *testing.T) {
-		withOsStat(t, func(string) (os.FileInfo, error) {
-			return nil, nil
-		})
+func readFileAndSetStateTestHelper(t *testing.T, statError error, readError error, expectRemove bool) (bool, *diag.Diagnostics) {
+	t.Helper()
+	withOsStat(t, func(string) (os.FileInfo, error) {
+		return nil, statError
+	})
+	if readError == nil {
 		withOsReadFile(t, func(string) ([]byte, error) {
 			return []byte("state content"), nil
 		})
-		diags := &diag.Diagnostics{}
-		contentSet := false
-		result := readFileAndSetState(
-			context.Background(),
-			"/test.txt",
-			"unused",
-			func(content string) {
+	} else {
+		withOsReadFile(t, func(string) ([]byte, error) {
+			return nil, readError
+		})
+	}
+	diags := &diag.Diagnostics{}
+	contentSet := false
+	removeResourceCalled := false
+	result := readFileAndSetState(
+		context.Background(),
+		testFilePath,
+		"unused",
+		func(content string) {
+			if statError != nil || readError != nil {
+				t.Error("should not set content on error")
+			} else {
 				contentSet = true
 				if content != "state content" {
 					t.Errorf("expected 'state content', got '%s'", content)
 				}
-			},
-			"Read State",
-			diags,
-			func(ctx context.Context) {
-				t.Error("should not remove resource")
-			},
-		)
+			}
+		},
+		readState,
+		diags,
+		func(ctx context.Context) {
+			removeResourceCalled = true
+		},
+	)
+	if statError == nil && readError == nil {
 		if !result {
-			t.Error("expected true")
+			t.Error(expectedTrue)
 		}
 		if !contentSet {
 			t.Error("expected content to be set")
 		}
 		if diags.HasError() {
-			t.Errorf("unexpected error: %v", diags)
+			t.Errorf(unexpectedError, diags)
 		}
-	})
-
-	t.Run("file not found (removes resource)", func(t *testing.T) {
-		withOsStat(t, func(string) (os.FileInfo, error) {
-			return nil, os.ErrNotExist
-		})
-		diags := &diag.Diagnostics{}
-		removeResourceCalled := false
-		result := readFileAndSetState(
-			context.Background(),
-			"/test.txt",
-			"unused",
-			func(content string) {
-				t.Error("should not set content")
-			},
-			"Read State",
-			diags,
-			func(ctx context.Context) {
-				removeResourceCalled = true
-			},
-		)
+	} else if statError == os.ErrNotExist {
 		if result {
-			t.Error("expected false")
+			t.Error(expectedFalse)
 		}
 		if !removeResourceCalled {
 			t.Error("expected removeResource to be called")
 		}
+	} else if readError != nil {
+		if result {
+			t.Error(expectedFalse)
+		}
+		if !diags.HasError() {
+			t.Error(expectedErrorDiagnostic)
+		}
+	}
+	return result, diags
+}
+
+func TestReadFileAndSetState(t *testing.T) {
+	t.Run("file exists and is read successfully", func(t *testing.T) {
+		readFileAndSetStateTestHelper(t, nil, nil, false)
+	})
+
+	t.Run("file not found (removes resource)", func(t *testing.T) {
+		readFileAndSetStateTestHelper(t, os.ErrNotExist, nil, true)
 	})
 
 	t.Run("read fails", func(t *testing.T) {
-		withOsStat(t, func(string) (os.FileInfo, error) {
-			return nil, nil
-		})
-		withOsReadFile(t, func(string) ([]byte, error) {
-			return nil, errors.New("read error")
-		})
-		diags := &diag.Diagnostics{}
-		result := readFileAndSetState(
-			context.Background(),
-			"/test.txt",
-			"unused",
-			func(content string) {
-				t.Error("should not set content on error")
-			},
-			"Read State",
-			diags,
-			func(ctx context.Context) {
-				t.Error("should not remove resource when read fails")
-			},
-		)
-		if result {
-			t.Error("expected false")
-		}
-		if !diags.HasError() {
-			t.Error("expected error diagnostic")
-		}
+		readFileAndSetStateTestHelper(t, nil, errors.New("read error"), false)
 	})
 }
 
+func verifyStringSliceResult(t *testing.T, result, expected []string) {
+	t.Helper()
+	if len(result) != len(expected) {
+		t.Errorf("expected length %d, got %d", len(expected), len(result))
+		return
+	}
+	for i, v := range result {
+		if v != expected[i] {
+			t.Errorf("index %d: expected '%s', got '%s'", i, expected[i], v)
+		}
+	}
+}
+
 func TestStringSliceFromTypesList(t *testing.T) {
-	t.Run("empty list", func(t *testing.T) {
-		result := stringSliceFromTypesList([]types.String{})
-		if len(result) != 0 {
-			t.Errorf("expected empty slice, got %v", result)
-		}
-	})
+	tests := []struct {
+		name     string
+		input    []types.String
+		expected []string
+	}{
+		{
+			name:     "empty list",
+			input:    []types.String{},
+			expected: []string{},
+		},
+		{
+			name:     "single value",
+			input:    []types.String{types.StringValue("test")},
+			expected: []string{"test"},
+		},
+		{
+			name: "multiple values",
+			input: []types.String{
+				types.StringValue("recipe1"),
+				types.StringValue("recipe2"),
+				types.StringValue("recipe3"),
+			},
+			expected: []string{"recipe1", "recipe2", "recipe3"},
+		},
+		{
+			name:     "null values",
+			input:    []types.String{types.StringNull()},
+			expected: []string{""},
+		},
+	}
 
-	t.Run("single value", func(t *testing.T) {
-		input := []types.String{types.StringValue("test")}
-		result := stringSliceFromTypesList(input)
-		if len(result) != 1 || result[0] != "test" {
-			t.Errorf("expected ['test'], got %v", result)
-		}
-	})
-
-	t.Run("multiple values", func(t *testing.T) {
-		input := []types.String{
-			types.StringValue("recipe1"),
-			types.StringValue("recipe2"),
-			types.StringValue("recipe3"),
-		}
-		result := stringSliceFromTypesList(input)
-		if len(result) != 3 {
-			t.Errorf("expected length 3, got %d", len(result))
-		}
-		expected := []string{"recipe1", "recipe2", "recipe3"}
-		for i, v := range result {
-			if v != expected[i] {
-				t.Errorf("index %d: expected '%s', got '%s'", i, expected[i], v)
-			}
-		}
-	})
-
-	t.Run("null values", func(t *testing.T) {
-		input := []types.String{types.StringNull()}
-		result := stringSliceFromTypesList(input)
-		if len(result) != 1 {
-			t.Errorf("expected length 1, got %d", len(result))
-		}
-		// Null values should convert to empty strings
-		if result[0] != "" {
-			t.Errorf("expected empty string for null, got '%s'", result[0])
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := stringSliceFromTypesList(tt.input)
+			verifyStringSliceResult(t, result, tt.expected)
+		})
+	}
 }
 
 // Helper functions to manage dependency injection in tests
