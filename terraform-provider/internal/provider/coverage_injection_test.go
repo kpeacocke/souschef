@@ -113,30 +113,39 @@ func TestBatchMapValueFromErrors(t *testing.T) {
 	}
 }
 
-func TestDeleteHandlesErrors(t *testing.T) {
-	// Helper to create resource delete test state
-	createDeleteTestState := func(r resource.Resource, outputDir string) tfsdk.State {
-		schema := newResourceSchema(t, r)
-		switch r.(type) {
-		case *migrationResource:
-			return newState(t, schema, migrationResourceModel{RecipeName: types.StringValue("test"), OutputPath: types.StringValue(outputDir)})
-		case *habitatMigrationResource:
-			return newState(t, schema, habitatMigrationResourceModel{PlanPath: types.StringValue("/tmp/plan.sh"), OutputPath: types.StringValue(outputDir)})
-		case *inspecMigrationResource:
-			return newState(t, schema, inspecMigrationResourceModel{ProfilePath: types.StringValue("/tmp/profile"), OutputPath: types.StringValue(outputDir), OutputFormat: types.StringValue("testinfra")})
-		case *batchMigrationResource:
-			return newState(t, schema, batchMigrationResourceModel{
-				ID:            types.StringValue("batch"),
-				RecipeNames:   []types.String{types.StringValue("default")},
-				OutputPath:    types.StringValue(outputDir),
-				CookbookName:  types.StringValue("test"),
-				PlaybookCount: types.Int64Value(1),
-				Playbooks:     types.MapNull(types.StringType),
-			})
-		}
-		return tfsdk.State{}
+// testLifecycleOperation executes a lifecycle operation and checks for errors
+func testLifecycleOperation(t *testing.T, name string, op func() diag.Diagnostics) {
+	t.Helper()
+	diags := op()
+	if !diags.HasError() {
+		t.Errorf("expected diagnostics for %s", name)
 	}
+}
 
+// createDeleteTestStateForResource creates appropriate delete test state for a resource type
+func createDeleteTestStateForResource(t *testing.T, r resource.Resource, outputDir string) tfsdk.State {
+	schema := newResourceSchema(t, r)
+	switch r.(type) {
+	case *migrationResource:
+		return newState(t, schema, migrationResourceModel{RecipeName: types.StringValue("test"), OutputPath: types.StringValue(outputDir)})
+	case *habitatMigrationResource:
+		return newState(t, schema, habitatMigrationResourceModel{PlanPath: types.StringValue("/tmp/plan.sh"), OutputPath: types.StringValue(outputDir)})
+	case *inspecMigrationResource:
+		return newState(t, schema, inspecMigrationResourceModel{ProfilePath: types.StringValue("/tmp/profile"), OutputPath: types.StringValue(outputDir), OutputFormat: types.StringValue("testinfra")})
+	case *batchMigrationResource:
+		return newState(t, schema, batchMigrationResourceModel{
+			ID:            types.StringValue("batch"),
+			RecipeNames:   []types.String{types.StringValue("default")},
+			OutputPath:    types.StringValue(outputDir),
+			CookbookName:  types.StringValue("test"),
+			PlaybookCount: types.Int64Value(1),
+			Playbooks:     types.MapNull(types.StringType),
+		})
+	}
+	return tfsdk.State{}
+}
+
+func TestDeleteHandlesErrors(t *testing.T) {
 	tests := []struct {
 		name      string
 		resource  resource.Resource
@@ -210,7 +219,7 @@ func TestDeleteHandlesErrors(t *testing.T) {
 				return tt.errorType
 			})
 
-			state := createDeleteTestState(tt.resource, t.TempDir())
+			state := createDeleteTestStateForResource(t, tt.resource, t.TempDir())
 			resp := &resource.DeleteResponse{}
 			tt.resource.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
 			if !tt.checkPred(resp.Diagnostics) {
@@ -263,39 +272,6 @@ func TestCostEstimateDataSourceReadConfigError(t *testing.T) {
 }
 
 func TestResourcePlanStateGetDiagnostics(t *testing.T) {
-	// Helper to test bad plan/state errors on a resource
-	testResourceLifecycleErrors := func(t *testing.T, r resource.Resource, fieldName string) {
-		schema := newResourceSchema(t, r)
-
-		// Test Create with bad plan
-		createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
-		r.Create(context.Background(), resource.CreateRequest{Plan: badPlan(schema, fieldName)}, createResp)
-		if !createResp.Diagnostics.HasError() {
-			t.Errorf("expected diagnostics for create plan")
-		}
-
-		// Test Update with bad plan
-		updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
-		r.Update(context.Background(), resource.UpdateRequest{Plan: badPlan(schema, fieldName)}, updateResp)
-		if !updateResp.Diagnostics.HasError() {
-			t.Errorf("expected diagnostics for update plan")
-		}
-
-		// Test Read with bad state
-		readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
-		r.Read(context.Background(), resource.ReadRequest{State: badState(schema, fieldName)}, readResp)
-		if !readResp.Diagnostics.HasError() {
-			t.Errorf("expected diagnostics for read state")
-		}
-
-		// Test Delete with bad state
-		deleteResp := &resource.DeleteResponse{}
-		r.Delete(context.Background(), resource.DeleteRequest{State: badState(schema, fieldName)}, deleteResp)
-		if !deleteResp.Diagnostics.HasError() {
-			t.Errorf("expected diagnostics for delete state")
-		}
-	}
-
 	tests := []struct {
 		name      string
 		resource  resource.Resource
@@ -325,7 +301,35 @@ func TestResourcePlanStateGetDiagnostics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testResourceLifecycleErrors(t, tt.resource, tt.fieldName)
+			schema := newResourceSchema(t, tt.resource)
+
+			// Test Create with bad plan
+			testLifecycleOperation(t, tt.name+" create plan", func() diag.Diagnostics {
+				createResp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+				tt.resource.Create(context.Background(), resource.CreateRequest{Plan: badPlan(schema, tt.fieldName)}, createResp)
+				return createResp.Diagnostics
+			})
+
+			// Test Update with bad plan
+			testLifecycleOperation(t, tt.name+" update plan", func() diag.Diagnostics {
+				updateResp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+				tt.resource.Update(context.Background(), resource.UpdateRequest{Plan: badPlan(schema, tt.fieldName)}, updateResp)
+				return updateResp.Diagnostics
+			})
+
+			// Test Read with bad state
+			testLifecycleOperation(t, tt.name+" read state", func() diag.Diagnostics {
+				readResp := &resource.ReadResponse{State: tfsdk.State{Schema: schema}}
+				tt.resource.Read(context.Background(), resource.ReadRequest{State: badState(schema, tt.fieldName)}, readResp)
+				return readResp.Diagnostics
+			})
+
+			// Test Delete with bad state
+			testLifecycleOperation(t, tt.name+" delete state", func() diag.Diagnostics {
+				deleteResp := &resource.DeleteResponse{}
+				tt.resource.Delete(context.Background(), resource.DeleteRequest{State: badState(schema, tt.fieldName)}, deleteResp)
+				return deleteResp.Diagnostics
+			})
 		})
 	}
 }
