@@ -334,9 +334,20 @@ func TestResourcePlanStateGetDiagnostics(t *testing.T) {
 	}
 }
 
+// testImportStateDiagnosticsError executes ImportState and verifies expected diagnostics error
+func testImportStateDiagnosticsError(t *testing.T, r *batchMigrationResource, id string, errMsg string) {
+	t.Helper()
+	schema := newResourceSchema(t, r)
+	resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
+	req := resource.ImportStateRequest{ID: id}
+	r.ImportState(context.Background(), req, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal(errMsg)
+	}
+}
+
 func TestBatchImportStateReadError(t *testing.T) {
 	r := &batchMigrationResource{}
-	schema := newResourceSchema(t, r)
 
 	cookbookDir := t.TempDir()
 	outputDir := t.TempDir()
@@ -349,12 +360,7 @@ func TestBatchImportStateReadError(t *testing.T) {
 		return nil, errors.New("read error")
 	})
 
-	resp := &resource.ImportStateResponse{State: newEmptyState(schema)}
-	req := resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "|default"}
-	r.ImportState(context.Background(), req, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for import read error")
-	}
+	testImportStateDiagnosticsError(t, r, cookbookDir+"|"+outputDir+"|default", "expected diagnostics for import read error")
 }
 
 func TestBatchImportStateRecipeNamesError(t *testing.T) {
@@ -363,10 +369,5 @@ func TestBatchImportStateRecipeNamesError(t *testing.T) {
 	cookbookDir := t.TempDir()
 	outputDir := t.TempDir()
 
-	resp := &resource.ImportStateResponse{State: newEmptyState(newResourceSchema(t, r))}
-	req := resource.ImportStateRequest{ID: cookbookDir + "|" + outputDir + "| , "}
-	r.ImportState(context.Background(), req, resp)
-	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for invalid recipe names")
-	}
+	testImportStateDiagnosticsError(t, r, cookbookDir+"|"+outputDir+"| , ", "expected diagnostics for invalid recipe names")
 }
