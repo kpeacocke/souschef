@@ -530,6 +530,59 @@ func TestInSpecMigrationReadWithMissingTestFile(t *testing.T) {
 	}
 }
 
+func testCreateOutputPathErrorHelper(t *testing.T, r resource.Resource, filePath string) {
+	t.Helper()
+	schema := newResourceSchema(t, r)
+	var plan tfsdk.Plan
+
+	switch r.(type) {
+	case *migrationResource:
+		plan = newPlan(t, schema, migrationResourceModel{
+			CookbookPath: types.StringValue(testTmpCookbook),
+			OutputPath:   types.StringValue(filePath),
+			RecipeName:   types.StringValue("default"),
+		})
+	case *batchMigrationResource:
+		plan = newPlan(t, schema, batchMigrationResourceModel{
+			CookbookPath:  types.StringValue(testTmpCookbook),
+			OutputPath:    types.StringValue(filePath),
+			RecipeNames:   []types.String{types.StringValue("default")},
+			ID:            types.StringNull(),
+			CookbookName:  types.StringNull(),
+			PlaybookCount: types.Int64Null(),
+			Playbooks:     types.MapNull(types.StringType),
+		})
+	case *habitatMigrationResource:
+		planPath := filepath.Join(t.TempDir(), testPlanSh)
+		if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+			t.Fatalf(testFailedToWritePlan, err)
+		}
+		plan = newPlan(t, schema, habitatMigrationResourceModel{
+			PlanPath:          types.StringValue(planPath),
+			OutputPath:        types.StringValue(filePath),
+			BaseImage:         types.StringNull(),
+			PackageName:       types.StringNull(),
+			ID:                types.StringNull(),
+			DockerfileContent: types.StringNull(),
+		})
+	case *inspecMigrationResource:
+		plan = newPlan(t, schema, inspecMigrationResourceModel{
+			ProfilePath:  types.StringValue(testTmpProfile),
+			OutputPath:   types.StringValue(filePath),
+			OutputFormat: types.StringValue("testinfra"),
+			ID:           types.StringNull(),
+			ProfileName:  types.StringNull(),
+			TestContent:  types.StringNull(),
+		})
+	}
+
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schema}}
+	r.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatalf("expected diagnostics for %T output path error", r)
+	}
+}
+
 func TestCreateOutputPathError(t *testing.T) {
 	// Ensure create returns diagnostics when output path is a file.
 	filePath := filepath.Join(t.TempDir(), "output-file")
@@ -537,216 +590,148 @@ func TestCreateOutputPathError(t *testing.T) {
 		t.Fatalf(testFailedToWriteFile, err)
 	}
 
-	// Migration resource
-	migration := &migrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	migrationSchema := newResourceSchema(t, migration)
-	plan := newPlan(t, migrationSchema, migrationResourceModel{
-		CookbookPath: types.StringValue(testTmpCookbook),
-		OutputPath:   types.StringValue(filePath),
-		RecipeName:   types.StringValue("default"),
-	})
-	resp := &resource.CreateResponse{State: tfsdk.State{Schema: migrationSchema}}
-	migration.Create(context.Background(), resource.CreateRequest{Plan: plan}, resp)
+	tests := []struct {
+		name     string
+		resource resource.Resource
+	}{
+		{"migration", &migrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}},
+		{"batch", &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}},
+		{"habitat", &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}},
+		{"inspec", &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testCreateOutputPathErrorHelper(t, tt.resource, filePath)
+		})
+	}
+}
+
+func testUpdateCommandFailureHelper(t *testing.T, r resource.Resource, convertCmd string) {
+	t.Helper()
+	schema := newResourceSchema(t, r)
+	var plan tfsdk.Plan
+
+	switch r.(type) {
+	case *batchMigrationResource:
+		plan = newPlan(t, schema, batchMigrationResourceModel{
+			CookbookPath:  types.StringValue(testTmpCookbook),
+			OutputPath:    types.StringValue(t.TempDir()),
+			RecipeNames:   []types.String{types.StringValue("default")},
+			ID:            types.StringNull(),
+			CookbookName:  types.StringNull(),
+			PlaybookCount: types.Int64Null(),
+			Playbooks:     types.MapNull(types.StringType),
+		})
+	case *habitatMigrationResource:
+		planPath := filepath.Join(t.TempDir(), testPlanSh)
+		if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
+			t.Fatalf(testFailedToWritePlan, err)
+		}
+		plan = newPlan(t, schema, habitatMigrationResourceModel{
+			PlanPath:          types.StringValue(planPath),
+			OutputPath:        types.StringValue(t.TempDir()),
+			BaseImage:         types.StringNull(),
+			PackageName:       types.StringNull(),
+			ID:                types.StringNull(),
+			DockerfileContent: types.StringNull(),
+		})
+	case *inspecMigrationResource:
+		plan = newPlan(t, schema, inspecMigrationResourceModel{
+			ProfilePath:  types.StringValue(testTmpProfile),
+			OutputPath:   types.StringValue(t.TempDir()),
+			OutputFormat: types.StringValue("testinfra"),
+			ID:           types.StringNull(),
+			ProfileName:  types.StringNull(),
+			TestContent:  types.StringNull(),
+		})
+	}
+
+	t.Setenv("SOUSCHEF_TEST_FAIL", convertCmd)
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schema}}
+	r.Update(context.Background(), resource.UpdateRequest{Plan: plan}, resp)
 	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for migration output path error")
-	}
-
-	// Batch migration resource
-	batch := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	batchSchema := newResourceSchema(t, batch)
-	batchPlan := newPlan(t, batchSchema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue(testTmpCookbook),
-		OutputPath:   types.StringValue(filePath),
-		RecipeNames: []types.String{
-			types.StringValue("default"),
-		},
-		ID:            types.StringNull(),
-		CookbookName:  types.StringNull(),
-		PlaybookCount: types.Int64Null(),
-		Playbooks:     types.MapNull(types.StringType),
-	})
-	batchResp := &resource.CreateResponse{State: tfsdk.State{Schema: batchSchema}}
-	batch.Create(context.Background(), resource.CreateRequest{Plan: batchPlan}, batchResp)
-	if !batchResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for batch output path error")
-	}
-
-	// Habitat migration resource
-	planPath := filepath.Join(t.TempDir(), testPlanSh)
-	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlan, err)
-	}
-	habitat := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	habitatSchema := newResourceSchema(t, habitat)
-	habitatPlan := newPlan(t, habitatSchema, habitatMigrationResourceModel{
-		PlanPath:          types.StringValue(planPath),
-		OutputPath:        types.StringValue(filePath),
-		BaseImage:         types.StringNull(),
-		PackageName:       types.StringNull(),
-		ID:                types.StringNull(),
-		DockerfileContent: types.StringNull(),
-	})
-	habitatResp := &resource.CreateResponse{State: tfsdk.State{Schema: habitatSchema}}
-	habitat.Create(context.Background(), resource.CreateRequest{Plan: habitatPlan}, habitatResp)
-	if !habitatResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for habitat output path error")
-	}
-
-	// InSpec migration resource
-	inspec := &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	inspecSchema := newResourceSchema(t, inspec)
-	inspecPlan := newPlan(t, inspecSchema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue(testTmpProfile),
-		OutputPath:   types.StringValue(filePath),
-		OutputFormat: types.StringValue("testinfra"),
-		ID:           types.StringNull(),
-		ProfileName:  types.StringNull(),
-		TestContent:  types.StringNull(),
-	})
-	inspecResp := &resource.CreateResponse{State: tfsdk.State{Schema: inspecSchema}}
-	inspec.Create(context.Background(), resource.CreateRequest{Plan: inspecPlan}, inspecResp)
-	if !inspecResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for inspec output path error")
+		t.Fatalf("expected diagnostics for %T update command failure", r)
 	}
 }
 
 func TestUpdateCommandFailures(t *testing.T) {
-	// Batch update command failure
-	batch := &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	batchSchema := newResourceSchema(t, batch)
-	batchPlan := newPlan(t, batchSchema, batchMigrationResourceModel{
-		CookbookPath: types.StringValue(testTmpCookbook),
-		OutputPath:   types.StringValue(t.TempDir()),
-		RecipeNames: []types.String{
-			types.StringValue("default"),
-		},
-		ID:            types.StringNull(),
-		CookbookName:  types.StringNull(),
-		PlaybookCount: types.Int64Null(),
-		Playbooks:     types.MapNull(types.StringType),
-	})
-
-	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertRecipe)
-	batchResp := &resource.UpdateResponse{State: tfsdk.State{Schema: batchSchema}}
-	batch.Update(context.Background(), resource.UpdateRequest{Plan: batchPlan}, batchResp)
-	if !batchResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for batch update command failure")
+	tests := []struct {
+		name       string
+		resource   resource.Resource
+		convertCmd string
+	}{
+		{"batch", &batchMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}, testConvertRecipe},
+		{"habitat", &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}, testConvertHabitat},
+		{"inspec", &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}, testConvertInSpec},
 	}
 
-	// Habitat update command failure
-	planPath := filepath.Join(t.TempDir(), testPlanSh)
-	if err := os.WriteFile(planPath, []byte(testPkgNameMyapp), 0644); err != nil {
-		t.Fatalf(testFailedToWritePlan, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testUpdateCommandFailureHelper(t, tt.resource, tt.convertCmd)
+		})
 	}
-	habitat := &habitatMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	habitatSchema := newResourceSchema(t, habitat)
-	habitatPlan := newPlan(t, habitatSchema, habitatMigrationResourceModel{
-		PlanPath:          types.StringValue(planPath),
-		OutputPath:        types.StringValue(t.TempDir()),
-		BaseImage:         types.StringNull(),
-		PackageName:       types.StringNull(),
-		ID:                types.StringNull(),
-		DockerfileContent: types.StringNull(),
-	})
+}
 
-	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertHabitat)
-	habitatResp := &resource.UpdateResponse{State: tfsdk.State{Schema: habitatSchema}}
-	habitat.Update(context.Background(), resource.UpdateRequest{Plan: habitatPlan}, habitatResp)
-	if !habitatResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for habitat update command failure")
+func testDeleteWarningHelper(t *testing.T, r resource.Resource, outputFileName string) {
+	t.Helper()
+	schema := newResourceSchema(t, r)
+	outputDir := t.TempDir()
+	filePath := filepath.Join(outputDir, outputFileName)
+	if err := os.MkdirAll(filePath, 0755); err != nil {
+		t.Fatalf(testFailedToCreateDirectory, err)
+	}
+	if err := os.WriteFile(filepath.Join(filePath, testFileName), []byte("x"), 0644); err != nil {
+		t.Fatalf(testFailedToWriteFile, err)
 	}
 
-	// InSpec update command failure
-	inspec := &inspecMigrationResource{client: &SousChefClient{Path: newFakeSousChef(t)}}
-	inspecSchema := newResourceSchema(t, inspec)
-	inspecPlan := newPlan(t, inspecSchema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue(testTmpProfile),
-		OutputPath:   types.StringValue(t.TempDir()),
-		OutputFormat: types.StringValue("testinfra"),
-		ID:           types.StringNull(),
-		ProfileName:  types.StringNull(),
-		TestContent:  types.StringNull(),
-	})
+	var state tfsdk.State
+	switch r.(type) {
+	case *habitatMigrationResource:
+		state = newState(t, schema, habitatMigrationResourceModel{
+			PlanPath:   types.StringValue(testTmpPlanSh),
+			OutputPath: types.StringValue(outputDir),
+		})
+	case *inspecMigrationResource:
+		state = newState(t, schema, inspecMigrationResourceModel{
+			ProfilePath:  types.StringValue(testTmpProfile),
+			OutputPath:   types.StringValue(outputDir),
+			OutputFormat: types.StringValue("testinfra"),
+		})
+	case *batchMigrationResource:
+		state = newState(t, schema, batchMigrationResourceModel{
+			ID: types.StringValue("batch-test"),
+			RecipeNames: []types.String{
+				types.StringValue("default"),
+			},
+			OutputPath:    types.StringValue(outputDir),
+			CookbookName:  types.StringValue("test"),
+			PlaybookCount: types.Int64Value(1),
+			Playbooks:     types.MapNull(types.StringType),
+		})
+	}
 
-	t.Setenv("SOUSCHEF_TEST_FAIL", testConvertInSpec)
-	inspecResp := &resource.UpdateResponse{State: tfsdk.State{Schema: inspecSchema}}
-	inspec.Update(context.Background(), resource.UpdateRequest{Plan: inspecPlan}, inspecResp)
-	if !inspecResp.Diagnostics.HasError() {
-		t.Fatal("expected diagnostics for inspec update command failure")
+	resp := &resource.DeleteResponse{}
+	r.Delete(context.Background(), resource.DeleteRequest{State: state}, resp)
+	if len(resp.Diagnostics) == 0 {
+		t.Fatalf("expected warning diagnostics for %T delete", r)
 	}
 }
 
 func TestDeleteWarningsWithDirectoryTargets(t *testing.T) {
-	// Habitat delete warning
-	habitat := &habitatMigrationResource{}
-	habitatSchema := newResourceSchema(t, habitat)
-	habitatOutput := t.TempDir()
-	habitatPath := filepath.Join(habitatOutput, "Dockerfile")
-	if err := os.MkdirAll(habitatPath, 0755); err != nil {
-		t.Fatalf(testFailedToCreateDirectory, err)
-	}
-	if err := os.WriteFile(filepath.Join(habitatPath, testFileName), []byte("x"), 0644); err != nil {
-		t.Fatalf(testFailedToWriteFile, err)
+	tests := []struct {
+		name           string
+		resource       resource.Resource
+		outputFileName string
+	}{
+		{"habitat", &habitatMigrationResource{}, "Dockerfile"},
+		{"inspec", &inspecMigrationResource{}, "test_spec.py"},
+		{"batch", &batchMigrationResource{}, "default.yml"},
 	}
 
-	habitatState := newState(t, habitatSchema, habitatMigrationResourceModel{
-		PlanPath:   types.StringValue(testTmpPlanSh),
-		OutputPath: types.StringValue(habitatOutput),
-	})
-	habitatResp := &resource.DeleteResponse{}
-	habitat.Delete(context.Background(), resource.DeleteRequest{State: habitatState}, habitatResp)
-	if len(habitatResp.Diagnostics) == 0 {
-		t.Fatal("expected warning diagnostics for habitat delete")
-	}
-
-	// InSpec delete warning
-	inspec := &inspecMigrationResource{}
-	inspecSchema := newResourceSchema(t, inspec)
-	inspecOutput := t.TempDir()
-	inspecPath := filepath.Join(inspecOutput, "test_spec.py")
-	if err := os.MkdirAll(inspecPath, 0755); err != nil {
-		t.Fatalf(testFailedToCreateDirectory, err)
-	}
-	if err := os.WriteFile(filepath.Join(inspecPath, testFileName), []byte("x"), 0644); err != nil {
-		t.Fatalf(testFailedToWriteFile, err)
-	}
-
-	inspecState := newState(t, inspecSchema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue(testTmpProfile),
-		OutputPath:   types.StringValue(inspecOutput),
-		OutputFormat: types.StringValue("testinfra"),
-	})
-	inspecResp := &resource.DeleteResponse{}
-	inspec.Delete(context.Background(), resource.DeleteRequest{State: inspecState}, inspecResp)
-	if len(inspecResp.Diagnostics) == 0 {
-		t.Fatal("expected warning diagnostics for inspec delete")
-	}
-
-	// Batch delete warning
-	batch := &batchMigrationResource{}
-	batchSchema := newResourceSchema(t, batch)
-	batchOutput := t.TempDir()
-	batchPath := filepath.Join(batchOutput, "default.yml")
-	if err := os.MkdirAll(batchPath, 0755); err != nil {
-		t.Fatalf(testFailedToCreateDirectory, err)
-	}
-	if err := os.WriteFile(filepath.Join(batchPath, testFileName), []byte("x"), 0644); err != nil {
-		t.Fatalf(testFailedToWriteFile, err)
-	}
-
-	batchState := newState(t, batchSchema, batchMigrationResourceModel{
-		ID: types.StringValue("batch-test"),
-		RecipeNames: []types.String{
-			types.StringValue("default"),
-		},
-		OutputPath:    types.StringValue(batchOutput),
-		CookbookName:  types.StringValue("test"),
-		PlaybookCount: types.Int64Value(1),
-		Playbooks:     types.MapNull(types.StringType),
-	})
-	batchResp := &resource.DeleteResponse{}
-	batch.Delete(context.Background(), resource.DeleteRequest{State: batchState}, batchResp)
-	if len(batchResp.Diagnostics) == 0 {
-		t.Fatal("expected warning diagnostics for batch delete")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testDeleteWarningHelper(t, tt.resource, tt.outputFileName)
+		})
 	}
 }
