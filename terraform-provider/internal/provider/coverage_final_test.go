@@ -12,6 +12,52 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// testReadOnlyDeleteHelper creates a read-only file and tests delete behavior
+func testReadOnlyDeleteHelper(t *testing.T, r resource.Resource, filePath, fileContent string) {
+	t.Helper()
+	schema := newResourceSchema(t, r)
+	outputDir := t.TempDir()
+	readOnlyPath := filepath.Join(outputDir, filePath)
+
+	if err := os.WriteFile(readOnlyPath, []byte(fileContent), 0444); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	defer os.Chmod(readOnlyPath, testFilePermissions)
+
+	var state tfsdk.State
+	switch r.(type) {
+	case *batchMigrationResource:
+		emptyPlaybooks, _ := types.MapValueFrom(context.Background(), types.StringType, map[string]string{})
+		state = newState(t, schema, batchMigrationResourceModel{
+			ID: types.StringValue("batch-test"),
+			RecipeNames: []types.String{
+				types.StringValue("readonly"),
+			},
+			OutputPath:    types.StringValue(outputDir),
+			CookbookName:  types.StringValue("test"),
+			PlaybookCount: types.Int64Value(1),
+			Playbooks:     emptyPlaybooks,
+		})
+	case *habitatMigrationResource:
+		state = newState(t, schema, habitatMigrationResourceModel{
+			PlanPath:   types.StringValue("/tmp/plan.sh"),
+			OutputPath: types.StringValue(outputDir),
+		})
+	case *inspecMigrationResource:
+		state = newState(t, schema, inspecMigrationResourceModel{
+			ProfilePath:  types.StringValue("/tmp/profile"),
+			OutputPath:   types.StringValue(outputDir),
+			OutputFormat: types.StringValue("testinfra"),
+		})
+	}
+
+	deleteResp := &resource.DeleteResponse{}
+	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
+
+	// May or may not error depending on OS permissions
+	_ = deleteResp.Diagnostics
+}
+
 // Comprehensive tests for 100% coverage of Delete operations with directory obstacles
 func TestMigrationDeleteWithDirectory(t *testing.T) {
 	r := &migrationResource{}
@@ -45,84 +91,17 @@ func TestMigrationDeleteWithDirectory(t *testing.T) {
 
 // Test batch delete with read-only file
 func TestBatchMigrationDeleteWithReadOnlyFile(t *testing.T) {
-	r := &batchMigrationResource{}
-	schema := newResourceSchema(t, r)
-
-	outputDir := t.TempDir()
-	recipe1Path := filepath.Join(outputDir, "readonly.yml")
-	if err := os.WriteFile(recipe1Path, []byte("content"), 0444); err != nil {
-		t.Fatalf("failed to write file: %v", err)
-	}
-	defer os.Chmod(recipe1Path, testFilePermissions) // cleanup
-
-	emptyPlaybooks, _ := types.MapValueFrom(context.Background(), types.StringType, map[string]string{})
-
-	state := newState(t, schema, batchMigrationResourceModel{
-		ID: types.StringValue("batch-test"),
-		RecipeNames: []types.String{
-			types.StringValue("readonly"),
-		},
-		OutputPath:    types.StringValue(outputDir),
-		CookbookName:  types.StringValue("test"),
-		PlaybookCount: types.Int64Value(1),
-		Playbooks:     emptyPlaybooks,
-	})
-
-	deleteResp := &resource.DeleteResponse{}
-	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
-
-	// May or may not error depending on OS permissions
-	// We just want to ensure it doesn't crash
-	_ = deleteResp.Diagnostics
+	testReadOnlyDeleteHelper(t, &batchMigrationResource{}, "readonly.yml", "content")
 }
 
 // Test habitat delete with read-only file
 func TestHabitatMigrationDeleteWithReadOnlyDockerfile(t *testing.T) {
-	r := &habitatMigrationResource{}
-	schema := newResourceSchema(t, r)
-
-	outputDir := t.TempDir()
-	dockerfilePath := filepath.Join(outputDir, "Dockerfile")
-	if err := os.WriteFile(dockerfilePath, []byte("FROM ubuntu"), 0444); err != nil {
-		t.Fatalf("failed to write dockerfile: %v", err)
-	}
-	defer os.Chmod(dockerfilePath, testFilePermissions)
-
-	state := newState(t, schema, habitatMigrationResourceModel{
-		PlanPath:   types.StringValue("/tmp/plan.sh"),
-		OutputPath: types.StringValue(outputDir),
-	})
-
-	deleteResp := &resource.DeleteResponse{}
-	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
-
-	// May have warning for permission issues
-	_ = deleteResp.Diagnostics
+	testReadOnlyDeleteHelper(t, &habitatMigrationResource{}, "Dockerfile", "FROM ubuntu")
 }
 
 // Test inspec delete with read-only test file
 func TestInSpecMigrationDeleteWithReadOnlyFile(t *testing.T) {
-	r := &inspecMigrationResource{}
-	schema := newResourceSchema(t, r)
-
-	outputDir := t.TempDir()
-	testFilePath := filepath.Join(outputDir, "test_spec.py")
-	if err := os.WriteFile(testFilePath, []byte("test"), 0444); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
-	defer os.Chmod(testFilePath, testFilePermissions)
-
-	state := newState(t, schema, inspecMigrationResourceModel{
-		ProfilePath:  types.StringValue("/tmp/profile"),
-		OutputPath:   types.StringValue(outputDir),
-		OutputFormat: types.StringValue("testinfra"),
-	})
-
-	deleteResp := &resource.DeleteResponse{}
-	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
-
-	// May have warning for permission issues
-	_ = deleteResp.Diagnostics
+	testReadOnlyDeleteHelper(t, &inspecMigrationResource{}, "test_spec.py", "test")
 }
 
 // Test comprehensive batch migration operations
