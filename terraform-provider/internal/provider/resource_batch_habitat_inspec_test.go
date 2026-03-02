@@ -68,7 +68,7 @@ func testResourceReadPermissionErrorPhase(t *testing.T, r resource.Resource, sch
 }
 
 // testResourceDeletePhase executes and validates the Delete operation.
-func testResourceDeletePhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, state tfsdk.State) {
+func testResourceDeletePhase(t *testing.T, r resource.Resource, state tfsdk.State) {
 	deleteResp := &resource.DeleteResponse{}
 	r.Delete(context.Background(), resource.DeleteRequest{State: state}, deleteResp)
 	if deleteResp.Diagnostics.HasError() {
@@ -77,7 +77,7 @@ func testResourceDeletePhase(t *testing.T, r resource.Resource, schema resources
 }
 
 // testResourceDeleteAsDirectoryPhase recreates the file as a directory and validates deletion.
-func testResourceDeleteAsDirectoryPhase(t *testing.T, r resource.Resource, schema resourceschema.Schema, state tfsdk.State, filePath string) {
+func testResourceDeleteAsDirectoryPhase(t *testing.T, r resource.Resource, state tfsdk.State, filePath string) {
 	if err := os.MkdirAll(filePath, 0755); err != nil {
 		t.Fatalf("failed to recreate as dir: %v", err)
 	}
@@ -335,10 +335,10 @@ func TestHabitatAndInSpecResourceCoverage(t *testing.T) {
 			testResourceReadPermissionErrorPhase(t, r, schema, state, filePath, tt.fileErrMsg)
 
 			// Delete file
-			testResourceDeletePhase(t, r, schema, state)
+			testResourceDeletePhase(t, r, state)
 
 			// Delete as directory
-			testResourceDeleteAsDirectoryPhase(t, r, schema, state, filePath)
+			testResourceDeleteAsDirectoryPhase(t, r, state, filePath)
 		})
 	}
 }
@@ -471,8 +471,8 @@ func TestHabitatAndInSpecImportStateCoverage(t *testing.T) {
 		validImportIDFmt string
 	}{
 		{
-			name:     "habitat",
-			resource: &habitatMigrationResource{},
+			name:            "habitat",
+			resource:        &habitatMigrationResource{},
 			invalidImportID: "missing|",
 			setupImportPath: func(t *testing.T) (string, string) {
 				planPath := filepath.Join(t.TempDir(), testPlanSh)
@@ -491,8 +491,8 @@ func TestHabitatAndInSpecImportStateCoverage(t *testing.T) {
 			validImportIDFmt: "%s|%s|",
 		},
 		{
-			name:     "inspec",
-			resource: &inspecMigrationResource{},
+			name:            "inspec",
+			resource:        &inspecMigrationResource{},
 			invalidImportID: "invalid",
 			setupImportPath: func(t *testing.T) (string, string) {
 				return t.TempDir(), t.TempDir()
