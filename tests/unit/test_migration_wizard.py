@@ -6,6 +6,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from souschef.migration_wizard import (
+    _confirm_configuration,
+    _prompt_cookbook_path,
+    _prompt_output_directory,
+    _yes_no_prompt,
     generate_migration_config,
     setup_wizard,
     validate_inputs,
@@ -235,11 +239,89 @@ class TestGenerateMigrationConfig:
 
         yaml_content = generate_migration_config(config)
 
-        # Check lowercase booleans
         assert "true" in yaml_content
         assert "false" in yaml_content
         assert "True" not in yaml_content
         assert "False" not in yaml_content
+
+    def test_generate_migration_config_empty_options(self) -> None:
+        """Empty option sections should still render headers."""
+        config = {
+            "cookbook_path": "/cookbook",
+            "chef_version": "14.15.6",
+            "output_dir": "/output",
+            "ansible_version": "2.12",
+            "resource_patterns": {},
+            "conversion_options": {},
+            "validation_options": {},
+            "optimization_options": {},
+        }
+
+        yaml_content = generate_migration_config(config)
+
+        assert "resource_patterns:" in yaml_content
+        assert "conversion:" in yaml_content
+        assert "validation:" in yaml_content
+        assert "optimization:" in yaml_content
+
+
+class TestWizardPrompts:
+    """Test interactive prompt helpers."""
+
+    def test_prompt_output_directory_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Empty input should return default output directory."""
+        monkeypatch.setattr("builtins.input", lambda _prompt: "")
+        result = _prompt_output_directory()
+        assert "ansible_output" in result
+
+    def test_yes_no_prompt_invalid_then_yes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Invalid response should reprompt until valid."""
+        responses = iter(["maybe", "y"])
+        monkeypatch.setattr("builtins.input", lambda _prompt: next(responses))
+        assert _yes_no_prompt("Proceed? ") is True
+
+    def test_confirm_configuration_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Confirmation should honour a negative response."""
+        monkeypatch.setattr(
+            "souschef.migration_wizard._yes_no_prompt", lambda *_args, **_kwargs: False
+        )
+        config = {
+            "cookbook_path": "/tmp/cookbook",
+            "output_dir": "/tmp/output",
+            "chef_version": "14.15.6",
+            "ansible_version": "2.12",
+            "resource_patterns": {"package": True},
+            "conversion_options": {"preserve_comments": True},
+            "validation_options": {"syntax_check": True},
+            "optimization_options": {"deduplicate_tasks": True},
+        }
+        assert _confirm_configuration(config) is False
+
+    def test_prompt_cookbook_path_success(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Prompt should return valid path when validation passes."""
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        (cookbook / "metadata.rb").write_text("name 'test'")
+
+        monkeypatch.setattr("builtins.input", lambda _prompt: str(cookbook))
+        result = _prompt_cookbook_path()
+        assert str(cookbook.resolve()) == result
+
+    def test_prompt_cookbook_path_retry_then_exit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Prompt should exit when validation returns exit."""
+        responses = iter(["/missing", "n"])
+        monkeypatch.setattr("builtins.input", lambda _prompt: next(responses))
+
+        with pytest.raises(SystemExit):
+            _prompt_cookbook_path()
 
 
 class TestSetupWizard:

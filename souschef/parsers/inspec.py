@@ -239,7 +239,24 @@ def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
 
     """
     try:
-        content = profile_path.read_text()
+        # Try multiple trusted bases to find the correct containment context
+        trusted_bases = [
+            _trusted_workspace_root(),
+            Path(tempfile.gettempdir()).resolve(),
+        ]
+
+        content = None
+        for base in trusted_bases:
+            try:
+                content = safe_read_text(profile_path, base)
+                break
+            except ValueError:
+                continue
+
+        if content is None:
+            # If no base worked, read directly (profile_path caller-validated)
+            content = profile_path.read_text()
+
         controls = _parse_inspec_control(content)
         for ctrl in controls:
             ctrl["file"] = profile_path.name

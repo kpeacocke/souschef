@@ -16,7 +16,6 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.13"
-  GO_VERSION: "1.24"
 
 jobs:
   sonarcloud:
@@ -54,12 +53,6 @@ jobs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Set up Go ${{ env.GO_VERSION }}
-      if: steps.check-token.outputs.has_token == 'true'
-      uses: actions/setup-go@1f57aee2e13f2855f0e1b0e3b7e3c2e8b7b5f8e6d # v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-
     - name: Install Poetry
       if: steps.check-token.outputs.has_token == 'true'
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a # v1
@@ -79,28 +72,56 @@ jobs:
 
     - name: Install dependencies
       if: steps.check-token.outputs.has_token == 'true'
-      run: poetry install --no-interaction
+      run: poetry install --no-interaction --all-extras
 
     - name: Generate coverage for SonarCloud
       if: steps.check-token.outputs.has_token == 'true'
       run: |
         poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
-        echo "Coverage generated:"
+        echo "Python coverage generated:"
         ls -lh coverage.xml
 
-    - name: Generate Go test coverage for SonarCloud
-      if: steps.check-token.outputs.has_token == 'true'
-      run: |
-        cd terraform-provider
-        echo "Running Go tests with coverage..."
-        TF_ACC=1 timeout 150 go test ./internal/provider -coverprofile=coverage.out -timeout 100s
-        echo "Go coverage generated:"
-        ls -lh coverage.out
+    - name: Download coverage artifacts from CI workflow
+      if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        run-id: ${{ github.event.workflow_run.id }}
+        path: coverage-artifacts
 
-        # Also generate JSON test report for SonarQube
-        TF_ACC=1 timeout 150 go test ./internal/provider -json > test-report.json -timeout 100s 2>&1 || true
-        echo "Go test report generated:"
-        ls -lh test-report.json
+    - name: Prepare coverage files
+      if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
+      run: |
+        set -e
+        echo "Checking for coverage artifacts..."
+        ls -lh coverage-artifacts/ 2>/dev/null || echo "No coverage-artifacts directory found"
+
+        # Find and copy Go coverage
+        if [ -f coverage-artifacts/go-coverage/coverage.lcov ]; then
+          echo "Found Go coverage at coverage-artifacts/go-coverage/coverage.lcov"
+          mkdir -p terraform-provider
+          cp coverage-artifacts/go-coverage/coverage.lcov terraform-provider/coverage.lcov
+          echo "✓ Go coverage copied to terraform-provider/coverage.lcov"
+          ls -lh terraform-provider/coverage.lcov
+        else
+          echo "⚠ Go coverage not found at coverage-artifacts/go-coverage/coverage.lcov"
+          find coverage-artifacts -name "coverage.lcov" 2>/dev/null || echo "No coverage.lcov files found"
+          find coverage-artifacts -type f 2>/dev/null || echo "No files in coverage-artifacts"
+        fi
+
+        # Verify Python coverage
+        if [ -f coverage.xml ]; then
+          echo "✓ Python coverage found at coverage.xml"
+          ls -lh coverage.xml
+        else
+          echo "⚠ Python coverage (coverage.xml) not found"
+        fi
+
+        # Final verification
+        echo ""
+        echo "Coverage files ready for SonarCloud:"
+        ls -lh terraform-provider/coverage.lcov 2>/dev/null || echo "  - Go coverage: MISSING"
+        ls -lh coverage.xml 2>/dev/null || echo "  - Python coverage: MISSING"
 
     - name: Run SonarCloud analysis
       if: steps.check-token.outputs.has_token == 'true'

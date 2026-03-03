@@ -4,22 +4,39 @@ package provider
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-const (
-	batchIDFormat = "%s-batch"
-)
-
 const errorReadingBatchPlaybook = "Error reading playbook"
+
+func parseBatchRecipeNames(recipeNamesStr string) ([]string, error) {
+	trimmed := strings.TrimSpace(recipeNamesStr)
+	if trimmed == "" {
+		return nil, fmt.Errorf("recipe names are required")
+	}
+
+	// Split by comma and trim whitespace from each name
+	recipeNames := make([]string, 0)
+	for _, name := range strings.Split(trimmed, ",") {
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName != "" {
+			recipeNames = append(recipeNames, trimmedName)
+		}
+	}
+
+	if len(recipeNames) == 0 {
+		return nil, fmt.Errorf("recipe names are required")
+	}
+
+	return recipeNames, nil
+}
 
 // Ensure the implementation satisfies the expected interfaces
 var (
@@ -95,20 +112,27 @@ func (r *batchMigrationResource) Schema(ctx context.Context, req resource.Schema
 
 // Configure adds the provider configured client to the resource
 func (r *batchMigrationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
+	r.client = configureResource(req, resp)
+}
 
-	client, ok := req.ProviderData.(*SousChefClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *SousChefClient, got: %T", req.ProviderData),
-		)
-		return
-	}
+// executeBatchConversion converts Chef recipes to Ansible playbooks
+func (r *batchMigrationResource) executeBatchConversion(ctx context.Context, cookbookPath string, outputPath string, recipeNames []string, diags *diag.Diagnostics) map[string]string {
+	playbooks := make(map[string]string)
+	for _, recipeName := range recipeNames {
+		args := []string{"convert-recipe", "--cookbook-path", cookbookPath, "--recipe-name", recipeName, "--output-path", outputPath}
+		if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting recipe", diags); !ok {
+			return nil
+		}
 
-	r.client = client
+		playbookPath := filepath.Join(outputPath, recipeName+".yml")
+		content := readGeneratedFile(playbookPath, errorReadingBatchPlaybook, diags)
+		if diags.HasError() {
+			return nil
+		}
+
+		playbooks[recipeName] = content
+	}
+	return playbooks
 }
 
 // Create creates the resource and sets the initial Terraform state
@@ -122,64 +146,31 @@ func (r *batchMigrationResource) Create(ctx context.Context, req resource.Create
 
 	cookbookPath := plan.CookbookPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
-	recipeNames := make([]string, len(plan.RecipeNames))
-	for i, name := range plan.RecipeNames {
-		recipeNames[i] = name.ValueString()
-	}
+	recipeNames := stringSliceFromTypesList(plan.RecipeNames)
 
 	// Create output directory
-	if err := os.MkdirAll(outputPath, 0755); err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating output directory",
-			fmt.Sprintf("Could not create directory %s: %s", outputPath, err),
-		)
+	if !createOutputDirectory(outputPath, &resp.Diagnostics) {
 		return
 	}
 
-	// Convert each recipe
-	playbooks := make(map[string]string)
-	for _, recipeName := range recipeNames {
-		// Call souschef CLI to convert recipe
-		cmd := exec.CommandContext(ctx, r.client.Path, "convert-recipe",
-			"--cookbook-path", cookbookPath,
-			"--recipe-name", recipeName,
-			"--output-path", outputPath)
-
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error converting recipe",
-				fmt.Sprintf("Could not convert recipe %s: %s\nOutput: %s", recipeName, err, string(output)),
-			)
-			return
-		}
-
-		// Read generated playbook
-		playbookPath := filepath.Join(outputPath, recipeName+".yml")
-		content, err := os.ReadFile(playbookPath)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				errorReadingBatchPlaybook,
-				fmt.Sprintf("Could not read generated playbook %s: %s", recipeName, err),
-			)
-			return
-		}
-
-		playbooks[recipeName] = string(content)
+	// Convert recipes to playbooks
+	playbooks := r.executeBatchConversion(ctx, cookbookPath, outputPath, recipeNames, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	// Extract cookbook name from path
 	cookbookName := filepath.Base(cookbookPath)
 
 	// Convert playbooks map to types.Map
-	playbooksMap, mapDiags := types.MapValueFrom(ctx, types.StringType, playbooks)
+	playbooksMap, mapDiags := typesMapValueFrom(ctx, types.StringType, playbooks)
 	resp.Diagnostics.Append(mapDiags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf(batchIDFormat, cookbookName))
+	plan.ID = types.StringValue(fmt.Sprintf("%s-batch", cookbookName))
 	plan.CookbookName = types.StringValue(cookbookName)
 	plan.PlaybookCount = types.Int64Value(int64(len(playbooks)))
 	plan.Playbooks = playbooksMap
@@ -198,27 +189,20 @@ func (r *batchMigrationResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	outputPath := state.OutputPath.ValueString()
-	recipeNames := make([]string, len(state.RecipeNames))
-	for i, name := range state.RecipeNames {
-		recipeNames[i] = name.ValueString()
-	}
+	recipeNames := stringSliceFromTypesList(state.RecipeNames)
 
 	// Check if any playbook exists
 	anyExists := false
 	playbooks := make(map[string]string)
 	for _, recipeName := range recipeNames {
 		playbookPath := filepath.Join(outputPath, recipeName+".yml")
-		if _, err := os.Stat(playbookPath); err == nil {
+		if _, err := osStat(playbookPath); err == nil {
 			anyExists = true
-			content, err := os.ReadFile(playbookPath)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					errorReadingBatchPlaybook,
-					fmt.Sprintf("Could not read playbook %s: %s", recipeName, err),
-				)
+			content := readGeneratedFile(playbookPath, errorReadingBatchPlaybook, &resp.Diagnostics)
+			if resp.Diagnostics.HasError() {
 				return
 			}
-			playbooks[recipeName] = string(content)
+			playbooks[recipeName] = content
 		}
 	}
 
@@ -228,7 +212,7 @@ func (r *batchMigrationResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	// Update state with current content
-	playbooksMap, mapDiags := types.MapValueFrom(ctx, types.StringType, playbooks)
+	playbooksMap, mapDiags := typesMapValueFrom(ctx, types.StringType, playbooks)
 	resp.Diagnostics.Append(mapDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -250,55 +234,18 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	// Get current state to preserve ID and cookbook_name
-	var state batchMigrationResourceModel
-	diags = req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
+	cookbookPath := plan.CookbookPath.ValueString()
+	outputPath := plan.OutputPath.ValueString()
+	recipeNames := stringSliceFromTypesList(plan.RecipeNames)
+
+	// Convert recipes to playbooks
+	playbooks := r.executeBatchConversion(ctx, cookbookPath, outputPath, recipeNames, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Re-run conversion for all recipes
-	cookbookPath := plan.CookbookPath.ValueString()
-	outputPath := plan.OutputPath.ValueString()
-	recipeNames := make([]string, len(plan.RecipeNames))
-	for i, name := range plan.RecipeNames {
-		recipeNames[i] = name.ValueString()
-	}
-
-	// Extract cookbook name from path
-	cookbookName := filepath.Base(cookbookPath)
-
-	playbooks := make(map[string]string)
-	for _, recipeName := range recipeNames {
-		cmd := exec.CommandContext(ctx, r.client.Path, "convert-recipe",
-			"--cookbook-path", cookbookPath,
-			"--recipe-name", recipeName,
-			"--output-path", outputPath)
-
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error converting recipe",
-				fmt.Sprintf("Could not convert recipe %s: %s\nOutput: %s", recipeName, err, string(output)),
-			)
-			return
-		}
-
-		playbookPath := filepath.Join(outputPath, recipeName+".yml")
-		content, err := os.ReadFile(playbookPath)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				errorReadingBatchPlaybook,
-				fmt.Sprintf("Could not read updated playbook %s: %s", recipeName, err),
-			)
-			return
-		}
-
-		playbooks[recipeName] = string(content)
-	}
-
-	playbooksMap, mapDiags := types.MapValueFrom(ctx, types.StringType, playbooks)
+	// Convert playbooks map to types.Map
+	playbooksMap, mapDiags := typesMapValueFrom(ctx, types.StringType, playbooks)
 	resp.Diagnostics.Append(mapDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -306,8 +253,6 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 
 	plan.Playbooks = playbooksMap
 	plan.PlaybookCount = types.Int64Value(int64(len(playbooks)))
-	plan.CookbookName = types.StringValue(cookbookName)
-	plan.ID = types.StringValue(fmt.Sprintf(batchIDFormat, cookbookName))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -323,20 +268,12 @@ func (r *batchMigrationResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	outputPath := state.OutputPath.ValueString()
-	recipeNames := make([]string, len(state.RecipeNames))
-	for i, name := range state.RecipeNames {
-		recipeNames[i] = name.ValueString()
-	}
+	recipeNames := stringSliceFromTypesList(state.RecipeNames)
 
 	// Delete generated playbooks
 	for _, recipeName := range recipeNames {
 		playbookPath := filepath.Join(outputPath, recipeName+".yml")
-		if err := os.Remove(playbookPath); err != nil && !os.IsNotExist(err) {
-			resp.Diagnostics.AddWarning(
-				"Error deleting playbook",
-				fmt.Sprintf("Could not delete playbook %s: %s", recipeName, err),
-			)
-		}
+		deleteGeneratedFile(playbookPath, "playbook", &resp.Diagnostics)
 	}
 }
 
@@ -357,17 +294,13 @@ func (r *batchMigrationResource) ImportState(ctx context.Context, req resource.I
 	recipeNamesStr := parts[2]
 
 	// Validate that the cookbook directory exists
-	if _, err := os.Stat(cookbookPath); os.IsNotExist(err) {
-		resp.Diagnostics.AddError(
-			"Cookbook not found",
-			fmt.Sprintf("Cookbook path does not exist: %s", cookbookPath),
-		)
+	if !checkFileExists(cookbookPath, "Cookbook", &resp.Diagnostics) {
 		return
 	}
 
 	// Parse recipe names
-	recipeNames := strings.Split(recipeNamesStr, ",")
-	if len(recipeNames) == 0 {
+	recipeNames, err := parseBatchRecipeNames(recipeNamesStr)
+	if err != nil {
 		resp.Diagnostics.AddError(
 			"Invalid import ID",
 			"At least one recipe name must be specified",
@@ -379,24 +312,16 @@ func (r *batchMigrationResource) ImportState(ctx context.Context, req resource.I
 	playbooks := make(map[string]string)
 	for _, recipeName := range recipeNames {
 		playbookPath := filepath.Join(outputPath, recipeName+".yml")
-		if _, err := os.Stat(playbookPath); os.IsNotExist(err) {
-			resp.Diagnostics.AddError(
-				"Playbook not found",
-				fmt.Sprintf("Playbook does not exist: %s", playbookPath),
-			)
+		if !checkFileExists(playbookPath, "Playbook", &resp.Diagnostics) {
 			return
 		}
 
-		content, err := os.ReadFile(playbookPath)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				errorReadingBatchPlaybook,
-				fmt.Sprintf("Could not read playbook %s: %s", recipeName, err),
-			)
+		content := readGeneratedFile(playbookPath, errorReadingBatchPlaybook, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
 			return
 		}
 
-		playbooks[recipeName] = string(content)
+		playbooks[recipeName] = content
 	}
 
 	// Extract cookbook name from path
@@ -409,7 +334,7 @@ func (r *batchMigrationResource) ImportState(ctx context.Context, req resource.I
 	}
 
 	// Convert playbooks map to types.Map
-	playbooksMap, mapDiags := types.MapValueFrom(ctx, types.StringType, playbooks)
+	playbooksMap, mapDiags := typesMapValueFrom(ctx, types.StringType, playbooks)
 	resp.Diagnostics.Append(mapDiags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -422,5 +347,5 @@ func (r *batchMigrationResource) ImportState(ctx context.Context, req resource.I
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cookbook_name"), cookbookName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("playbook_count"), int64(len(playbooks)))...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("playbooks"), playbooksMap)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf(batchIDFormat, cookbookName))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf("%s-batch", cookbookName))...)
 }

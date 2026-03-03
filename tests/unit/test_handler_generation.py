@@ -58,6 +58,20 @@ class TestParseChefHandlerClass:
         assert result["name"] == "MyEventHandler"
         assert result["type"] == "event_handler"
 
+    def test_parse_exception_callback_method(self) -> None:
+        """Test parsing exception callback methods adds converge_failed."""
+        handler_code = """
+        class MyExceptionCallback < Chef::Handler
+          def exception
+            puts "boom"
+          end
+        end
+        """
+        result = parse_chef_handler_class(handler_code)
+
+        assert "exception" in result["methods"]
+        assert "converge_failed" in result["callbacks"]
+
     def test_parse_handler_with_attributes(self) -> None:
         """Test parsing handler with attributes."""
         handler_code = """

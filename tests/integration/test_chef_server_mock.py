@@ -126,7 +126,7 @@ class TestChefServerMockIntegration:
                     "run_list": ["role[webserver]"],
                     "chef_environment": "production",
                     "platform": "ubuntu",
-                    "ipaddress": "192.0.2.110",  # RFC 5737 documentation IP
+                    "ipaddress": "10.0.1.10",  # NOSONAR - test fixture
                     "fqdn": "web-01.example.com",
                     "automatic": {"platform": "ubuntu", "platform_version": "22.04"},
                 },
@@ -135,7 +135,7 @@ class TestChefServerMockIntegration:
                     "run_list": ["role[database]"],
                     "chef_environment": "production",
                     "platform": "centos",
-                    "ipaddress": "192.0.2.120",  # RFC 5737 documentation IP
+                    "ipaddress": "10.0.1.20",  # NOSONAR - test fixture
                     "fqdn": "db-01.example.com",
                     "automatic": {"platform": "centos", "platform_version": "8"},
                 },
@@ -486,9 +486,7 @@ class TestChefServerMockAuthHeaders:
 
         # Verify request was made with correct query params
         assert len(responses.calls) == 1
-        request_url = responses.calls[0].request.url
-        assert request_url is not None
-        assert "q=role%3Awebserver" in request_url
+        assert "q=role%3Awebserver" in responses.calls[0].request.url  # type: ignore[operator]
 
 
 class TestChefServerMockSecretsRedaction:

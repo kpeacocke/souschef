@@ -183,6 +183,21 @@ class TestStopCopilotAgent:
         comment_body = mock_add_comment.call_args[0][3]
         assert "Requirements changed" in comment_body
 
+    @patch(
+        "souschef.github.agent_control._add_label_to_issue",
+        side_effect=RuntimeError("Stop failed"),
+    )
+    def test_stop_agent_handles_errors(self, mock_add_label):
+        """Test error handling during stop."""
+        result = stop_copilot_agent(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+        )
+
+        assert "Error stopping" in result
+        assert "Stop failed" in result
+
 
 class TestResumeCopilotAgent:
     """Tests for resume_copilot_agent function."""
@@ -254,6 +269,21 @@ class TestResumeCopilotAgent:
         assert "Additional instructions:** Focus on security" in result
         comment_body = mock_add_comment.call_args[0][3]
         assert "Focus on security" in comment_body
+
+    @patch(
+        "souschef.github.agent_control._check_agent_labels",
+        side_effect=RuntimeError("Resume error"),
+    )
+    def test_resume_agent_handles_errors(self, mock_check):
+        """Test error handling during resume."""
+        result = resume_copilot_agent(
+            owner="testorg",
+            repo="testrepo",
+            issue_number=42,
+        )
+
+        assert "Error resuming" in result
+        assert "Resume error" in result
 
 
 class TestCheckCopilotAgentStatus:

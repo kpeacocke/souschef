@@ -1,6 +1,7 @@
 """Path utility functions for safe filesystem operations."""
 
 import os
+import re
 from pathlib import Path
 
 
@@ -24,7 +25,7 @@ def _get_workspace_root() -> Path:
     env_root = os.getenv("SOUSCHEF_WORKSPACE_ROOT")
     base_path = _normalize_path(env_root) if env_root else _trusted_workspace_root()
 
-    if not base_path.exists():  # NOSONAR
+    if not base_path.exists():
         raise ValueError(f"Workspace root does not exist: {base_path}")
     if not base_path.is_dir():
         raise ValueError(f"Workspace root is not a directory: {base_path}")
@@ -50,18 +51,16 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
         ValueError: If the path escapes the base directory.
 
     """
-    # Use pathlib.Path.resolve() for normalization (prevents traversal)
     base_resolved: Path = Path(base_path).resolve()
     candidate_resolved: Path = Path(path_obj).resolve()
 
-    # Check containment using relative_to (raises ValueError if not contained)
     try:
         candidate_resolved.relative_to(base_resolved)
     except ValueError as e:
         msg = f"Path traversal attempt: escapes {base_resolved}"
         raise ValueError(msg) from e
 
-    return candidate_resolved  # nosonar
+    return candidate_resolved
 
 
 def _normalize_path(path_str: str | Path) -> Path:
@@ -84,11 +83,9 @@ def _normalize_path(path_str: str | Path) -> Path:
         ValueError: If the path contains null bytes or is invalid.
 
     """
-    # Convert Path to string if needed for validation
     if isinstance(path_str, Path):
         path_obj = path_str
     elif isinstance(path_str, str):
-        # Reject paths with null bytes (CWE-158 prevention)
         if "\x00" in path_str:
             raise ValueError(f"Path contains null bytes: {path_str!r}")
         path_obj = Path(path_str)
@@ -96,12 +93,8 @@ def _normalize_path(path_str: str | Path) -> Path:
         raise ValueError(f"Path must be a string or Path object, got {type(path_str)}")
 
     try:
-        # Path.resolve() normalizes the path, resolving symlinks and ".." sequences
-        # This prevents path traversal attacks by canonicalizing the path
-        # Input validated for null bytes; Path.resolve() returns safe absolute path
-        resolved_path = path_obj.expanduser().resolve()  # nosonar
-        # Explicit assignment to mark as sanitized output
-        normalized: Path = resolved_path  # nosonar
+        resolved_path = path_obj.expanduser().resolve()
+        normalized: Path = resolved_path
         return normalized
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
@@ -146,6 +139,48 @@ def _validate_relative_parts(parts: tuple[str, ...]) -> Path:
     return relative
 
 
+def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Path:
+    """
+    Resolve ``path_obj`` and enforce that it remains under ``base_path``.
+
+    This function normalizes both paths, rejects relative traversal, and then
+    validates canonical containment before filesystem I/O occurs.
+    """
+    safe_base = _normalize_trusted_base(base_path)
+    base_resolved = os.path.realpath(str(safe_base))
+
+    # If path_obj is already a Path object, use it directly without string validation
+    if isinstance(path_obj, Path):
+        raw_path = path_obj.expanduser()
+    else:
+        # Only apply character validation to string inputs (user-controlled data)
+        raw_value = str(path_obj)
+        if "\x00" in raw_value:
+            raise ValueError(f"Path contains null bytes: {raw_value!r}")
+        if not re.fullmatch(r"[A-Za-z0-9_./\\~:-]+", raw_value):
+            raise ValueError(f"Path contains invalid characters: {raw_value!r}")
+        raw_path = Path(raw_value).expanduser()
+
+    if raw_path.is_absolute():
+        candidate_resolved = os.path.realpath(str(raw_path))
+    else:
+        relative = _validate_relative_parts(raw_path.parts)
+        joined = Path(base_resolved) / relative
+        candidate_resolved = os.path.realpath(str(joined))
+
+    try:
+        common = os.path.commonpath([candidate_resolved, base_resolved])
+    except ValueError as e:
+        msg = f"Path traversal attempt: escapes {safe_base}"
+        raise ValueError(msg) from e
+
+    if common != base_resolved:
+        msg = f"Path traversal attempt: escapes {safe_base}"
+        raise ValueError(msg)
+
+    return _ensure_within_base_path(Path(candidate_resolved), Path(base_resolved))
+
+
 def _safe_join(base_path: Path, *parts: str) -> Path:
     """
     Safely join path components ensuring result stays within base directory.
@@ -164,56 +199,37 @@ def _safe_join(base_path: Path, *parts: str) -> Path:
         ValueError: If result would escape base_path.
 
     """
-    # Resolve base path to canonical form
-    base_resolved: Path = Path(base_path).resolve()
-
-    # Validate inputs before constructing the path to avoid traversal.
+    base_resolved = _normalize_trusted_base(base_path)
     relative_parts = _validate_relative_parts(parts)
-
-    # Join and validate the full path using the shared containment check.
     candidate = base_resolved / relative_parts
-    return _validated_candidate(candidate, base_resolved)
+    return _resolve_path_under_base(candidate, base_resolved)
 
 
-def _validated_candidate(path_obj: Path, safe_base: Path) -> Path:
+def _validated_candidate(path_obj: Path | str, safe_base: Path | str) -> Path:
     """
     Validate a candidate path stays contained under ``safe_base``.
 
     This is a path sanitizer that ensures directory traversal attacks
     are prevented by validating containment (CWE-22 mitigation).
     """
-    # Resolve both paths to canonical forms
-    base_resolved: Path = Path(safe_base).resolve()
-    candidate_resolved: Path = Path(path_obj).resolve()
-
-    # Check containment using relative_to
-    try:
-        candidate_resolved.relative_to(base_resolved)
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {base_resolved}"
-        raise ValueError(msg) from e
-
-    return candidate_resolved  # nosonar
+    return _resolve_path_under_base(path_obj, safe_base)
 
 
 def safe_exists(path_obj: Path, base_path: Path) -> bool:
     """Check existence after enforcing base containment."""
-    safe_base = _normalize_trusted_base(base_path)
-    candidate: Path = _validated_candidate(path_obj, safe_base)
+    candidate = _resolve_path_under_base(path_obj, base_path)
     return candidate.exists()
 
 
 def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
     """Check directory-ness after enforcing base containment."""
-    safe_base = _normalize_trusted_base(base_path)
-    candidate: Path = _validated_candidate(path_obj, safe_base)
+    candidate = _resolve_path_under_base(path_obj, base_path)
     return candidate.is_dir()
 
 
 def safe_is_file(path_obj: Path, base_path: Path) -> bool:
     """Check file-ness after enforcing base containment."""
-    safe_base = _normalize_trusted_base(base_path)
-    candidate: Path = _validated_candidate(path_obj, safe_base)
+    candidate = _resolve_path_under_base(path_obj, base_path)
     return candidate.is_file()
 
 
@@ -231,12 +247,11 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
         raise ValueError(msg)
 
     safe_base = _normalize_trusted_base(base_path)
-    safe_dir: Path = _validated_candidate(_normalize_path(dir_path), safe_base)
+    safe_dir = _resolve_path_under_base(dir_path, safe_base)
 
     results: list[Path] = []
-    for result in safe_dir.glob(pattern):  # noqa # NOSONAR: S6549
-        # Validated: pattern checked above, result checked below for containment
-        validated_result: Path = _validated_candidate(Path(result), safe_base)
+    for result in safe_dir.glob(pattern):
+        validated_result: Path = _resolve_path_under_base(result, safe_base)
         results.append(validated_result)
 
     return results
@@ -246,10 +261,8 @@ def safe_mkdir(
     path_obj: Path, base_path: Path, parents: bool = False, exist_ok: bool = False
 ) -> None:
     """Create directory after enforcing base containment."""
-    safe_base = _normalize_trusted_base(base_path)
-    safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
-
-    safe_path.mkdir(parents=parents, exist_ok=exist_ok)  # nosonar
+    safe_path = _resolve_path_under_base(path_obj, base_path)
+    safe_path.mkdir(parents=parents, exist_ok=exist_ok)
 
 
 def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
@@ -268,10 +281,8 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
         ValueError: If the path escapes the base directory.
 
     """
-    safe_base = _normalize_trusted_base(base_path)
-    safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
-
-    return safe_path.read_text(encoding=encoding)  # nosonar
+    safe_path = _resolve_path_under_base(path_obj, base_path)
+    return safe_path.read_text(encoding=encoding)
 
 
 def safe_write_text(
@@ -287,10 +298,8 @@ def safe_write_text(
         encoding: Text encoding (default: 'utf-8').
 
     """
-    safe_base = _normalize_trusted_base(base_path)
-    safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
-
-    safe_path.write_text(text, encoding=encoding)  # nosonar
+    safe_path = _resolve_path_under_base(path_obj, base_path)
+    safe_path.write_text(text, encoding=encoding)
 
 
 def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
@@ -309,12 +318,11 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
 
     """
     safe_base = _normalize_trusted_base(base_path)
-    safe_path = _validated_candidate(_normalize_path(path_obj), safe_base)
+    safe_path = _resolve_path_under_base(path_obj, safe_base)
 
     results: list[Path] = []
-    for item in safe_path.iterdir():  # nosonar
-        # Validate each item stays within base
-        validated_item: Path = _validated_candidate(item, safe_base)
+    for item in safe_path.iterdir():
+        validated_item: Path = _resolve_path_under_base(item, safe_base)
         results.append(validated_item)
 
     return results
@@ -344,15 +352,11 @@ def _check_symlink_safety(path_obj: Path, base_path: Path | None = None) -> None
         ValueError: If symlinks are detected in the inspected path ancestry.
 
     """
-    # Prefer checking the unresolved/original path when provided, falling
-    # back to the (typically resolved) candidate path.
     target: Path = base_path if base_path is not None else path_obj
 
-    # Check if the chosen path contains components that are symlinks by
-    # iterating through each level of the path.
     try:
         current = target
-        while current != current.parent:  # Until we reach filesystem root
+        while current != current.parent:
             if current.is_symlink():
                 msg = (
                     f"Symlink detected in path {target}: {current} -> "
@@ -361,6 +365,4 @@ def _check_symlink_safety(path_obj: Path, base_path: Path | None = None) -> None
                 raise ValueError(msg)
             current = current.parent
     except (FileNotFoundError, PermissionError, NotADirectoryError):
-        # Path might not exist yet or be inaccessible; in that case we cannot
-        # reliably inspect symlink ancestry, so we treat this as a no-op.
         return

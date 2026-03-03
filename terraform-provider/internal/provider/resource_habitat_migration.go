@@ -4,11 +4,10 @@ package provider
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -94,20 +93,7 @@ func (r *habitatMigrationResource) Schema(ctx context.Context, req resource.Sche
 
 // Configure adds the provider configured client to the resource
 func (r *habitatMigrationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*SousChefClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *SousChefClient, got: %T", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.client = configureResource(req, resp)
 }
 
 // Create creates the resource and sets the initial Terraform state
@@ -119,56 +105,16 @@ func (r *habitatMigrationResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	planPath := plan.PlanPath.ValueString()
-	outputPath := plan.OutputPath.ValueString()
-	baseImage := defaultBaseImage
-	if !plan.BaseImage.IsNull() && plan.BaseImage.ValueString() != "" {
-		baseImage = plan.BaseImage.ValueString()
-	}
-
 	// Create output directory
-	if err := os.MkdirAll(outputPath, 0755); err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating output directory",
-			fmt.Sprintf("Could not create directory %s: %s", outputPath, err),
-		)
+	if !createOutputDirectory(plan.OutputPath.ValueString(), &resp.Diagnostics) {
 		return
 	}
 
-	// Call souschef CLI to convert Habitat plan
-	cmd := exec.CommandContext(ctx, r.client.Path, "convert-habitat",
-		"--plan-path", planPath,
-		"--output-path", outputPath,
-		"--base-image", baseImage)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error converting Habitat plan",
-			fmt.Sprintf("Could not convert plan: %s\nOutput: %s", err, string(output)),
-		)
+	// Execute conversion and set state
+	r.executeHabitatConversion(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// Read generated Dockerfile
-	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
-	content, err := os.ReadFile(dockerfilePath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errReadingDockerfile,
-			fmt.Sprintf("Could not read generated Dockerfile: %s", err),
-		)
-		return
-	}
-
-	// Extract package name from plan path
-	packageName := filepath.Base(filepath.Dir(planPath))
-
-	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf(habitatIDFormat, packageName))
-	plan.BaseImage = types.StringValue(baseImage)
-	plan.PackageName = types.StringValue(packageName)
-	plan.DockerfileContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -185,21 +131,18 @@ func (r *habitatMigrationResource) Read(ctx context.Context, req resource.ReadRe
 
 	dockerfilePath := filepath.Join(state.OutputPath.ValueString(), "Dockerfile")
 
-	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
-		resp.State.RemoveResource(ctx)
+	// Check if file exists and read content
+	if !readFileAndSetState(
+		ctx,
+		dockerfilePath,
+		"dockerfile_content",
+		func(content string) { state.DockerfileContent = types.StringValue(content) },
+		errReadingDockerfile,
+		&resp.Diagnostics,
+		resp.State.RemoveResource,
+	) {
 		return
 	}
-
-	content, err := os.ReadFile(dockerfilePath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errReadingDockerfile,
-			fmt.Sprintf("Could not read Dockerfile: %s", err),
-		)
-		return
-	}
-
-	state.DockerfileContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -214,45 +157,11 @@ func (r *habitatMigrationResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	planPath := plan.PlanPath.ValueString()
-	outputPath := plan.OutputPath.ValueString()
-	baseImage := defaultBaseImage
-	if !plan.BaseImage.IsNull() && plan.BaseImage.ValueString() != "" {
-		baseImage = plan.BaseImage.ValueString()
-	}
-
-	cmd := exec.CommandContext(ctx, r.client.Path, "convert-habitat",
-		"--plan-path", planPath,
-		"--output-path", outputPath,
-		"--base-image", baseImage)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error converting Habitat plan",
-			fmt.Sprintf("Could not convert plan: %s\nOutput: %s", err, string(output)),
-		)
+	// Execute conversion and set state
+	r.executeHabitatConversion(ctx, &plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
-	content, err := os.ReadFile(dockerfilePath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errReadingDockerfile,
-			fmt.Sprintf("Could not read updated Dockerfile: %s", err),
-		)
-		return
-	}
-
-	// Extract package name from plan path
-	packageName := filepath.Base(filepath.Dir(planPath))
-
-	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf(habitatIDFormat, packageName))
-	plan.BaseImage = types.StringValue(baseImage)
-	plan.PackageName = types.StringValue(packageName)
-	plan.DockerfileContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -268,12 +177,40 @@ func (r *habitatMigrationResource) Delete(ctx context.Context, req resource.Dele
 	}
 
 	dockerfilePath := filepath.Join(state.OutputPath.ValueString(), "Dockerfile")
-	if err := os.Remove(dockerfilePath); err != nil && !os.IsNotExist(err) {
-		resp.Diagnostics.AddWarning(
-			"Error deleting Dockerfile",
-			fmt.Sprintf("Could not delete Dockerfile: %s", err),
-		)
+	deleteGeneratedFile(dockerfilePath, "Dockerfile", &resp.Diagnostics)
+}
+
+// executeHabitatConversion is a helper that encapsulates the common logic for Create and Update.
+// It executes the habitat conversion, reads the output, and updates the model state.
+func (r *habitatMigrationResource) executeHabitatConversion(ctx context.Context, model *habitatMigrationResourceModel, diagnostics *diag.Diagnostics) {
+	planPath := model.PlanPath.ValueString()
+	outputPath := model.OutputPath.ValueString()
+	baseImage := defaultBaseImage
+	if !model.BaseImage.IsNull() && model.BaseImage.ValueString() != "" {
+		baseImage = model.BaseImage.ValueString()
 	}
+
+	// Call souschef CLI to convert Habitat plan
+	args := []string{"convert-habitat", "--plan-path", planPath, "--output-path", outputPath, "--base-image", baseImage}
+	if _, ok := executeSousChefCommand(ctx, r.client.Path, args, "Error converting Habitat plan", diagnostics); !ok {
+		return
+	}
+
+	// Read generated Dockerfile
+	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
+	content := readGeneratedFile(dockerfilePath, errReadingDockerfile, diagnostics)
+	if diagnostics.HasError() {
+		return
+	}
+
+	// Extract package name from plan path
+	packageName := filepath.Base(filepath.Dir(planPath))
+
+	// Set state
+	model.ID = types.StringValue(fmt.Sprintf(habitatIDFormat, packageName))
+	model.BaseImage = types.StringValue(baseImage)
+	model.PackageName = types.StringValue(packageName)
+	model.DockerfileContent = types.StringValue(string(content))
 }
 
 // ImportState imports an existing resource into Terraform
@@ -296,31 +233,19 @@ func (r *habitatMigrationResource) ImportState(ctx context.Context, req resource
 	}
 
 	// Validate that the plan file exists
-	if _, err := os.Stat(planPath); os.IsNotExist(err) {
-		resp.Diagnostics.AddError(
-			"Plan file not found",
-			fmt.Sprintf("Plan file does not exist: %s", planPath),
-		)
+	if !checkFileExists(planPath, "Plan file", &resp.Diagnostics) {
 		return
 	}
 
 	// Check if Dockerfile exists
 	dockerfilePath := filepath.Join(outputPath, "Dockerfile")
-	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
-		resp.Diagnostics.AddError(
-			"Dockerfile not found",
-			fmt.Sprintf("Dockerfile does not exist: %s", dockerfilePath),
-		)
+	if !checkFileExists(dockerfilePath, "Dockerfile", &resp.Diagnostics) {
 		return
 	}
 
 	// Read Dockerfile content
-	content, err := os.ReadFile(dockerfilePath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errReadingDockerfile,
-			fmt.Sprintf("Could not read Dockerfile: %s", err),
-		)
+	content := readGeneratedFile(dockerfilePath, errReadingDockerfile, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 

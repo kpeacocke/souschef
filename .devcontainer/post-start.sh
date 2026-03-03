@@ -4,6 +4,17 @@
 
 echo "Starting SousChef devcontainer services..."
 
+# Ensure Python dependencies are installed
+echo "Checking Python dependencies..."
+cd /workspaces/souschef || exit 1
+if command -v poetry &> /dev/null; then
+    # Install all dependencies including optional extras (needed for tests)
+    poetry install --all-extras --sync --quiet
+    echo "  Python dependencies up to date"
+else
+    echo "  WARNING: Poetry not found - dependencies may be missing"
+fi
+
 # Initialize MCP Catalog
 echo "Initializing MCP Catalog..."
 docker mcp catalog init 2>/dev/null || {

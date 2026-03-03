@@ -251,9 +251,10 @@ class TestConcurrentProcessing:
             resource_task = asyncio.to_thread(parse_custom_resource, str(resource_path))
             template_task = asyncio.to_thread(parse_template, str(template_path))
 
-            return await asyncio.gather(
+            result = await asyncio.gather(
                 recipe_task, attrs_task, resource_task, template_task
             )
+            return result
 
         (
             recipe_result,

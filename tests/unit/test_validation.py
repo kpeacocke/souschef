@@ -1,5 +1,7 @@
 """Unit tests for souschef.core.validation module."""
 
+import builtins
+
 from souschef.core.validation import (
     ValidationCategory,
     ValidationEngine,
@@ -208,6 +210,21 @@ class TestValidationEngine:
         # Should not have errors
         errors = [r for r in results if r.level == ValidationLevel.ERROR]
         assert len(errors) == 0
+
+    def test_validate_yaml_without_library(self, monkeypatch):
+        """Test YAML validation skips when yaml is unavailable."""
+        engine = ValidationEngine()
+        original_import = builtins.__import__
+
+        def guarded_import(name, *args, **kwargs):
+            if name == "yaml":
+                raise ImportError("yaml not available")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", guarded_import)
+        engine._validate_yaml_syntax("key: value")
+
+        assert engine.results == []
 
     def test_validate_template_conversion_deep_nesting(self):
         """Test validation flags deeply nested variables."""

@@ -93,8 +93,8 @@ class TestConversionFunctions:
     @pytest.mark.skip(reason="Function convert_recipe_to_tasks does not exist")
     def test_convert_recipe_to_tasks(self) -> None:
         """Test convert_recipe_to_tasks."""
-        from souschef.server import (
-            convert_recipe_to_tasks,  # type: ignore[attr-defined]
+        from souschef.server import (  # type: ignore
+            convert_recipe_to_tasks,
         )
 
         with patch("souschef.server._normalize_path") as mock_path:
@@ -107,8 +107,8 @@ class TestConversionFunctions:
     @pytest.mark.skip(reason="Function convert_template_to_jinja2 does not exist")
     def test_convert_template_to_jinja2(self) -> None:
         """Test convert_template_to_jinja2."""
-        from souschef.server import (
-            convert_template_to_jinja2,  # type: ignore[attr-defined]
+        from souschef.server import (  # type: ignore
+            convert_template_to_jinja2,
         )
 
         with patch("souschef.server._normalize_path") as mock_path:
@@ -168,8 +168,8 @@ class TestJsonOutputHandling:
     @pytest.mark.skip(reason="Function convert_recipe_to_tasks does not exist")
     def test_conversion_output_valid_json(self) -> None:
         """Test conversion output is valid JSON."""
-        from souschef.server import (
-            convert_recipe_to_tasks,  # type: ignore[attr-defined]
+        from souschef.server import (  # type: ignore
+            convert_recipe_to_tasks,
         )
 
         with patch("souschef.server._normalize_path") as mock_path:

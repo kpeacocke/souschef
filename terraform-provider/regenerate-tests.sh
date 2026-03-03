@@ -7,7 +7,7 @@ echo "🔄 Regenerating Go test results..."
 cd /workspaces/souschef/terraform-provider
 
 # Ensure test environment is set up
-if [ ! -f ".env.test" ]; then
+if [[ ! -f ".env.test" ]]; then
     echo "📋 Setting up test environment..."
     cp .env.test.example .env.test
 fi

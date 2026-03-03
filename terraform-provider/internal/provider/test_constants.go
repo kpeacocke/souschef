@@ -1,15 +1,37 @@
+// Package provider contains test constants shared across multiple test files.
 package provider
 
-// Shared test constants
+import "os"
+
 const (
-	expectedPanicMsg        = "Expected panic: %v"
-	nonexistentSousChefPath = "nonexistent-souschef-for-test"
-	// testDirPermissions defines readable/writable/executable directory permissions for temporary test directories
-	testDirPermissions = 0o755
-	// readonlyDirPermissions defines read-only directory permissions to test permission-denied scenarios
-	readonlyDirPermissions = 0o555
-	// testFilePermissions defines readable/writable file permissions for temporary test files
-	testFilePermissions = 0o644
-	// executableFilePermissions defines readable/writable/executable file permissions for test scripts
-	executableFilePermissions = 0o755
+	// Diagnostic messages
+	testUnexpectedDiagnostics    = "unexpected diagnostics: %v"
+	testExpectedConvertError     = "expected diagnostics for convert error"
+	testFailedToWritePlaybook    = "failed to write playbook: %v"
+	testFailedToWritePlan        = "failed to write plan: %v"
+	testFailedToWriteFile        = "failed to write file: %v"
+	testFailedToCreateDirectory  = "failed to create directory: %v"
+	testConfigureErrorMsg        = "expected error when provider data is wrong type"
+	testUnexpectedNilDataMsg     = "unexpected error on nil provider data: %v"
+
+	// File paths
+	testTmpCookbook  = "/tmp/cookbook"
+	testTmpPlanSh    = "/tmp/plan.sh"
+	testTmpProfile   = "/tmp/profile"
+	testDefaultYml   = "default.yml"
+	testPlanSh       = "plan.sh"
+	testPkgNameMyapp = "pkg_name=myapp\n"
+	testFileName     = "file.txt"
+
+	// Commands
+	testConvertRecipe  = "convert-recipe"
+	testConvertHabitat = "convert-habitat"
+	testConvertInSpec  = "convert-inspec"
+)
+
+// File permission constants used in provider tests.
+var (
+	testFilePermissions = os.FileMode(0o644)
+	testDirPermissions  = os.FileMode(0o755)
+	noPermissions       = os.FileMode(0o000)
 )

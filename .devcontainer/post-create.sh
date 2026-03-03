@@ -55,6 +55,33 @@ if [ -S /var/run/docker.sock ]; then
     fi
 fi
 
+# Verify and install Go if missing (fallback for feature installation issues)
+if ! command -v go &> /dev/null; then
+    echo "Go not found in PATH, installing from go.dev..."
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+        GO_ARCH="arm64"
+    else
+        GO_ARCH="amd64"
+    fi
+    GO_VERSION="1.24.0"
+    GO_URL="https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz"
+
+    mkdir -p /tmp/go-install
+    if curl -fsSL --proto '=https' --tlsv1.2 "$GO_URL" -o /tmp/go-install/go.tar.gz; then
+        rm -rf /usr/local/go
+        tar -C /usr/local -xzf /tmp/go-install/go.tar.gz
+        rm -rf /tmp/go-install
+        echo "Go $GO_VERSION installed successfully"
+    else
+        echo "  WARNING: Failed to install Go from go.dev"
+        echo "  This may be a network issue. Go may still be available from the feature installation."
+    fi
+else
+    GO_VERSION=$(go version | awk '{print $3}')
+    echo "Go already installed: $GO_VERSION"
+fi
+
 # Verify Poetry is available
 if ! command -v poetry &> /dev/null; then
     echo "Poetry not found in PATH, installing..."
@@ -71,9 +98,37 @@ cat > ~/.gitconfig << 'EOF'
 	gpgsign = false
 EOF
 
-# Install project dependencies (changes with code)
-echo "Installing Python project dependencies..."
-poetry install
+# Configure Poetry to create venv in project directory
+echo "Configuring Poetry..."
+poetry config virtualenvs.in-project true
+
+# Install project dependencies with all extras (changes with code)
+echo "Installing Python project dependencies (including all extras)..."
+poetry install --all-extras
+
+# Add automatic virtual environment activation to shell
+echo "Configuring shell to auto-activate virtual environment..."
+if ! grep -q "Auto-activate Poetry venv" ~/.zshrc 2>/dev/null; then
+    cat >> ~/.zshrc << 'EOF'
+
+# Auto-activate Poetry venv for SousChef project
+if [[ -d "/workspaces/souschef/.venv" ]] && [[ "$PWD" == /workspaces/souschef* ]]; then
+    source /workspaces/souschef/.venv/bin/activate
+fi
+EOF
+    echo "  Added venv activation to ~/.zshrc"
+fi
+
+if ! grep -q "Auto-activate Poetry venv" ~/.bashrc 2>/dev/null; then
+    cat >> ~/.bashrc << 'EOF'
+
+# Auto-activate Poetry venv for SousChef project
+if [[ -d "/workspaces/souschef/.venv" ]] && [[ "$PWD" == /workspaces/souschef* ]]; then
+    source /workspaces/souschef/.venv/bin/activate
+fi
+EOF
+    echo "  Added venv activation to ~/.bashrc"
+fi
 
 # Install pre-commit hooks (project-specific)
 echo "Installing pre-commit hooks..."

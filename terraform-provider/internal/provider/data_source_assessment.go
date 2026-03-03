@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -113,7 +112,7 @@ func (d *assessmentDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	cookbookPath := config.CookbookPath.ValueString()
 
 	// Call souschef CLI to assess cookbook
-	cmd := exec.CommandContext(ctx, d.client.Path, "assess-cookbook",
+	cmd := execCommandContext(ctx, d.client.Path, "assess-cookbook",
 		"--cookbook-path", cookbookPath,
 		"--format", "json",
 	)

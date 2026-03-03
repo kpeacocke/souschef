@@ -1,5 +1,7 @@
 """Tests for V2.2 custom module generator."""
 
+from typing import Any
+
 from souschef.converters.custom_module_generator import (
     analyse_resource_complexity,
     build_module_collection,
@@ -93,6 +95,17 @@ class TestAnalyseResourceComplexity:
         assert result["complexity_score"] >= 3
         assert result["needs_custom_module"] is True
         assert result["estimated_module_size"] > 150
+
+    def test_resource_with_provides_increases_complexity(self) -> None:
+        """Test provides declarations increase complexity."""
+        resource_body = """
+        provides :custom_resource
+        action :create do
+        end
+        """
+        result = analyse_resource_complexity(resource_body)
+
+        assert result["complexity_score"] >= 2
 
 
 class TestExtractModuleInterface:
@@ -237,7 +250,7 @@ class TestGenerateModuleDocumentation:
 
     def test_documentation_includes_recommendations(self) -> None:
         """Test documentation includes implementation recommendations."""
-        interface = {"properties": {}, "actions": []}
+        interface: dict[str, Any] = {"properties": {}, "actions": []}
         complexity = {
             "complexity_score": 0,
             "custom_logic_required": [],
