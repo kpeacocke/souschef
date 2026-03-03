@@ -89,6 +89,7 @@ from souschef.server import (
     generate_github_workflow_from_chef,
     generate_inspec_from_recipe,
     generate_inventory_from_chef_environments,
+    import_offline_bundle,
     list_cookbook_structure,
     list_directory,
     main,
@@ -130,6 +131,60 @@ def test_list_directory_success():
     ):
         result = list_directory(".")
         assert result == ["file1.txt", "file2.txt"]
+
+
+def test_import_offline_bundle_success(tmp_path, monkeypatch):
+    """Test importing an offline bundle archive."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
+    bundle_source = tmp_path / "bundle_source"
+    bundle_source.mkdir()
+    (bundle_source / "manifest.json").write_text("{}")
+
+    archive_path = tmp_path / "bundle.tar.gz"
+    from souschef.filesystem.operations import create_tar_gz_archive
+
+    create_tar_gz_archive(str(bundle_source), str(archive_path))
+
+    output_dir = tmp_path / "bundle_output"
+    result = import_offline_bundle(str(archive_path), str(output_dir))
+
+    payload = json.loads(result)
+    assert payload["status"] == "success"
+    assert (output_dir / "manifest.json").exists()
+
+
+def test_import_offline_bundle_invalid_archive(tmp_path, monkeypatch):
+    """Test error handling for invalid archive path."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
+    result = import_offline_bundle(
+        "/nonexistent/bundle.tar.gz", str(tmp_path / "output")
+    )
+
+    payload = json.loads(result)
+    assert payload["status"] == "failed"
+    assert "error" in payload
+
+
+def test_import_offline_bundle_invalid_path(tmp_path, monkeypatch):
+    """Test error handling for path outside workspace."""
+    monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", str(tmp_path))
+
+    bundle_source = tmp_path / "bundle_source"
+    bundle_source.mkdir()
+    (bundle_source / "manifest.json").write_text("{}")
+
+    archive_path = tmp_path / "bundle.tar.gz"
+    from souschef.filesystem.operations import create_tar_gz_archive
+
+    create_tar_gz_archive(str(bundle_source), str(archive_path))
+
+    # Try to extract to a path outside workspace
+    result = import_offline_bundle(str(archive_path), "/tmp/../../etc")  # NOSONAR
+
+    payload = json.loads(result)
+    assert payload["status"] == "failed"
 
 
 def test_assess_chef_migration_complexity_success(tmp_path, monkeypatch):
@@ -9500,9 +9555,9 @@ end""",
             "data_bag:secrets",
             "data_bag:certificates AND environment:production",
             # Network-based searches
-            "ipaddress:10.0.0.*",  # NOSONAR - test fixture
+            "ipaddress:192.0.2.*",  # RFC 5737 documentation IP pattern
             "network.interfaces.eth0.addresses:192.168.*",  # NOSONAR - test fixture
-            "network.default_gateway:10.0.0.1",  # NOSONAR - test fixture
+            "network.default_gateway:192.0.2.1",  # RFC 5737 documentation IP
             # Time-based searches
             "automatic.ohai_time:[1609459200 TO *]",
             "chef_packages.chef.version:[15.0 TO *]",
@@ -16973,7 +17028,7 @@ def test_get_chef_nodes_success():
             "roles": ["webserver"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "10.0.1.10",  # NOSONAR - RFC 1918 private IP in test data
+            "ipaddress": "192.0.2.110",  # RFC 5737 documentation IP
             "fqdn": "web-server-01.example.com",
         },
         {
@@ -16981,7 +17036,7 @@ def test_get_chef_nodes_success():
             "roles": ["database"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "10.0.2.10",  # NOSONAR - RFC 1918 private IP in test data
+            "ipaddress": "198.51.100.10",  # RFC 5737 documentation IP
             "fqdn": "db-server-01.example.com",
         },
     ]

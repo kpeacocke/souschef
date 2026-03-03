@@ -31,7 +31,7 @@ class TestAnsibleTask:
 
     def test_full_task(self):
         """Test creating a task with all fields."""
-        task = AnsibleTask(
+        task = AnsibleTask(  # type: ignore[call-arg]
             name="Install nginx",
             module="package",
             parameters={"name": "nginx", "state": "present"},
@@ -39,7 +39,7 @@ class TestAnsibleTask:
             notify=["restart nginx"],
             tags=["packages", "nginx"],
             become=True,
-            register="nginx_result",
+            register="nginx_result",  # type: ignore[call-arg]
         )
         assert task.name == "Install nginx"
         assert task.module == "package"

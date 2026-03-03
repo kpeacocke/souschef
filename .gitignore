@@ -126,3 +126,4 @@ MagicMock/
 
 # Docker Compose persistent storage
 data/
+*.cover

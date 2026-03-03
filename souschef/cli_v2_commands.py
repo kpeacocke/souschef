@@ -16,7 +16,12 @@ from souschef.core.path_utils import (
     _get_workspace_root,
     _normalize_path,
 )
-from souschef.migration_v2 import MigrationOrchestrator, MigrationStatus
+from souschef.migration_v2 import (
+    ChefServerOptions,
+    CookbookIngestionOptions,
+    MigrationOrchestrator,
+    MigrationStatus,
+)
 
 
 def register_v2_commands(cli: Any) -> None:
@@ -260,24 +265,8 @@ def _output_result(result: str, output_format: str) -> None:
     type=click.Path(),
     help="Save result to file instead of printing to stdout",
 )
-def v2_migrate(  # noqa: S107  # NOSONAR
-    cookbook_path: str,
-    chef_version: str,
-    target_platform: str,
-    target_version: str,
-    chef_server_url: str | None,
-    chef_organisation: str | None,
-    chef_client_name: str | None,
-    chef_client_key_path: str | None,
-    chef_client_key: str | None,
-    chef_query: str,
-    skip_validation: bool,
-    save_state: bool,
-    analysis_id: int | None,
-    output_type: str,
-    output_format: str,
-    output_path: str | None,
-) -> None:
+@click.pass_context
+def v2_migrate(ctx: click.Context, **kwargs: Any) -> None:
     """
     Run the v2 migration orchestrator for a cookbook.
 
@@ -285,13 +274,25 @@ def v2_migrate(  # noqa: S107  # NOSONAR
     saves migration state to the storage layer for later retrieval.
     """
     # Group parameters into logical dictionaries to reduce complexity
+    del ctx
+    cookbook_path = kwargs["cookbook_path"]
+    chef_version = kwargs["chef_version"]
+    target_platform = kwargs["target_platform"]
+    target_version = kwargs["target_version"]
+    skip_validation = kwargs["skip_validation"]
+    save_state = kwargs["save_state"]
+    analysis_id = kwargs["analysis_id"]
+    output_type = kwargs["output_type"]
+    output_format = kwargs["output_format"]
+    output_path = kwargs["output_path"]
+
     chef_server_config = {
-        "url": chef_server_url,
-        "organisation": chef_organisation,
-        "client_name": chef_client_name,
-        "client_key_path": chef_client_key_path,
-        "client_key": chef_client_key,
-        "query": chef_query,
+        "url": kwargs["chef_server_url"],
+        "organisation": kwargs["chef_organisation"],
+        "client_name": kwargs["chef_client_name"],
+        "client_key_path": kwargs["chef_client_key_path"],
+        "client_key": kwargs["chef_client_key"],
+        "query": kwargs["chef_query"],
     }
     output_config = {
         "type": output_type,
@@ -336,15 +337,21 @@ def _run_v2_migration(
             target_version=target_version,
         )
 
+        chef_server = ChefServerOptions(
+            server_url=chef_server_config["url"],
+            organisation=chef_server_config["organisation"],
+            client_name=chef_server_config["client_name"],
+            client_key_path=chef_server_config["client_key_path"],
+            client_key=chef_server_config["client_key"],
+            query=chef_server_config["query"],
+        )
+        ingestion = CookbookIngestionOptions()
+
         result = orchestrator.migrate_cookbook(
             str(cookbook_dir),
             skip_validation=migration_options["skip_validation"],
-            chef_server_url=chef_server_config["url"],
-            chef_organisation=chef_server_config["organisation"],
-            chef_client_name=chef_server_config["client_name"],
-            chef_client_key_path=chef_server_config["client_key_path"],
-            chef_client_key=chef_server_config["client_key"],
-            chef_query=chef_server_config["query"],
+            chef_server=chef_server,
+            ingestion=ingestion,
         )
 
         storage_id = None

@@ -4,6 +4,7 @@ import ast
 import json
 import re
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from souschef.converters.cookbook_specific import (
@@ -232,6 +233,23 @@ def _get_remote_file_params(
     return params
 
 
+def _get_cookbook_file_params(
+    resource_name: str, action: str, props: dict[str, Any]
+) -> dict[str, Any]:
+    """Build parameters for cookbook_file resources."""
+    src = props.get("source") or Path(resource_name).name
+    params = {
+        "src": src,
+        "dest": resource_name,
+    }
+    for key in ("mode", "owner", "group", "checksum"):
+        if key in props:
+            params[key] = props[key]
+    if action == "delete":
+        params["state"] = "absent"
+    return params
+
+
 def _get_include_recipe_params(
     resource_name: str, action: str, props: dict[str, Any]
 ) -> dict[str, Any]:
@@ -273,6 +291,7 @@ RESOURCE_PARAM_BUILDERS: dict[str, ParamBuilder | str] = {
     "user": _get_user_group_params,
     "group": _get_user_group_params,
     "remote_file": _get_remote_file_params,
+    "cookbook_file": _get_cookbook_file_params,
     "include_recipe": _get_include_recipe_params,
 }
 

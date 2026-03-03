@@ -5,7 +5,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import streamlit as st
+try:
+    import streamlit as st
+except ImportError:
+    st = None  # type: ignore[assignment]
 
 
 def _run_ansible_lint(playbook_path: str) -> tuple[bool, str]:

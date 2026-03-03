@@ -331,7 +331,7 @@ class HTTPClient:
             RequestException,
         ) as e:
             self._handle_request_error(e, url, timeout_value, response)
-            raise  # Unreachable, but makes type checker happy
+            raise  # pragma: no cover  # Unreachable, but makes type checker happy
 
     def get(
         self,
@@ -389,7 +389,7 @@ class HTTPClient:
             RequestException,
         ) as e:
             self._handle_request_error(e, url, timeout_value, response)
-            raise  # Unreachable, but makes type checker happy
+            raise  # pragma: no cover  # Unreachable, but makes type checker happy
 
     def close(self) -> None:
         """Close the HTTP session."""

@@ -121,7 +121,8 @@
                 "Progress.chef",
                 "redhat.ansible",
                 "zbr.vscode-ansible",
-                "ms-vscode.test-adapter-converter"
+                "ms-vscode.test-adapter-converter",
+                "hashicorp.terraform"
             ]
         }
     },

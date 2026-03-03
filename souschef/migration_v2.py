@@ -37,11 +37,22 @@ from souschef.converters.conversion_audit import (
 )
 from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.converters.template import convert_template_file
-from souschef.core.chef_server import get_chef_nodes
+from souschef.core.chef_server import (
+    ChefServerClient,
+    build_chef_server_client,
+    get_chef_nodes,
+)
+from souschef.core.path_utils import _get_workspace_root, _safe_join
+from souschef.deployment import _parse_chef_runlist
+from souschef.ingestion import CookbookSpec, fetch_cookbooks_from_chef_server
 from souschef.migration_simulation import (
     create_simulation_config,
 )
-from souschef.parsers.attributes import parse_attributes
+from souschef.parsers.attributes import (
+    collect_attributes_with_provenance,
+    parse_attributes,
+    resolve_attribute_precedence_with_provenance,
+)
 from souschef.parsers.recipe import parse_recipe
 
 logger = logging.getLogger(__name__)
@@ -163,6 +174,31 @@ class MetricsConversionStatus(Enum):
     PARTIAL = "partial"
     SKIPPED = "skipped"
     FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class ChefServerOptions:
+    """Chef Server connection and selection options."""
+
+    server_url: str | None = None
+    organisation: str | None = None
+    client_name: str | None = None
+    client_key_path: str | None = None
+    client_key: str | None = None
+    query: str = "*"
+    node: str | None = None
+    policy: str | None = None
+
+
+@dataclass(frozen=True)
+class CookbookIngestionOptions:
+    """Chef Server cookbook ingestion options."""
+
+    cookbook_name: str | None = None
+    cookbook_version: str | None = None
+    dependency_depth: str = "full"
+    use_cache: bool = True
+    offline_bundle_path: str | None = None
 
 
 @dataclass
@@ -303,6 +339,13 @@ class MigrationResult:
     job_template_id: int | None = None
     chef_nodes: list[dict[str, Any]] = field(default_factory=list)
     chef_server_queried: bool = False
+    run_list: list[str] = field(default_factory=list)
+    variable_context: dict[str, Any] = field(default_factory=dict)
+    variable_provenance: dict[str, Any] = field(default_factory=dict)
+    dependency_graph: dict[str, dict[str, str]] = field(default_factory=dict)
+    downloaded_cookbooks: list[dict[str, str]] = field(default_factory=list)
+    offline_bundle_path: str | None = None
+    migration_report: str | None = None
     metrics: ConversionMetrics = field(default_factory=ConversionMetrics)
     errors: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[dict[str, Any]] = field(default_factory=list)
@@ -333,6 +376,13 @@ class MigrationResult:
                 "nodes": self.chef_nodes if self.chef_server_queried else [],
                 "queried": self.chef_server_queried,
             },
+            "run_list": self.run_list,
+            "variable_context": self.variable_context,
+            "variable_provenance": self.variable_provenance,
+            "dependency_graph": self.dependency_graph,
+            "downloaded_cookbooks": self.downloaded_cookbooks,
+            "offline_bundle_path": self.offline_bundle_path,
+            "migration_report": self.migration_report,
             "metrics": self.metrics.to_dict(),
             "errors": self.errors,
             "warnings": self.warnings,
@@ -380,6 +430,13 @@ class MigrationResult:
             job_template_id=infrastructure.get("job_template_id"),
             chef_nodes=chef_server.get("nodes", []),
             chef_server_queried=chef_server.get("queried", False),
+            run_list=data.get("run_list", []),
+            variable_context=data.get("variable_context", {}),
+            variable_provenance=data.get("variable_provenance", {}),
+            dependency_graph=data.get("dependency_graph", {}),
+            downloaded_cookbooks=data.get("downloaded_cookbooks", []),
+            offline_bundle_path=data.get("offline_bundle_path"),
+            migration_report=data.get("migration_report"),
             metrics=ConversionMetrics.from_dict(metrics_payload),
             errors=data.get("errors", []),
             warnings=data.get("warnings", []),
@@ -412,12 +469,8 @@ class MigrationOrchestrator:
         skip_validation: bool = False,
         parallel_processing: bool = False,
         max_workers: int | None = None,
-        chef_server_url: str | None = None,
-        chef_organisation: str | None = None,
-        chef_client_name: str | None = None,
-        chef_client_key_path: str | None = None,
-        chef_client_key: str | None = None,
-        chef_query: str = "*",
+        chef_server: ChefServerOptions | None = None,
+        ingestion: CookbookIngestionOptions | None = None,
     ) -> MigrationResult:
         """
         Execute complete cookbook migration.
@@ -428,12 +481,8 @@ class MigrationOrchestrator:
             parallel_processing: Enable parallel conversion of recipes and attributes.
             max_workers: Maximum number of worker processes for parallel execution
                         (default: CPU count - 1).
-            chef_server_url: Chef Server URL (optional).
-            chef_organisation: Chef organisation name (optional).
-            chef_client_name: Chef client name (optional).
-            chef_client_key_path: Path to Chef client key (optional).
-            chef_client_key: Inline Chef client key content (optional).
-            chef_query: Chef search query for nodes (default: *).
+            chef_server: Chef Server connection and selection options.
+            ingestion: Cookbook ingestion options for Chef Server downloads.
 
         Returns:
             Migration result with status, playbooks, and metrics.
@@ -452,6 +501,26 @@ class MigrationOrchestrator:
         )
 
         try:
+            chef_server = chef_server or ChefServerOptions()
+            ingestion = ingestion or CookbookIngestionOptions()
+
+            cookbook_path, chef_node_payload = self._prepare_cookbook_source(
+                cookbook_path=cookbook_path,
+                chef_server_url=chef_server.server_url,
+                chef_organisation=chef_server.organisation,
+                chef_client_name=chef_server.client_name,
+                chef_client_key_path=chef_server.client_key_path,
+                chef_client_key=chef_server.client_key,
+                chef_node=chef_server.node,
+                chef_policy=chef_server.policy,
+                cookbook_name=ingestion.cookbook_name,
+                cookbook_version=ingestion.cookbook_version,
+                dependency_depth=ingestion.dependency_depth,
+                use_cache=ingestion.use_cache,
+                offline_bundle_path=ingestion.offline_bundle_path,
+            )
+            self.result.source_cookbook = cookbook_path
+
             # Phase 1: Analyze
             logger.info(f"[{self.migration_id}] Starting migration analysis")
             self._analyze_cookbook(cookbook_path)
@@ -459,14 +528,18 @@ class MigrationOrchestrator:
             # Optional Chef Server query for node data
             if any(
                 [
-                    chef_server_url,
-                    chef_organisation,
-                    chef_client_name,
-                    chef_client_key_path,
-                    chef_client_key,
+                    chef_server.server_url,
+                    chef_server.organisation,
+                    chef_server.client_name,
+                    chef_server.client_key_path,
+                    chef_server.client_key,
                 ]
             ):
-                if not chef_server_url or not chef_organisation or not chef_client_name:
+                if (
+                    not chef_server.server_url
+                    or not chef_server.organisation
+                    or not chef_server.client_name
+                ):
                     message = "Chef Server query skipped due to missing configuration"
                     self.result.warnings.append(
                         {
@@ -476,7 +549,7 @@ class MigrationOrchestrator:
                         }
                     )
                     logger.warning("[%s] %s", self.migration_id, message)
-                elif not chef_client_key_path and not chef_client_key:
+                elif not chef_server.client_key_path and not chef_server.client_key:
                     message = "Chef Server query skipped due to missing client key"
                     self.result.warnings.append(
                         {
@@ -488,13 +561,18 @@ class MigrationOrchestrator:
                     logger.warning("[%s] %s", self.migration_id, message)
                 else:
                     self._query_chef_server(
-                        server_url=chef_server_url,
-                        organisation=chef_organisation,
-                        client_name=chef_client_name,
-                        client_key_path=chef_client_key_path,
-                        client_key=chef_client_key,
-                        query=chef_query,
+                        server_url=chef_server.server_url,
+                        organisation=chef_server.organisation,
+                        client_name=chef_server.client_name,
+                        client_key_path=chef_server.client_key_path,
+                        client_key=chef_server.client_key,
+                        query=chef_server.query,
                     )
+
+            self._build_variable_context(
+                cookbook_path=cookbook_path,
+                chef_node_payload=chef_node_payload,
+            )
 
             # Phase 2: Convert
             logger.info(f"[{self.migration_id}] Converting Chef artifacts")
@@ -528,6 +606,8 @@ class MigrationOrchestrator:
             conversion_rate = self.result.metrics.conversion_rate()
             msg = f"[{self.migration_id}] Migration complete: {conversion_rate:.1f}%"
             logger.info(msg)
+
+            self.result.migration_report = self._build_migration_report()
 
         except Exception as e:
             logger.error(f"[{self.migration_id}] Migration failed: {e}")
@@ -572,6 +652,308 @@ class MigrationOrchestrator:
         templates_dir = path / "templates"
         if templates_dir.exists():
             self.result.metrics.templates_total = len(list(templates_dir.glob("*")))
+
+    def _prepare_cookbook_source(
+        self,
+        *,
+        cookbook_path: str,
+        chef_server_url: str | None,
+        chef_organisation: str | None,
+        chef_client_name: str | None,
+        chef_client_key_path: str | None,
+        chef_client_key: str | None,
+        chef_node: str | None,
+        chef_policy: str | None,
+        cookbook_name: str | None,
+        cookbook_version: str | None,
+        dependency_depth: str,
+        use_cache: bool,
+        offline_bundle_path: str | None,
+    ) -> tuple[str, dict[str, Any] | None]:
+        """
+        Prepare cookbook source, optionally fetching from Chef Server.
+
+        Returns:
+            Tuple of (cookbook_path, chef_node_payload).
+
+        """
+        if cookbook_path and Path(cookbook_path).exists():
+            return cookbook_path, None
+
+        if not (chef_server_url and chef_organisation and chef_client_name):
+            raise ValueError("Chef Server configuration is required for downloads")
+        if not (chef_client_key_path or chef_client_key):
+            raise ValueError("Chef Server client key is required for downloads")
+
+        run_list, chef_node_payload = self._fetch_run_list(
+            chef_server_url=chef_server_url,
+            chef_organisation=chef_organisation,
+            chef_client_name=chef_client_name,
+            chef_client_key_path=chef_client_key_path,
+            chef_client_key=chef_client_key,
+            chef_node=chef_node,
+            chef_policy=chef_policy,
+        )
+
+        assert self.result is not None
+        cookbooks_from_runlist: list[str] = []
+        if run_list:
+            self.result.run_list = run_list
+            cookbooks_from_runlist = self._extract_cookbooks_from_run_list(run_list)
+
+        primary_cookbook = self._resolve_primary_cookbook(
+            cookbook_name, cookbooks_from_runlist
+        )
+
+        additional_specs = [
+            CookbookSpec(name=name, version="")
+            for name in cookbooks_from_runlist
+            if name and name != primary_cookbook
+        ]
+
+        primary_spec = CookbookSpec(
+            name=primary_cookbook,
+            version=cookbook_version or "",
+        )
+
+        workspace_root = _get_workspace_root()
+        output_root = _safe_join(
+            workspace_root,
+            ".souschef",
+            "chef-downloads",
+            self.migration_id,
+        )
+
+        fetch_result = fetch_cookbooks_from_chef_server(
+            cookbook=primary_spec,
+            additional_cookbooks=additional_specs,
+            server_url=chef_server_url,
+            organisation=chef_organisation,
+            client_name=chef_client_name,
+            client_key_path=chef_client_key_path,
+            client_key=chef_client_key,
+            output_dir=str(output_root),
+            dependency_depth=dependency_depth,
+            use_cache=use_cache,
+            offline_bundle_path=offline_bundle_path,
+        )
+
+        assert self.result is not None
+        self.result.downloaded_cookbooks = [
+            {"name": spec.name, "version": spec.version}
+            for spec in fetch_result.cookbooks
+        ]
+        self.result.dependency_graph = fetch_result.dependency_graph
+        if fetch_result.offline_bundle_path:
+            self.result.offline_bundle_path = str(fetch_result.offline_bundle_path)
+
+        for warning in fetch_result.warnings:
+            self.result.warnings.append(
+                {
+                    "phase": "cookbook_fetch",
+                    "message": warning,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+        cookbook_root = fetch_result.root_dir / "cookbooks" / primary_cookbook
+        return str(cookbook_root), chef_node_payload
+
+    def _fetch_run_list(
+        self,
+        *,
+        chef_server_url: str | None,
+        chef_organisation: str | None,
+        chef_client_name: str | None,
+        chef_client_key_path: str | None,
+        chef_client_key: str | None,
+        chef_node: str | None,
+        chef_policy: str | None,
+    ) -> tuple[list[str], dict[str, Any] | None]:
+        """Fetch run_list data from Chef Server for a node or policy."""
+        if not chef_node and not chef_policy:
+            return [], None
+
+        client = build_chef_server_client(
+            server_url=chef_server_url or "",
+            organisation=chef_organisation or "",
+            client_name=chef_client_name or "",
+            client_key_path=chef_client_key_path,
+            client_key=chef_client_key,
+        )
+
+        if chef_node:
+            chef_node_payload = client.get_node(chef_node)
+            run_list = self._normalise_run_list(chef_node_payload.get("run_list", []))
+            return run_list, chef_node_payload
+
+        policy_payload = client.get_policy(chef_policy or "")
+        run_list = self._extract_policy_run_list(
+            client,
+            chef_policy or "",
+            policy_payload,
+        )
+        return run_list, None
+
+    def _resolve_primary_cookbook(
+        self, cookbook_name: str | None, run_list_cookbooks: list[str]
+    ) -> str:
+        """Resolve the primary cookbook name for ingestion."""
+        if cookbook_name:
+            return cookbook_name
+        if run_list_cookbooks:
+            return run_list_cookbooks[0]
+        raise ValueError("Cookbook name is required for Chef Server ingestion")
+
+    def _normalise_run_list(self, run_list: Any) -> list[str]:
+        """Normalise Chef run_list values into a list of strings."""
+        if isinstance(run_list, list):
+            normalised: list[str] = []
+            for item in run_list:
+                if isinstance(item, str):
+                    normalised.extend(_parse_chef_runlist(item))
+            return [item for item in normalised if item]
+
+        if isinstance(run_list, str):
+            return [item for item in _parse_chef_runlist(run_list) if item]
+
+        return []
+
+    def _extract_cookbooks_from_run_list(self, run_list: list[str]) -> list[str]:
+        """Extract cookbook names from a normalised run_list."""
+        cookbooks: list[str] = []
+        for item in run_list:
+            if "::" in item:
+                cookbooks.append(item.split("::", 1)[0])
+            else:
+                cookbooks.append(item)
+        return [name for name in cookbooks if name]
+
+    def _extract_policy_run_list(
+        self,
+        client: ChefServerClient,
+        policy_name: str,
+        policy_payload: dict[str, Any],
+    ) -> list[str]:
+        """Extract run_list from policy payload or revision data."""
+        revision_id = None
+        if isinstance(policy_payload.get("revision_id"), str):
+            revision_id = policy_payload.get("revision_id")
+        elif isinstance(policy_payload.get("revisions"), dict):
+            revisions = list(policy_payload["revisions"].keys())
+            if revisions:
+                revision_id = sorted(revisions)[-1]
+
+        run_list_payload: Any = policy_payload.get("run_list")
+        if revision_id:
+            revision_payload = client.get_policy_revision(policy_name, revision_id)
+            run_list_payload = revision_payload.get("run_list", run_list_payload)
+
+        return self._normalise_run_list(run_list_payload)
+
+    def _build_variable_context(
+        self,
+        *,
+        cookbook_path: str,
+        chef_node_payload: dict[str, Any] | None,
+    ) -> None:
+        """Build variable context and provenance report."""
+        assert self.result is not None
+
+        attributes_dir = Path(cookbook_path) / "attributes"
+        all_attributes: list[dict[str, str]] = []
+
+        if attributes_dir.exists():
+            for attr_file in attributes_dir.glob("*.rb"):
+                content = attr_file.read_text(encoding="utf-8", errors="ignore")
+                all_attributes.extend(
+                    collect_attributes_with_provenance(content, str(attr_file))
+                )
+
+        if chef_node_payload and isinstance(chef_node_payload.get("automatic"), dict):
+            automatic_attrs = self._flatten_dict(chef_node_payload["automatic"])
+            for path, value in automatic_attrs.items():
+                all_attributes.append(
+                    {
+                        "precedence": "automatic",
+                        "path": path,
+                        "value": self._format_attribute_value(value),
+                        "source_file": "chef_server:automatic",
+                    }
+                )
+
+        if not all_attributes:
+            return
+
+        resolved = resolve_attribute_precedence_with_provenance(all_attributes)
+
+        self.result.variable_context = {
+            path: info.get("value") for path, info in resolved.items()
+        }
+        self.result.variable_provenance = {
+            "run_list": self.result.run_list,
+            "attributes": resolved,
+        }
+
+        conflict_paths = [
+            path for path, info in resolved.items() if info["has_conflict"]
+        ]
+        if conflict_paths:
+            self.result.warnings.append(
+                {
+                    "phase": "variable_context",
+                    "message": (
+                        "Attribute precedence conflicts detected for: "
+                        + ", ".join(sorted(conflict_paths))
+                    ),
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+
+    def _flatten_dict(self, data: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+        """Flatten nested dictionaries into dot notation."""
+        flattened: dict[str, Any] = {}
+        for key, value in data.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if isinstance(value, dict):
+                flattened.update(self._flatten_dict(value, path))
+            else:
+                flattened[path] = value
+        return flattened
+
+    def _format_attribute_value(self, value: Any) -> str:
+        """Normalise attribute values for provenance reporting."""
+        if isinstance(value, (dict, list)):
+            return json.dumps(value)
+        return str(value)
+
+    def _build_migration_report(self) -> str:
+        """Build a human-readable migration report."""
+        assert self.result is not None
+        lines = [
+            "Chef to Ansible Migration Report",
+            "=" * 40,
+            f"Migration ID: {self.result.migration_id}",
+            f"Source cookbook: {self.result.source_cookbook}",
+            f"Status: {self.result.status.value}",
+            f"Downloaded cookbooks: {len(self.result.downloaded_cookbooks)}",
+        ]
+
+        if self.result.offline_bundle_path:
+            lines.append(f"Offline bundle: {self.result.offline_bundle_path}")
+
+        if self.result.run_list:
+            lines.append("Run list:")
+            lines.extend([f"  - {item}" for item in self.result.run_list])
+
+        conflict_count = sum(
+            1
+            for info in self.result.variable_provenance.get("attributes", {}).values()
+            if info.get("has_conflict")
+        )
+        lines.append(f"Attribute conflicts: {conflict_count}")
+
+        return "\n".join(lines)
 
     def _query_chef_server(
         self,

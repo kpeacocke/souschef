@@ -56,6 +56,19 @@ func (p *SousChefProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 	}
 }
 
+// ValidateConfigValue validates a single configuration value for provider setup.
+// It checks for unknown values and adds appropriate diagnostics.
+// Exported for testing purposes.
+func ValidateConfigValue(value types.String, attrPath path.Path, resp *provider.ConfigureResponse) {
+	if value.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			attrPath,
+			"Unknown SousChef Path",
+			"The provider cannot create the SousChef client as there is an unknown configuration value for the SousChef path.",
+		)
+	}
+}
+
 // Configure prepares a SousChef API client for data sources and resources.
 func (p *SousChefProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var config SousChefProviderModel
@@ -66,14 +79,8 @@ func (p *SousChefProvider) Configure(ctx context.Context, req provider.Configure
 		return
 	}
 
-	// Configuration values are now available via config
-	if config.SousChefPath.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("souschef_path"),
-			"Unknown SousChef Path",
-			"The provider cannot create the SousChef client as there is an unknown configuration value for the SousChef path.",
-		)
-	}
+	// Validate configuration values
+	ValidateConfigValue(config.SousChefPath, path.Root("souschef_path"), resp)
 
 	if resp.Diagnostics.HasError() {
 		return
