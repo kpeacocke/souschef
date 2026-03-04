@@ -176,7 +176,9 @@ func TestDataSourceAssessmentWithConfig(t *testing.T) {
 	req := datasource.ReadRequest{
 		Config: config,
 	}
-	resp := &datasource.ReadResponse{}
+	resp := &datasource.ReadResponse{
+		State: tfsdk.State{Schema: schemaResp.Schema},
+	}
 
 	// This will fail because souschef CLI doesn't exist, but it exercises the code path
 	ds.Read(context.Background(), req, resp)

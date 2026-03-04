@@ -1,0 +1,8 @@
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+  unit-test:
+    runs-on: ubuntu-latest
+  integration-test:
+    runs-on: ubuntu-latest
