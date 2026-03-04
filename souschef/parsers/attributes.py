@@ -133,7 +133,7 @@ def _extract_precedence_and_path(
 
     """
     if _precedence_types is None:
-        precedence_types = (
+        precedence_types: tuple[str, ...] = (
             "default",
             "force_default",
             "normal",
