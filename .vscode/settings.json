@@ -526,8 +526,20 @@
             "generate": true,
             "gc_details": true
         },
-        "experimentalWorkspaceModule": true
+        "experimentalWorkspaceModule": true,
+        "allowImplicitNetworkAccess": true
     },
+    // Go extension settings for test discovery and language server
+    "[go]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "golang.go",
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    },
+    "go.lintTool": "golangci-lint",
+    "go.useLanguageServer": true,
+    "go.lintOnSave": "package",
     "snyk.advanced.autoSelectOrganization": false,
     "codeQL.createQuery.qlPackLocation": "/Users/kpeacocke/code/souschef",
     "python-envs.defaultEnvManager": "ms-python.python:system",

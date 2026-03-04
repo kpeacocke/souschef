@@ -297,7 +297,7 @@ func TestMigrationImportStateValidFilesPresent(t *testing.T) {
 	}
 }
 
-func TestBatchMigrationImportStateInvalidID(t *testing.T) {
+func TestBatchMigrationImportStateInvalidIDCoverage(t *testing.T) {
 	r := &batchMigrationResource{client: &SousChefClient{Path: "souschef"}}
 
 	req := resource.ImportStateRequest{ID: "only-one-segment"}

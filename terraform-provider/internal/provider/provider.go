@@ -56,10 +56,9 @@ func (p *SousChefProvider) Schema(_ context.Context, _ provider.SchemaRequest, r
 	}
 }
 
-// ValidateConfigValue validates a single configuration value for provider setup.
+// validateAndReportConfigValue validates a single configuration value for provider setup.
 // It checks for unknown values and adds appropriate diagnostics.
-// Exported for testing purposes.
-func ValidateConfigValue(value types.String, attrPath path.Path, resp *provider.ConfigureResponse) {
+func validateAndReportConfigValue(value types.String, attrPath path.Path, resp *provider.ConfigureResponse) {
 	if value.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
 			attrPath,
@@ -80,7 +79,7 @@ func (p *SousChefProvider) Configure(ctx context.Context, req provider.Configure
 	}
 
 	// Validate configuration values
-	ValidateConfigValue(config.SousChefPath, path.Root("souschef_path"), resp)
+	validateAndReportConfigValue(config.SousChefPath, path.Root("souschef_path"), resp)
 
 	if resp.Diagnostics.HasError() {
 		return
