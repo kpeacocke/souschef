@@ -118,16 +118,31 @@ def parse_attributes_with_provenance(path: str) -> dict[str, Any] | str:
         return f"An error occurred: {e}"
 
 
-def _extract_precedence_and_path(line: str) -> tuple[str, str, str] | None:
-    """Extract precedence and attribute path from a line."""
-    precedence_types = (
-        "default",
-        "force_default",
-        "normal",
-        "override",
-        "force_override",
-        "automatic",
-    )
+def _extract_precedence_and_path(
+    line: str, _precedence_types: tuple[str, ...] | None = None
+) -> tuple[str, str, str] | None:
+    """
+    Extract precedence and attribute path from a line.
+
+    Args:
+        line: The attribute line to parse.
+        _precedence_types: Optional tuple of precedence type strings for testing.
+
+    Returns:
+        Tuple of (precedence, attr_path, value_start) or None if no match.
+
+    """
+    if _precedence_types is None:
+        precedence_types = (
+            "default",
+            "force_default",
+            "normal",
+            "override",
+            "force_override",
+            "automatic",
+        )
+    else:
+        precedence_types = _precedence_types
     if not (line.startswith(precedence_types) and "[" in line):
         return None
 

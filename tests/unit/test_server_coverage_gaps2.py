@@ -135,7 +135,9 @@ def test_parse_controls_from_directory_read_error(tmp_path: Path) -> None:
     (controls_dir / "test.rb").write_text("control 'x' do\nend\n")
 
     with (
-        patch("souschef.server.safe_read_text", side_effect=OSError("disk error")),
+        patch(
+            "souschef.parsers.inspec.safe_read_text", side_effect=OSError("disk error")
+        ),
         pytest.raises(RuntimeError, match="disk error"),
     ):
         _parse_controls_from_directory(profile_dir)
@@ -153,7 +155,8 @@ def test_parse_controls_from_file_read_error(tmp_path: Path) -> None:
 
     with (
         patch(
-            "souschef.server.safe_read_text", side_effect=OSError("permission denied")
+            "souschef.parsers.inspec.safe_read_text",
+            side_effect=OSError("permission denied"),
         ),
         pytest.raises(RuntimeError, match="Error reading file"),
     ):
@@ -662,12 +665,12 @@ def test_convert_all_cookbooks_comprehensive_no_cookbooks(
 
 
 def test_validate_conversion_paths_invalid_cookbooks(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """_validate_conversion_paths raises ValueError for an invalid cookbooks path."""
     from souschef.server import _validate_conversion_paths
 
-    monkeypatch.chdir("/workspaces/souschef")
+    monkeypatch.chdir(tmp_path)
     with (
         patch(
             "souschef.server._ensure_within_base_path",

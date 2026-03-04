@@ -468,6 +468,7 @@ def test_eol_status_structure(major, minor):
         valid_statuses = [
             "Supported",
             "End of Life",
+            "EOL Approaching",
             "Upcoming",
             "Unknown",
             "supported",

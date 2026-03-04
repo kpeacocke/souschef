@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from souschef.migration_v2 import (
+    ChefServerOptions,
     ConversionMetrics,
     MigrationOrchestrator,
     MigrationResult,
@@ -203,7 +204,8 @@ class TestMigrationOrchestrator:
                 {"name": "web01", "ipaddress": "10.0.1.10", "run_list": ["role[web]"]}
             ]
             result = orchestrator.migrate_cookbook(
-                str(cookbook_dir), chef_server_url="https://chef.example.com"
+                str(cookbook_dir),
+                chef_server=ChefServerOptions(server_url="https://chef.example.com"),
             )
             # Should return MigrationResult, not dict
             assert isinstance(result, MigrationResult)
