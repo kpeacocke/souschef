@@ -124,10 +124,7 @@ class TestListDirectoryFunction:
         (tmp_path / "subdir" / "file2.rb").write_text("content")
 
         result = list_directory(str(tmp_path))
-        if isinstance(result, str):
-            assert "file1.rb" in result
-        else:
-            assert "file1.rb" in result
+        assert "file1.rb" in result
 
     def test_list_directory_missing_path(self) -> None:
         """Test list_directory with missing path."""

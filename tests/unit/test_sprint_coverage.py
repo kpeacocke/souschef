@@ -172,7 +172,7 @@ def test_complexity_with_missing_metrics() -> None:
         score = _calculate_complexity_score(partial_metrics)
         assert isinstance(score, int)
     except KeyError:
-        assert True
+        assert "custom_resources" not in partial_metrics
 
 
 def test_assessment_priority_all_ranges() -> None:

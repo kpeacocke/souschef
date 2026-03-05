@@ -81,7 +81,7 @@ def test_conversion_audit_duration_and_html_export(tmp_path: Path) -> None:
         )
     )
     data = trail.to_dict()
-    assert data["duration_seconds"] == 5.0
+    assert data["duration_seconds"] == pytest.approx(5.0)
 
     out = tmp_path / "audit.html"
     trail.export_html_report(str(out))
@@ -182,7 +182,7 @@ def test_inspec_converter_branches() -> None:
     assert any("match" in line for line in lines)
 
     lines = []
-    _convert_file_to_serverspec(lines, "/tmp/x", file_expectations)
+    _convert_file_to_serverspec(lines, "/var/lib/souschef/x", file_expectations)
     assert any("owner" in line for line in lines)
 
     goss_pkg = _convert_package_to_goss(pkg_expectations)
@@ -354,14 +354,14 @@ def test_playbook_error_branches() -> None:
     with patch(
         "souschef.converters.playbook.parse_recipe", side_effect=RuntimeError("boom")
     ):
-        result = playbook.generate_playbook_from_recipe("/tmp/recipe.rb")
+        result = playbook.generate_playbook_from_recipe("/var/lib/souschef/recipe.rb")
     assert result.startswith("Error generating playbook:")
 
     with patch(
         "souschef.converters.playbook._normalize_path",
         side_effect=RuntimeError("bad path"),
     ):
-        result = playbook.analyse_chef_search_patterns("/tmp")
+        result = playbook.analyse_chef_search_patterns("/var/lib/souschef")
     assert result.startswith("Error analyzing Chef search patterns:")
 
 
@@ -471,7 +471,7 @@ def test_postgres_manager_none_and_exception_branches() -> None:
         assert (
             mgr.save_analysis(
                 cookbook_name="cb",
-                cookbook_path="/tmp/cb",
+                cookbook_path="/var/lib/souschef/cb",
                 cookbook_version="1.0",
                 complexity="low",
                 estimated_hours=1.0,
@@ -484,7 +484,7 @@ def test_postgres_manager_none_and_exception_branches() -> None:
 
     with patch.object(mgr, "_connect", return_value=_Conn(row=None)):
         assert mgr.get_analysis_by_fingerprint("fp") is None
-        assert mgr.get_cached_analysis("/tmp/cb") is None
+        assert mgr.get_cached_analysis("/var/lib/souschef/cb") is None
 
     with patch.object(mgr, "_connect", return_value=_Conn(row=None, rowcount=0)):
         assert mgr.save_conversion("cb", "playbook", "ok", 1, {}) is None
@@ -539,7 +539,7 @@ def test_postgres_manager_positive_row_branches() -> None:
     analysis_row = {
         "id": 9,
         "cookbook_name": "cb",
-        "cookbook_path": "/tmp/cb",
+        "cookbook_path": "/var/lib/souschef/cb",
         "cookbook_version": "1.0",
         "complexity": "low",
         "estimated_hours": 1.0,
@@ -555,7 +555,7 @@ def test_postgres_manager_positive_row_branches() -> None:
     with patch.object(mgr, "_connect", return_value=_Conn(row={"id": 7})):
         saved_id = mgr.save_analysis(
             cookbook_name="cb",
-            cookbook_path="/tmp/cb",
+            cookbook_path="/var/lib/souschef/cb",
             cookbook_version="1.0",
             complexity="low",
             estimated_hours=1.0,
@@ -567,7 +567,7 @@ def test_postgres_manager_positive_row_branches() -> None:
 
     with patch.object(mgr, "_connect", return_value=_Conn(row=analysis_row)):
         assert mgr.get_analysis_by_fingerprint("fp") is not None
-        assert mgr.get_cached_analysis("/tmp/cb") is not None
+        assert mgr.get_cached_analysis("/var/lib/souschef/cb") is not None
 
     with patch.object(mgr, "_connect", return_value=_Conn(row={"id": 12})):
         conv_id = mgr.save_conversion("cb", "playbook", "ok", 1, {})

@@ -284,14 +284,18 @@ class TestWizardPrompts:
         monkeypatch.setattr("builtins.input", lambda _prompt: next(responses))
         assert _yes_no_prompt("Proceed? ") is True
 
-    def test_confirm_configuration_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_confirm_configuration_false(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         """Confirmation should honour a negative response."""
         monkeypatch.setattr(
             "souschef.migration_wizard._yes_no_prompt", lambda *_args, **_kwargs: False
         )
+        cookbook_path = tmp_path / "cookbook"
+        output_path = tmp_path / "output"
         config = {
-            "cookbook_path": "/tmp/cookbook",
-            "output_dir": "/tmp/output",
+            "cookbook_path": str(cookbook_path),
+            "output_dir": str(output_path),
             "chef_version": "14.15.6",
             "ansible_version": "2.12",
             "resource_patterns": {"package": True},
