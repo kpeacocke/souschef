@@ -29,7 +29,7 @@ func TestAccBatchMigrationResourceMultipleRecipes(t *testing.T) {
 
 	for _, combo := range recipeCombinations {
 		t.Run(combo.name, func(t *testing.T) {
-			outputPath := fmt.Sprintf("/workspaces/souschef/test-output/batch/%s", combo.name)
+			outputPath := getTestOutputPath("batch", combo.name)
 			os.MkdirAll(outputPath, 0755)
 
 			resource.Test(t, resource.TestCase{
@@ -51,7 +51,7 @@ func TestAccBatchMigrationResourceMultipleRecipes(t *testing.T) {
 
 // TestAccBatchMigrationResourceReadRefresh tests Read/Refresh cycles
 func TestAccBatchMigrationResourceReadRefresh(t *testing.T) {
-	outputPath := "/workspaces/souschef/test-output/batch/refresh"
+	outputPath := getTestOutputPath("batch", "refresh")
 	os.MkdirAll(outputPath, 0755)
 
 	resource.Test(t, resource.TestCase{
@@ -80,7 +80,7 @@ func TestAccBatchMigrationResourceReadRefresh(t *testing.T) {
 
 // TestAccBatchMigrationResourceDeleteMultiple tests deleting multiple playbooks
 func TestAccBatchMigrationResourceDeleteMultiple(t *testing.T) {
-	outputPath := "/workspaces/souschef/test-output/batch/delete_multi"
+	outputPath := getTestOutputPath("batch", "delete_multi")
 	os.MkdirAll(outputPath, 0755)
 	recipes := []string{"default", "server"}
 
@@ -106,7 +106,7 @@ func TestAccBatchMigrationResourceDeleteMultiple(t *testing.T) {
 
 // TestAccBatchMigrationResourceUpdateRecipeList tests updating recipe lists
 func TestAccBatchMigrationResourceUpdateRecipeList(t *testing.T) {
-	outputPath := "/workspaces/souschef/test-output/batch/update_list"
+	outputPath := getTestOutputPath("batch", "update_list")
 	os.MkdirAll(outputPath, 0755)
 
 	resource.Test(t, resource.TestCase{

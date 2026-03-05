@@ -244,6 +244,10 @@ func (r *migrationResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
+	// Keep computed attributes known after update.
+	cookbookName := filepath.Base(cookbookPath)
+	plan.ID = types.StringValue(fmt.Sprintf("%s-%s", cookbookName, recipeName))
+	plan.CookbookName = types.StringValue(cookbookName)
 	plan.PlaybookContent = types.StringValue(string(content))
 
 	diags = resp.State.Set(ctx, plan)

@@ -10,7 +10,7 @@ import (
 var (
 	testInSpecMigrationResourceName = "souschef_inspec_migration.test"
 	testInSpecProfilePath           = getFixturePath("sample_inspec_profile")
-	testInSpecOutputPath            = "/workspaces/souschef/test-output/tests"
+	testInSpecOutputPath            = getTestOutputPath("tests")
 )
 
 func TestAccInSpecMigrationResource(t *testing.T) {

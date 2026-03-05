@@ -78,6 +78,23 @@ func getFixturePath(fixtureName string) string {
 	return filepath.Clean(fixturesPath)
 }
 
+// getTestOutputPath returns a writable output path under the repository root.
+// This avoids hardcoded absolute paths that may not be writable in CI.
+func getTestOutputPath(parts ...string) string {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		cwd, _ := os.Getwd()
+		base := filepath.Join(cwd, "test-output")
+		segments := append([]string{base}, parts...)
+		return filepath.Clean(filepath.Join(segments...))
+	}
+
+	repoRoot := filepath.Join(filepath.Dir(filename), "..", "..", "..")
+	base := filepath.Join(filepath.Clean(repoRoot), "test-output")
+	segments := append([]string{base}, parts...)
+	return filepath.Clean(filepath.Join(segments...))
+}
+
 // TestAccProviderConfigure tests provider configuration with explicit path
 func TestAccProviderConfigure(t *testing.T) {
 	testAccPreCheck(t)

@@ -10,8 +10,8 @@ import (
 // TestAccMigrationResourceUpdateOutputPath tests updating the output path
 // This is a valid update scenario - regenerating playbooks in a new location
 func TestAccMigrationResourceUpdateOutputPath(t *testing.T) {
-	outputPath1 := "/workspaces/souschef/test-output/ansible/test1"
-	outputPath2 := "/workspaces/souschef/test-output/ansible/test2"
+	outputPath1 := getTestOutputPath("ansible", "test1")
+	outputPath2 := getTestOutputPath("ansible", "test2")
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

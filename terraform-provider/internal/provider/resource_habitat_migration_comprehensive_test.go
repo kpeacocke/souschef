@@ -32,7 +32,7 @@ func TestAccHabitatMigrationResourceComprehensive(t *testing.T) {
 }
 
 func testHabitatWithBaseImage(t *testing.T, baseImage string) {
-	outputPath := fmt.Sprintf("/workspaces/souschef/test-output/habitat/%s", filepath.Base(baseImage))
+	outputPath := getTestOutputPath("habitat", filepath.Base(baseImage))
 	os.MkdirAll(outputPath, 0755)
 
 	resource.Test(t, resource.TestCase{
@@ -56,7 +56,7 @@ func testHabitatWithBaseImage(t *testing.T, baseImage string) {
 
 // TestAccHabitatMigrationResourceDefaultBaseImage tests default base image handling
 func TestAccHabitatMigrationResourceDefaultBaseImage(t *testing.T) {
-	outputPath := "/workspaces/souschef/test-output/habitat/default"
+	outputPath := getTestOutputPath("habitat", "default")
 	os.MkdirAll(outputPath, 0755)
 
 	resource.Test(t, resource.TestCase{
@@ -77,7 +77,7 @@ func TestAccHabitatMigrationResourceDefaultBaseImage(t *testing.T) {
 
 // TestAccHabitatMigrationResourceDeleteVerification tests delete with file verification
 func TestAccHabitatMigrationResourceDeleteVerification(t *testing.T) {
-	outputPath := "/workspaces/souschef/test-output/habitat/delete_verify"
+	outputPath := getTestOutputPath("habitat", "delete_verify")
 	os.MkdirAll(outputPath, 0755)
 
 	resource.Test(t, resource.TestCase{
@@ -101,9 +101,9 @@ func TestAccHabitatMigrationResourceDeleteVerification(t *testing.T) {
 // TestAccHabitatMigrationResourceMultipleOutputPaths tests multiple output locations
 func TestAccHabitatMigrationResourceMultipleOutputPaths(t *testing.T) {
 	outputPaths := []string{
-		"/workspaces/souschef/test-output/habitat/out1",
-		"/workspaces/souschef/test-output/habitat/out2",
-		"/workspaces/souschef/test-output/habitat/out3",
+		getTestOutputPath("habitat", "out1"),
+		getTestOutputPath("habitat", "out2"),
+		getTestOutputPath("habitat", "out3"),
 	}
 
 	for i, outputPath := range outputPaths {

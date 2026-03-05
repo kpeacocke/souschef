@@ -251,6 +251,9 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 		return
 	}
 
+	cookbookName := filepath.Base(cookbookPath)
+	plan.ID = types.StringValue(fmt.Sprintf("%s-batch", cookbookName))
+	plan.CookbookName = types.StringValue(cookbookName)
 	plan.Playbooks = playbooksMap
 	plan.PlaybookCount = types.Int64Value(int64(len(playbooks)))
 
