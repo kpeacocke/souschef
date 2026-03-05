@@ -8,6 +8,7 @@ terraform-provider-souschef
 # Output of go coverage tool
 *.out
 coverage.html
+coverage_*.html
 
 # Terraform files
 *.tfstate

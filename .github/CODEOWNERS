@@ -1,0 +1,12 @@
+# GitHub CODEOWNERS for SousChef project
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Critical workflow files - requires review from maintainers
+.github/workflows/ @kpeacocke
+
+# Sonar configuration - requires review
+sonar-project.properties @kpeacocke
+
+# Architecture and documentation
+ARCHITECTURE.md @kpeacocke
+docs/ @kpeacocke

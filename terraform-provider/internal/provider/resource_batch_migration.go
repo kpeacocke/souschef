@@ -14,7 +14,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-const errorReadingBatchPlaybook = "Error reading playbook"
+const (
+	errorReadingBatchPlaybook = "Error reading playbook"
+	batchMigrationIDFormat    = "%s-batch"
+)
 
 func parseBatchRecipeNames(recipeNamesStr string) ([]string, error) {
 	trimmed := strings.TrimSpace(recipeNamesStr)
@@ -170,7 +173,7 @@ func (r *batchMigrationResource) Create(ctx context.Context, req resource.Create
 	}
 
 	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf("%s-batch", cookbookName))
+	plan.ID = types.StringValue(fmt.Sprintf(batchMigrationIDFormat, cookbookName))
 	plan.CookbookName = types.StringValue(cookbookName)
 	plan.PlaybookCount = types.Int64Value(int64(len(playbooks)))
 	plan.Playbooks = playbooksMap
@@ -252,7 +255,7 @@ func (r *batchMigrationResource) Update(ctx context.Context, req resource.Update
 	}
 
 	cookbookName := filepath.Base(cookbookPath)
-	plan.ID = types.StringValue(fmt.Sprintf("%s-batch", cookbookName))
+	plan.ID = types.StringValue(fmt.Sprintf(batchMigrationIDFormat, cookbookName))
 	plan.CookbookName = types.StringValue(cookbookName)
 	plan.Playbooks = playbooksMap
 	plan.PlaybookCount = types.Int64Value(int64(len(playbooks)))
@@ -350,5 +353,5 @@ func (r *batchMigrationResource) ImportState(ctx context.Context, req resource.I
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cookbook_name"), cookbookName)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("playbook_count"), int64(len(playbooks)))...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("playbooks"), playbooksMap)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf("%s-batch", cookbookName))...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf(batchMigrationIDFormat, cookbookName))...)
 }

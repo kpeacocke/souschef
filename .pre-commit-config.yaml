@@ -30,3 +30,13 @@ repos:
         files: ^pyproject.toml$
         pass_filenames: false
 
+  # Local hook to prevent accidental workflow file truncation
+  - repo: local
+    hooks:
+      - id: check-workflow-truncation
+        name: check for workflow file truncation
+        description: Detect accidental truncation of critical workflow files
+        entry: scripts/check-workflow-truncation.sh
+        language: script
+        files: ^\.github/workflows/ci\.yml$
+
