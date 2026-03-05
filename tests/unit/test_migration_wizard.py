@@ -422,7 +422,6 @@ class TestSetupWizard:
         # Check sys.exit was called with 0 (cancel)
         mock_exit.assert_called_once_with(0)
 
-    @pytest.mark.skip(reason="Complex mocking of interactive prompts")
     @patch("souschef.migration_wizard.input")
     @patch("souschef.migration_wizard.sys.exit")
     def test_setup_wizard_invalid_cookbook_path(
@@ -436,8 +435,10 @@ class TestSetupWizard:
             "/nonexistent/path",  # Cookbook path attempt (fails)
             "n",  # Would you like to try again? -> No (should exit)
         ]
+        mock_exit.side_effect = SystemExit(1)
 
-        setup_wizard()
+        with pytest.raises(SystemExit):
+            setup_wizard()
 
         # Should exit when user chooses not to retry
         mock_exit.assert_called_once_with(1)

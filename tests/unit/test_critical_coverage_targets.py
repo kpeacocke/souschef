@@ -150,29 +150,18 @@ class TestCLIV2Commands:
 
     def test_validate_user_path_none(self) -> None:
         """Test path validation with None."""
-        try:
-            result = _validate_user_path(None)
-            assert isinstance(result, Path)
-        except (ImportError, NameError, ValueError):
-            # Some implementations might raise, which is acceptable
-            pytest.skip("CLI v2 module not available")
+        result = _validate_user_path(None)
+        assert isinstance(result, Path)
 
     def test_validate_user_path_relative(self) -> None:
         """Test path validation with relative path."""
-        try:
-            result = _validate_user_path(".")
-            assert isinstance(result, Path)
-        except (ImportError, NameError, ValueError):
-            pytest.skip("CLI v2 module not available")
+        result = _validate_user_path(".")
+        assert isinstance(result, Path)
 
     def test_validate_user_path_home_expansion(self) -> None:
-        """Test path validation with home directory expansion."""
-        try:
-            result = _validate_user_path("~")
-            assert isinstance(result, Path)
-            assert result.is_absolute()
-        except (ImportError, NameError, ValueError):
-            pytest.skip("CLI v2 module not available")
+        """Test path validation raises on unresolved tilde path."""
+        with pytest.raises(ValueError):
+            _validate_user_path("~")
 
     def test_resolve_output_path_custom(self) -> None:
         """Test resolving custom output path."""

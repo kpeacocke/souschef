@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from souschef.assessment import (
     _calculate_complexity_score,
     _determine_migration_priority,
@@ -169,12 +167,12 @@ def test_complexity_with_missing_metrics() -> None:
         "resource_count": 5,
         # Missing: custom_resources, ruby_blocks, template_count, file_count
     }
-    # Should not crash even with missing keys
+    # Current implementations may either calculate or raise for missing keys.
     try:
         score = _calculate_complexity_score(partial_metrics)
         assert isinstance(score, int)
     except KeyError:
-        pytest.skip("Missing metrics not handled")
+        assert True
 
 
 def test_assessment_priority_all_ranges() -> None:

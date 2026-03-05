@@ -6,7 +6,6 @@ prevent directory traversal attacks (CWE-22) and path manipulation
 vulnerabilities.
 """
 
-import os
 from pathlib import Path
 
 import pytest
@@ -121,15 +120,13 @@ class TestPathContainmentSecurity:
             # Also acceptable - path rejected
             pass
 
-    @pytest.mark.skipif(os.name != "nt", reason="Windows-specific path handling")
     def test_ensure_within_base_path_backslash_windows_style(self, tmp_path):
         """Test that Windows-style backslash paths are handled safely."""
         base = tmp_path / "workspace"
         base.mkdir()
 
-        # Test with backslashes (Windows path separators)
-        # Path() normalizes these automatically on Windows
-        safe_path = base / "cookbook" / "recipe.rb"
+        # Simulate backslash-style segment and ensure containment still holds.
+        safe_path = base / "cookbook\\recipe.rb"
         result = _ensure_within_base_path(safe_path, base)
 
         assert str(result).startswith(str(base.resolve()))
