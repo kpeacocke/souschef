@@ -10,24 +10,28 @@
 - `souschef/core`
 - `souschef/parsers`
 - `souschef/converters`
-- `souschef/filesystem  
-- `souschef/ir`
+- `souschef/filesystem`
 
 ## Add These Containers to Phase 1
 
 These containers exist in the codebase and are architecturally compliant:
 
-### 1. souschef/storage
+### 1. souschef/ir
+**Contains:** Intermediate Representation - schema.py, plugin.py, versioning.py (IR graph, versioning, plugin system)  
+**Can depend on:** core  
+**Cannot depend on:** anything else (foundation layer)
+
+### 2. souschef/storage
 **Contains:** database.py, blob.py (PostgreSQL, MinIO)  
 **Can depend on:** core  
 **Cannot depend on:** anything else
 
-### 2. souschef/generators
+### 3. souschef/generators
 **Contains:** repo.py (Ansible repository generation)  
 **Can depend on:** core, converters, ir, filesystem  
 **Cannot depend on:** services, orchestrators, UI layers
 
-### 3. souschef/ui
+### 4. souschef/ui
 **Contains:** Streamlit web interface (app.py, pages/, components/)  
 **Can depend on:** core, api (when created), orchestrators (when created)  
 **Cannot depend on:** cli, server.py, domain logic directly
@@ -36,13 +40,19 @@ These containers exist in the codebase and are architecturally compliant:
 
 Navigate to: https://sonarcloud.io/project/architecture?id=kpeacocke_souschef
 
-### Step 1: Add Storage Container
+### Step 1: Add IR Container
+1. Click "Add container"
+2. Name: `souschef/ir`
+3. Pattern: `souschef/ir/**`
+4. Click "Add dependency" → select `souschef/core` → Save
+
+### Step 2: Add Storage Container
 1. Click "Add container"
 2. Name: `souschef/storage`
 3. Pattern: `souschef/storage/**`
 4. Click "Add dependency" → select `souschef/core` → Save
 
-### Step 2: Add Generators Container
+### Step 3: Add Generators Container
 1. Click "Add container"
 2. Name: `souschef/generators`
 3. Pattern: `souschef/generators/**`
@@ -53,7 +63,7 @@ Navigate to: https://sonarcloud.io/project/architecture?id=kpeacocke_souschef
    - `souschef/filesystem`
 5. Save
 
-### Step 3: Add UI Container
+### Step 4: Add UI Container
 1. Click "Add container"
 2. Name: `souschef/ui`
 3. Pattern: `souschef/ui/**`
@@ -62,7 +72,7 @@ Navigate to: https://sonarcloud.io/project/architecture?id=kpeacocke_souschef
 
 ## Complete Phase 1 Dependency Matrix
 
-After adding the 3 new containers, your SonarCloud architecture should enforce these rules:
+After adding the 4 new containers, your SonarCloud architecture should enforce these rules:
 
 | Container | Can Depend On |
 |-----------|---------------|
