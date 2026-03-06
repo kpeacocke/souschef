@@ -1,6 +1,7 @@
 """Comprehensive tests for api_clients module to achieve 100% coverage."""
 
 import logging
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -229,18 +230,20 @@ class TestAnsiblePlatformClient:
         assert isinstance(client.session.auth, HTTPBasicAuth)
 
     def test_abstract_get_api_version_pass(self):
-        """Test abstract base method pass-through."""
+        """Test base class get_api_version returns default version."""
 
         class DummyClient(AnsiblePlatformClient):
-            def get_api_version(self) -> str:
-                return super().get_api_version()
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                super().__init__(*args, **kwargs)
+                self._default_version = "3.8.5"
 
         client = DummyClient(
             server_url="https://tower.example.com",
             username="admin",
             password=TEST_SECRET,
         )
-        assert client.get_api_version() is None
+        # Should return the default version when API call fails
+        assert client.get_api_version() == "3.8.5"
 
     @patch("souschef.api_clients.requests.Session.post")
     def test_create_inventory_success(self, mock_post):

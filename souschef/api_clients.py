@@ -6,7 +6,6 @@ Supports all version-specific API differences.
 """
 
 import logging
-from abc import ABC, abstractmethod
 from typing import Any, cast
 
 import requests
@@ -144,8 +143,8 @@ class ChefServerClient:
             raise
 
 
-class AnsiblePlatformClient(ABC):
-    """Abstract base for Ansible Platform clients."""
+class AnsiblePlatformClient:
+    """Base class for Ansible Platform clients."""
 
     def __init__(
         self,
@@ -172,10 +171,39 @@ class AnsiblePlatformClient(ABC):
         self.session.auth = HTTPBasicAuth(username, password)
         self.session.verify = verify_ssl
 
-    @abstractmethod
     def get_api_version(self) -> str:
-        """Get platform version."""
-        pass
+        """
+        Get platform version from the config endpoint.
+
+        Returns default version if API call fails.
+        Override in subclass if different endpoint or default is needed.
+        """
+        url = f"{self.server_url}/api/v2/config/"
+        default_version = getattr(self, "_default_version", "3.8.5")
+
+        try:
+            response = self.session.get(url)
+            response.raise_for_status()
+            data = cast(dict[str, Any], response.json())
+            return cast(str, data.get("version", default_version))
+        except requests.RequestException:
+            return default_version
+
+    def create_execution_environment(
+        self, name: str, image: str = "quay.io/ansible/creator-ee:0.5.0", **kwargs: Any
+    ) -> dict[str, Any]:
+        """Create execution environment in platform."""
+        url = f"{self.server_url}/api/v2/execution_environments/"
+        data = {"name": name, "image": image, **kwargs}
+
+        try:
+            response = self.session.post(url, json=data)
+            response.raise_for_status()
+            logger.debug(f"Created EE: {cast(dict[str, Any], response.json())['id']}")
+            return cast(dict[str, Any], response.json())
+        except requests.RequestException as e:
+            logger.error(f"Failed to create EE: {e}")
+            raise
 
     def create_inventory(self, name: str) -> dict[str, Any]:
         """Create inventory."""
@@ -317,17 +345,16 @@ class AnsiblePlatformClient(ABC):
 class TowerClient(AnsiblePlatformClient):
     """Client for Ansible Tower 3.8.x."""
 
-    def get_api_version(self) -> str:
-        """Get Tower version."""
-        url = f"{self.server_url}/api/v2/config/"
-
-        try:
-            response = self.session.get(url)
-            response.raise_for_status()
-            data = cast(dict[str, Any], response.json())
-            return cast(str, data.get("version", "3.8.5"))
-        except requests.RequestException:
-            return "3.8.5"
+    def __init__(
+        self,
+        server_url: str,
+        username: str,
+        password: str,
+        verify_ssl: bool = True,
+    ):
+        """Initialize Tower client."""
+        super().__init__(server_url, username, password, verify_ssl)
+        self._default_version = "3.8.5"
 
 
 class AWXClient(AnsiblePlatformClient):
@@ -344,18 +371,7 @@ class AWXClient(AnsiblePlatformClient):
         """Initialize AWX client."""
         super().__init__(server_url, username, password, verify_ssl)
         self.version = version
-
-    def get_api_version(self) -> str:
-        """Get AWX version."""
-        url = f"{self.server_url}/api/v2/config/"
-
-        try:
-            response = self.session.get(url)
-            response.raise_for_status()
-            data = cast(dict[str, Any], response.json())
-            return cast(str, data.get("version", self.version))
-        except requests.RequestException:
-            return self.version
+        self._default_version = version
 
     def create_execution_environment(
         self, name: str, image: str = "quay.io/ansible/creator-ee:0.5.0", **kwargs: Any
@@ -365,50 +381,23 @@ class AWXClient(AnsiblePlatformClient):
             raise NotImplementedError(
                 f"Execution environments not supported in AWX {self.version}"
             )
-
-        url = f"{self.server_url}/api/v2/execution_environments/"
-        data = {"name": name, "image": image, **kwargs}
-
-        try:
-            response = self.session.post(url, json=data)
-            response.raise_for_status()
-            logger.debug(f"Created EE: {cast(dict[str, Any], response.json())['id']}")
-            return cast(dict[str, Any], response.json())
-        except requests.RequestException as e:
-            logger.error(f"Failed to create EE: {e}")
-            raise
+        # Call parent implementation
+        return super().create_execution_environment(name, image, **kwargs)
 
 
 class AAPClient(AnsiblePlatformClient):
     """Client for Ansible Automation Platform 2.4+."""
 
-    def get_api_version(self) -> str:
-        """Get AAP version."""
-        url = f"{self.server_url}/api/v2/config/"
-
-        try:
-            response = self.session.get(url)
-            response.raise_for_status()
-            data = cast(dict[str, Any], response.json())
-            return cast(str, data.get("version", "2.4.0"))
-        except requests.RequestException:
-            return "2.4.0"
-
-    def create_execution_environment(
-        self, name: str, image: str = "quay.io/ansible/creator-ee:0.5.0", **kwargs: Any
-    ) -> dict[str, Any]:
-        """Create execution environment (required in AAP)."""
-        url = f"{self.server_url}/api/v2/execution_environments/"
-        data = {"name": name, "image": image, **kwargs}
-
-        try:
-            response = self.session.post(url, json=data)
-            response.raise_for_status()
-            logger.debug(f"Created EE: {cast(dict[str, Any], response.json())['id']}")
-            return cast(dict[str, Any], response.json())
-        except requests.RequestException as e:
-            logger.error(f"Failed to create EE: {e}")
-            raise
+    def __init__(
+        self,
+        server_url: str,
+        username: str,
+        password: str,
+        verify_ssl: bool = True,
+    ):
+        """Initialize AAP client."""
+        super().__init__(server_url, username, password, verify_ssl)
+        self._default_version = "2.4.0"
 
     def enable_content_signing(self, job_template_id: int, signing_key_id: int) -> bool:
         """Enable content signing on job template (AAP 2.4)."""
