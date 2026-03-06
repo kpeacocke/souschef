@@ -43,23 +43,23 @@ var (
 	}
 )
 
-type schemaResource interface {
+type SchemaResource interface {
 	Schema(context.Context, resource.SchemaRequest, *resource.SchemaResponse)
 }
 
-type readResource interface {
-	schemaResource
+type ReadResource interface {
+	SchemaResource
 	Read(context.Context, resource.ReadRequest, *resource.ReadResponse)
 }
 
-type deleteResource interface {
-	schemaResource
+type DeleteResource interface {
+	SchemaResource
 	Delete(context.Context, resource.DeleteRequest, *resource.DeleteResponse)
 }
 
 func buildStateFromResource(
 	t *testing.T,
-	r schemaResource,
+	r SchemaResource,
 	attributeTypes map[string]tftypes.Type,
 	values map[string]tftypes.Value,
 ) tfsdk.State {
@@ -80,7 +80,7 @@ func buildStateFromResource(
 	}
 }
 
-func runRead(t *testing.T, r readResource, state tfsdk.State) {
+func runRead(t *testing.T, r ReadResource, state tfsdk.State) {
 	t.Helper()
 
 	req := resource.ReadRequest{State: state}
@@ -88,7 +88,7 @@ func runRead(t *testing.T, r readResource, state tfsdk.State) {
 	r.Read(context.Background(), req, resp)
 }
 
-func runDelete(t *testing.T, r deleteResource, state tfsdk.State) *resource.DeleteResponse {
+func runDelete(t *testing.T, r DeleteResource, state tfsdk.State) *resource.DeleteResponse {
 	t.Helper()
 
 	req := resource.DeleteRequest{State: state}
@@ -211,13 +211,13 @@ func TestInSpecMigrationDeleteSuccessPath(t *testing.T) {
 func TestReadFileNotFoundRemovesState(t *testing.T) {
 	testCases := []struct {
 		name      string
-		resource  readResource
-		stateFunc func(t *testing.T, r readResource) tfsdk.State
+		resource  ReadResource
+		stateFunc func(t *testing.T, r ReadResource) tfsdk.State
 	}{
 		{
 			name:     "migration resource missing playbook",
 			resource: &migrationResource{client: &SousChefClient{Path: "souschef"}},
-			stateFunc: func(t *testing.T, r readResource) tfsdk.State {
+			stateFunc: func(t *testing.T, r ReadResource) tfsdk.State {
 				return buildStateFromResource(
 					t,
 					r,
@@ -229,7 +229,7 @@ func TestReadFileNotFoundRemovesState(t *testing.T) {
 		{
 			name:     "habitat resource missing Dockerfile",
 			resource: &habitatMigrationResource{client: &SousChefClient{Path: "souschef"}},
-			stateFunc: func(t *testing.T, r readResource) tfsdk.State {
+			stateFunc: func(t *testing.T, r ReadResource) tfsdk.State {
 				return buildStateFromResource(
 					t,
 					r,
@@ -241,7 +241,7 @@ func TestReadFileNotFoundRemovesState(t *testing.T) {
 		{
 			name:     "inspec resource missing test file",
 			resource: &inspecMigrationResource{client: &SousChefClient{Path: "souschef"}},
-			stateFunc: func(t *testing.T, r readResource) tfsdk.State {
+			stateFunc: func(t *testing.T, r ReadResource) tfsdk.State {
 				return buildStateFromResource(
 					t,
 					r,
