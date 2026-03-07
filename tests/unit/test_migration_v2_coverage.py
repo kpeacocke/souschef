@@ -741,7 +741,6 @@ def test_assign_host_to_env_group_exception() -> None:
 
     orch._assign_host_to_env_group(
         client=mock_client,
-        inventory_id=1,
         hostname="web01",
         host_id=42,
         env_groups={"production": 10},
@@ -765,7 +764,6 @@ def test_assign_host_to_role_groups_exception() -> None:
 
     orch._assign_host_to_role_groups(
         client=mock_client,
-        inventory_id=1,
         hostname="web01",
         host_id=42,
         role_groups={"webserver": 20},
