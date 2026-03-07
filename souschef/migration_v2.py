@@ -65,6 +65,22 @@ if TYPE_CHECKING:
 NO_MIGRATION_RESULT_ERROR = "No migration result available"
 
 
+def _sanitise_for_logging(value: Any) -> str:
+    """
+    Sanitise dynamic values before writing to logs.
+
+    Replaces control characters that can forge or split log lines.
+
+    Args:
+        value: Value to be logged.
+
+    Returns:
+        Sanitised string safe for log output.
+
+    """
+    return str(value).replace("\r", r"\\r").replace("\n", r"\\n").replace("\t", r"\\t")
+
+
 # Parallel processing worker functions (module-level for pickling)
 def _process_recipe_worker(args: tuple[str, str]) -> dict[str, Any]:
     """
@@ -1197,10 +1213,16 @@ class MigrationOrchestrator:
                     else:
                         self.result.metrics.recipes_skipped += 1
                         logger.warning(
-                            f"Failed to convert {recipe_file.name}: {playbook_content}"
+                            "Failed to convert %s: %s",
+                            _sanitise_for_logging(recipe_file.name),
+                            _sanitise_for_logging(playbook_content),
                         )
                 except Exception as e:
-                    logger.error(f"Error converting {recipe_file.name}: {e}")
+                    logger.error(
+                        "Error converting %s: %s",
+                        _sanitise_for_logging(recipe_file.name),
+                        _sanitise_for_logging(e),
+                    )
                     self.result.metrics.recipes_skipped += 1
 
     def _convert_attributes(self, cookbook_path: str) -> None:
@@ -1225,11 +1247,16 @@ class MigrationOrchestrator:
                     else:
                         self.result.metrics.attributes_skipped += 1
                         logger.warning(
-                            f"Failed to convert attributes {attr_file.name}: "
-                            f"{attributes_content}"
+                            "Failed to convert attributes %s: %s",
+                            _sanitise_for_logging(attr_file.name),
+                            _sanitise_for_logging(attributes_content),
                         )
                 except Exception as e:
-                    logger.error(f"Error converting {attr_file.name}: {e}")
+                    logger.error(
+                        "Error converting %s: %s",
+                        _sanitise_for_logging(attr_file.name),
+                        _sanitise_for_logging(e),
+                    )
                     self.result.metrics.attributes_skipped += 1
 
     def _convert_resources(self, cookbook_path: str) -> None:
@@ -1408,11 +1435,16 @@ class MigrationOrchestrator:
                     else:
                         self.result.metrics.templates_skipped += 1
                         logger.warning(
-                            f"Failed to convert {template_file.name}: "
-                            f"{conversion_result.get('error')}"
+                            "Failed to convert %s: %s",
+                            _sanitise_for_logging(template_file.name),
+                            _sanitise_for_logging(conversion_result.get("error")),
                         )
                 except Exception as e:
-                    logger.error(f"Error converting {template_file.name}: {e}")
+                    logger.error(
+                        "Error converting %s: %s",
+                        _sanitise_for_logging(template_file.name),
+                        _sanitise_for_logging(e),
+                    )
                     self.result.metrics.templates_skipped += 1
 
     def _validate_playbooks(self) -> None:
