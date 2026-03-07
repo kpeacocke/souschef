@@ -629,7 +629,11 @@ class MigrationOrchestrator:
             self.result.migration_report = self._build_migration_report()
 
         except Exception as e:
-            logger.error(f"[{self.migration_id}] Migration failed: {e}")
+            logger.error(
+                "[%s] Migration failed: %s",
+                self.migration_id,
+                _sanitise_for_logging(e),
+            )
             self.result.status = MigrationStatus.FAILED
             self.result.errors.append(
                 {
@@ -1022,7 +1026,11 @@ class MigrationOrchestrator:
                     "timestamp": datetime.now().isoformat(),
                 }
             )
-            logger.warning("[%s] Chef Server query failed: %s", self.migration_id, e)
+            logger.warning(
+                "[%s] Chef Server query failed: %s",
+                self.migration_id,
+                _sanitise_for_logging(e),
+            )
 
     def _convert_recipes_parallel(
         self, cookbook_path: str, max_workers: int | None = None
@@ -1086,16 +1094,16 @@ class MigrationOrchestrator:
                         logger.debug(
                             "[%s] Converted recipe %s to %s",
                             self.migration_id,
-                            result["file"],
-                            result["playbook_name"],
+                            _sanitise_for_logging(result["file"]),
+                            _sanitise_for_logging(result["playbook_name"]),
                         )
                     else:
                         self.result.metrics.recipes_skipped += 1
                         logger.warning(
                             "[%s] Failed to convert %s: %s",
                             self.migration_id,
-                            result["file"],
-                            result.get("error", "Unknown error"),
+                            _sanitise_for_logging(result["file"]),
+                            _sanitise_for_logging(result.get("error", "Unknown error")),
                         )
 
         except Exception as e:
@@ -1103,7 +1111,7 @@ class MigrationOrchestrator:
                 "[%s] Parallel recipe conversion failed: %s. "
                 "Falling back to sequential.",
                 self.migration_id,
-                e,
+                _sanitise_for_logging(e),
             )
             # Fallback to sequential processing
             self._convert_recipes(cookbook_path)
@@ -1171,16 +1179,16 @@ class MigrationOrchestrator:
                         logger.debug(
                             "[%s] Converted attributes %s to %s",
                             self.migration_id,
-                            result["file"],
-                            result["var_name"],
+                            _sanitise_for_logging(result["file"]),
+                            _sanitise_for_logging(result["var_name"]),
                         )
                     else:
                         self.result.metrics.attributes_skipped += 1
                         logger.warning(
                             "[%s] Failed to convert attributes %s: %s",
                             self.migration_id,
-                            result["file"],
-                            result.get("error", "Unknown error"),
+                            _sanitise_for_logging(result["file"]),
+                            _sanitise_for_logging(result.get("error", "Unknown error")),
                         )
 
         except Exception as e:
@@ -1188,7 +1196,7 @@ class MigrationOrchestrator:
                 "[%s] Parallel attribute conversion failed: %s. "
                 "Falling back to sequential.",
                 self.migration_id,
-                e,
+                _sanitise_for_logging(e),
             )
             # Fallback to sequential processing
             self._convert_attributes(cookbook_path)
