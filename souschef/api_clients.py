@@ -256,7 +256,7 @@ class AnsiblePlatformClient:
             logger.error(f"Failed to create group {name}: {e}")
             raise
 
-    def add_host_to_group(self, inventory_id: int, group_id: int, host_id: int) -> bool:
+    def add_host_to_group(self, group_id: int, host_id: int) -> bool:
         """Add a host to a group."""
         url = f"{self.server_url}/api/v2/groups/{group_id}/hosts/"
         data = {"id": host_id}

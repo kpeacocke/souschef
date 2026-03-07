@@ -475,7 +475,7 @@ class TestAnsiblePlatformBase:
         mock_response.raise_for_status = MagicMock()
         client.session.post = MagicMock(return_value=mock_response)  # type: ignore[method-assign]
 
-        assert client.add_host_to_group(1, 2, 3) is True
+        assert client.add_host_to_group(2, 3) is True
 
     def test_add_host_to_group_error(self) -> None:
         """Adding host to group should propagate request exceptions."""
@@ -490,7 +490,7 @@ class TestAnsiblePlatformBase:
         )
 
         with pytest.raises(requests.RequestException, match="group add failed"):
-            client.add_host_to_group(1, 2, 3)
+            client.add_host_to_group(2, 3)
 
     def test_create_job_template_error(self) -> None:
         """Creating job template should propagate request exceptions."""

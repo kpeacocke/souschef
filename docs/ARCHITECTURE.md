@@ -1,7 +1,7 @@
 # SousChef Architecture Declaration
 
-**Version:** 2.0  
-**Last Updated:** 2026-03-06  
+**Version:** 2.0
+**Last Updated:** 2026-03-06
 **Status:** Approved & Enforced via SonarCloud
 
 This document is the **authoritative architectural declaration** for SousChef. All code must adhere to the structure, dependencies, and boundaries defined here.
@@ -98,9 +98,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 ### Layer 1: Foundation
 
 #### `core/` - Shared Utilities
-**Purpose:** Foundation layer providing reusable utilities, constants, and base classes.  
-**Status:** ✅ Exists  
-**Dependencies:** None (foundation layer)  
+**Purpose:** Foundation layer providing reusable utilities, constants, and base classes.
+**Status:** ✅ Exists
+**Dependencies:** None (foundation layer)
 **Contains:**
 - `constants.py` - Application-wide constants
 - `errors.py` - Custom exception classes
@@ -122,9 +122,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 ### Layer 2: Data & Infrastructure
 
 #### `storage/` - Data Persistence
-**Purpose:** Database and blob storage abstractions.  
-**Status:** ✅ Exists (database.py, blob.py)  
-**Dependencies:** `core/`  
+**Purpose:** Database and blob storage abstractions.
+**Status:** ✅ Exists (database.py, blob.py)
+**Dependencies:** `core/`
 **Contains:**
 - `database.py` - PostgreSQL/SQLite database access
 - `blob.py` - Object storage (MinIO/S3) access
@@ -135,9 +135,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - ❌ Cannot import from: any other containers
 
 #### `filesystem/` - File Operations
-**Purpose:** Safe file system operations with validation.  
-**Status:** ✅ Exists  
-**Dependencies:** `core/`  
+**Purpose:** Safe file system operations with validation.
+**Status:** ✅ Exists
+**Dependencies:** `core/`
 **Contains:**
 - `operations.py` - Directory/file operations with safety checks
 
@@ -146,9 +146,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - ❌ Cannot import from: any other containers
 
 #### `ir/` - Intermediate Representation
-**Purpose:** Abstract, tool-agnostic representation of infrastructure configurations.  
-**Status:** ✅ Exists  
-**Dependencies:** `core/`  
+**Purpose:** Abstract, tool-agnostic representation of infrastructure configurations.
+**Status:** ✅ Exists
+**Dependencies:** `core/`
 **Contains:**
 - `schema.py` - IRGraph, IRNode, IRAction data structures
 - `versioning.py` - Version management and schema evolution
@@ -164,9 +164,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 ### Layer 3: Domain Logic
 
 #### `parsers/` - Input Parsing
-**Purpose:** Extract structured data from source configuration management tools.  
-**Status:** ✅ Exists (Chef parsers); 🔄 Planned (Puppet, Salt, Bash, PowerShell)  
-**Dependencies:** `core/`, `ir/`, `filesystem/`  
+**Purpose:** Extract structured data from source configuration management tools.
+**Status:** ✅ Exists (Chef parsers); 🔄 Planned (Puppet, Salt, Bash, PowerShell)
+**Dependencies:** `core/`, `ir/`, `filesystem/`
 **Contains:**
 - `recipe.py` - Chef recipe parser
 - `metadata.py` - Chef metadata parser
@@ -186,9 +186,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - 🎯 **Key Design:** Read-only - extract structure without transformation
 
 #### `converters/` - Transformation Logic
-**Purpose:** Transform parsed data into intermediate or target formats.  
-**Status:** ✅ Exists (Chef→Ansible); 🔄 Planned (multi-source, multi-target)  
-**Dependencies:** `core/`, `parsers/`, `ir/`  
+**Purpose:** Transform parsed data into intermediate or target formats.
+**Status:** ✅ Exists (Chef→Ansible); 🔄 Planned (multi-source, multi-target)
+**Dependencies:** `core/`, `parsers/`, `ir/`
 **Contains:**
 - `playbook.py` - Recipe → Ansible playbook
 - `resource.py` - Resource → Ansible task
@@ -205,9 +205,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - 🎯 **Key Design:** Pure transformation - no I/O, no orchestration
 
 #### `generators/` - Output Generation
-**Purpose:** Generate target configuration files from IR or converter output.  
-**Status:** ✅ Exists (repo.py)  
-**Dependencies:** `core/`, `converters/`, `ir/`, `filesystem/`  
+**Purpose:** Generate target configuration files from IR or converter output.
+**Status:** ✅ Exists (repo.py)
+**Dependencies:** `core/`, `converters/`, `ir/`, `filesystem/`
 **Contains:**
 - `repo.py` - Ansible repository structure generation
 - 🔄 `terraform.py` - Terraform module generation (planned)
@@ -222,9 +222,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 ### Layer 4: Services
 
 #### `auth/` - Authentication & Authorization
-**Purpose:** User authentication, role-based access control (RBAC).  
-**Status:** 🔄 Planned  
-**Dependencies:** `core/`, `storage/`  
+**Purpose:** User authentication, role-based access control (RBAC).
+**Status:** 🔄 Planned
+**Dependencies:** `core/`, `storage/`
 **Contains:**
 - `authentication.py` - User login/logout, session management
 - `rbac.py` - Role and permission management
@@ -236,9 +236,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - ❌ Cannot import from: domain logic, orchestrators, integrations, UI
 
 #### `audit/` - Audit Logging
-**Purpose:** Compliance, change tracking, audit trail.  
-**Status:** 🔄 Planned  
-**Dependencies:** `core/`, `storage/`, `auth/`  
+**Purpose:** Compliance, change tracking, audit trail.
+**Status:** 🔄 Planned
+**Dependencies:** `core/`, `storage/`, `auth/`
 **Contains:**
 - `logger.py` - Audit event logging
 - `events.py` - Audit event definitions
@@ -249,9 +249,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - ❌ Cannot import from: domain logic, orchestrators, integrations, UI
 
 #### `benchmarking/` - Performance Metrics
-**Purpose:** Performance profiling, benchmarking, optimisation metrics.  
-**Status:** ✅ Exists (profiling.py - needs migration)  
-**Dependencies:** `core/`, `storage/`  
+**Purpose:** Performance profiling, benchmarking, optimisation metrics.
+**Status:** ✅ Exists (profiling.py - needs migration)
+**Dependencies:** `core/`, `storage/`
 **Contains:**
 - `profiler.py` - Code execution profiling
 - `metrics.py` - Performance metric collection
@@ -266,9 +266,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 ### Layer 5: Integration & API
 
 #### `integrations/` - External Systems
-**Purpose:** Integration with GitHub, GitLab, AWX, Jira, Slack, etc.  
-**Status:** ✅ Partial (github/); 🔄 Planned (others)  
-**Dependencies:** `core/`, `auth/`, `audit/`, `storage/`  
+**Purpose:** Integration with GitHub, GitLab, AWX, Jira, Slack, etc.
+**Status:** ✅ Partial (github/); 🔄 Planned (others)
+**Dependencies:** `core/`, `auth/`, `audit/`, `storage/`
 **Contains:**
 - `github/` - GitHub API client and workflows
 - 🔄 `gitlab.py` - GitLab API integration (planned)
@@ -281,9 +281,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - ❌ Cannot import from: domain logic (parsers/converters), orchestrators, UI
 
 #### `api/` - REST API
-**Purpose:** RESTful API for programmatic access to all platform capabilities.  
-**Status:** 🔄 Planned  
-**Dependencies:** `core/`, `auth/`, `audit/`, `storage/`, `orchestrators/`  
+**Purpose:** RESTful API for programmatic access to all platform capabilities.
+**Status:** 🔄 Planned
+**Dependencies:** `core/`, `auth/`, `audit/`, `storage/`, `orchestrators/`
 **Contains:**
 - `routes/` - API endpoint definitions
 - `schemas.py` - Request/response schemas (Pydantic)
@@ -300,9 +300,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 ### Layer 6: Orchestration
 
 #### `orchestrators/` - Workflow Coordination
-**Purpose:** High-level workflows coordinating parsers, converters, generators.  
-**Status:** ✅ Partial (assessment.py, deployment.py as top-level); 🔄 Needs refactor  
-**Dependencies:** `core/`, `parsers/`, `converters/`, `generators/`, `integrations/`, `storage/`  
+**Purpose:** High-level workflows coordinating parsers, converters, generators.
+**Status:** ✅ Partial (assessment.py, deployment.py as top-level); 🔄 Needs refactor
+**Dependencies:** `core/`, `parsers/`, `converters/`, `generators/`, `integrations/`, `storage/`
 **Contains:**
 - `migration.py` - End-to-end migration workflows
 - `analysis.py` - Codebase analysis orchestration
@@ -320,9 +320,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 ### Layer 7: User Interfaces
 
 #### `cli/` - Command-Line Interface
-**Purpose:** Terminal-based user interface.  
-**Status:** ✅ Exists (cli.py, cli_v2_commands.py, cli_registry.py - needs consolidation)  
-**Dependencies:** `orchestrators/`, `api/` (optional)  
+**Purpose:** Terminal-based user interface.
+**Status:** ✅ Exists (cli.py, cli_v2_commands.py, cli_registry.py - needs consolidation)
+**Dependencies:** `orchestrators/`, `api/` (optional)
 **Contains:**
 - `commands/` - CLI command implementations
 - `interactive.py` - Interactive mode (prompts, wizards)
@@ -333,9 +333,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - 🎯 **Key Design:** Thin wrapper around orchestrators
 
 #### `ui/` - Web User Interface
-**Purpose:** Browser-based dashboard and visualizations.  
-**Status:** ✅ Exists (Streamlit); 🔄 Planned enhancements (Next.js, analytics, dark mode)  
-**Dependencies:** `api/`, `orchestrators/`  
+**Purpose:** Browser-based dashboard and visualizations.
+**Status:** ✅ Exists (Streamlit); 🔄 Planned enhancements (Next.js, analytics, dark mode)
+**Dependencies:** `api/`, `orchestrators/`
 **Contains:**
 - `app.py` - Main Streamlit application
 - `pages/` - Dashboard pages
@@ -350,9 +350,9 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - 🎯 **Key Design:** API-first - all actions call REST API (when available)
 
 #### `server.py` - MCP Server (Top-Level File)
-**Purpose:** Model Context Protocol server entry point.  
-**Status:** ✅ Exists  
-**Dependencies:** `orchestrators/`, `core/`  
+**Purpose:** Model Context Protocol server entry point.
+**Status:** ✅ Exists
+**Dependencies:** `orchestrators/`, `core/`
 **Contains:**
 - MCP tool registration using FastMCP
 - Tool wrapper functions calling orchestrators
@@ -374,7 +374,7 @@ This matrix defines which containers **CAN** import from which other containers.
 - 🔄 = Conditional (e.g., only during certain phases)
 
 | From ↓ / To → | core | storage | filesystem | ir | parsers | converters | generators | auth | audit | benchmarking | integrations | api | orchestrators | cli | ui | server.py |
-|---------------|------|---------|------------|----|---------| -----------|-----------|------|-------|--------------|--------------|-----|---------------|-----|----|-----------| 
+|---------------|------|---------|------------|----|---------| -----------|-----------|------|-------|--------------|--------------|-----|---------------|-----|----|-----------|
 | **core** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **storage** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **filesystem** | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |

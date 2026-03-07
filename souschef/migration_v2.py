@@ -1218,22 +1218,12 @@ class MigrationOrchestrator:
                         playbook_name = recipe_file.stem + ".yml"
                         self.result.playbooks_generated.append(playbook_name)
                         self.result.metrics.recipes_converted += 1
-                        logger.debug(
-                            f"Converted recipe {recipe_file.name} to {playbook_name}"
-                        )
+                        logger.debug("Recipe converted successfully")
                     else:
                         self.result.metrics.recipes_skipped += 1
-                        logger.warning(
-                            CONVERSION_FAILED_LOG_FORMAT,
-                            _sanitise_for_logging(recipe_file.name),
-                            _sanitise_for_logging(playbook_content),
-                        )
-                except Exception as e:
-                    logger.error(
-                        CONVERSION_ERROR_LOG_FORMAT,
-                        _sanitise_for_logging(recipe_file.name),
-                        _sanitise_for_logging(e),
-                    )
+                        logger.warning("Recipe conversion reported an error")
+                except Exception:
+                    logger.error("Recipe conversion failed")
                     self.result.metrics.recipes_skipped += 1
 
     def _convert_attributes(self, cookbook_path: str) -> None:
@@ -1252,22 +1242,12 @@ class MigrationOrchestrator:
                         # Store reference to variables file
                         self.result.playbooks_generated.append(f"vars/{var_name}")
                         self.result.metrics.attributes_converted += 1
-                        logger.debug(
-                            f"Converted attributes {attr_file.name} to {var_name}"
-                        )
+                        logger.debug("Attributes converted successfully")
                     else:
                         self.result.metrics.attributes_skipped += 1
-                        logger.warning(
-                            ATTR_CONVERSION_FAILED_LOG_FORMAT,
-                            _sanitise_for_logging(attr_file.name),
-                            _sanitise_for_logging(attributes_content),
-                        )
-                except Exception as e:
-                    logger.error(
-                        CONVERSION_ERROR_LOG_FORMAT,
-                        _sanitise_for_logging(attr_file.name),
-                        _sanitise_for_logging(e),
-                    )
+                        logger.warning("Attribute conversion reported an error")
+                except Exception:
+                    logger.error("Attribute conversion failed")
                     self.result.metrics.attributes_skipped += 1
 
     def _convert_resources(self, cookbook_path: str) -> None:
@@ -1439,23 +1419,12 @@ class MigrationOrchestrator:
                             f"templates/{jinja2_filename}"
                         )
                         self.result.metrics.templates_converted += 1
-                        logger.debug(
-                            f"Converted template {template_file.name} "
-                            f"to {jinja2_filename}"
-                        )
+                        logger.debug("Template converted successfully")
                     else:
                         self.result.metrics.templates_skipped += 1
-                        logger.warning(
-                            CONVERSION_FAILED_LOG_FORMAT,
-                            _sanitise_for_logging(template_file.name),
-                            _sanitise_for_logging(conversion_result.get("error")),
-                        )
-                except Exception as e:
-                    logger.error(
-                        CONVERSION_ERROR_LOG_FORMAT,
-                        _sanitise_for_logging(template_file.name),
-                        _sanitise_for_logging(e),
-                    )
+                        logger.warning("Template conversion reported an error")
+                except Exception:
+                    logger.error("Template conversion failed")
                     self.result.metrics.templates_skipped += 1
 
     def _validate_playbooks(self) -> None:
@@ -2033,10 +2002,10 @@ class MigrationOrchestrator:
             # Assign hosts to groups
             for hostname, host_id in hostname_to_id.items():
                 self._assign_host_to_env_group(
-                    client, inventory_id, hostname, host_id, env_groups, node_env_map
+                    client, hostname, host_id, env_groups, node_env_map
                 )
                 self._assign_host_to_role_groups(
-                    client, inventory_id, hostname, host_id, role_groups, node_roles_map
+                    client, hostname, host_id, role_groups, node_roles_map
                 )
 
         except Exception as e:
@@ -2051,7 +2020,6 @@ class MigrationOrchestrator:
     def _assign_host_to_env_group(
         self,
         client: AnsiblePlatformClient,
-        inventory_id: int,
         hostname: str,
         host_id: int,
         env_groups: dict[str, int],
@@ -2066,7 +2034,7 @@ class MigrationOrchestrator:
             return
 
         try:
-            client.add_host_to_group(inventory_id, env_groups[env], host_id)
+            client.add_host_to_group(env_groups[env], host_id)
             logger.debug(f"Added {hostname} to env_{env}")
         except Exception as e:
             logger.warning(f"Failed to add {hostname} to env_{env}: {e}")
@@ -2074,7 +2042,6 @@ class MigrationOrchestrator:
     def _assign_host_to_role_groups(
         self,
         client: AnsiblePlatformClient,
-        inventory_id: int,
         hostname: str,
         host_id: int,
         role_groups: dict[str, int],
@@ -2089,7 +2056,7 @@ class MigrationOrchestrator:
                 continue
 
             try:
-                client.add_host_to_group(inventory_id, role_groups[role], host_id)
+                client.add_host_to_group(role_groups[role], host_id)
                 logger.debug(f"Added {hostname} to role_{role}")
             except Exception as e:
                 logger.warning(f"Failed to add {hostname} to role_{role}: {e}")

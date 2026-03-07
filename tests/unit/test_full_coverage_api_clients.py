@@ -352,7 +352,7 @@ class TestAnsiblePlatformClient:
             username="admin",
             password=TEST_SECRET,
         )
-        result = client.add_host_to_group(1, 1, 1)
+        result = client.add_host_to_group(1, 1)
 
         assert result is True
 
@@ -368,7 +368,7 @@ class TestAnsiblePlatformClient:
         )
 
         with pytest.raises(requests.RequestException):
-            client.add_host_to_group(1, 1, 1)
+            client.add_host_to_group(1, 1)
 
     @patch("souschef.api_clients.requests.Session.post")
     def test_create_project_success(self, mock_post):
@@ -860,7 +860,7 @@ class TestLoggingCoverage:
                 username="admin",
                 password=TEST_SECRET,
             )
-            result = client.add_host_to_group(1, 1, 1)
+            result = client.add_host_to_group(1, 1)
 
         assert result is True
 

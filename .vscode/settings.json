@@ -45,6 +45,14 @@
     "files.eol": "\n",
     "files.insertFinalNewline": true,
     "files.trimTrailingWhitespace": true,
+    "files.associations": {
+        "**/CODEOWNERS": "plaintext"
+    },
+    // Go extension: Use toolchain-aware Go binary
+    "go.goroot": "/home/vscode/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.24.13.linux-arm64",
+    "go.alternateTools": {
+        "go": "/home/vscode/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.24.13.linux-arm64/bin/go"
+    },
     "editor.rulers": [88],
     "editor.tabSize": 4,
     "editor.insertSpaces": true,

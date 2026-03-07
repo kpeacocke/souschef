@@ -1,7 +1,7 @@
 # SonarCloud Architecture Phase 1 Extension Guide
 
-**For:** Complete Phase 1 implementation with all existing containers  
-**Date:** 2026-03-06  
+**For:** Complete Phase 1 implementation with all existing containers
+**Date:** 2026-03-06
 **Reference:** `docs/ARCHITECTURE.md` - Dependency Matrix
 
 ## Current Status
@@ -18,18 +18,18 @@
 These containers exist in the codebase and are architecturally compliant:
 
 ### 1. souschef/storage
-**Contains:** database.py, blob.py (PostgreSQL, MinIO)  
-**Can depend on:** core  
+**Contains:** database.py, blob.py (PostgreSQL, MinIO)
+**Can depend on:** core
 **Cannot depend on:** anything else
 
 ### 2. souschef/generators
-**Contains:** repo.py (Ansible repository generation)  
-**Can depend on:** core, converters, ir, filesystem  
+**Contains:** repo.py (Ansible repository generation)
+**Can depend on:** core, converters, ir, filesystem
 **Cannot depend on:** services, orchestrators, UI layers
 
 ### 3. souschef/ui
-**Contains:** Streamlit web interface (app.py, pages/, components/)  
-**Can depend on:** core, api (when created), orchestrators (when created)  
+**Contains:** Streamlit web interface (app.py, pages/, components/)
+**Can depend on:** core, api (when created), orchestrators (when created)
 **Cannot depend on:** cli, server.py, domain logic directly
 
 ## SonarCloud UI Steps
