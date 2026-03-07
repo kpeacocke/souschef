@@ -63,6 +63,9 @@ if TYPE_CHECKING:
 
 # Constants
 NO_MIGRATION_RESULT_ERROR = "No migration result available"
+CONVERSION_FAILED_LOG_FORMAT = "Failed to convert %s: %s"
+ATTR_CONVERSION_FAILED_LOG_FORMAT = "Failed to convert attributes %s: %s"
+CONVERSION_ERROR_LOG_FORMAT = "Error converting %s: %s"
 
 
 def _sanitise_for_logging(value: Any) -> str:
@@ -1213,13 +1216,13 @@ class MigrationOrchestrator:
                     else:
                         self.result.metrics.recipes_skipped += 1
                         logger.warning(
-                            "Failed to convert %s: %s",
+                            CONVERSION_FAILED_LOG_FORMAT,
                             _sanitise_for_logging(recipe_file.name),
                             _sanitise_for_logging(playbook_content),
                         )
                 except Exception as e:
                     logger.error(
-                        "Error converting %s: %s",
+                        CONVERSION_ERROR_LOG_FORMAT,
                         _sanitise_for_logging(recipe_file.name),
                         _sanitise_for_logging(e),
                     )
@@ -1247,13 +1250,13 @@ class MigrationOrchestrator:
                     else:
                         self.result.metrics.attributes_skipped += 1
                         logger.warning(
-                            "Failed to convert attributes %s: %s",
+                            ATTR_CONVERSION_FAILED_LOG_FORMAT,
                             _sanitise_for_logging(attr_file.name),
                             _sanitise_for_logging(attributes_content),
                         )
                 except Exception as e:
                     logger.error(
-                        "Error converting %s: %s",
+                        CONVERSION_ERROR_LOG_FORMAT,
                         _sanitise_for_logging(attr_file.name),
                         _sanitise_for_logging(e),
                     )
@@ -1435,13 +1438,13 @@ class MigrationOrchestrator:
                     else:
                         self.result.metrics.templates_skipped += 1
                         logger.warning(
-                            "Failed to convert %s: %s",
+                            CONVERSION_FAILED_LOG_FORMAT,
                             _sanitise_for_logging(template_file.name),
                             _sanitise_for_logging(conversion_result.get("error")),
                         )
                 except Exception as e:
                     logger.error(
-                        "Error converting %s: %s",
+                        CONVERSION_ERROR_LOG_FORMAT,
                         _sanitise_for_logging(template_file.name),
                         _sanitise_for_logging(e),
                     )
