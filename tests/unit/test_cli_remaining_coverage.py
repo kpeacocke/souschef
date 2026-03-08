@@ -243,6 +243,8 @@ jobs:
                 [
                     "generate-github-workflow",
                     str(sample_cookbook),
+                    "--output",
+                    str(sample_cookbook.parent / "generated-ci.yml"),
                     "--cache",
                     "--artifacts",
                 ],
@@ -259,7 +261,13 @@ jobs:
             side_effect=ValueError("Config error"),
         ):
             result = runner.invoke(
-                cli, ["generate-github-workflow", str(sample_cookbook)]
+                cli,
+                [
+                    "generate-github-workflow",
+                    str(sample_cookbook),
+                    "--output",
+                    str(sample_cookbook.parent / "generated-ci.yml"),
+                ],
             )
             assert result.exit_code == 1
             assert "Error generating GitHub Actions workflow" in result.output

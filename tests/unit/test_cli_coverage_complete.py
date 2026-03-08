@@ -322,7 +322,7 @@ def test_generate_github_workflow_exception(tmp_path: Path) -> None:
             workflow_name="CI",
             cache=False,
             artifacts=False,
-            output=None,
+            output=str(tmp_path / "workflow.yml"),
         )
 
 
@@ -350,7 +350,7 @@ def test_generate_github_workflow_display_logic(
             workflow_name="CI",
             cache=True,
             artifacts=True,
-            output=None,
+            output=str(tmp_path / "workflow.yml"),
         )
 
     captured = capsys.readouterr()

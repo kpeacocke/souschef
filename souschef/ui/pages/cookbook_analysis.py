@@ -12,17 +12,23 @@ import tempfile
 import zipfile
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
-try:
+# UI dependencies - required for this module to function
+# At runtime, gracefully handle missing dependencies; for type checking, assume present
+if TYPE_CHECKING:
     import pandas as pd
-except ImportError:
-    pd = None  # type: ignore[assignment]
-
-try:
     import streamlit as st
-except ImportError:
-    st = None  # type: ignore[assignment]
+else:
+    try:
+        import pandas as pd
+    except ImportError:
+        pd = None  # type: ignore[assignment]
+
+    try:
+        import streamlit as st
+    except ImportError:
+        st = None  # type: ignore[assignment]
 
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -31,11 +37,15 @@ from souschef.assessment import (
     analyse_cookbook_dependencies,
     assess_single_cookbook_with_ai,
 )
+
+# Import converter functions directly for recipe conversion
 from souschef.converters.playbook import (
     generate_playbook_from_recipe,
     generate_playbook_from_recipe_with_ai,
 )
-from souschef.converters.template import convert_cookbook_templates
+from souschef.converters.template import (
+    convert_cookbook_templates as _convert_templates_impl,
+)
 from souschef.core.constants import METADATA_FILENAME
 from souschef.core.metrics import (
     EffortMetrics,
@@ -46,14 +56,22 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
 )
-from souschef.generators.repo import (
-    analyse_conversion_output,
-    generate_ansible_repository,
+
+# Import from orchestration layer (Layer 6) instead of domain logic (Layer 3)
+from souschef.orchestration import (
+    orchestrate_conversion_analysis as analyse_conversion_output,
 )
-from souschef.parsers.metadata import parse_cookbook_metadata
-from souschef.storage import (
-    get_blob_storage,
-    get_storage_manager,
+from souschef.orchestration import (
+    orchestrate_cookbook_metadata_parsing as parse_cookbook_metadata,
+)
+from souschef.orchestration import (
+    orchestrate_get_blob_storage as get_blob_storage,
+)
+from souschef.orchestration import (
+    orchestrate_get_storage_manager as get_storage_manager,
+)
+from souschef.orchestration import (
+    orchestrate_repository_generation as generate_ansible_repository,
 )
 
 # Import refactored modules for backward compatibility and tests
@@ -86,6 +104,39 @@ class DeploymentMode(str, Enum):
 
 
 DEPLOYMENT_MODES = [DeploymentMode.SIMULATION.value, DeploymentMode.LIVE.value]
+
+
+def _sanitize_for_logging(message: str, max_length: int = 200) -> str:
+    """
+    Sanitize a message for safe logging to prevent injection attacks.
+
+    Removes newlines and control characters that could be used for log injection,
+    and limits the message length to prevent log flooding.
+
+    Args:
+        message: The message to sanitize.
+        max_length: Maximum length of the returned message.
+
+    Returns:
+        Sanitized message safe for logging.
+
+    """
+    if not message:
+        return ""
+
+    # Replace newlines and carriage returns with spaces to prevent log injection
+    sanitized = message.replace("\n", " ").replace("\r", " ")
+
+    # Remove other control characters (ASCII 0-31 except space)
+    sanitized = "".join(
+        char if ord(char) >= 32 or char == " " else " " for char in sanitized
+    )
+
+    # Limit length to prevent log flooding
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length] + "..."
+
+    return sanitized
 
 
 def load_ai_settings() -> dict[str, str | float | int]:
@@ -343,26 +394,29 @@ def _save_analysis_to_db(
             ),
         }
 
-        analysis_id = storage_manager.save_analysis(
-            cookbook_name=result.get("name", "Unknown"),
-            cookbook_path=result.get("path", ""),
-            cookbook_version=result.get("version", "Unknown"),
-            complexity=result.get("complexity", "Unknown"),
-            estimated_hours=float(result.get("estimated_hours", 0)),
-            estimated_hours_with_souschef=float(
-                result.get("estimated_hours_with_souschef", 0)
+        analysis_id = cast(
+            int | None,
+            storage_manager.save_analysis(
+                cookbook_name=result.get("name", "Unknown"),
+                cookbook_path=result.get("path", ""),
+                cookbook_version=result.get("version", "Unknown"),
+                complexity=result.get("complexity", "Unknown"),
+                estimated_hours=float(result.get("estimated_hours", 0)),
+                estimated_hours_with_souschef=float(
+                    result.get("estimated_hours_with_souschef", 0)
+                ),
+                recommendations=result.get("recommendations", ""),
+                analysis_data=analysis_data,
+                ai_provider=ai_provider,
+                ai_model=ai_model,
+                cookbook_blob_key=cookbook_blob_key,
+                content_fingerprint=content_fingerprint,
             ),
-            recommendations=result.get("recommendations", ""),
-            analysis_data=analysis_data,
-            ai_provider=ai_provider,
-            ai_model=ai_model,
-            cookbook_blob_key=cookbook_blob_key,
-            content_fingerprint=content_fingerprint,
         )
 
         return analysis_id
     except Exception as e:
-        st.warning(f"Failed to save analysis to database: {e}")
+        st.warning(_sanitize_for_logging(f"Failed to save analysis to database: {e}"))
         return None
 
 
@@ -404,6 +458,7 @@ def _check_analysis_cache(
 
         return None
     except Exception:
+        st.error(_sanitize_for_logging("Error checking analysis cache"))
         return None
 
 
@@ -414,6 +469,7 @@ ANALYSIS_STATUS_ANALYSED = "Analysed"
 ANALYSIS_STATUS_FAILED = "Failed"
 METADATA_COLUMN_NAME = "Has Metadata"
 MIME_TYPE_ZIP = "application/zip"
+UNKNOWN_ERROR = "Unknown error"
 
 # Security limits for archive extraction
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024  # 100MB total
@@ -505,7 +561,7 @@ def _upload_cookbook_archive(archive_path: Path, cookbook_name: str) -> str | No
         existing = storage_manager.get_analysis_by_fingerprint(content_fingerprint)
         if existing and existing.cookbook_blob_key:
             # Reuse existing blob key (deduplication)
-            return existing.cookbook_blob_key
+            return cast(str, existing.cookbook_blob_key)
 
         blob_storage = get_blob_storage()
         if not blob_storage:
@@ -519,7 +575,11 @@ def _upload_cookbook_archive(archive_path: Path, cookbook_name: str) -> str | No
 
         return blob_key
     except Exception as e:
-        st.warning(f"Failed to upload cookbook archive to blob storage: {e}")
+        st.warning(
+            _sanitize_for_logging(
+                f"Failed to upload cookbook archive to blob storage: {e}"
+            )
+        )
         return None
 
 
@@ -788,7 +848,7 @@ def _show_analysis_input() -> None:
                     st.session_state.archive_path = archive_path
                 st.success("Archive extracted successfully to temporary location")
             except (OSError, zipfile.BadZipFile, tarfile.TarError) as e:
-                st.error(f"Failed to extract archive: {e}")
+                st.error(_sanitize_for_logging(f"Failed to extract archive: {e}"))
                 return
 
     try:
@@ -902,9 +962,9 @@ def _validate_and_list_cookbooks(cookbook_path: str) -> None:
         if dir_is_dir:
             _list_and_display_cookbooks(safe_dir)
         else:
-            st.error(f"Directory not found: {safe_dir}")
+            st.error(_sanitize_for_logging(f"Directory not found: {safe_dir}"))
     else:
-        st.error(f"Directory not found: {safe_dir}")
+        st.error(_sanitize_for_logging(f"Directory not found: {safe_dir}"))
 
 
 def _get_safe_cookbook_directory(cookbook_path):
@@ -935,7 +995,7 @@ def _get_safe_cookbook_directory(cookbook_path):
         raise ValueError(f"Path traversal attempt: escapes {base_dir}")
 
     except ValueError as exc:
-        st.error(f"Invalid path: {exc}")
+        st.error(_sanitize_for_logging(f"Invalid path: {exc}"))
         return None
 
 
@@ -950,11 +1010,13 @@ def _list_and_display_cookbooks(cookbook_path: Path):
             _handle_cookbook_selection(str(cookbook_path), cookbook_data)
         else:
             st.warning(
-                "No subdirectories found in the specified path. "
-                "Are these individual cookbooks?"
+                _sanitize_for_logging(
+                    "No subdirectories found in the specified path. "
+                    "Are these individual cookbooks?"
+                )
             )
     except Exception as e:
-        st.error(f"Error reading directory: {e}")
+        st.error(_sanitize_for_logging(f"Error reading directory: {e}"))
 
 
 def _collect_cookbook_data(cookbooks):
@@ -1109,11 +1171,14 @@ def _collect_deployment_config() -> dict[str, Any]:
         target_platform: str = st.selectbox(
             "Target Platform",
             ["awx", "aap", "tower"],
-            format_func=lambda x: {
-                "awx": "AWX (Open Source)",
-                "aap": "Ansible Automation Platform",
-                "tower": "Ansible Tower (Legacy)",
-            }.get(x, x),
+            format_func=lambda x: cast(
+                str,
+                {
+                    "awx": "AWX (Open Source)",
+                    "aap": "Ansible Automation Platform",
+                    "tower": "Ansible Tower (Legacy)",
+                }.get(x, x),
+            ),
             index=0,
             key="simulation_target",
             help="Select the target Ansible automation platform",
@@ -1467,7 +1532,7 @@ def _analyze_all_cookbooks_holistically(
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
-        st.error(f"Holistic analysis failed: {e}")
+        st.error(_sanitize_for_logging(f"Holistic analysis failed: {e}"))
     finally:
         progress_bar.empty()
         status_text.empty()
@@ -1513,7 +1578,11 @@ def _analyze_with_ai(
     project_id = _get_ai_string_value(ai_config, "project_id", "")
     base_url = _get_ai_string_value(ai_config, "base_url", "")
 
-    st.info(f"Using AI-enhanced analysis with {provider_name} ({model})")
+    st.info(
+        _sanitize_for_logging(
+            f"Using AI-enhanced analysis with {provider_name} ({model})"
+        )
+    )
 
     # Count total recipes across all cookbooks
     def _safe_count_recipes(path_str: str) -> int:
@@ -1530,7 +1599,11 @@ def _analyze_with_ai(
 
     total_recipes = sum(_safe_count_recipes(cb["Path"]) for cb in cookbook_data)
 
-    st.info(f"Detected {len(cookbook_data)} cookbook(s) with {total_recipes} recipe(s)")
+    st.info(
+        _sanitize_for_logging(
+            f"Detected {len(cookbook_data)} cookbook(s) with {total_recipes} recipe(s)"
+        )
+    )
 
     results = []
     cached_count = 0
@@ -1548,7 +1621,9 @@ def _analyze_with_ai(
         # Check cache first
         cached_result = _check_analysis_cache(cb_data["Path"], provider, model)
         if cached_result:
-            st.info(f"Using cached analysis for {cb_data['Name']}")
+            st.info(
+                _sanitize_for_logging(f"Using cached analysis for {cb_data['Name']}")
+            )
             results.append(cached_result)
             cached_count += 1
             continue
@@ -1600,7 +1675,11 @@ def _analyze_rule_based(
     assessment_result = parse_chef_migration_assessment(cookbook_paths_str)
 
     if "error" in assessment_result:
-        st.error(f"Holistic analysis failed: {assessment_result['error']}")
+        st.error(
+            _sanitize_for_logging(
+                f"Holistic analysis failed: {assessment_result['error']}"
+            )
+        )
         return [], {}
 
     results = _process_cookbook_assessments(assessment_result, cookbook_data)
@@ -1825,7 +1904,11 @@ def _convert_all_cookbooks_holistically(cookbook_path: str):
         )
 
         if conversion_result.startswith("Error"):
-            st.error(f"Holistic conversion failed: {conversion_result}")
+            st.error(
+                _sanitize_for_logging(
+                    f"Holistic conversion failed: {conversion_result}"
+                )
+            )
             return
 
         # Store conversion result for display
@@ -1857,7 +1940,7 @@ def _convert_all_cookbooks_holistically(cookbook_path: str):
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
-        st.error(f"Holistic conversion failed: {e}")
+        st.error(_sanitize_for_logging(f"Holistic conversion failed: {e}"))
     finally:
         progress_bar.empty()
         status_text.empty()
@@ -1943,7 +2026,7 @@ def _save_conversion_to_storage(
 
     except Exception as e:
         # Non-fatal: log but don't fail the conversion display
-        st.warning(f"Failed to save conversion to storage: {e}")
+        st.warning(_sanitize_for_logging(f"Failed to save conversion to storage: {e}"))
 
 
 def _parse_conversion_result_text(result_text: str) -> dict:
@@ -2149,8 +2232,10 @@ def _display_conversion_details(structured_result: dict):
                 if cookbook_result.get("status") == "success":
                     st.success("Conversion successful")
                 else:
-                    error_msg = cookbook_result.get("error", "Unknown error")
-                    st.error(f"❌ Conversion failed: {error_msg}")
+                    error_msg = cookbook_result.get("error", UNKNOWN_ERROR)
+                    st.error(
+                        _sanitize_for_logging(f"❌ Conversion failed: {error_msg}")
+                    )
 
 
 def _display_conversion_report(result_text: str):
@@ -2212,7 +2297,7 @@ def _simulate_chef_to_awx_migration_ui(
     except json.JSONDecodeError:
         st.error("Simulation returned invalid JSON output")
     except Exception as e:
-        st.error(f"Simulation failed: {e}")
+        st.error(_sanitize_for_logging(f"Simulation failed: {e}"))
 
 
 def _display_simulation_results(simulation_result: dict) -> None:
@@ -2496,7 +2581,7 @@ def _create_ansible_repository(
             _commit_repository_changes(temp_repo, num_roles)
             result["temp_path"] = str(temp_repo)
 
-        return result
+        return cast(dict[Any, Any], result)
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -2551,7 +2636,7 @@ def _display_conversion_download_options(conversion_result: dict):
         _display_role_download_buttons(safe_output_path)
         repo_placeholder = st.container()
         _display_generated_repo_section(repo_placeholder)
-        st.info(f"Roles saved to: {output_path}")
+        st.info(_sanitize_for_logging(f"Roles saved to: {output_path}"))
     else:
         st.warning("Output directory not found for download")
 
@@ -2617,7 +2702,9 @@ def _upload_repository_to_storage(repo_result: dict, roles_path: Path) -> None:
 
     except Exception as e:
         # Non-fatal: just log warning
-        st.warning(f"Could not upload repository to storage: {e}")
+        st.warning(
+            _sanitize_for_logging(f"Could not upload repository to storage: {e}")
+        )
 
 
 def _create_repo_callback(safe_output_path: Path) -> None:
@@ -2645,7 +2732,7 @@ def _create_repo_callback(safe_output_path: Path) -> None:
             # Upload repository to blob storage if conversion was saved
             _upload_repository_to_storage(repo_result, safe_output_path)
         else:
-            _handle_repo_creation_failure(repo_result.get("error", "Unknown error"))
+            _handle_repo_creation_failure(repo_result.get("error", UNKNOWN_ERROR))
     except Exception as e:
         _handle_repo_creation_failure(f"Exception: {str(e)}")
 
@@ -2809,7 +2896,7 @@ def _handle_dashboard_upload():
     )
 
     # Display upload info
-    st.info(f"Using file uploaded from Dashboard: {file_name}")
+    st.info(_sanitize_for_logging(f"Using file uploaded from Dashboard: {file_name}"))
 
     # Add option to clear and upload a different file
     col1, col2 = st.columns([1, 1])
@@ -2847,7 +2934,7 @@ def _handle_dashboard_upload():
             _validate_and_list_cookbooks(str(cookbook_path))
 
     except Exception as e:
-        st.error(f"Failed to process uploaded file: {e}")
+        st.error(_sanitize_for_logging(f"Failed to process uploaded file: {e}"))
         # Clear the uploaded file on error
         if "uploaded_file_data" in st.session_state:
             del st.session_state.uploaded_file_data
@@ -3384,7 +3471,7 @@ def _analyse_project_dependencies(
         project_analysis["recommendations"] = recommendations
 
     except Exception as e:
-        st.warning(f"Project dependency analysis failed: {e}")
+        st.warning(_sanitize_for_logging(f"Project dependency analysis failed: {e}"))
         # Continue with basic analysis
 
     return project_analysis
@@ -3921,7 +4008,11 @@ def _display_download_option(results):
         if ai_available:
             provider = ai_config.get("provider", "Unknown")
             model = ai_config.get("model", "Unknown")
-            st.info(f"Using AI-enhanced conversion with {provider} ({model})")
+            st.info(
+                _sanitize_for_logging(
+                    f"Using AI-enhanced conversion with {provider} ({model})"
+                )
+            )
         else:
             st.info(
                 "Using deterministic conversion. Configure AI settings "
@@ -4221,7 +4312,9 @@ AI: {ai_hours:.1f}h
 def _display_failed_cookbook_details(result):
     """Display detailed failure information for a cookbook."""
     with st.expander(f"{result['name']} - Analysis Failed", expanded=True):
-        st.error(f"**Analysis Error:** {result['recommendations']}")
+        st.error(
+            _sanitize_for_logging(f"**Analysis Error:** {result['recommendations']}")
+        )
 
         # Show cookbook path
         st.write(f"**Cookbook Path:** {result['path']}")
@@ -4301,7 +4394,9 @@ def _convert_and_download_playbooks(results):
             st.session_state.converted_playbooks_path = str(output_dir)
             st.success("Playbooks converted and staged for validation.")
         except Exception as e:
-            st.warning(f"Could not stage playbooks for validation: {e}")
+            st.warning(
+                _sanitize_for_logging(f"Could not stage playbooks for validation: {e}")
+            )
 
     # Store conversion results in session state to persist across reruns
     st.session_state.conversion_results = {
@@ -4330,12 +4425,14 @@ def _convert_single_cookbook(
     recipes_dir = cookbook_dir / "recipes"
 
     if not recipes_dir.exists():  # NOSONAR
-        st.warning(f"No recipes directory found in {result['name']}")
+        st.warning(
+            _sanitize_for_logging(f"No recipes directory found in {result['name']}")
+        )
         return [], []
 
     recipe_files = list(recipes_dir.glob("*.rb"))
     if not recipe_files:
-        st.warning(f"No recipe files found in {result['name']}")
+        st.warning(_sanitize_for_logging(f"No recipe files found in {result['name']}"))
         return [], []
 
     # Convert recipes
@@ -4420,9 +4517,14 @@ def _convert_recipes(
                     }
                 )
             else:
-                st.warning(f"Failed to convert {recipe_file.name}: {playbook_content}")
+                st.warning(
+                    f"Failed to convert {recipe_file.name}: "
+                    f"{_sanitize_for_logging(playbook_content)}"
+                )
         except Exception as e:
-            st.warning(f"Failed to convert {recipe_file.name}: {e}")
+            st.warning(
+                f"Failed to convert {recipe_file.name}: {_sanitize_for_logging(str(e))}"
+            )
 
     return converted_playbooks
 
@@ -4440,7 +4542,7 @@ def _convert_templates(cookbook_name: str, cookbook_dir: Path) -> list:
 
     """
     converted_templates = []
-    template_results = convert_cookbook_templates(str(cookbook_dir))
+    template_results = _convert_templates_impl(str(cookbook_dir))
 
     if template_results.get("success"):
         for template_result in template_results.get("results", []):
@@ -4459,9 +4561,10 @@ def _convert_templates(cookbook_name: str, cookbook_dir: Path) -> list:
                 f"Converted {len(converted_templates)} template(s) from {cookbook_name}"
             )
     elif not template_results.get("message"):
+        error_msg = template_results.get("error", UNKNOWN_ERROR)
         st.warning(
             f"Template conversion failed for {cookbook_name}: "
-            f"{template_results.get('error', 'Unknown error')}"
+            f"{_sanitize_for_logging(str(error_msg))}"
         )
 
     return converted_templates
@@ -4471,12 +4574,14 @@ def _find_recipe_file(cookbook_dir: Path, cookbook_name: str) -> Path | None:
     """Find the appropriate recipe file for a cookbook."""
     recipes_dir = cookbook_dir / "recipes"
     if not recipes_dir.exists():  # NOSONAR
-        st.warning(f"No recipes directory found in {cookbook_name}")
+        st.warning(
+            _sanitize_for_logging(f"No recipes directory found in {cookbook_name}")
+        )
         return None
 
     recipe_files = list(recipes_dir.glob("*.rb"))
     if not recipe_files:
-        st.warning(f"No recipe files found in {cookbook_name}")
+        st.warning(_sanitize_for_logging(f"No recipe files found in {cookbook_name}"))
         return None
 
     # Use the default.rb recipe if available, otherwise first recipe
@@ -4902,7 +5007,7 @@ def _create_analysis_report(results):
             ),
         },
         "cookbook_details": results,
-        "generated_at": str(pd.Timestamp.now()),
+        "generated_at": pd.Timestamp.now().isoformat(),
     }
 
     return json.dumps(report, indent=2)

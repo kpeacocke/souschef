@@ -17,7 +17,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from souschef.ansible_upgrade import validate_collection_compatibility
 from souschef.core.ansible_versions import ANSIBLE_VERSIONS
-from souschef.parsers.ansible_inventory import parse_requirements_yml
+
+# Import from orchestration layer instead of parsers directly
+from souschef.orchestration import (
+    orchestrate_requirements_parsing as parse_requirements_yml,
+)
 
 
 def _display_validation_intro() -> None:

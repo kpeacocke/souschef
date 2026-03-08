@@ -21,7 +21,13 @@ except ImportError:
 # Add the parent directory to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from souschef.storage import get_blob_storage, get_storage_manager
+# Import from orchestration layer instead of storage directly
+from souschef.orchestration import (
+    orchestrate_get_blob_storage as get_blob_storage,
+)
+from souschef.orchestration import (
+    orchestrate_get_storage_manager as get_storage_manager,
+)
 
 # Constants
 DOWNLOAD_ARTEFACTS_LABEL = "Download Artefacts"

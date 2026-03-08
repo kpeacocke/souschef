@@ -43,23 +43,23 @@ var (
 	}
 )
 
-type SchemaResource interface {
+type Schemer interface {
 	Schema(context.Context, resource.SchemaRequest, *resource.SchemaResponse)
 }
 
 type ReadResource interface {
-	SchemaResource
+	Schemer
 	Read(context.Context, resource.ReadRequest, *resource.ReadResponse)
 }
 
 type DeleteResource interface {
-	SchemaResource
+	Schemer
 	Delete(context.Context, resource.DeleteRequest, *resource.DeleteResponse)
 }
 
 func buildStateFromResource(
 	t *testing.T,
-	r SchemaResource,
+	r Schemer,
 	attributeTypes map[string]tftypes.Type,
 	values map[string]tftypes.Value,
 ) tfsdk.State {

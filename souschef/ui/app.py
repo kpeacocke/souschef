@@ -466,7 +466,9 @@ def _handle_history_load_button(selected_analysis_id, analyses):
 def _display_migration_planning_history() -> None:
     """Display migration planning history section."""
     st.subheader(HISTORY_SUBHEADER)
-    from souschef.storage import get_storage_manager
+    from souschef.orchestration import (
+        orchestrate_get_storage_manager as get_storage_manager,
+    )
 
     storage_manager = get_storage_manager()
     analyses = storage_manager.get_analysis_history(limit=50)
@@ -828,7 +830,9 @@ def _display_dependency_mapping_header() -> None:
 
 def _display_dependency_mapping_history() -> None:
     """Display and handle history selection for dependency mapping."""
-    from souschef.storage import get_storage_manager
+    from souschef.orchestration import (
+        orchestrate_get_storage_manager as get_storage_manager,
+    )
 
     st.subheader(HISTORY_SUBHEADER)
     storage_manager = get_storage_manager()
@@ -3098,7 +3102,7 @@ def _display_conversion_history_tab(conversions):
 
         with col2:
             if st.button("Load", key="load_conversion_vr") and selected_conversion_id:
-                from souschef.storage.database import ConversionResult
+                from souschef.orchestration import ConversionResult
 
                 selected_conv: ConversionResult = next(
                     c for c in conversions if c.id == selected_conversion_id
@@ -3118,7 +3122,9 @@ def _display_conversion_history_tab(conversions):
 
 def _display_validation_history_tabs():
     """Display history selection tabs for analyses and conversions."""
-    from souschef.storage import get_storage_manager
+    from souschef.orchestration import (
+        orchestrate_get_storage_manager as get_storage_manager,
+    )
 
     storage_manager = get_storage_manager()
     analyses = storage_manager.get_analysis_history(limit=50)

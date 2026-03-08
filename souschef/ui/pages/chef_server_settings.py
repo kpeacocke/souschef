@@ -26,7 +26,11 @@ from souschef.core.path_utils import (
     _normalize_path,
     _safe_join,
 )
-from souschef.storage import get_storage_manager
+
+# Import from orchestration layer instead of storage directly
+from souschef.orchestration import (
+    orchestrate_get_storage_manager as get_storage_manager,
+)
 
 NOT_CONFIGURED = "Not configured"
 
