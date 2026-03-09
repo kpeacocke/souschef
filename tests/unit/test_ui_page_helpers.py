@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, Mock, patch
 
 
@@ -38,7 +39,7 @@ class TestAnsibleAssessmentHelpers:
             "collections": {"community.general": "9.0.0", "ansible.posix": "1.5.4"}
         }
 
-        _display_assessment_collections(assessment)
+        _display_assessment_collections(cast(dict[str, object], assessment))
 
         mock_st.subheader.assert_called_once()
         assert mock_st.text.call_count == 2
@@ -207,6 +208,7 @@ class TestAnsiblePlanningHelpers:
 
     @patch("souschef.ui.pages.ansible_planning.st")
     def test_display_plan_collections_tab(self, mock_st):
+        from souschef.ansible_upgrade import UpgradePlan
         from souschef.ui.pages.ansible_planning import _display_plan_collections_tab
 
         mock_st.columns.return_value = [_ctx(), _ctx()]
@@ -219,13 +221,14 @@ class TestAnsiblePlanningHelpers:
                 }
             }
         }
-        _display_plan_collections_tab(plan)
+        _display_plan_collections_tab(cast(UpgradePlan, plan))
 
         assert mock_st.metric.call_count == 2
         assert mock_st.write.call_count >= 2
 
     @patch("souschef.ui.pages.ansible_planning.st")
     def test_display_plan_testing_tab(self, mock_st):
+        from souschef.ansible_upgrade import UpgradePlan
         from souschef.ui.pages.ansible_planning import _display_plan_testing_tab
 
         mock_st.expander.return_value = _ctx()
@@ -238,7 +241,7 @@ class TestAnsiblePlanningHelpers:
             "post_upgrade_validation": ["Run full suite"],
         }
 
-        _display_plan_testing_tab(plan)
+        _display_plan_testing_tab(cast(UpgradePlan, plan))
 
         assert mock_st.expander.call_count >= 3
 
@@ -901,18 +904,20 @@ class TestAnsiblePlanningAdditionalHelpers:
 
     @patch("souschef.ui.pages.ansible_planning.st")
     def test_display_plan_breaking_and_deprecated_tabs_empty(self, mock_st):
+        from souschef.ansible_upgrade import UpgradePlan
         from souschef.ui.pages.ansible_planning import (
             _display_plan_breaking_tab,
             _display_plan_deprecated_tab,
         )
 
-        _display_plan_breaking_tab({"breaking_changes": []})
-        _display_plan_deprecated_tab({"deprecated_features": []})
+        _display_plan_breaking_tab(cast(UpgradePlan, {"breaking_changes": []}))
+        _display_plan_deprecated_tab(cast(UpgradePlan, {"deprecated_features": []}))
 
         assert mock_st.info.call_count >= 2
 
     @patch("souschef.ui.pages.ansible_planning.st")
     def test_display_plan_tabs(self, mock_st):
+        from souschef.ansible_upgrade import UpgradePlan
         from souschef.ui.pages.ansible_planning import _display_plan_tabs
 
         mock_st.tabs.return_value = [_ctx(), _ctx(), _ctx(), _ctx(), _ctx()]
@@ -938,7 +943,7 @@ class TestAnsiblePlanningAdditionalHelpers:
             "post_upgrade_validation": ["Verify hosts"],
         }
 
-        _display_plan_tabs(plan)
+        _display_plan_tabs(cast(UpgradePlan, plan))
         mock_st.tabs.assert_called_once()
 
     @patch("souschef.ui.pages.ansible_planning.st")

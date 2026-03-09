@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
 
 class SessionState(dict):
     """Session-state helper with attribute and dict access."""
@@ -99,7 +101,7 @@ def test_render_advanced_settings(mock_st):
     mock_st.number_input.return_value = 2048
 
     temperature, max_tokens = _render_advanced_settings()
-    assert temperature == 0.9
+    assert temperature == pytest.approx(0.9)
     assert max_tokens == 2048
 
 
@@ -242,9 +244,7 @@ def test_check_openai_compatible_server_paths():
     response_ok = MagicMock(status_code=200)
     response_ok.json.return_value = {"data": [{"id": "gpt-4o"}]}
     with patch("souschef.ui.pages.ai_settings.requests.get", return_value=response_ok):
-        success, message = _check_openai_compatible_server(
-            "https://localhost:8000", "gpt-4o"
-        )
+        success, _ = _check_openai_compatible_server("https://localhost:8000", "gpt-4o")
     assert success
 
     response_bad = MagicMock(status_code=500)
@@ -307,9 +307,7 @@ def test_validate_openai_config_success_and_invalid_base_url():
             return_value="https://api.openai.com/v1",
         ),
     ):
-        success, message = validate_openai_config(
-            "k", "gpt-4o", "https://api.openai.com/v1"
-        )
+        success, _ = validate_openai_config("k", "gpt-4o", "https://api.openai.com/v1")
     assert success
 
     with patch(
@@ -352,7 +350,7 @@ def test_validate_watson_config_success_and_invalid_url():
             return_value="https://us-south.ml.cloud.ibm.com",
         ),
     ):
-        success, message = validate_watson_config(
+        success, _ = validate_watson_config(
             "k", "p", "https://us-south.ml.cloud.ibm.com"
         )
     assert success
@@ -481,5 +479,5 @@ def test_load_ai_settings_from_env(monkeypatch):
 
     cfg = _load_ai_settings_from_env()
     assert cfg["provider"] == "OpenAI (GPT)"
-    assert cfg["temperature"] == 0.5
+    assert cfg["temperature"] == pytest.approx(0.5)
     assert cfg["max_tokens"] == 2048

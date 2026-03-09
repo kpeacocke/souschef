@@ -7,6 +7,8 @@ import tarfile
 import zipfile
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
 
 class SessionState(dict):
     """Session-state helper with attribute and dict access."""
@@ -190,7 +192,8 @@ class TestHistoryHelpers:
         assert mock_st.metric.call_count >= 8
 
     @patch("souschef.ui.pages.history.st")
-    def test_display_conversion_table(self, mock_st):
+    @patch("souschef.ui.pages.history.pd")
+    def test_display_conversion_table(self, mock_pd, mock_st):
         from souschef.ui.pages.history import _display_conversion_table
 
         conv = MagicMock()
@@ -257,7 +260,8 @@ class TestHistoryHelpers:
         mock_st.info.assert_called()
 
     @patch("souschef.ui.pages.history.st")
-    def test_show_analysis_history_with_results(self, mock_st):
+    @patch("souschef.ui.pages.history.pd")
+    def test_show_analysis_history_with_results(self, mock_pd, mock_st):
         from souschef.ui.pages.history import _show_analysis_history
 
         analysis = MagicMock()
@@ -345,6 +349,39 @@ class TestHistoryHelpers:
             _display_analysis_details(analysis, storage)
 
         convert_btn.assert_called_once()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_display_analysis_details_activity_divider_branch(self, mock_st):
+        from souschef.ui.pages.history import _display_analysis_details
+
+        analysis = MagicMock()
+        analysis.id = 78
+        analysis.complexity = "Low"
+        analysis.estimated_hours = 4.0
+        analysis.estimated_hours_with_souschef = 2.0
+        analysis.analysis_data = (
+            '{"activity_breakdown": [{"activity_type": "Parse", "count": 1}]}'
+        )
+        analysis.recommendations = "ok"
+
+        storage = MagicMock()
+        storage.get_conversions_by_analysis_id.return_value = []
+        mock_st.columns.side_effect = lambda spec: [
+            _ctx() for _ in range(spec if isinstance(spec, int) else len(spec))
+        ]
+        mock_st.expander.return_value = _ctx()
+        mock_st.button.return_value = False
+
+        with (
+            patch(
+                "souschef.ui.pages.history.get_blob_storage", return_value=MagicMock()
+            ),
+            patch("souschef.ui.pages.history._display_analysis_activity_breakdown"),
+        ):
+            _display_analysis_details(analysis, storage)
+
+        # Activity section adds an extra divider after rendering breakdown.
+        assert mock_st.divider.call_count >= 2
 
     @patch("souschef.ui.pages.history.st")
     def test_display_conversion_downloads_no_selection(self, mock_st):
@@ -594,6 +631,358 @@ class TestHistoryHelpers:
         assert "history_convert_path" in mock_st.session_state
         mock_st.success.assert_called()
 
+    def test_import_streamlit_fallback_branch(self):
+        import builtins
+        import importlib
+
+        import souschef.ui.pages.history as history
+
+        real_import = builtins.__import__
+
+        def fake_import(
+            name, module_globals=None, module_locals=None, fromlist=(), level=0
+        ):
+            if name == "streamlit":
+                raise ImportError("streamlit missing")
+            return real_import(name, module_globals, module_locals, fromlist, level)
+
+        with patch("builtins.__import__", side_effect=fake_import):
+            reloaded = importlib.reload(history)
+            assert hasattr(reloaded, "st")
+
+        # Restore clean module state for following tests.
+        importlib.reload(history)
+
+    def test_validate_archive_size_missing_file_branch(self, tmp_path):
+        from souschef.ui.pages.history import _validate_archive_size
+
+        missing = tmp_path / "missing.tar"
+        with pytest.raises(ValueError, match="Archive file not found"):
+            _validate_archive_size(missing, 100)
+
+    def test_safe_tar_extractall_skips_empty_member_name(self, tmp_path):
+        from souschef.ui.pages.history import _safe_tar_extractall
+
+        tar = MagicMock()
+        member = MagicMock()
+        member.name = ""
+
+        _safe_tar_extractall(tar, tmp_path, [member])
+        tar.extract.assert_not_called()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_display_analysis_details_delete_analysis_success(self, mock_st):
+        from souschef.ui.pages.history import _display_analysis_details
+
+        analysis = MagicMock()
+        analysis.id = 99
+        analysis.complexity = "Low"
+        analysis.estimated_hours = 4.0
+        analysis.estimated_hours_with_souschef = 2.0
+        analysis.analysis_data = (
+            '{"activity_breakdown": [{"activity_type": "Parse", "count": 1}]}'
+        )
+        analysis.recommendations = "ok"
+
+        storage = MagicMock()
+        storage.get_conversions_by_analysis_id.return_value = []
+        storage.delete_analysis.return_value = True
+
+        mock_st.columns.side_effect = lambda spec: [
+            _ctx() for _ in range(spec if isinstance(spec, int) else len(spec))
+        ]
+        mock_st.expander.return_value = _ctx()
+        # First buttons for conversion area False, delete button True.
+        mock_st.button.side_effect = [False, True]
+
+        with patch(
+            "souschef.ui.pages.history.get_blob_storage", return_value=MagicMock()
+        ):
+            _display_analysis_details(analysis, storage)
+
+        storage.delete_analysis.assert_called_once_with(99)
+        mock_st.success.assert_called()
+        mock_st.rerun.assert_called()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_display_analysis_details_delete_analysis_failure(self, mock_st):
+        from souschef.ui.pages.history import _display_analysis_details
+
+        analysis = MagicMock()
+        analysis.id = 100
+        analysis.complexity = "Low"
+        analysis.estimated_hours = 4.0
+        analysis.estimated_hours_with_souschef = 2.0
+        analysis.analysis_data = "{}"
+        analysis.recommendations = "ok"
+
+        storage = MagicMock()
+        storage.get_conversions_by_analysis_id.return_value = []
+        storage.delete_analysis.return_value = False
+
+        mock_st.columns.side_effect = lambda spec: [
+            _ctx() for _ in range(spec if isinstance(spec, int) else len(spec))
+        ]
+        mock_st.expander.return_value = _ctx()
+        mock_st.button.side_effect = [False, True]
+
+        with patch(
+            "souschef.ui.pages.history.get_blob_storage", return_value=MagicMock()
+        ):
+            _display_analysis_details(analysis, storage)
+
+        mock_st.error.assert_called_with("Failed to delete analysis.")
+
+    @patch("souschef.ui.pages.history.st")
+    def test_display_convert_button_with_blob_key_triggers(self, mock_st):
+        from souschef.ui.pages.history import _display_convert_button
+
+        analysis = MagicMock()
+        analysis.id = 101
+        analysis.cookbook_name = "nginx"
+        analysis.cookbook_version = "1.0"
+        analysis.cookbook_blob_key = "blob-key"
+
+        mock_st.columns.return_value = [_ctx(), _ctx()]
+        mock_st.button.return_value = True
+
+        with patch("souschef.ui.pages.history._trigger_conversion") as trigger:
+            _display_convert_button(analysis, MagicMock())
+
+        trigger.assert_called_once()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_trigger_conversion_tar_format_branches(self, mock_st, tmp_path):
+        from souschef.ui.pages.history import _trigger_conversion
+
+        mock_st.spinner.return_value = _ctx()
+        mock_st.session_state = SessionState()
+
+        analysis = MagicMock()
+        analysis.cookbook_blob_key = "blob"
+        analysis.cookbook_name = "nginx"
+        analysis.id = 55
+
+        archive = tmp_path / "archive.bin"
+        archive.write_bytes(b"x")
+        cookbook_dir = tmp_path / "extracted" / "cookbook"
+        cookbook_dir.mkdir(parents=True)
+
+        blob = MagicMock()
+        blob.download.return_value = archive
+
+        for fmt, mode in [
+            ("tar.gz", "r:gz"),
+            ("tar.bz2", "r:bz2"),
+            ("tar.xz", "r:xz"),
+            ("tar", "r"),
+        ]:
+            tar_ctx = MagicMock()
+            tar_ctx.__enter__.return_value = tar_ctx
+            tar_ctx.__exit__.return_value = None
+
+            with (
+                patch(
+                    "souschef.ui.pages.history._detect_archive_format", return_value=fmt
+                ),
+                patch("souschef.ui.pages.history._validate_archive_size"),
+                patch("tarfile.open", return_value=tar_ctx) as tar_open,
+                patch(
+                    "souschef.ui.pages.history._filter_safe_tar_members",
+                    return_value=[],
+                ),
+                patch("souschef.ui.pages.history._safe_tar_extractall") as safe_extract,
+                patch("pathlib.Path.iterdir", return_value=[cookbook_dir]),
+            ):
+                _trigger_conversion(analysis, blob)
+
+            tar_open.assert_called_with(archive, mode)
+            safe_extract.assert_called_once()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_trigger_conversion_exception_branch(self, mock_st):
+        from souschef.ui.pages.history import _trigger_conversion
+
+        mock_st.spinner.return_value = _ctx()
+        analysis = MagicMock()
+        analysis.cookbook_blob_key = "blob"
+        analysis.cookbook_name = "nginx"
+
+        blob = MagicMock()
+        blob.download.side_effect = RuntimeError("download failed")
+
+        _trigger_conversion(analysis, blob)
+        assert mock_st.error.call_count >= 1
+
+    @patch("souschef.ui.pages.history.st")
+    def test_filter_safe_tar_members_break_branch(self, mock_st, tmp_path):
+        from souschef.ui.pages.history import _filter_safe_tar_members
+
+        tar = MagicMock()
+        m1 = MagicMock()
+        m2 = MagicMock()
+        tar.getmembers.return_value = [m1, m2]
+
+        with patch(
+            "souschef.ui.pages.history._validate_tar_member",
+            side_effect=[
+                {
+                    "warning": "stop",
+                    "should_stop": True,
+                    "is_safe": False,
+                    "new_total_size": 0,
+                },
+                {
+                    "warning": None,
+                    "should_stop": False,
+                    "is_safe": True,
+                    "new_total_size": 10,
+                },
+            ],
+        ):
+            safe = _filter_safe_tar_members(
+                tar,
+                tmp_path,
+                max_file_size=100,
+                max_total_size=1000,
+                max_files=10,
+            )
+
+        assert safe == []
+        mock_st.warning.assert_called()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_extract_zip_members_exception_branch(self, mock_st, tmp_path):
+        from souschef.ui.pages.history import _extract_zip_members
+
+        info = MagicMock()
+        info.filename = "bad.txt"
+
+        with patch(
+            "souschef.ui.pages.history._extract_single_zip_member",
+            side_effect=RuntimeError("boom"),
+        ):
+            _extract_zip_members(MagicMock(), tmp_path, [info])
+
+        mock_st.warning.assert_called_once()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_extract_single_zip_member_outside_dir_branch(self, mock_st, tmp_path):
+        from souschef.ui.pages.history import _extract_single_zip_member
+
+        zip_ref = MagicMock()
+        info = MagicMock()
+        info.filename = "../outside.txt"
+
+        _extract_single_zip_member(zip_ref, info, tmp_path)
+        mock_st.warning.assert_called_once()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_display_conversion_downloads_full_action_branch(self, mock_st):
+        from souschef.ui.pages.history import _display_conversion_downloads
+
+        c1 = MagicMock()
+        c1.id = 1
+        c1.cookbook_name = "nginx"
+        c1.output_type = "playbook"
+        c1.files_generated = 3
+        c1.created_at = "2025-01-01T00:00:00"
+        c1.blob_storage_key = "blob"
+
+        mock_st.selectbox.return_value = 1
+        mock_st.columns.return_value = [_ctx(), _ctx()]
+        mock_st.button.return_value = True
+
+        with (
+            patch("souschef.ui.pages.history._download_conversion_artefacts") as dl,
+            patch("souschef.ui.pages.history._display_conversion_deletion") as del_ui,
+        ):
+            _display_conversion_downloads(MagicMock(), MagicMock(), [c1])
+
+        dl.assert_called_once()
+        del_ui.assert_called_once()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_download_conversion_artefacts_exception_branch(self, mock_st):
+        from souschef.ui.pages.history import _download_conversion_artefacts
+
+        mock_st.spinner.return_value = _ctx()
+        with patch(
+            "souschef.ui.pages.history._parse_conversion_blob_keys",
+            side_effect=RuntimeError("parse failed"),
+        ):
+            _download_conversion_artefacts(MagicMock(), MagicMock())
+
+        mock_st.error.assert_called_once()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_display_roles_download_missing_and_directory_branches(
+        self, mock_st, tmp_path
+    ):
+        from souschef.ui.pages.history import _display_roles_download
+
+        conversion = MagicMock(cookbook_name="test", id=1)
+        blob = MagicMock()
+
+        missing = MagicMock()
+        missing.exists.return_value = False
+
+        directory = MagicMock()
+        directory.exists.return_value = True
+        directory.is_file.return_value = False
+
+        blob.download.side_effect = [missing, directory]
+
+        with patch(
+            "souschef.ui.pages.history._create_and_display_zip_download"
+        ) as zip_dl:
+            _display_roles_download(conversion, blob, "roles", tmp_path)
+            _display_roles_download(conversion, blob, "roles", tmp_path)
+
+        zip_dl.assert_called_once()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_display_repo_download_file_and_directory_branches(self, mock_st, tmp_path):
+        from souschef.ui.pages.history import _display_repo_download
+
+        conversion = MagicMock(cookbook_name="test", id=2)
+        blob = MagicMock()
+
+        file_obj = MagicMock()
+        file_obj.exists.return_value = True
+        file_obj.is_file.return_value = True
+        file_obj.open.return_value.__enter__.return_value.read.return_value = b"x"
+
+        directory = MagicMock()
+        directory.exists.return_value = True
+        directory.is_file.return_value = False
+
+        blob.download.side_effect = [file_obj, directory]
+
+        with patch(
+            "souschef.ui.pages.history._create_and_display_zip_download"
+        ) as zip_dl:
+            _display_repo_download(conversion, blob, "repo", tmp_path)
+            _display_repo_download(conversion, blob, "repo", tmp_path)
+
+        mock_st.download_button.assert_called_once()
+        zip_dl.assert_called_once()
+
+    @patch("souschef.ui.pages.history.st")
+    def test_display_repo_download_missing_path_branch(self, mock_st, tmp_path):
+        from souschef.ui.pages.history import _display_repo_download
+
+        conversion = MagicMock(cookbook_name="test", id=3)
+        blob = MagicMock()
+
+        missing = MagicMock()
+        missing.exists.return_value = False
+        blob.download.return_value = missing
+
+        _display_repo_download(conversion, blob, "repo", tmp_path)
+
+        mock_st.download_button.assert_not_called()
+
 
 class TestChefServerSettingsHelpers:
     """Tests for chef_server_settings.py helper functions."""
@@ -601,8 +990,8 @@ class TestChefServerSettingsHelpers:
     def test_estimate_operation_time(self):
         from souschef.ui.pages.chef_server_settings import _estimate_operation_time
 
-        assert _estimate_operation_time(3, "assess") == 15.0
-        assert _estimate_operation_time(3, "convert") == 30.0
+        assert _estimate_operation_time(3, "assess") == pytest.approx(15.0)
+        assert _estimate_operation_time(3, "convert") == pytest.approx(30.0)
 
     def test_format_time_estimate(self):
         from souschef.ui.pages.chef_server_settings import _format_time_estimate

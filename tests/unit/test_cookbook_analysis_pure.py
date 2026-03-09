@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
 
 def _ctx() -> MagicMock:
     """Create a context manager mock."""
@@ -51,7 +53,7 @@ def test_get_ai_provider_and_values():
         _get_ai_string_value,
     )
 
-    cfg = {
+    cfg: dict[str, str | float | int] = {
         "provider": "OpenAI",
         "model": "gpt-4",
         "temperature": "0.8",
@@ -60,7 +62,7 @@ def test_get_ai_provider_and_values():
 
     assert _get_ai_provider(cfg) == "OpenAI"
     assert _get_ai_string_value(cfg, "model") == "gpt-4"
-    assert _get_ai_float_value(cfg, "temperature") == 0.8
+    assert _get_ai_float_value(cfg, "temperature") == pytest.approx(0.8)
     assert _get_ai_int_value(cfg, "max_tokens") == 2048
 
 
@@ -70,8 +72,8 @@ def test_get_ai_numeric_defaults_on_invalid():
         _get_ai_int_value,
     )
 
-    cfg = {"temperature": "bad", "max_tokens": "bad"}
-    assert _get_ai_float_value(cfg, "temperature", 0.7) == 0.7
+    cfg: dict[str, str | float | int] = {"temperature": "bad", "max_tokens": "bad"}
+    assert _get_ai_float_value(cfg, "temperature", 0.7) == pytest.approx(0.7)
     assert _get_ai_int_value(cfg, "max_tokens", 4000) == 4000
 
 
@@ -1234,7 +1236,7 @@ def test_list_and_display_cookbooks(mock_st):
     ):
         _list_and_display_cookbooks(Path("/tmp"))
 
-    assert True  # Just ensure function runs without error
+    # Test passes if function runs without error
 
 
 @patch("souschef.ui.pages.cookbook_analysis.st")

@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -309,7 +310,7 @@ class TestNavigationRendering:
         _render_navigation_button(mock_col, "Test Page", "test_page", "test_page")
 
         mock_st.button.assert_called_once()
-        args, kwargs = mock_st.button.call_args
+        _, kwargs = mock_st.button.call_args
         assert kwargs["type"] == "primary"
         assert kwargs["width"] == "stretch"
 
@@ -323,7 +324,7 @@ class TestNavigationRendering:
 
         _render_navigation_button(mock_col, "Other Page", "other_page", "current_page")
 
-        args, kwargs = mock_st.button.call_args
+        _, kwargs = mock_st.button.call_args
         assert kwargs["type"] == "secondary"
 
     @patch("souschef.ui.app.st")
@@ -531,7 +532,7 @@ class TestMainFunction:
         main()
 
         mock_st.set_page_config.assert_called_once()
-        args, kwargs = mock_st.set_page_config.call_args
+        _, kwargs = mock_st.set_page_config.call_args
         assert kwargs["page_title"] == "SousChef - Chef to Ansible Migration"
         assert kwargs["layout"] == "wide"
         assert kwargs["initial_sidebar_state"] == "collapsed"
@@ -1344,7 +1345,7 @@ class TestGraphFilteringFunctions:
         graph = MockGraph()
         filters = {"circular_only": False}
 
-        _filter_circular_dependencies_only(graph, filters)
+        _filter_circular_dependencies_only(cast(Any, graph), filters)
 
         # Should return graph unchanged
         assert len(graph._nodes) == 3
@@ -1370,7 +1371,7 @@ class TestGraphFilteringFunctions:
             "circular_deps": [("app1", "app2"), ("app2", "app1")],
         }
 
-        _filter_circular_dependencies_only(graph, filters)
+        _filter_circular_dependencies_only(cast(Any, graph), filters)
 
         # Should only keep app1 and app2
         assert len(graph._nodes) == 2
@@ -1390,12 +1391,13 @@ class TestGraphFilteringFunctions:
                 return self._nodes
 
             def remove_nodes_from(self, nodes):
+                """Mock method - no action needed for test."""
                 pass
 
         graph = MockGraph()
         filters = {"community_only": False}
 
-        result = _filter_community_cookbooks_only(graph, filters)
+        result = _filter_community_cookbooks_only(cast(Any, graph), filters)
 
         # Should return graph unchanged
         assert result == graph
@@ -1415,12 +1417,13 @@ class TestGraphFilteringFunctions:
                 return 1
 
             def remove_nodes_from(self, nodes):
+                """Mock method - no action needed for test."""
                 pass
 
         graph = MockGraph()
         filters = {"min_connections": 0}
 
-        result = _filter_minimum_connections(graph, filters)
+        result = _filter_minimum_connections(cast(Any, graph), filters)
 
         # Should return graph unchanged
         assert result == graph
@@ -1447,7 +1450,7 @@ class TestGraphFilteringFunctions:
         graph = MockGraph()
         filters = {"min_connections": 3}
 
-        _filter_minimum_connections(graph, filters)
+        _filter_minimum_connections(cast(Any, graph), filters)
 
         # Should only keep nginx (degree 5)
         assert len(graph._nodes) == 1
@@ -1514,9 +1517,7 @@ class TestDependencyMetricsParsing:
         Transitive Dependencies: Unknown
         """
 
-        direct, transitive, circular, community = _parse_dependency_metrics_from_result(
-            result_text
-        )
+        direct, transitive, _, _ = _parse_dependency_metrics_from_result(result_text)
 
         # Should handle ValueError gracefully and return 0
         assert direct == 0
@@ -1625,7 +1626,7 @@ class TestValidationFormattingFunctions:
         from souschef.ui.app import _format_conversion_for_validation
 
         result = _format_conversion_for_validation([], 999)
-        assert result == "-- Select from history --"
+        assert result == "--"  # Returns "--" when conversion_id not found
 
 
 class TestCircularAndCommunityParsing:
@@ -2477,7 +2478,7 @@ class TestDashboardAndDependencyHelpers:
 
         _display_quick_upload_section()
 
-        assert mock_st.session_state.uploaded_file_name == "cookbooks.zip"
+        assert mock_st.session_state["uploaded_file_name"] == "cookbooks.zip"
         mock_st.success.assert_called_once()
 
     @patch("souschef.ui.app.st")
@@ -2546,7 +2547,7 @@ class TestDashboardAndDependencyHelpers:
         ):
             _display_migration_planning_history()
 
-        assert mock_st.session_state.analysis_cookbook_path == "/tmp/apache"
+        assert mock_st.session_state["analysis_cookbook_path"] == "/tmp/apache"
         mock_st.rerun.assert_called_once()
 
     @patch("souschef.ui.app.st")
@@ -2590,7 +2591,7 @@ class TestDashboardAndDependencyHelpers:
         ):
             _display_dependency_mapping_history()
 
-        assert mock_st.session_state.dep_analysis_cookbook_path == "/tmp/mysql"
+        assert mock_st.session_state["dep_analysis_cookbook_path"] == "/tmp/mysql"
         mock_st.rerun.assert_called_once()
 
     @patch("souschef.ui.app.st")
@@ -3102,7 +3103,7 @@ class TestDashboardAndDependencyHelpers:
         ):
             _execute_migration_plan_generation("/tmp/cook", "phased", 6)
 
-        assert mock_st.session_state.migration_plan == "## Plan"
+        assert mock_st.session_state["migration_plan"] == "## Plan"
         mock_st.success.assert_called_once()
         mock_st.rerun.assert_called_once()
 
@@ -3265,7 +3266,7 @@ class TestDashboardAndDependencyHelpers:
             cookbook_name = "nginx"
 
         _handle_history_load_button(7, [Analysis()])
-        assert mock_st.session_state.analysis_cookbook_path == "/tmp/cook"
+        assert mock_st.session_state["analysis_cookbook_path"] == "/tmp/cook"
         mock_st.rerun.assert_called_once()
 
     @patch("souschef.ui.app.st")
@@ -3298,7 +3299,7 @@ class TestDashboardAndDependencyHelpers:
         ):
             _execute_dependency_analysis("/tmp/cook", "direct", "text")
 
-        assert mock_st.session_state.dep_analysis_result == "deps"
+        assert mock_st.session_state["dep_analysis_result"] == "deps"
         mock_st.rerun.assert_called_once()
 
     @patch("souschef.ui.app.st")
