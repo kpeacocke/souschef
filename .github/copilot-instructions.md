@@ -3,51 +3,73 @@
 ## Project Overview
 SousChef is an AI-powered MCP (Model Context Protocol) server that assists with converting Chef cookbooks to Ansible playbooks.
 
+## Specialised Agents
+For focused expertise on specific tasks, refer to [**AGENTS.md**](AGENTS.md) which defines specialised agents:
+- **Test Coverage Guardian**: Achieve 100% coverage with best-in-class testing
+- **Quality Enforcer**: Zero warnings from ruff, mypy, Pylance
+- **Architecture Reviewer**: Ensure code follows modular structure
+- **TDD Coach**: Guide test-driven development
+- **Migration Specialist**: Chef-to-Ansible conversion expertise
+- **Documentation Maintainer**: Keep docs accurate and current
+- **Performance Optimiser**: Profile and optimise bottlenecks
+
+Invoke agents with: `@AgentName [task description]`
+
 ## Project Architecture
 
 ### Module Structure
-The project follows a modular architecture organized by functionality:
+The project follows a **7-layer modular architecture** with strict dependency discipline:
 
 ```
 souschef/
 ├── __init__.py          # Package initialization
-├── server.py            # MCP server entry point with tool registrations
-├── cli.py               # Command-line interface
-├── assessment.py        # Migration assessment and planning
-├── deployment.py        # AWX/Tower and deployment strategies
-├── core/                # Core utilities
-│   ├── constants.py     # Shared constants
-│   ├── path_utils.py    # Path normalization utilities
-│   ├── ruby_utils.py    # Ruby value normalization
-│   └── validation.py    # Validation engine
-├── parsers/             # Chef artifact parsers
-│   ├── attributes.py    # Attribute file parsing
+├── server.py            # MCP server entry point (Layer 7)
+├── cli.py               # Command-line interface (Layer 7)
+├── ui/                  # Web interface (Layer 7)
+├── orchestrators/       # Workflow coordination (Layer 6)
+├── assessment.py        # Migration planning (Layer 6)
+├── deployment.py        # AWX/Tower deployment (Layer 6)
+├── api/                 # REST API endpoints (Layer 5)
+├── integrations/        # External integrations (Layer 5)
+│   └── github/          # GitHub integration
+├── auth/                # Authentication & RBAC (Layer 4)
+├── audit/               # Audit logging (Layer 4)
+├── benchmarking/        # Performance profiling (Layer 4)
+├── parsers/             # Input parsing (Layer 3)
+│   ├── attributes.py    # Chef attribute parsing
 │   ├── habitat.py       # Habitat plan parsing
 │   ├── inspec.py        # InSpec profile parsing
-│   ├── metadata.rb      # Cookbook metadata parsing
+│   ├── metadata.py      # Cookbook metadata parsing
 │   ├── recipe.py        # Recipe parsing
 │   ├── resource.py      # Custom resource parsing
 │   └── template.py      # ERB template parsing
-├── converters/          # Chef to Ansible converters
-│   ├── habitat.py       # Habitat to Docker conversion
-│   ├── playbook.py      # Recipe to playbook conversion
-│   └── resource.py      # Resource to task conversion
-└── filesystem/          # Filesystem operations
-    └── operations.py    # Directory/file operations
+├── converters/          # Transformations (Layer 3)
+│   ├── habitat.py       # Habitat to Docker
+│   ├── playbook.py      # Recipe to playbook
+│   └── resource.py      # Resource to task
+├── generators/          # Output generation (Layer 3)
+├── storage/             # Data persistence (Layer 2)
+├── filesystem/          # File operations (Layer 2)
+├── ir/                  # Intermediate representation (Layer 2)
+└── core/                # Foundation utilities (Layer 1)
+    ├── constants.py     # Shared constants
+    ├── errors.py        # Custom exceptions
+    ├── path_utils.py    # Path normalization
+    ├── ruby_utils.py    # Ruby value parsing
+    └── validation.py    # Validation helpers
 ```
 
 ### Key Architecture Principles
 
-1. **server.py as Entry Point**: All MCP tools are registered in `server.py`. Internal functions are imported from specialized modules.
+1. **server.py as Entry Point**: All MCP tools are registered in `server.py`. Internal functions are imported from specialised modules.
 
 2. **Backward Compatibility Exports**: Internal functions used by tests are re-exported from `server.py` with `# noqa: F401` comments to suppress unused import warnings.
 
-3. **Module Responsibilities**:
-   - `parsers/`: Parse Chef artifacts (read-only, extract structure)
-   - `converters/`: Transform Chef to Ansible (produce output)
-   - `core/`: Shared utilities (no business logic dependencies)
-   - `assessment.py`: High-level migration planning
-   - `deployment.py`: AWX integration and deployment strategies
+3. **Layered Architecture with Dependency Discipline**:
+   - 7 layers: Foundation → Data → Domain → Services → Integration → Orchestration → UI
+   - Dependencies ONLY flow downward (never upward)
+   - Enforced by SonarCloud to prevent architectural drift
+   - See [ARCHITECTURE.md](../docs/ARCHITECTURE.md) for complete details
 
 4. **When to Keep Functions Together vs. Modularize**:
    - Keep tightly coupled MCP tools in `server.py` when they share significant context (e.g., databag/environment functions ~1,180 lines)
@@ -62,14 +84,31 @@ souschef/
    ```
 
 6. **Respecting the Architecture**: Always follow the established module structure. Refer to [**ARCHITECTURE.md**](../docs/ARCHITECTURE.md) for:
-   - Where code belongs (use the decision tree)
-   - Module responsibilities and boundaries
-   - Design patterns and architectural principles
+   - **Layered architecture** (7 layers with strict downward dependencies)
+   - **Decision tree** for where code belongs
+   - **Container definitions** and module responsibilities
+   - **Dependency matrix** showing allowed imports
+   - **SonarCloud enforcement** rules
    - When to create new modules vs. reusing existing ones
 
-   **Before suggesting changes, ask**: "Does this belong in this module? Should it be refactored to another module instead?"
+   **Critical Architecture Rules**:
+   - Dependencies ONLY flow downward (higher layers → lower layers)
+   - Lower layers NEVER import from higher layers
+   - `core/` has NO internal souschef dependencies
+   - Use the decision tree before placing code
+
+   **Before suggesting changes, ask**: "Does this belong in this module? Should it be refactored to another module instead? Does this violate dependency rules?"
+
+7. **Security Awareness**: Be mindful of security anti-patterns documented in [**SECURITY_ANTI_PATTERNS.md**](../docs/SECURITY_ANTI_PATTERNS.md):
+   - Never use string interpolation in shell commands (use array form)
+   - Validate all inputs against appropriate patterns
+   - Avoid shell metacharacters in parameters
+   - Reference OWASP/CWE guidelines for secure patterns
+   - Test fixtures may contain insecure code intentionally - never copy to production
 
 ## Development Standards
+
+**IMPORTANT**: Review [**CONTRIBUTING.md**](../CONTRIBUTING.md) for complete contribution guidelines, PR checklist, and workflow.
 
 ### Code Quality
 - **Zero warnings policy**: All code must be free of errors and warnings from **all tools** (Ruff, mypy, Pylance) without disabling them
@@ -111,12 +150,14 @@ SousChef uses a modern Python toolchain:
 
 ### Testing Requirements
 - **Current coverage**: 91% (913 tests passing across 13 test files)
-- **Coverage goal**: Maintain 90%+ for production readiness, aim for 95%+
+- **Coverage goal**: Achieve and maintain 100% line and branch coverage
 - **Test framework**: Use `pytest` for all tests
-- **Test structure**: Tests should be organized in `tests/` directory mirroring the source structure
+- **Test structure**: Tests should be organised in `tests/` directory mirroring the source structure
 - **Test naming**: Test functions should clearly describe what they test (e.g., `test_list_directory_success`)
 - **Error cases**: Always test both success and failure scenarios
 - **Mocking**: Use `unittest.mock` for external dependencies
+- **TDD Approach**: Prefer Test-Driven Development (write tests before implementation)
+- **Coverage Analysis**: Use `--cov-report=html` and `--cov-report=term-missing` to identify gaps
 
 #### Multiple Test Types
 The project maintains three types of tests - ensure all are updated when adding features:
@@ -145,12 +186,97 @@ The project maintains three types of tests - ensure all are updated when adding 
 - **Maintenance**: Update fixtures when adding new parsing capabilities
 - **Adding fixtures**: Create realistic Chef content that exercises new features
 
+#### Test Organisation and Discovery
+- **Test file naming**: `test_<module_name>.py` mirrors source structure
+  - Source: `souschef/parsers/recipe.py` → Test: `tests/unit/test_parsers_recipe.py`
+  - Source: `souschef/core/validation.py` → Test: `tests/unit/test_core_validation.py`
+- **Test discovery**: pytest automatically discovers `test_*.py` or `*_test.py` files
+- **Test function naming**: `test_<function>_<scenario>` clearly describes behaviour
+  - Example: `test_parse_recipe_with_invalid_syntax`
+  - Example: `test_list_directory_when_path_not_exists`
+- **Test class grouping**: Use classes to group related tests (optional)
+  ```python
+  class TestRecipeParser:
+      def test_parse_simple_recipe(self): ...
+      def test_parse_complex_recipe(self): ...
+  ```
+
 #### Testing Best Practices
+- **Test-Driven Development (TDD)**: Write tests before implementation (Red-Green-Refactor)
+  1. Write a failing test that describes desired behaviour (RED)
+  2. Write minimal code to make the test pass (GREEN)
+  3. Refactor code while keeping tests green (REFACTOR)
 - When adding a new tool, add all three test types (unit, integration, property-based)
 - Use `@pytest.mark.parametrize` for testing multiple inputs efficiently
 - Add benchmarks for performance-sensitive parsing functions
 - Update test fixtures when adding support for new Chef constructs
 - Ensure integration tests validate actual parsing accuracy, not just coverage
+
+#### Advanced Testing Techniques
+- **Coverage Gap Analysis**:
+  - Run `poetry run pytest --cov=souschef --cov-report=html --cov-report=term-missing`
+  - Review `htmlcov/index.html` for visual coverage map
+  - Focus on uncovered lines shown in terminal output
+  - Identify missing branches (if/else not fully tested)
+- **Edge Cases to Test**:
+  - None values and null inputs
+  - Empty strings, lists, and dictionaries
+  - Boundary conditions (min/max values, zero, negative)
+  - Error states and exception paths
+  - Unicode and special characters
+  - Large inputs (performance testing)
+- **Testing Private Functions**:
+  - Private functions (prefixed with `_`) should be tested indirectly through public API
+  - If a private function is complex enough to warrant direct testing, consider:
+    - Making it public if it provides reusable utility
+    - Moving it to a separate module if it has standalone value
+    - Testing through public functions that call it
+  - Only test private functions directly if they contain critical logic that's hard to cover via public API
+- **Test Markers for Organisation**:
+  ```python
+  @pytest.mark.slow  # Long-running tests
+  @pytest.mark.integration  # Integration tests
+  @pytest.mark.unit  # Unit tests
+  @pytest.mark.property  # Property-based tests
+  ```
+  - Run specific markers: `poetry run pytest -m "not slow"`
+  - Run fast tests only: `poetry run pytest -m "unit"`
+- **Mutation Testing for Quality**:
+  - Use `mutmut` to verify tests catch intentional bugs
+  - Install: `poetry add --group dev mutmut`
+  - Run: `poetry run mutmut run`
+  - Tests should fail when code is mutated (high mutation score = good tests)
+- **Performance Testing**:
+  - Use `@pytest.mark.benchmark` for performance-critical functions
+  - Compare performance before/after optimisations
+  - Set performance budgets for critical paths
+
+#### When Code is Legitimately Untestable
+Some code cannot or should not be extensively tested:
+- **Platform-specific code**: OS-level operations that can't be mocked reliably
+- **Third-party integrations**: External APIs where mocking is insufficient (use integration tests sparingly)
+- **Trivial code**: Simple property getters/setters with no logic
+- **Configuration loading**: Basic file I/O without complex logic (test via integration)
+- **Main entry points**: `if __name__ == "__main__":` blocks (test CLI separately)
+
+**Approach for near-untestable code**:
+1. Isolate untestable code in thin wrapper functions
+2. Test business logic separately with mocks
+3. Document why code is untested (comment + pragma)
+4. Use integration tests to verify end-to-end behaviour
+5. Ask user for approval before adding `# pragma: no cover`
+
+#### Coverage Report Interpretation
+- **Line coverage**: Percentage of code lines executed during tests
+- **Branch coverage**: Percentage of conditional branches tested (both if/else paths)
+- **Target**: 100% line and branch coverage
+- **Interpreting HTML reports** (`htmlcov/index.html`):
+  - Green lines: Covered by tests
+  - Red lines: Not executed by any test
+  - Yellow lines: Partially covered (some branches untested)
+  - Click filenames to see line-by-line coverage
+- **Terminal missing report**: Shows uncovered line numbers directly
+- **Focus areas**: Functions with 0% coverage, edge cases, error handling
 
 ### Cross-Platform Compatibility
 - **File paths**: Use `pathlib.Path` instead of string concatenation for file paths
@@ -173,59 +299,138 @@ The project maintains three types of tests - ensure all are updated when adding 
 - **Lock file**: Always commit `poetry.lock` to version control
 - **Dev dependencies**: Keep development dependencies separate in `[tool.poetry.group.dev.dependencies]`
 
-## Pre-Submission Quality Checks
-**CRITICAL**: Before committing or submitting ANY code changes, you MUST run these checks and ensure they all pass:
+## Quality Assurance Checklist
+**CRITICAL**: Before committing or submitting ANY code changes, you MUST complete this comprehensive checklist.
 
-1.  **Ruff Linting** (REQUIRED - must exit with code 0):
+### Mandatory Pre-Submission Checks
+These checks MUST pass without errors:
+
+1.  ✅ **Ruff Linting** (exit code 0 required):
     ```bash
     poetry run ruff check .
+    poetry run ruff check . --fix  # Auto-fix where possible
     ```
-    - All errors must be fixed (no exit code 1)
-    - Use `poetry run ruff check . --fix` for auto-fixable errors
-    - Manually fix remaining errors before proceeding
+    - Zero violations allowed
+    - Fix all errors manually if auto-fix insufficient
 
-2.  **Type Checking** (REQUIRED - must have zero errors):
+2.  ✅ **Code Formatting** (properly formatted):
+    ```bash
+    poetry run ruff format .
+    ```
+    - All code must follow consistent style
+
+3.  ✅ **Type Checking** (zero errors required):
     ```bash
     poetry run mypy souschef
     ```
-    - No type errors allowed in source code
+    - No type errors in source code
     - Standard library stub warnings can be ignored
+    - Pylance should show no warnings in VS Code
 
-3.  **Test Suite** (REQUIRED - all tests must pass):
+4.  ✅ **Test Suite** (all tests pass):
     ```bash
-    poetry run pytest --cov=souschef
+    poetry run pytest --cov=souschef --cov-report=term-missing --cov-report=html
     ```
-    - All tests must pass (exit code 0)
-    - Coverage should be maintained at 90%+
+    - Exit code 0 required (all tests pass)
+    - Coverage maintained or improved (target: 100%)
+    - Review uncovered lines in terminal output
+    - Check `htmlcov/index.html` for visual coverage gaps
 
-4.  **Git Status** (REQUIRED - clean state):
+5.  ✅ **Git Status** (clean state):
     ```bash
     git status
     ```
-    - No uncommitted changes should remain
-    - All intended changes should be committed
-    - Temporary files should be removed
+    - No uncommitted changes (unless intentional)
+    - No temporary or generated files
+    - `.gitignore` properly configured
 
-**IMPORTANT**: These checks are mandatory quality gates. Do not skip them or commit code that fails any of these checks.
+### Code Quality Checklist
+Before submitting code changes, verify:
 
-## Code Review Checklist
-Before suggesting code, ensure:
-1.  No linting errors (`ruff check`) - **MANDATORY PRE-SUBMISSION CHECK**
-2.  Properly formatted (`ruff format`)
-3.  No type errors (`mypy souschef`) - **MANDATORY PRE-SUBMISSION CHECK**
-4.  All tests pass (`pytest`) - **MANDATORY PRE-SUBMISSION CHECK**
-5.  Coverage maintained at 90%+ (`pytest --cov`)
-6.  Unit tests added/updated in `test_server.py`
-7.  Integration tests added/updated in `test_integration.py`
-8.  Property-based tests added if applicable in `test_property_based.py`
-9.  Test fixtures updated if new parsing features added
-10. Type hints are complete
-11. Docstrings are present and clear
-12. Error cases are handled
-13. Cross-platform compatible
-14. **Architecture respected**: Code follows module structure from [ARCHITECTURE.md](../docs/ARCHITECTURE.md) - if uncertain about placement, use the decision tree
-15. **Australian English used**: All documentation, comments, and docstrings use Australian English spelling (colour, organise, recognise, etc.)
-16. **Pre-submission checks completed**: All mandatory quality checks from "Pre-Submission Quality Checks" section have passed
+**Testing:**
+- [ ] Unit tests added/updated in `tests/unit/`
+- [ ] Integration tests added/updated in `tests/integration/`
+- [ ] Property-based tests added if applicable in `tests/unit/test_property_based.py`
+- [ ] Test fixtures updated for new Chef constructs
+- [ ] All three test types present for new features
+- [ ] Edge cases tested (None, empty, boundaries, errors)
+- [ ] Error paths and exceptions covered
+- [ ] Test names clearly describe scenarios
+- [ ] Tests follow Arrange-Act-Assert pattern
+
+**Code Standards:**
+- [ ] Type hints complete for all function signatures
+- [ ] Docstrings present and clear (Google style)
+- [ ] Australian English in all documentation/comments
+- [ ] Cross-platform compatible (`pathlib.Path` for paths)
+- [ ] No hardcoded file paths
+- [ ] Error handling comprehensive (no bare `except:`)
+- [ ] No code suppressions without user approval
+- [ ] Existing `# noqa: F401` markers respected
+
+**Architecture:**
+- [ ] Code placed in correct module using [decision tree](../docs/ARCHITECTURE.md#module-placement-rules)
+- [ ] Module responsibilities respected (see layer definitions)
+- [ ] Dependency rules followed (downward only, no upward imports)
+- [ ] SonarCloud enforcement rules not violated
+- [ ] No tight coupling between modules
+- [ ] Functions extracted when reusable
+- [ ] Mock patching done where functions are used
+- [ ] Security anti-patterns avoided (see [SECURITY_ANTI_PATTERNS.md](../docs/SECURITY_ANTI_PATTERNS.md))
+
+**Documentation:**
+- [ ] README updated if features changed
+- [ ] Usage examples accurate and current
+- [ ] API documentation reflects changes
+- [ ] Comments explain "why", not "what"
+
+### Quick Quality Check Command
+Run all checks in sequence:
+```bash
+poetry run ruff check . && poetry run ruff format . && poetry run mypy souschef && poetry run pytest --cov=souschef --cov-report=term-missing
+```
+
+### When Checks Fail
+- **Never suppress errors** without attempting to fix them first
+- **Never commit failing code** - all checks must pass
+- **Ask for help** if stuck - use specialised agents:
+  - Coverage improvements → @TestCoverageGuardian
+  - Quality issues → @QualityEnforcer
+  - Architecture questions → @ArchitectureReviewer
+  - TDD guidance → @TDDCoach
+  - See [AGENTS.md](AGENTS.md) for full agent list
+
+**IMPORTANT**: These checks are mandatory quality gates. Do not skip them or commit code that fails any check.
+
+## Best Practices and Patterns
+
+### Security Considerations
+
+**CRITICAL**: Review [SECURITY_ANTI_PATTERNS.md](../docs/SECURITY_ANTI_PATTERNS.md) to avoid common security issues:
+
+```python
+# ❌ NEVER: String interpolation in shell commands (Command Injection - CWE-78)
+execute "dangerous" do
+  command "docker pull #{user_input}"  # Vulnerable to injection!
+end
+
+# ✅ ALWAYS: Use array form to prevent injection
+execute "safe" do
+  command ["docker", "pull", user_input]  # Arguments passed safely
+end
+
+# ✅ Validate inputs against expected patterns
+import re
+if not re.match(r'^[a-z0-9][a-z0-9._-]*(/[a-z0-9._-]+)*$', image_name):
+    raise ValueError(f"Invalid image name: {image_name}")
+```
+
+**Security Checklist**:
+- [ ] No string interpolation in shell commands
+- [ ] All user inputs validated
+- [ ] No shell metacharacters (`;|&$()<>`) in parameters
+- [ ] Proper escaping/sanitization applied
+- [ ] Follows OWASP guidelines (document CWE/CAPEC references)
 
 ## Preferred Patterns
 
@@ -326,8 +531,23 @@ def test_handles_any_input(random_input):
 - **Keep examples current**: Ensure usage examples in README match actual tool signatures and behavior
 - **Update roadmap**: Mark completed items and add new planned features to the roadmap section
 
+## Contributing Guidelines
+
+For comprehensive contribution guidelines, see [**CONTRIBUTING.md**](../CONTRIBUTING.md):
+- Pull request workflow
+- PR checklist
+- Adding new MCP tools
+- Dependency management
+- Commit message conventions
+- Branch strategy
+
 ## When in Doubt
-- Prioritize readability over cleverness
+- **Architecture**: Use the [decision tree](../docs/ARCHITECTURE.md#module-placement-rules)
+- **Dependencies**: Check the [dependency matrix](../docs/ARCHITECTURE.md#dependency-matrix)
+- **Security**: Review [SECURITY_ANTI_PATTERNS.md](../docs/SECURITY_ANTI_PATTERNS.md)
+- **Contributing**: Follow [CONTRIBUTING.md](../CONTRIBUTING.md)
+- **Agents**: Consult [AGENTS.md](AGENTS.md) for specialised help
+- Prioritise readability over cleverness
 - Add tests before fixing bugs
 - Document why, not just what
 - Ask for clarification rather than assume

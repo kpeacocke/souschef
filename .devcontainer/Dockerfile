@@ -41,7 +41,6 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list && \
     libffi-dev \
     libssl-dev \
     lsb-release \
-    npm \
     unzip \
     wget && \
     # Install Terraform CLI from HashiCorp APT repository
@@ -80,10 +79,6 @@ RUN chmod +x /usr/local/lib/docker/cli-plugins/docker-mcp && \
     apt-get update && \
     apt-get install -y --no-install-recommends trivy && \
     rm -rf /var/lib/apt/lists/* && \
-    if [ "$SNYK_VERSION" != "skip" ]; then \
-    npm install -g --ignore-scripts snyk && \
-    snyk --version; \
-    fi && \
     if [ "$CODEQL_VERSION" != "skip" ]; then \
     ARCH=$(uname -m); \
     if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then \

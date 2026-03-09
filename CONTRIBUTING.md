@@ -62,14 +62,14 @@ Google style, required for all functions/classes/modules:
 ```python
 def convert_resource(name: str, action: str) -> dict:
     """Convert Chef resource to Ansible task.
-    
+
     Args:
         name: Resource name.
         action: Resource action (install, create, etc.).
-    
+
     Returns:
         Dictionary with Ansible task definition.
-    
+
     Raises:
         ValueError: If resource type unsupported.
     """
@@ -126,9 +126,10 @@ def test_handles_any_input(random_input):
 
 ### Coverage Goal
 
-- **Current:** 91% (3,500+ passing tests)
-- **Requirement:** Maintain 90%+, aim for 95%+
-- **For New Code:** All three test types required
+- **Current:** 91% (913 tests passing across 13 test files)
+- **Target:** 100% line and branch coverage
+- **Requirement for PRs:** Coverage maintained or improved
+- **For New Code:** All three test types required (unit, integration, property-based)
 
 ## Dependency Management
 
@@ -198,6 +199,7 @@ These checks are **mandatory quality gates**. Do not skip.
 Format: `<type>(<scope>): <subject>`
 
 **Types:**
+
 - `feat:` = New feature (minor version bump)
 - `fix:` = Bug fix (patch version bump)
 - `docs:` = Documentation only
@@ -242,13 +244,13 @@ BREAKING CHANGE: Renamed 'path' parameter to 'file_path' for consistency."
 @mcp.tool()
 def your_new_tool(parameter: str) -> str:
     """Brief description.
-    
+
     Args:
         parameter: Description.
-    
+
     Returns:
         Description of return value.
-    
+
     Raises:
         ValueError: When parameter invalid.
     """
@@ -353,6 +355,7 @@ SousChef uses automated releases via Release Please:
 - **Contributors:** Target `develop` branch with PRs
 
 **Version bumps:**
+
 - `fix:` or `docs:` → patch (5.1.4 → 5.1.5)
 - `feat:` → minor (5.1.4 → 5.2.0)
 - `feat!:` or `BREAKING CHANGE:` → major (5.1.4 → 6.0.0, after 1.0.0)

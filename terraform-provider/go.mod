@@ -2,8 +2,6 @@ module github.com/kpeacocke/terraform-provider-souschef
 
 go 1.24.13
 
-toolchain go1.24.13
-
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.18.0
 	github.com/hashicorp/terraform-plugin-go v0.30.0
