@@ -55,6 +55,22 @@ if [ -S /var/run/docker.sock ]; then
     fi
 fi
 
+# ============================================================================
+# Install Snyk CLI (requires Node.js from devcontainer feature)
+# ============================================================================
+if command -v npm &> /dev/null; then
+    echo "Installing Snyk CLI..."
+    if npm install -g --ignore-scripts snyk; then
+        SNYK_VERSION=$(snyk --version 2>/dev/null || echo "unknown")
+        echo "  Snyk $SNYK_VERSION installed successfully"
+    else
+        echo "  WARNING: Failed to install Snyk (npm might not be in PATH yet)"
+    fi
+else
+    echo "  WARNING: npm not found, skipping Snyk installation"
+    echo "  Node.js feature may not have completed yet"
+fi
+
 # Verify and install Go if missing (fallback for feature installation issues)
 if ! command -v go &> /dev/null; then
     echo "Go not found in PATH, installing from go.dev..."
