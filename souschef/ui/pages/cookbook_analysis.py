@@ -23,12 +23,12 @@ else:
     try:
         import pandas as pd
     except ImportError:
-        pd = None  # type: ignore[assignment]
+        pd = None
 
     try:
         import streamlit as st
     except ImportError:
-        st = None  # type: ignore[assignment]
+        st = None
 
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

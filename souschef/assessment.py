@@ -35,10 +35,11 @@ from souschef.core.validation import (
 )
 
 # Optional AI provider imports
+requests: Any | None
 try:
     import requests
 except ImportError:  # pragma: no cover
-    requests = None  # type: ignore[assignment]
+    requests = None
 
 try:
     from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]

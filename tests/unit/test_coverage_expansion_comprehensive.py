@@ -286,29 +286,26 @@ class TestExceptionHandlingBoundaries:
 
     def test_filepath_normalization_with_invalid_paths(self) -> None:
         """Test path handling with unusual inputs."""
-        try:
-            from souschef.core.path_utils import _normalize_path
+        path_utils = pytest.importorskip("souschef.core.path_utils")
+        _normalize_path = path_utils._normalize_path
 
-            # Try various path inputs
-            test_paths = [
-                "",
-                " ",
-                ".",
-                "..",
-                "/",
-                "~",
-            ]
+        # Try various path inputs
+        test_paths = [
+            "",
+            " ",
+            ".",
+            "..",
+            "/",
+            "~",
+        ]
 
-            for path_input in test_paths:
-                try:
-                    result = _normalize_path(path_input)
-                    assert result is not None
-                except (ValueError, OSError, RuntimeError):
-                    # Some of these might raise, which is acceptable
-                    pass
-        except ImportError:
-            # If path_utils module not found, skip this test
-            pytest.skip("path_utils module not available")
+        for path_input in test_paths:
+            try:
+                result = _normalize_path(path_input)
+                assert result is not None
+            except (ValueError, OSError, RuntimeError):
+                # Some of these might raise, which is acceptable
+                pass
 
     def test_yaml_parsing_with_malformed_input(self) -> None:
         """Test YAML parsing with malformed content."""

@@ -9,11 +9,15 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-try:
+if TYPE_CHECKING:
     import streamlit as st
-except ImportError:
-    st = None  # type: ignore[assignment]
+else:
+    try:
+        import streamlit as st
+    except ImportError:
+        st = None
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 

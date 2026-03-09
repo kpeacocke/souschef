@@ -3,12 +3,15 @@
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-try:
+if TYPE_CHECKING:
     import streamlit as st
-except ImportError:
-    st = None  # type: ignore[assignment]
+else:
+    try:
+        import streamlit as st
+    except ImportError:
+        st = None
 
 
 def _run_ansible_lint(playbook_path: str) -> tuple[bool, str]:

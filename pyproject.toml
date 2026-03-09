@@ -114,7 +114,7 @@ python_functions = ["test_*"]
 [tool.coverage.run]
 source = ["souschef"]
 relative_files = true
-omit = ["tests/*", "examples/*", "souschef/ui/*"]
+omit = ["tests/*", "examples/*"]
 
 [tool.coverage.report]
 exclude_lines = [

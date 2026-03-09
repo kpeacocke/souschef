@@ -7,12 +7,15 @@ Configure and validate AI provider settings for the SousChef MCP server.
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-try:
+if TYPE_CHECKING:
     import streamlit as st
-except ImportError:
-    st = None  # type: ignore[assignment]
+else:
+    try:
+        import streamlit as st
+    except ImportError:
+        st = None
 
 from souschef.core.url_validation import validate_user_provided_url
 
@@ -29,9 +32,11 @@ REQUESTS_NOT_INSTALLED_MESSAGE = "requests library not installed"
 
 # Import AI libraries (optional dependencies)
 try:
-    import anthropic
+    import anthropic as _anthropic
 except ImportError:
-    anthropic = None  # type: ignore[assignment]
+    anthropic = None
+else:
+    anthropic = _anthropic
 
 try:
     from ibm_watsonx_ai import APIClient  # type: ignore[import-not-found]
@@ -39,14 +44,18 @@ except ImportError:
     APIClient = None
 
 try:
-    import requests
+    import requests as _requests
 except ImportError:
-    requests = None  # type: ignore[assignment]
+    requests = None
+else:
+    requests = _requests
 
 try:
-    import openai
+    import openai as _openai
 except ImportError:
-    openai = None  # type: ignore[assignment]
+    openai = None
+else:
+    openai = _openai
 
 
 def _get_model_options(provider):

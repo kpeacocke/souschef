@@ -10,20 +10,15 @@ import contextlib
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
-
-try:
-    import streamlit as st
-except ImportError:
-    st = None  # type: ignore[assignment]
+from typing import TYPE_CHECKING, Any, Concatenate
 
 if TYPE_CHECKING:
     import networkx as nx
     import plotly.graph_objects as go
+    import streamlit as st
     from matplotlib.figure import Figure
-
-P = ParamSpec("P")
-R = TypeVar("R")
+else:
+    import streamlit as st
 
 from souschef.core import _ensure_within_base_path, _normalize_path
 from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_is_file
@@ -123,7 +118,7 @@ class ProgressTracker:
         self.status_text.empty()
 
 
-def with_progress_tracking(
+def with_progress_tracking[**P, R](
     operation_func: Callable[Concatenate[ProgressTracker, P], R],
     description: str = "Processing...",
     total_steps: int = 100,

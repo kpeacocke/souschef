@@ -177,22 +177,19 @@ class TestAnsibleVersionsMissingLines:
         from souschef.core.ansible_versions import _call_ai_provider
 
         # Test with anthropic but catch exception
-        try:
-            import anthropic  # noqa: F401
+        pytest.importorskip("anthropic")
 
-            with patch("anthropic.Anthropic") as mock_class:
-                mock_client = MagicMock()
-                mock_class.return_value = mock_client
-                # Return a response that has no text content
-                mock_response = MagicMock()
-                mock_response.content = []
-                mock_client.messages.create.return_value = mock_response
+        with patch("anthropic.Anthropic") as mock_class:
+            mock_client = MagicMock()
+            mock_class.return_value = mock_client
+            # Return a response that has no text content
+            mock_response = MagicMock()
+            mock_response.content = []
+            mock_client.messages.create.return_value = mock_response
 
-                result = _call_ai_provider("anthropic", "test-key", "model", "prompt")
-                # Should return None when no content
-                assert result is None
-        except ImportError:
-            pytest.skip("anthropic not installed")
+            result = _call_ai_provider("anthropic", "test-key", "model", "prompt")
+            # Should return None when no content
+            assert result is None
 
     def test_call_ai_provider_exception(self):
         """Test _call_ai_provider with API exception."""

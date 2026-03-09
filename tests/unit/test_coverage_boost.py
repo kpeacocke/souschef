@@ -284,63 +284,50 @@ class TestAnsibleVersionsErrorPaths:
 
     def test_call_ai_provider_anthropic_no_content(self):
         """Test _call_ai_provider with Anthropic returning no content."""
-        try:
-            import anthropic  # noqa: F401
+        pytest.importorskip("anthropic")
 
-            with patch("anthropic.Anthropic") as mock_anthropic_class:
-                mock_client = MagicMock()
-                mock_anthropic_class.return_value = mock_client
-                mock_response = MagicMock()
-                mock_response.content = []
-                mock_client.messages.create.return_value = mock_response
+        with patch("anthropic.Anthropic") as mock_anthropic_class:
+            mock_client = MagicMock()
+            mock_anthropic_class.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.content = []
+            mock_client.messages.create.return_value = mock_response
 
-                result = _call_ai_provider(
-                    "anthropic", "test-key", "claude-3", "prompt"
-                )
-                assert result is None
-        except ImportError:
-            pytest.skip("anthropic module not installed")
+            result = _call_ai_provider("anthropic", "test-key", "claude-3", "prompt")
+            assert result is None
 
     def test_call_ai_provider_anthropic_no_text(self):
         """Test _call_ai_provider with Anthropic returning content without text."""
-        try:
-            import anthropic  # noqa: F401
+        pytest.importorskip("anthropic")
 
-            with patch("anthropic.Anthropic") as mock_anthropic_class:
-                mock_client = MagicMock()
-                mock_anthropic_class.return_value = mock_client
-                mock_response = MagicMock()
-                mock_block = MagicMock(spec=[])  # No text attribute
-                mock_response.content = [mock_block]
-                mock_client.messages.create.return_value = mock_response
+        with patch("anthropic.Anthropic") as mock_anthropic_class:
+            mock_client = MagicMock()
+            mock_anthropic_class.return_value = mock_client
+            mock_response = MagicMock()
+            mock_block = MagicMock(spec=[])  # No text attribute
+            mock_response.content = [mock_block]
+            mock_client.messages.create.return_value = mock_response
 
-                result = _call_ai_provider(
-                    "anthropic", "test-key", "claude-3", "prompt"
-                )
-                assert result is None
-        except ImportError:
-            pytest.skip("anthropic module not installed")
+            result = _call_ai_provider("anthropic", "test-key", "claude-3", "prompt")
+            assert result is None
 
     def test_call_ai_provider_openai_success(self):
         """Test _call_ai_provider with OpenAI success."""
-        try:
-            import openai  # noqa: F401
+        pytest.importorskip("openai")
 
-            with patch("openai.OpenAI") as mock_openai_class:
-                mock_client = MagicMock()
-                mock_openai_class.return_value = mock_client
-                mock_response = MagicMock()
-                mock_choice = MagicMock()
-                mock_message = MagicMock()
-                mock_message.content = "Test response"
-                mock_choice.message = mock_message
-                mock_response.choices = [mock_choice]
-                mock_client.chat.completions.create.return_value = mock_response
+        with patch("openai.OpenAI") as mock_openai_class:
+            mock_client = MagicMock()
+            mock_openai_class.return_value = mock_client
+            mock_response = MagicMock()
+            mock_choice = MagicMock()
+            mock_message = MagicMock()
+            mock_message.content = "Test response"
+            mock_choice.message = mock_message
+            mock_response.choices = [mock_choice]
+            mock_client.chat.completions.create.return_value = mock_response
 
-                result = _call_ai_provider("openai", "test-key", "gpt-4", "prompt")
-                assert result == "Test response"
-        except ImportError:
-            pytest.skip("openai module not installed")
+            result = _call_ai_provider("openai", "test-key", "gpt-4", "prompt")
+            assert result == "Test response"
 
     def test_call_ai_provider_unknown_provider(self):
         """Test _call_ai_provider with unknown provider."""

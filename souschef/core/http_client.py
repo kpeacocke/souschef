@@ -5,55 +5,30 @@ Provides a unified interface for making HTTP requests with consistent
 error handling, authentication, and retry logic.
 """
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 
-if TYPE_CHECKING:
-    from requests.adapters import HTTPAdapter
-    from requests.exceptions import (
-        ConnectionError as RequestsConnectionError,
-    )
-    from requests.exceptions import (
-        HTTPError as RequestsHTTPError,
-    )
-    from requests.exceptions import (
-        RequestException,
-    )
-    from requests.exceptions import (
-        Timeout as RequestsTimeout,
-    )
-    from urllib3.util.retry import Retry
+from souschef.core.errors import SousChefError
+
+requests: Any
+requests_exceptions: Any
+urllib3_retry: Any
 
 try:
-    import requests
-    from requests.adapters import HTTPAdapter
-    from requests.exceptions import (
-        ConnectionError as RequestsConnectionError,
-    )
-    from requests.exceptions import (
-        HTTPError as RequestsHTTPError,
-    )
-    from requests.exceptions import (
-        RequestException,
-    )
-    from requests.exceptions import (
-        Timeout as RequestsTimeout,
-    )
-    from urllib3.util.retry import Retry
+    import requests as _requests
+    from requests import exceptions as _requests_exceptions
+    from urllib3.util import retry as _urllib3_retry
 
+    requests = _requests
+    requests_exceptions = _requests_exceptions
+    urllib3_retry = _urllib3_retry
     REQUESTS_AVAILABLE = True
 except ImportError:  # pragma: no cover
     # Fallback when requests is not installed
-    requests = None  # type: ignore[assignment]
-    HTTPAdapter = None  # type: ignore[assignment,misc]
-    Retry = None  # type: ignore[assignment,misc]
-    RequestsHTTPError = Exception  # type: ignore[misc,assignment]
-    RequestsTimeout = Exception  # type: ignore[misc,assignment]
-    RequestsConnectionError = Exception  # type: ignore[misc,assignment]
-    RequestException = Exception  # type: ignore[misc,assignment]
+    requests = None
+    requests_exceptions = None
+    urllib3_retry = None
     REQUESTS_AVAILABLE = False
-
-from souschef.core.errors import SousChefError
 
 
 class HTTPError(SousChefError):
@@ -136,7 +111,7 @@ class HTTPClient:
             SousChefError: If base_url does not use HTTPS.
 
         """
-        if not REQUESTS_AVAILABLE or Retry is None or HTTPAdapter is None:
+        if not REQUESTS_AVAILABLE or urllib3_retry is None:
             raise SousChefError(
                 "requests library not available",
                 "Install with: pip install requests",
@@ -182,13 +157,13 @@ class HTTPClient:
         self.session = requests.Session()
 
         # Configure retries for transient errors
-        retry_strategy = Retry(
+        retry_strategy = urllib3_retry.Retry(
             total=max_retries,
             backoff_factor=backoff_factor,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["GET", "POST", "PUT", "DELETE"],
         )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
+        adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
 
         https_scheme = "https://"
         self.session.mount(https_scheme, adapter)
@@ -246,7 +221,13 @@ class HTTPClient:
             SousChefError: For other request failures.
 
         """
-        if isinstance(error, RequestsHTTPError):
+        if requests_exceptions is None:
+            raise SousChefError(
+                f"Request failed: {error}",
+                "Check the API documentation and your request parameters.",
+            ) from error
+
+        if isinstance(error, requests_exceptions.HTTPError):
             if response is not None:
                 raise HTTPError(
                     response.status_code,
@@ -258,18 +239,18 @@ class HTTPClient:
                     f"HTTP request failed: {error}",
                     "Check the API endpoint and your network connection.",
                 ) from error
-        elif isinstance(error, RequestsTimeout):
+        elif isinstance(error, requests_exceptions.Timeout):
             raise SousChefError(
                 f"Request timed out after {timeout_value} seconds",
                 "The API service may be slow or unresponsive. Try increasing "
                 "the timeout value or try again later.",
             ) from error
-        elif isinstance(error, RequestsConnectionError):
+        elif isinstance(error, requests_exceptions.ConnectionError):
             raise SousChefError(
                 f"Failed to connect to {url}",
                 "Check your network connection and verify the base URL is correct.",
             ) from error
-        elif isinstance(error, RequestException):
+        elif isinstance(error, requests_exceptions.RequestException):
             raise SousChefError(
                 f"Request failed: {error}",
                 "Check the API documentation and your request parameters.",
@@ -324,12 +305,7 @@ class HTTPClient:
                     "Check the API documentation and endpoint.",
                 )
             return json_response
-        except (
-            RequestsHTTPError,
-            RequestsTimeout,
-            RequestsConnectionError,
-            RequestException,
-        ) as e:
+        except Exception as e:
             self._handle_request_error(e, url, timeout_value, response)
             raise  # pragma: no cover  # Unreachable, but makes type checker happy
 
@@ -382,12 +358,7 @@ class HTTPClient:
                     "Check the API documentation and endpoint.",
                 )
             return json_response
-        except (
-            RequestsHTTPError,
-            RequestsTimeout,
-            RequestsConnectionError,
-            RequestException,
-        ) as e:
+        except Exception as e:
             self._handle_request_error(e, url, timeout_value, response)
             raise  # pragma: no cover  # Unreachable, but makes type checker happy
 

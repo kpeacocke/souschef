@@ -6,17 +6,21 @@ import tarfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-try:
+if TYPE_CHECKING:
     import pandas as pd
-except ImportError:
-    pd = None  # type: ignore[assignment]
-
-try:
     import streamlit as st
-except ImportError:
-    st = None  # type: ignore[assignment]
+else:
+    try:
+        import pandas as pd
+    except ImportError:
+        pd = None
+
+    try:
+        import streamlit as st
+    except ImportError:
+        st = None
 
 # Add the parent directory to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

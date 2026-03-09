@@ -7015,25 +7015,16 @@ class TestCoverageBoosterFunctions:
     def test_all_mcp_tools_with_realistic_inputs(self, tmp_path):
         """Test all MCP tools with more realistic inputs."""
         # Import as many MCP tools as possible and test them
+        server_module = pytest.importorskip("souschef.server")
         mcp_functions = []
-        try:
-            from souschef.server import (
-                convert_inspec_to_test,
-                generate_inspec_from_recipe,
-                generate_playbook_from_recipe,
-                parse_inspec_profile,
-            )
-
-            mcp_functions.extend(
-                [
-                    parse_inspec_profile,
-                    convert_inspec_to_test,
-                    generate_inspec_from_recipe,
-                    generate_playbook_from_recipe,
-                ]
-            )
-        except ImportError:
-            pass  # Optional functions may not be available in all configurations
+        for function_name in [
+            "parse_inspec_profile",
+            "convert_inspec_to_test",
+            "generate_inspec_from_recipe",
+            "generate_playbook_from_recipe",
+        ]:
+            if hasattr(server_module, function_name):
+                mcp_functions.append(getattr(server_module, function_name))
 
         # Test each function with various inputs
         test_inputs = [
@@ -7068,54 +7059,57 @@ class TestCoverageBoosterFunctions:
     def test_internal_helper_functions_exhaustively(self):
         """Test internal helper functions that might not be covered."""
         # Test helper functions that exist in the server module
-        try:
-            from souschef.server import (
-                _extract_code_block_variables,
-                _extract_node_attribute_path,
-                _extract_output_variables,
-                _extract_template_variables,
-            )
+        server_module = pytest.importorskip("souschef.server")
+        required_names = [
+            "_extract_code_block_variables",
+            "_extract_node_attribute_path",
+            "_extract_output_variables",
+            "_extract_template_variables",
+        ]
+        if not all(hasattr(server_module, name) for name in required_names):
+            return
 
-            # Test _extract_node_attribute_path
-            test_paths = [
-                "node['simple']",
-                'node["double_quotes"]',
-                "node['deep']['nested']['path']",
-                'node["mixed"]["quotes"]',
-                "invalid_path",
-                "",
-                "node[]",
-                "node['']",
-            ]
+        _extract_code_block_variables = server_module._extract_code_block_variables
+        _extract_node_attribute_path = server_module._extract_node_attribute_path
+        _extract_output_variables = server_module._extract_output_variables
+        _extract_template_variables = server_module._extract_template_variables
 
-            for path in test_paths:
-                result = _extract_node_attribute_path(path)
-                assert result is None or isinstance(result, str)
+        # Test _extract_node_attribute_path
+        test_paths = [
+            "node['simple']",
+            'node["double_quotes"]',
+            "node['deep']['nested']['path']",
+            'node["mixed"]["quotes"]',
+            "invalid_path",
+            "",
+            "node[]",
+            "node['']",
+        ]
 
-            # Test template variable extraction functions
-            template_examples = [
-                "Simple <%= variable %> template",
-                "<% complex.each do |item| %><%= item %><% end %>",
-                "<%# comment %><%= node['attr'] %>",
-                "",
-                "No variables here",
-            ]
+        for path in test_paths:
+            result = _extract_node_attribute_path(path)
+            assert result is None or isinstance(result, str)
 
-            for template in template_examples:
-                variables = set()
-                _extract_output_variables(template, variables)
-                assert isinstance(variables, set)
+        # Test template variable extraction functions
+        template_examples = [
+            "Simple <%= variable %> template",
+            "<% complex.each do |item| %><%= item %><% end %>",
+            "<%# comment %><%= node['attr'] %>",
+            "",
+            "No variables here",
+        ]
 
-                variables = set()
-                _extract_code_block_variables(template, variables)
-                assert isinstance(variables, set)
+        for template in template_examples:
+            variables = set()
+            _extract_output_variables(template, variables)
+            assert isinstance(variables, set)
 
-                result = _extract_template_variables(template)
-                assert isinstance(result, set)
+            variables = set()
+            _extract_code_block_variables(template, variables)
+            assert isinstance(variables, set)
 
-        except ImportError:
-            # Functions might not exist, that's okay
-            pass
+            result = _extract_template_variables(template)
+            assert isinstance(result, set)
 
     def test_cookbook_structure_comprehensive(self, tmp_path):
         """Test cookbook structure analysis comprehensively."""
@@ -7571,14 +7565,13 @@ db_servers = search(:node, "role:database")
 
     def test_parse_chef_search_internal_functions(self):
         """Test internal Chef search parsing functions directly."""
-        try:
-            from souschef.server import (
-                _parse_chef_search_query,
-                _parse_search_condition,
-            )
-        except ImportError:
-            # Functions might not be available for direct import
+        server_module = pytest.importorskip("souschef.server")
+        if not hasattr(server_module, "_parse_chef_search_query") or not hasattr(
+            server_module, "_parse_search_condition"
+        ):
             return
+        _parse_chef_search_query = server_module._parse_chef_search_query
+        _parse_search_condition = server_module._parse_search_condition
 
         # Test _parse_chef_search_query
         search_queries = [
@@ -7623,10 +7616,12 @@ db_servers = search(:node, "role:database")
 
     def test_generate_ansible_inventory_internal(self):
         """Test internal inventory generation function."""
-        try:
-            from souschef.server import _generate_ansible_inventory_from_search
-        except ImportError:
+        server_module = pytest.importorskip("souschef.server")
+        if not hasattr(server_module, "_generate_ansible_inventory_from_search"):
             return
+        _generate_ansible_inventory_from_search = (
+            server_module._generate_ansible_inventory_from_search
+        )
 
         search_results = [
             # Simple search result
@@ -8377,16 +8372,21 @@ class TestHelperFunctionsCoverage:
 
     def test_all_format_functions(self):
         """Test all _format_* helper functions."""
-        try:
-            from souschef.server import (
-                _format_ansible_task,
-                _format_attributes,
-                _format_cookbook_structure,
-                _format_metadata,
-                _format_resources,
-            )
-        except ImportError:
+        server_module = pytest.importorskip("souschef.server")
+        required_names = [
+            "_format_ansible_task",
+            "_format_attributes",
+            "_format_cookbook_structure",
+            "_format_metadata",
+            "_format_resources",
+        ]
+        if not all(hasattr(server_module, name) for name in required_names):
             return
+        _format_ansible_task = server_module._format_ansible_task
+        _format_attributes = server_module._format_attributes
+        _format_cookbook_structure = server_module._format_cookbook_structure
+        _format_metadata = server_module._format_metadata
+        _format_resources = server_module._format_resources
 
         # Test _format_metadata
         metadata_samples = [
@@ -8460,17 +8460,23 @@ class TestHelperFunctionsCoverage:
 
     def test_all_extract_functions(self):
         """Test all _extract_* helper functions."""
-        try:
-            from souschef.server import (
-                _extract_attributes,
-                _extract_conditionals,
-                _extract_metadata,
-                _extract_resource_actions,
-                _extract_resource_properties,
-                _extract_resources,
-            )
-        except ImportError:
+        server_module = pytest.importorskip("souschef.server")
+        required_names = [
+            "_extract_attributes",
+            "_extract_conditionals",
+            "_extract_metadata",
+            "_extract_resource_actions",
+            "_extract_resource_properties",
+            "_extract_resources",
+        ]
+        if not all(hasattr(server_module, name) for name in required_names):
             return
+        _extract_attributes = server_module._extract_attributes
+        _extract_conditionals = server_module._extract_conditionals
+        _extract_metadata = server_module._extract_metadata
+        _extract_resource_actions = server_module._extract_resource_actions
+        _extract_resource_properties = server_module._extract_resource_properties
+        _extract_resources = server_module._extract_resources
 
         # Test _extract_metadata
         metadata_contents = [
@@ -8557,14 +8563,19 @@ end""",
 
     def test_conversion_helper_functions(self, tmp_path):
         """Test conversion helper functions."""
-        try:
-            from souschef.server import (
-                _convert_chef_resource_to_ansible,
-                _get_file_params,
-                _get_service_params,
-            )
-        except ImportError:
+        server_module = pytest.importorskip("souschef.server")
+        required_names = [
+            "_convert_chef_resource_to_ansible",
+            "_get_file_params",
+            "_get_service_params",
+        ]
+        if not all(hasattr(server_module, name) for name in required_names):
             return
+        _convert_chef_resource_to_ansible = (
+            server_module._convert_chef_resource_to_ansible
+        )
+        _get_file_params = server_module._get_file_params
+        _get_service_params = server_module._get_service_params
 
         # Test _get_service_params
         service_tests = [
@@ -11045,15 +11056,19 @@ version '0.1.0' """,
 
     def test_search_parsing_functions_comprehensive(self):
         """Test Chef search parsing functions exhaustively."""
-        try:
-            from souschef.server import (
-                _generate_ansible_inventory_from_search,
-                _parse_chef_search_query,
-                _parse_search_condition,
-            )
-        except ImportError:
-            # Functions might not be available for direct import
+        server_module = pytest.importorskip("souschef.server")
+        required_names = [
+            "_generate_ansible_inventory_from_search",
+            "_parse_chef_search_query",
+            "_parse_search_condition",
+        ]
+        if not all(hasattr(server_module, name) for name in required_names):
             return
+        _generate_ansible_inventory_from_search = (
+            server_module._generate_ansible_inventory_from_search
+        )
+        _parse_chef_search_query = server_module._parse_chef_search_query
+        _parse_search_condition = server_module._parse_search_condition
 
         # Test _parse_chef_search_query with comprehensive search patterns
         search_queries = [

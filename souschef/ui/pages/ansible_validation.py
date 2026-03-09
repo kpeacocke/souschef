@@ -5,12 +5,15 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-try:
+if TYPE_CHECKING:
     import streamlit as st
-except ImportError:
-    st = None  # type: ignore[assignment]
+else:
+    try:
+        import streamlit as st
+    except ImportError:
+        st = None
 
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

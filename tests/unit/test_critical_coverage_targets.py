@@ -344,38 +344,32 @@ class TestServerModuleEdgeCases:
 
     def test_server_module_imports(self) -> None:
         """Test that server module can be imported."""
-        try:
-            import souschef.server
+        server_module = pytest.importorskip("souschef.server")
 
-            # Should import without error
-            assert (
-                hasattr(souschef.server, "MigrationConfig")
-                or hasattr(souschef.server, "convert_chef_databag_to_vars")
-                or hasattr(souschef.server, "__name__")
-            )
-        except ImportError:
-            pytest.skip("Server module not available")
+        # Should import without error
+        assert (
+            hasattr(server_module, "MigrationConfig")
+            or hasattr(server_module, "convert_chef_databag_to_vars")
+            or hasattr(server_module, "__name__")
+        )
 
     def test_server_has_mcp_tools(self) -> None:
         """Test that server module has MCP tool functions."""
-        try:
-            import souschef.server as server_module
+        server_module = pytest.importorskip("souschef.server")
 
-            # Check for expected MCP tool functions
-            tool_functions = [
-                "validate_databags_directory",
-                "convert_chef_databag_to_vars",
-                "list_directory",
-            ]
+        # Check for expected MCP tool functions
+        tool_functions = [
+            "validate_databags_directory",
+            "convert_chef_databag_to_vars",
+            "list_directory",
+        ]
 
-            available_tools = [
-                name for name in tool_functions if hasattr(server_module, name)
-            ]
+        available_tools = [
+            name for name in tool_functions if hasattr(server_module, name)
+        ]
 
-            # At least some tools should be available
-            assert len(available_tools) > 0
-        except ImportError:
-            pytest.skip("Server module not available")
+        # At least some tools should be available
+        assert len(available_tools) > 0
 
 
 class TestCLIv2CommandsIntegration:

@@ -29,9 +29,9 @@ else:
         import requests as requests_module
         from requests.exceptions import ConnectionError, Timeout  # noqa: A004
     except ImportError:  # pragma: no cover
-        requests_module = None  # type: ignore[assignment]
-        ConnectionError = Exception  # type: ignore[assignment,misc]  # noqa: A004, A001
-        Timeout = Exception  # type: ignore[assignment,misc]
+        requests_module = None
+        ConnectionError = Exception  # noqa: A004, A001
+        Timeout = Exception
 
 # Constants
 AUTH_CHUNK_SIZE = 60
