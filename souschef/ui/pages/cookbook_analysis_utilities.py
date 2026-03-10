@@ -31,6 +31,8 @@ def _sanitize_filename(filename: str) -> str:
 
 def _get_secure_ai_config_path() -> Path:
     """Return a private, non-world-writable path for AI config storage."""
+    # Private temp subdirectory; permissions enforced below.
+    # NOSONAR python:S5443
     config_dir = Path(tempfile.gettempdir()) / ".souschef"
     config_dir.mkdir(mode=0o700, exist_ok=True)
     with contextlib.suppress(OSError):

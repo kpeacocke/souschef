@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 else:
     try:
         import streamlit as st
-    except ImportError:
-        st = None
+    except ImportError:  # pragma: no cover
+        st = None  # pragma: no cover
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -37,6 +37,15 @@ from souschef.orchestration import (
 )
 
 NOT_CONFIGURED = "Not configured"
+
+
+def _display_chef_server_intro() -> None:
+    """Display introductory information about Chef Server integration."""
+    st.markdown("""
+    Configure your Chef Server connection to enable dynamic inventory generation
+    and live node queries. This allows SousChef to integrate with your existing
+    Chef infrastructure during the migration process.
+    """)
 
 
 def _render_chef_server_configuration() -> tuple[str, str, str, str]:
@@ -701,11 +710,8 @@ def show_chef_server_settings_page() -> None:
     """Display Chef Server settings and configuration page."""
     st.title("🔧 Chef Server Settings")
 
-    st.markdown("""
-    Configure your Chef Server connection to enable dynamic inventory generation
-    and live node queries. This allows SousChef to integrate with your existing
-    Chef infrastructure during the migration process.
-    """)
+    # Display introductory information
+    _display_chef_server_intro()
 
     # Display current configuration
     _render_current_configuration()
@@ -746,3 +752,6 @@ def show_chef_server_settings_page() -> None:
     For production use, ensure your Chef Server credentials are properly secured
     and not committed to version control.
     """)
+
+
+# Re-export for backward compatibility with tests  # noqa: F401

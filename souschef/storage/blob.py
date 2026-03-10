@@ -97,8 +97,12 @@ class LocalBlobStorage(BlobStorage):
 
     def _get_default_storage_path(self) -> Path:
         """Get the default storage path."""
+        # Private temp subdirectory with restrictive permissions.
+        # NOSONAR python:S5443
         data_dir = Path(tempfile.gettempdir()) / ".souschef" / "storage"
         data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # Containment validation prevents unsafe path usage.
+        # NOSONAR python:S5443
         return _ensure_within_base_path(data_dir, Path(tempfile.gettempdir()))
 
     def _get_full_path(self, storage_key: str) -> Path:

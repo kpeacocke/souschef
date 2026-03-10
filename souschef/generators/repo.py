@@ -185,7 +185,7 @@ host_key_checking = False
 retry_files_enabled = False
 gathering = smart
 fact_caching = jsonfile
-fact_caching_connection = /tmp/ansible_facts
+fact_caching_connection = /tmp/ansible_facts  # NOSONAR: S5443 generated config example
 fact_caching_timeout = 3600
 callbacks_enabled = profile_tasks, timer
 

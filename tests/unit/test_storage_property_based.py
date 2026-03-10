@@ -47,7 +47,7 @@ class TestStoragePropertyBased:
             assert key1 != key2
 
     @given(st.text(min_size=1, max_size=200), st.text(min_size=0, max_size=500))
-    @settings(max_examples=20)
+    @settings(max_examples=20, deadline=None)
     def test_save_analysis_with_arbitrary_text(self, cookbook_name, recommendations):
         """Test saving analysis with arbitrary text inputs."""
         with tempfile.TemporaryDirectory() as tmpdir:

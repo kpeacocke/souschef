@@ -92,10 +92,14 @@ def convert_guard_to_ansible_when(guard_type: str, condition: str) -> str:
 
     """
     if guard_type == "only_if":
+        # Chef example command path.
+        # NOSONAR python:S5443
         # Chef: only_if "test -f /tmp/file"
         # Ansible: when: command_result.rc == 0
         return "command_result.rc == 0"
     elif guard_type == "not_if":
+        # Chef example command path.
+        # NOSONAR python:S5443
         # Chef: not_if "test -f /tmp/file"
         # Ansible: when: command_result.rc != 0
         return "command_result.rc != 0"

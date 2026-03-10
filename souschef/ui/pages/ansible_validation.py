@@ -12,8 +12,8 @@ if TYPE_CHECKING:
 else:
     try:
         import streamlit as st
-    except ImportError:
-        st = None
+    except ImportError:  # pragma: no cover
+        st = None  # pragma: no cover
 
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

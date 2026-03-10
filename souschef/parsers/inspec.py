@@ -48,6 +48,8 @@ def parse_inspec_profile(path: str) -> str:
 
         trusted_bases = [
             _trusted_workspace_root(),
+            # Used as trusted base for containment validation only.
+            # NOSONAR python:S5443
             Path(tempfile.gettempdir()).resolve(),
         ]
 
@@ -242,6 +244,8 @@ def _parse_controls_from_file(profile_path: Path) -> list[dict[str, Any]]:
         # Try multiple trusted bases to find the correct containment context
         trusted_bases = [
             _trusted_workspace_root(),
+            # Used as trusted base for containment validation only.
+            # NOSONAR python:S5443
             Path(tempfile.gettempdir()).resolve(),
         ]
 

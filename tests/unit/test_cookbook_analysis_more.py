@@ -206,6 +206,28 @@ def test_display_cookbook_activity_breakdown_dict_and_object(mock_st):
 
 
 @patch("souschef.ui.pages.cookbook_analysis.st")
+def test_display_cookbook_activity_breakdown_without_pandas(mock_st):
+    from souschef.ui.pages import cookbook_analysis as ca
+
+    mock_st.columns.return_value = [_ctx(), _ctx()]
+
+    with patch.object(ca, "pd", None):
+        ca._display_cookbook_activity_breakdown(
+            [
+                {
+                    "activity_type": "Convert",
+                    "count": 1,
+                    "description": "desc",
+                    "manual_hours": 2.0,
+                    "ai_assisted_hours": 1.0,
+                }
+            ]
+        )
+
+    mock_st.warning.assert_called_once()
+
+
+@patch("souschef.ui.pages.cookbook_analysis.st")
 def test_convert_pipeline_smoke(mock_st, tmp_path):
     from souschef.ui.pages.cookbook_analysis import (
         _convert_and_download_playbooks,
@@ -3809,7 +3831,12 @@ def test_activity_breakdown_split_edge_branches(mock_st):
             "ai_assisted_testing_hours": 0,
         },
     ]
-    _display_cookbook_activity_breakdown(activities)
+
+    mock_pd = MagicMock()
+    mock_pd.DataFrame.return_value = MagicMock()
+    with patch("souschef.ui.pages.cookbook_analysis.pd", mock_pd):
+        _display_cookbook_activity_breakdown(activities)
+
     assert mock_st.dataframe.called
 
 
@@ -3987,3 +4014,50 @@ def test_handle_dashboard_upload_back_to_dashboard_branch(mock_st, tmp_path):
 
     assert mock_st.session_state.current_page == "Dashboard"
     assert mock_st.rerun.called
+
+
+def test_cookbook_analysis_pandas_import_error():
+    """Test that cookbook_analysis module handles missing pandas gracefully."""
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    # Store original pandas module if it exists
+    original_pandas = sys.modules.get("pandas")
+
+    try:
+        # Remove pandas from sys.modules
+        if "pandas" in sys.modules:
+            del sys.modules["pandas"]
+
+        # Mock pandas import to raise ImportError
+        with patch.dict("sys.modules", {"pandas": None}):
+            # Remove the cookbook_analysis module from cache to force reimport
+            if "souschef.ui.pages.cookbook_analysis" in sys.modules:
+                del sys.modules["souschef.ui.pages.cookbook_analysis"]
+
+            # Mock streamlit to prevent other import issues
+            mock_st = MagicMock()
+            with patch.dict("sys.modules", {"streamlit": mock_st}):
+                # Now import with builtins.__import__ patched to raise ImportError for pandas
+                import builtins
+
+                original_import = builtins.__import__
+
+                def mock_import(name, *args, **kwargs):
+                    if name == "pandas":
+                        raise ImportError("pandas not available")
+                    return original_import(name, *args, **kwargs)
+
+                with patch.object(builtins, "__import__", side_effect=mock_import):
+                    # This should trigger the except ImportError block in cookbook_analysis.py
+                    import souschef.ui.pages.cookbook_analysis as analysis_module
+
+                    # Verify that pd is set to None
+                    assert analysis_module.pd is None
+
+    finally:
+        # Restore original pandas module
+        if original_pandas is not None:
+            sys.modules["pandas"] = original_pandas
+        elif "pandas" in sys.modules:
+            del sys.modules["pandas"]

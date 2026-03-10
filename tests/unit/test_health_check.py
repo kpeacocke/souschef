@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
 import json
+import sys
 from unittest.mock import patch
 
 
@@ -68,3 +70,16 @@ def test_health_check_output_format_failure():
         assert result["status"] == "unhealthy"
         assert result["service"] == "souschef-ui"
         assert "error" in result
+
+
+def test_health_check_adds_app_path_to_sys_path_on_reload():
+    """Test import-time branch that inserts app path into sys.path."""
+    import souschef.ui.health_check as health_check
+
+    app_path = str(health_check.Path(health_check.__file__).parent.parent)
+    while app_path in sys.path:
+        sys.path.remove(app_path)
+
+    reloaded = importlib.reload(health_check)
+
+    assert app_path in reloaded.sys.path

@@ -985,6 +985,8 @@ def _get_safe_cookbook_directory(cookbook_path):
         # Sanitise the candidate path using shared helper
         candidate = _normalize_path(path_str)
 
+        # Tempdir base is used only for containment validation.
+        # NOSONAR python:S5443
         trusted_bases = [base_dir, Path(tempfile.gettempdir()).resolve()]
         for base in trusted_bases:
             try:
@@ -4249,6 +4251,10 @@ AI: {ai_hours:.1f}h
 
     with col2:
         st.markdown("### Details Table")
+        if pd is None:
+            st.warning("Pandas is required to display the activity details table.")
+            return
+
         table_data = []
         for activity in activities:
             # Handle both dict and object formats

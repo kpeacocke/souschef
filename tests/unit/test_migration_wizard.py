@@ -7,13 +7,24 @@ import pytest
 
 from souschef.migration_wizard import (
     _confirm_configuration,
+    _is_valid_cookbook_structure,
+    _prompt_ansible_version,
+    _prompt_chef_version,
     _prompt_cookbook_path,
+    _prompt_optimization_options,
     _prompt_output_directory,
+    _validate_cookbook_path,
     _yes_no_prompt,
     generate_migration_config,
     setup_wizard,
     validate_inputs,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run each test in an isolated directory so default output path is predictable."""
+    monkeypatch.chdir(tmp_path)
 
 
 class TestValidateInputs:
@@ -276,6 +287,62 @@ class TestWizardPrompts:
         result = _prompt_output_directory()
         assert "ansible_output" in result
 
+    def test_validate_cookbook_path_empty(self) -> None:
+        """Empty cookbook path should request retry."""
+        assert _validate_cookbook_path("") == "retry"
+
+    def test_validate_cookbook_path_not_directory(self, tmp_path: Path) -> None:
+        """File path should be rejected as cookbook directory."""
+        file_path = tmp_path / "not_a_dir"
+        file_path.write_text("x")
+        assert _validate_cookbook_path(str(file_path)) == "retry"
+
+    def test_validate_cookbook_path_invalid_structure_decline_continue(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Invalid structure with decline should return retry."""
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+        assert _validate_cookbook_path(str(cookbook)) == "retry"
+
+    def test_is_valid_cookbook_structure_false(self, tmp_path: Path) -> None:
+        """Structure checker should fail when metadata and recipes are missing."""
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        assert _is_valid_cookbook_structure(cookbook) is False
+
+    def test_prompt_chef_version_unusual_format(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Unusual Chef version format should still be accepted with warning."""
+        monkeypatch.setattr("builtins.input", lambda _prompt: "v14")
+        assert _prompt_chef_version() == "v14"
+
+    def test_prompt_ansible_version_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Empty ansible version input should use default."""
+        monkeypatch.setattr("builtins.input", lambda _prompt: "")
+        assert _prompt_ansible_version() == "2.12"
+
+    def test_prompt_optimization_options(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Optimization prompts should return expected boolean map."""
+        responses = iter(["y", "n", "y", "n"])
+        monkeypatch.setattr("builtins.input", lambda _prompt: next(responses))
+        options = _prompt_optimization_options()
+        assert options == {
+            "deduplicate_tasks": True,
+            "consolidate_loops": False,
+            "optimize_handlers": True,
+            "parallel_processing": False,
+        }
+
+    def test_yes_no_prompt_default_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Empty answer should honour default=False."""
+        monkeypatch.setattr("builtins.input", lambda _prompt: "")
+        assert _yes_no_prompt("Proceed? ", default=False) is False
+
     def test_yes_no_prompt_invalid_then_yes(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -326,6 +393,34 @@ class TestWizardPrompts:
 
         with pytest.raises(SystemExit):
             _prompt_cookbook_path()
+
+    def test_prompt_cookbook_path_retry_then_success(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Retry branch should loop and then return once a valid path is provided."""
+        cookbook = tmp_path / "cookbook"
+        cookbook.mkdir()
+        (cookbook / "metadata.rb").write_text("name 'test'")
+
+        responses = iter(["", str(cookbook)])
+        monkeypatch.setattr("builtins.input", lambda _prompt: next(responses))
+
+        result = _prompt_cookbook_path()
+        assert result == str(cookbook.resolve())
+
+    def test_prompt_output_directory_non_empty_decline_exits(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Non-empty output dir with decline should exit."""
+        out_dir = tmp_path / "ansible_output"
+        out_dir.mkdir()
+        (out_dir / "existing.txt").write_text("x")
+
+        responses = iter([str(out_dir), "n"])
+        monkeypatch.setattr("builtins.input", lambda _prompt: next(responses))
+
+        with pytest.raises(SystemExit):
+            _prompt_output_directory()
 
 
 class TestSetupWizard:

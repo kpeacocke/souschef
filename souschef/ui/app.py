@@ -3264,7 +3264,7 @@ def _parse_validation_metrics(validation_result: str) -> tuple[int, int, int, in
             or "[INFO]" in line_upper
         ):
             passed += 1
-        if "Total checks:" in line.lower():
+        if "total checks:" in line.lower():
             with contextlib.suppress(ValueError):
                 total_checks = int(line.split(":")[1].strip())
 

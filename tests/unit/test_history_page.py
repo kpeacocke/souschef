@@ -796,3 +796,50 @@ class TestDownloadFunctions:
             )
 
             mock_st.download_button.assert_called()
+
+
+def test_history_pandas_import_error():
+    """Test that history module handles missing pandas gracefully."""
+    import sys
+    from unittest.mock import patch
+
+    # Store original pandas module if it exists
+    original_pandas = sys.modules.get("pandas")
+
+    try:
+        # Remove pandas from sys.modules
+        if "pandas" in sys.modules:
+            del sys.modules["pandas"]
+
+        # Mock pandas import to raise ImportError
+        with patch.dict("sys.modules", {"pandas": None}):
+            # Remove the history module from cache to force reimport
+            if "souschef.ui.pages.history" in sys.modules:
+                del sys.modules["souschef.ui.pages.history"]
+
+            # Mock streamlit to prevent other import issues
+            mock_st = MagicMock()
+            with patch.dict("sys.modules", {"streamlit": mock_st}):
+                # Now import with builtins.__import__ patched to raise ImportError for pandas
+                import builtins
+
+                original_import = builtins.__import__
+
+                def mock_import(name, *args, **kwargs):
+                    if name == "pandas":
+                        raise ImportError("pandas not available")
+                    return original_import(name, *args, **kwargs)
+
+                with patch.object(builtins, "__import__", side_effect=mock_import):
+                    # This should trigger the except ImportError block in history.py
+                    import souschef.ui.pages.history as history_module
+
+                    # Verify that pd is set to None
+                    assert history_module.pd is None
+
+    finally:
+        # Restore original pandas module
+        if original_pandas is not None:
+            sys.modules["pandas"] = original_pandas
+        elif "pandas" in sys.modules:
+            del sys.modules["pandas"]

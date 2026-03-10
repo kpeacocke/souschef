@@ -322,6 +322,13 @@ class TestExportConfiguration:
 class TestActivityVisualisation:
     """Test activity visualisation section."""
 
+    def test_show_visualisation_returns_when_streamlit_unavailable(self):
+        """Function should return early when module-level streamlit handle is None."""
+        import souschef.ui.pages.migration_config as mc
+
+        with patch.object(mc, "st", None):
+            mc._show_activity_visualisation()
+
     @patch("souschef.ui.pages.migration_config.st")
     def test_show_visualisation_form(self, mock_st):
         """Test activity visualisation form display."""

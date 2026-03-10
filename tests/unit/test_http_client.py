@@ -66,6 +66,11 @@ class TestHTTPError:
         assert len(error.response_text) == 1000
         assert "x" * 500 in error_str
 
+    def test_http_error_default_suggestion_branch(self):
+        """Test fallback suggestion path for unknown status codes."""
+        error = HTTPError(418, "Teapot")
+        assert "documentation" in str(error)
+
 
 @pytest.mark.skipif(
     not hasattr(pytest, "importorskip"),
@@ -160,6 +165,27 @@ class TestHTTPClient:
         client = HTTPClient(base_url="https://api.example.com")
 
         assert client.base_url == "https://api.example.com"
+
+    def test_invalid_timeout_rejected(self):
+        """Test timeout bounds validation."""
+        with pytest.raises(SousChefError) as exc_info:
+            HTTPClient(base_url="https://api.example.com", timeout=0)
+
+        assert "Invalid timeout value" in str(exc_info.value)
+
+    def test_invalid_max_retries_rejected(self):
+        """Test max_retries bounds validation."""
+        with pytest.raises(SousChefError) as exc_info:
+            HTTPClient(base_url="https://api.example.com", max_retries=11)
+
+        assert "Invalid max_retries value" in str(exc_info.value)
+
+    def test_invalid_backoff_factor_rejected(self):
+        """Test backoff_factor bounds validation."""
+        with pytest.raises(SousChefError) as exc_info:
+            HTTPClient(base_url="https://api.example.com", backoff_factor=0.01)
+
+        assert "Invalid backoff_factor value" in str(exc_info.value)
 
     def test_post_success(self, mock_session):
         """Test successful POST request."""
@@ -292,6 +318,70 @@ class TestHTTPClient:
             client.get("/resource")
 
         assert exc_info.value.status_code == 500
+
+    def test_post_non_object_json_raises(self, mock_session):
+        """Test POST rejects non-dict JSON responses."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ["not", "an", "object"]
+        mock_session.post.return_value = mock_response
+
+        client = HTTPClient(base_url="https://api.example.com")
+
+        with pytest.raises(SousChefError) as exc_info:
+            client.post("/endpoint")
+
+        assert "Expected JSON object response" in str(exc_info.value)
+
+    def test_get_non_object_json_raises(self, mock_session):
+        """Test GET rejects non-dict JSON responses."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ["not", "an", "object"]
+        mock_session.get.return_value = mock_response
+
+        client = HTTPClient(base_url="https://api.example.com")
+
+        with pytest.raises(SousChefError) as exc_info:
+            client.get("/endpoint")
+
+        assert "Expected JSON object response" in str(exc_info.value)
+
+    def test_handle_request_error_without_requests_exceptions(self):
+        """Test fallback path when requests exceptions module is unavailable."""
+        client = HTTPClient(base_url="https://api.example.com")
+
+        with (
+            patch("souschef.core.http_client.requests_exceptions", None),
+            pytest.raises(SousChefError) as exc_info,
+        ):
+            client._handle_request_error(RuntimeError("boom"), "https://api", 30)
+
+        assert "Request failed" in str(exc_info.value)
+
+    def test_handle_http_error_without_response(self):
+        """Test HTTPError handling when no response object is available."""
+        import requests
+
+        client = HTTPClient(base_url="https://api.example.com")
+        err = requests.exceptions.HTTPError("bad status")
+
+        with pytest.raises(SousChefError) as exc_info:
+            client._handle_request_error(err, "https://api", 30, response=None)
+
+        assert "HTTP request failed" in str(exc_info.value)
+
+    def test_handle_generic_request_exception(self):
+        """Test generic RequestException branch."""
+        import requests
+
+        client = HTTPClient(base_url="https://api.example.com")
+        err = requests.exceptions.RequestException("generic")
+
+        with pytest.raises(SousChefError) as exc_info:
+            client._handle_request_error(err, "https://api", 30)
+
+        assert "Request failed" in str(exc_info.value)
 
     def test_context_manager(self, mock_session):
         """Test using client as context manager."""

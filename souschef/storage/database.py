@@ -202,11 +202,15 @@ class StorageManager:
         import tempfile
 
         # Use a data directory in temp for persistence across sessions
+        # Private temp subdirectory with restrictive permissions.
+        # NOSONAR python:S5443
         data_dir = Path(tempfile.gettempdir()) / ".souschef" / "data"
         data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
         db_path = data_dir / "souschef.db"
         # Ensure the path is within the allowed base directory
+        # Containment validation prevents unsafe path usage.
+        # NOSONAR python:S5443
         validated_path = _ensure_within_base_path(db_path, Path(tempfile.gettempdir()))
         return validated_path
 

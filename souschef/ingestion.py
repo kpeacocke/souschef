@@ -165,6 +165,8 @@ def _resolve_cache_root(cache_dir: str | None) -> Path:
     if cache_dir:
         cache_root = Path(cache_dir)
     else:
+        # Private subdirectory with restrictive permissions.
+        # NOSONAR python:S5443
         cache_root = Path(tempfile.gettempdir()) / ".souschef" / "cookbook-cache"
     cache_root.mkdir(parents=True, exist_ok=True, mode=0o700)
     return cache_root
