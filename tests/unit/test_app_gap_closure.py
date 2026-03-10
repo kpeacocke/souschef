@@ -438,6 +438,7 @@ def test_display_validation_results_and_impact_medium_low_and_detailed_calls():
 
 def test_app_sys_path_insertion_when_not_present():
     """Test that app.py adds parent directory to sys.path when not already present."""
+    import importlib
     import sys
     from pathlib import Path
 
@@ -445,27 +446,30 @@ def test_app_sys_path_insertion_when_not_present():
     app_module_path = Path(__file__).parent.parent.parent / "souschef" / "ui" / "app.py"
     expected_path = str(app_module_path.parent.parent)
 
-    # Store original sys.path
+    # Store original sys.path and the cached module (if any)
     original_path = sys.path.copy()
+    original_module = sys.modules.pop("souschef.ui.app", None)
 
     try:
-        # Remove the expected path if it exists
+        # Ensure expected_path is NOT in sys.path so the insertion branch executes
         sys.path = [p for p in sys.path if p != expected_path]
 
-        # Mock environment to prevent main() execution
+        # Mock environment to prevent main() execution during the reimport
         with (
             patch.dict(os.environ, {"STREAMLIT_SERVER_PORT": "8501"}),
             patch.dict("sys.modules", {"streamlit": MagicMock()}),
         ):
-            # Force reimport by removing from sys.modules if present
-            if "souschef.ui.app" in sys.modules:
-                del sys.modules["souschef.ui.app"]
+            # Import the module fresh - re-executes the top-level sys.path.insert code
+            importlib.import_module("souschef.ui.app")
 
-                # Import the module - this should trigger the sys.path.insert
-
-                # Verify the path was added
-                assert expected_path in sys.path
+        # Verify the path was inserted by app.py's top-level code
+        assert expected_path in sys.path
 
     finally:
         # Restore original sys.path
         sys.path = original_path
+        # Restore or remove the module cache entry
+        if original_module is not None:
+            sys.modules["souschef.ui.app"] = original_module
+        else:
+            sys.modules.pop("souschef.ui.app", None)
