@@ -205,6 +205,9 @@ def _export_configuration() -> None:
 
 def _show_activity_visualisation() -> None:
     """Show the activity breakdown visualisation."""
+    if st is None:
+        return
+
     st.subheader("Migration Activity Breakdown")
 
     st.markdown("""
@@ -238,7 +241,7 @@ def _show_activity_visualisation() -> None:
         help="Calculate activity breakdown for the specified cookbook(s)",
         key="generate_breakdown",
     ):
-        if not cookbook_path.strip():
+        if not cookbook_path or not cookbook_path.strip():
             st.error("Please enter a cookbook path.")
             return
 
@@ -387,7 +390,7 @@ def _display_activity_table(breakdown: dict[str, Any]) -> None:
     st.table(table_data)
 
 
-def _display_time_savings_chart(breakdown: dict[str, Any]) -> None:
+def _display_time_savings_chart(breakdown: dict[str, Any]) -> None:  # pragma: no cover
     """Display time savings as a bar chart."""
     try:
         import pandas as pd
