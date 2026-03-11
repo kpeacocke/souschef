@@ -707,7 +707,7 @@ def test_save_analysis_to_db_success(mock_st, tmp_path):
             return_value=storage,
         ),
         patch(
-            "souschef.storage.database.calculate_file_fingerprint",
+            "souschef.ui.pages.cookbook_analysis._calculate_file_fingerprint",
             return_value="fp",
         ),
         patch(

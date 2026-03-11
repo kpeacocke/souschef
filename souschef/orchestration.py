@@ -33,7 +33,10 @@ from souschef.parsers.metadata import parse_cookbook_metadata
 
 # Layer 2: Storage (allowed for orchestration layer)
 from souschef.storage import get_blob_storage, get_storage_manager
-from souschef.storage.database import ConversionResult  # Re-export for UI layer
+from souschef.storage.database import (
+    ConversionResult,  # Re-export for UI layer
+    calculate_file_fingerprint,
+)
 
 # ============================================================================
 # Cookbook Migration Orchestration
@@ -72,6 +75,44 @@ def orchestrate_playbook_generation(
         )
     return generate_playbook_from_recipe(
         recipe_path=recipe_path,
+        cookbook_path=cookbook_path,
+    )
+
+
+def orchestrate_generate_playbook_from_recipe(
+    recipe_path: str,
+    cookbook_path: str | None = None,
+) -> str:
+    """Orchestrate deterministic playbook generation from a recipe path."""
+    return generate_playbook_from_recipe(
+        recipe_path=recipe_path,
+        cookbook_path=cookbook_path,
+    )
+
+
+def orchestrate_generate_playbook_from_recipe_with_ai(
+    recipe_path: str,
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str = "",
+    base_url: str = "",
+    project_recommendations: str | None = None,
+    cookbook_path: str | None = None,
+) -> str:
+    """Orchestrate AI-assisted playbook generation from a recipe path."""
+    return generate_playbook_from_recipe_with_ai(
+        recipe_path=recipe_path,
+        ai_provider=ai_provider,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        project_id=project_id,
+        base_url=base_url,
+        project_recommendations=project_recommendations,
         cookbook_path=cookbook_path,
     )
 
@@ -233,6 +274,11 @@ def orchestrate_get_blob_storage() -> Any:
     return get_blob_storage()
 
 
+def orchestrate_calculate_file_fingerprint(file_path: Path) -> str:
+    """Orchestrate file fingerprint calculation for UI/storage workflows."""
+    return calculate_file_fingerprint(file_path)
+
+
 # ============================================================================
 # Re-exports for backward compatibility with existing tests
 # ============================================================================
@@ -241,6 +287,8 @@ def orchestrate_get_blob_storage() -> Any:
 # may import these orchestration functions from this module.
 __all__ = [
     "orchestrate_playbook_generation",
+    "orchestrate_generate_playbook_from_recipe",
+    "orchestrate_generate_playbook_from_recipe_with_ai",
     "orchestrate_template_conversion",
     "orchestrate_repository_generation",
     "orchestrate_conversion_analysis",
@@ -248,5 +296,6 @@ __all__ = [
     "orchestrate_requirements_parsing",
     "orchestrate_get_storage_manager",
     "orchestrate_get_blob_storage",
+    "orchestrate_calculate_file_fingerprint",
     "ConversionResult",  # Re-exported type for UI layer
 ]

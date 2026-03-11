@@ -37,15 +37,6 @@ from souschef.assessment import (
     analyse_cookbook_dependencies,
     assess_single_cookbook_with_ai,
 )
-
-# Import converter functions directly for recipe conversion
-from souschef.converters.playbook import (
-    generate_playbook_from_recipe,
-    generate_playbook_from_recipe_with_ai,
-)
-from souschef.converters.template import (
-    convert_cookbook_templates as _convert_templates_impl,
-)
 from souschef.core.constants import METADATA_FILENAME
 from souschef.core.metrics import (
     EffortMetrics,
@@ -59,10 +50,19 @@ from souschef.core.path_utils import (
 
 # Import from orchestration layer (Layer 6) instead of domain logic (Layer 3)
 from souschef.orchestration import (
+    orchestrate_calculate_file_fingerprint as _calculate_file_fingerprint,
+)
+from souschef.orchestration import (
     orchestrate_conversion_analysis as analyse_conversion_output,
 )
 from souschef.orchestration import (
     orchestrate_cookbook_metadata_parsing as parse_cookbook_metadata,
+)
+from souschef.orchestration import (
+    orchestrate_generate_playbook_from_recipe as generate_playbook_from_recipe,
+)
+from souschef.orchestration import (
+    orchestrate_generate_playbook_from_recipe_with_ai,
 )
 from souschef.orchestration import (
     orchestrate_get_blob_storage as get_blob_storage,
@@ -72,6 +72,9 @@ from souschef.orchestration import (
 )
 from souschef.orchestration import (
     orchestrate_repository_generation as generate_ansible_repository,
+)
+from souschef.orchestration import (
+    orchestrate_template_conversion as _convert_templates_impl,
 )
 from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
 
@@ -85,6 +88,10 @@ from souschef.ui.pages.cookbook_analysis_security import (
 from souschef.ui.pages.cookbook_analysis_utilities import (
     _get_secure_ai_config_path,
     _sanitize_filename,
+)
+
+generate_playbook_from_recipe_with_ai = (
+    orchestrate_generate_playbook_from_recipe_with_ai
 )
 
 # AI Settings
@@ -325,8 +332,6 @@ def _save_analysis_to_db(
 
     """
     try:
-        from souschef.storage.database import calculate_file_fingerprint
-
         storage_manager = get_storage_manager()
 
         # Calculate content fingerprint for deduplication
@@ -334,7 +339,7 @@ def _save_analysis_to_db(
         if hasattr(st.session_state, "archive_path") and st.session_state.archive_path:
             archive_path = st.session_state.archive_path
             if archive_path.exists():  # NOSONAR
-                content_fingerprint = calculate_file_fingerprint(archive_path)
+                content_fingerprint = _calculate_file_fingerprint(archive_path)
 
         # Upload cookbook archive if available in session state
         cookbook_blob_key = None
@@ -512,10 +517,8 @@ def _upload_cookbook_archive(archive_path: Path, cookbook_name: str) -> str | No
 
     """
     try:
-        from souschef.storage.database import calculate_file_fingerprint
-
         # Calculate content fingerprint for deduplication
-        content_fingerprint = calculate_file_fingerprint(archive_path)
+        content_fingerprint = _calculate_file_fingerprint(archive_path)
 
         # Check if this content was already uploaded
         storage_manager = get_storage_manager()
