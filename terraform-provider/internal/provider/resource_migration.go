@@ -133,6 +133,38 @@ func (r *migrationResource) runConversion(
 	return content, "", nil
 }
 
+func addConversionError(
+	addError func(string, string),
+	conversionTitle, conversionPrefix, readPrefix string,
+	err error,
+	cmdOut string,
+) {
+	if cmdOut != "" {
+		addError(
+			conversionTitle,
+			fmt.Sprintf("%s: %s\n%s", conversionPrefix, err, cmdOut),
+		)
+		return
+	}
+
+	addError(
+		errorReadingPlaybook,
+		fmt.Sprintf("%s: %s", readPrefix, err),
+	)
+}
+
+func populateMigrationPlanState(
+	plan *migrationResourceModel,
+	cookbookPath, recipeName string,
+	content []byte,
+) {
+	cookbookName := filepath.Base(cookbookPath)
+	plan.ID = types.StringValue(fmt.Sprintf("%s-%s", cookbookName, recipeName))
+	plan.CookbookName = types.StringValue(cookbookName)
+	plan.RecipeName = types.StringValue(recipeName)
+	plan.PlaybookContent = types.StringValue(string(content))
+}
+
 // Create creates the resource and sets the initial Terraform state.
 func (r *migrationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan migrationResourceModel
@@ -155,28 +187,18 @@ func (r *migrationResource) Create(ctx context.Context, req resource.CreateReque
 	// Call souschef CLI to convert recipe and read the resulting playbook
 	content, cmdOut, err := r.runConversion(ctx, cookbookPath, recipeName, outputPath)
 	if err != nil {
-		if cmdOut != "" {
-			resp.Diagnostics.AddError(
-				"Error converting recipe",
-				fmt.Sprintf("Could not convert recipe: %s\n%s", err, cmdOut),
-			)
-		} else {
-			resp.Diagnostics.AddError(
-				errorReadingPlaybook,
-				fmt.Sprintf("Could not read generated playbook: %s", err),
-			)
-		}
+		addConversionError(
+			resp.Diagnostics.AddError,
+			"Error converting recipe",
+			"Could not convert recipe",
+			"Could not read generated playbook",
+			err,
+			cmdOut,
+		)
 		return
 	}
 
-	// Extract cookbook name from path
-	cookbookName := filepath.Base(cookbookPath)
-
-	// Set state
-	plan.ID = types.StringValue(fmt.Sprintf("%s-%s", cookbookName, recipeName))
-	plan.CookbookName = types.StringValue(cookbookName)
-	plan.RecipeName = types.StringValue(recipeName)
-	plan.PlaybookContent = types.StringValue(string(content))
+	populateMigrationPlanState(&plan, cookbookPath, recipeName, content)
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -234,25 +256,18 @@ func (r *migrationResource) Update(ctx context.Context, req resource.UpdateReque
 	// Re-run conversion and read the resulting playbook
 	content, cmdOut, err := r.runConversion(ctx, cookbookPath, recipeName, outputPath)
 	if err != nil {
-		if cmdOut != "" {
-			resp.Diagnostics.AddError(
-				"Error updating migration",
-				fmt.Sprintf("Could not re-convert recipe: %s\n%s", err, cmdOut),
-			)
-		} else {
-			resp.Diagnostics.AddError(
-				errorReadingPlaybook,
-				fmt.Sprintf("Could not read updated playbook: %s", err),
-			)
-		}
+		addConversionError(
+			resp.Diagnostics.AddError,
+			"Error updating migration",
+			"Could not re-convert recipe",
+			"Could not read updated playbook",
+			err,
+			cmdOut,
+		)
 		return
 	}
 
-	// Keep computed attributes known after update.
-	cookbookName := filepath.Base(cookbookPath)
-	plan.ID = types.StringValue(fmt.Sprintf("%s-%s", cookbookName, recipeName))
-	plan.CookbookName = types.StringValue(cookbookName)
-	plan.PlaybookContent = types.StringValue(string(content))
+	populateMigrationPlanState(&plan, cookbookPath, recipeName, content)
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
