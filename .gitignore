@@ -33,6 +33,11 @@ coverage.xml
 coverage.json
 htmlcov/
 
+# Go coverage artifacts
+*.cover
+*.out
+*.lcov
+
 # Mutation testing
 .mutmut-cache
 mutants/
@@ -126,4 +131,3 @@ MagicMock/
 
 # Docker Compose persistent storage
 data/
-*.cover
