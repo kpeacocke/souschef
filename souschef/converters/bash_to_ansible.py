@@ -426,7 +426,8 @@ def _download_tasks(downloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "name": f"Download {dest_name}",
                 "ansible.builtin.get_url": {
                     "url": entry["url"],
-                    "dest": f"/tmp/{dest_name}",  # nosec B108 – TODO: set explicit dest
+                    "dest": "{{ download_dest_dir | default('/opt/downloads') }}"
+                     f"/{dest_name}",
                     "mode": "0644",
                 },
                 "_metadata": {
@@ -624,8 +625,12 @@ def _archive_tasks(archives: list[dict[str, Any]]) -> list[dict[str, Any]]:
     tasks = []
     for entry in archives:
         src = entry.get("source", "UNKNOWN_ARCHIVE")
-        # Derive destination directory from source path
-        dest = str(Path(src).parent) if "/" in src else "/tmp"  # nosec B108 – TODO: set explicit dest
+        # Derive destination directory from source path; fall back to a
+        # configurable variable so users can set an appropriate location.
+        if "/" in src:
+            dest = str(Path(src).parent)
+        else:
+            dest = "{{ archive_dest_dir | default('/opt/archives') }}"
         task: dict[str, Any] = {
             "name": f"Extract archive {src}",
             "ansible.builtin.unarchive": {
