@@ -81,7 +81,7 @@ def orchestrate_playbook_generation(
 
 def orchestrate_generate_playbook_from_recipe(
     recipe_path: str,
-    cookbook_path: str | None = None,
+    cookbook_path: str = "",
 ) -> str:
     """Orchestrate deterministic playbook generation from a recipe path."""
     return generate_playbook_from_recipe(
@@ -99,8 +99,8 @@ def orchestrate_generate_playbook_from_recipe_with_ai(
     max_tokens: int,
     project_id: str = "",
     base_url: str = "",
-    project_recommendations: str | None = None,
-    cookbook_path: str | None = None,
+    project_recommendations: dict[str, Any] | None = None,
+    cookbook_path: str = "",
 ) -> str:
     """Orchestrate AI-assisted playbook generation from a recipe path."""
     return generate_playbook_from_recipe_with_ai(
