@@ -33,6 +33,23 @@ from souschef.assessment import (
 from souschef.assessment import (
     validate_conversion as _validate_conversion,
 )
+from souschef.converters.bash_to_ansible import (  # noqa: F401, codeql[py/unused-import]
+    _build_idempotency_report,
+    _build_tasks,
+    _collect_warnings,
+    _download_tasks,
+    _file_write_tasks,
+    _package_tasks,
+    _render_playbook,
+    _render_task,
+    _service_tasks,
+    _shell_fallback_tasks,
+    _shell_task,
+    _yaml_str,
+)
+from souschef.converters.bash_to_ansible import (
+    convert_bash_to_ansible as _convert_bash_to_ansible,
+)
 from souschef.converters.habitat import (  # noqa: F401, codeql[py/unused-import]
     _add_service_build,
     _add_service_dependencies,
@@ -218,6 +235,24 @@ from souschef.parsers.attributes import (  # noqa: F401, codeql[py/unused-import
 from souschef.parsers.attributes import (
     parse_attributes as _parse_attributes,
 )
+from souschef.parsers.bash import (  # noqa: F401, codeql[py/unused-import]
+    _extract_downloads,
+    _extract_file_writes,
+    _extract_idempotency_risks,
+    _extract_packages,
+    _extract_services,
+    _format_downloads_section,
+    _format_file_writes_section,
+    _format_packages_section,
+    _format_parse_result,
+    _format_risks_and_fallbacks_section,
+    _format_services_section,
+    _identify_shell_fallbacks,
+    _line_number,
+    _parse_bash_content,
+    _parse_package_names,
+)
+from souschef.parsers.bash import parse_bash_script as _parse_bash_script
 from souschef.parsers.habitat import (  # noqa: F401, codeql[py/unused-import]
     _extract_plan_array,
     _extract_plan_exports,
@@ -5551,6 +5586,58 @@ def generate_handler_routing_config(
 
 
 # ==================== End Ansible Upgrade Tools ====================
+
+
+# ==================== V2.2 Bash Script Migration Tools ====================
+
+
+@mcp.tool()
+def parse_bash_script(script_path: str) -> str:
+    """
+    Parse a Bash script and extract provisioning patterns.
+
+    Detects common provisioning operations including package installs
+    (apt, yum, dnf, zypper, apk), service control (systemctl, service),
+    file writes (heredocs, redirects), and downloads (curl, wget).
+    Emits results with confidence scores; low-confidence sections are
+    flagged as shell-fallbacks with idempotency warnings.
+
+    Args:
+        script_path: Path to the Bash script file.
+
+    Returns:
+        Formatted string describing detected patterns, warnings, and
+        idempotency hints.
+
+    """
+    return _parse_bash_script(script_path)
+
+
+@mcp.tool()
+def convert_bash_to_ansible(script_path: str) -> str:
+    """
+    Convert a Bash script to an Ansible playbook.
+
+    Reads the Bash script at *script_path*, maps common provisioning
+    patterns to the most appropriate Ansible modules
+    (``ansible.builtin.package``, ``ansible.builtin.service``,
+    ``ansible.builtin.copy``, ``ansible.builtin.get_url``), and falls
+    back to ``ansible.builtin.shell`` with idempotency hints
+    (``creates``, ``changed_when``, ``failed_when``) for sections that
+    cannot be mapped confidently.
+
+    Args:
+        script_path: Path to the Bash script file.
+
+    Returns:
+        JSON string with ``playbook_yaml``, ``tasks``, ``warnings``,
+        and ``idempotency_report`` keys.
+
+    """
+    return _convert_bash_to_ansible(script_path)
+
+
+# ==================== End V2.2 Bash Script Migration Tools ====================
 
 
 def main() -> None:

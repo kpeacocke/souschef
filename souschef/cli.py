@@ -43,6 +43,7 @@ from souschef.profiling import (
     profile_function,
 )
 from souschef.server import (
+    convert_bash_to_ansible,
     convert_inspec_to_test,
     convert_resource_to_task,
     generate_github_workflow_from_chef,
@@ -52,6 +53,7 @@ from souschef.server import (
     list_cookbook_structure,
     list_directory,
     parse_attributes,
+    parse_bash_script,
     parse_custom_resource,
     parse_inspec_profile,
     parse_recipe,
@@ -2463,6 +2465,96 @@ def ansible_detect_python(environment_path: str | None) -> None:
 
     except Exception as e:
         click.echo(f"Error detecting Python version: {e}", err=True)
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Bash migration commands
+# ---------------------------------------------------------------------------
+
+
+@cli.group()
+def bash() -> None:
+    """Bash script migration commands."""
+
+
+@bash.command("parse")
+@click.argument("script_path")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output file path (default: stdout).",
+)
+def bash_parse(script_path: str, output: str | None) -> None:
+    """
+    Parse a Bash script and display detected provisioning patterns.
+
+    SCRIPT_PATH is the path to the Bash script to analyse.
+    """
+    try:
+        result = parse_bash_script(script_path)
+        _safe_write_file(output, result)
+        if output is None:
+            click.echo(result)
+    except Exception as e:  # noqa: BLE001
+        click.echo(f"Error parsing Bash script: {e}", err=True)
+        sys.exit(1)
+
+
+@bash.command("convert")
+@click.argument("script_path")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output file path for the generated playbook YAML (default: stdout).",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["yaml", "json"]),
+    default="yaml",
+    show_default=True,
+    help=(
+        "Output format: 'yaml' writes the playbook YAML,"
+        " 'json' writes the full response."
+    ),
+)
+def bash_convert(
+    script_path: str,
+    output: str | None,
+    output_format: str,
+) -> None:
+    """
+    Convert a Bash script to an Ansible playbook.
+
+    SCRIPT_PATH is the path to the Bash script to convert.
+    """
+    import json as _json
+
+    try:
+        raw = convert_bash_to_ansible(script_path)
+        data = _json.loads(raw)
+
+        if data.get("status") == "error":
+            click.echo(f"Error: {data.get('error')}", err=True)
+            sys.exit(1)
+
+        content = data.get("playbook_yaml", "") if output_format == "yaml" else raw
+
+        _safe_write_file(output, content)
+        if output is None:
+            click.echo(content)
+
+        # Always print warnings to stderr
+        warnings = data.get("warnings", [])
+        if warnings:
+            click.echo("\nWarnings:", err=True)
+            for w in warnings:
+                click.echo(f"  - {w}", err=True)
+    except Exception as e:  # noqa: BLE001
+        click.echo(f"Error converting Bash script: {e}", err=True)
         sys.exit(1)
 
 

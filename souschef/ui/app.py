@@ -26,6 +26,7 @@ from souschef.ui.pages.ai_settings import show_ai_settings_page
 from souschef.ui.pages.ansible_assessment import show_ansible_assessment_page
 from souschef.ui.pages.ansible_planning import show_ansible_planning_page
 from souschef.ui.pages.ansible_validation import show_ansible_validation_page
+from souschef.ui.pages.bash_migration import show_bash_migration_page
 from souschef.ui.pages.chef_server_settings import show_chef_server_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
@@ -43,12 +44,14 @@ NAV_VALIDATION_REPORTS = "Validation Reports"
 NAV_AI_SETTINGS = "AI Settings"
 NAV_CHEF_SERVER_SETTINGS = "Chef Server Settings"
 NAV_COOKBOOK_ANALYSIS = "Migrate Cookbook"
+NAV_BASH_MIGRATION = "Bash Migration"
 NAV_HISTORY = "History"
 NAV_ANSIBLE_ASSESSMENT = "Ansible Assessment"
 NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
 NAV_ANSIBLE_VALIDATION = "Collection Validation"
 CHEF_FEATURES = {
     NAV_COOKBOOK_ANALYSIS,
+    NAV_BASH_MIGRATION,
     NAV_MIGRATION_PLANNING,
     NAV_MIGRATION_CONFIG,
     NAV_DEPENDENCY_MAPPING,
@@ -159,6 +162,7 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
     """Render navigation buttons for a given set of features."""
     all_nav_buttons = [
         ("Migrate Cookbook", NAV_COOKBOOK_ANALYSIS),
+        ("Bash Migration", NAV_BASH_MIGRATION),
         ("Migration Planning", NAV_MIGRATION_PLANNING),
         ("Migration Config", NAV_MIGRATION_CONFIG),
         ("Dependency Mapping", NAV_DEPENDENCY_MAPPING),
@@ -225,6 +229,7 @@ def _route_to_page(page: str) -> None:
     page_routes = {
         "Dashboard": show_dashboard,
         NAV_COOKBOOK_ANALYSIS: show_cookbook_analysis_page,
+        NAV_BASH_MIGRATION: show_bash_migration_page,
         NAV_MIGRATION_PLANNING: show_migration_planning,
         NAV_MIGRATION_CONFIG: show_migration_config_page,
         NAV_DEPENDENCY_MAPPING: show_dependency_mapping,
