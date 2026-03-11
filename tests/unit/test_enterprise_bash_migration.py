@@ -739,7 +739,7 @@ def test_build_quality_score_grades(
         for i in range(total)
     ]
     sensitive = [
-        {"type": "password", "raw": "<r>", "line": 1, "suggestion": ""}
+        {"type": "password", "raw": "<redacted>", "line": 1, "suggestion": ""}
     ] * penalty
     ir: dict = {"sensitive_data": sensitive}
     qs = _build_quality_score(ir, tasks)
