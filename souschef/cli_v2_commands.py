@@ -11,6 +11,7 @@ from typing import Any
 
 import click
 
+from souschef.cli_utils import _resolve_output_path as _shared_resolve_output_path
 from souschef.cli_utils import _safe_write_file
 from souschef.migration_v2 import (
     ChefServerOptions,
@@ -89,6 +90,11 @@ def _validate_user_path(path_input: str | None) -> Path:
         return validated_path
     except OSError as e:
         raise ValueError(f"Invalid path: {e}") from e
+
+
+def _resolve_output_path(output: str | None, default_path: Path) -> Path:
+    """Backward-compatible wrapper for shared CLI output path resolution."""
+    return _shared_resolve_output_path(output, default_path)
 
 
 def _output_result(result: str, output_format: str) -> None:
