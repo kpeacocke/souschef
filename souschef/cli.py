@@ -2559,9 +2559,7 @@ def powershell_convert(
 
     if output:
         try:
-            import json as _json
-
-            result = _json.loads(result_json)
+            result = json.loads(result_json)
             playbook_yaml = result.get("playbook_yaml", "")
             if playbook_yaml:
                 workspace_root = _get_workspace_root()
@@ -2581,8 +2579,14 @@ def powershell_convert(
                 if warnings:
                     click.echo(f"Warnings: {len(warnings)}")
                 return
+        except json.JSONDecodeError as e:
+            click.echo(f"Error parsing conversion result: {e}", err=True)
+            sys.exit(1)
+        except (ValueError, OSError) as e:
+            click.echo(f"Error writing output file '{output}': {e}", err=True)
+            sys.exit(1)
         except Exception as e:
-            click.echo(f"Error writing output file: {e}", err=True)
+            click.echo(f"Unexpected error during output: {e}", err=True)
             sys.exit(1)
 
     _output_result(result_json, output_format)

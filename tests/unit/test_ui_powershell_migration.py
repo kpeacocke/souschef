@@ -405,7 +405,7 @@ class TestRenderActionsTable:
         ]
         _render_actions_table(actions)
         # Should include elevation note in the expander label
-        call_args = mock_st.expander.call_args[0][0]
+        call_args = mock_st.expander.call_args.args[0]
         assert "elevation" in call_args
 
 
