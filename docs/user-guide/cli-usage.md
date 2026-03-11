@@ -1075,6 +1075,320 @@ Enable shell completion for faster command entry:
     eval (env _SOUSCHEF_CLI_COMPLETE=fish_source souschef-cli)
     ```
 
+```
+
+---
+
+## PowerShell Migration Commands
+
+Convert PowerShell provisioning scripts to Windows Ansible automation using `ansible.windows`, `community.windows`, and `chocolatey.chocolatey` collections.
+
+### powershell-parse
+
+Parse a PowerShell provisioning script and extract structured actions.
+
+**Syntax:**
+```bash
+souschef-cli powershell-parse PATH [--format FORMAT]
+```
+
+**Options:**
+- `PATH` (required): Path to the PowerShell script (`.ps1` file)
+- `--format`: Output format — `json` (default) or `text`
+
+**Example:**
+
+```bash
+souschef-cli powershell-parse scripts/setup.ps1
+```
+
+**Output Format (JSON):**
+
+```json
+{
+  "source": "/absolute/path/to/setup.ps1",
+  "actions": [
+    {
+      "action_type": "windows_feature_install",
+      "feature": "Web-Server",
+      "include_management_tools": true,
+      "confidence": "high",
+      "lineno": 3,
+      "requires_elevation": true
+    }
+  ],
+  "warnings": [],
+  "metrics": {
+    "windows_feature_install": 1,
+    "registry_set": 2
+  }
+}
+```
+
+---
+
+### powershell-convert
+
+Convert a PowerShell provisioning script to an Ansible playbook.
+
+**Syntax:**
+```bash
+souschef-cli powershell-convert PATH [--playbook-name NAME] [--hosts PATTERN] [--output FILE] [--format FORMAT]
+```
+
+**Options:**
+- `PATH` (required): Path to the PowerShell script (`.ps1` file)
+- `--playbook-name`: Name for the generated Ansible play (default: `powershell_migration`)
+- `--hosts`: Ansible inventory group or host pattern (default: `windows`)
+- `--output`, `-o`: Write the generated playbook YAML to this file path
+- `--format`: Output format for the full result — `json` (default) or `text`
+
+**Examples:**
+
+=== "Basic conversion"
+    ```bash
+    souschef-cli powershell-convert scripts/setup.ps1
+    ```
+
+=== "Save to file"
+    ```bash
+    souschef-cli powershell-convert scripts/setup.ps1 \
+        --playbook-name iis_setup \
+        --hosts windows_servers \
+        --output playbook.yml
+    ```
+
+**Output (saved to file):**
+
+```
+Playbook written to: playbook.yml
+Tasks generated: 12 (win_shell fallbacks: 2)
+Warnings: 2
+```
+
+---
+
+### powershell-inventory
+
+Generate a WinRM-ready Ansible inventory for Windows managed nodes.
+
+**Syntax:**
+```bash
+souschef-cli powershell-inventory [--hosts HOSTS] [--winrm-port PORT] [--no-ssl] [--output FILE]
+```
+
+**Options:**
+- `--hosts`: Comma-separated Windows host names or IPs (default: placeholder)
+- `--winrm-port`: WinRM port (default: `5986` for HTTPS)
+- `--no-ssl`: Use HTTP transport instead of HTTPS (port `5985`)
+- `--output`, `-o`: Write inventory to this file path
+
+**Examples:**
+
+=== "Generate to stdout"
+    ```bash
+    souschef-cli powershell-inventory \
+        --hosts "win01.example.com,win02.example.com"
+    ```
+
+=== "Save to file"
+    ```bash
+    souschef-cli powershell-inventory \
+        --hosts "win01.example.com,win02.example.com" \
+        --output inventory/hosts
+    ```
+
+**Output:**
+
+```ini
+[windows]
+win01.example.com
+win02.example.com
+
+[windows:vars]
+ansible_connection=winrm
+ansible_winrm_transport=ssl
+ansible_port=5986
+ansible_winrm_server_cert_validation=ignore
+```
+
+---
+
+### powershell-requirements
+
+Generate `requirements.yml` with required Ansible collections for Windows automation.
+
+**Syntax:**
+```bash
+souschef-cli powershell-requirements [PATH] [--output FILE]
+```
+
+**Options:**
+- `PATH` (optional): Path to a PowerShell script. When provided, tailors the output to the collections actually needed.
+- `--output`, `-o`: Write `requirements.yml` to this file path
+
+**Examples:**
+
+=== "Tailored to script"
+    ```bash
+    souschef-cli powershell-requirements scripts/setup.ps1 -o requirements.yml
+    ```
+
+=== "All Windows collections"
+    ```bash
+    souschef-cli powershell-requirements -o requirements.yml
+    ```
+
+**Output:**
+
+```yaml
+---
+collections:
+  - name: ansible.windows
+    version: ">=2.3.0"
+  - name: community.windows
+    version: ">=2.2.0"
+  - name: chocolatey.chocolatey
+    version: ">=1.5.0"
+```
+
+---
+
+### powershell-role
+
+Generate a complete Ansible role from a PowerShell script.
+
+**Syntax:**
+```bash
+souschef-cli powershell-role PATH [--role-name NAME] [--playbook-name NAME] [--hosts PATTERN] [--output-dir DIR]
+```
+
+**Options:**
+- `PATH` (required): Path to the PowerShell script (`.ps1` file)
+- `--role-name`: Name for the generated Ansible role (default: `windows_provisioning`)
+- `--playbook-name`: Base name for the top-level playbook file (default: `site`)
+- `--hosts`: Ansible inventory host/group pattern (default: `windows`)
+- `--output-dir`, `-o`: Write all role files under this directory
+
+**Example:**
+
+```bash
+souschef-cli powershell-role scripts/setup.ps1 \
+    --role-name iis_server \
+    --output-dir ./ansible-role
+```
+
+**Output:**
+
+```
+Role files written to: ./ansible-role
+Files generated: 10
+```
+
+**Generated structure:**
+
+```
+ansible-role/
+├── roles/
+│   └── iis_server/
+│       ├── tasks/main.yml
+│       ├── handlers/main.yml
+│       ├── defaults/main.yml
+│       ├── vars/main.yml
+│       ├── meta/main.yml
+│       └── README.md
+├── site.yml
+├── inventory/hosts
+├── group_vars/windows.yml
+└── requirements.yml
+```
+
+---
+
+### powershell-job-template
+
+Generate an AWX/AAP Windows job template from a PowerShell script.
+
+**Syntax:**
+```bash
+souschef-cli powershell-job-template PATH [--name NAME] [--playbook FILE] [--inventory NAME] [--project NAME] [--credential NAME] [--environment ENV] [--no-survey] [--output FILE]
+```
+
+**Options:**
+- `PATH` (required): Path to the PowerShell script (`.ps1` file)
+- `--name`: Display name for the AWX job template (default: `Windows PowerShell Migration`)
+- `--playbook`: Playbook file relative to project root (default: `site.yml`)
+- `--inventory`: Inventory name or ID in AWX (default: `windows-inventory`)
+- `--project`: Project name or ID in AWX (default: `windows-migration-project`)
+- `--credential`: Windows credential name in AWX (default: `windows-winrm-credential`)
+- `--environment`: Target environment label (default: `production`)
+- `--no-survey`: Skip survey spec generation
+- `--output`, `-o`: Write job template JSON to this file path
+
+**Example:**
+
+```bash
+souschef-cli powershell-job-template scripts/setup.ps1 \
+    --name "Setup IIS Web Server" \
+    --credential iis-winrm-credential \
+    --output job_template.json
+```
+
+**Output (stdout):**
+
+```
+=== AWX Job Template JSON ===
+{ ... }
+
+=== Import Command ===
+awx job_templates create --conf.host https://awx.example.com ...
+
+=== Action Summary ===
+Script: setup.ps1
+Actions: 12 total (10 automated, 2 manual review)
+```
+
+---
+
+### powershell-fidelity
+
+Analyse migration fidelity for a PowerShell provisioning script.
+
+**Syntax:**
+```bash
+souschef-cli powershell-fidelity PATH [--format FORMAT]
+```
+
+**Options:**
+- `PATH` (required): Path to the PowerShell script (`.ps1` file)
+- `--format`: Output format — `json` (default) or `text`
+
+**Example:**
+
+```bash
+souschef-cli powershell-fidelity scripts/setup.ps1
+souschef-cli powershell-fidelity scripts/setup.ps1 --format text
+```
+
+**Output Format (JSON):**
+
+```json
+{
+  "fidelity_score": 87.5,
+  "total_actions": 40,
+  "automated_actions": 35,
+  "fallback_actions": 5,
+  "review_required": [
+    "Line 42: Invoke-Expression $cmd - unrecognised pattern"
+  ],
+  "summary": "87.5% of actions map to idiomatic Ansible modules.",
+  "recommendations": [
+    "Review win_shell fallbacks at lines 42, 67, 88, 99, 120",
+    "Consider using ansible.windows.win_command for known executables"
+  ]
+}
+```
+
 ---
 
 ## Troubleshooting

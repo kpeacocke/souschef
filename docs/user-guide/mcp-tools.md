@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-SousChef provides **44 specialised MCP tools** for comprehensive Chef-to-Ansible migration and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **51 specialised MCP tools** for comprehensive Chef-to-Ansible migration, PowerShell-to-Ansible Windows automation, and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
@@ -8,9 +8,9 @@ SousChef provides **44 specialised MCP tools** for comprehensive Chef-to-Ansible
 !!! info "About the Tool Count"
     **Complete tool inventory available in source code**
 
-    This guide documents the **44 primary user-facing tools** (39 Chef migration + 5 Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
+    This guide documents the **51 primary user-facing tools** (46 Chef migration + PowerShell migration + 5 Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
 
-    As a user, you'll primarily interact with these 44 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
+    As a user, you'll primarily interact with these 51 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
 
     See `souschef/server.py` for the complete authoritative list of all MCP tools.
 
@@ -30,6 +30,7 @@ SousChef provides **44 specialised MCP tools** for comprehensive Chef-to-Ansible
 | [AWX/AAP Integration](#awx-aap-integration) | 3 tools | Generate AWX job templates, workflows, and inventory |
 | [Chef Server Integration](#chef-server-integration) | 3 tools | Validate Chef Server connections and query dynamic inventory |
 | [Ansible Upgrade Planning](#ansible-upgrade-planning) | 5 tools | Assess Ansible environments and plan version upgrades |
+| [PowerShell Migration](#powershell-migration) | 7 tools | Convert PowerShell scripts to Windows Ansible automation |
 
 ---
 
@@ -1619,6 +1620,300 @@ The plan provides a structured approach to validating that your Ansible upgrade 
 === "CLI"
     ```bash
     souschef ansible test-plan --environment-path /etc/ansible
+    ```
+
+---
+
+---
+
+## PowerShell Migration
+
+Enterprise Windows automation — convert PowerShell provisioning scripts to idiomatic Ansible playbooks, roles, WinRM inventories, and AWX/AAP job templates using the `ansible.windows`, `community.windows`, and `chocolatey.chocolatey` collections.
+
+### parse_powershell
+
+Parse a PowerShell provisioning script and extract structured actions.
+
+**What it does**: Analyses a `.ps1` script using pattern matching to identify 28+ common Windows provisioning operations: Windows features, services, registry edits, file operations, MSI installs, Chocolatey packages, users/groups, firewall rules, scheduled tasks, environment variables, PS modules, certificates, WinRM, IIS, DNS, and ACL operations. Unrecognised commands are preserved as `win_shell` fallbacks with confidence warnings and source locations.
+
+**Why you need this**: Before converting a PowerShell script you need to understand what it actually does. This tool gives you a structured inventory of every provisioning action so you can assess scope, estimate effort, and plan your Ansible migration.
+
+**What you get**:
+- Structured list of all recognised actions with type, parameters, and confidence
+- Source location (line number) for every extracted action
+- Metrics summary broken down by action category
+- Warnings for unrecognised commands that will need manual review
+
+**Real-world example**: A 300-line `setup.ps1` that installs IIS, configures the Windows Firewall, and creates scheduled tasks is parsed into 42 structured actions with full parameter detail — ready for automated conversion.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+
+**Returns:**
+- JSON string with `source`, `actions`, `warnings`, and `metrics` keys
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Parse the PowerShell script at scripts/setup.ps1 and show me
+    what provisioning actions it contains
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-parse scripts/setup.ps1
+    souschef-cli powershell-parse scripts/setup.ps1 --format text
+    ```
+
+---
+
+### convert_powershell
+
+Convert a PowerShell provisioning script to an Ansible playbook.
+
+**What it does**: Maps recognised PowerShell provisioning actions to their idiomatic `ansible.windows.*`, `community.windows.*`, and `chocolatey.chocolatey.*` module equivalents. Produces a complete, runnable Ansible playbook YAML. Unrecognised commands fall back to `ansible.windows.win_shell` with warnings so nothing is silently lost.
+
+**Why you need this**: Manually rewriting PowerShell scripts as Ansible playbooks is time-consuming and error-prone. This tool automates the mapping so you can focus on reviewing the output rather than writing boilerplate.
+
+**What you get**:
+- Complete Ansible playbook YAML using idiomatic Windows collection modules
+- Task count breakdown (idiomatic vs. `win_shell` fallbacks)
+- Warning list with source locations for every fallback task
+- Ready to use with `ansible-playbook` against a WinRM inventory
+
+**Real-world example**: `Install-WindowsFeature Web-Server` becomes `ansible.windows.win_feature: name: Web-Server state: present include_management_tools: true` — idiomatic, idempotent, and production-ready.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+- `playbook_name` (string, optional): Name for the generated Ansible play (default: `powershell_migration`)
+- `hosts` (string, optional): Ansible inventory group or host pattern (default: `windows`)
+
+**Returns:**
+- JSON string with `status`, `playbook_yaml`, `tasks_generated`, `win_shell_fallbacks`, `warnings`, and `source`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert the PowerShell script at scripts/setup.ps1 to an Ansible playbook
+    targeting the windows_servers inventory group
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-convert scripts/setup.ps1 \
+        --playbook-name my_windows_setup \
+        --hosts windows_servers \
+        --output playbook.yml
+    ```
+
+---
+
+### generate_windows_inventory_tool
+
+Generate a WinRM-ready Ansible inventory file for Windows managed nodes.
+
+**What it does**: Produces an INI-format Ansible inventory with a `[windows]` group and a `[windows:vars]` section containing all the WinRM connection variables required by the `ansible.windows` collection (`ansible_connection`, `ansible_winrm_transport`, `ansible_port`, etc.).
+
+**Why you need this**: Setting up WinRM inventory variables correctly is fiddly and easy to get wrong. This tool generates a battle-tested template so you can start running Windows playbooks immediately.
+
+**What you get**:
+- INI-format `inventory/hosts` file with `[windows]` group
+- Pre-configured WinRM connection variables
+- SSL and non-SSL variants supported
+- Placeholder host comments with credential guidance
+
+**Real-world example**: Generates an inventory for `win01.example.com` and `win02.example.com` with HTTPS WinRM on port 5986, ready for `ansible-playbook -i inventory/hosts site.yml`.
+
+**Parameters:**
+- `hosts` (string, optional): Comma-separated Windows host names or IPs (default: placeholder)
+- `winrm_port` (integer, optional): WinRM HTTPS listener port (default: `5986`)
+- `use_ssl` (boolean, optional): Use HTTPS transport (default: `true`)
+- `validate_certs` (boolean, optional): Validate WinRM SSL certificate (default: `false`)
+
+**Returns:**
+- INI-formatted inventory string ready to save as `inventory/hosts`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a WinRM inventory for win01.example.com and win02.example.com
+    using HTTPS on port 5986
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-inventory \
+        --hosts "win01.example.com,win02.example.com" \
+        --output inventory/hosts
+    ```
+
+---
+
+### generate_windows_requirements
+
+Generate `requirements.yml` with required Ansible collections for Windows automation.
+
+**What it does**: Examines the parsed PowerShell script to determine which Ansible collections are actually needed (`ansible.windows`, `community.windows`, `chocolatey.chocolatey`, etc.) and produces a `requirements.yml` file pinned to stable versions. When no script is provided, all Windows collections are included.
+
+**Why you need this**: Manually identifying and versioning Ansible collection dependencies is error-prone. This tool auto-detects which collections your converted playbook needs so `ansible-galaxy collection install -r requirements.yml` just works.
+
+**What you get**:
+- `requirements.yml` with all needed Windows Ansible collections
+- Pinned to tested, stable versions
+- Tailored to your script when a path is provided (omits unused collections)
+
+**Real-world example**: A script using Chocolatey installs produces a `requirements.yml` with both `ansible.windows` and `chocolatey.chocolatey`; a script with only Windows Features and Services omits the Chocolatey entry.
+
+**Parameters:**
+- `script_path` (string, optional): Path to a PowerShell script. When omitted all Windows collections are included.
+
+**Returns:**
+- YAML string for `requirements.yml`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a requirements.yml for the PowerShell script at scripts/setup.ps1
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-requirements scripts/setup.ps1 -o requirements.yml
+    ```
+
+---
+
+### generate_powershell_role
+
+Generate a complete Ansible role structure from a PowerShell script.
+
+**What it does**: Parses the PowerShell script and produces all files for a production-ready Ansible role: `tasks/main.yml`, `handlers/main.yml`, `defaults/main.yml`, `vars/main.yml`, `meta/main.yml`, `README.md`, a top-level playbook, WinRM inventory, `group_vars/windows.yml`, and `requirements.yml`. Returns a JSON map of relative path → file content.
+
+**Why you need this**: A single tool call produces a complete, deployable Ansible role skeleton instead of requiring you to manually create a dozen files in the right directory structure. Ideal as a starting point for production Windows automation.
+
+**What you get**:
+- Full Ansible role directory structure
+- `tasks/main.yml` with converted tasks
+- `handlers/main.yml` for service restart handlers
+- `defaults/main.yml` and `vars/main.yml` for variable management
+- `meta/main.yml` with collection dependencies
+- `README.md` with role documentation
+- Top-level playbook, WinRM inventory, `group_vars/windows.yml`, and `requirements.yml`
+
+**Real-world example**: Running this on a 50-line `setup.ps1` produces 10 files ready to commit to your Ansible project and run against a WinRM inventory.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+- `role_name` (string, optional): Name of the role directory (default: `windows_provisioning`)
+- `playbook_name` (string, optional): Base name for the top-level playbook file (default: `site`)
+- `hosts` (string, optional): Ansible inventory host/group pattern (default: `windows`)
+
+**Returns:**
+- JSON string with `status`, `files` (path → content map), and `file_count`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a complete Ansible role from scripts/setup.ps1 with role name
+    iis_server and save the files to ./ansible-role/
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-role scripts/setup.ps1 \
+        --role-name iis_server \
+        --output-dir ./ansible-role
+    ```
+
+---
+
+### generate_powershell_job_template
+
+Generate an AWX/AAP Windows job template from a PowerShell script.
+
+**What it does**: Parses the PowerShell script and produces a JSON configuration importable via `awx-cli` or the AWX/AAP REST API. The job template is pre-configured for WinRM Windows automation with optional survey specs derived from script variables, an action summary, and the exact CLI import command to run.
+
+**Why you need this**: Manually creating AWX/AAP job templates with correct Windows credentials, inventory, and survey specs is tedious. This tool generates importable JSON so you can get your Windows automation running in AAP with a single `awx` command.
+
+**What you get**:
+- AWX/AAP-compatible job template JSON
+- Pre-configured Windows credential and WinRM settings
+- Optional survey spec for runtime variable overrides
+- CLI import command ready to copy-paste
+- Action summary showing what the job template will automate
+
+**Real-world example**: Generates a job template named "Setup IIS Web Server" referencing your `windows-migration-project` project and `windows-winrm-credential` credential, ready to import with `awx job_templates create`.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+- `job_template_name` (string, optional): Display name for the AWX job template (default: `Windows PowerShell Migration`)
+- `playbook` (string, optional): Playbook file relative to project root (default: `site.yml`)
+- `inventory` (string, optional): Inventory name or ID in AWX (default: `windows-inventory`)
+- `project` (string, optional): Project name or ID in AWX (default: `windows-migration-project`)
+- `credential` (string, optional): Windows credential name in AWX (default: `windows-winrm-credential`)
+- `environment` (string, optional): Target environment label (default: `production`)
+- `include_survey` (boolean, optional): Whether to generate a survey spec (default: `true`)
+
+**Returns:**
+- Formatted text block with job template JSON, CLI import command, and action summary
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate an AWX job template from scripts/setup.ps1 named "Setup IIS"
+    using the iis-winrm-credential credential
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-job-template scripts/setup.ps1 \
+        --name "Setup IIS Web Server" \
+        --credential iis-winrm-credential \
+        --output job_template.json
+    ```
+
+---
+
+### analyze_powershell_fidelity
+
+Analyse migration fidelity for a PowerShell provisioning script.
+
+**What it does**: Calculates the percentage of actions that can be automatically mapped to idiomatic Ansible modules (the fidelity score), lists actions needing manual review, and provides actionable next-step recommendations. A score of 100% means full automation is achievable; lower scores highlight areas requiring manual attention.
+
+**Why you need this**: Before committing to a migration you need to know how much of the work can be automated vs. how much requires manual effort. This tool gives you that answer in seconds so you can plan your sprint and set stakeholder expectations.
+
+**What you get**:
+- Fidelity score (0–100%) — percentage of actions fully automatable
+- Total action count broken down by automated, fallback, and manual-review
+- List of specific actions requiring manual completion
+- Actionable recommendations with suggested Ansible modules
+
+**Real-world example**: A `setup.ps1` with 40 actions scores 87.5% fidelity — 35 actions map automatically, 5 `win_shell` fallbacks need manual review. The report lists the 5 fallbacks and suggests replacements.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+
+**Returns:**
+- JSON string with `fidelity_score`, `total_actions`, `automated_actions`, `fallback_actions`, `review_required`, `summary`, and `recommendations`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Analyse the migration fidelity of scripts/setup.ps1 and tell me
+    what percentage can be automated
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-fidelity scripts/setup.ps1
+    souschef-cli powershell-fidelity scripts/setup.ps1 --format text
     ```
 
 ---

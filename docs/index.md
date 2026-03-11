@@ -13,7 +13,7 @@ SousChef is a complete enterprise-grade platform with two major capabilities:
 
 ### 1. Chef to Ansible Migration (38 tools)
 
-Complete enterprise-grade migration platform with **38 primary MCP tools** organised across **9 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and Chef Server integration, SousChef provides everything needed for a successful infrastructure automation migration.
+Complete enterprise-grade migration platform with **45 primary MCP tools** organised across **10 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations and PowerShell-to-Ansible Windows automation. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, and PowerShell enterprise migration, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### 2. Ansible Upgrade Assessment & Planning (5 tools)
 
@@ -30,7 +30,7 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 !!! info "About Tool Counts"
     **Complete tool inventory available in source code**
 
-    The MCP server includes primary user-facing tools for Chef-to-Ansible migration and Ansible upgrade planning. This documentation focuses on the primary user-facing tools (38 migration + 5 upgrade) that cover the main capabilities.
+    The MCP server includes primary user-facing tools for Chef-to-Ansible migration, PowerShell-to-Ansible Windows automation, and Ansible upgrade planning. This documentation focuses on the primary user-facing tools (45 migration + 5 upgrade) that cover the main capabilities.
 
     As a user, you'll primarily interact with the documented tools. Your AI assistant may use additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
@@ -71,6 +71,11 @@ Comprehensive validation framework and InSpec integration for ensuring migration
 Modernise Habitat applications to containerised deployments with Docker and Compose.
 
 [Learn more about Habitat conversion →](user-guide/mcp-tools.md#habitat){ .md-button }
+
+### :material-microsoft-windows: PowerShell to Ansible Migration
+Enterprise Windows automation migration — convert PowerShell provisioning scripts to idiomatic `ansible.windows` playbooks, roles, inventories, and AWX/AAP job templates.
+
+[Learn more about PowerShell migration →](migration-guide/powershell-migration.md){ .md-button }
 
 ### :material-update: Ansible Upgrade Assessment & Planning
 Comprehensive Ansible upgrade planning based on official compatibility matrices and EOL tracking.

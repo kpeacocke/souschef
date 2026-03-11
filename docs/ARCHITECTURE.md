@@ -25,7 +25,7 @@ SousChef is evolving from a Chef-to-Ansible converter into a **multi-source, mul
 - 🔄 **Puppet** → Ansible (planned)
 - 🔄 **Salt** → Ansible (planned)
 - 🔄 **Bash scripts** → Ansible (planned)
-- 🔄 **PowerShell scripts** → Ansible (planned)
+- ✅ **PowerShell scripts** → Ansible
 - 🔄 **Multi-target**: Ansible, Terraform, CloudFormation (via IR)
 
 ### Enterprise Features (Planned)
@@ -165,7 +165,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `parsers/` - Input Parsing
 **Purpose:** Extract structured data from source configuration management tools.
-**Status:** ✅ Exists (Chef parsers); 🔄 Planned (Puppet, Salt, Bash, PowerShell)
+**Status:** ✅ Exists (Chef parsers, PowerShell parser); 🔄 Planned (Puppet, Salt, Bash)
 **Dependencies:** `core/`, `ir/`, `filesystem/`
 **Contains:**
 - `recipe.py` - Chef recipe parser
@@ -178,7 +178,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - 🔄 `puppet.py` - Puppet manifest parser (planned)
 - 🔄 `salt.py` - Salt state parser (planned)
 - 🔄 `bash.py` - Bash script parser (planned)
-- 🔄 `powershell.py` - PowerShell script parser (planned)
+- ✅ `powershell.py` - PowerShell script parser
 
 **Rules:**
 - ✅ Can import from: `core/`, `ir/`, `filesystem/`
@@ -197,7 +197,8 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - `conversion_rules.py` - Transformation rules engine
 - 🔄 `puppet_to_ansible.py` - Puppet → Ansible (planned)
 - 🔄 `salt_to_ansible.py` - Salt → Ansible (planned)
-- 🔄 `script_to_ansible.py` - Bash/PS → Ansible (planned)
+- ✅ `powershell.py` - PowerShell → Ansible (exists)
+- 🔄 `script_to_ansible.py` - Bash → Ansible (planned)
 
 **Rules:**
 - ✅ Can import from: `core/`, `parsers/`, `ir/`
@@ -206,10 +207,11 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `generators/` - Output Generation
 **Purpose:** Generate target configuration files from IR or converter output.
-**Status:** ✅ Exists (repo.py)
+**Status:** ✅ Exists (repo.py, powershell.py)
 **Dependencies:** `core/`, `converters/`, `ir/`, `filesystem/`
 **Contains:**
 - `repo.py` - Ansible repository structure generation
+- ✅ `powershell.py` - Windows inventory, group_vars, requirements.yml, role skeleton, AWX job template, fidelity report
 - 🔄 `terraform.py` - Terraform module generation (planned)
 - 🔄 `cloudformation.py` - CloudFormation template generation (planned)
 
