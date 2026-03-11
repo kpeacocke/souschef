@@ -341,6 +341,9 @@ def test_parse_bash_content_returns_dict_structure() -> None:
     expected_keys = {
         "packages", "services", "file_writes", "downloads",
         "idempotency_risks", "shell_fallbacks", "warnings",
+        "users", "groups", "file_perms", "git_ops", "archives",
+        "sed_ops", "cron_jobs", "firewall_rules", "hostname_ops",
+        "env_vars", "sensitive_data", "cm_escapes",
     }
     assert expected_keys == set(ir.keys())
 

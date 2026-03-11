@@ -34,21 +34,35 @@ from souschef.assessment import (
     validate_conversion as _validate_conversion,
 )
 from souschef.converters.bash_to_ansible import (  # noqa: F401, codeql[py/unused-import]
+    _archive_tasks,
+    _build_aap_hints,
     _build_idempotency_report,
+    _build_quality_score,
     _build_tasks,
     _collect_warnings,
+    _cron_tasks,
     _download_tasks,
+    _file_perm_tasks,
     _file_write_tasks,
+    _firewall_tasks,
+    _git_tasks,
+    _group_tasks,
+    _hostname_tasks,
     _package_tasks,
     _render_playbook,
     _render_task,
+    _sed_tasks,
     _service_tasks,
     _shell_fallback_tasks,
     _shell_task,
+    _user_tasks,
     _yaml_str,
 )
 from souschef.converters.bash_to_ansible import (
     convert_bash_to_ansible as _convert_bash_to_ansible,
+)
+from souschef.converters.bash_to_ansible import (
+    generate_ansible_role_from_bash_file as _generate_ansible_role_from_bash_file,
 )
 from souschef.converters.habitat import (  # noqa: F401, codeql[py/unused-import]
     _add_service_build,
@@ -236,17 +250,41 @@ from souschef.parsers.attributes import (
     parse_attributes as _parse_attributes,
 )
 from souschef.parsers.bash import (  # noqa: F401, codeql[py/unused-import]
+    _extract_archives,
+    _extract_cm_escapes,
+    _extract_cron_jobs,
     _extract_downloads,
+    _extract_env_vars,
+    _extract_file_perms,
     _extract_file_writes,
+    _extract_firewall_rules,
+    _extract_git_ops,
+    _extract_groups,
+    _extract_hostname_ops,
     _extract_idempotency_risks,
     _extract_packages,
+    _extract_sed_ops,
+    _extract_sensitive_data,
     _extract_services,
+    _extract_users,
+    _format_archives_section,
+    _format_cm_escapes_section,
+    _format_cron_jobs_section,
     _format_downloads_section,
+    _format_env_vars_section,
+    _format_file_perms_section,
     _format_file_writes_section,
+    _format_firewall_rules_section,
+    _format_git_ops_section,
+    _format_groups_section,
+    _format_hostname_ops_section,
     _format_packages_section,
     _format_parse_result,
     _format_risks_and_fallbacks_section,
+    _format_sed_ops_section,
+    _format_sensitive_data_section,
     _format_services_section,
+    _format_users_section,
     _identify_shell_fallbacks,
     _line_number,
     _parse_bash_content,
@@ -5635,6 +5673,31 @@ def convert_bash_to_ansible(script_path: str) -> str:
 
     """
     return _convert_bash_to_ansible(script_path)
+
+
+@mcp.tool()
+def generate_ansible_role_from_bash(
+    script_path: str,
+    role_name: str = "bash_converted",
+) -> str:
+    """
+    Generate an Ansible role directory structure from a Bash script.
+
+    Reads the Bash script at *script_path*, parses it into an IR,
+    converts patterns to Ansible tasks split across role task files,
+    and returns a JSON envelope containing all role file contents.
+
+    Args:
+        script_path: Path to the Bash script file.
+        role_name: Name for the generated Ansible role.
+
+    Returns:
+        JSON string with ``status``, ``role_name``, ``files`` (dict of
+        relative path → content), ``quality_score``, and ``aap_hints``
+        keys.  Returns a JSON error object on failure.
+
+    """
+    return _generate_ansible_role_from_bash_file(script_path, role_name)
 
 
 # ==================== End V2.2 Bash Script Migration Tools ====================

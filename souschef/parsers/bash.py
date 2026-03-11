@@ -2,7 +2,11 @@
 Bash script parser for SousChef.
 
 Parses Bash provisioning scripts and extracts structured patterns
-including package installs, file writes, service control, and downloads.
+including package installs, file writes, service control, downloads,
+user/group management, file permissions, git operations, archive
+extraction, sed in-place edits, cron jobs, firewall rules, hostname
+changes, environment variables, sensitive data detection, and
+configuration-management tool escape calls.
 Emits an intermediate representation with confidence scores so that
 low-confidence sections can fall back to plain ``ansible.builtin.shell``
 tasks with warnings.
@@ -29,6 +33,142 @@ from souschef.core.path_utils import (
 # ---------------------------------------------------------------------------
 # Pattern constants
 # ---------------------------------------------------------------------------
+
+# User management
+_USER_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("create", re.compile(r"\buseradd\b[^\n]*", re.IGNORECASE)),
+    ("create", re.compile(r"\badduser\b[^\n]*", re.IGNORECASE)),
+    ("modify", re.compile(r"\busermod\b[^\n]*", re.IGNORECASE)),
+    ("remove", re.compile(r"\buserdel\b[^\n]*", re.IGNORECASE)),
+]
+
+# Group management
+_GROUP_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("create", re.compile(r"\bgroupadd\b[^\n]*", re.IGNORECASE)),
+    ("modify", re.compile(r"\bgroupmod\b[^\n]*", re.IGNORECASE)),
+    ("remove", re.compile(r"\bgroupdel\b[^\n]*", re.IGNORECASE)),
+]
+
+# File permissions
+_CHMOD_PATTERN = re.compile(
+    r"\bchmod\s+(-R\s+)?([0-9]{3,4}|[ugoa]+[+\-=][rwxst]+)\s+(\S+)",
+    re.IGNORECASE,
+)
+_CHOWN_PATTERN = re.compile(
+    r"\bchown\s+(-R\s+)?([^:\s]+(?::[^:\s]+)?)\s+(\S+)",
+    re.IGNORECASE,
+)
+
+# Git operations
+_GIT_CLONE_PATTERN = re.compile(
+    r"\bgit\s+clone\s+(?:--[^\s]+\s+)*(\S+)(?:\s+(\S+))?",
+    re.IGNORECASE,
+)
+_GIT_PULL_PATTERN = re.compile(r"\bgit\s+pull\b[^\n]*", re.IGNORECASE)
+_GIT_CHECKOUT_PATTERN = re.compile(r"\bgit\s+checkout\s+(\S+)", re.IGNORECASE)
+
+# Archive extraction
+_TAR_EXTRACT_PATTERN = re.compile(
+    r"\btar\b[^\n]*-[^\s]*x[^\n]*\s+"
+    r"(\S+\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.Z|tar))",
+    re.IGNORECASE,
+)
+_UNZIP_PATTERN = re.compile(r"\bunzip\s+(?:-[^\s]+\s+)*(\S+\.zip)", re.IGNORECASE)
+
+# sed in-place
+_SED_INPLACE_PATTERN = re.compile(
+    r"\bsed\s+(?:-i[^\s]*|--in-place[=\s][^\s]*)\s+[^\n]*",
+    re.IGNORECASE,
+)
+
+# Cron
+_CRON_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\bcrontab\b[^\n]*", re.IGNORECASE),
+    re.compile(
+        r'(?:echo|printf)\s+["\'][^"\']*\*[^"\']*["\'].*(?:>+\s*/etc/cron|\|\s*crontab)',
+        re.IGNORECASE,
+    ),
+]
+
+# Firewall
+_FIREWALL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "ufw",
+        re.compile(
+            r"\bufw\s+(?:allow|deny|limit|enable|disable|reject|delete|reset)\b[^\n]*",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "firewalld",
+        re.compile(r"\bfirewall-cmd\b[^\n]*", re.IGNORECASE),
+    ),
+    (
+        "iptables",
+        re.compile(r"\biptables\s+-[AI]\b[^\n]*", re.IGNORECASE),
+    ),
+]
+
+# Hostname
+_HOSTNAME_PATTERN = re.compile(
+    r"\bhostnamectl\s+set-hostname\s+(\S+)|\bhostname\s+(\S+)",
+    re.IGNORECASE,
+)
+
+# Environment variables (export VAR=val or VAR=val at line start)
+_ENV_VAR_PATTERN = re.compile(
+    r"^(?:export\s+)?([A-Z_][A-Z0-9_]*)=(.+?)(?:\s*#.*)?$",
+    re.MULTILINE,
+)
+
+# Sensitive data – detect hardcoded secrets (no actual secrets stored)
+_SENSITIVE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "password",
+        re.compile(
+            r'(?:password|passwd|pass)\s*[=:]\s*["\']?(?!\$\{)[^\s"\'$;]{4,}',
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "api_key",
+        re.compile(
+            r"(?:api[_-]?key|secret[_-]?key|auth[_-]?token|access[_-]?token"
+            r"|private[_-]?key)\s*[=:]\s*[\"']?[A-Za-z0-9_\-]{12,}",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "private_key_material",
+        re.compile(
+            r"-----BEGIN\s+(?:RSA|EC|DSA|OPENSSH)\s+PRIVATE\s+KEY",
+            re.IGNORECASE,
+        ),
+    ),
+]
+
+# Salt / Puppet / Chef escape-call detection
+_CM_ESCAPE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "salt",
+        re.compile(r"\bsalt(?:-call|-minion|-master|-key)?\b[^\n]*", re.IGNORECASE),
+    ),
+    (
+        "puppet",
+        re.compile(
+            r"\bpuppet\s+(?:apply|agent|module|resource|lookup)\b[^\n]*",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "chef",
+        re.compile(
+            r"\b(?:chef-client|chef-solo|chef-run|knife|berkshelf|berks"
+            r"|cookstyle|foodcritic)\b[^\n]*",
+            re.IGNORECASE,
+        ),
+    ),
+]
 
 # Package managers and their install sub-commands
 _PKG_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
@@ -234,6 +374,18 @@ def _parse_bash_content(content: str) -> dict[str, Any]:
         "idempotency_risks": [],
         "shell_fallbacks": [],
         "warnings": [],
+        "users": [],
+        "groups": [],
+        "file_perms": [],
+        "git_ops": [],
+        "archives": [],
+        "sed_ops": [],
+        "cron_jobs": [],
+        "firewall_rules": [],
+        "hostname_ops": [],
+        "env_vars": [],
+        "sensitive_data": [],
+        "cm_escapes": [],
     }
 
     _extract_packages(content, result)
@@ -241,6 +393,18 @@ def _parse_bash_content(content: str) -> dict[str, Any]:
     _extract_file_writes(content, result)
     _extract_downloads(content, result)
     _extract_idempotency_risks(content, result)
+    _extract_users(content, result)
+    _extract_groups(content, result)
+    _extract_file_perms(content, result)
+    _extract_git_ops(content, result)
+    _extract_archives(content, result)
+    _extract_sed_ops(content, result)
+    _extract_cron_jobs(content, result)
+    _extract_firewall_rules(content, result)
+    _extract_hostname_ops(content, result)
+    _extract_env_vars(content, result)
+    _extract_sensitive_data(content, result)
+    _extract_cm_escapes(content, result)
     _identify_shell_fallbacks(lines, result)
 
     return result
@@ -424,6 +588,93 @@ def _identify_shell_fallbacks(
         "shopt",
         "#!/",
     }
+    known_commands.update(
+        {
+            "useradd",
+            "adduser",
+            "usermod",
+            "userdel",
+            "groupadd",
+            "groupmod",
+            "groupdel",
+            "chmod",
+            "chown",
+            "chgrp",
+            "git",
+            "tar",
+            "unzip",
+            "gzip",
+            "gunzip",
+            "sed",
+            "awk",
+            "grep",
+            "find",
+            "crontab",
+            "ufw",
+            "firewall-cmd",
+            "iptables",
+            "hostname",
+            "hostnamectl",
+            "mkdir",
+            "rmdir",
+            "rm",
+            "mv",
+            "cp",
+            "ln",
+            "touch",
+            "sudo",
+            "su",
+            "ssh",
+            "scp",
+            "sftp",
+            "rsync",
+            "python",
+            "python3",
+            "ruby",
+            "perl",
+            "node",
+            "salt",
+            "salt-call",
+            "puppet",
+            "chef-client",
+            "systemd-analyze",
+            "journalctl",
+            "logger",
+            "mount",
+            "umount",
+            "df",
+            "du",
+            "id",
+            "whoami",
+            "groups",
+            "date",
+            "sleep",
+            "wait",
+            "printf",
+            "read",
+            "test",
+            "[",
+            "[[",
+            "function",
+            "local",
+            "return",
+            "exit",
+            "if",
+            "fi",
+            "else",
+            "elif",
+            "then",
+            "for",
+            "while",
+            "do",
+            "done",
+            "in",
+            "case",
+            "esac",
+            "true",
+            "false",
+        }
+    )
     for lineno, line in enumerate(lines, start=1):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -440,6 +691,593 @@ def _identify_shell_fallbacks(
                     ),
                 }
             )
+
+
+def _extract_users(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['users']* from *content*.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for action, pattern in _USER_PATTERNS:
+        for match in pattern.finditer(content):
+            result["users"].append(
+                {
+                    "action": action,
+                    "raw": match.group(0).strip(),
+                    "line": _line_number(content, match.start()),
+                    "confidence": 0.9,
+                }
+            )
+
+
+def _extract_groups(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['groups']* from *content*.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for action, pattern in _GROUP_PATTERNS:
+        for match in pattern.finditer(content):
+            result["groups"].append(
+                {
+                    "action": action,
+                    "raw": match.group(0).strip(),
+                    "line": _line_number(content, match.start()),
+                    "confidence": 0.9,
+                }
+            )
+
+
+def _extract_file_perms(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['file_perms']* from *content*.
+
+    Detects ``chmod`` and ``chown`` operations.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for match in _CHMOD_PATTERN.finditer(content):
+        recursive_flag = match.group(1)
+        result["file_perms"].append(
+            {
+                "op": "chmod",
+                "mode": match.group(2),
+                "owner": None,
+                "path": match.group(3),
+                "recursive": recursive_flag is not None,
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "confidence": 0.85,
+            }
+        )
+    for match in _CHOWN_PATTERN.finditer(content):
+        recursive_flag = match.group(1)
+        owner_str = match.group(2)
+        result["file_perms"].append(
+            {
+                "op": "chown",
+                "mode": None,
+                "owner": owner_str,
+                "path": match.group(3),
+                "recursive": recursive_flag is not None,
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "confidence": 0.85,
+            }
+        )
+
+
+def _extract_git_ops(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['git_ops']* from *content*.
+
+    Detects ``git clone``, ``git pull``, and ``git checkout`` operations.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for match in _GIT_CLONE_PATTERN.finditer(content):
+        result["git_ops"].append(
+            {
+                "action": "clone",
+                "repo": match.group(1),
+                "dest": match.group(2),
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "confidence": 0.9,
+            }
+        )
+    for match in _GIT_PULL_PATTERN.finditer(content):
+        result["git_ops"].append(
+            {
+                "action": "pull",
+                "repo": None,
+                "dest": None,
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "confidence": 0.9,
+            }
+        )
+    for match in _GIT_CHECKOUT_PATTERN.finditer(content):
+        result["git_ops"].append(
+            {
+                "action": "checkout",
+                "repo": None,
+                "dest": match.group(1),
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "confidence": 0.9,
+            }
+        )
+
+
+def _extract_archives(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['archives']* from *content*.
+
+    Detects ``tar`` extraction and ``unzip`` operations.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for match in _TAR_EXTRACT_PATTERN.finditer(content):
+        result["archives"].append(
+            {
+                "tool": "tar",
+                "source": match.group(1),
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "confidence": 0.85,
+            }
+        )
+    for match in _UNZIP_PATTERN.finditer(content):
+        result["archives"].append(
+            {
+                "tool": "unzip",
+                "source": match.group(1),
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "confidence": 0.85,
+            }
+        )
+
+
+def _extract_sed_ops(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['sed_ops']* from *content*.
+
+    Detects ``sed -i`` in-place file modification operations.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for match in _SED_INPLACE_PATTERN.finditer(content):
+        result["sed_ops"].append(
+            {
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "confidence": 0.6,
+                "ansible_module": "ansible.builtin.lineinfile",
+            }
+        )
+
+
+def _extract_cron_jobs(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['cron_jobs']* from *content*.
+
+    Detects ``crontab`` and cron.d write operations.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for pattern in _CRON_PATTERNS:
+        for match in pattern.finditer(content):
+            result["cron_jobs"].append(
+                {
+                    "raw": match.group(0).strip(),
+                    "line": _line_number(content, match.start()),
+                    "confidence": 0.7,
+                }
+            )
+
+
+_FIREWALL_MODULE_MAP: dict[str, str] = {
+    "ufw": "community.general.ufw",
+    "firewalld": "ansible.posix.firewalld",
+    "iptables": "ansible.builtin.iptables",
+}
+
+
+def _extract_firewall_rules(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['firewall_rules']* from *content*.
+
+    Detects ufw, firewall-cmd, and iptables operations.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for tool, pattern in _FIREWALL_PATTERNS:
+        for match in pattern.finditer(content):
+            result["firewall_rules"].append(
+                {
+                    "tool": tool,
+                    "raw": match.group(0).strip(),
+                    "line": _line_number(content, match.start()),
+                    "confidence": 0.85,
+                    "ansible_module": _FIREWALL_MODULE_MAP[tool],
+                }
+            )
+
+
+def _extract_hostname_ops(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['hostname_ops']* from *content*.
+
+    Detects ``hostnamectl set-hostname`` and ``hostname`` commands.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for match in _HOSTNAME_PATTERN.finditer(content):
+        hostname = match.group(1) or match.group(2)
+        result["hostname_ops"].append(
+            {
+                "hostname": hostname,
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "confidence": 0.95,
+            }
+        )
+
+
+# Pattern used to check whether an env var value looks like a secret
+_SECRET_VALUE_RE = re.compile(
+    r"(?:password|passwd|pass|secret|token|key|credential)",
+    re.IGNORECASE,
+)
+
+
+def _extract_env_vars(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['env_vars']* from *content*.
+
+    Detects exported or globally-assigned shell variables.  Variables
+    whose names contain lower-case letters are skipped as they are
+    typically shell internals rather than configuration values.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for match in _ENV_VAR_PATTERN.finditer(content):
+        name = match.group(1)
+        value = match.group(2).strip()
+        # Skip if name contains any lower-case letter (shell internals)
+        if re.search(r"[a-z]", name):
+            continue
+        is_sensitive = bool(_SECRET_VALUE_RE.search(name))
+        result["env_vars"].append(
+            {
+                "name": name,
+                "value": value,
+                "raw": match.group(0).strip(),
+                "line": _line_number(content, match.start()),
+                "is_sensitive": is_sensitive,
+            }
+        )
+
+
+def _extract_sensitive_data(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['sensitive_data']* from *content*.
+
+    Detects hardcoded passwords, API keys, and private key material.
+    The raw matched text is **not** stored; only the type and line
+    number are recorded to avoid leaking secrets.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for secret_type, pattern in _SENSITIVE_PATTERNS:
+        for match in pattern.finditer(content):
+            result["sensitive_data"].append(
+                {
+                    "type": secret_type,
+                    "raw": "<redacted>",
+                    "line": _line_number(content, match.start()),
+                    "suggestion": "Use ansible-vault to encrypt this value",
+                }
+            )
+
+
+def _extract_cm_escapes(content: str, result: dict[str, Any]) -> None:
+    """
+    Populate *result['cm_escapes']* from *content*.
+
+    Detects calls to Salt, Puppet, and Chef configuration-management
+    tools within the script.
+
+    Args:
+        content: Raw Bash script text.
+        result: Result dictionary to update in-place.
+
+    """
+    for tool, pattern in _CM_ESCAPE_PATTERNS:
+        for match in pattern.finditer(content):
+            result["cm_escapes"].append(
+                {
+                    "tool": tool,
+                    "raw": match.group(0).strip(),
+                    "line": _line_number(content, match.start()),
+                    "suggestion": "Replace with native Ansible equivalent",
+                }
+            )
+
+
+def _format_users_section(users: list[dict[str, Any]], lines: list[str]) -> None:
+    """
+    Append formatted user management entries to *lines*.
+
+    Args:
+        users: List of user IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not users:
+        return
+    lines.append("User Management:")
+    for u in users:
+        lines.append(
+            f"  Line {u['line']}: [{u['action']}] {u['raw'][:60]} "
+            f"(confidence: {u['confidence']:.0%})"
+        )
+
+
+def _format_groups_section(groups: list[dict[str, Any]], lines: list[str]) -> None:
+    """
+    Append formatted group management entries to *lines*.
+
+    Args:
+        groups: List of group IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not groups:
+        return
+    lines.append("Group Management:")
+    for g in groups:
+        lines.append(
+            f"  Line {g['line']}: [{g['action']}] {g['raw'][:60]} "
+            f"(confidence: {g['confidence']:.0%})"
+        )
+
+
+def _format_file_perms_section(
+    file_perms: list[dict[str, Any]], lines: list[str]
+) -> None:
+    """
+    Append formatted file permission entries to *lines*.
+
+    Args:
+        file_perms: List of file permission IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not file_perms:
+        return
+    lines.append("File Permissions:")
+    for fp in file_perms:
+        detail = fp["mode"] if fp["op"] == "chmod" else fp["owner"]
+        recursive = " (recursive)" if fp["recursive"] else ""
+        lines.append(
+            f"  Line {fp['line']}: {fp['op']} {detail} {fp['path']}{recursive} "
+            f"(confidence: {fp['confidence']:.0%})"
+        )
+
+
+def _format_git_ops_section(git_ops: list[dict[str, Any]], lines: list[str]) -> None:
+    """
+    Append formatted git operation entries to *lines*.
+
+    Args:
+        git_ops: List of git operation IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not git_ops:
+        return
+    lines.append("Git Operations:")
+    for g in git_ops:
+        detail = g.get("repo") or g.get("dest") or g["raw"][:40]
+        lines.append(
+            f"  Line {g['line']}: [{g['action']}] {detail} "
+            f"(confidence: {g['confidence']:.0%})"
+        )
+
+
+def _format_archives_section(archives: list[dict[str, Any]], lines: list[str]) -> None:
+    """
+    Append formatted archive extraction entries to *lines*.
+
+    Args:
+        archives: List of archive IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not archives:
+        return
+    lines.append("Archive Extractions:")
+    for a in archives:
+        lines.append(
+            f"  Line {a['line']}: [{a['tool']}] {a['source']} "
+            f"(confidence: {a['confidence']:.0%})"
+        )
+
+
+def _format_sed_ops_section(sed_ops: list[dict[str, Any]], lines: list[str]) -> None:
+    """
+    Append formatted sed in-place operation entries to *lines*.
+
+    Args:
+        sed_ops: List of sed operation IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not sed_ops:
+        return
+    lines.append("sed In-place Operations:")
+    for s in sed_ops:
+        lines.append(
+            f"  Line {s['line']}: {s['raw'][:60]} "
+            f"→ {s['ansible_module']} (confidence: {s['confidence']:.0%})"
+        )
+
+
+def _format_cron_jobs_section(
+    cron_jobs: list[dict[str, Any]], lines: list[str]
+) -> None:
+    """
+    Append formatted cron job entries to *lines*.
+
+    Args:
+        cron_jobs: List of cron job IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not cron_jobs:
+        return
+    lines.append("Cron Jobs:")
+    for c in cron_jobs:
+        lines.append(
+            f"  Line {c['line']}: {c['raw'][:60]} (confidence: {c['confidence']:.0%})"
+        )
+
+
+def _format_firewall_rules_section(
+    firewall_rules: list[dict[str, Any]], lines: list[str]
+) -> None:
+    """
+    Append formatted firewall rule entries to *lines*.
+
+    Args:
+        firewall_rules: List of firewall rule IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not firewall_rules:
+        return
+    lines.append("Firewall Rules:")
+    for fw in firewall_rules:
+        lines.append(
+            f"  Line {fw['line']}: [{fw['tool']}] {fw['raw'][:60]} "
+            f"→ {fw['ansible_module']} (confidence: {fw['confidence']:.0%})"
+        )
+
+
+def _format_hostname_ops_section(
+    hostname_ops: list[dict[str, Any]], lines: list[str]
+) -> None:
+    """
+    Append formatted hostname operation entries to *lines*.
+
+    Args:
+        hostname_ops: List of hostname operation IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not hostname_ops:
+        return
+    lines.append("Hostname Operations:")
+    for h in hostname_ops:
+        lines.append(
+            f"  Line {h['line']}: set hostname → {h['hostname']} "
+            f"(confidence: {h['confidence']:.0%})"
+        )
+
+
+def _format_env_vars_section(env_vars: list[dict[str, Any]], lines: list[str]) -> None:
+    """
+    Append formatted environment variable entries to *lines*.
+
+    Args:
+        env_vars: List of environment variable IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not env_vars:
+        return
+    lines.append("Environment Variables:")
+    for v in env_vars:
+        sensitive_tag = " [SENSITIVE]" if v["is_sensitive"] else ""
+        lines.append(f"  Line {v['line']}: {v['name']}={v['value']}{sensitive_tag}")
+
+
+def _format_sensitive_data_section(
+    sensitive_data: list[dict[str, Any]], lines: list[str]
+) -> None:
+    """
+    Append formatted sensitive data warning entries to *lines*.
+
+    Only the type and line number are shown; the matched value is never
+    included to avoid leaking secrets.
+
+    Args:
+        sensitive_data: List of sensitive data IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not sensitive_data:
+        return
+    lines.append("Sensitive Data Warnings:")
+    for s in sensitive_data:
+        lines.append(f"  Line {s['line']}: [{s['type']}] detected — {s['suggestion']}")
+
+
+def _format_cm_escapes_section(
+    cm_escapes: list[dict[str, Any]], lines: list[str]
+) -> None:
+    """
+    Append formatted CM escape call entries to *lines*.
+
+    Args:
+        cm_escapes: List of CM escape IR entries.
+        lines: Lines list to append to (mutated in-place).
+
+    """
+    if not cm_escapes:
+        return
+    lines.append("Configuration Management Escape Calls:")
+    for c in cm_escapes:
+        lines.append(
+            f"  Line {c['line']}: [{c['tool']}] {c['raw'][:60]} — {c['suggestion']}"
+        )
 
 
 def _format_packages_section(packages: list[dict[str, Any]], lines: list[str]) -> None:
@@ -524,9 +1362,7 @@ def _format_downloads_section(
         )
 
 
-def _format_risks_and_fallbacks_section(
-    ir: dict[str, Any], lines: list[str]
-) -> None:
+def _format_risks_and_fallbacks_section(ir: dict[str, Any], lines: list[str]) -> None:
     """
     Append idempotency risks and shell fallbacks to *lines*.
 
@@ -560,10 +1396,22 @@ def _format_parse_result(ir: dict[str, Any]) -> str:
     """
     lines: list[str] = []
 
+    _format_cm_escapes_section(ir.get("cm_escapes", []), lines)
+    _format_sensitive_data_section(ir.get("sensitive_data", []), lines)
     _format_packages_section(ir["packages"], lines)
     _format_services_section(ir["services"], lines)
     _format_file_writes_section(ir["file_writes"], lines)
     _format_downloads_section(ir["downloads"], lines)
+    _format_users_section(ir.get("users", []), lines)
+    _format_groups_section(ir.get("groups", []), lines)
+    _format_file_perms_section(ir.get("file_perms", []), lines)
+    _format_git_ops_section(ir.get("git_ops", []), lines)
+    _format_archives_section(ir.get("archives", []), lines)
+    _format_sed_ops_section(ir.get("sed_ops", []), lines)
+    _format_cron_jobs_section(ir.get("cron_jobs", []), lines)
+    _format_firewall_rules_section(ir.get("firewall_rules", []), lines)
+    _format_hostname_ops_section(ir.get("hostname_ops", []), lines)
+    _format_env_vars_section(ir.get("env_vars", []), lines)
     _format_risks_and_fallbacks_section(ir, lines)
 
     if not lines:

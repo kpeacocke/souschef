@@ -46,6 +46,7 @@ from souschef.server import (
     convert_bash_to_ansible,
     convert_inspec_to_test,
     convert_resource_to_task,
+    generate_ansible_role_from_bash,
     generate_github_workflow_from_chef,
     generate_gitlab_ci_from_chef,
     generate_inspec_from_recipe,
@@ -2556,6 +2557,44 @@ def bash_convert(
     except Exception as e:  # noqa: BLE001
         click.echo(f"Error converting Bash script: {e}", err=True)
         sys.exit(1)
+
+
+@bash.command("role")
+@click.argument("script_path")
+@click.option(
+    "--role-name",
+    default="bash_converted",
+    show_default=True,
+    help="Name for the generated Ansible role.",
+)
+@click.option(
+    "--output-dir",
+    default=None,
+    help="Directory to write role files to (default: print to stdout).",
+)
+def bash_role(script_path: str, role_name: str, output_dir: str | None) -> None:
+    """
+    Generate an Ansible role structure from SCRIPT_PATH.
+
+    SCRIPT_PATH is the path to the Bash script to convert into a role.
+    """
+    raw = generate_ansible_role_from_bash(script_path, role_name)
+    data = json.loads(raw)
+    if data.get("status") == "error":
+        click.echo(f"Error: {data.get('error')}", err=True)
+        sys.exit(1)
+    files: dict[str, str] = data.get("files", {})
+    if output_dir:
+        base = Path(output_dir) / role_name
+        for filename, content in files.items():
+            fpath = base / filename
+            fpath.parent.mkdir(parents=True, exist_ok=True)
+            fpath.write_text(content)
+        click.echo(f"Role written to {base}")
+    else:
+        for filename, content in files.items():
+            click.echo(f"\n# --- {filename} ---")
+            click.echo(content)
 
 
 def main() -> NoReturn:
