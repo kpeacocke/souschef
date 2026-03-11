@@ -20,6 +20,7 @@ from souschef.ansible_upgrade import (
     validate_collection_compatibility,
 )
 from souschef.cli_registry import get_registry, register_default_groups
+from souschef.cli_utils import _resolve_output_path, _safe_write_file
 from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.core.ansible_versions import format_version_display, get_eol_status
 from souschef.core.logging import configure_logging
@@ -109,53 +110,6 @@ CI_JOB_INTEGRATION_TESTS = "  • Integration Tests (Test Kitchen)"
 
 # File name constants
 METADATA_FILENAME = "metadata.rb"
-
-
-def _resolve_output_path(output: str | None, default_path: Path) -> Path:
-    """Normalise and validate output paths for generated files."""
-    try:
-        workspace_root = _get_workspace_root()
-        if output:
-            resolved_path = _ensure_within_base_path(
-                _normalize_path(output), workspace_root
-            )
-        else:
-            resolved_path = _ensure_within_base_path(
-                default_path.resolve(), workspace_root
-            )
-    except ValueError as exc:  # noqa: TRY003
-        click.echo(f"Invalid output path: {exc}", err=True)
-        raise click.Abort() from exc
-
-    resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    return resolved_path
-
-
-def _safe_write_file(content: str, output: str | None, default_path: Path) -> Path:
-    """
-    Safely write content to a validated file path.
-
-    Args:
-        content: Content to write to file.
-        output: Optional user-specified output path.
-        default_path: Default path if output not specified.
-
-    Returns:
-        The path where content was written.
-
-    Raises:
-        click.Abort: If path validation or write fails.
-
-    """
-    validated_path = _resolve_output_path(output, default_path)
-    try:
-        # Separate validation from write to satisfy SonarQube path construction rules
-        with validated_path.open("w", encoding="utf-8") as f:
-            f.write(content)
-    except OSError as e:
-        click.echo(f"Error writing file: {e}", err=True)
-        raise click.Abort() from e
-    return validated_path
 
 
 @click.group()

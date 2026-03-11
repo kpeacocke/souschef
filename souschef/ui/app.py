@@ -1040,32 +1040,8 @@ def _get_dependency_mapping_inputs() -> tuple[str, str, str]:
         help="Enter the path to your cookbooks directory for dependency analysis",
     )
 
-    # Analysis options
-    col1, col2 = st.columns(2)
-
-    with col1:
-        dependency_depth = st.selectbox(
-            "Analysis Depth",
-            ["direct", "transitive", "full"],
-            help="How deep to analyse dependencies",
-            format_func=lambda x: {
-                "direct": "Direct Dependencies Only",
-                "transitive": "Include Transitive Dependencies",
-                "full": "Full Dependency Graph",
-            }.get(x, str(x)),
-        )
-
-    with col2:
-        visualization_type = st.selectbox(
-            "Visualization",
-            ["text", "graph", "interactive"],
-            help="How to display dependency information",
-            format_func=lambda x: {
-                "text": "Text Summary",
-                "graph": "Static Graph View",
-                "interactive": "Interactive Graph",
-            }.get(x, str(x)),
-        )
+    # Analysis options - reuse the shared analysis options helper
+    dependency_depth, visualization_type = _get_dependency_analysis_options()
 
     return cookbook_path, dependency_depth, visualization_type
 

@@ -5,7 +5,6 @@ Configure and validate AI provider settings for the SousChef MCP server.
 """
 
 import json
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +17,7 @@ else:
         st = None
 
 from souschef.core.url_validation import validate_user_provided_url
+from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
 
 # AI Provider Constants
 ANTHROPIC_PROVIDER = "Anthropic (Claude)"
@@ -647,39 +647,6 @@ def load_ai_settings() -> dict[str, Any]:
         return env_config
 
     return {}
-
-
-def _load_ai_settings_from_env() -> dict[str, str | float | int]:
-    """Load AI settings from environment variables."""
-    from contextlib import suppress
-
-    env_config: dict[str, str | float | int] = {}
-    env_mappings = {
-        "SOUSCHEF_AI_PROVIDER": "provider",
-        "SOUSCHEF_AI_MODEL": "model",
-        "SOUSCHEF_AI_API_KEY": "api_key",
-        "SOUSCHEF_AI_BASE_URL": "base_url",
-        "SOUSCHEF_AI_PROJECT_ID": "project_id",
-    }
-
-    # Handle string values
-    for env_var, config_key in env_mappings.items():
-        env_value = os.environ.get(env_var)
-        if env_value:
-            env_config[config_key] = env_value
-
-    # Handle numeric values with error suppression
-    temp_value = os.environ.get("SOUSCHEF_AI_TEMPERATURE")
-    if temp_value:
-        with suppress(ValueError):
-            env_config["temperature"] = float(temp_value)
-
-    tokens_value = os.environ.get("SOUSCHEF_AI_MAX_TOKENS")
-    if tokens_value:
-        with suppress(ValueError):
-            env_config["max_tokens"] = int(tokens_value)
-
-    return env_config
 
 
 def _load_ai_settings_from_file() -> dict[str, Any]:

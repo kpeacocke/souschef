@@ -63,7 +63,7 @@ class TestSafeWriteFileErrors:
         recipe_file.write_text('package "nginx"')
 
         with patch(
-            "souschef.cli._ensure_within_base_path",
+            "souschef.cli_utils._ensure_within_base_path",
             side_effect=ValueError("Path outside workspace"),
         ):
             result = runner.invoke(

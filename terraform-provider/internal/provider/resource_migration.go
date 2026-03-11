@@ -106,6 +106,33 @@ func (r *migrationResource) Configure(_ context.Context, req resource.ConfigureR
 	r.client = client
 }
 
+// runConversion executes the SousChef convert-recipe command and reads the
+// resulting playbook file. Returns (content, cmdOutput, err); cmdOutput is
+// non-empty only when the command itself failed rather than a file-read failure.
+func (r *migrationResource) runConversion(
+	ctx context.Context,
+	cookbookPath, recipeName, outputPath string,
+) ([]byte, string, error) {
+	cmd := execCommandContext(ctx, r.client.Path, "convert-recipe",
+		"--cookbook-path", cookbookPath,
+		"--recipe-name", recipeName,
+		"--output-path", outputPath,
+	)
+	tflog.Debug(ctx, "Executing SousChef", map[string]interface{}{
+		"command": cmd.String(),
+	})
+	cmdOutput, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, string(cmdOutput), err
+	}
+	playbookPath := filepath.Join(outputPath, recipeName+".yml")
+	content, err := osReadFile(playbookPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return content, "", nil
+}
+
 // Create creates the resource and sets the initial Terraform state.
 func (r *migrationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan migrationResourceModel
@@ -125,34 +152,20 @@ func (r *migrationResource) Create(ctx context.Context, req resource.CreateReque
 	cookbookPath := plan.CookbookPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
 
-	// Call souschef CLI to convert recipe
-	cmd := execCommandContext(ctx, r.client.Path, "convert-recipe",
-		"--cookbook-path", cookbookPath,
-		"--recipe-name", recipeName,
-		"--output-path", outputPath,
-	)
-
-	tflog.Debug(ctx, "Executing SousChef", map[string]interface{}{
-		"command": cmd.String(),
-	})
-
-	output, err := cmd.CombinedOutput()
+	// Call souschef CLI to convert recipe and read the resulting playbook
+	content, cmdOut, err := r.runConversion(ctx, cookbookPath, recipeName, outputPath)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error converting recipe",
-			fmt.Sprintf("Could not convert recipe: %s\n%s", err, string(output)),
-		)
-		return
-	}
-
-	// Read generated playbook
-	playbookPath := filepath.Join(outputPath, recipeName+".yml")
-	content, err := osReadFile(playbookPath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errorReadingPlaybook,
-			fmt.Sprintf("Could not read generated playbook: %s", err),
-		)
+		if cmdOut != "" {
+			resp.Diagnostics.AddError(
+				"Error converting recipe",
+				fmt.Sprintf("Could not convert recipe: %s\n%s", err, cmdOut),
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errorReadingPlaybook,
+				fmt.Sprintf("Could not read generated playbook: %s", err),
+			)
+		}
 		return
 	}
 
@@ -218,29 +231,20 @@ func (r *migrationResource) Update(ctx context.Context, req resource.UpdateReque
 	cookbookPath := plan.CookbookPath.ValueString()
 	outputPath := plan.OutputPath.ValueString()
 
-	cmd := execCommandContext(ctx, r.client.Path, "convert-recipe",
-		"--cookbook-path", cookbookPath,
-		"--recipe-name", recipeName,
-		"--output-path", outputPath,
-	)
-
-	output, err := cmd.CombinedOutput()
+	// Re-run conversion and read the resulting playbook
+	content, cmdOut, err := r.runConversion(ctx, cookbookPath, recipeName, outputPath)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error updating migration",
-			fmt.Sprintf("Could not re-convert recipe: %s\n%s", err, string(output)),
-		)
-		return
-	}
-
-	// Read updated playbook
-	playbookPath := filepath.Join(outputPath, recipeName+".yml")
-	content, err := osReadFile(playbookPath)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			errorReadingPlaybook,
-			fmt.Sprintf("Could not read updated playbook: %s", err),
-		)
+		if cmdOut != "" {
+			resp.Diagnostics.AddError(
+				"Error updating migration",
+				fmt.Sprintf("Could not re-convert recipe: %s\n%s", err, cmdOut),
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				errorReadingPlaybook,
+				fmt.Sprintf("Could not read updated playbook: %s", err),
+			)
+		}
 		return
 	}
 

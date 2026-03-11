@@ -73,6 +73,7 @@ from souschef.orchestration import (
 from souschef.orchestration import (
     orchestrate_repository_generation as generate_ansible_repository,
 )
+from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
 
 # Import refactored modules for backward compatibility and tests
 from souschef.ui.pages.cookbook_analysis_security import (
@@ -148,7 +149,7 @@ def load_ai_settings() -> dict[str, str | float | int]:
     accidental logging or exposure of sensitive credentials.
     """
     # First try to load from environment variables
-    env_config = _load_ai_settings_from_env()
+    env_config = _load_ai_settings_from_env(include_api_key=False)
 
     # If we have environment config, use it
     if env_config:
@@ -156,46 +157,6 @@ def load_ai_settings() -> dict[str, str | float | int]:
 
     # Fall back to loading from configuration file
     return _load_ai_settings_from_file()
-
-
-def _load_ai_settings_from_env() -> dict[str, str | float | int]:
-    """
-    Load AI settings from environment variables.
-
-    Security: API keys are loaded from environment variables but NOT stored
-    in the returned dictionary. Callers must retrieve them separately from
-    os.environ to prevent accidental logging or exposure.
-    """
-    import os
-    from contextlib import suppress
-
-    env_config: dict[str, str | float | int] = {}
-    env_mappings = {
-        "SOUSCHEF_AI_PROVIDER": "provider",
-        "SOUSCHEF_AI_MODEL": "model",
-        "SOUSCHEF_AI_BASE_URL": "base_url",
-        "SOUSCHEF_AI_PROJECT_ID": "project_id",
-        # NOTE: api_key is NOT included here to prevent accidental logging
-    }
-
-    # Handle string values
-    for env_var, config_key in env_mappings.items():
-        env_value = os.environ.get(env_var)
-        if env_value:
-            env_config[config_key] = env_value
-
-    # Handle numeric values with error suppression
-    temp_value = os.environ.get("SOUSCHEF_AI_TEMPERATURE")
-    if temp_value:
-        with suppress(ValueError):
-            env_config["temperature"] = float(temp_value)
-
-    tokens_value = os.environ.get("SOUSCHEF_AI_MAX_TOKENS")
-    if tokens_value:
-        with suppress(ValueError):
-            env_config["max_tokens"] = int(tokens_value)
-
-    return env_config
 
 
 def _load_ai_settings_from_file() -> dict[str, str | float | int]:

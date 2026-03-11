@@ -44,8 +44,10 @@ class TestCLIErrorPaths:
 
         # Path that doesn't exist within workspace root
         with (
-            patch("souschef.cli._get_workspace_root", return_value=tmp_path),
-            patch("souschef.cli._normalize_path", side_effect=ValueError("Invalid")),
+            patch("souschef.cli_utils._get_workspace_root", return_value=tmp_path),
+            patch(
+                "souschef.cli_utils._normalize_path", side_effect=ValueError("Invalid")
+            ),
             pytest.raises(click.Abort),
         ):
             _resolve_output_path("/invalid/path", tmp_path / "output.txt")

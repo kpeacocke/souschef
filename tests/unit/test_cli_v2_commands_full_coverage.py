@@ -12,6 +12,7 @@ import pytest
 from click.testing import CliRunner
 
 import souschef.cli_v2_commands as cli_v2
+from souschef.cli_utils import _resolve_output_path
 from souschef.migration_v2 import MigrationStatus
 
 
@@ -44,30 +45,30 @@ class TestOutputPaths:
         """It resolves default output within workspace root."""
         default = tmp_path / "out.json"
         with (
-            patch("souschef.cli_v2_commands._get_workspace_root") as mock_root,
-            patch("souschef.cli_v2_commands._ensure_within_base_path") as mock_safe,
+            patch("souschef.cli_utils._get_workspace_root") as mock_root,
+            patch("souschef.cli_utils._ensure_within_base_path") as mock_safe,
         ):
             mock_root.return_value = tmp_path
             mock_safe.return_value = default
-            result = cli_v2._resolve_output_path(None, default)
+            result = _resolve_output_path(None, default)
         assert result == default
 
     def test_resolve_output_path_invalid(self, tmp_path: Path) -> None:
         """It aborts when output path is invalid."""
         default = tmp_path / "out.json"
         with (
-            patch("souschef.cli_v2_commands._get_workspace_root") as mock_root,
-            patch("souschef.cli_v2_commands._ensure_within_base_path") as mock_safe,
+            patch("souschef.cli_utils._get_workspace_root") as mock_root,
+            patch("souschef.cli_utils._ensure_within_base_path") as mock_safe,
         ):
             mock_root.return_value = tmp_path
             mock_safe.side_effect = ValueError("bad")
             with pytest.raises(click.Abort):
-                cli_v2._resolve_output_path("../bad", default)
+                _resolve_output_path("../bad", default)
 
     def test_safe_write_file_writes(self, tmp_path: Path) -> None:
         """It writes content to the resolved file path."""
         target = tmp_path / "result.json"
-        with patch("souschef.cli_v2_commands._resolve_output_path") as mock_resolve:
+        with patch("souschef.cli_utils._resolve_output_path") as mock_resolve:
             mock_resolve.return_value = target
             result = cli_v2._safe_write_file("content", None, target)
         assert result == target
@@ -77,7 +78,7 @@ class TestOutputPaths:
         """It aborts when file writing fails."""
         target = tmp_path / "result.json"
         with (
-            patch("souschef.cli_v2_commands._resolve_output_path") as mock_resolve,
+            patch("souschef.cli_utils._resolve_output_path") as mock_resolve,
             patch("pathlib.Path.open") as mock_open,
         ):
             mock_resolve.return_value = target

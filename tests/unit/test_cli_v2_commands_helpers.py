@@ -10,10 +10,9 @@ from unittest.mock import MagicMock, patch
 import click
 import pytest
 
+from souschef.cli_utils import _resolve_output_path, _safe_write_file
 from souschef.cli_v2_commands import (
     _output_result,
-    _resolve_output_path,
-    _safe_write_file,
     _validate_user_path,
     create_v2_group,
     register_v2_commands,
@@ -59,7 +58,7 @@ class TestResolveOutputPath:
     def test_resolve_output_path_default(self, tmp_path: Path) -> None:
         """No output specified uses default path."""
         default = tmp_path / "output.json"
-        with patch("souschef.cli_v2_commands._get_workspace_root") as mock_root:
+        with patch("souschef.cli_utils._get_workspace_root") as mock_root:
             mock_root.return_value = tmp_path
 
             result = _resolve_output_path(None, default)
@@ -73,9 +72,9 @@ class TestResolveOutputPath:
         default = tmp_path / "output.json"
 
         with (
-            patch("souschef.cli_v2_commands._get_workspace_root") as mock_root,
-            patch("souschef.cli_v2_commands._normalize_path") as mock_norm,
-            patch("souschef.cli_v2_commands._ensure_within_base_path") as mock_safe,
+            patch("souschef.cli_utils._get_workspace_root") as mock_root,
+            patch("souschef.cli_utils._normalize_path") as mock_norm,
+            patch("souschef.cli_utils._ensure_within_base_path") as mock_safe,
         ):
             mock_root.return_value = tmp_path
             mock_norm.return_value = Path(custom_output)
@@ -94,7 +93,7 @@ class TestResolveOutputPath:
             raise ValueError("Invalid path")
 
         monkeypatch.setattr(
-            "souschef.cli_v2_commands._get_workspace_root",
+            "souschef.cli_utils._get_workspace_root",
             raise_value_error,
         )
 
@@ -110,7 +109,7 @@ class TestSafeWriteFile:
         content = "Test content"
         output_path = tmp_path / "output.json"
 
-        with patch("souschef.cli_v2_commands._resolve_output_path") as mock_resolve:
+        with patch("souschef.cli_utils._resolve_output_path") as mock_resolve:
             mock_resolve.return_value = output_path
 
             result = _safe_write_file(content, None, tmp_path / "default.json")
@@ -129,7 +128,7 @@ class TestSafeWriteFile:
 
         monkeypatch.setattr(Path, "open", raise_oserror)
 
-        with patch("souschef.cli_v2_commands._resolve_output_path") as mock_resolve:
+        with patch("souschef.cli_utils._resolve_output_path") as mock_resolve:
             mock_resolve.return_value = tmp_path / "output.json"
 
             with pytest.raises(click.Abort):
