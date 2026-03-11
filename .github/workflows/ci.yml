@@ -124,7 +124,6 @@ jobs:
         go install github.com/jandelgado/gcov2lcov@latest
         "$(go env GOPATH)/bin/gcov2lcov" -infile=coverage.out -outfile=coverage.lcov
 
-    - name: Run Terraform provider acceptance tests
     - name: Install Terraform CLI for acceptance tests
       uses: hashicorp/setup-terraform@b9cd54531c595da1a2ae506fbeac89f1b5a60e61 # v3
       with:
