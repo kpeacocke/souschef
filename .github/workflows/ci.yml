@@ -125,7 +125,7 @@ jobs:
         "$(go env GOPATH)/bin/gcov2lcov" -infile=coverage.out -outfile=coverage.lcov
 
     - name: Install Terraform CLI for acceptance tests
-      uses: hashicorp/setup-terraform@b9cd54531c595da1a2ae506fbeac89f1b5a60e61 # v3
+      uses: hashicorp/setup-terraform@v3
       with:
         terraform_wrapper: false
 
