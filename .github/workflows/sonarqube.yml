@@ -96,15 +96,17 @@ jobs:
         echo "Checking for coverage artifacts..."
         ls -lh coverage-artifacts/ 2>/dev/null || echo "No coverage-artifacts directory found"
 
-        # Find and copy Go coverage
-        if [ -f coverage-artifacts/go-coverage/coverage.lcov ]; then
-          echo "Found Go coverage at coverage-artifacts/go-coverage/coverage.lcov"
+        # Find and copy Go coverage. Artifact download can preserve directory
+        # structure, so coverage.lcov may be nested under terraform-provider/.
+        GO_COVERAGE_SOURCE=$(find coverage-artifacts -type f -name "coverage.lcov" | head -n 1 || true)
+        if [ -n "$GO_COVERAGE_SOURCE" ] && [ -f "$GO_COVERAGE_SOURCE" ]; then
+          echo "Found Go coverage at $GO_COVERAGE_SOURCE"
           mkdir -p terraform-provider
-          cp coverage-artifacts/go-coverage/coverage.lcov terraform-provider/coverage.lcov
+          cp "$GO_COVERAGE_SOURCE" terraform-provider/coverage.lcov
           echo "✓ Go coverage copied to terraform-provider/coverage.lcov"
           ls -lh terraform-provider/coverage.lcov
         else
-          echo "⚠ Go coverage not found at coverage-artifacts/go-coverage/coverage.lcov"
+          echo "⚠ Go coverage not found in downloaded artifacts"
           find coverage-artifacts -name "coverage.lcov" 2>/dev/null || echo "No coverage.lcov files found"
           find coverage-artifacts -type f 2>/dev/null || echo "No files in coverage-artifacts"
         fi
