@@ -96,18 +96,18 @@ jobs:
         echo "Checking for coverage artifacts..."
         ls -lh coverage-artifacts/ 2>/dev/null || echo "No coverage-artifacts directory found"
 
-        # Find and copy Go coverage. Artifact download can preserve directory
-        # structure, so coverage.lcov may be nested under terraform-provider/.
-        GO_COVERAGE_SOURCE=$(find coverage-artifacts -type f -name "coverage.lcov" | head -n 1 || true)
+        # Find and copy Go coverage profile. Artifact download can preserve
+        # directory structure, so coverage.out may be nested.
+        GO_COVERAGE_SOURCE=$(find coverage-artifacts -type f -name "coverage.out" | head -n 1 || true)
         if [ -n "$GO_COVERAGE_SOURCE" ] && [ -f "$GO_COVERAGE_SOURCE" ]; then
           echo "Found Go coverage at $GO_COVERAGE_SOURCE"
           mkdir -p terraform-provider
-          cp "$GO_COVERAGE_SOURCE" terraform-provider/coverage.lcov
-          echo "✓ Go coverage copied to terraform-provider/coverage.lcov"
-          ls -lh terraform-provider/coverage.lcov
+          cp "$GO_COVERAGE_SOURCE" terraform-provider/coverage.out
+          echo "✓ Go coverage copied to terraform-provider/coverage.out"
+          ls -lh terraform-provider/coverage.out
         else
           echo "⚠ Go coverage not found in downloaded artifacts"
-          find coverage-artifacts -name "coverage.lcov" 2>/dev/null || echo "No coverage.lcov files found"
+          find coverage-artifacts -name "coverage.out" 2>/dev/null || echo "No coverage.out files found"
           find coverage-artifacts -type f 2>/dev/null || echo "No files in coverage-artifacts"
         fi
 
@@ -122,7 +122,7 @@ jobs:
         # Final verification
         echo ""
         echo "Coverage files ready for SonarCloud:"
-        ls -lh terraform-provider/coverage.lcov 2>/dev/null || echo "  - Go coverage: MISSING"
+        ls -lh terraform-provider/coverage.out 2>/dev/null || echo "  - Go coverage: MISSING"
         ls -lh coverage.xml 2>/dev/null || echo "  - Python coverage: MISSING"
 
     - name: Run SonarCloud analysis
