@@ -2566,7 +2566,7 @@ def powershell_convert(
                 out_path = _ensure_within_base_path(
                     _normalize_path(output), workspace_root
                 )
-                safe_write_text(out_path, playbook_yaml, workspace_root)
+                safe_write_text(out_path, workspace_root, playbook_yaml)
                 click.echo(f"Playbook written to: {out_path}")
                 # Also show stats
                 tasks = result.get("tasks_generated", 0)
@@ -2646,7 +2646,7 @@ def powershell_inventory(
             out_path = _ensure_within_base_path(
                 _normalize_path(output), workspace_root
             )
-            safe_write_text(out_path, result, workspace_root)
+            safe_write_text(out_path, workspace_root, result)
             click.echo(f"Inventory written to: {out_path}")
         except (ValueError, OSError) as e:
             click.echo(f"Error writing inventory file '{output}': {e}", err=True)
@@ -2695,7 +2695,7 @@ def powershell_requirements(
             out_path = _ensure_within_base_path(
                 _normalize_path(output), workspace_root
             )
-            safe_write_text(out_path, result, workspace_root)
+            safe_write_text(out_path, workspace_root, result)
             click.echo(f"requirements.yml written to: {out_path}")
         except (ValueError, OSError) as e:
             click.echo(f"Error writing requirements file '{output}': {e}", err=True)
@@ -2772,7 +2772,7 @@ def powershell_role(
             for rel_path, content in files.items():
                 out_path = base / rel_path
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                safe_write_text(out_path, content, workspace_root)
+                safe_write_text(out_path, workspace_root, content)
             click.echo(f"Role files written to: {base}")
             click.echo(f"Files generated: {len(files)}")
         except (ValueError, OSError) as e:
@@ -2876,7 +2876,7 @@ def powershell_job_template(
             out_path = _ensure_within_base_path(
                 _normalize_path(output), workspace_root
             )
-            safe_write_text(out_path, result, workspace_root)
+            safe_write_text(out_path, workspace_root, result)
             click.echo(f"Job template written to: {out_path}")
         except (ValueError, OSError) as e:
             click.echo(f"Error writing job template file '{output}': {e}", err=True)
