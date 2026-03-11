@@ -1996,7 +1996,7 @@ def test_upload_cookbook_archive_success():
 
     with (
         patch(
-            "souschef.storage.database.calculate_file_fingerprint",
+            "souschef.ui.pages.cookbook_analysis._calculate_file_fingerprint",
             return_value="abc123",
         ),
         patch(
@@ -2025,7 +2025,7 @@ def test_upload_cookbook_archive_deduplicated():
 
     with (
         patch(
-            "souschef.storage.database.calculate_file_fingerprint",
+            "souschef.ui.pages.cookbook_analysis._calculate_file_fingerprint",
             return_value="abc123",
         ),
         patch(
@@ -2044,7 +2044,7 @@ def test_upload_cookbook_archive_error(mock_st):
     from souschef.ui.pages.cookbook_analysis import _upload_cookbook_archive
 
     with patch(
-        "souschef.storage.database.calculate_file_fingerprint",
+        "souschef.ui.pages.cookbook_analysis._calculate_file_fingerprint",
         side_effect=Exception("Upload failed"),
     ):
         result = _upload_cookbook_archive(Path("/tmp/cookbook.tar.gz"), "nginx")
