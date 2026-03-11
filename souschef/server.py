@@ -84,6 +84,16 @@ from souschef.converters.playbook import (
 from souschef.converters.playbook import (
     generate_dynamic_inventory_script as _generate_dynamic_inventory_script,
 )
+from souschef.converters.powershell import (  # noqa: F401, codeql[py/unused-import]
+    _action_to_task,
+    _split_registry_key,
+)
+from souschef.converters.powershell import (
+    convert_powershell_content_to_ansible as _convert_powershell_content_to_ansible,
+)
+from souschef.converters.powershell import (
+    convert_powershell_to_ansible as _convert_powershell_to_ansible,
+)
 from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-import]
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
@@ -259,6 +269,18 @@ from souschef.parsers.metadata import (
 from souschef.parsers.metadata import (
     read_cookbook_metadata as _read_cookbook_metadata,
 )
+from souschef.parsers.powershell import (  # noqa: F401, codeql[py/unused-import]
+    _classify_line,
+    _make_action,
+    _make_win_shell_fallback,
+    _parse_powershell_content,
+)
+from souschef.parsers.powershell import (
+    parse_powershell_content as _parse_powershell_content_fn,
+)
+from souschef.parsers.powershell import (
+    parse_powershell_script as _parse_powershell_script,
+)
 from souschef.parsers.recipe import (
     _extract_conditionals,  # noqa: F401, codeql[py/unused-import]
     _extract_resources,  # noqa: F401, codeql[py/unused-import]
@@ -317,6 +339,10 @@ generate_blue_green_deployment_playbook = (  # noqa: F401
 generate_canary_deployment_strategy = (  # noqa: F401
     _generate_canary_deployment_strategy
 )
+parse_powershell_script = _parse_powershell_script  # noqa: F401
+parse_powershell_content = _parse_powershell_content_fn  # noqa: F401
+convert_powershell_to_ansible = _convert_powershell_to_ansible  # noqa: F401
+convert_powershell_content_to_ansible = _convert_powershell_content_to_ansible  # noqa: F401
 
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
@@ -5551,6 +5577,73 @@ def generate_handler_routing_config(
 
 
 # ==================== End Ansible Upgrade Tools ====================
+
+
+# ==================== PowerShell Migration Tools ====================
+
+
+@mcp.tool()
+def parse_powershell(script_path: str) -> str:
+    """
+    Parse a PowerShell provisioning script and extract structured actions.
+
+    Analyses the ``.ps1`` script using pattern matching to identify common
+    Windows provisioning operations: Windows features, services, registry
+    edits, file operations, MSI installs, and Chocolatey packages.
+
+    Addresses GitHub issues #204 and #205.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+
+    Returns:
+        JSON string with keys:
+
+        - ``source``: absolute path of the parsed file.
+        - ``actions``: list of structured action dicts (type, params,
+          confidence, source location, elevation requirement).
+        - ``warnings``: list of warnings for unrecognised lines.
+        - ``metrics``: summary counts per action category.
+
+    """
+    return _parse_powershell_script(script_path)
+
+
+@mcp.tool()
+def convert_powershell(
+    script_path: str,
+    playbook_name: str = "powershell_migration",
+    hosts: str = "windows",
+) -> str:
+    """
+    Convert a PowerShell provisioning script to an Ansible playbook.
+
+    Maps recognised PowerShell provisioning actions to their idiomatic
+    ``ansible.windows`` module equivalents.  Unrecognised commands fall
+    back to ``ansible.windows.win_shell`` with warnings.
+
+    Addresses GitHub issues #204, #205, and #206.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+        playbook_name: Name for the generated Ansible play.
+        hosts: Ansible inventory group / host pattern (default: ``windows``).
+
+    Returns:
+        JSON string with keys:
+
+        - ``status``: ``"success"`` or ``"error"``.
+        - ``playbook_yaml``: the generated Ansible playbook as YAML text.
+        - ``tasks_generated``: total number of tasks.
+        - ``win_shell_fallbacks``: count of low-confidence fallback tasks.
+        - ``warnings``: list of warning messages with source locations.
+        - ``source``: absolute path of the input file.
+
+    """
+    return _convert_powershell_to_ansible(script_path, playbook_name, hosts)
+
+
+# ==================== End PowerShell Migration Tools ====================
 
 
 def main() -> None:

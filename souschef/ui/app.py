@@ -30,6 +30,7 @@ from souschef.ui.pages.chef_server_settings import show_chef_server_settings_pag
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
 from souschef.ui.pages.migration_config import show_migration_config_page
+from souschef.ui.pages.powershell_migration import show_powershell_migration_page
 
 # Constants
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
@@ -47,11 +48,13 @@ NAV_HISTORY = "History"
 NAV_ANSIBLE_ASSESSMENT = "Ansible Assessment"
 NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
 NAV_ANSIBLE_VALIDATION = "Collection Validation"
+NAV_POWERSHELL_MIGRATION = "PowerShell Migration"
 CHEF_FEATURES = {
     NAV_COOKBOOK_ANALYSIS,
     NAV_MIGRATION_PLANNING,
     NAV_MIGRATION_CONFIG,
     NAV_DEPENDENCY_MAPPING,
+    NAV_POWERSHELL_MIGRATION,
 }
 ANSIBLE_FEATURES = {
     NAV_ANSIBLE_ASSESSMENT,
@@ -162,6 +165,7 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
         ("Migration Planning", NAV_MIGRATION_PLANNING),
         ("Migration Config", NAV_MIGRATION_CONFIG),
         ("Dependency Mapping", NAV_DEPENDENCY_MAPPING),
+        ("PowerShell Migration", NAV_POWERSHELL_MIGRATION),
         ("Ansible Assessment", NAV_ANSIBLE_ASSESSMENT),
         ("Ansible Upgrade", NAV_ANSIBLE_PLANNING),
         ("Collection Validation", NAV_ANSIBLE_VALIDATION),
@@ -235,6 +239,7 @@ def _route_to_page(page: str) -> None:
         NAV_ANSIBLE_ASSESSMENT: show_ansible_assessment_page,
         NAV_ANSIBLE_PLANNING: show_ansible_planning_page,
         NAV_ANSIBLE_VALIDATION: show_ansible_validation_page,
+        NAV_POWERSHELL_MIGRATION: show_powershell_migration_page,
     }
 
     route_func = page_routes.get(page)

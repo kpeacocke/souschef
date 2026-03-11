@@ -18,6 +18,10 @@ from souschef.parsers.metadata import (
     parse_cookbook_metadata,
     read_cookbook_metadata,
 )
+from souschef.parsers.powershell import (
+    parse_powershell_content,
+    parse_powershell_script,
+)
 from souschef.parsers.recipe import parse_recipe
 from souschef.parsers.resource import parse_custom_resource
 from souschef.parsers.template import parse_template
@@ -34,6 +38,8 @@ __all__ = [
     "convert_inspec_to_test",
     "generate_inspec_from_chef",
     "parse_habitat_plan",
+    "parse_powershell_script",
+    "parse_powershell_content",
     "ValidationCategory",
     "ValidationEngine",
     "ValidationLevel",

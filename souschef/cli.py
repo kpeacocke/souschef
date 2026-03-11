@@ -2473,5 +2473,120 @@ def main() -> NoReturn:
     sys.exit(0)
 
 
+# ==================== PowerShell Migration Commands ====================
+
+
+@cli.command("powershell-parse")
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+    help="Output format (default: json)",
+)
+def powershell_parse(path: str, output_format: str) -> None:
+    r"""
+    Parse a PowerShell provisioning script.
+
+    Extracts structured actions from the script, including Windows features,
+    services, registry edits, file operations, MSI installs, and Chocolatey
+    packages.  Unrecognised commands are preserved as win_shell fallbacks.
+
+    PATH: Path to the PowerShell script (.ps1 file)
+
+    Example:
+        souschef powershell-parse C:\scripts\setup.ps1
+
+    """
+    from souschef.server import parse_powershell_script
+
+    result = parse_powershell_script(path)
+    _output_result(result, output_format)
+
+
+@cli.command("powershell-convert")
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--playbook-name",
+    default="powershell_migration",
+    help="Name for the generated Ansible play (default: powershell_migration)",
+)
+@click.option(
+    "--hosts",
+    default="windows",
+    help="Ansible inventory group or host pattern (default: windows)",
+)
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Write the generated playbook YAML to this file path",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+    help="Output format for the full result (default: json)",
+)
+def powershell_convert(
+    path: str,
+    playbook_name: str,
+    hosts: str,
+    output: str | None,
+    output_format: str,
+) -> None:
+    r"""
+    Convert a PowerShell script to an Ansible playbook.
+
+    Maps recognised PowerShell provisioning actions to ansible.windows
+    module tasks.  Unrecognised commands fall back to win_shell with
+    warnings and source locations.
+
+    PATH: Path to the PowerShell script (.ps1 file)
+
+    Example:
+        souschef powershell-convert C:\scripts\setup.ps1 \
+            --playbook-name my_playbook \
+            --hosts windows_servers \
+            --output playbook.yml
+
+    """
+    from souschef.server import convert_powershell_to_ansible
+
+    result_json = convert_powershell_to_ansible(path, playbook_name, hosts)
+
+    if output:
+        try:
+            import json as _json
+
+            result = _json.loads(result_json)
+            playbook_yaml = result.get("playbook_yaml", "")
+            if playbook_yaml:
+                workspace_root = _get_workspace_root()
+                out_path = _ensure_within_base_path(
+                    _normalize_path(output), workspace_root
+                )
+                safe_write_text(out_path, playbook_yaml, workspace_root)
+                click.echo(f"Playbook written to: {out_path}")
+                # Also show stats
+                tasks = result.get("tasks_generated", 0)
+                fallbacks = result.get("win_shell_fallbacks", 0)
+                click.echo(
+                    f"Tasks generated: {tasks}"
+                    f" (win_shell fallbacks: {fallbacks})"
+                )
+                warnings = result.get("warnings", [])
+                if warnings:
+                    click.echo(f"Warnings: {len(warnings)}")
+                return
+        except Exception as e:
+            click.echo(f"Error writing output file: {e}", err=True)
+            sys.exit(1)
+
+    _output_result(result_json, output_format)
+
+
 if __name__ == "__main__":
     main()

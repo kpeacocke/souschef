@@ -36,6 +36,10 @@ from souschef.converters.playbook import (
     generate_dynamic_inventory_script,
     generate_playbook_from_recipe,
 )
+from souschef.converters.powershell import (
+    convert_powershell_content_to_ansible,
+    convert_powershell_to_ansible,
+)
 from souschef.converters.resource import convert_resource_to_task
 
 __all__ = [
@@ -58,6 +62,8 @@ __all__ = [
     "generate_module_manifest",
     "validate_module_code",
     "build_module_collection",
+    "convert_powershell_to_ansible",
+    "convert_powershell_content_to_ansible",
     "ConversionRule",
     "RuleEngine",
     "RuleType",
