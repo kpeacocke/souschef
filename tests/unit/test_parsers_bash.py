@@ -119,7 +119,7 @@ def test_extract_packages_apt() -> None:
     """Detects apt-get install commands."""
     content = "apt-get install -y nginx python3\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_packages(content, [], result)
+    _extract_packages(content, result)
     assert len(result["packages"]) >= 1
     apt_pkgs = [p for p in result["packages"] if p["manager"] == "apt"]
     assert apt_pkgs
@@ -130,7 +130,7 @@ def test_extract_packages_multiple_managers() -> None:
     """Detects multiple package managers in the same script."""
     content = "apt-get install nginx\nyum install httpd\ndnf install vim\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_packages(content, [], result)
+    _extract_packages(content, result)
     managers = {p["manager"] for p in result["packages"]}
     assert "apt" in managers
     assert "yum" in managers
@@ -141,14 +141,14 @@ def test_extract_packages_confidence_high() -> None:
     """Packages with parsed names get high confidence."""
     content = "apt-get install -y nginx\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_packages(content, [], result)
+    _extract_packages(content, result)
     assert result["packages"][0]["confidence"] >= 0.8
 
 
 def test_extract_packages_empty_content() -> None:
     """Empty content results in no packages."""
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_packages("", [], result)
+    _extract_packages("", result)
     assert result["packages"] == []
 
 
@@ -161,7 +161,7 @@ def test_extract_services_systemctl() -> None:
     """Detects systemctl enable/start commands."""
     content = "systemctl enable nginx\nsystemctl start nginx\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_services(content, [], result)
+    _extract_services(content, result)
     assert len(result["services"]) == 2
     actions = {s["action"] for s in result["services"]}
     assert "enable" in actions
@@ -172,7 +172,7 @@ def test_extract_services_service_command() -> None:
     """Detects legacy service command."""
     content = "service apache2 restart\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_services(content, [], result)
+    _extract_services(content, result)
     assert len(result["services"]) == 1
     svc = result["services"][0]
     assert svc["name"] == "apache2"
@@ -183,14 +183,14 @@ def test_extract_services_high_confidence() -> None:
     """Service entries have high confidence."""
     content = "systemctl stop nginx\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_services(content, [], result)
+    _extract_services(content, result)
     assert result["services"][0]["confidence"] >= 0.9
 
 
 def test_extract_services_empty_content() -> None:
     """Empty content results in no services."""
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_services("", [], result)
+    _extract_services("", result)
     assert result["services"] == []
 
 
@@ -203,7 +203,7 @@ def test_extract_file_writes_heredoc() -> None:
     """Detects cat heredoc file writes."""
     content = "cat <<EOF > /etc/app.conf\nfoo\nEOF\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_file_writes(content, [], result)
+    _extract_file_writes(content, result)
     assert any("/etc/app.conf" in fw["destination"] for fw in result["file_writes"])
 
 
@@ -211,14 +211,14 @@ def test_extract_file_writes_echo_redirect() -> None:
     """Detects echo redirect file writes."""
     content = 'echo "KEY=value" > /etc/app/env\n'
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_file_writes(content, [], result)
+    _extract_file_writes(content, result)
     assert len(result["file_writes"]) >= 1
 
 
 def test_extract_file_writes_empty_content() -> None:
     """Empty content results in no file writes."""
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_file_writes("", [], result)
+    _extract_file_writes("", result)
     assert result["file_writes"] == []
 
 
@@ -231,17 +231,17 @@ def test_extract_downloads_curl() -> None:
     """Detects curl download commands."""
     content = "curl -o /tmp/app.tar.gz https://example.com/app.tar.gz\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_downloads(content, [], result)
+    _extract_downloads(content, result)
     assert len(result["downloads"]) >= 1
     assert result["downloads"][0]["tool"] == "curl"
-    assert "example.com" in result["downloads"][0]["url"]
+    assert result["downloads"][0]["url"] == "https://example.com/app.tar.gz"
 
 
 def test_extract_downloads_wget() -> None:
     """Detects wget download commands."""
     content = "wget -O /tmp/config.zip https://example.com/config.zip\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_downloads(content, [], result)
+    _extract_downloads(content, result)
     assert len(result["downloads"]) >= 1
     assert result["downloads"][0]["tool"] == "wget"
 
@@ -249,7 +249,7 @@ def test_extract_downloads_wget() -> None:
 def test_extract_downloads_empty_content() -> None:
     """Empty content results in no downloads."""
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_downloads("", [], result)
+    _extract_downloads("", result)
     assert result["downloads"] == []
 
 
@@ -262,7 +262,7 @@ def test_extract_idempotency_risks_package_install() -> None:
     """Detects unconditional package install risk."""
     content = "apt-get install nginx\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_idempotency_risks(content, [], result)
+    _extract_idempotency_risks(content, result)
     risk_types = {r["type"] for r in result["idempotency_risks"]}
     assert "unconditional_package_install" in risk_types
 
@@ -271,7 +271,7 @@ def test_extract_idempotency_risks_download() -> None:
     """Detects raw download risk."""
     content = "wget https://example.com/file.tgz\n"
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_idempotency_risks(content, [], result)
+    _extract_idempotency_risks(content, result)
     risk_types = {r["type"] for r in result["idempotency_risks"]}
     assert "raw_download" in risk_types
 
@@ -279,7 +279,7 @@ def test_extract_idempotency_risks_download() -> None:
 def test_extract_idempotency_risks_empty_content() -> None:
     """Empty content results in no risks."""
     result: dict = {"packages": [], "services": [], "file_writes": [], "downloads": [], "idempotency_risks": [], "shell_fallbacks": [], "warnings": []}
-    _extract_idempotency_risks("", [], result)
+    _extract_idempotency_risks("", result)
     assert result["idempotency_risks"] == []
 
 

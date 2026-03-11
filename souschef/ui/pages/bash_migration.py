@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import streamlit as st
@@ -131,7 +131,7 @@ def _display_parse_results(content: str) -> None:
     _render_shell_fallbacks(ir)
 
 
-def _render_summary_metrics(ir: dict) -> None:  # type: ignore[type-arg]
+def _render_summary_metrics(ir: dict[str, Any]) -> None:
     """Render high-level metric cards."""
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -144,7 +144,7 @@ def _render_summary_metrics(ir: dict) -> None:  # type: ignore[type-arg]
         st.metric("Downloads", len(ir.get("downloads", [])))
 
 
-def _render_packages(ir: dict) -> None:  # type: ignore[type-arg]
+def _render_packages(ir: dict[str, Any]) -> None:
     """Render detected package install operations."""
     packages = ir.get("packages", [])
     if not packages:
@@ -160,7 +160,7 @@ def _render_packages(ir: dict) -> None:  # type: ignore[type-arg]
             st.code(pkg["raw"], language="bash")
 
 
-def _render_services(ir: dict) -> None:  # type: ignore[type-arg]
+def _render_services(ir: dict[str, Any]) -> None:
     """Render detected service control operations."""
     services = ir.get("services", [])
     if not services:
@@ -175,7 +175,7 @@ def _render_services(ir: dict) -> None:  # type: ignore[type-arg]
             st.code(svc["raw"], language="bash")
 
 
-def _render_file_writes(ir: dict) -> None:  # type: ignore[type-arg]
+def _render_file_writes(ir: dict[str, Any]) -> None:
     """Render detected file write operations."""
     file_writes = ir.get("file_writes", [])
     if not file_writes:
@@ -188,7 +188,7 @@ def _render_file_writes(ir: dict) -> None:  # type: ignore[type-arg]
             st.code(fw["raw"], language="bash")
 
 
-def _render_downloads(ir: dict) -> None:  # type: ignore[type-arg]
+def _render_downloads(ir: dict[str, Any]) -> None:
     """Render detected download operations."""
     downloads = ir.get("downloads", [])
     if not downloads:
@@ -203,7 +203,7 @@ def _render_downloads(ir: dict) -> None:  # type: ignore[type-arg]
             st.code(dl["raw"], language="bash")
 
 
-def _render_idempotency_risks(ir: dict) -> None:  # type: ignore[type-arg]
+def _render_idempotency_risks(ir: dict[str, Any]) -> None:
     """Render idempotency risk warnings."""
     risks = ir.get("idempotency_risks", [])
     if not risks:
@@ -215,7 +215,7 @@ def _render_idempotency_risks(ir: dict) -> None:  # type: ignore[type-arg]
         )
 
 
-def _render_shell_fallbacks(ir: dict) -> None:  # type: ignore[type-arg]
+def _render_shell_fallbacks(ir: dict[str, Any]) -> None:
     """Render lines that will fall back to ansible.builtin.shell."""
     fallbacks = ir.get("shell_fallbacks", [])
     if not fallbacks:

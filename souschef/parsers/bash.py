@@ -236,11 +236,11 @@ def _parse_bash_content(content: str) -> dict[str, Any]:
         "warnings": [],
     }
 
-    _extract_packages(content, lines, result)
-    _extract_services(content, lines, result)
-    _extract_file_writes(content, lines, result)
-    _extract_downloads(content, lines, result)
-    _extract_idempotency_risks(content, lines, result)
+    _extract_packages(content, result)
+    _extract_services(content, result)
+    _extract_file_writes(content, result)
+    _extract_downloads(content, result)
+    _extract_idempotency_risks(content, result)
     _identify_shell_fallbacks(lines, result)
 
     return result
@@ -253,11 +253,9 @@ def _line_number(content: str, match_start: int) -> int:
 
 def _extract_packages(
     content: str,
-    lines: list[str],  # noqa: ARG001
     result: dict[str, Any],
 ) -> None:
     """Populate *result['packages']* from *content*."""
-    del lines  # unused – kept for uniform helper signature
     for manager, ansible_module, pattern in _PKG_PATTERNS:
         for match in pattern.finditer(content):
             raw_line = match.group(0).strip()
@@ -307,11 +305,9 @@ def _parse_package_names(raw: str, manager: str) -> list[str]:
 
 def _extract_services(
     content: str,
-    lines: list[str],  # noqa: ARG001
     result: dict[str, Any],
 ) -> None:
     """Populate *result['services']* from *content*."""
-    del lines
     for manager, pattern in _SERVICE_PATTERNS:
         for match in pattern.finditer(content):
             if manager == "systemctl":
@@ -332,11 +328,9 @@ def _extract_services(
 
 def _extract_file_writes(
     content: str,
-    lines: list[str],  # noqa: ARG001
     result: dict[str, Any],
 ) -> None:
     """Populate *result['file_writes']* from *content*."""
-    del lines
     for pattern in _FILE_WRITE_PATTERNS:
         for match in pattern.finditer(content):
             # Destination is in the last non-None group
@@ -356,11 +350,9 @@ def _extract_file_writes(
 
 def _extract_downloads(
     content: str,
-    lines: list[str],  # noqa: ARG001
     result: dict[str, Any],
 ) -> None:
     """Populate *result['downloads']* from *content*."""
-    del lines
     for tool, pattern in _DOWNLOAD_PATTERNS:
         for match in pattern.finditer(content):
             url_match = re.search(r"https?://\S+", match.group(0))
@@ -378,11 +370,9 @@ def _extract_downloads(
 
 def _extract_idempotency_risks(
     content: str,
-    lines: list[str],  # noqa: ARG001
     result: dict[str, Any],
 ) -> None:
     """Populate *result['idempotency_risks']* from *content*."""
-    del lines
     for risk_type, suggestion, pattern in _IDEMPOTENCY_RISKS:
         for match in pattern.finditer(content):
             result["idempotency_risks"].append(
