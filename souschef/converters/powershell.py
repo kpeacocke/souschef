@@ -17,6 +17,7 @@ Mapping decisions follow the acceptance criteria from GitHub issue #206:
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import yaml
@@ -51,6 +52,34 @@ _MODULE_MAP: dict[str, str] = {
     "chocolatey_install": "chocolatey.chocolatey.win_chocolatey",
     "chocolatey_uninstall": "chocolatey.chocolatey.win_chocolatey",
     "win_shell": "ansible.windows.win_shell",
+    # User management
+    "user_create": "ansible.windows.win_user",
+    "user_modify": "ansible.windows.win_user",
+    "user_remove": "ansible.windows.win_user",
+    "group_member_add": "ansible.windows.win_group_membership",
+    "group_member_remove": "ansible.windows.win_group_membership",
+    # Firewall
+    "firewall_rule_create": "ansible.windows.win_firewall_rule",
+    "firewall_rule_enable": "ansible.windows.win_firewall_rule",
+    "firewall_rule_disable": "ansible.windows.win_firewall_rule",
+    "firewall_rule_remove": "ansible.windows.win_firewall_rule",
+    # Scheduled tasks
+    "scheduled_task_register": "community.windows.win_scheduled_task",
+    "scheduled_task_unregister": "community.windows.win_scheduled_task",
+    # Environment variables
+    "environment_set": "ansible.windows.win_environment",
+    # PowerShell modules
+    "psmodule_install": "community.windows.win_psmodule",
+    # Certificates
+    "certificate_import": "community.windows.win_certificate_store",
+    # WinRM
+    "winrm_enable": "ansible.windows.win_shell",
+    # IIS
+    "iis_website_create": "community.windows.win_iis_website",
+    # DNS client
+    "dns_client_set": "community.windows.win_dns_client",
+    # ACL
+    "acl_set": "ansible.windows.win_acl",
 }
 
 #: Startup type mapping from PowerShell to Ansible
@@ -477,6 +506,218 @@ def _convert_win_shell(
     )
 
 
+def _convert_user_create(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert user_create to win_user task args."""
+    user = params.get("username", "unknown")
+    return (
+        f"Create local user: {user}",
+        {"name": user, "state": "present"},
+    )
+
+
+def _convert_user_modify(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert user_modify to win_user task args."""
+    user = params.get("username", "unknown")
+    return (
+        f"Modify local user: {user}",
+        {"name": user, "state": "present", "update_password": "on_create"},
+    )
+
+
+def _convert_user_remove(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert user_remove to win_user task args."""
+    user = params.get("username", "unknown")
+    return (
+        f"Remove local user: {user}",
+        {"name": user, "state": "absent"},
+    )
+
+
+def _convert_group_member_add(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert group_member_add to win_group_membership task args."""
+    group = params.get("group", "unknown")
+    member = params.get("member", "unknown")
+    return (
+        f"Add {member} to group: {group}",
+        {"name": group, "members": [member], "state": "present"},
+    )
+
+
+def _convert_group_member_remove(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert group_member_remove to win_group_membership task args."""
+    group = params.get("group", "unknown")
+    member = params.get("member", "unknown")
+    return (
+        f"Remove {member} from group: {group}",
+        {"name": group, "members": [member], "state": "absent"},
+    )
+
+
+def _convert_firewall_rule_create(
+    params: dict[str, Any], raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert firewall_rule_create to win_firewall_rule task args."""
+    name = params.get("rule_name", "unknown")
+    return (
+        f"Create firewall rule: {name}",
+        {"name": name, "state": "present", "raw_args": raw},
+    )
+
+
+def _convert_firewall_rule_enable(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert firewall_rule_enable to win_firewall_rule task args."""
+    name = params.get("rule_name", "unknown")
+    return (
+        f"Enable firewall rule: {name}",
+        {"name": name, "enabled": True, "state": "present"},
+    )
+
+
+def _convert_firewall_rule_disable(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert firewall_rule_disable to win_firewall_rule task args."""
+    name = params.get("rule_name", "unknown")
+    return (
+        f"Disable firewall rule: {name}",
+        {"name": name, "enabled": False, "state": "present"},
+    )
+
+
+def _convert_firewall_rule_remove(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert firewall_rule_remove to win_firewall_rule task args."""
+    name = params.get("rule_name", "unknown")
+    return (
+        f"Remove firewall rule: {name}",
+        {"name": name, "state": "absent"},
+    )
+
+
+def _convert_scheduled_task_register(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert scheduled_task_register to win_scheduled_task task args."""
+    task = params.get("task_name", "unknown")
+    return (
+        f"Register scheduled task: {task}",
+        {"name": task, "state": "present"},
+    )
+
+
+def _convert_scheduled_task_unregister(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert scheduled_task_unregister to win_scheduled_task task args."""
+    task = params.get("task_name", "unknown")
+    return (
+        f"Unregister scheduled task: {task}",
+        {"name": task, "state": "absent"},
+    )
+
+
+def _convert_environment_set(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert environment_set to win_environment task args."""
+    name = params.get("name", "unknown")
+    value = params.get("value", "")
+    return (
+        f"Set environment variable: {name}",
+        {"name": name, "value": value, "state": "present", "level": "machine"},
+    )
+
+
+def _convert_psmodule_install(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert psmodule_install to win_psmodule task args."""
+    module = params.get("module_name", "unknown")
+    return (
+        f"Install PowerShell module: {module}",
+        {"name": module, "state": "present"},
+    )
+
+
+def _convert_certificate_import(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert certificate_import to win_certificate_store task args."""
+    path = params.get("certificate_path", "")
+    return (
+        f"Import certificate: {path}",
+        {"path": path, "state": "present"},
+    )
+
+
+def _convert_winrm_enable(
+    params: dict[str, Any], raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert winrm_enable to win_shell task args (with note)."""
+    cmd = params.get("raw_command", raw)
+    return (
+        "Enable WinRM / PSRemoting",
+        {"cmd": cmd, "creates": "C:\\Windows\\System32\\winrm.cmd"},
+    )
+
+
+def _convert_iis_website_create(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert iis_website_create to win_iis_website task args."""
+    site = params.get("site_name", "Default Web Site")
+    return (
+        f"Create IIS website: {site}",
+        {"name": site, "state": "started"},
+    )
+
+
+def _convert_dns_client_set(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert dns_client_set to win_dns_client task args."""
+    addresses = params.get("server_addresses", "")
+    dns_list = [
+        a.strip().strip("'\"[]")
+        for a in re.split(r"[,\s]+", addresses)
+        if a.strip().strip("'\"[]")
+    ]
+    return (
+        "Configure DNS client server addresses",
+        {"ipv4_addresses": dns_list or ["127.0.0.1"], "adapter_names": "*"},
+    )
+
+
+def _convert_acl_set(
+    params: dict[str, Any], _raw: str
+) -> tuple[str, dict[str, Any]]:
+    """Convert acl_set to win_acl task args."""
+    path = params.get("path", "")
+    return (
+        f"Set ACL on: {path}",
+        {
+            "path": path,
+            "user": "DOMAIN\\ServiceAccount",
+            "rights": "FullControl",
+            "type": "allow",
+            "state": "present",
+        },
+    )
+
+
 #: Dispatch table mapping action_type -> converter function
 _TASK_CONVERTERS: dict[
     str,
@@ -501,6 +742,24 @@ _TASK_CONVERTERS: dict[
     "chocolatey_install": _convert_chocolatey_install,
     "chocolatey_uninstall": _convert_chocolatey_uninstall,
     "win_shell": _convert_win_shell,
+    "user_create": _convert_user_create,
+    "user_modify": _convert_user_modify,
+    "user_remove": _convert_user_remove,
+    "group_member_add": _convert_group_member_add,
+    "group_member_remove": _convert_group_member_remove,
+    "firewall_rule_create": _convert_firewall_rule_create,
+    "firewall_rule_enable": _convert_firewall_rule_enable,
+    "firewall_rule_disable": _convert_firewall_rule_disable,
+    "firewall_rule_remove": _convert_firewall_rule_remove,
+    "scheduled_task_register": _convert_scheduled_task_register,
+    "scheduled_task_unregister": _convert_scheduled_task_unregister,
+    "environment_set": _convert_environment_set,
+    "psmodule_install": _convert_psmodule_install,
+    "certificate_import": _convert_certificate_import,
+    "winrm_enable": _convert_winrm_enable,
+    "iis_website_create": _convert_iis_website_create,
+    "dns_client_set": _convert_dns_client_set,
+    "acl_set": _convert_acl_set,
 }
 
 
