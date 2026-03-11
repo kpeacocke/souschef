@@ -8,15 +8,20 @@ Tests cover all Puppet-related MCP tools registered in server.py:
 - convert_puppet_module_to_ansible
 - convert_puppet_resource_to_task
 - list_puppet_supported_resource_types
+- convert_puppet_manifest_to_ansible_with_ai
+- convert_puppet_module_to_ansible_with_ai
 """
 
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
 from souschef.server import (
     convert_puppet_manifest_to_ansible,
+    convert_puppet_manifest_to_ansible_with_ai,
     convert_puppet_module_to_ansible,
+    convert_puppet_module_to_ansible_with_ai,
     convert_puppet_resource_to_task,
     list_puppet_supported_resource_types,
     parse_puppet_manifest,
@@ -210,3 +215,91 @@ def test_mcp_list_puppet_supported_resource_types() -> None:
     assert "exec" in result
     assert "ansible.builtin.package" in result
     assert "Total:" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: convert_puppet_manifest_to_ansible_with_ai (MCP tool)
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_convert_puppet_manifest_with_ai_no_unsupported(
+    tmp_path: Path,
+) -> None:
+    """MCP tool falls back to deterministic conversion when no unsupported constructs."""
+    m = tmp_path / "site.pp"
+    m.write_text("package { 'nginx': ensure => installed }", encoding="utf-8")
+    result = convert_puppet_manifest_to_ansible_with_ai(str(m))
+    assert "ansible.builtin.package" in result
+
+
+def test_mcp_convert_puppet_manifest_with_ai_calls_ai(tmp_path: Path) -> None:
+    """MCP tool invokes AI when unsupported constructs are present."""
+    m = tmp_path / "hiera.pp"
+    m.write_text(
+        "$p = hiera('port', 80)\npackage { 'nginx': ensure => installed }",
+        encoding="utf-8",
+    )
+    ai_playbook = (
+        "- name: Converted from Puppet: hiera.pp\n"
+        "  hosts: all\n"
+        "  become: true\n"
+        "  tasks: []\n"
+    )
+    with patch(
+        "souschef.converters.puppet_to_ansible._convert_manifest_with_ai",
+        return_value=ai_playbook,
+    ) as mock_ai:
+        result = convert_puppet_manifest_to_ansible_with_ai(
+            str(m), api_key="test-key"
+        )
+        mock_ai.assert_called_once()
+    assert "Converted from Puppet" in result
+
+
+def test_mcp_convert_puppet_manifest_with_ai_missing_file() -> None:
+    """MCP tool returns error for missing manifest."""
+    result = convert_puppet_manifest_to_ansible_with_ai("/no/such/file.pp")
+    assert "Error" in result or "not found" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests: convert_puppet_module_to_ansible_with_ai (MCP tool)
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_convert_puppet_module_with_ai_no_unsupported(tmp_path: Path) -> None:
+    """MCP tool falls back to deterministic conversion for clean modules."""
+    (tmp_path / "init.pp").write_text(
+        "package { 'nginx': ensure => installed }", encoding="utf-8"
+    )
+    result = convert_puppet_module_to_ansible_with_ai(str(tmp_path))
+    assert "ansible.builtin.package" in result
+
+
+def test_mcp_convert_puppet_module_with_ai_calls_ai(tmp_path: Path) -> None:
+    """MCP tool invokes AI for modules with unsupported constructs."""
+    (tmp_path / "init.pp").write_text(
+        "$x = hiera('key')\npackage { 'curl': ensure => installed }",
+        encoding="utf-8",
+    )
+    ai_playbook = (
+        "- name: Converted from Puppet\n"
+        "  hosts: all\n"
+        "  become: true\n"
+        "  tasks: []\n"
+    )
+    with patch(
+        "souschef.converters.puppet_to_ansible._convert_manifest_with_ai",
+        return_value=ai_playbook,
+    ) as mock_ai:
+        result = convert_puppet_module_to_ansible_with_ai(
+            str(tmp_path), api_key="key"
+        )
+        mock_ai.assert_called_once()
+    assert "Converted from Puppet" in result
+
+
+def test_mcp_convert_puppet_module_with_ai_missing_path() -> None:
+    """MCP tool returns error for missing module path."""
+    result = convert_puppet_module_to_ansible_with_ai("/no/such/directory")
+    assert "Error" in result or "not found" in result.lower()

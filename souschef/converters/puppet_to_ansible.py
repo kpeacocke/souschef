@@ -17,6 +17,15 @@ Resource mapping:
 - ``host`` → ``ansible.builtin.lineinfile`` (with warning)
 - ``mount`` → ``ansible.posix.mount``
 - Others → ``ansible.builtin.debug`` warning task
+
+AI-Assisted Conversion
+----------------------
+For manifests with unsupported constructs (Hiera lookups, create_resources,
+exported/virtual resources, etc.), the ``*_with_ai`` variants use a
+configurable LLM to produce best-effort Ansible equivalents.  These functions
+accept the same ``ai_provider``, ``api_key``, ``model``, ``temperature``,
+``max_tokens``, ``project_id``, and ``base_url`` parameters as the Chef
+recipe AI-assisted converters in :mod:`souschef.converters.playbook`.
 """
 
 import re
@@ -37,7 +46,11 @@ from souschef.core.path_utils import (
 )
 from souschef.parsers.puppet import (
     _parse_manifest_content,
+    parse_puppet_manifest,
 )
+
+# Error prefix used for error detection in callers
+_ERROR_PREFIX = "Error:"
 
 # Maximum content length for safe processing
 MAX_CONTENT_LENGTH = 2_000_000
@@ -722,3 +735,500 @@ def get_supported_puppet_types() -> list[str]:
 
     """
     return sorted(RESOURCE_MODULE_MAP.keys())
+
+
+# ---------------------------------------------------------------------------
+# AI-Assisted Conversion
+# ---------------------------------------------------------------------------
+
+# Maximum manifest content length sent to the LLM (trim beyond this)
+_AI_MAX_CONTENT_CHARS = 40_000
+
+
+def convert_puppet_manifest_to_ansible_with_ai(
+    manifest_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a Puppet manifest to an Ansible playbook using an LLM.
+
+    Uses a configurable AI provider to convert the *entire* manifest,
+    with particular focus on unsupported constructs such as Hiera lookups,
+    ``create_resources`` calls, exported/virtual resources, etc. that the
+    deterministic converter cannot handle.
+
+    If no unsupported constructs are detected the function falls back to the
+    standard deterministic :func:`convert_puppet_manifest_to_ansible`.
+
+    Args:
+        manifest_path: Path to the Puppet manifest (``.pp``) file.
+        ai_provider: AI provider to use (``'anthropic'``, ``'openai'``,
+            ``'watson'``, ``'lightspeed'``).
+        api_key: API key for the chosen provider.
+        model: Model identifier (e.g. ``'claude-3-5-sonnet-20241022'``).
+        temperature: Sampling temperature (0.0 – 1.0). Lower values produce
+            more deterministic output; defaults to ``0.3`` for code generation.
+        max_tokens: Maximum tokens in the LLM response.
+        project_id: Project ID (required for IBM Watsonx).
+        base_url: Custom base URL override for the provider endpoint.
+
+    Returns:
+        Ansible playbook YAML string, or an error message string prefixed
+        with ``"Error:"`` if conversion fails.
+
+    """
+    try:
+        file_path = _normalize_path(manifest_path)
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        raw_content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
+
+        if len(raw_content) > MAX_CONTENT_LENGTH:
+            return (
+                f"Error: Manifest too large to convert safely "
+                f"({len(raw_content)} bytes)"
+            )
+
+        parsed = _parse_manifest_content(raw_content, manifest_path)
+        unsupported = parsed.get("unsupported", [])
+
+        if not unsupported:
+            # Nothing the LLM needs to help with — use fast deterministic path
+            return _generate_puppet_playbook(parsed, manifest_path)
+
+        # Build the analysis text for context
+        parsed_analysis = parse_puppet_manifest(manifest_path)
+
+        return _convert_manifest_with_ai(
+            raw_content,
+            parsed_analysis,
+            unsupported,
+            safe_path.name,
+            ai_provider,
+            api_key,
+            model,
+            temperature,
+            max_tokens,
+            project_id,
+            base_url,
+        )
+
+    except ValueError as e:
+        return f"Error: {e}"
+    except FileNotFoundError:
+        return ERROR_FILE_NOT_FOUND.format(path=manifest_path)
+    except IsADirectoryError:
+        return ERROR_IS_DIRECTORY.format(path=manifest_path)
+    except PermissionError:
+        return ERROR_PERMISSION_DENIED.format(path=manifest_path)
+    except Exception as e:
+        return f"An error occurred: {e}"
+
+
+def convert_puppet_module_to_ansible_with_ai(
+    module_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a Puppet module directory to an Ansible playbook using an LLM.
+
+    Combines all ``.pp`` files in the module, then applies AI-assisted
+    conversion for any unsupported constructs found.  Falls back to the
+    standard deterministic converter when no unsupported constructs exist.
+
+    Args:
+        module_path: Path to the Puppet module directory.
+        ai_provider: AI provider (``'anthropic'``, ``'openai'``, ``'watson'``,
+            ``'lightspeed'``).
+        api_key: API key for the chosen provider.
+        model: Model identifier.
+        temperature: Sampling temperature; defaults to ``0.3``.
+        max_tokens: Maximum tokens in the LLM response.
+        project_id: Project ID for IBM Watsonx.
+        base_url: Custom provider endpoint URL.
+
+    Returns:
+        Ansible playbook YAML string, or an error message string prefixed
+        with ``"Error:"`` if conversion fails.
+
+    """
+    try:
+        dir_path = _normalize_path(module_path)
+        workspace_root = _get_workspace_root()
+        safe_dir = _ensure_within_base_path(dir_path, workspace_root)
+
+        if not safe_dir.exists():  # NOSONAR
+            return ERROR_FILE_NOT_FOUND.format(path=module_path)
+        if not safe_dir.is_dir():
+            return ERROR_IS_DIRECTORY.format(path=module_path)
+
+        manifests = sorted(safe_dir.rglob("*.pp"))
+        if not manifests:
+            return f"Warning: No Puppet manifests (.pp files) found in {module_path}"
+
+        parsed_data = _collect_module_manifests(manifests, workspace_root)
+        all_resources = parsed_data["resources"]
+        all_unsupported = parsed_data["unsupported"]
+        combined_content_parts = parsed_data["content_parts"]
+
+        combined: dict[str, Any] = {
+            "resources": all_resources,
+            "classes": [],
+            "variables": [],
+            "unsupported": all_unsupported,
+        }
+
+        if not all_unsupported:
+            return _generate_puppet_playbook(combined, module_path)
+
+        # Build combined manifest text for context
+        combined_raw = "\n\n".join(combined_content_parts)
+        parsed_analysis = _format_module_analysis(
+            all_resources, all_unsupported, module_path
+        )
+
+        return _convert_manifest_with_ai(
+            combined_raw,
+            parsed_analysis,
+            all_unsupported,
+            module_path,
+            ai_provider,
+            api_key,
+            model,
+            temperature,
+            max_tokens,
+            project_id,
+            base_url,
+        )
+
+    except ValueError as e:
+        return f"Error: {e}"
+    except FileNotFoundError:
+        return ERROR_FILE_NOT_FOUND.format(path=module_path)
+    except PermissionError:
+        return ERROR_PERMISSION_DENIED.format(path=module_path)
+    except Exception as e:
+        return f"An error occurred: {e}"
+
+
+def _collect_module_manifests(
+    manifests: list[Any],
+    workspace_root: Any,
+) -> dict[str, Any]:
+    """
+    Read and parse all ``.pp`` files in a module, collecting resources and content.
+
+    Args:
+        manifests: Sorted list of ``pathlib.Path`` objects pointing to ``.pp`` files.
+        workspace_root: Workspace root path used for safe-path containment checks.
+
+    Returns:
+        Dictionary with keys ``'resources'``, ``'unsupported'``, and
+        ``'content_parts'``.
+
+    """
+    all_resources: list[dict[str, Any]] = []
+    all_unsupported: list[dict[str, Any]] = []
+    combined_content_parts: list[str] = []
+
+    for manifest_path in manifests:
+        try:
+            content = safe_read_text(
+                manifest_path, workspace_root, encoding="utf-8"
+            )
+            rel_path = str(manifest_path.relative_to(workspace_root))
+            parsed = _parse_manifest_content(content, rel_path)
+            all_resources.extend(parsed.get("resources", []))
+            all_unsupported.extend(parsed.get("unsupported", []))
+            combined_content_parts.append(f"# === {rel_path} ===\n{content}")
+        except (OSError, ValueError):
+            continue
+
+    return {
+        "resources": all_resources,
+        "unsupported": all_unsupported,
+        "content_parts": combined_content_parts,
+    }
+
+
+def _format_module_analysis(
+    resources: list[dict[str, Any]],
+    unsupported: list[dict[str, Any]],
+    module_path: str,
+) -> str:
+    """
+    Produce a concise analysis summary for a multi-file Puppet module.
+
+    Args:
+        resources: Aggregated list of parsed resources across all manifests.
+        unsupported: Aggregated list of unsupported construct dicts.
+        module_path: Path to the module root (used in heading).
+
+    Returns:
+        Formatted analysis string.
+
+    """
+    lines: list[str] = [
+        f"Puppet Module Analysis: {module_path}",
+        "",
+        f"Total resources: {len(resources)}",
+        f"Unsupported constructs: {len(unsupported)}",
+    ]
+    if unsupported:
+        lines.append("")
+        lines.append("Unsupported constructs requiring AI conversion:")
+        for item in unsupported:
+            loc = f"{item['source_file']}:{item['line']}"
+            lines.append(f"  [{item['construct']}] at {loc} — {item['text']!r}")
+    return "\n".join(lines)
+
+
+def _convert_manifest_with_ai(
+    raw_content: str,
+    parsed_analysis: str,
+    unsupported: list[dict[str, Any]],
+    source_name: str,
+    ai_provider: str,
+    api_key: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    project_id: str,
+    base_url: str,
+) -> str:
+    """
+    Core AI-assisted conversion routine shared by manifest and module variants.
+
+    Initialises the AI client, builds the conversion prompt, calls the LLM,
+    and cleans the response.
+
+    Args:
+        raw_content: Full Puppet manifest text (may be multi-file concatenation).
+        parsed_analysis: Human-readable analysis string for context.
+        unsupported: List of unsupported construct dicts.
+        source_name: File or directory name used in error messages.
+        ai_provider: AI provider identifier.
+        api_key: Provider API key.
+        model: Model identifier.
+        temperature: Sampling temperature.
+        max_tokens: Maximum response tokens.
+        project_id: Watsonx project ID.
+        base_url: Custom provider URL.
+
+    Returns:
+        Cleaned Ansible playbook YAML string, or an error message string.
+
+    """
+    # Lazy import to avoid loading AI libraries unless needed
+    from souschef.converters.playbook import (
+        _call_ai_api,
+        _initialize_ai_client,
+    )
+
+    client = _initialize_ai_client(ai_provider, api_key, project_id, base_url)
+    if isinstance(client, str):
+        # _initialize_ai_client returns an error string on failure
+        return client
+
+    prompt = _create_puppet_ai_prompt(
+        raw_content, parsed_analysis, unsupported, source_name
+    )
+    ai_response = _call_ai_api(
+        client, ai_provider, prompt, model, temperature, max_tokens
+    )
+    return _clean_puppet_ai_response(ai_response)
+
+
+def _create_puppet_ai_prompt(
+    raw_content: str,
+    parsed_analysis: str,
+    unsupported: list[dict[str, Any]],
+    manifest_name: str,
+) -> str:
+    """
+    Build the LLM prompt for Puppet → Ansible conversion.
+
+    The prompt explains the manifest content, the parsed analysis, the
+    specific unsupported constructs that need AI help, and the output format
+    requirements.
+
+    Args:
+        raw_content: Raw Puppet manifest text (truncated if very long).
+        parsed_analysis: Pre-formatted analysis string from the parser.
+        unsupported: List of unsupported construct dictionaries.
+        manifest_name: Manifest file or module name (used in play name).
+
+    Returns:
+        Prompt string ready to send to the LLM.
+
+    """
+    # Truncate very long manifests to avoid exceeding context windows
+    if len(raw_content) > _AI_MAX_CONTENT_CHARS:
+        raw_content = raw_content[:_AI_MAX_CONTENT_CHARS] + "\n# [truncated]"
+
+    unsupported_lines = _format_unsupported_for_prompt(unsupported)
+    guidance_lines = _build_construct_guidance(unsupported)
+
+    parts = [
+        "You are an expert Puppet-to-Ansible migration engineer.",
+        "Convert the Puppet manifest below into a complete, production-ready "
+        "Ansible playbook.",
+        "",
+        "PUPPET MANIFEST CONTENT:",
+        raw_content,
+        "",
+        "PARSED PUPPET ANALYSIS (for context):",
+        parsed_analysis,
+        "",
+        "UNSUPPORTED CONSTRUCTS REQUIRING AI CONVERSION:",
+        unsupported_lines,
+        "",
+        "CONVERSION GUIDANCE:",
+        guidance_lines,
+        "",
+        "GENERAL REQUIREMENTS:",
+        "- All tasks must be idempotent.",
+        "- Use fully-qualified Ansible module names (ansible.builtin.*).",
+        "- Set `become: true` at the play level.",
+        "- Name the play: 'Converted from Puppet: " + manifest_name + "'",
+        "- Preserve the logical order: install packages, then configure, "
+        "then start services.",
+        "",
+        "OUTPUT FORMAT:",
+        "Return ONLY valid YAML for a single Ansible playbook. "
+        "Do NOT include markdown code fences, explanations, "
+        "or any text outside the YAML.",
+    ]
+    return "\n".join(parts)
+
+
+def _format_unsupported_for_prompt(unsupported: list[dict[str, Any]]) -> str:
+    """
+    Format unsupported construct list as a human-readable prompt section.
+
+    Args:
+        unsupported: List of unsupported construct dicts from the parser.
+
+    Returns:
+        Formatted multi-line string listing each unsupported construct.
+
+    """
+    if not unsupported:
+        return "(none)"
+    lines = []
+    for item in unsupported:
+        loc = f"{item['source_file']}:{item['line']}"
+        lines.append(
+            f"  - [{item['construct']}] at {loc}: {item['text']!r}"
+        )
+    return "\n".join(lines)
+
+
+def _build_construct_guidance(unsupported: list[dict[str, Any]]) -> str:
+    """
+    Build targeted conversion guidance based on the detected construct types.
+
+    Args:
+        unsupported: List of unsupported construct dicts.
+
+    Returns:
+        Guidance string with specific instructions per construct type.
+
+    """
+    seen: set[str] = set()
+    for item in unsupported:
+        seen.add(item["construct"])
+
+    guidance_map: dict[str, str] = {
+        "Hiera lookup": (
+            "Hiera lookup: Replace hiera('key', default) with an Ansible "
+            "variable reference {{ key }}; declare variables in vars: "
+            "with sensible defaults."
+        ),
+        "Hiera lookup (lookup function)": (
+            "Hiera lookup (lookup): Replace lookup('key', ...) with an Ansible "
+            "variable {{ key }} and add it to the play vars: section."
+        ),
+        "create_resources function": (
+            "create_resources: Unroll into individual resource tasks "
+            "using a loop (with_items / loop) over the hash entries."
+        ),
+        "generate function": (
+            "generate(): Replace with ansible.builtin.command or "
+            "ansible.builtin.shell with an equivalent command, "
+            "guarded by a when condition for idempotency."
+        ),
+        "inline_template function": (
+            "inline_template(): Convert ERB expressions to Jinja2 equivalents "
+            "and use ansible.builtin.template or set_fact."
+        ),
+        "defined() function": (
+            "defined(): Replace with Ansible's `is defined` test in a "
+            "when: condition, e.g. `when: my_var is defined`."
+        ),
+        "Virtual resource declaration": (
+            "Virtual resource (@Resource): Include as a regular task "
+            "with a when condition to control activation."
+        ),
+        "Virtual resource realization": (
+            "realize(): Convert to a direct task (idempotency is handled "
+            "by the module itself)."
+        ),
+        "Resource collection expression": (
+            "Resource collection (<| |>): Replace with a task loop "
+            "over a host group or dynamic inventory group."
+        ),
+        "Exported resource": (
+            "Exported resource (@@): Use ansible.builtin.add_host or "
+            "group_vars to share data across hosts, then apply tasks "
+            "to the target group."
+        ),
+    }
+
+    lines = []
+    for construct, hint in guidance_map.items():
+        if construct in seen:
+            lines.append(f"- {hint}")
+
+    return "\n".join(lines) if lines else (
+        "- Follow best practices for idempotent tasks."
+    )
+
+
+def _clean_puppet_ai_response(ai_response: str) -> str:
+    """
+    Strip markdown fences from the AI response and validate it looks like YAML.
+
+    Args:
+        ai_response: Raw string returned by the LLM.
+
+    Returns:
+        Cleaned YAML string, or an error message if the response is invalid.
+
+    """
+    if not ai_response or not ai_response.strip():
+        return f"{_ERROR_PREFIX} AI returned an empty response"
+
+    # Remove markdown code fences (```yaml ... ``` or ``` ... ```)
+    cleaned = re.sub(r"```\w*\n?", "", ai_response).strip()
+
+    # Minimal sanity check — must look like a YAML list or mapping
+    if not cleaned.startswith("---") and not cleaned.startswith("- "):
+        return (
+            f"{_ERROR_PREFIX} AI response does not appear to be a valid "
+            "Ansible playbook (expected YAML list starting with '---' or '- ')"
+        )
+
+    return cleaned

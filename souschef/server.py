@@ -86,17 +86,24 @@ from souschef.converters.playbook import (
 )
 from souschef.converters.puppet_to_ansible import (  # noqa: F401, codeql[py/unused-import]
     _RESOURCE_CONVERTERS,
+    _build_construct_guidance,
+    _clean_puppet_ai_response,
+    _collect_module_manifests,
     _convert_cron,
     _convert_exec,
     _convert_file,
     _convert_group,
     _convert_host,
+    _convert_manifest_with_ai,
     _convert_mount,
     _convert_package,
     _convert_service,
     _convert_ssh_authorized_key,
     _convert_unsupported,
     _convert_user,
+    _create_puppet_ai_prompt,
+    _format_module_analysis,
+    _format_unsupported_for_prompt,
     _generate_puppet_playbook,
     _map_ensure,
     _source_to_play_name,
@@ -107,7 +114,13 @@ from souschef.converters.puppet_to_ansible import (
     convert_puppet_manifest_to_ansible as _convert_puppet_manifest_to_ansible,
 )
 from souschef.converters.puppet_to_ansible import (
+    convert_puppet_manifest_to_ansible_with_ai as _convert_puppet_manifest_ai,
+)
+from souschef.converters.puppet_to_ansible import (
     convert_puppet_module_to_ansible as _convert_puppet_module_to_ansible,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_module_to_ansible_with_ai as _convert_puppet_module_ai,
 )
 from souschef.converters.puppet_to_ansible import (
     convert_puppet_resource_to_task as _convert_puppet_resource_to_task,
@@ -5751,6 +5764,100 @@ def list_puppet_supported_resource_types() -> str:
     lines.append("")
     lines.append(f"Total: {len(module_map)} resource types supported")
     return "\n".join(lines)
+
+
+@mcp.tool()
+def convert_puppet_manifest_to_ansible_with_ai(
+    manifest_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a Puppet manifest to an Ansible playbook using AI for unsupported constructs.
+
+    Uses an LLM to intelligently convert Puppet constructs that the deterministic
+    converter cannot handle automatically, such as Hiera lookups, create_resources
+    calls, exported/virtual resources, and inline templates.
+
+    Falls back to the standard deterministic conversion when no unsupported
+    constructs are detected.
+
+    Args:
+        manifest_path: Path to the Puppet manifest (.pp) file.
+        ai_provider: AI provider to use ('anthropic', 'openai', 'watson',
+            'lightspeed').
+        api_key: API key for the chosen provider.
+        model: Model identifier (e.g. 'claude-3-5-sonnet-20241022').
+        temperature: Sampling temperature (0.0 – 1.0). Lower values are more
+            deterministic; default is 0.3 for code-generation tasks.
+        max_tokens: Maximum tokens in the AI response.
+        project_id: Project ID (required for IBM Watsonx).
+        base_url: Custom base URL for the provider endpoint.
+
+    Returns:
+        Ansible playbook YAML string, or an error message if conversion fails.
+
+    """
+    return _convert_puppet_manifest_ai(
+        manifest_path,
+        ai_provider=ai_provider,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        project_id=project_id,
+        base_url=base_url,
+    )
+
+
+@mcp.tool()
+def convert_puppet_module_to_ansible_with_ai(
+    module_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a Puppet module directory to an Ansible playbook using AI.
+
+    Combines all .pp files in the module directory and applies AI-assisted
+    conversion for unsupported constructs. Falls back to the deterministic
+    converter when no unsupported constructs are present.
+
+    Args:
+        module_path: Path to the Puppet module directory.
+        ai_provider: AI provider to use ('anthropic', 'openai', 'watson',
+            'lightspeed').
+        api_key: API key for the chosen provider.
+        model: Model identifier.
+        temperature: Sampling temperature; default is 0.3.
+        max_tokens: Maximum tokens in the AI response.
+        project_id: Project ID for IBM Watsonx.
+        base_url: Custom provider endpoint URL.
+
+    Returns:
+        Ansible playbook YAML string, or an error message if conversion fails.
+
+    """
+    return _convert_puppet_module_ai(
+        module_path,
+        ai_provider=ai_provider,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        project_id=project_id,
+        base_url=base_url,
+    )
 
 
 # ==================== End Puppet Migration Tools ====================

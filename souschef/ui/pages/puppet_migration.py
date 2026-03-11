@@ -7,6 +7,7 @@ to Ansible playbooks. Supports:
 - Module directory analysis
 - Resource listing with unsupported construct warnings
 - Playbook download
+- AI-assisted conversion for unsupported constructs
 """
 
 import sys
@@ -26,7 +27,9 @@ else:
 
 from souschef.converters.puppet_to_ansible import (
     convert_puppet_manifest_to_ansible,
+    convert_puppet_manifest_to_ansible_with_ai,
     convert_puppet_module_to_ansible,
+    convert_puppet_module_to_ansible_with_ai,
     get_puppet_ansible_module_map,
 )
 from souschef.parsers.puppet import (
@@ -41,6 +44,11 @@ INPUT_METHODS = [INPUT_METHOD_FILE_PATH, INPUT_METHOD_MODULE_PATH]
 MIME_TEXT_YAML = "text/yaml"
 MIME_TEXT_PLAIN = "text/plain"
 
+# AI provider display names
+_AI_PROVIDERS = ["anthropic", "openai", "watson", "lightspeed"]
+_DEFAULT_PROVIDER = "anthropic"
+_DEFAULT_MODEL = "claude-3-5-sonnet-20241022"
+
 
 def show_puppet_migration_page() -> None:
     """Render the Puppet Migration page in the Streamlit UI."""
@@ -50,7 +58,9 @@ def show_puppet_migration_page() -> None:
     st.header("Puppet Migration")
     st.markdown(
         "Convert Puppet manifests and modules to Ansible playbooks. "
-        "Supports package, file, service, user, group, exec, cron, and more."
+        "Supports package, file, service, user, group, exec, cron, and more. "
+        "Use **Convert with AI** to handle advanced constructs such as Hiera "
+        "lookups, ``create_resources``, and exported resources."
     )
 
     # Input method selection
@@ -70,6 +80,75 @@ def show_puppet_migration_page() -> None:
     _show_resource_type_reference()
 
 
+def _get_ai_settings() -> dict[str, str | float | int]:
+    """
+    Retrieve AI settings from the inline expander controls.
+
+    Returns:
+        Dictionary with ``provider``, ``api_key``, ``model``, ``temperature``,
+        ``max_tokens``, ``project_id``, and ``base_url`` keys.
+
+    """
+    if st is None:  # pragma: no cover
+        return {}  # pragma: no cover
+
+    with st.expander("AI Settings (required for Convert with AI)"):
+        provider = st.selectbox(
+            "AI Provider",
+            _AI_PROVIDERS,
+            key="puppet_ai_provider",
+        )
+        api_key = st.text_input(
+            "API Key",
+            type="password",
+            key="puppet_ai_api_key",
+            help="API key for the selected AI provider.",
+        )
+        model = st.text_input(
+            "Model",
+            value=_DEFAULT_MODEL,
+            key="puppet_ai_model",
+            help="Model identifier (e.g. claude-3-5-sonnet-20241022, gpt-4o).",
+        )
+        col_t, col_m = st.columns(2)
+        with col_t:
+            temperature = st.slider(
+                "Temperature",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.3,
+                step=0.05,
+                key="puppet_ai_temperature",
+            )
+        with col_m:
+            max_tokens = st.number_input(
+                "Max Tokens",
+                min_value=500,
+                max_value=8000,
+                value=4000,
+                step=500,
+                key="puppet_ai_max_tokens",
+            )
+        project_id = st.text_input(
+            "Project ID (IBM Watsonx only)",
+            key="puppet_ai_project_id",
+        )
+        base_url = st.text_input(
+            "Base URL (optional override)",
+            key="puppet_ai_base_url",
+        )
+
+    return {
+        "provider": provider or _DEFAULT_PROVIDER,
+        "api_key": api_key or "",
+        "model": model or _DEFAULT_MODEL,
+        "temperature": float(temperature),
+        "max_tokens": int(max_tokens),
+        "project_id": project_id or "",
+        "base_url": base_url or "",
+    }
+
+
 def _show_manifest_file_section() -> None:
     """Render the manifest file input and analysis section."""
     if st is None:
@@ -83,7 +162,7 @@ def _show_manifest_file_section() -> None:
         help="Enter the path to a Puppet manifest file (.pp)",
     )
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         analyse_clicked = st.button(
@@ -99,16 +178,32 @@ def _show_manifest_file_section() -> None:
             type="primary",
         )
 
+    with col3:
+        ai_clicked = st.button(
+            "Convert with AI",
+            key="puppet_ai_manifest",
+            type="primary",
+            help=(
+                "Use an LLM to convert unsupported constructs "
+                "(Hiera, create_resources, exported resources, etc.)"
+            ),
+        )
+
     if not manifest_path:
-        if analyse_clicked or convert_clicked:
+        if analyse_clicked or convert_clicked or ai_clicked:
             st.warning("Please enter a manifest path.")
         return
+
+    ai_cfg = _get_ai_settings() if ai_clicked else {}
 
     if analyse_clicked:
         _run_manifest_analysis(manifest_path)
 
     if convert_clicked:
         _run_manifest_conversion(manifest_path)
+
+    if ai_clicked:
+        _run_manifest_ai_conversion(manifest_path, ai_cfg)
 
 
 def _show_module_directory_section() -> None:
@@ -124,7 +219,7 @@ def _show_module_directory_section() -> None:
         help="Enter the path to a Puppet module directory containing .pp files",
     )
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         analyse_clicked = st.button(
@@ -140,16 +235,32 @@ def _show_module_directory_section() -> None:
             type="primary",
         )
 
+    with col3:
+        ai_clicked = st.button(
+            "Convert with AI",
+            key="puppet_ai_module",
+            type="primary",
+            help=(
+                "Use an LLM to convert unsupported constructs "
+                "(Hiera, create_resources, exported resources, etc.)"
+            ),
+        )
+
     if not module_path:
-        if analyse_clicked or convert_clicked:
+        if analyse_clicked or convert_clicked or ai_clicked:
             st.warning("Please enter a module directory path.")
         return
+
+    ai_cfg = _get_ai_settings() if ai_clicked else {}
 
     if analyse_clicked:
         _run_module_analysis(module_path)
 
     if convert_clicked:
         _run_module_conversion(module_path)
+
+    if ai_clicked:
+        _run_module_ai_conversion(module_path, ai_cfg)
 
 
 def _run_manifest_analysis(manifest_path: str) -> None:
@@ -196,6 +307,64 @@ def _run_module_conversion(module_path: str) -> None:
     _display_conversion_result(playbook, module_path)
 
 
+def _run_manifest_ai_conversion(
+    manifest_path: str, ai_cfg: dict[str, str | float | int]
+) -> None:
+    """Execute AI-assisted manifest conversion and display the playbook."""
+    if st is None:
+        return  # pragma: no cover
+
+    if not ai_cfg.get("api_key"):
+        st.warning(
+            "An API key is required for AI-assisted conversion. "
+            "Expand the AI Settings panel above and enter your key."
+        )
+        return
+
+    with st.spinner("Converting Puppet manifest to Ansible with AI..."):
+        playbook = convert_puppet_manifest_to_ansible_with_ai(
+            manifest_path,
+            ai_provider=str(ai_cfg.get("provider", _DEFAULT_PROVIDER)),
+            api_key=str(ai_cfg.get("api_key", "")),
+            model=str(ai_cfg.get("model", _DEFAULT_MODEL)),
+            temperature=float(ai_cfg.get("temperature", 0.3)),
+            max_tokens=int(ai_cfg.get("max_tokens", 4000)),
+            project_id=str(ai_cfg.get("project_id", "")),
+            base_url=str(ai_cfg.get("base_url", "")),
+        )
+
+    _display_conversion_result(playbook, manifest_path, ai_enhanced=True)
+
+
+def _run_module_ai_conversion(
+    module_path: str, ai_cfg: dict[str, str | float | int]
+) -> None:
+    """Execute AI-assisted module conversion and display the playbook."""
+    if st is None:
+        return  # pragma: no cover
+
+    if not ai_cfg.get("api_key"):
+        st.warning(
+            "An API key is required for AI-assisted conversion. "
+            "Expand the AI Settings panel above and enter your key."
+        )
+        return
+
+    with st.spinner("Converting Puppet module to Ansible with AI..."):
+        playbook = convert_puppet_module_to_ansible_with_ai(
+            module_path,
+            ai_provider=str(ai_cfg.get("provider", _DEFAULT_PROVIDER)),
+            api_key=str(ai_cfg.get("api_key", "")),
+            model=str(ai_cfg.get("model", _DEFAULT_MODEL)),
+            temperature=float(ai_cfg.get("temperature", 0.3)),
+            max_tokens=int(ai_cfg.get("max_tokens", 4000)),
+            project_id=str(ai_cfg.get("project_id", "")),
+            base_url=str(ai_cfg.get("base_url", "")),
+        )
+
+    _display_conversion_result(playbook, module_path, ai_enhanced=True)
+
+
 def _display_analysis_result(result: str, source_type: str) -> None:
     """Display analysis results with appropriate formatting."""
     if st is None:
@@ -233,7 +402,9 @@ def _display_analysis_result(result: str, source_type: str) -> None:
     )
 
 
-def _display_conversion_result(playbook: str, source_path: str) -> None:
+def _display_conversion_result(
+    playbook: str, source_path: str, *, ai_enhanced: bool = False
+) -> None:
     """Display converted Ansible playbook with download option."""
     if st is None:
         return  # pragma: no cover
@@ -246,27 +417,40 @@ def _display_conversion_result(playbook: str, source_path: str) -> None:
         st.warning(playbook)
         return
 
-    st.success("Puppet manifest converted to Ansible playbook successfully.")
+    if ai_enhanced:
+        st.success(
+            "Puppet manifest converted to Ansible playbook with AI assistance."
+        )
+        st.info(
+            "The AI-generated playbook may include best-effort conversions for "
+            "unsupported constructs. Review carefully before use in production."
+        )
+    else:
+        st.success("Puppet manifest converted to Ansible playbook successfully.")
 
-    # Warn if debug tasks present (unsupported constructs)
-    if "WARNING:" in playbook or "manual review" in playbook.lower():
+    # Warn if debug tasks present (unsupported constructs, non-AI path)
+    if not ai_enhanced and (
+        "WARNING:" in playbook or "manual review" in playbook.lower()
+    ):
         st.warning(
             "Some resources require manual review. Check tasks labelled WARNING "
-            "in the playbook."
+            "in the playbook. Use **Convert with AI** to attempt automatic "
+            "conversion of these constructs."
         )
 
     st.code(playbook, language="yaml")
 
     # Generate a safe filename from source path
     safe_name = Path(source_path).stem.replace(" ", "_")
-    filename = f"{safe_name}_ansible_playbook.yml"
+    suffix = "_ai" if ai_enhanced else ""
+    filename = f"{safe_name}{suffix}_ansible_playbook.yml"
 
     st.download_button(
         "Download Ansible Playbook",
         data=playbook,
         file_name=filename,
         mime=MIME_TEXT_YAML,
-        key="puppet_download_playbook",
+        key=f"puppet_download_playbook{'_ai' if ai_enhanced else ''}",
     )
 
 

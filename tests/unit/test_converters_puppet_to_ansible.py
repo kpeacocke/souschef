@@ -9,22 +9,32 @@ Tests cover:
 - YAML output structure validation
 - Error handling
 - Helper functions
+- AI-assisted conversion functions
 """
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import yaml
 
 from souschef.converters.puppet_to_ansible import (
     ENSURE_TO_STATE,
     RESOURCE_MODULE_MAP,
+    _build_construct_guidance,
+    _clean_puppet_ai_response,
+    _collect_module_manifests,
+    _convert_manifest_with_ai,
     _convert_unsupported,
+    _create_puppet_ai_prompt,
+    _format_module_analysis,
+    _format_unsupported_for_prompt,
     _generate_puppet_playbook,
     _map_ensure,
     _source_to_play_name,
     convert_puppet_manifest_to_ansible,
+    convert_puppet_manifest_to_ansible_with_ai,
     convert_puppet_module_to_ansible,
+    convert_puppet_module_to_ansible_with_ai,
     convert_puppet_resource_to_task,
     get_puppet_ansible_module_map,
     get_supported_puppet_types,
@@ -846,3 +856,556 @@ def test_resource_module_map_completeness() -> None:
     assert "host" in RESOURCE_MODULE_MAP
     assert "mount" in RESOURCE_MODULE_MAP
     assert "ssh_authorized_key" in RESOURCE_MODULE_MAP
+
+
+# ---------------------------------------------------------------------------
+# Tests: AI-Assisted Conversion Helper Functions
+# ---------------------------------------------------------------------------
+
+
+def test_clean_puppet_ai_response_valid_yaml_list() -> None:
+    """Test that valid YAML list responses are returned unchanged."""
+    response = "- name: Install nginx\n  ansible.builtin.package:\n    name: nginx\n"
+    result = _clean_puppet_ai_response(response)
+    assert result == response.strip()
+
+
+def test_clean_puppet_ai_response_valid_yaml_with_dashes() -> None:
+    """Test that responses starting with '---' are accepted."""
+    response = "---\n- name: Install nginx\n  ansible.builtin.package:\n    name: nginx\n"
+    result = _clean_puppet_ai_response(response)
+    assert result.startswith("---")
+
+
+def test_clean_puppet_ai_response_strips_markdown_fences() -> None:
+    """Test that markdown code fences are stripped."""
+    response = "```yaml\n- name: task\n  ansible.builtin.debug:\n    msg: hi\n```"
+    result = _clean_puppet_ai_response(response)
+    assert "```" not in result
+    assert result.startswith("- ")
+
+
+def test_clean_puppet_ai_response_empty_returns_error() -> None:
+    """Test that empty response returns an error string."""
+    result = _clean_puppet_ai_response("")
+    assert result.startswith("Error:")
+
+
+def test_clean_puppet_ai_response_whitespace_only_returns_error() -> None:
+    """Test that whitespace-only response returns an error string."""
+    result = _clean_puppet_ai_response("   \n  ")
+    assert result.startswith("Error:")
+
+
+def test_clean_puppet_ai_response_invalid_yaml_returns_error() -> None:
+    """Test that non-YAML response returns an error string."""
+    result = _clean_puppet_ai_response("This is plain text, not YAML at all.")
+    assert result.startswith("Error:")
+
+
+def test_format_unsupported_for_prompt_empty() -> None:
+    """Test formatting with no unsupported constructs."""
+    result = _format_unsupported_for_prompt([])
+    assert result == "(none)"
+
+
+def test_format_unsupported_for_prompt_single() -> None:
+    """Test formatting with a single unsupported construct."""
+    items = [
+        {
+            "construct": "Hiera lookup",
+            "text": "hiera('app_port'",
+            "source_file": "site.pp",
+            "line": 5,
+        }
+    ]
+    result = _format_unsupported_for_prompt(items)
+    assert "Hiera lookup" in result
+    assert "site.pp:5" in result
+    assert "hiera('app_port'" in result
+
+
+def test_format_unsupported_for_prompt_multiple() -> None:
+    """Test formatting with multiple unsupported constructs."""
+    items = [
+        {
+            "construct": "Hiera lookup",
+            "text": "hiera('x'",
+            "source_file": "a.pp",
+            "line": 1,
+        },
+        {
+            "construct": "Exported resource",
+            "text": "@@file {",
+            "source_file": "b.pp",
+            "line": 10,
+        },
+    ]
+    result = _format_unsupported_for_prompt(items)
+    assert "Hiera lookup" in result
+    assert "Exported resource" in result
+    assert "a.pp:1" in result
+    assert "b.pp:10" in result
+
+
+def test_build_construct_guidance_hiera() -> None:
+    """Test guidance generation for Hiera lookups."""
+    items = [
+        {
+            "construct": "Hiera lookup",
+            "text": "hiera('port')",
+            "source_file": "x.pp",
+            "line": 1,
+        }
+    ]
+    result = _build_construct_guidance(items)
+    assert "Hiera" in result
+    assert "vars" in result.lower() or "variable" in result.lower()
+
+
+def test_build_construct_guidance_create_resources() -> None:
+    """Test guidance generation for create_resources."""
+    items = [
+        {
+            "construct": "create_resources function",
+            "text": "create_resources('file', $h)",
+            "source_file": "x.pp",
+            "line": 3,
+        }
+    ]
+    result = _build_construct_guidance(items)
+    assert "create_resources" in result
+    assert "loop" in result.lower() or "with_items" in result.lower()
+
+
+def test_build_construct_guidance_exported_resource() -> None:
+    """Test guidance generation for exported resources."""
+    items = [
+        {
+            "construct": "Exported resource",
+            "text": "@@file { '/etc/hosts': }",
+            "source_file": "x.pp",
+            "line": 7,
+        }
+    ]
+    result = _build_construct_guidance(items)
+    assert "Exported" in result
+
+
+def test_build_construct_guidance_all_types() -> None:
+    """Test that all recognised construct types produce guidance."""
+    all_constructs = [
+        "Hiera lookup",
+        "Hiera lookup (lookup function)",
+        "create_resources function",
+        "generate function",
+        "inline_template function",
+        "defined() function",
+        "Virtual resource declaration",
+        "Virtual resource realization",
+        "Resource collection expression",
+        "Exported resource",
+    ]
+    items = [
+        {"construct": c, "text": "...", "source_file": "f.pp", "line": 1}
+        for c in all_constructs
+    ]
+    result = _build_construct_guidance(items)
+    assert len(result.strip()) > 0
+
+
+def test_build_construct_guidance_empty_returns_default() -> None:
+    """Test that no constructs returns a default guidance string."""
+    result = _build_construct_guidance([])
+    assert "idempotent" in result.lower() or "best practices" in result.lower()
+
+
+def test_build_construct_guidance_unknown_type() -> None:
+    """Test that unknown construct type doesn't crash."""
+    items = [
+        {
+            "construct": "Some unknown thing",
+            "text": "x",
+            "source_file": "x.pp",
+            "line": 1,
+        }
+    ]
+    result = _build_construct_guidance(items)
+    # Should fall back to default guidance
+    assert "best practices" in result.lower() or len(result) > 0
+
+
+def test_create_puppet_ai_prompt_contains_manifest() -> None:
+    """Test that the prompt includes the manifest content."""
+    raw = "package { 'nginx': ensure => installed }"
+    analysis = "Resources (1):\n  package { 'nginx' }"
+    unsupported: list[dict] = []
+    prompt = _create_puppet_ai_prompt(raw, analysis, unsupported, "init.pp")
+    assert "nginx" in prompt
+    assert "Puppet" in prompt
+    assert "Ansible" in prompt
+
+
+def test_create_puppet_ai_prompt_truncates_long_content() -> None:
+    """Test that very long manifest content is truncated in the prompt."""
+    raw = "x" * 50_000
+    analysis = "no resources"
+    unsupported: list[dict] = []
+    prompt = _create_puppet_ai_prompt(raw, analysis, unsupported, "big.pp")
+    assert "[truncated]" in prompt
+
+
+def test_create_puppet_ai_prompt_includes_unsupported_guidance() -> None:
+    """Test that the prompt includes specific guidance for Hiera."""
+    raw = "$port = hiera('app_port', 80)"
+    analysis = "Variables: $port"
+    unsupported = [
+        {
+            "construct": "Hiera lookup",
+            "text": "hiera('app_port'",
+            "source_file": "init.pp",
+            "line": 1,
+        }
+    ]
+    prompt = _create_puppet_ai_prompt(raw, analysis, unsupported, "init.pp")
+    assert "Hiera" in prompt
+    assert "hiera('app_port'" in prompt
+
+
+def test_create_puppet_ai_prompt_output_format_instruction() -> None:
+    """Test that the prompt instructs the LLM to return YAML only."""
+    prompt = _create_puppet_ai_prompt("", "", [], "test.pp")
+    assert "YAML" in prompt
+    assert "markdown" in prompt.lower() or "code fences" in prompt.lower()
+
+
+def test_format_module_analysis_empty() -> None:
+    """Test module analysis formatting with no resources."""
+    result = _format_module_analysis([], [], "/some/module")
+    assert "/some/module" in result
+    assert "0" in result
+
+
+def test_format_module_analysis_with_unsupported() -> None:
+    """Test module analysis formatting with unsupported constructs."""
+    unsupported = [
+        {
+            "construct": "Hiera lookup",
+            "text": "hiera('port')",
+            "source_file": "init.pp",
+            "line": 5,
+        }
+    ]
+    result = _format_module_analysis([], unsupported, "/mod")
+    assert "Hiera lookup" in result
+    assert "init.pp:5" in result
+
+
+def test_collect_module_manifests_skips_unreadable(tmp_path: Path) -> None:
+    """Test that unreadable files are skipped and their resources excluded."""
+    good = tmp_path / "good.pp"
+    bad = tmp_path / "bad.pp"
+    good.write_text("package { 'vim': ensure => installed }", encoding="utf-8")
+    bad.write_text("package { 'curl': ensure => installed }", encoding="utf-8")
+
+    def _selective(path: Path, *args: object, **kwargs: object) -> str:
+        if "bad" in str(path):
+            raise OSError("cannot read")
+        return safe_read_text(path, *args, **kwargs)
+
+    with patch(
+        "souschef.converters.puppet_to_ansible.safe_read_text",
+        side_effect=_selective,
+    ):
+        result = _collect_module_manifests(
+            sorted([good, bad]), tmp_path.parent
+        )
+
+    assert isinstance(result["resources"], list)
+    assert isinstance(result["unsupported"], list)
+    assert isinstance(result["content_parts"], list)
+    # Only 'vim' from good.pp should be present; 'curl' from bad.pp was skipped
+    resource_names = [r.get("title", "") for r in result["resources"]]
+    assert any("vim" in n for n in resource_names)
+    assert not any("curl" in n for n in resource_names)
+
+
+def test_collect_module_manifests_aggregates_resources(tmp_path: Path) -> None:
+    """Test that resources from multiple manifests are aggregated."""
+    m1 = tmp_path / "a.pp"
+    m2 = tmp_path / "b.pp"
+    m1.write_text("package { 'vim': ensure => installed }", encoding="utf-8")
+    m2.write_text("service { 'nginx': ensure => running }", encoding="utf-8")
+
+    result = _collect_module_manifests([m1, m2], tmp_path.parent)
+    types = {r["type"] for r in result["resources"]}
+    assert "package" in types
+    assert "service" in types
+
+
+# ---------------------------------------------------------------------------
+# Tests: convert_puppet_manifest_to_ansible_with_ai
+# ---------------------------------------------------------------------------
+
+
+def test_convert_manifest_with_ai_fallback_when_no_unsupported(
+    tmp_path: Path,
+) -> None:
+    """Test that manifests without unsupported constructs use deterministic conversion."""
+    manifest = tmp_path / "site.pp"
+    manifest.write_text(
+        "package { 'nginx': ensure => installed }",
+        encoding="utf-8",
+    )
+    result = convert_puppet_manifest_to_ansible_with_ai(str(manifest))
+    # Should produce a YAML playbook without calling AI
+    assert "ansible.builtin.package" in result
+    assert "nginx" in result
+
+
+def test_convert_manifest_with_ai_calls_ai_for_unsupported(
+    tmp_path: Path,
+) -> None:
+    """Test that AI is called when unsupported constructs are present."""
+    manifest = tmp_path / "hiera.pp"
+    manifest.write_text(
+        "$port = hiera('app_port', 80)\npackage { 'nginx': ensure => installed }",
+        encoding="utf-8",
+    )
+    ai_playbook = (
+        "- name: Converted from Puppet: hiera.pp\n"
+        "  hosts: all\n"
+        "  become: true\n"
+        "  vars:\n"
+        "    app_port: 80\n"
+        "  tasks:\n"
+        "  - name: Manage package: nginx\n"
+        "    ansible.builtin.package:\n"
+        "      name: nginx\n"
+        "      state: present\n"
+    )
+    with patch(
+        "souschef.converters.puppet_to_ansible._convert_manifest_with_ai",
+        return_value=ai_playbook,
+    ) as mock_ai:
+        result = convert_puppet_manifest_to_ansible_with_ai(
+            str(manifest),
+            api_key="test-key",
+        )
+        mock_ai.assert_called_once()
+    assert "app_port" in result
+
+
+def test_convert_manifest_with_ai_file_not_found() -> None:
+    """Test error handling for missing manifest file."""
+    result = convert_puppet_manifest_to_ansible_with_ai(
+        "/nonexistent/path/missing.pp"
+    )
+    assert "Error" in result or "not found" in result.lower()
+
+
+def test_convert_manifest_with_ai_too_large(tmp_path: Path) -> None:
+    """Test that oversized manifests return an error."""
+    manifest = tmp_path / "huge.pp"
+    manifest.write_text("x" * 3_000_000, encoding="utf-8")
+    result = convert_puppet_manifest_to_ansible_with_ai(str(manifest))
+    assert "Error" in result
+
+
+def test_convert_manifest_with_ai_permission_error(tmp_path: Path) -> None:
+    """Test handling of PermissionError."""
+    manifest = tmp_path / "init.pp"
+    manifest.write_text("package { 'vim': ensure => installed }", encoding="utf-8")
+    with patch(
+        "souschef.converters.puppet_to_ansible._get_workspace_root",
+        side_effect=PermissionError("denied"),
+    ):
+        result = convert_puppet_manifest_to_ansible_with_ai(str(manifest))
+    assert "Error" in result or "denied" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests: convert_puppet_module_to_ansible_with_ai
+# ---------------------------------------------------------------------------
+
+
+def test_convert_module_with_ai_fallback_no_unsupported(tmp_path: Path) -> None:
+    """Test that modules without unsupported constructs use deterministic path."""
+    m = tmp_path / "init.pp"
+    m.write_text(
+        "package { 'nginx': ensure => installed }",
+        encoding="utf-8",
+    )
+    result = convert_puppet_module_to_ansible_with_ai(str(tmp_path))
+    assert "ansible.builtin.package" in result
+
+
+def test_convert_module_with_ai_calls_ai_for_unsupported(tmp_path: Path) -> None:
+    """Test that AI is called when module has unsupported constructs."""
+    m = tmp_path / "init.pp"
+    m.write_text(
+        "$x = hiera('key', 'val')\npackage { 'nginx': ensure => installed }",
+        encoding="utf-8",
+    )
+    ai_playbook = (
+        "- name: Converted from Puppet\n"
+        "  hosts: all\n"
+        "  become: true\n"
+        "  tasks: []\n"
+    )
+    with patch(
+        "souschef.converters.puppet_to_ansible._convert_manifest_with_ai",
+        return_value=ai_playbook,
+    ) as mock_ai:
+        result = convert_puppet_module_to_ansible_with_ai(
+            str(tmp_path), api_key="key"
+        )
+        mock_ai.assert_called_once()
+    assert "Converted from Puppet" in result
+
+
+def test_convert_module_with_ai_empty_directory(tmp_path: Path) -> None:
+    """Test that empty directory returns a warning."""
+    result = convert_puppet_module_to_ansible_with_ai(str(tmp_path))
+    assert "Warning" in result or "No Puppet manifests" in result
+
+
+def test_convert_module_with_ai_path_not_found() -> None:
+    """Test error handling for missing module path."""
+    result = convert_puppet_module_to_ansible_with_ai("/nonexistent/path")
+    assert "Error" in result or "not found" in result.lower()
+
+
+def test_convert_module_with_ai_file_not_dir(tmp_path: Path) -> None:
+    """Test error when module path is a file not a directory."""
+    f = tmp_path / "file.pp"
+    f.write_text("package { 'vim': ensure => installed }")
+    result = convert_puppet_module_to_ansible_with_ai(str(f))
+    assert "Error" in result
+
+
+def test_convert_module_with_ai_permission_error(tmp_path: Path) -> None:
+    """Test handling of PermissionError on module directory."""
+    (tmp_path / "init.pp").write_text("package { 'vim': ensure => installed }")
+    with patch(
+        "souschef.converters.puppet_to_ansible._get_workspace_root",
+        side_effect=PermissionError("denied"),
+    ):
+        result = convert_puppet_module_to_ansible_with_ai(str(tmp_path))
+    assert "Error" in result
+
+
+# ---------------------------------------------------------------------------
+# Tests: _convert_manifest_with_ai
+# ---------------------------------------------------------------------------
+
+
+def test_convert_manifest_with_ai_returns_playbook() -> None:
+    """Test that _convert_manifest_with_ai returns cleaned playbook."""
+    mock_client = MagicMock()
+
+    with patch(
+        "souschef.converters.playbook._initialize_ai_client",
+        return_value=mock_client,
+    ), patch(
+        "souschef.converters.playbook._call_ai_api",
+        return_value="- name: play\n  hosts: all\n  tasks: []\n",
+    ):
+        result = _convert_manifest_with_ai(
+            raw_content="$x = hiera('key')",
+            parsed_analysis="no resources",
+            unsupported=[
+                {
+                    "construct": "Hiera lookup",
+                    "text": "hiera('key'",
+                    "source_file": "init.pp",
+                    "line": 1,
+                }
+            ],
+            source_name="init.pp",
+            ai_provider="anthropic",
+            api_key="fake-key",
+            model="claude-3-5-sonnet-20241022",
+            temperature=0.3,
+            max_tokens=4000,
+            project_id="",
+            base_url="",
+        )
+    assert result.startswith("- ")
+
+
+def test_convert_manifest_with_ai_client_error_propagated() -> None:
+    """Test that client initialisation errors are surfaced."""
+    with patch(
+        "souschef.converters.playbook._initialize_ai_client",
+        return_value="Error: Unsupported AI provider: badprovider",
+    ):
+        result = _convert_manifest_with_ai(
+            raw_content="",
+            parsed_analysis="",
+            unsupported=[],
+            source_name="x.pp",
+            ai_provider="badprovider",
+            api_key="",
+            model="",
+            temperature=0.3,
+            max_tokens=4000,
+            project_id="",
+            base_url="",
+        )
+    assert "Error" in result
+
+
+def test_convert_manifest_with_ai_is_directory(tmp_path: Path) -> None:
+    """Test handling of IsADirectoryError in manifest AI conversion."""
+    with patch(
+        "souschef.converters.puppet_to_ansible._get_workspace_root",
+        side_effect=IsADirectoryError("is a dir"),
+    ):
+        result = convert_puppet_manifest_to_ansible_with_ai(str(tmp_path))
+    assert "Error" in result
+
+
+def test_convert_manifest_with_ai_generic_exception(tmp_path: Path) -> None:
+    """Test handling of unexpected exceptions in manifest AI conversion."""
+    manifest = tmp_path / "init.pp"
+    manifest.write_text("package { 'vim': ensure => installed }", encoding="utf-8")
+    with patch(
+        "souschef.converters.puppet_to_ansible._parse_manifest_content",
+        side_effect=RuntimeError("unexpected"),
+    ):
+        result = convert_puppet_manifest_to_ansible_with_ai(str(manifest))
+    assert "error occurred" in result.lower() or "Error" in result
+
+
+def test_convert_module_with_ai_value_error(tmp_path: Path) -> None:
+    """Test handling of ValueError in module AI conversion."""
+    (tmp_path / "init.pp").write_text("package { 'vim': ensure => installed }")
+    with patch(
+        "souschef.converters.puppet_to_ansible._normalize_path",
+        side_effect=ValueError("bad path"),
+    ):
+        result = convert_puppet_module_to_ansible_with_ai(str(tmp_path))
+    assert "Error" in result
+
+
+def test_convert_module_with_ai_file_not_found_exception(tmp_path: Path) -> None:
+    """Test handling of FileNotFoundError in module AI conversion."""
+    (tmp_path / "init.pp").write_text("package { 'vim': ensure => installed }")
+    with patch(
+        "souschef.converters.puppet_to_ansible._get_workspace_root",
+        side_effect=FileNotFoundError("no such"),
+    ):
+        result = convert_puppet_module_to_ansible_with_ai(str(tmp_path))
+    assert "Error" in result or "not found" in result.lower()
+
+
+def test_convert_module_with_ai_generic_exception(tmp_path: Path) -> None:
+    """Test handling of unexpected exceptions in module AI conversion."""
+    (tmp_path / "init.pp").write_text("package { 'vim': ensure => installed }")
+    with patch(
+        "souschef.converters.puppet_to_ansible._normalize_path",
+        side_effect=RuntimeError("unexpected error"),
+    ):
+        result = convert_puppet_module_to_ansible_with_ai(str(tmp_path))
+    assert "error occurred" in result.lower() or "Error" in result
