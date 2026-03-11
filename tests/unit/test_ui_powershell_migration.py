@@ -33,18 +33,18 @@ class TestShowPowershellMigrationPage:
         )
 
         mock_st.text_area.return_value = ""
-        mock_st.text_input.side_effect = ["powershell_migration", "windows"]
-        mock_st.columns.return_value = [MagicMock(), MagicMock()]
+        mock_st.text_input.side_effect = [
+            "powershell_migration", "windows", "windows_provisioning"
+        ]
+        mock_st.columns.return_value = [MagicMock(), MagicMock(), MagicMock()]
 
         # Buttons not clicked
-        col1, col2 = MagicMock(), MagicMock()
-        col1.__enter__ = lambda s: s
-        col1.__exit__ = MagicMock(return_value=False)
-        col2.__enter__ = lambda s: s
-        col2.__exit__ = MagicMock(return_value=False)
-        col1.button = MagicMock(return_value=False)
-        col2.button = MagicMock(return_value=False)
-        mock_st.columns.return_value = [col1, col2]
+        col1, col2, col3 = MagicMock(), MagicMock(), MagicMock()
+        for col in (col1, col2, col3):
+            col.__enter__ = lambda s: s
+            col.__exit__ = MagicMock(return_value=False)
+            col.button = MagicMock(return_value=False)
+        mock_st.columns.return_value = [col1, col2, col3]
 
         # Should not raise
         show_powershell_migration_page()
@@ -66,22 +66,24 @@ class TestRenderInputs:
     """Tests for _render_inputs()."""
 
     def test_render_inputs_returns_content_name_hosts(self, mock_st) -> None:
-        """_render_inputs returns (script_content, playbook_name, hosts)."""
+        """_render_inputs returns (script_content, playbook_name, hosts, role_name)."""
         from souschef.ui.pages.powershell_migration import _render_inputs
 
         mock_st.text_area.return_value = "# script content"
-        mock_st.text_input.side_effect = ["my_play", "win_servers"]
-        col1, col2 = MagicMock(), MagicMock()
-        col1.__enter__ = lambda s: s
-        col1.__exit__ = MagicMock(return_value=False)
-        col2.__enter__ = lambda s: s
-        col2.__exit__ = MagicMock(return_value=False)
-        mock_st.columns.return_value = [col1, col2]
+        mock_st.text_input.side_effect = [
+            "my_play", "win_servers", "my_role"
+        ]
+        col1, col2, col3 = MagicMock(), MagicMock(), MagicMock()
+        for col in (col1, col2, col3):
+            col.__enter__ = lambda s: s
+            col.__exit__ = MagicMock(return_value=False)
+        mock_st.columns.return_value = [col1, col2, col3]
 
-        content, name, hosts = _render_inputs()
+        content, name, hosts, role = _render_inputs()
         assert content == "# script content"
         assert name == "my_play"
         assert hosts == "win_servers"
+        assert role == "my_role"
 
 
 class TestHandleParse:

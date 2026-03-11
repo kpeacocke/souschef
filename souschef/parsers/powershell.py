@@ -139,13 +139,13 @@ _RE_REMOVE_LOCAL_USER = re.compile(
     re.IGNORECASE,
 )
 _RE_ADD_LOCAL_GROUP_MEMBER = re.compile(
-    r"Add-LocalGroupMember\s+(?:-Group\s+)?[\"']?(?P<group>[\w\-\s]+)[\"']?"
-    r".*?(?:-Member\s+)?[\"']?(?P<member>[\w\-\.\\]+)[\"']?",
+    r"Add-LocalGroupMember\s+(?:-Group\s+)?[\"']?(?P<group>[\w\-\s]+?)[\"']?"
+    r"\s+-Member\s+[\"']?(?P<member>[\w\-\.\\]+)[\"']?",
     re.IGNORECASE,
 )
 _RE_REMOVE_LOCAL_GROUP_MEMBER = re.compile(
-    r"Remove-LocalGroupMember\s+(?:-Group\s+)?[\"']?(?P<group>[\w\-\s]+)[\"']?"
-    r".*?(?:-Member\s+)?[\"']?(?P<member>[\w\-\.\\]+)[\"']?",
+    r"Remove-LocalGroupMember\s+(?:-Group\s+)?[\"']?(?P<group>[\w\-\s]+?)[\"']?"
+    r"\s+-Member\s+[\"']?(?P<member>[\w\-\.\\]+)[\"']?",
     re.IGNORECASE,
 )
 
@@ -169,7 +169,7 @@ _RE_REMOVE_FIREWALL_RULE = re.compile(
 
 # Scheduled tasks
 _RE_REGISTER_SCHEDULED_TASK = re.compile(
-    r"Register-ScheduledTask\s+(?:-TaskName\s+)?[\"']?(?P<taskname>[\w\-\s\.\\]+)[\"']?",
+    r"(?<!Un)Register-ScheduledTask\s+(?:-TaskName\s+)?[\"']?(?P<taskname>[\w\-\s\.\\]+)[\"']?",
     re.IGNORECASE,
 )
 _RE_UNREGISTER_SCHEDULED_TASK = re.compile(
@@ -213,7 +213,7 @@ _RE_NEW_WEBSITE = re.compile(
 
 # DNS client
 _RE_SET_DNS_CLIENT = re.compile(
-    r"Set-DnsClientServerAddress\s+.*?(?:-ServerAddresses\s+)?[\"']?(?P<addresses>[0-9\.,\s\"'\[\]]+)[\"']?",
+    r"Set-DnsClientServerAddress\s+.*?-ServerAddresses\s+[\"']?(?P<addresses>[0-9a-fA-F\.:,\s\[\]]+?)(?:\s+-|\s*$)",
     re.IGNORECASE,
 )
 

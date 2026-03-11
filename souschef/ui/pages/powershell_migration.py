@@ -19,7 +19,18 @@ else:
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from souschef.converters.powershell import convert_powershell_content_to_ansible
-from souschef.parsers.powershell import parse_powershell_content
+from souschef.generators.powershell import (
+    analyze_powershell_migration_fidelity,
+    generate_ansible_requirements,
+    generate_powershell_awx_job_template,
+    generate_powershell_role_structure,
+    generate_windows_group_vars,
+    generate_windows_inventory,
+)
+from souschef.parsers.powershell import (
+    _parse_powershell_content,
+    parse_powershell_content,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -29,19 +40,31 @@ _PLACEHOLDER_SCRIPT = """\
 # Example PowerShell provisioning script
 Install-WindowsFeature -Name Web-Server -IncludeManagementTools
 Start-Service -Name W3SVC
+Set-Service -Name W3SVC -StartupType Automatic
 Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\MyApp' -Name 'Version' -Value '1.0'
 New-Item -Path 'C:\\MyApp\\Logs' -ItemType Directory
+New-LocalUser -Name 'svc_myapp'
+New-NetFirewallRule -DisplayName 'MyApp HTTP' -Direction Inbound -Port 80
+Register-ScheduledTask -TaskName 'MyApp Backup'
+[System.Environment]::SetEnvironmentVariable('APP_HOME', 'C:\\MyApp', 'Machine')
 choco install notepadplusplus
 """
 
 _LABEL_SCRIPT_INPUT = "PowerShell Script"
 _LABEL_PLAYBOOK_NAME = "Playbook Name"
 _LABEL_HOSTS = "Target Hosts"
+_LABEL_ROLE_NAME = "Role Name"
 _LABEL_PARSE_BTN = "Parse Script"
 _LABEL_CONVERT_BTN = "Convert to Ansible"
+_LABEL_ENTERPRISE_BTN = "Generate Enterprise Artefacts"
 _LABEL_ACTIONS_TAB = "Parsed Actions"
 _LABEL_PLAYBOOK_TAB = "Ansible Playbook"
 _LABEL_WARNINGS_TAB = "Warnings"
+_LABEL_ROLE_TAB = "Ansible Role"
+_LABEL_INVENTORY_TAB = "Inventory"
+_LABEL_REQUIREMENTS_TAB = "requirements.yml"
+_LABEL_JOB_TEMPLATE_TAB = "AWX Job Template"
+_LABEL_FIDELITY_TAB = "Migration Fidelity"
 
 
 # ---------------------------------------------------------------------------
@@ -52,8 +75,8 @@ _LABEL_WARNINGS_TAB = "Warnings"
 def show_powershell_migration_page() -> None:
     """Render the PowerShell Migration page."""
     _display_intro()
-    script_content, playbook_name, hosts = _render_inputs()
-    _render_action_buttons(script_content, playbook_name, hosts)
+    script_content, playbook_name, hosts, role_name = _render_inputs()
+    _render_action_buttons(script_content, playbook_name, hosts, role_name)
 
 
 # ---------------------------------------------------------------------------
@@ -66,27 +89,28 @@ def _display_intro() -> None:
     st.title("PowerShell to Ansible Migration")
     st.markdown(
         """
-        Convert PowerShell provisioning scripts to idiomatic Ansible playbooks
-        targeting Windows managed nodes.
+        Convert PowerShell provisioning scripts to idiomatic Ansible playbooks and
+        complete enterprise automation artefacts targeting Windows managed nodes on
+        **Ansible Automation Platform (AAP) / AWX**.
 
         **Supported actions:**
-        - Windows Features (`Install-WindowsFeature`, `Enable-WindowsOptionalFeature`)
-        - Windows Services (`Start-Service`, `Stop-Service`, `Set-Service`,
-          `New-Service`)
-        - Registry edits (`Set-ItemProperty`, `New-Item`, `Remove-Item`
-          on HKLM/HKCU)
-        - File operations (`Copy-Item`, `New-Item -ItemType Directory`,
-          `Set-Content`, `Remove-Item`)
-        - MSI installs (`msiexec`, `Start-Process msiexec`)
-        - Chocolatey packages (`choco install` / `choco uninstall`)
+        Windows Features · Services · Registry · Files · MSI/Chocolatey ·
+        Users & Groups · Firewall Rules · Scheduled Tasks · Environment Variables ·
+        Certificates · WinRM · IIS · DNS · ACL
 
         Unrecognised commands fall back to `ansible.windows.win_shell` with warnings.
         """
     )
 
 
-def _render_inputs() -> tuple[str, str, str]:
-    """Render script input area and options; return (content, playbook_name, hosts)."""
+def _render_inputs() -> tuple[str, str, str, str]:
+    """
+    Render script input area and options.
+
+    Returns:
+        Tuple of (script_content, playbook_name, hosts, role_name).
+
+    """
     script_content: str = st.text_area(
         _LABEL_SCRIPT_INPUT,
         value=_PLACEHOLDER_SCRIPT,
@@ -95,7 +119,7 @@ def _render_inputs() -> tuple[str, str, str]:
         key="ps_script_content",
     )
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         playbook_name: str = st.text_input(
             _LABEL_PLAYBOOK_NAME,
@@ -110,15 +134,22 @@ def _render_inputs() -> tuple[str, str, str]:
             help="Ansible inventory group or host pattern.",
             key="ps_hosts",
         )
+    with col3:
+        role_name: str = st.text_input(
+            _LABEL_ROLE_NAME,
+            value="windows_provisioning",
+            help="Name for the generated Ansible role.",
+            key="ps_role_name",
+        )
 
-    return script_content, playbook_name, hosts
+    return script_content, playbook_name, hosts, role_name
 
 
 def _render_action_buttons(
-    script_content: str, playbook_name: str, hosts: str
+    script_content: str, playbook_name: str, hosts: str, role_name: str
 ) -> None:
-    """Render Parse and Convert buttons and display results."""
-    col_parse, col_convert = st.columns(2)
+    """Render Parse, Convert, and Enterprise buttons and display results."""
+    col_parse, col_convert, col_enterprise = st.columns(3)
 
     with col_parse:
         parse_clicked = st.button(
@@ -133,14 +164,24 @@ def _render_action_buttons(
             key="ps_convert_btn",
         )
 
+    with col_enterprise:
+        enterprise_clicked = st.button(
+            _LABEL_ENTERPRISE_BTN,
+            use_container_width=True,
+            key="ps_enterprise_btn",
+        )
+
     if parse_clicked:
         _handle_parse(script_content)
 
     if convert_clicked:
         _handle_convert(script_content, playbook_name, hosts)
 
+    if enterprise_clicked:
+        _handle_enterprise(script_content, playbook_name, hosts, role_name)
+
     # Persist results across reruns using session state
-    if not parse_clicked and not convert_clicked:
+    if not parse_clicked and not convert_clicked and not enterprise_clicked:
         _display_stored_results()
 
 
@@ -161,6 +202,7 @@ def _handle_parse(script_content: str) -> None:
     result = json.loads(result_json)
     st.session_state["ps_parse_result"] = result
     st.session_state["ps_convert_result"] = None
+    st.session_state["ps_enterprise_result"] = None
     _display_parse_result(result)
 
 
@@ -180,18 +222,58 @@ def _handle_convert(script_content: str, playbook_name: str, hosts: str) -> None
     result = json.loads(result_json)
     st.session_state["ps_convert_result"] = result
     st.session_state["ps_parse_result"] = None
+    st.session_state["ps_enterprise_result"] = None
     _display_convert_result(result)
+
+
+def _handle_enterprise(
+    script_content: str, playbook_name: str, hosts: str, role_name: str
+) -> None:
+    """Generate enterprise artefacts and display them."""
+    if not script_content.strip():
+        st.warning("Please enter a PowerShell script.")
+        return
+
+    with st.spinner("Generating enterprise Ansible artefacts..."):
+        parsed_ir = _parse_powershell_content(script_content, "<inline>")
+        enterprise_result = {
+            "parsed_ir": parsed_ir,
+            "inventory": generate_windows_inventory(),
+            "group_vars": generate_windows_group_vars(),
+            "requirements": generate_ansible_requirements(parsed_ir),
+            "role_files": generate_powershell_role_structure(
+                parsed_ir,
+                role_name=role_name,
+                playbook_name=playbook_name,
+                hosts=hosts,
+            ),
+            "job_template": generate_powershell_awx_job_template(
+                parsed_ir,
+                job_template_name=f"Windows: {playbook_name}",
+                playbook=f"{playbook_name}.yml",
+                hosts=hosts,
+            ),
+            "fidelity": json.loads(analyze_powershell_migration_fidelity(parsed_ir)),
+        }
+
+    st.session_state["ps_enterprise_result"] = enterprise_result
+    st.session_state["ps_parse_result"] = None
+    st.session_state["ps_convert_result"] = None
+    _display_enterprise_result(enterprise_result)
 
 
 def _display_stored_results() -> None:
     """Re-display previously computed results from session state."""
     parse_result = st.session_state.get("ps_parse_result")
     convert_result = st.session_state.get("ps_convert_result")
+    enterprise_result = st.session_state.get("ps_enterprise_result")
 
     if parse_result:
         _display_parse_result(parse_result)
     elif convert_result:
         _display_convert_result(convert_result)
+    elif enterprise_result:
+        _display_enterprise_result(enterprise_result)
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +307,21 @@ def _render_metrics_summary(metrics: dict) -> None:
     col4.metric("Files", metrics.get("file", 0))
     col5.metric("Packages", metrics.get("package", 0))
     col6.metric("Fallbacks", metrics.get("win_shell_fallback", 0))
+
+    # Show enterprise metrics if present
+    enterprise_keys = [
+        "user", "firewall", "scheduled_task",
+        "environment", "certificate", "other_enterprise",
+    ]
+    enterprise_vals = {
+        k: metrics.get(k, 0)
+        for k in enterprise_keys
+        if metrics.get(k, 0) > 0
+    }
+    if enterprise_vals:
+        cols = st.columns(len(enterprise_vals))
+        for col, (key, val) in zip(cols, enterprise_vals.items(), strict=False):
+            col.metric(key.replace("_", " ").title(), val)
 
 
 def _render_actions_table(actions: list) -> None:
@@ -291,3 +388,134 @@ def _display_convert_result(result: dict) -> None:
 
     with tab_warnings:
         _render_warnings(warnings)
+
+
+def _display_enterprise_result(enterprise_result: dict) -> None:
+    """Display all enterprise artefacts across tabs."""
+    fidelity = enterprise_result.get("fidelity", {})
+    score = fidelity.get("fidelity_score", 0)
+    total = fidelity.get("total_actions", 0)
+    automated = fidelity.get("automated_actions", 0)
+    fallbacks = fidelity.get("fallback_actions", 0)
+    role_files = enterprise_result.get("role_files", {})
+
+    # Top-level fidelity metrics
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Fidelity Score", f"{score}%")
+    col2.metric("Total Actions", total)
+    col3.metric("Automated", automated)
+    col4.metric("Fallbacks", fallbacks)
+
+    (
+        tab_fidelity,
+        tab_role,
+        tab_inventory,
+        tab_requirements,
+        tab_job_template,
+    ) = st.tabs(
+        [
+            _LABEL_FIDELITY_TAB,
+            _LABEL_ROLE_TAB,
+            _LABEL_INVENTORY_TAB,
+            _LABEL_REQUIREMENTS_TAB,
+            _LABEL_JOB_TEMPLATE_TAB,
+        ]
+    )
+
+    with tab_fidelity:
+        _render_fidelity_report(fidelity)
+
+    with tab_role:
+        _render_role_files(role_files)
+
+    with tab_inventory:
+        inventory = enterprise_result.get("inventory", "")
+        group_vars = enterprise_result.get("group_vars", "")
+        st.subheader("inventory/hosts")
+        st.code(inventory, language="ini")
+        st.download_button(
+            "Download inventory/hosts",
+            data=inventory,
+            file_name="hosts",
+            mime="text/plain",
+            key="ps_download_inventory",
+        )
+        st.subheader("group_vars/windows.yml")
+        st.code(group_vars, language="yaml")
+        st.download_button(
+            "Download group_vars/windows.yml",
+            data=group_vars,
+            file_name="windows.yml",
+            mime="text/yaml",
+            key="ps_download_group_vars",
+        )
+
+    with tab_requirements:
+        requirements = enterprise_result.get("requirements", "")
+        st.code(requirements, language="yaml")
+        st.download_button(
+            "Download requirements.yml",
+            data=requirements,
+            file_name="requirements.yml",
+            mime="text/yaml",
+            key="ps_download_requirements",
+        )
+
+    with tab_job_template:
+        job_template = enterprise_result.get("job_template", "")
+        st.code(job_template, language="markdown")
+        st.download_button(
+            "Download Job Template",
+            data=job_template,
+            file_name="job_template.md",
+            mime="text/markdown",
+            key="ps_download_job_template",
+        )
+
+
+def _render_fidelity_report(fidelity: dict) -> None:
+    """Render the migration fidelity analysis."""
+    st.markdown(f"**{fidelity.get('summary', '')}**")
+
+    recommendations = fidelity.get("recommendations", [])
+    if recommendations:
+        st.subheader("Recommendations")
+        for rec in recommendations:
+            st.info(rec)
+
+    review_required = fidelity.get("review_required", [])
+    if review_required:
+        st.subheader("Actions Requiring Manual Review")
+        for item in review_required:
+            with st.expander(
+                f"Line {item.get('source_line', '?')}: {item.get('action_type', '?')}"
+            ):
+                st.warning(item.get("reason", ""))
+                st.caption(f"Raw: `{item.get('raw', '')}`")
+
+
+def _render_role_files(role_files: dict) -> None:
+    """Render role file structure with code viewers and download buttons."""
+    if not role_files:
+        st.info("No role files generated.")
+        return
+
+    st.caption(f"Generated {len(role_files)} files for the Ansible role.")
+
+    for rel_path, content in role_files.items():
+        lang = "yaml"
+        if rel_path.endswith(".md"):
+            lang = "markdown"
+        elif rel_path.endswith("hosts"):
+            lang = "ini"
+
+        with st.expander(rel_path):
+            st.code(content, language=lang)
+            st.download_button(
+                f"Download {Path(rel_path).name}",
+                data=content,
+                file_name=Path(rel_path).name,
+                mime="text/plain",
+                key=f"ps_download_{rel_path.replace('/', '_').replace('.', '_')}",
+            )
+

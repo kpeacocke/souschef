@@ -198,6 +198,24 @@ from souschef.filesystem import (
 from souschef.filesystem import (
     read_file as _read_file,
 )
+from souschef.generators.powershell import (
+    analyze_powershell_migration_fidelity as _analyze_powershell_migration_fidelity,
+)
+from souschef.generators.powershell import (
+    generate_ansible_requirements as _generate_ansible_requirements,
+)
+from souschef.generators.powershell import (
+    generate_powershell_awx_job_template as _generate_powershell_awx_job_template,
+)
+from souschef.generators.powershell import (
+    generate_powershell_role_structure as _generate_powershell_role_structure,
+)
+from souschef.generators.powershell import (
+    generate_windows_group_vars as _generate_windows_group_vars,
+)
+from souschef.generators.powershell import (
+    generate_windows_inventory as _generate_windows_inventory,
+)
 from souschef.generators.repo import (
     create_ansible_repository_from_roles as _create_ansible_repository_from_roles,
 )
@@ -343,6 +361,12 @@ parse_powershell_script = _parse_powershell_script  # noqa: F401
 parse_powershell_content = _parse_powershell_content_fn  # noqa: F401
 convert_powershell_to_ansible = _convert_powershell_to_ansible  # noqa: F401
 convert_powershell_content_to_ansible = _convert_powershell_content_to_ansible  # noqa: F401
+generate_windows_inventory = _generate_windows_inventory  # noqa: F401
+generate_windows_group_vars = _generate_windows_group_vars  # noqa: F401
+generate_ansible_requirements = _generate_ansible_requirements  # noqa: F401
+generate_powershell_role_structure = _generate_powershell_role_structure  # noqa: F401
+generate_powershell_awx_job_template = _generate_powershell_awx_job_template  # noqa: F401
+analyze_powershell_migration_fidelity = _analyze_powershell_migration_fidelity  # noqa: F401
 
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
@@ -5641,6 +5665,204 @@ def convert_powershell(
 
     """
     return _convert_powershell_to_ansible(script_path, playbook_name, hosts)
+
+
+@mcp.tool()
+def generate_windows_inventory_tool(
+    hosts: str = "",
+    winrm_port: int = 5986,
+    use_ssl: bool = True,
+    validate_certs: bool = False,
+) -> str:
+    """
+    Generate a WinRM-ready Ansible inventory file for Windows managed nodes.
+
+    Produces an INI-format inventory with a ``[windows]`` group and a
+    ``[windows:vars]`` section containing the WinRM connection settings
+    required by the ``ansible.windows`` collection.
+
+    Args:
+        hosts: Comma-separated list of Windows host names or IPs to include.
+            When empty, a placeholder host is used.
+        winrm_port: WinRM HTTPS listener port (default ``5986``).
+        use_ssl: Whether to use HTTPS (``ssl``) or HTTP (``basic``) transport.
+        validate_certs: Whether to validate the WinRM SSL certificate.
+
+    Returns:
+        INI-formatted inventory string ready to save as ``inventory/hosts``.
+
+    """
+    host_list = [h.strip() for h in hosts.split(",") if h.strip()] or None
+    return _generate_windows_inventory(
+        hosts=host_list,
+        winrm_port=winrm_port,
+        use_ssl=use_ssl,
+        validate_certs=validate_certs,
+    )
+
+
+@mcp.tool()
+def generate_windows_requirements(
+    script_path: str = "",
+) -> str:
+    """
+    Generate ``requirements.yml`` with required Ansible collections for Windows.
+
+    Examines the parsed PowerShell script to determine which collections are
+    actually needed (``ansible.windows``, ``community.windows``,
+    ``chocolatey.chocolatey``, etc.) and produces a ``requirements.yml`` file.
+
+    Args:
+        script_path: Optional path to a PowerShell script.  When provided the
+            output is tailored to the collections needed by that script.  When
+            omitted all Windows collections are included.
+
+    Returns:
+        YAML string for ``requirements.yml``.
+
+    """
+    parsed_ir: dict | None = None
+    if script_path.strip():
+        import json as _json
+
+        raw = _parse_powershell_script(script_path)
+        if not raw.startswith("Error"):
+            parsed_ir = _json.loads(raw)
+    return _generate_ansible_requirements(parsed_ir)
+
+
+@mcp.tool()
+def generate_powershell_role(
+    script_path: str,
+    role_name: str = "windows_provisioning",
+    playbook_name: str = "site",
+    hosts: str = "windows",
+) -> str:
+    """
+    Generate a complete Ansible Role structure from a PowerShell script.
+
+    Parses the script and produces all files for a production-ready Ansible
+    role: ``tasks/main.yml``, ``handlers/main.yml``, ``defaults/main.yml``,
+    ``vars/main.yml``, ``meta/main.yml``, ``README.md``, a top-level
+    playbook, WinRM inventory, ``group_vars/windows.yml``, and
+    ``requirements.yml``.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+        role_name: Name of the role directory.
+        playbook_name: Base name for the top-level playbook file.
+        hosts: Ansible inventory host / group pattern.
+
+    Returns:
+        JSON string mapping relative file path → file content for all
+        generated artefacts.
+
+    """
+    import json as _json
+
+    raw = _parse_powershell_script(script_path)
+    if raw.startswith("Error"):
+        return _json.dumps({"status": "error", "error": raw}, indent=2)
+
+    parsed_ir = _json.loads(raw)
+    files = _generate_powershell_role_structure(
+        parsed_ir,
+        role_name=role_name,
+        playbook_name=playbook_name,
+        hosts=hosts,
+    )
+    return _json.dumps(
+        {"status": "success", "files": files, "file_count": len(files)},
+        indent=2,
+    )
+
+
+@mcp.tool()
+def generate_powershell_job_template(
+    script_path: str,
+    job_template_name: str = "Windows PowerShell Migration",
+    playbook: str = "site.yml",
+    inventory: str = "windows-inventory",
+    project: str = "windows-migration-project",
+    credential: str = "windows-winrm-credential",
+    environment: str = "production",
+    include_survey: bool = True,
+) -> str:
+    """
+    Generate an AWX / AAP Windows job template from a PowerShell script.
+
+    Parses the script and produces a JSON configuration importable via
+    ``awx-cli`` or the AWX/AAP REST API pre-configured for WinRM Windows
+    automation with optional survey specs derived from script variables.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+        job_template_name: Display name for the AWX job template.
+        playbook: Playbook file name relative to the project root.
+        inventory: Inventory name or ID in AWX.
+        project: Project name or ID in AWX.
+        credential: Windows credential name in AWX (Machine credential).
+        environment: Target environment label.
+        include_survey: Whether to generate a survey spec.
+
+    Returns:
+        Formatted text block with job template JSON, CLI import command,
+        and an action summary.
+
+    """
+    import json as _json
+
+    raw = _parse_powershell_script(script_path)
+    if raw.startswith("Error"):
+        return raw
+
+    parsed_ir = _json.loads(raw)
+    return _generate_powershell_awx_job_template(
+        parsed_ir,
+        job_template_name=job_template_name,
+        playbook=playbook,
+        inventory=inventory,
+        project=project,
+        credential=credential,
+        environment=environment,
+        include_survey=include_survey,
+    )
+
+
+@mcp.tool()
+def analyze_powershell_fidelity(
+    script_path: str,
+) -> str:
+    """
+    Analyse migration fidelity for a PowerShell provisioning script.
+
+    Calculates the percentage of actions that can be automatically mapped to
+    idiomatic Ansible modules, lists actions needing manual review, and
+    provides actionable next steps.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+
+    Returns:
+        JSON string with keys:
+
+        - ``fidelity_score``: Percentage (0-100) automated.
+        - ``total_actions``: Total action count.
+        - ``automated_actions``: High-confidence idiomatic mappings.
+        - ``fallback_actions``: ``win_shell`` fallbacks.
+        - ``review_required``: Actions needing manual completion.
+        - ``summary``: Human-readable summary.
+        - ``recommendations``: Actionable next steps.
+
+    """
+    import json as _json
+
+    raw = _parse_powershell_script(script_path)
+    if raw.startswith("Error"):
+        return _json.dumps({"status": "error", "error": raw}, indent=2)
+
+    parsed_ir = _json.loads(raw)
+    return _analyze_powershell_migration_fidelity(parsed_ir)
 
 
 # ==================== End PowerShell Migration Tools ====================
