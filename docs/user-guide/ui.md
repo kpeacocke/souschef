@@ -287,10 +287,117 @@ souschef/ui/
     └── report_generator.py     # Report creation
 ```
 
+## Salt Migration Tab
+
+The **Salt** tab provides a dedicated interface for SaltStack-to-Ansible migrations, complementing the 12 Salt MCP tools with interactive visualisation and guided workflows.
+
+### Accessing the Salt Tab
+
+The Salt tab appears in the main navigation alongside the Chef migration and Ansible upgrade tabs. Launch the UI and select **Salt** to access all Salt migration features.
+
+### Sub-tabs
+
+The Salt tab is divided into eight sub-tabs, each corresponding to a stage of the migration workflow:
+
+#### Parse SLS
+
+Interactive parser for Salt SLS state files.
+
+- **File selection**: Browse or enter a path to any `.sls` state file
+- **State tree view**: Expandable tree showing every state declaration, its module, function, and parameters
+- **Pillar references**: List of all pillar keys referenced in the file with their default values
+- **Grain references**: Grain keys used for conditional logic
+- **Requisite graph**: Visual representation of `require`, `watch`, and `onchanges` dependencies between states
+- **Export**: Download parsed results as JSON for further analysis
+
+#### Convert to Ansible
+
+Single-file SLS-to-playbook conversion with live preview.
+
+- **Source file**: Select an SLS file to convert
+- **Live preview**: Converted Ansible playbook YAML displayed alongside the original SLS for comparison
+- **Handler extraction**: `watch` requisites highlighted and extracted to a handlers section
+- **Variable mapping**: Pillar references shown with their Ansible equivalent variable names
+- **Copy to clipboard**: One-click copy of the generated YAML
+- **Download**: Save the converted playbook as a `.yml` file
+
+#### Pillar Files
+
+Pillar-to-variables conversion interface.
+
+- **Pillar browser**: Navigate your pillar directory tree
+- **Variable classification**: Automatic identification of sensitive values (passwords, keys, tokens)
+- **Output format selector**: Choose between `yaml` (all vars together) or `vault` (split into plain + vault files)
+- **Preview pane**: Side-by-side preview of the generated `group_vars` file and Vault file
+- **Bulk export**: Convert an entire pillar directory in one operation
+
+#### Directory Scan
+
+Full Salt state tree scanner and structural overview.
+
+- **Directory picker**: Enter or browse to your Salt states root directory
+- **Tree view**: Collapsible directory tree showing all SLS files
+- **Summary statistics**: Total state files, unique modules used, states per directory
+- **Include graph**: Visual map of cross-directory include relationships
+- **Export manifest**: Download the full directory inventory as JSON
+
+#### Assessment
+
+Complexity scoring and effort estimation for a Salt directory.
+
+- **Directory input**: Point to any Salt state directory
+- **Complexity dashboard**: Visual complexity score (Low / Medium / High / Very High) with contributing factor breakdown
+- **Effort estimate**: Estimated person-days with confidence range
+- **Per-directory breakdown**: Table showing complexity score and estimated effort for each state directory
+- **Risk register**: Identified risk factors with suggested mitigations
+- **Migration order**: Recommended sequence for converting state directories (simplest first)
+- **Export report**: Download the assessment as Markdown or JSON
+
+#### Migration Plan
+
+Phased migration planning with timeline generation.
+
+- **Directory input**: Salt states directory to plan for
+- **Timeline input**: Available migration timeline in weeks
+- **Target platform selector**: Choose from Ansible Automation Platform (AAP), AWX (open source), or Ansible Core
+- **Generated plan**: Week-by-week phased plan displayed in a structured timeline view
+- **Phase breakdown**: Objectives, activities, and deliverables for each phase
+- **Resource estimate**: Person-days per phase
+- **Export**: Download the plan as Markdown for inclusion in project documentation
+
+#### Batch Convert
+
+Full directory-to-roles conversion for large-scale migrations.
+
+- **Source directory**: Salt states directory to convert
+- **Output directory**: Target directory for the generated Ansible roles structure
+- **Conversion options**:
+  - Generate `site.yml` orchestration playbook
+  - Include role `README.md` files
+  - Preserve original SLS comments as task comments
+- **Progress tracking**: Real-time progress bar and per-file status during conversion
+- **Conversion summary**: Count of roles created, tasks generated, and items flagged for manual review
+- **Review panel**: List of states that required manual attention with explanatory notes
+- **Download archive**: Package the entire generated roles structure as a ZIP or TAR archive
+
+#### Inventory
+
+`top.sls`-to-Ansible-inventory conversion.
+
+- **top.sls file**: Select or enter path to your `top.sls`
+- **Targeting analysis**: Visual breakdown of all targeting expressions by environment
+- **Inventory preview**: Generated Ansible INI inventory displayed with group structure
+- **Group mapping**: Table showing each Salt target expression and its corresponding Ansible group
+- **Matcher support**: Handles glob, grain, compound, pcre, and nodegroup matchers
+- **Export**: Download the generated inventory as `hosts.ini`
+
+---
+
 ## See Also
 
 - **[MCP Tools Reference](mcp-tools.md)** - All available MCP tools
 - **[CLI Usage Guide](cli-usage.md)** - Command-line interface
-- **[Migration Guide](../migration-guide/overview.md)** - Complete migration methodology
+- **[Migration Guide](../migration-guide/overview.md)** - Complete Chef migration methodology
+- **[Salt Migration Guide](../migration-guide/salt-migration.md)** - Complete Salt migration methodology
 - **[Security Documentation](../security.md)** - Security features and best practices</content>
 <parameter name="filePath">/workspaces/souschef/docs/user-guide/ui.md

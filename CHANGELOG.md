@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **SaltStack migration:** Enterprise-grade SaltStack to AAP/Ansible migration (12 new MCP tools)
+  - 12 MCP tools covering parse, convert, assess, plan, report, inventory, and batch roles conversion
+  - SLS state file parsing for 18 Salt modules with pillar and grain extraction
+  - Pillar-to-Ansible-Vault conversion for secure variable migration
+  - `top.sls` to Ansible INI inventory conversion
+  - Batch directory-to-roles conversion producing full Ansible role structure
+  - Interactive Salt Migration UI (8 tabs: Parse SLS, Convert to Ansible, Pillar Files, Directory Scan, Assessment, Migration Plan, Batch Convert, Inventory) integrated into web interface
+  - Live Salt Master REST API integration (CherryPy netapi)
+  - Comprehensive Salt migration guide at `docs/migration-guide/salt-migration.md`
 * **v2.2:** Interactive CLI migration wizard with step-by-step guidance
 * **v2.2:** Custom rule engine for resource conversion with user-defined mappings
 * **v2.2:** Custom module generator for Ansible module scaffolding

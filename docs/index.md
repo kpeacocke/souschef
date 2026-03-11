@@ -9,7 +9,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 ## Overview
 
-SousChef is a complete enterprise-grade platform with two major capabilities:
+SousChef is a complete enterprise-grade platform with three major capabilities:
 
 ### 1. Chef to Ansible Migration (38 tools)
 
@@ -27,10 +27,23 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 - **Python Upgrade Impact** - Assess Python version upgrade requirements for control and managed nodes
 - **Testing Plan Generation** - Generate comprehensive upgrade testing plans
 
+### 3. SaltStack to Ansible Migration (12 tools)
+
+Enterprise-grade SaltStack migration platform with **12 MCP tools** covering the full migration lifecycle:
+
+- **SLS Parsing** - Parse state files, extract states, pillars, and grain references
+- **Pillar Migration** - Convert pillar data to Ansible `vars/`, `group_vars/`, and Ansible Vault
+- **Inventory Generation** - Convert `top.sls` targeting logic to Ansible INI inventory
+- **Batch Conversion** - Convert a full Salt state tree to an Ansible roles structure in one command
+- **Complexity Assessment** - Automated scoring and effort estimation for Salt directories
+- **Migration Planning** - Phased migration plans with timeline for AAP, AWX, or Ansible Core targets
+- **Executive Reporting** - Stakeholder-ready migration reports in Markdown or JSON
+- **Live Salt Master Integration** - Query the Salt Master REST API (CherryPy netapi) directly
+
 !!! info "About Tool Counts"
     **Complete tool inventory available in source code**
 
-    The MCP server includes primary user-facing tools for Chef-to-Ansible migration and Ansible upgrade planning. This documentation focuses on the primary user-facing tools (38 migration + 5 upgrade) that cover the main capabilities.
+    The MCP server includes primary user-facing tools for Chef-to-Ansible migration, Ansible upgrade planning, and SaltStack migration. This documentation focuses on the primary user-facing tools (38 Chef migration + 5 upgrade + 12 Salt migration) that cover the main capabilities.
 
     As a user, you'll primarily interact with the documented tools. Your AI assistant may use additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
@@ -213,6 +226,14 @@ Get started with SousChef in minutes:
     Complex migration patterns and integration strategies
 
     [:octicons-arrow-right-24: Advanced workflows](migration-guide/advanced-workflows.md)
+
+-   :material-ansible:{ .lg .middle } __Salt Migration__
+
+    ---
+
+    Migrate SaltStack states, pillars, and inventory to Ansible
+
+    [:octicons-arrow-right-24: Salt migration guide](migration-guide/salt-migration.md)
 
 -   :material-help-circle:{ .lg .middle } __Troubleshooting__
 
