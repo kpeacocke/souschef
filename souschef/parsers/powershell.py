@@ -3,7 +3,9 @@ PowerShell script parser for Chef-to-Ansible migration.
 
 Parses PowerShell provisioning scripts and extracts structured actions
 (Windows features, services, registry operations, file operations,
-MSI installs, Chocolatey installs) that can be converted to Ansible tasks.
+MSI installs, Chocolatey installs, user management, firewall rules,
+scheduled tasks, environment variables, certificates, WinRM, IIS, DNS,
+and ACL operations) that can be converted to Ansible tasks.
 
 Actions with recognised patterns produce structured IR entries; unrecognised
 fragments are preserved as raw ``win_shell`` fallbacks with source locations
@@ -123,10 +125,113 @@ _RE_CHOCO_UNINSTALL = re.compile(
     re.IGNORECASE,
 )
 
+# User management
+_RE_NEW_LOCAL_USER = re.compile(
+    r"New-LocalUser\s+(?:-Name\s+)?[\"']?(?P<username>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_SET_LOCAL_USER = re.compile(
+    r"Set-LocalUser\s+(?:-Name\s+)?[\"']?(?P<username>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_REMOVE_LOCAL_USER = re.compile(
+    r"Remove-LocalUser\s+(?:-Name\s+)?[\"']?(?P<username>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_ADD_LOCAL_GROUP_MEMBER = re.compile(
+    r"Add-LocalGroupMember\s+(?:-Group\s+)?[\"']?(?P<group>[\w\-\s]+)[\"']?"
+    r".*?(?:-Member\s+)?[\"']?(?P<member>[\w\-\.\\]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_REMOVE_LOCAL_GROUP_MEMBER = re.compile(
+    r"Remove-LocalGroupMember\s+(?:-Group\s+)?[\"']?(?P<group>[\w\-\s]+)[\"']?"
+    r".*?(?:-Member\s+)?[\"']?(?P<member>[\w\-\.\\]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Firewall rules
+_RE_NEW_FIREWALL_RULE = re.compile(
+    r"New-NetFirewallRule\s+(?:-DisplayName\s+|-Name\s+)?[\"']?(?P<name>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_ENABLE_FIREWALL_RULE = re.compile(
+    r"Enable-NetFirewallRule\s+(?:-DisplayName\s+|-Name\s+)?[\"']?(?P<name>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_DISABLE_FIREWALL_RULE = re.compile(
+    r"Disable-NetFirewallRule\s+(?:-DisplayName\s+|-Name\s+)?[\"']?(?P<name>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_REMOVE_FIREWALL_RULE = re.compile(
+    r"Remove-NetFirewallRule\s+(?:-DisplayName\s+|-Name\s+)?[\"']?(?P<name>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Scheduled tasks
+_RE_REGISTER_SCHEDULED_TASK = re.compile(
+    r"Register-ScheduledTask\s+(?:-TaskName\s+)?[\"']?(?P<taskname>[\w\-\s\.\\]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_UNREGISTER_SCHEDULED_TASK = re.compile(
+    r"Unregister-ScheduledTask\s+(?:-TaskName\s+)?[\"']?(?P<taskname>[\w\-\s\.\\]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Environment variables
+_RE_SET_ENV_VAR = re.compile(
+    r"\[(?:System\.)?Environment\]::SetEnvironmentVariable\s*\([\"'](?P<varname>[\w\-\.]+)[\"']\s*,\s*[\"']?(?P<value>[^\"',)]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_SET_ENV_ITEM = re.compile(
+    r"Set-Item\s+(?:Env:|env:)(?P<varname>[\w\-\.]+)\s+[\"']?(?P<value>[^\"'\s;]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# PowerShell modules
+_RE_INSTALL_MODULE = re.compile(
+    r"Install-Module\s+(?:-Name\s+)?[\"']?(?P<module>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Certificates
+_RE_IMPORT_CERTIFICATE = re.compile(
+    r"(?:Import-Certificate|Import-PfxCertificate)\s+.*?(?:-FilePath\s+)?[\"']?(?P<path>[^\"'\s;,]+\.(?:cer|pfx|p12|crt))[\"']?",
+    re.IGNORECASE,
+)
+
+# WinRM / remoting
+_RE_ENABLE_PSREMOTING = re.compile(
+    r"(?:Enable-PSRemoting|winrm\s+(?:quickconfig|set|create))",
+    re.IGNORECASE,
+)
+
+# IIS
+_RE_NEW_WEBSITE = re.compile(
+    r"New-WebSite\s+(?:-Name\s+)?[\"']?(?P<sitename>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# DNS client
+_RE_SET_DNS_CLIENT = re.compile(
+    r"Set-DnsClientServerAddress\s+.*?(?:-ServerAddresses\s+)?[\"']?(?P<addresses>[0-9\.,\s\"'\[\]]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# ACL
+_RE_SET_ACL = re.compile(
+    r"(?:Set-Acl|icacls\.exe?)\s+[\"']?(?P<path>[^\"'\s;]+)[\"']?",
+    re.IGNORECASE,
+)
+
 # Elevation requirement: commands that need admin
 _ELEVATION_PATTERNS = re.compile(
     r"Install-WindowsFeature|Enable-WindowsOptionalFeature|New-Service|"
-    r"Set-Service|msiexec|New-Item\s+.*HKLM|Set-ItemProperty\s+.*HKLM",
+    r"Set-Service|msiexec|New-Item\s+.*HKLM|Set-ItemProperty\s+.*HKLM|"
+    r"New-LocalUser|Remove-LocalUser|Add-LocalGroupMember|Remove-LocalGroupMember|"
+    r"New-NetFirewallRule|Enable-NetFirewallRule|Disable-NetFirewallRule|"
+    r"Remove-NetFirewallRule|Register-ScheduledTask|Unregister-ScheduledTask|"
+    r"Enable-PSRemoting|winrm\s+quickconfig|Import-Certificate|Import-PfxCertificate|"
+    r"New-WebSite|Set-Acl|icacls|Install-Module",
     re.IGNORECASE,
 )
 
@@ -214,6 +319,12 @@ def _parse_powershell_content(content: str, source: str) -> dict[str, Any]:
         "registry": 0,
         "file": 0,
         "package": 0,
+        "user": 0,
+        "firewall": 0,
+        "scheduled_task": 0,
+        "environment": 0,
+        "certificate": 0,
+        "other_enterprise": 0,
         "win_shell_fallback": 0,
         "total_lines": 0,
         "skipped_lines": 0,
@@ -273,6 +384,24 @@ def _increment_metric(metrics: dict[str, int], action_type: str) -> None:
         "msi_install": "package",
         "chocolatey_install": "package",
         "chocolatey_uninstall": "package",
+        "user_create": "user",
+        "user_modify": "user",
+        "user_remove": "user",
+        "group_member_add": "user",
+        "group_member_remove": "user",
+        "firewall_rule_create": "firewall",
+        "firewall_rule_enable": "firewall",
+        "firewall_rule_disable": "firewall",
+        "firewall_rule_remove": "firewall",
+        "scheduled_task_register": "scheduled_task",
+        "scheduled_task_unregister": "scheduled_task",
+        "environment_set": "environment",
+        "psmodule_install": "other_enterprise",
+        "certificate_import": "certificate",
+        "winrm_enable": "other_enterprise",
+        "iis_website_create": "other_enterprise",
+        "dns_client_set": "other_enterprise",
+        "acl_set": "other_enterprise",
         "win_shell": "win_shell_fallback",
     }
     category = category_map.get(action_type, "win_shell_fallback")
@@ -305,6 +434,9 @@ def _classify_line(line: str, lineno: int) -> dict[str, Any] | None:
         or _classify_registry_line(line, lineno)
         or _classify_file_line(line, lineno)
         or _classify_package_line(line, lineno)
+        or _classify_user_line(line, lineno)
+        or _classify_firewall_line(line, lineno)
+        or _classify_enterprise_line(line, lineno)
     )
 
 
@@ -496,6 +628,201 @@ def _classify_package_line(line: str, lineno: int) -> dict[str, Any] | None:
         return _make_action(
             "chocolatey_uninstall",
             {"package_name": m.group("package")},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _classify_user_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify Windows local user management lines."""
+    m = _RE_NEW_LOCAL_USER.search(line)
+    if m:
+        return _make_action(
+            "user_create",
+            {"username": m.group("username")},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_LOCAL_USER.search(line)
+    if m:
+        return _make_action(
+            "user_modify",
+            {"username": m.group("username")},
+            line,
+            lineno,
+        )
+
+    m = _RE_REMOVE_LOCAL_USER.search(line)
+    if m:
+        return _make_action(
+            "user_remove",
+            {"username": m.group("username")},
+            line,
+            lineno,
+        )
+
+    m = _RE_ADD_LOCAL_GROUP_MEMBER.search(line)
+    if m:
+        return _make_action(
+            "group_member_add",
+            {"group": m.group("group").strip(), "member": m.group("member").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_REMOVE_LOCAL_GROUP_MEMBER.search(line)
+    if m:
+        return _make_action(
+            "group_member_remove",
+            {"group": m.group("group").strip(), "member": m.group("member").strip()},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _classify_firewall_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify Windows firewall rule lines."""
+    m = _RE_NEW_FIREWALL_RULE.search(line)
+    if m:
+        return _make_action(
+            "firewall_rule_create",
+            {"rule_name": m.group("name").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_ENABLE_FIREWALL_RULE.search(line)
+    if m:
+        return _make_action(
+            "firewall_rule_enable",
+            {"rule_name": m.group("name").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_DISABLE_FIREWALL_RULE.search(line)
+    if m:
+        return _make_action(
+            "firewall_rule_disable",
+            {"rule_name": m.group("name").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_REMOVE_FIREWALL_RULE.search(line)
+    if m:
+        return _make_action(
+            "firewall_rule_remove",
+            {"rule_name": m.group("name").strip()},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _classify_enterprise_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify enterprise Windows operations."""
+    return _classify_task_env_line(line, lineno) or _classify_infra_line(line, lineno)
+
+
+def _classify_task_env_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify scheduled task and environment variable lines."""
+    m = _RE_REGISTER_SCHEDULED_TASK.search(line)
+    if m:
+        return _make_action(
+            "scheduled_task_register",
+            {"task_name": m.group("taskname").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_UNREGISTER_SCHEDULED_TASK.search(line)
+    if m:
+        return _make_action(
+            "scheduled_task_unregister",
+            {"task_name": m.group("taskname").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_ENV_VAR.search(line)
+    if m:
+        return _make_action(
+            "environment_set",
+            {"name": m.group("varname"), "value": m.group("value").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_ENV_ITEM.search(line)
+    if m:
+        return _make_action(
+            "environment_set",
+            {"name": m.group("varname"), "value": m.group("value").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_INSTALL_MODULE.search(line)
+    if m:
+        return _make_action(
+            "psmodule_install",
+            {"module_name": m.group("module")},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _classify_infra_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify certificate, WinRM, IIS, DNS, and ACL lines."""
+    m = _RE_IMPORT_CERTIFICATE.search(line)
+    if m:
+        return _make_action(
+            "certificate_import",
+            {"certificate_path": m.group("path")},
+            line,
+            lineno,
+        )
+
+    if _RE_ENABLE_PSREMOTING.search(line):
+        return _make_action(
+            "winrm_enable",
+            {"raw_command": line},
+            line,
+            lineno,
+        )
+
+    m = _RE_NEW_WEBSITE.search(line)
+    if m:
+        return _make_action(
+            "iis_website_create",
+            {"site_name": m.group("sitename").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_DNS_CLIENT.search(line)
+    if m:
+        return _make_action(
+            "dns_client_set",
+            {"server_addresses": m.group("addresses").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_ACL.search(line)
+    if m:
+        return _make_action(
+            "acl_set",
+            {"path": m.group("path")},
             line,
             lineno,
         )
