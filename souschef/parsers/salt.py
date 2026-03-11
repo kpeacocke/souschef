@@ -584,3 +584,238 @@ def parse_salt_directory(salt_dir: str) -> str:
     }
 
     return json.dumps(result, indent=2)
+
+
+def _score_state_complexity(state: dict[str, Any]) -> float:
+    """
+    Score the migration complexity of a single Salt state.
+
+    Assigns a complexity score from 0.0 (trivial) to 1.0 (very complex) based
+    on the state module type, argument count, and Jinja2 template usage.
+
+    Args:
+        state: Salt state entry dict with module, function, and args keys.
+
+    Returns:
+        Float from 0.0 (trivial) to 1.0 (very complex).
+
+    """
+    module = state.get("module", "")
+    func = state.get("function", "")
+    args = state.get("args", {})
+
+    complex_modules = {"cmd", "git", "archive", "mount", "firewall", "sysctl"}
+    simple_modules = {"pkg", "service"}
+
+    if module in complex_modules:
+        score = 0.4
+    elif module in simple_modules:
+        score = 0.1
+    else:
+        score = 0.2
+
+    # Extra penalty for shell/script execution
+    if module == "cmd" and func in ("run", "script", "call"):
+        score += 0.2
+
+    # Count Jinja2 references in arg values
+    jinja_count = 0
+    for val in args.values():
+        if isinstance(val, str) and "__JINJA2__" in val:
+            jinja_count += 1
+        elif isinstance(val, list):
+            for item in val:
+                if isinstance(item, str) and "__JINJA2__" in item:
+                    jinja_count += 1
+
+    jinja_penalty = min(jinja_count * 0.1, 0.3)
+    score += jinja_penalty
+
+    # Arg count penalty
+    arg_count = len(args)
+    if arg_count > 5:
+        score += 0.2
+    elif arg_count > 3:
+        score += 0.1
+
+    return min(score, 1.0)
+
+
+def _detect_salt_dependencies(content: str) -> dict[str, list[str]]:
+    """
+    Detect state dependencies in SLS file content.
+
+    Parses require, watch, onchanges, onfail, and listen dependency
+    declarations as well as include clauses from SLS content.
+
+    Args:
+        content: Raw SLS file content string.
+
+    Returns:
+        Dict mapping state IDs to dependency strings like ``"pkg:nginx"``.
+        The special ``"__include__"`` key lists included SLS module names.
+
+    """
+    data = _parse_sls_yaml(content)
+    dependencies: dict[str, list[str]] = {}
+
+    # Handle include: clause
+    includes = data.get("include")
+    if isinstance(includes, list):
+        dependencies["__include__"] = [str(inc) for inc in includes]
+
+    dep_keywords = {"require", "watch", "onchanges", "onfail", "listen"}
+
+    for state_id, state_def in data.items():
+        if state_id in ("include", "extend"):
+            continue
+
+        # Collect all args from list or dict format
+        arg_list: list[dict[str, Any]] = []
+        if isinstance(state_def, dict):
+            for val in state_def.values():
+                if isinstance(val, list):
+                    for item in val:
+                        if isinstance(item, dict):
+                            arg_list.append(item)
+        elif isinstance(state_def, list):
+            for item in state_def:
+                if isinstance(item, dict):
+                    for val in item.values():
+                        if isinstance(val, list):
+                            for sub in val:
+                                if isinstance(sub, dict):
+                                    arg_list.append(sub)
+
+        state_deps: list[str] = []
+        for arg_dict in arg_list:
+            for keyword in dep_keywords:
+                dep_list = arg_dict.get(keyword)
+                if isinstance(dep_list, list):
+                    for dep_item in dep_list:
+                        if isinstance(dep_item, dict):
+                            for dep_module, dep_id in dep_item.items():
+                                state_deps.append(f"{dep_module}:{dep_id}")
+
+        if state_deps:
+            dependencies[str(state_id)] = state_deps
+
+    return dependencies
+
+
+def assess_salt_complexity(salt_dir: str) -> str:
+    """
+    Assess migration complexity of a SaltStack state directory.
+
+    Scans all SLS files in the given directory, scores each state's migration
+    complexity, and produces per-file and overall complexity reports with
+    effort estimates.
+
+    Uses ``ComplexityLevel`` and ``EffortMetrics`` from
+    ``souschef.core.metrics`` for consistent effort reporting.
+
+    Args:
+        salt_dir: Path to the Salt states root directory.
+
+    Returns:
+        JSON string with:
+
+        - ``directory``: The assessed directory path.
+        - ``files``: List of per-file reports (file, state_count,
+          complexity_score, complexity_level, dependencies, module_summary).
+        - ``summary``: Overall complexity_score, complexity_level,
+          total_files, total_states, estimated_effort_days,
+          estimated_effort_days_with_souschef, estimated_effort_hours,
+          estimated_effort_weeks, high_complexity_files, module_breakdown.
+
+    """
+    from souschef.core.metrics import (
+        categorize_complexity,
+        estimate_effort_for_complexity,
+    )
+
+    try:
+        normalized_path = _normalize_path(salt_dir)
+        workspace_root = _get_workspace_root()
+        safe_path = _ensure_within_base_path(normalized_path, workspace_root)
+
+        if not safe_path.exists():  # NOSONAR
+            return json.dumps({"error": f"Directory not found: {salt_dir}"})
+        if not safe_path.is_dir():
+            return json.dumps({"error": f"Path is not a directory: {salt_dir}"})
+
+    except PermissionError:
+        return json.dumps({"error": f"Permission denied: {salt_dir}"})
+    except ValueError as e:
+        return json.dumps({"error": str(e)})
+
+    sls_files = _list_sls_files(safe_path)
+    file_reports: list[dict[str, Any]] = []
+    total_score_sum = 0.0
+    total_states = 0
+    module_breakdown: dict[str, int] = {}
+    high_complexity_files: list[str] = []
+
+    for rel_path in sls_files:
+        file_path = safe_path / rel_path
+        try:
+            content = safe_read_text(file_path, workspace_root, encoding="utf-8")
+        except (PermissionError, OSError):
+            continue
+
+        states = _parse_sls_states(content)
+        deps = _detect_salt_dependencies(content)
+
+        state_scores = [_score_state_complexity(s) for s in states]
+        avg_score = (
+            (sum(state_scores) / len(state_scores)) * 100 if state_scores else 0.0
+        )
+        complexity_level = categorize_complexity(avg_score)
+
+        # Module summary for this file
+        mod_summary: dict[str, int] = {}
+        for state in states:
+            mod = state.get("module", "unknown")
+            mod_summary[mod] = mod_summary.get(mod, 0) + 1
+            module_breakdown[mod] = module_breakdown.get(mod, 0) + 1
+
+        total_score_sum += avg_score
+        total_states += len(states)
+
+        if complexity_level.value == "high":
+            high_complexity_files.append(rel_path)
+
+        file_reports.append(
+            {
+                "file": rel_path,
+                "state_count": len(states),
+                "complexity_score": round(avg_score, 2),
+                "complexity_level": complexity_level.value,
+                "dependencies": deps,
+                "module_summary": mod_summary,
+            }
+        )
+
+    total_files = len(sls_files)
+    overall_score = (total_score_sum / total_files) if total_files > 0 else 0.0
+    overall_complexity = categorize_complexity(overall_score)
+    effort = estimate_effort_for_complexity(overall_score, total_states)
+
+    result: dict[str, Any] = {
+        "directory": salt_dir,
+        "files": file_reports,
+        "summary": {
+            "complexity_score": round(overall_score, 2),
+            "complexity_level": overall_complexity.value,
+            "total_files": total_files,
+            "total_states": total_states,
+            "estimated_effort_days": effort.estimated_days,
+            "estimated_effort_days_with_souschef": effort.estimated_days_with_souschef,
+            "estimated_effort_hours": effort.estimated_hours,
+            "estimated_effort_weeks": effort.estimated_weeks_range,
+            "high_complexity_files": high_complexity_files,
+            "module_breakdown": module_breakdown,
+        },
+    }
+
+    return json.dumps(result, indent=2)
