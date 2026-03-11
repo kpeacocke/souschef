@@ -515,6 +515,7 @@ class TestCaching:
         cache.set(str(test_file), {"key": "value"})
 
         import time
+
         time.sleep(0.01)  # Give a brief moment for TTL to expire
 
         result = cache.get(str(test_file))

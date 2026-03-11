@@ -143,7 +143,12 @@ class TestNavigationFunctions:
         from souschef.ui.app import _display_navigation_section
 
         with patch("souschef.ui.app.st") as mock_st:
-            mock_st.tabs.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
+            mock_st.tabs.return_value = (
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            )
             with patch("souschef.ui.app._render_buttons_for_features"):
                 _display_navigation_section("Dashboard")
 

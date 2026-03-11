@@ -4,8 +4,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from souschef.converters.salt import (
     _build_cmd_task,
     _build_file_task,
@@ -22,7 +20,6 @@ from souschef.converters.salt import (
     convert_salt_sls_to_ansible,
 )
 
-
 # ---------------------------------------------------------------------------
 # _build_pkg_task
 # ---------------------------------------------------------------------------
@@ -30,7 +27,12 @@ from souschef.converters.salt import (
 
 def test_build_pkg_task_installed() -> None:
     """pkg.installed maps to package state=present."""
-    state = {"id": "nginx", "module": "pkg", "function": "installed", "args": {"name": "nginx"}}
+    state = {
+        "id": "nginx",
+        "module": "pkg",
+        "function": "installed",
+        "args": {"name": "nginx"},
+    }
     task = _build_pkg_task(state)
     assert task["ansible.builtin.package"]["state"] == "present"
     assert task["ansible.builtin.package"]["name"] == "nginx"
@@ -812,7 +814,9 @@ def test_convert_salt_sls_to_ansible_file_not_found(tmp_path: Path) -> None:
     with (
         patch("souschef.converters.salt._normalize_path", return_value=missing),
         patch("souschef.converters.salt._get_workspace_root", return_value=tmp_path),
-        patch("souschef.converters.salt._ensure_within_base_path", return_value=missing),
+        patch(
+            "souschef.converters.salt._ensure_within_base_path", return_value=missing
+        ),
     ):
         result_str = convert_salt_sls_to_ansible(str(missing))
 
@@ -825,7 +829,9 @@ def test_convert_salt_sls_to_ansible_directory(tmp_path: Path) -> None:
     with (
         patch("souschef.converters.salt._normalize_path", return_value=tmp_path),
         patch("souschef.converters.salt._get_workspace_root", return_value=tmp_path),
-        patch("souschef.converters.salt._ensure_within_base_path", return_value=tmp_path),
+        patch(
+            "souschef.converters.salt._ensure_within_base_path", return_value=tmp_path
+        ),
     ):
         result_str = convert_salt_sls_to_ansible(str(tmp_path))
 
@@ -904,9 +910,7 @@ def test_convert_salt_sls_to_ansible_unconverted_generates_warnings(
 def test_convert_salt_sls_to_ansible_with_pillars(tmp_path: Path) -> None:
     """Pillar references are converted to Ansible vars."""
     content = (
-        "web:\n"
-        "  pkg.installed:\n"
-        "    - name: {{ pillar.get('web_package', 'nginx') }}\n"
+        "web:\n  pkg.installed:\n    - name: {{ pillar.get('web_package', 'nginx') }}\n"
     )
     sls = tmp_path / "web.sls"
     sls.write_text(content, encoding="utf-8")

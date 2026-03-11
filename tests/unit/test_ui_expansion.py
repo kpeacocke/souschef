@@ -650,7 +650,12 @@ class TestDisplayNavigationSection:
         mock_tab_tools.__enter__ = Mock(return_value=mock_tab_tools)
         mock_tab_tools.__exit__ = Mock(return_value=None)
 
-        mock_st.tabs.return_value = [mock_tab_chef, mock_tab_ansible, mock_tab_salt, mock_tab_tools]
+        mock_st.tabs.return_value = [
+            mock_tab_chef,
+            mock_tab_ansible,
+            mock_tab_salt,
+            mock_tab_tools,
+        ]
 
         _display_navigation_section("Dashboard")
 

@@ -4,8 +4,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from souschef.parsers.salt import (
     _extract_grains,
     _extract_pillars,
@@ -19,7 +17,6 @@ from souschef.parsers.salt import (
     parse_salt_sls,
     parse_salt_top,
 )
-
 
 # ---------------------------------------------------------------------------
 # _parse_sls_yaml
@@ -366,11 +363,7 @@ def test_parse_salt_sls_value_error(tmp_path: Path) -> None:
 
 def test_parse_salt_sls_with_pillars(tmp_path: Path) -> None:
     """Pillar references are extracted into provenance mapping."""
-    content = (
-        "web:\n"
-        "  pkg.installed:\n"
-        "    - name: {{ pillar['web_package'] }}\n"
-    )
+    content = "web:\n  pkg.installed:\n    - name: {{ pillar['web_package'] }}\n"
     sls = tmp_path / "web.sls"
     sls.write_text(content, encoding="utf-8")
 

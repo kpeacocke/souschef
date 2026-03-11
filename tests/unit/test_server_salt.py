@@ -4,8 +4,6 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from souschef.server import (
     convert_salt_to_ansible,
     parse_salt_directory,
@@ -14,7 +12,6 @@ from souschef.server import (
     parse_salt_top,
     query_salt_master,
 )
-
 
 # ---------------------------------------------------------------------------
 # parse_salt_sls MCP tool
@@ -25,17 +22,16 @@ def test_server_parse_salt_sls_delegates_to_parser(tmp_path: Path) -> None:
     """parse_salt_sls MCP tool delegates to the parser module."""
     expected = json.dumps({"summary": {"total_states": 1}})
 
-    with patch(
-        "souschef.server.parse_salt_sls.__wrapped__",
-        return_value=expected,
-        create=True,
+    with (
+        patch(
+            "souschef.server.parse_salt_sls.__wrapped__",
+            return_value=expected,
+            create=True,
+        ),
+        patch("souschef.parsers.salt.parse_salt_sls", return_value=expected),
+        patch("souschef.server._validate_path_length"),
     ):
-        with patch(
-            "souschef.parsers.salt.parse_salt_sls", return_value=expected
-        ) as mock_parser:
-            # Call via the server tool which validates path first
-            with patch("souschef.server._validate_path_length"):
-                result = parse_salt_sls(str(tmp_path / "init.sls"))
+        result = parse_salt_sls(str(tmp_path / "init.sls"))
 
     assert isinstance(result, str)
 
@@ -71,9 +67,7 @@ def test_server_parse_salt_pillar_path_too_long() -> None:
 def test_server_parse_salt_pillar_calls_parser() -> None:
     """parse_salt_pillar MCP tool calls the underlying parser."""
     expected = json.dumps({"flattened": {}, "summary": {"total_keys": 0}})
-    with patch(
-        "souschef.server._parse_salt_pillar", return_value=expected
-    ) as mock:
+    with patch("souschef.server._parse_salt_pillar", return_value=expected) as mock:
         result = parse_salt_pillar("/some/pillar.sls")
     mock.assert_called_once_with("/some/pillar.sls")
     assert result == expected
@@ -115,9 +109,7 @@ def test_server_parse_salt_directory_path_too_long() -> None:
 def test_server_parse_salt_directory_calls_parser() -> None:
     """parse_salt_directory MCP tool calls the underlying parser."""
     expected = json.dumps({"summary": {"total_files": 0}})
-    with patch(
-        "souschef.server._parse_salt_directory", return_value=expected
-    ) as mock:
+    with patch("souschef.server._parse_salt_directory", return_value=expected) as mock:
         result = parse_salt_directory("/srv/salt")
     mock.assert_called_once_with("/srv/salt")
     assert result == expected
@@ -160,7 +152,7 @@ def test_server_convert_salt_to_ansible_default_playbook_name() -> None:
     with patch(
         "souschef.server._convert_salt_sls_to_ansible", return_value=expected
     ) as mock:
-        result = convert_salt_to_ansible("/some/path.sls")
+        convert_salt_to_ansible("/some/path.sls")
     mock.assert_called_once_with("/some/path.sls", "")
 
 
@@ -196,9 +188,7 @@ def test_server_query_salt_master_connection_error() -> None:
         "urllib.request.urlopen",
         side_effect=urllib.error.URLError("Connection refused"),
     ):
-        result = query_salt_master(
-            "https://salt-master:8080", "user", "pass"
-        )
+        result = query_salt_master("https://salt-master:8080", "user", "pass")
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
     assert "Connection error" in result_dict["error"]
@@ -214,9 +204,7 @@ def test_server_query_salt_master_http_error() -> None:
             "https://salt-master:8080/login", 401, "Unauthorized", {}, None
         ),
     ):
-        result = query_salt_master(
-            "https://salt-master:8080", "user", "pass"
-        )
+        result = query_salt_master("https://salt-master:8080", "user", "pass")
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
     assert "401" in result_dict["error"]
@@ -230,9 +218,7 @@ def test_server_query_salt_master_auth_no_token() -> None:
     mock_response.read.return_value = json.dumps({"return": [{}]}).encode("utf-8")
 
     with patch("urllib.request.urlopen", return_value=mock_response):
-        result = query_salt_master(
-            "https://salt-master:8080", "user", "pass"
-        )
+        result = query_salt_master("https://salt-master:8080", "user", "pass")
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
     assert "Authentication failed" in result_dict["error"]
@@ -254,9 +240,7 @@ def test_server_query_salt_master_top_success() -> None:
         {"return": [{"minion1": {"base": ["common", "webserver"]}}]}
     ).encode("utf-8")
 
-    with patch(
-        "urllib.request.urlopen", side_effect=[login_response, query_response]
-    ):
+    with patch("urllib.request.urlopen", side_effect=[login_response, query_response]):
         result = query_salt_master(
             "https://salt-master:8080", "user", "pass", target="*", query_type="top"
         )
@@ -281,9 +265,7 @@ def test_server_query_salt_master_states_query() -> None:
     query_response.__exit__ = MagicMock(return_value=False)
     query_response.read.return_value = json.dumps({"return": [{}]}).encode("utf-8")
 
-    with patch(
-        "urllib.request.urlopen", side_effect=[login_response, query_response]
-    ):
+    with patch("urllib.request.urlopen", side_effect=[login_response, query_response]):
         result = query_salt_master(
             "https://salt-master:8080",
             "user",
@@ -310,9 +292,7 @@ def test_server_query_salt_master_pillar_query() -> None:
     query_response.__exit__ = MagicMock(return_value=False)
     query_response.read.return_value = json.dumps({"return": [{}]}).encode("utf-8")
 
-    with patch(
-        "urllib.request.urlopen", side_effect=[login_response, query_response]
-    ):
+    with patch("urllib.request.urlopen", side_effect=[login_response, query_response]):
         result = query_salt_master(
             "https://salt-master:8080",
             "user",
@@ -331,9 +311,7 @@ def test_server_query_salt_master_generic_exception() -> None:
         "urllib.request.urlopen",
         side_effect=RuntimeError("unexpected failure"),
     ):
-        result = query_salt_master(
-            "https://salt-master:8080", "user", "pass"
-        )
+        result = query_salt_master("https://salt-master:8080", "user", "pass")
     result_dict = json.loads(result)
     assert result_dict["status"] == "error"
     assert "unexpected failure" in result_dict["error"]
