@@ -29,6 +29,7 @@ from souschef.converters.puppet_to_ansible import (
     get_puppet_ansible_module_map,
     get_supported_puppet_types,
 )
+from souschef.core.path_utils import safe_read_text
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -541,12 +542,10 @@ def test_convert_module_skips_unreadable_file(tmp_path: Path) -> None:
     good.write_text("package { 'vim': ensure => installed }", encoding="utf-8")
     bad.write_text("package { 'curl': ensure => installed }", encoding="utf-8")
 
-    from souschef.core.path_utils import safe_read_text as orig_safe_read_text
-
     def _selective(path: Path, *args: object, **kwargs: object) -> str:
         if "bad" in str(path):
             raise OSError("cannot read")
-        return orig_safe_read_text(path, *args, **kwargs)
+        return safe_read_text(path, *args, **kwargs)
 
     with patch(
         "souschef.converters.puppet_to_ansible.safe_read_text",

@@ -141,7 +141,7 @@ def test_mcp_convert_puppet_module_no_manifests(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_mcp_convert_puppet_resource_package(tmp_path: Path) -> None:
+def test_mcp_convert_puppet_resource_package() -> None:
     """Test converting a package resource via MCP tool."""
     result = convert_puppet_resource_to_task("package", "nginx", "ensure=installed")
     task = yaml.safe_load(result)
@@ -149,21 +149,21 @@ def test_mcp_convert_puppet_resource_package(tmp_path: Path) -> None:
     assert task["ansible.builtin.package"]["name"] == "nginx"
 
 
-def test_mcp_convert_puppet_resource_service(tmp_path: Path) -> None:
+def test_mcp_convert_puppet_resource_service() -> None:
     """Test converting a service resource via MCP tool."""
     result = convert_puppet_resource_to_task("service", "nginx", "ensure=running")
     task = yaml.safe_load(result)
     assert "ansible.builtin.service" in task
 
 
-def test_mcp_convert_puppet_resource_no_attributes(tmp_path: Path) -> None:
+def test_mcp_convert_puppet_resource_no_attributes() -> None:
     """Test converting a resource with no attributes."""
     result = convert_puppet_resource_to_task("package", "vim")
     task = yaml.safe_load(result)
     assert "ansible.builtin.package" in task
 
 
-def test_mcp_convert_puppet_resource_multiple_attributes(tmp_path: Path) -> None:
+def test_mcp_convert_puppet_resource_multiple_attributes() -> None:
     """Test converting a resource with multiple attributes."""
     result = convert_puppet_resource_to_task(
         "file", "/etc/app", "ensure=directory,owner=root,mode=0755"
@@ -172,21 +172,21 @@ def test_mcp_convert_puppet_resource_multiple_attributes(tmp_path: Path) -> None
     assert "ansible.builtin.file" in task
 
 
-def test_mcp_convert_puppet_resource_unsupported_type(tmp_path: Path) -> None:
+def test_mcp_convert_puppet_resource_unsupported_type() -> None:
     """Test converting an unsupported resource type."""
     result = convert_puppet_resource_to_task("augeas", "test", "")
     task = yaml.safe_load(result)
     assert "ansible.builtin.debug" in task
 
 
-def test_mcp_convert_puppet_resource_empty_attribute_value(tmp_path: Path) -> None:
+def test_mcp_convert_puppet_resource_empty_attribute_value() -> None:
     """Test parsing attribute string with extra spaces."""
     result = convert_puppet_resource_to_task("package", "vim", "  ensure = present  ")
     task = yaml.safe_load(result)
     assert "ansible.builtin.package" in task
 
 
-def test_mcp_convert_puppet_resource_attribute_without_equals(tmp_path: Path) -> None:
+def test_mcp_convert_puppet_resource_attribute_without_equals() -> None:
     """Test that attribute pairs without '=' are ignored gracefully."""
     result = convert_puppet_resource_to_task("package", "vim", "notapair")
     task = yaml.safe_load(result)

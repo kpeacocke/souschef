@@ -226,7 +226,6 @@ def _extract_puppet_resources(
         re.DOTALL,
     )
 
-    lines = content.split("\n")
     line_starts = _build_line_index(content)
 
     for match in resource_pattern.finditer(content):
@@ -254,7 +253,6 @@ def _extract_puppet_resources(
             if len(resources) >= MAX_RESOURCES:
                 return resources
 
-    _ = lines  # referenced above for line context; suppress unused warning
     return resources
 
 

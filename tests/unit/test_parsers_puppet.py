@@ -14,6 +14,7 @@ Tests cover:
 from pathlib import Path
 from unittest.mock import patch
 
+from souschef.core.path_utils import safe_read_text
 from souschef.parsers.puppet import (
     _build_line_index,
     _detect_unsupported_constructs,
@@ -336,14 +337,10 @@ def test_parse_puppet_module_skips_unreadable_file(tmp_path: Path) -> None:
     good.write_text("package { 'vim': ensure => installed }", encoding="utf-8")
     bad.write_text("package { 'curl': ensure => installed }", encoding="utf-8")
 
-    original_safe_read = __import__(
-        "souschef.core.path_utils", fromlist=["safe_read_text"]
-    ).safe_read_text
-
     def _selective_read(path: Path, *args: object, **kwargs: object) -> str:
         if "bad" in str(path):
             raise OSError("cannot read")
-        return original_safe_read(path, *args, **kwargs)
+        return safe_read_text(path, *args, **kwargs)
 
     with patch("souschef.parsers.puppet.safe_read_text", side_effect=_selective_read):
         result = parse_puppet_module(str(tmp_path))
