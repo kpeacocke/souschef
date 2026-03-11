@@ -143,7 +143,7 @@ class TestNavigationFunctions:
         from souschef.ui.app import _display_navigation_section
 
         with patch("souschef.ui.app.st") as mock_st:
-            mock_st.tabs.return_value = (MagicMock(), MagicMock(), MagicMock())
+            mock_st.tabs.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
             with patch("souschef.ui.app._render_buttons_for_features"):
                 _display_navigation_section("Dashboard")
 
@@ -274,6 +274,14 @@ class TestRouting:
         with patch("souschef.ui.app.show_dashboard") as mock_dashboard:
             _route_to_page("UnknownPage")
             mock_dashboard.assert_called_once()
+
+    def test_route_to_page_salt_migration(self):
+        """Test routing to Salt Migration page."""
+        from souschef.ui.app import NAV_SALT_MIGRATION, _route_to_page
+
+        with patch("souschef.ui.app.show_salt_migration_page") as mock_salt:
+            _route_to_page(NAV_SALT_MIGRATION)
+            mock_salt.assert_called_once()
 
 
 class TestFormatHistoryAnalysis:

@@ -93,6 +93,26 @@ from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-impor
 from souschef.converters.resource import (
     convert_resource_to_task as _convert_resource_to_task,
 )
+from souschef.converters.salt import (  # noqa: F401, codeql[py/unused-import]
+    _apply_file_ownership,
+    _build_cmd_task,
+    _build_file_task,
+    _build_generic_task,
+    _build_git_task,
+    _build_group_task,
+    _build_pip_task,
+    _build_pkg_task,
+    _build_service_task,
+    _build_user_task,
+    _convert_state_to_task,
+    _pillar_to_ansible_vars,
+    _render_param_value,
+    _render_playbook_yaml,
+    _render_task_lines,
+)
+from souschef.converters.salt import (
+    convert_salt_sls_to_ansible as _convert_salt_sls_to_ansible,
+)
 from souschef.converters.template import (
     convert_template_with_ai as _convert_template_with_ai,
 )
@@ -273,6 +293,30 @@ from souschef.parsers.resource import (
 )
 from souschef.parsers.resource import (
     parse_custom_resource as _parse_custom_resource,
+)
+from souschef.parsers.salt import (  # noqa: F401, codeql[py/unused-import]
+    _build_state_entry,
+    _extract_args_from_value,
+    _extract_grains,
+    _extract_pillars,
+    _extract_state_id_and_module,
+    _list_sls_files,
+    _parse_sls_states,
+    _parse_sls_yaml,
+    _parse_top_environments,
+    _summarise_states,
+)
+from souschef.parsers.salt import (
+    parse_salt_directory as _parse_salt_directory,
+)
+from souschef.parsers.salt import (
+    parse_salt_pillar as _parse_salt_pillar,
+)
+from souschef.parsers.salt import (
+    parse_salt_sls as _parse_salt_sls,
+)
+from souschef.parsers.salt import (
+    parse_salt_top as _parse_salt_top,
 )
 from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
     _convert_erb_to_jinja2,
@@ -5551,6 +5595,285 @@ def generate_handler_routing_config(
 
 
 # ==================== End Ansible Upgrade Tools ====================
+
+
+# ==================== Salt Migration Tools ====================
+# Closes: https://github.com/kpeacocke/souschef/issues/210
+# Closes: https://github.com/kpeacocke/souschef/issues/211
+# Closes: https://github.com/kpeacocke/souschef/issues/212
+
+
+@mcp.tool()
+def parse_salt_sls(sls_path: str) -> str:
+    """
+    Parse a SaltStack SLS state file and extract structured state data.
+
+    Analyses SLS files to extract state definitions, pillar variable references,
+    grain references, and provides a summary suitable for Ansible conversion.
+
+    Supported state modules: pkg, file, service, cmd, user, group, git, pip,
+    npm, gem, cron, mount, firewall, sysctl, timezone, locale, host, archive.
+
+    Args:
+        sls_path: Path to the SLS state file.
+
+    Returns:
+        JSON string with parsed state metadata including states list, pillar
+        provenance mapping, grain references, and summary counts.
+
+    """
+    try:
+        _validate_path_length(sls_path, "SLS path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating SLS path", sls_path)
+    return _parse_salt_sls(sls_path)
+
+
+@mcp.tool()
+def parse_salt_pillar(pillar_path: str) -> str:
+    """
+    Parse a SaltStack pillar file and extract variable definitions.
+
+    Pillar files define configuration data injected into states. This parser
+    extracts variable names, values, and nesting structure.
+
+    Args:
+        pillar_path: Path to the pillar SLS file.
+
+    Returns:
+        JSON string with pillar variable definitions and structure.
+
+    """
+    try:
+        _validate_path_length(pillar_path, "Pillar path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating pillar path", pillar_path)
+    return _parse_salt_pillar(pillar_path)
+
+
+@mcp.tool()
+def parse_salt_top(top_path: str) -> str:
+    """
+    Parse a SaltStack top.sls file and extract target-to-state mappings.
+
+    The top file maps minion targets (hostnames/globs/grains) to the SLS
+    states that should be applied to them.
+
+    Args:
+        top_path: Path to the top.sls file.
+
+    Returns:
+        JSON string with target-to-state mappings per environment.
+
+    """
+    try:
+        _validate_path_length(top_path, "Top file path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating top file path", top_path)
+    return _parse_salt_top(top_path)
+
+
+@mcp.tool()
+def parse_salt_directory(salt_dir: str) -> str:
+    """
+    Parse a SaltStack state directory structure.
+
+    Scans a Salt states directory to discover SLS files, top files,
+    and pillar files, then returns a structural overview.
+
+    Args:
+        salt_dir: Path to the Salt states root directory.
+
+    Returns:
+        JSON string with directory structure overview.
+
+    """
+    try:
+        _validate_path_length(salt_dir, "Salt directory path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating Salt directory path", salt_dir)
+    return _parse_salt_directory(salt_dir)
+
+
+@mcp.tool()
+def convert_salt_to_ansible(sls_path: str, playbook_name: str = "") -> str:
+    """
+    Convert a SaltStack SLS state file to an Ansible playbook.
+
+    Reads a Salt SLS file, converts each state definition to the equivalent
+    Ansible task, maps pillar variables to Ansible vars, and returns the
+    complete playbook as YAML text with a JSON report.
+
+    Supported Salt modules: pkg, file, service, cmd, user, group, git, pip.
+    Unsupported modules generate debug tasks tagged ``salt_unconverted``.
+
+    Args:
+        sls_path: Path to the SLS state file.
+        playbook_name: Optional name for the generated playbook. Defaults to
+            the SLS file stem.
+
+    Returns:
+        JSON string with keys:
+            - ``playbook``: YAML text of the generated Ansible playbook.
+            - ``tasks_converted``: Count of successfully mapped tasks.
+            - ``tasks_unconverted``: Count of tasks requiring manual review.
+            - ``ansible_vars``: Ansible variable definitions from pillar keys.
+            - ``warnings``: List of conversion warning messages.
+
+    """
+    try:
+        _validate_path_length(sls_path, "SLS path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating SLS path", sls_path)
+    return _convert_salt_sls_to_ansible(sls_path, playbook_name)
+
+
+@mcp.tool()
+def query_salt_master(
+    master_url: str,
+    username: str,
+    password: str,
+    target: str = "*",
+    query_type: str = "top",
+) -> str:
+    """
+    Query a SaltStack Salt Master API to retrieve state and pillar data.
+
+    Connects to the Salt Master REST API (CherryPy netapi) to retrieve top
+    file entries, SLS state lists, and pillar data for minion targets.
+
+    Args:
+        master_url: URL of the Salt Master API (e.g., ``https://salt-master:8080``).
+        username: Salt API username.
+        password: Salt API password.
+        target: Minion target glob or grain match (default: ``*`` for all minions).
+        query_type: Type of query - ``top`` for top file, ``states`` for state
+            list, or ``pillar`` for pillar data (default: ``top``).
+
+    Returns:
+        JSON string with query results or error details.
+
+    """
+    import re
+    import ssl
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    try:
+        _validate_path_length(master_url, "Salt Master URL")
+    except ValueError as e:
+        return json.dumps({"error": str(e), "status": "error"})
+
+    # Validate URL scheme to prevent SSRF - only allow https:// and http://
+    _url_pattern = re.compile(r"^https?://[a-zA-Z0-9._-]+(:[0-9]{1,5})?(/.*)?$")
+    if not _url_pattern.match(master_url):
+        return json.dumps(
+            {
+                "error": "Invalid master_url format. Must be an http:// or https:// URL with a hostname.",
+                "status": "error",
+            }
+        )
+
+    valid_query_types = {"top", "states", "pillar"}
+    if query_type not in valid_query_types:
+        return json.dumps(
+            {
+                "error": f"Invalid query_type '{query_type}'. Must be one of: {sorted(valid_query_types)}",
+                "status": "error",
+            }
+        )
+
+    try:
+        # Build SSL context that verifies certificates by default
+        ssl_context = ssl.create_default_context()
+
+        # Login to Salt API
+        login_data = urllib.parse.urlencode(
+            {
+                "username": username,
+                "password": password,
+                "eauth": "pam",
+            }
+        ).encode("utf-8")
+
+        login_url = f"{master_url.rstrip('/')}/login"
+        login_req = urllib.request.Request(  # noqa: S310
+            login_url,
+            data=login_data,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+
+        with urllib.request.urlopen(login_req, context=ssl_context, timeout=30) as resp:  # noqa: S310
+            import json as _json
+
+            login_result = _json.loads(resp.read().decode("utf-8"))
+
+        token = login_result.get("return", [{}])[0].get("token", "")
+        if not token:
+            return json.dumps(
+                {
+                    "error": "Authentication failed - no token returned",
+                    "status": "error",
+                }
+            )
+
+        # Build query based on type
+        if query_type == "top":
+            fun = "state.show_top"
+        elif query_type == "states":
+            fun = "state.show_highstate"
+        else:
+            fun = "pillar.items"
+
+        query_data = urllib.parse.urlencode(
+            {
+                "client": "local",
+                "tgt": target,
+                "fun": fun,
+            }
+        ).encode("utf-8")
+
+        api_url = master_url.rstrip("/")
+        query_req = urllib.request.Request(  # noqa: S310
+            api_url,
+            data=query_data,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Auth-Token": token,
+            },
+        )
+
+        with urllib.request.urlopen(query_req, context=ssl_context, timeout=60) as resp:  # noqa: S310
+            query_result = _json.loads(resp.read().decode("utf-8"))
+
+        return json.dumps(
+            {
+                "status": "success",
+                "query_type": query_type,
+                "target": target,
+                "result": query_result.get("return", []),
+            },
+            indent=2,
+        )
+
+    except urllib.error.HTTPError as e:
+        return json.dumps(
+            {"error": f"HTTP error {e.code}: {e.reason}", "status": "error"}
+        )
+    except urllib.error.URLError as e:
+        return json.dumps({"error": f"Connection error: {e.reason}", "status": "error"})
+    except Exception as e:
+        return json.dumps(
+            {"error": f"Error querying Salt Master: {e}", "status": "error"}
+        )
+
+
+# ==================== End Salt Migration Tools ====================
 
 
 def main() -> None:
