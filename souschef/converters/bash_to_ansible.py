@@ -34,9 +34,6 @@ from souschef.parsers.bash import _parse_bash_content
 # fall back to ansible.builtin.shell rather than a structured module.
 _CONFIDENCE_THRESHOLD = 0.8
 
-# YAML indentation used when building task blocks
-_INDENT = "  "
-
 
 # ---------------------------------------------------------------------------
 # Public API

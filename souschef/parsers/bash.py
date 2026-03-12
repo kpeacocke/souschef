@@ -68,9 +68,11 @@ _GIT_PULL_PATTERN = re.compile(r"\bgit\s+pull\b[^\n]*", re.IGNORECASE)
 _GIT_CHECKOUT_PATTERN = re.compile(r"\bgit\s+checkout\s+(\S+)", re.IGNORECASE)
 
 # Archive extraction
+# Each token is matched as \S+ separated by \s+ to avoid polynomial backtracking
+# that would occur with overlapping [^\n]* and \s+ patterns (CWE-1333).
 _TAR_EXTRACT_PATTERN = re.compile(
-    r"\btar\b[^\n]*-[^\s]*x[^\n]*\s+"
-    r"(\S+\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.Z|tar))",
+    r"\btar\b(?:\s+\S+)*\s+\S*x\S*(?:\s+\S+)*\s+"
+    r"(\S+\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.Z|tar))\b",
     re.IGNORECASE,
 )
 _UNZIP_PATTERN = re.compile(r"\bunzip\s+(?:-[^\s]+\s+)*(\S+\.zip)", re.IGNORECASE)
@@ -115,9 +117,12 @@ _HOSTNAME_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Environment variables (export VAR=val or VAR=val at line start)
+# Environment variables (export VAR=val or VAR=val at line start).
+# Using [^\n]* (greedy, line-bounded) avoids polynomial backtracking that
+# (.+?)(?:\s*#.*)?$ can exhibit (CWE-1333).  Inline comment stripping is
+# handled in _extract_env_vars() instead.
 _ENV_VAR_PATTERN = re.compile(
-    r"^(?:export\s+)?([A-Z_][A-Z0-9_]*)=(.+?)(?:\s*#.*)?$",
+    r"^(?:export[ \t]+)?([A-Z_][A-Z0-9_]*)=([^\n]*)",
     re.MULTILINE,
 )
 
@@ -976,7 +981,12 @@ def _extract_env_vars(content: str, result: dict[str, Any]) -> None:
     """
     for match in _ENV_VAR_PATTERN.finditer(content):
         name = match.group(1)
-        value = match.group(2).strip()
+        raw_value = match.group(2)
+        # Strip inline shell comment: whitespace + # + rest-of-line
+        comment_pos = raw_value.find(" #")
+        if comment_pos == -1:
+            comment_pos = raw_value.find("\t#")
+        value = (raw_value[:comment_pos] if comment_pos != -1 else raw_value).strip()
         # Skip if name contains any lower-case letter (shell internals)
         if re.search(r"[a-z]", name):
             continue

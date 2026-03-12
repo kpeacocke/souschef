@@ -10,7 +10,7 @@ import contextlib
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Concatenate
+from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -121,17 +121,21 @@ class ProgressTracker:
         self.status_text.empty()
 
 
-def with_progress_tracking[**P, R](
-    operation_func: Callable[Concatenate[ProgressTracker, P], R],
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def with_progress_tracking(
+    operation_func: Callable[Concatenate[ProgressTracker, _P], _R],
     description: str = "Processing...",
     total_steps: int = 100,
-) -> Callable[P, R]:
+) -> Callable[_P, _R]:
     """Add progress tracking to operations."""
 
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         tracker = ProgressTracker(total_steps, description)
         try:
-            result: R = operation_func(tracker, *args, **kwargs)
+            result: _R = operation_func(tracker, *args, **kwargs)
             tracker.complete()
             return result
         except Exception as e:  # noqa: BLE001

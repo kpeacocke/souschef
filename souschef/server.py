@@ -166,7 +166,7 @@ from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     safe_write_text,
 )
 from souschef.core.ruby_utils import (
-    _normalize_ruby_value,  # noqa: F401 - used by MCP tools and tests
+    _normalize_ruby_value,  # noqa: F401, codeql[py/unused-import] - used by MCP tools and tests
 )
 from souschef.core.validation import (  # noqa: F401, codeql[py/unused-import]
     ValidationCategory,
@@ -367,6 +367,14 @@ __all__ = [
     "ValidationEngine",
     "ValidationLevel",
     "ValidationResult",
+    # Backward compatibility re-exports without underscore prefix (for tests)
+    "convert_chef_deployment_to_ansible_strategy",
+    "generate_awx_inventory_source_from_chef",
+    "generate_awx_job_template_from_cookbook",
+    "generate_awx_project_from_cookbooks",
+    "generate_awx_workflow_from_chef_runlist",
+    "generate_blue_green_deployment_playbook",
+    "generate_canary_deployment_strategy",
 ]
 
 # Backward compatibility re-exports without underscore prefix (for tests)
