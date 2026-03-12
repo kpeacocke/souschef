@@ -217,10 +217,7 @@ class TestPowershellJobTemplateCli:
         self, runner: CliRunner, cli, sample_ps1: Path, tmp_path: Path
     ) -> None:
         """Command writes job template to file when --output is specified."""
-        from souschef.core.path_utils import _get_workspace_root
-
-        workspace = Path(_get_workspace_root())
-        out_file = workspace / "tmp_test_job_template.md"
+        out_file = tmp_path / "tmp_test_job_template.md"
         try:
             result = runner.invoke(
                 cli,
