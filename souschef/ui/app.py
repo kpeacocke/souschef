@@ -30,6 +30,7 @@ from souschef.ui.pages.chef_server_settings import show_chef_server_settings_pag
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
 from souschef.ui.pages.migration_config import show_migration_config_page
+from souschef.ui.pages.powershell_migration import show_powershell_migration_page
 from souschef.ui.pages.puppet_migration import show_puppet_migration_page
 
 # Constants
@@ -49,6 +50,7 @@ NAV_ANSIBLE_ASSESSMENT = "Ansible Assessment"
 NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
 NAV_ANSIBLE_VALIDATION = "Collection Validation"
 NAV_PUPPET_MIGRATION = "Puppet Migration"
+NAV_POWERSHELL_MIGRATION = "PowerShell Migration"
 CHEF_FEATURES = {
     NAV_COOKBOOK_ANALYSIS,
     NAV_MIGRATION_PLANNING,
@@ -57,6 +59,7 @@ CHEF_FEATURES = {
 }
 PUPPET_FEATURES = {
     NAV_PUPPET_MIGRATION,
+    NAV_POWERSHELL_MIGRATION,
 }
 ANSIBLE_FEATURES = {
     NAV_ANSIBLE_ASSESSMENT,
@@ -168,6 +171,7 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
         ("Migration Config", NAV_MIGRATION_CONFIG),
         ("Dependency Mapping", NAV_DEPENDENCY_MAPPING),
         ("Puppet Migration", NAV_PUPPET_MIGRATION),
+        ("PowerShell Migration", NAV_POWERSHELL_MIGRATION),
         ("Ansible Assessment", NAV_ANSIBLE_ASSESSMENT),
         ("Ansible Upgrade", NAV_ANSIBLE_PLANNING),
         ("Collection Validation", NAV_ANSIBLE_VALIDATION),
@@ -191,14 +195,14 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
 
 def _display_navigation_section(current_page: str) -> None:
     """Display tabbed navigation with feature-specific buttons."""
-    tab_chef, tab_puppet, tab_ansible, tab_tools = st.tabs(
-        ["Chef", "Puppet", "Ansible", "Tools"]
+    tab_chef, tab_migration, tab_ansible, tab_tools = st.tabs(
+        ["Chef", "Migration", "Ansible", "Tools"]
     )
 
     with tab_chef:
         _render_buttons_for_features(CHEF_FEATURES, current_page)
 
-    with tab_puppet:
+    with tab_migration:
         _render_buttons_for_features(PUPPET_FEATURES, current_page)
 
     with tab_ansible:
@@ -240,6 +244,7 @@ def _route_to_page(page: str) -> None:
         NAV_MIGRATION_CONFIG: show_migration_config_page,
         NAV_DEPENDENCY_MAPPING: show_dependency_mapping,
         NAV_PUPPET_MIGRATION: show_puppet_migration_page,
+        NAV_POWERSHELL_MIGRATION: show_powershell_migration_page,
         NAV_HISTORY: show_history_page,
         NAV_VALIDATION_REPORTS: show_validation_reports,
         NAV_AI_SETTINGS: show_ai_settings_page,

@@ -125,6 +125,46 @@ from souschef.converters.puppet_to_ansible import (
 from souschef.converters.puppet_to_ansible import (
     convert_puppet_resource_to_task as _convert_puppet_resource_to_task,
 )
+from souschef.converters.powershell_to_ansible import (  # noqa: F401, codeql[py/unused-import]
+    get_powershell_ansible_module_map,
+    get_supported_powershell_cmdlets,
+)
+from souschef.converters.powershell_to_ansible import (
+    convert_powershell_script_to_ansible as _convert_ps_script,
+)
+from souschef.converters.powershell_to_ansible import (
+    convert_powershell_directory_to_ansible as _convert_ps_dir,
+)
+from souschef.converters.powershell_to_ansible import (
+    convert_powershell_script_to_ansible_with_ai as _convert_ps_script_ai,
+)
+from souschef.converters.powershell_to_ansible import (
+    convert_powershell_directory_to_ansible_with_ai as _convert_ps_dir_ai,
+)
+from souschef.converters.powershell_to_ansible import (
+    generate_windows_ee_definition as _gen_windows_ee,
+)
+from souschef.converters.powershell_to_ansible import (
+    generate_aap_windows_credential_vars as _gen_aap_cred_vars,
+)
+from souschef.converters.powershell_to_ansible import (
+    generate_windows_inventory_template as _gen_windows_inv,
+)
+from souschef.parsers.powershell import (  # noqa: F401, codeql[py/unused-import]
+    _parse_script_content,
+    _strip_comments,
+    _extract_cmdlets,
+    _extract_functions,
+    _extract_variables,
+    _extract_module_imports,
+    _detect_unsupported_constructs,
+)
+from souschef.parsers.powershell import (
+    parse_powershell_script as _parse_powershell_script,
+)
+from souschef.parsers.powershell import (
+    parse_powershell_directory as _parse_powershell_directory,
+)
 from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-import]
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
@@ -5861,6 +5901,280 @@ def convert_puppet_module_to_ansible_with_ai(
 
 
 # ==================== End Puppet Migration Tools ====================
+
+
+# ==================== PowerShell Migration Tools ====================
+
+
+@mcp.tool()
+def parse_powershell_script(script_path: str) -> str:
+    """
+    Parse a PowerShell script and extract its structure.
+
+    Identifies cmdlet invocations, function definitions, variable assignments,
+    module imports, and constructs that cannot be automatically converted to
+    Ansible (e.g. .NET P/Invoke, WMI, COM objects, DSC Configuration blocks).
+
+    Args:
+        script_path: Path to a PowerShell script (.ps1 or .psm1).
+
+    Returns:
+        Formatted analysis report string, or an error message.
+
+    """
+    return _parse_powershell_script(script_path)
+
+
+@mcp.tool()
+def parse_powershell_directory(directory_path: str) -> str:
+    """
+    Parse all PowerShell scripts in a directory.
+
+    Recursively finds .ps1, .psm1, and .psd1 files and produces a combined
+    analysis report.
+
+    Args:
+        directory_path: Path to the directory containing PowerShell scripts.
+
+    Returns:
+        Combined analysis report string, or an error message.
+
+    """
+    return _parse_powershell_directory(directory_path)
+
+
+@mcp.tool()
+def convert_powershell_script_to_ansible(script_path: str) -> str:
+    """
+    Convert a PowerShell script to an Ansible playbook.
+
+    Parses the script and maps supported cmdlets to Windows Ansible modules
+    (ansible.windows.*, community.windows.*).  Unsupported cmdlets are
+    emitted as ansible.windows.win_shell stubs with a WARNING comment.
+
+    Args:
+        script_path: Path to the PowerShell script (.ps1 or .psm1).
+
+    Returns:
+        Ansible playbook YAML string targeting Windows hosts, or an error.
+
+    """
+    return _convert_ps_script(script_path)
+
+
+@mcp.tool()
+def convert_powershell_directory_to_ansible(directory_path: str) -> str:
+    """
+    Convert all PowerShell scripts in a directory to an Ansible playbook.
+
+    Combines plays from every .ps1/.psm1 file found into a single
+    multi-play Windows playbook.
+
+    Args:
+        directory_path: Path to the directory containing PowerShell scripts.
+
+    Returns:
+        Combined Ansible playbook YAML string, or an error message.
+
+    """
+    return _convert_ps_dir(directory_path)
+
+
+@mcp.tool()
+def convert_powershell_script_to_ansible_with_ai(
+    script_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a PowerShell script to an Ansible playbook using AI.
+
+    When unsupported constructs are detected (.NET P/Invoke, WMI, COM objects,
+    DSC Configuration blocks, PS remoting sessions, etc.), delegates to an
+    LLM for best-effort conversion.  Falls back to the deterministic converter
+    if no unsupported constructs exist.
+
+    Args:
+        script_path: Path to the PowerShell script (.ps1 or .psm1).
+        ai_provider: AI provider ('anthropic', 'openai', 'watson', 'lightspeed').
+        api_key: API key for the chosen provider.
+        model: Model identifier (e.g. 'claude-3-5-sonnet-20241022').
+        temperature: Sampling temperature; default is 0.3.
+        max_tokens: Maximum tokens in the AI response.
+        project_id: Project ID for IBM Watsonx.
+        base_url: Custom provider endpoint URL.
+
+    Returns:
+        Ansible playbook YAML string, or an error message if conversion fails.
+
+    """
+    return _convert_ps_script_ai(
+        script_path,
+        ai_provider=ai_provider,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        project_id=project_id,
+        base_url=base_url,
+    )
+
+
+@mcp.tool()
+def convert_powershell_directory_to_ansible_with_ai(
+    directory_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a directory of PowerShell scripts to Ansible using AI.
+
+    Args:
+        directory_path: Path to the directory containing PowerShell scripts.
+        ai_provider: AI provider identifier.
+        api_key: API key for the chosen provider.
+        model: Model identifier.
+        temperature: Sampling temperature; default is 0.3.
+        max_tokens: Maximum tokens in the AI response.
+        project_id: Project ID for IBM Watsonx.
+        base_url: Custom provider endpoint URL.
+
+    Returns:
+        Combined Ansible playbook YAML string, or an error message.
+
+    """
+    return _convert_ps_dir_ai(
+        directory_path,
+        ai_provider=ai_provider,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        project_id=project_id,
+        base_url=base_url,
+    )
+
+
+@mcp.tool()
+def generate_windows_ee_definition(
+    ee_name: str = "windows-ee",
+    base_image: str = "registry.redhat.io/ansible-automation-platform-25/ee-supported-rhel9:latest",
+    python_packages: str = "",
+    galaxy_collections: str = "",
+) -> str:
+    """
+    Generate an Ansible Builder execution-environment.yml for Windows targets.
+
+    Includes the ansible.windows and community.windows collections and the
+    pywinrm Python package required for WinRM connectivity.
+
+    Args:
+        ee_name: Human-readable name for the execution environment.
+        base_image: Base image reference (defaults to AAP 2.5 supported EE).
+        python_packages: Comma-separated extra Python packages (e.g. 'pykerberos').
+        galaxy_collections: Comma-separated extra Galaxy collections.
+
+    Returns:
+        YAML string for the execution-environment.yml file.
+
+    """
+    py_list = [p.strip() for p in python_packages.split(",") if p.strip()]
+    col_list = [c.strip() for c in galaxy_collections.split(",") if c.strip()]
+    return _gen_windows_ee(
+        ee_name=ee_name,
+        base_image=base_image,
+        python_packages=py_list or None,
+        galaxy_collections=col_list or None,
+    )
+
+
+@mcp.tool()
+def generate_aap_windows_credential_vars(
+    transport: str = "ntlm",
+    port: int = 5985,
+    validate_certs: bool = True,
+) -> str:
+    """
+    Generate a Windows credential variable template for AAP/AWX inventories.
+
+    Produces a group_vars/windows.yml stub with WinRM connection variables
+    appropriate for an enterprise Windows inventory.
+
+    Args:
+        transport: WinRM authentication transport ('ntlm', 'kerberos',
+            'certificate', 'basic').
+        port: WinRM port (5985 for HTTP, 5986 for HTTPS).
+        validate_certs: Whether to validate SSL certificates.
+
+    Returns:
+        YAML string for group_vars/windows.yml.
+
+    """
+    return _gen_aap_cred_vars(
+        transport=transport,
+        port=port,
+        validate_certs=validate_certs,
+    )
+
+
+@mcp.tool()
+def generate_windows_inventory_template(
+    hosts: str = "win-server-01,win-server-02",
+    group_name: str = "windows",
+    transport: str = "ntlm",
+) -> str:
+    """
+    Generate a Windows inventory YAML template for AAP/AWX.
+
+    Args:
+        hosts: Comma-separated host names or IPs.
+        group_name: Inventory group name (default 'windows').
+        transport: WinRM transport type.
+
+    Returns:
+        YAML inventory template string.
+
+    """
+    host_list = [h.strip() for h in hosts.split(",") if h.strip()]
+    return _gen_windows_inv(
+        hosts=host_list or None,
+        group_name=group_name,
+        transport=transport,
+    )
+
+
+@mcp.tool()
+def list_powershell_supported_cmdlets() -> str:
+    """
+    List PowerShell cmdlets that have direct Ansible module equivalents.
+
+    Returns:
+        Formatted list of supported cmdlets with their Ansible modules.
+
+    """
+    module_map = get_powershell_ansible_module_map()
+    lines = [
+        "Supported PowerShell Cmdlets → Ansible Modules",
+        "=" * 55,
+        "",
+    ]
+    for cmdlet, module in sorted(module_map.items()):
+        lines.append(f"  {cmdlet:<45} → {module}")
+    lines.extend(["", f"Total: {len(module_map)} cmdlets with direct mappings"])
+    return "\n".join(lines)
+
+
+# ==================== End PowerShell Migration Tools ====================
 
 
 def main() -> None:
