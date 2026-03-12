@@ -2500,7 +2500,7 @@ def bash_parse(script_path: str, output: str | None) -> None:
             _safe_write_file(result, output, default_path=default)
         else:
             click.echo(result)
-    except Exception as e:  # noqa: BLE001
+    except (OSError, ValueError) as e:
         click.echo(f"Error parsing Bash script: {e}", err=True)
         sys.exit(1)
 
@@ -2557,8 +2557,12 @@ def bash_convert(
             click.echo("\nWarnings:", err=True)
             for w in warnings:
                 click.echo(f"  - {w}", err=True)
-    except Exception as e:  # noqa: BLE001
-        click.echo(f"Error converting Bash script: {e}", err=True)
+    except _json.JSONDecodeError as exc:
+        click.echo(
+            "Error converting Bash script: invalid JSON in conversion response.",
+            err=True,
+        )
+        click.echo(str(exc), err=True)
         sys.exit(1)
 
 
