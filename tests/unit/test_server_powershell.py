@@ -19,13 +19,13 @@ class TestParsePowershellMcpTool:
         from souschef.server import parse_powershell
 
         script = tmp_path / "setup.ps1"
-        script.write_text(
-            "Install-WindowsFeature -Name Web-Server\n", encoding="utf-8"
-        )
+        script.write_text("Install-WindowsFeature -Name Web-Server\n", encoding="utf-8")
 
         result = json.loads(parse_powershell(str(script)))
         assert "actions" in result
-        assert any(a["action_type"] == "windows_feature_install" for a in result["actions"])
+        assert any(
+            a["action_type"] == "windows_feature_install" for a in result["actions"]
+        )
 
     def test_parse_missing_file(self, tmp_path: Path) -> None:
         """parse_powershell returns error for missing file."""
@@ -50,9 +50,7 @@ class TestConvertPowershellMcpTool:
         from souschef.server import convert_powershell
 
         script = tmp_path / "setup.ps1"
-        script.write_text(
-            "Install-WindowsFeature -Name Web-Server\n", encoding="utf-8"
-        )
+        script.write_text("Install-WindowsFeature -Name Web-Server\n", encoding="utf-8")
 
         result = json.loads(convert_powershell(str(script)))
         assert result["status"] == "success"
@@ -85,9 +83,7 @@ class TestConvertPowershellMcpTool:
         script = tmp_path / "setup.ps1"
         script.write_text("Start-Service -Name W3SVC\n", encoding="utf-8")
 
-        result = json.loads(
-            convert_powershell(str(script), hosts="win_web_servers")
-        )
+        result = json.loads(convert_powershell(str(script), hosts="win_web_servers"))
         assert "win_web_servers" in result["playbook_yaml"]
 
 
@@ -128,9 +124,7 @@ class TestServerReExports:
         result = json.loads(parse_powershell_script(str(script)))
         assert "actions" in result
 
-    def test_convert_powershell_to_ansible_function_works(
-        self, tmp_path: Path
-    ) -> None:
+    def test_convert_powershell_to_ansible_function_works(self, tmp_path: Path) -> None:
         """The re-exported convert_powershell_to_ansible function works end-to-end."""
         from souschef.server import convert_powershell_to_ansible
 

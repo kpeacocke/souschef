@@ -94,9 +94,7 @@ class TestPowershellInventoryCli:
 class TestPowershellRequirementsCli:
     """Tests for the powershell-requirements CLI command."""
 
-    def test_outputs_requirements_yaml(
-        self, runner: CliRunner, cli
-    ) -> None:
+    def test_outputs_requirements_yaml(self, runner: CliRunner, cli) -> None:
         """Command outputs requirements.yml YAML content."""
         result = runner.invoke(cli, ["powershell-requirements"])
         assert result.exit_code == 0
@@ -122,11 +120,10 @@ class TestPowershellRequirementsCli:
         assert result.exit_code == 0
         assert "chocolatey" in result.output
 
-    def test_output_is_valid_yaml(
-        self, runner: CliRunner, cli, tmp_path: Path
-    ) -> None:
+    def test_output_is_valid_yaml(self, runner: CliRunner, cli, tmp_path: Path) -> None:
         """Command output is valid YAML."""
         import yaml
+
         result = runner.invoke(cli, ["powershell-requirements"])
         assert result.exit_code == 0
         parsed = yaml.safe_load(result.output)
@@ -146,9 +143,7 @@ class TestPowershellRoleCli:
         assert "files" in data
         assert data["file_count"] > 0
 
-    def test_custom_role_name(
-        self, runner: CliRunner, cli, sample_ps1: Path
-    ) -> None:
+    def test_custom_role_name(self, runner: CliRunner, cli, sample_ps1: Path) -> None:
         """Custom role name appears in generated file paths."""
         result = runner.invoke(
             cli,
@@ -172,9 +167,7 @@ class TestPowershellRoleCli:
         self, runner: CliRunner, cli, tmp_path: Path
     ) -> None:
         """Command exits with error for a non-existent script."""
-        result = runner.invoke(
-            cli, ["powershell-role", str(tmp_path / "missing.ps1")]
-        )
+        result = runner.invoke(cli, ["powershell-role", str(tmp_path / "missing.ps1")])
         assert result.exit_code != 0
 
 
@@ -206,9 +199,7 @@ class TestPowershellJobTemplateCli:
         assert result.exit_code == 0
         assert "My Windows Setup" in result.output
 
-    def test_custom_environment(
-        self, runner: CliRunner, cli, sample_ps1: Path
-    ) -> None:
+    def test_custom_environment(self, runner: CliRunner, cli, sample_ps1: Path) -> None:
         """Custom environment label appears in output."""
         result = runner.invoke(
             cli,

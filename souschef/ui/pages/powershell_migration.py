@@ -65,6 +65,7 @@ _LABEL_INVENTORY_TAB = "Inventory"
 _LABEL_REQUIREMENTS_TAB = "requirements.yml"
 _LABEL_JOB_TEMPLATE_TAB = "AWX Job Template"
 _LABEL_FIDELITY_TAB = "Migration Fidelity"
+_MIME_YAML = "text/yaml"
 
 
 # ---------------------------------------------------------------------------
@@ -383,7 +384,7 @@ def _display_convert_result(result: dict) -> None:
             "Download Playbook",
             data=playbook_yaml,
             file_name="playbook.yml",
-            mime="text/yaml",
+            mime=_MIME_YAML,
             key="ps_download_playbook",
         )
 
@@ -447,7 +448,7 @@ def _display_enterprise_result(enterprise_result: dict) -> None:
             "Download group_vars/windows.yml",
             data=group_vars,
             file_name="windows.yml",
-            mime="text/yaml",
+            mime=_MIME_YAML,
             key="ps_download_group_vars",
         )
 
@@ -458,7 +459,7 @@ def _display_enterprise_result(enterprise_result: dict) -> None:
             "Download requirements.yml",
             data=requirements,
             file_name="requirements.yml",
-            mime="text/yaml",
+            mime=_MIME_YAML,
             key="ps_download_requirements",
         )
 

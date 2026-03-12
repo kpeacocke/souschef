@@ -264,7 +264,9 @@ class TestGenerateAnsibleRequirements:
         """chocolatey.chocolatey is not added when no chocolatey actions present."""
         from souschef.generators.powershell import generate_ansible_requirements
 
-        ir = _minimal_ir([_action("windows_feature_install", {"feature_name": "Web-Server"})])
+        ir = _minimal_ir(
+            [_action("windows_feature_install", {"feature_name": "Web-Server"})]
+        )
         parsed = yaml.safe_load(generate_ansible_requirements(parsed_ir=ir))
         names = [c["name"] for c in parsed["collections"]]
         assert "chocolatey.chocolatey" not in names
@@ -338,7 +340,9 @@ class TestGeneratePowershellRoleStructure:
         """Returned dict contains the top-level playbook file."""
         from souschef.generators.powershell import generate_powershell_role_structure
 
-        result = generate_powershell_role_structure(_minimal_ir(), playbook_name="deploy")
+        result = generate_powershell_role_structure(
+            _minimal_ir(), playbook_name="deploy"
+        )
         assert "deploy.yml" in result
 
     def test_contains_inventory_hosts(self) -> None:
@@ -382,7 +386,9 @@ class TestGeneratePowershellRoleStructure:
         """windows_feature_install action causes a reboot handler to be added."""
         from souschef.generators.powershell import generate_powershell_role_structure
 
-        ir = _minimal_ir([_action("windows_feature_install", {"feature_name": "Web-Server"})])
+        ir = _minimal_ir(
+            [_action("windows_feature_install", {"feature_name": "Web-Server"})]
+        )
         result = generate_powershell_role_structure(ir)
         handlers_key = next(k for k in result if "handlers/main.yml" in k)
         assert "Reboot" in result[handlers_key]
@@ -391,11 +397,13 @@ class TestGeneratePowershellRoleStructure:
         """Role structure is generated correctly with multiple real actions."""
         from souschef.generators.powershell import generate_powershell_role_structure
 
-        ir = _minimal_ir([
-            _action("user_create", {"username": "svc_app"}),
-            _action("firewall_rule_create", {"rule_name": "Allow-80"}),
-            _action("environment_set", {"name": "APP_ENV", "value": "prod"}),
-        ])
+        ir = _minimal_ir(
+            [
+                _action("user_create", {"username": "svc_app"}),
+                _action("firewall_rule_create", {"rule_name": "Allow-80"}),
+                _action("environment_set", {"name": "APP_ENV", "value": "prod"}),
+            ]
+        )
         result = generate_powershell_role_structure(ir)
         assert len(result) >= 10
 
@@ -478,7 +486,9 @@ class TestGeneratePowershellAwxJobTemplate:
         """environment_set actions generate survey vars when include_survey=True."""
         from souschef.generators.powershell import generate_powershell_awx_job_template
 
-        ir = _minimal_ir([_action("environment_set", {"name": "APP_ENV", "value": "prod"})])
+        ir = _minimal_ir(
+            [_action("environment_set", {"name": "APP_ENV", "value": "prod"})]
+        )
         result = generate_powershell_awx_job_template(ir, include_survey=True)
         # The JSON block should have survey_enabled true
         start = result.index("```json\n") + len("```json\n")
@@ -541,10 +551,12 @@ class TestAnalyzePowershellMigrationFidelity:
         """A script with only high-fidelity actions scores 100."""
         from souschef.generators.powershell import analyze_powershell_migration_fidelity
 
-        ir = _minimal_ir([
-            _action("windows_feature_install", {"feature_name": "Web-Server"}),
-            _action("user_create", {"username": "svc_app"}),
-        ])
+        ir = _minimal_ir(
+            [
+                _action("windows_feature_install", {"feature_name": "Web-Server"}),
+                _action("user_create", {"username": "svc_app"}),
+            ]
+        )
         parsed = json.loads(analyze_powershell_migration_fidelity(ir))
         assert parsed["fidelity_score"] == 100
 
@@ -552,10 +564,12 @@ class TestAnalyzePowershellMigrationFidelity:
         """win_shell actions reduce the fidelity score."""
         from souschef.generators.powershell import analyze_powershell_migration_fidelity
 
-        ir = _minimal_ir([
-            _action("windows_feature_install", {"feature_name": "Web-Server"}),
-            _action("win_shell", {"raw_command": "some-cmd"}),
-        ])
+        ir = _minimal_ir(
+            [
+                _action("windows_feature_install", {"feature_name": "Web-Server"}),
+                _action("win_shell", {"raw_command": "some-cmd"}),
+            ]
+        )
         parsed = json.loads(analyze_powershell_migration_fidelity(ir))
         assert parsed["fidelity_score"] < 100
         assert parsed["fallback_actions"] >= 1
@@ -604,11 +618,13 @@ class TestAnalyzePowershellMigrationFidelity:
         """total_actions reflects the number of actions in parsed_ir."""
         from souschef.generators.powershell import analyze_powershell_migration_fidelity
 
-        ir = _minimal_ir([
-            _action("user_create", {"username": "a"}),
-            _action("user_remove", {"username": "b"}),
-            _action("win_shell", {"raw_command": "x"}),
-        ])
+        ir = _minimal_ir(
+            [
+                _action("user_create", {"username": "a"}),
+                _action("user_remove", {"username": "b"}),
+                _action("win_shell", {"raw_command": "x"}),
+            ]
+        )
         parsed = json.loads(analyze_powershell_migration_fidelity(ir))
         assert parsed["total_actions"] == 3
 
@@ -616,11 +632,13 @@ class TestAnalyzePowershellMigrationFidelity:
         """automated_actions + fallback_actions accounts for all actions."""
         from souschef.generators.powershell import analyze_powershell_migration_fidelity
 
-        ir = _minimal_ir([
-            _action("windows_feature_install", {"feature_name": "Web-Server"}),
-            _action("win_shell", {"raw_command": "something"}),
-            _action("user_create", {"username": "svc"}),
-        ])
+        ir = _minimal_ir(
+            [
+                _action("windows_feature_install", {"feature_name": "Web-Server"}),
+                _action("win_shell", {"raw_command": "something"}),
+                _action("user_create", {"username": "svc"}),
+            ]
+        )
         parsed = json.loads(analyze_powershell_migration_fidelity(ir))
         total = parsed["total_actions"]
         automated = parsed["automated_actions"]

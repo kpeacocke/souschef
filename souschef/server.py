@@ -5884,7 +5884,7 @@ def generate_powershell_job_template(
     playbook: str = "site.yml",
     inventory: str = "windows-inventory",
     project: str = "windows-migration-project",
-    credential: str = "windows-winrm-credential",
+    credential_name: str = "windows-winrm-credential",
     environment: str = "production",
     include_survey: bool = True,
 ) -> str:
@@ -5901,7 +5901,7 @@ def generate_powershell_job_template(
         playbook: Playbook file name relative to the project root.
         inventory: Inventory name or ID in AWX.
         project: Project name or ID in AWX.
-        credential: Windows credential name in AWX (Machine credential).
+        credential_name: Windows credential name in AWX (Machine credential).
         environment: Target environment label.
         include_survey: Whether to generate a survey spec.
 
@@ -5923,7 +5923,7 @@ def generate_powershell_job_template(
         playbook=playbook,
         inventory=inventory,
         project=project,
-        credential=credential,
+        credential_name=credential_name,
         environment=environment,
         include_survey=include_survey,
     )

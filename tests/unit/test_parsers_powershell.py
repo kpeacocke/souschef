@@ -25,7 +25,9 @@ class TestParsePowershellScript:
 
         result = json.loads(parse_powershell_script(str(script)))
         assert result["source"].endswith("setup.ps1")
-        assert any(a["action_type"] == "windows_feature_install" for a in result["actions"])
+        assert any(
+            a["action_type"] == "windows_feature_install" for a in result["actions"]
+        )
 
     def test_parse_nonexistent_file(self, tmp_path: Path) -> None:
         """parse_powershell_script returns an error for a missing file."""
@@ -134,9 +136,7 @@ class TestWindowsFeatureClassifier:
         """Add-WindowsFeature alias is also recognised."""
         from souschef.parsers.powershell import parse_powershell_content
 
-        result = json.loads(
-            parse_powershell_content("Add-WindowsFeature Web-Server")
-        )
+        result = json.loads(parse_powershell_content("Add-WindowsFeature Web-Server"))
         assert result["actions"][0]["action_type"] == "windows_feature_install"
 
     def test_enable_optional_feature(self) -> None:
@@ -216,9 +216,7 @@ class TestWindowsServiceClassifier:
         from souschef.parsers.powershell import parse_powershell_content
 
         result = json.loads(
-            parse_powershell_content(
-                "Set-Service -Name Spooler -StartupType Automatic"
-            )
+            parse_powershell_content("Set-Service -Name Spooler -StartupType Automatic")
         )
         assert result["actions"][0]["action_type"] == "windows_service_configure"
         assert result["actions"][0]["params"]["service_name"] == "Spooler"
@@ -259,9 +257,7 @@ class TestWindowsServiceClassifier:
         """New-Service without -BinaryPathName still produces service_create action."""
         from souschef.parsers.powershell import parse_powershell_content
 
-        result = json.loads(
-            parse_powershell_content("New-Service -Name MyService")
-        )
+        result = json.loads(parse_powershell_content("New-Service -Name MyService"))
         assert result["actions"][0]["action_type"] == "windows_service_create"
         assert "binary_path" not in result["actions"][0]["params"]
 
@@ -286,9 +282,7 @@ class TestRegistryClassifier:
         from souschef.parsers.powershell import parse_powershell_content
 
         result = json.loads(
-            parse_powershell_content(
-                "New-Item -Path 'HKLM:\\SOFTWARE\\NewApp'"
-            )
+            parse_powershell_content("New-Item -Path 'HKLM:\\SOFTWARE\\NewApp'")
         )
         assert result["actions"][0]["action_type"] == "registry_create_key"
 
@@ -297,9 +291,7 @@ class TestRegistryClassifier:
         from souschef.parsers.powershell import parse_powershell_content
 
         result = json.loads(
-            parse_powershell_content(
-                "Remove-Item -Path 'HKLM:\\SOFTWARE\\OldApp'"
-            )
+            parse_powershell_content("Remove-Item -Path 'HKLM:\\SOFTWARE\\OldApp'")
         )
         assert result["actions"][0]["action_type"] == "registry_remove_key"
 
@@ -308,9 +300,7 @@ class TestRegistryClassifier:
         from souschef.parsers.powershell import parse_powershell_content
 
         result = json.loads(
-            parse_powershell_content(
-                "New-Item -Path 'HKLM:\\SOFTWARE\\NewApp'"
-            )
+            parse_powershell_content("New-Item -Path 'HKLM:\\SOFTWARE\\NewApp'")
         )
         assert result["actions"][0]["requires_elevation"] is True
 
@@ -323,7 +313,9 @@ class TestFileClassifier:
         from souschef.parsers.powershell import parse_powershell_content
 
         result = json.loads(
-            parse_powershell_content("Copy-Item -Path C:\\src\\file.txt -Destination C:\\dest\\")
+            parse_powershell_content(
+                "Copy-Item -Path C:\\src\\file.txt -Destination C:\\dest\\"
+            )
         )
         assert result["actions"][0]["action_type"] == "file_copy"
         assert "src" in result["actions"][0]["params"]
@@ -346,9 +338,7 @@ class TestFileClassifier:
         from souschef.parsers.powershell import parse_powershell_content
 
         result = json.loads(
-            parse_powershell_content(
-                "New-Item -Path C:\\MyApp\\Data -ItemType Folder"
-            )
+            parse_powershell_content("New-Item -Path C:\\MyApp\\Data -ItemType Folder")
         )
         assert result["actions"][0]["action_type"] == "directory_create"
 
@@ -383,9 +373,7 @@ class TestPackageClassifier:
         from souschef.parsers.powershell import parse_powershell_content
 
         result = json.loads(
-            parse_powershell_content(
-                "msiexec.exe /i C:\\packages\\app.msi /quiet"
-            )
+            parse_powershell_content("msiexec.exe /i C:\\packages\\app.msi /quiet")
         )
         assert result["actions"][0]["action_type"] == "msi_install"
         assert "app.msi" in result["actions"][0]["params"]["package_path"]
@@ -395,9 +383,7 @@ class TestPackageClassifier:
         from souschef.parsers.powershell import parse_powershell_content
 
         result = json.loads(
-            parse_powershell_content(
-                "Start-Process msiexec /i C:\\packages\\app.msi"
-            )
+            parse_powershell_content("Start-Process msiexec /i C:\\packages\\app.msi")
         )
         assert result["actions"][0]["action_type"] == "msi_install"
 
@@ -405,9 +391,7 @@ class TestPackageClassifier:
         """Choco install is classified as chocolatey_install."""
         from souschef.parsers.powershell import parse_powershell_content
 
-        result = json.loads(
-            parse_powershell_content("choco install notepadplusplus")
-        )
+        result = json.loads(parse_powershell_content("choco install notepadplusplus"))
         assert result["actions"][0]["action_type"] == "chocolatey_install"
         assert result["actions"][0]["params"]["package_name"] == "notepadplusplus"
 
@@ -415,18 +399,14 @@ class TestPackageClassifier:
         """Install-Package is classified as chocolatey_install."""
         from souschef.parsers.powershell import parse_powershell_content
 
-        result = json.loads(
-            parse_powershell_content("Install-Package 'git'")
-        )
+        result = json.loads(parse_powershell_content("Install-Package 'git'"))
         assert result["actions"][0]["action_type"] == "chocolatey_install"
 
     def test_chocolatey_uninstall(self) -> None:
         """Choco uninstall is classified as chocolatey_uninstall."""
         from souschef.parsers.powershell import parse_powershell_content
 
-        result = json.loads(
-            parse_powershell_content("choco uninstall notepadplusplus")
-        )
+        result = json.loads(parse_powershell_content("choco uninstall notepadplusplus"))
         assert result["actions"][0]["action_type"] == "chocolatey_uninstall"
         assert result["actions"][0]["params"]["package_name"] == "notepadplusplus"
 
@@ -438,14 +418,16 @@ class TestMetrics:
         """Metrics correctly count all action categories."""
         from souschef.parsers.powershell import parse_powershell_content
 
-        content = "\n".join([
-            "Install-WindowsFeature -Name Web-Server",
-            "Start-Service -Name W3SVC",
-            "Set-ItemProperty -Path 'HKLM:\\SW\\App' -Name V -Value 1",
-            "New-Item -Path C:\\logs -ItemType Directory",
-            "choco install git",
-            "Write-Host unknown",
-        ])
+        content = "\n".join(
+            [
+                "Install-WindowsFeature -Name Web-Server",
+                "Start-Service -Name W3SVC",
+                "Set-ItemProperty -Path 'HKLM:\\SW\\App' -Name V -Value 1",
+                "New-Item -Path C:\\logs -ItemType Directory",
+                "choco install git",
+                "Write-Host unknown",
+            ]
+        )
         result = json.loads(parse_powershell_content(content))
         m = result["metrics"]
         assert m["windows_feature"] == 1
@@ -614,7 +596,9 @@ class TestHelperFunctions:
         script.write_text("Start-Service -Name W3SVC\n", encoding="utf-8")
 
         result = _parse_script_from_path(script)
-        assert any(a["action_type"] == "windows_service_start" for a in result["actions"])
+        assert any(
+            a["action_type"] == "windows_service_start" for a in result["actions"]
+        )
 
     def test_parse_powershell_content_internal(self) -> None:
         """_parse_powershell_content internal function works correctly."""
@@ -622,7 +606,9 @@ class TestHelperFunctions:
 
         result = _parse_powershell_content("Start-Service -Name W3SVC\n", "test.ps1")
         assert result["source"] == "test.ps1"
-        assert any(a["action_type"] == "windows_service_start" for a in result["actions"])
+        assert any(
+            a["action_type"] == "windows_service_start" for a in result["actions"]
+        )
 
 
 class TestMultiLineScript:
@@ -662,12 +648,14 @@ Invoke-WebRequest -Uri https://example.com -OutFile C:\\temp\\file.zip
         """All feature action types are classified in a single parse."""
         from souschef.parsers.powershell import parse_powershell_content
 
-        content = "\n".join([
-            "Install-WindowsFeature -Name Web-Server",
-            "Remove-WindowsFeature -Name Web-Server",
-            "Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer",
-            "Disable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer",
-        ])
+        content = "\n".join(
+            [
+                "Install-WindowsFeature -Name Web-Server",
+                "Remove-WindowsFeature -Name Web-Server",
+                "Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer",
+                "Disable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer",
+            ]
+        )
         result = json.loads(parse_powershell_content(content))
         action_types = {a["action_type"] for a in result["actions"]}
         assert action_types == {
@@ -681,11 +669,13 @@ Invoke-WebRequest -Uri https://example.com -OutFile C:\\temp\\file.zip
         """All registry action types are classified in a single parse."""
         from souschef.parsers.powershell import parse_powershell_content
 
-        content = "\n".join([
-            "Set-ItemProperty -Path 'HKLM:\\SW\\App' -Name V -Value 1",
-            "New-Item -Path 'HKLM:\\SW\\NewKey'",
-            "Remove-Item -Path 'HKLM:\\SW\\OldKey'",
-        ])
+        content = "\n".join(
+            [
+                "Set-ItemProperty -Path 'HKLM:\\SW\\App' -Name V -Value 1",
+                "New-Item -Path 'HKLM:\\SW\\NewKey'",
+                "Remove-Item -Path 'HKLM:\\SW\\OldKey'",
+            ]
+        )
         result = json.loads(parse_powershell_content(content))
         action_types = {a["action_type"] for a in result["actions"]}
         assert "registry_set" in action_types

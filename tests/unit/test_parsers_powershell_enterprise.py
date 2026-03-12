@@ -94,7 +94,7 @@ class TestUserModify:
 
     def test_set_local_user_with_extra_params(self) -> None:
         """Set-LocalUser with additional parameters is still classified."""
-        action = _single('Set-LocalUser -Name svc -PasswordNeverExpires $true\n')
+        action = _single("Set-LocalUser -Name svc -PasswordNeverExpires $true\n")
         assert action["action_type"] == "user_modify"
         assert action["params"]["username"] == "svc"
 
@@ -125,7 +125,9 @@ class TestGroupMemberAdd:
 
     def test_basic_add_local_group_member(self) -> None:
         """Add-LocalGroupMember produces a group_member_add action."""
-        action = _single("Add-LocalGroupMember -Group Administrators -Member deploy_svc\n")
+        action = _single(
+            "Add-LocalGroupMember -Group Administrators -Member deploy_svc\n"
+        )
         assert action["action_type"] == "group_member_add"
         assert action["params"]["group"] == "Administrators"
         assert action["params"]["member"] == "deploy_svc"
@@ -349,9 +351,7 @@ class TestEnvironmentSet:
 
     def test_environment_set_case_insensitive_api(self) -> None:
         """SetEnvironmentVariable is matched case-insensitively."""
-        action = _single(
-            "[system.environment]::setenvironmentvariable('X', 'y')\n"
-        )
+        action = _single("[system.environment]::setenvironmentvariable('X', 'y')\n")
         assert action["action_type"] == "environment_set"
 
 
@@ -397,33 +397,25 @@ class TestCertificateImport:
 
     def test_import_certificate_cer(self) -> None:
         """Import-Certificate for a .cer file produces certificate_import."""
-        action = _single(
-            "Import-Certificate -FilePath C:\\\\certs\\\\server.cer\n"
-        )
+        action = _single("Import-Certificate -FilePath C:\\\\certs\\\\server.cer\n")
         assert action["action_type"] == "certificate_import"
         assert action["params"]["certificate_path"].endswith(".cer")
 
     def test_import_pfx_certificate(self) -> None:
         """Import-PfxCertificate produces a certificate_import action."""
-        action = _single(
-            "Import-PfxCertificate -FilePath C:\\\\certs\\\\server.pfx\n"
-        )
+        action = _single("Import-PfxCertificate -FilePath C:\\\\certs\\\\server.pfx\n")
         assert action["action_type"] == "certificate_import"
         assert action["params"]["certificate_path"].endswith(".pfx")
 
     def test_import_certificate_p12(self) -> None:
         """Import-PfxCertificate for a .p12 file is classified."""
-        action = _single(
-            "Import-PfxCertificate -FilePath /tmp/cert.p12\n"
-        )
+        action = _single("Import-PfxCertificate -FilePath /tmp/cert.p12\n")
         assert action["action_type"] == "certificate_import"
         assert action["params"]["certificate_path"].endswith(".p12")
 
     def test_import_certificate_case_insensitive(self) -> None:
         """import-certificate (lower-case) is still classified."""
-        action = _single(
-            "import-certificate -filepath C:\\\\certs\\\\ca.cer\n"
-        )
+        action = _single("import-certificate -filepath C:\\\\certs\\\\ca.cer\n")
         assert action["action_type"] == "certificate_import"
 
 
@@ -606,10 +598,7 @@ class TestMultiActionScripts:
 
     def test_comments_not_classified(self) -> None:
         """Comment lines containing enterprise keywords are not classified."""
-        script = (
-            "# New-LocalUser would create a user\n"
-            "# Enable-PSRemoting -Force\n"
-        )
+        script = "# New-LocalUser would create a user\n# Enable-PSRemoting -Force\n"
         acts = _actions(script)
         assert acts == []
 

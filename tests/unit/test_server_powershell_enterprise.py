@@ -27,7 +27,9 @@ class TestGenerateWindowsInventoryTool:
         """Tool includes specified hosts in the inventory."""
         from souschef.server import generate_windows_inventory_tool
 
-        result = generate_windows_inventory_tool(hosts="host1.example.com,host2.example.com")
+        result = generate_windows_inventory_tool(
+            hosts="host1.example.com,host2.example.com"
+        )
         assert "host1.example.com" in result
         assert "host2.example.com" in result
 
@@ -95,9 +97,7 @@ class TestGeneratePowershellRole:
         from souschef.server import generate_powershell_role
 
         script = tmp_path / "setup.ps1"
-        script.write_text(
-            "Install-WindowsFeature -Name Web-Server\n", encoding="utf-8"
-        )
+        script.write_text("Install-WindowsFeature -Name Web-Server\n", encoding="utf-8")
 
         raw = generate_powershell_role(str(script))
         result = json.loads(raw)
@@ -159,9 +159,7 @@ class TestGeneratePowershellJobTemplate:
         from souschef.server import generate_powershell_job_template
 
         script = tmp_path / "setup.ps1"
-        script.write_text(
-            "Install-WindowsFeature -Name Web-Server\n", encoding="utf-8"
-        )
+        script.write_text("Install-WindowsFeature -Name Web-Server\n", encoding="utf-8")
 
         result = generate_powershell_job_template(str(script))
         assert "Job Template JSON" in result
@@ -206,9 +204,7 @@ class TestGeneratePowershellJobTemplate:
         script = tmp_path / "setup.ps1"
         script.write_text("choco install git\n", encoding="utf-8")
 
-        result = generate_powershell_job_template(
-            str(script), environment="staging"
-        )
+        result = generate_powershell_job_template(str(script), environment="staging")
         assert "staging" in result
 
 
@@ -258,8 +254,7 @@ class TestAnalyzePowershellFidelity:
 
         script = tmp_path / "setup.ps1"
         script.write_text(
-            "Invoke-SomeWeirdCustomCmdlet -Param1 foo\n"
-            "DoSomethingMagical -Foo bar\n",
+            "Invoke-SomeWeirdCustomCmdlet -Param1 foo\nDoSomethingMagical -Foo bar\n",
             encoding="utf-8",
         )
 
@@ -306,7 +301,12 @@ class TestServerReExports:
         """generate_powershell_role_structure is accessible from souschef.server."""
         from souschef.server import generate_powershell_role_structure
 
-        parsed_ir: dict = {"source": "<test>", "actions": [], "warnings": [], "metrics": {}}
+        parsed_ir: dict = {
+            "source": "<test>",
+            "actions": [],
+            "warnings": [],
+            "metrics": {},
+        }
         files = generate_powershell_role_structure(parsed_ir)
         assert isinstance(files, dict)
         assert len(files) > 0
@@ -315,7 +315,12 @@ class TestServerReExports:
         """generate_powershell_awx_job_template is accessible from souschef.server."""
         from souschef.server import generate_powershell_awx_job_template
 
-        parsed_ir: dict = {"source": "<test>", "actions": [], "warnings": [], "metrics": {}}
+        parsed_ir: dict = {
+            "source": "<test>",
+            "actions": [],
+            "warnings": [],
+            "metrics": {},
+        }
         result = generate_powershell_awx_job_template(parsed_ir)
         assert "Job Template JSON" in result
 
@@ -323,6 +328,11 @@ class TestServerReExports:
         """analyze_powershell_migration_fidelity is accessible from souschef.server."""
         from souschef.server import analyze_powershell_migration_fidelity
 
-        parsed_ir: dict = {"source": "<test>", "actions": [], "warnings": [], "metrics": {}}
+        parsed_ir: dict = {
+            "source": "<test>",
+            "actions": [],
+            "warnings": [],
+            "metrics": {},
+        }
         result = json.loads(analyze_powershell_migration_fidelity(parsed_ir))
         assert result["fidelity_score"] == 100

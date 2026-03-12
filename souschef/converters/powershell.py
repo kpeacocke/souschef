@@ -353,9 +353,7 @@ def _convert_service_configure(
 ) -> tuple[str, dict[str, Any]]:
     """Convert windows_service_configure to win_service task args."""
     svc = params.get("service_name", "unknown")
-    startup = _STARTUP_TYPE_MAP.get(
-        params.get("startup_type", "").lower(), "auto"
-    )
+    startup = _STARTUP_TYPE_MAP.get(params.get("startup_type", "").lower(), "auto")
     return (
         f"Configure service startup: {svc}",
         {"name": svc, "start_mode": startup},
@@ -416,9 +414,7 @@ def _convert_registry_remove_key(
     )
 
 
-def _convert_file_copy(
-    params: dict[str, Any], _raw: str
-) -> tuple[str, dict[str, Any]]:
+def _convert_file_copy(params: dict[str, Any], _raw: str) -> tuple[str, dict[str, Any]]:
     """Convert file_copy to win_copy task args."""
     src = params.get("src", "")
     dest = params.get("dest", "")
@@ -495,9 +491,7 @@ def _convert_chocolatey_uninstall(
     )
 
 
-def _convert_win_shell(
-    params: dict[str, Any], raw: str
-) -> tuple[str, dict[str, Any]]:
+def _convert_win_shell(params: dict[str, Any], raw: str) -> tuple[str, dict[str, Any]]:
     """Convert win_shell fallback to win_shell task args."""
     cmd = params.get("command", raw)
     return (
@@ -701,9 +695,7 @@ def _convert_dns_client_set(
     )
 
 
-def _convert_acl_set(
-    params: dict[str, Any], _raw: str
-) -> tuple[str, dict[str, Any]]:
+def _convert_acl_set(params: dict[str, Any], _raw: str) -> tuple[str, dict[str, Any]]:
     """Convert acl_set to win_acl task args."""
     path = params.get("path", "")
     return (

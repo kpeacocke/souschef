@@ -99,7 +99,7 @@ _RE_NEW_ITEM_DIR = re.compile(
     re.IGNORECASE,
 )
 _RE_REMOVE_ITEM = re.compile(
-    r"Remove-Item\s+(?:-Path\s+)?[\"']?(?P<path>[^\"'\s;,]+(?:\.[a-zA-Z0-9]+)?)[\"']?",
+    r"Remove-Item\s+(?:-Path\s+)?[\"']?(?P<path>[^\"'\s;,]+(?:\.[a-z0-9]+)?)[\"']?",
     re.IGNORECASE,
 )
 _RE_SET_CONTENT = re.compile(
@@ -183,7 +183,7 @@ _RE_SET_ENV_VAR = re.compile(
     re.IGNORECASE,
 )
 _RE_SET_ENV_ITEM = re.compile(
-    r"Set-Item\s+(?:Env:|env:)(?P<varname>[\w\-\.]+)\s+[\"']?(?P<value>[^\"'\s;]+)[\"']?",
+    r"Set-Item\s+Env:(?P<varname>[\w\-\.]+)\s+[\"']?(?P<value>[^\"'\s;]+)[\"']?",
     re.IGNORECASE,
 )
 
@@ -213,7 +213,7 @@ _RE_NEW_WEBSITE = re.compile(
 
 # DNS client
 _RE_SET_DNS_CLIENT = re.compile(
-    r"Set-DnsClientServerAddress\s+.*?-ServerAddresses\s+[\"']?(?P<addresses>[0-9a-fA-F\.:,\s\[\]]+?)(?:\s+-|\s*$)",
+    r"Set-DnsClientServerAddress\s+.*?-ServerAddresses\s+[\"']?(?P<addresses>[0-9a-f\.:,\s\[\]]+)(?=\s*(?:-|$))",
     re.IGNORECASE,
 )
 
@@ -832,9 +832,7 @@ def _classify_infra_line(line: str, lineno: int) -> dict[str, Any] | None:
 
 def _is_registry_path(path: str) -> bool:
     """Return True if *path* looks like a Windows registry path."""
-    return bool(
-        re.match(r"(?:HKLM|HKCU|HKEY_[A-Z_]+)[:\\]", path, re.IGNORECASE)
-    )
+    return bool(re.match(r"(?:HKLM|HKCU|HKEY_[A-Z_]+)[:\\]", path, re.IGNORECASE))
 
 
 def _make_action(

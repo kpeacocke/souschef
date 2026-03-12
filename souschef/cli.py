@@ -2724,8 +2724,7 @@ def powershell_convert(
                 tasks = result.get("tasks_generated", 0)
                 fallbacks = result.get("win_shell_fallbacks", 0)
                 click.echo(
-                    f"Tasks generated: {tasks}"
-                    f" (win_shell fallbacks: {fallbacks})"
+                    f"Tasks generated: {tasks} (win_shell fallbacks: {fallbacks})"
                 )
                 warnings = result.get("warnings", [])
                 if warnings:
@@ -2795,9 +2794,7 @@ def powershell_inventory(
     if output:
         try:
             workspace_root = _get_workspace_root()
-            out_path = _ensure_within_base_path(
-                _normalize_path(output), workspace_root
-            )
+            out_path = _ensure_within_base_path(_normalize_path(output), workspace_root)
             safe_write_text(out_path, workspace_root, result)
             click.echo(f"Inventory written to: {out_path}")
         except (ValueError, OSError) as e:
@@ -2844,9 +2841,7 @@ def powershell_requirements(
     if output:
         try:
             workspace_root = _get_workspace_root()
-            out_path = _ensure_within_base_path(
-                _normalize_path(output), workspace_root
-            )
+            out_path = _ensure_within_base_path(_normalize_path(output), workspace_root)
             safe_write_text(out_path, workspace_root, result)
             click.echo(f"requirements.yml written to: {out_path}")
         except (ValueError, OSError) as e:
@@ -2918,9 +2913,7 @@ def powershell_role(
     if output_dir:
         try:
             workspace_root = _get_workspace_root()
-            base = _ensure_within_base_path(
-                _normalize_path(output_dir), workspace_root
-            )
+            base = _ensure_within_base_path(_normalize_path(output_dir), workspace_root)
             for rel_path, content in files.items():
                 out_path = base / rel_path
                 out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3017,7 +3010,7 @@ def powershell_job_template(
         playbook=playbook,
         inventory=inventory,
         project=project,
-        credential=credential,
+        credential_name=credential,
         environment=environment,
         include_survey=not no_survey,
     )
@@ -3025,9 +3018,7 @@ def powershell_job_template(
     if output:
         try:
             workspace_root = _get_workspace_root()
-            out_path = _ensure_within_base_path(
-                _normalize_path(output), workspace_root
-            )
+            out_path = _ensure_within_base_path(_normalize_path(output), workspace_root)
             safe_write_text(out_path, workspace_root, result)
             click.echo(f"Job template written to: {out_path}")
         except (ValueError, OSError) as e:

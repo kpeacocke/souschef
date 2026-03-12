@@ -18,11 +18,18 @@ output can be tailored to the actual actions found in each script.
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
-import yaml
+yaml = cast(Any, importlib.import_module("yaml"))
+
+_COMMUNITY_WINDOWS_NAME = "community.windows"
+_COMMUNITY_WINDOWS_VERSION = ">=2.2.0"
+_UNKNOWN_SOURCE = "<unknown>"
+_REBOOT_HANDLER_NAME = "Reboot if required"
+_DEFAULT_WINRM_CREDENTIAL_NAME = "windows-winrm-credential"
 
 # ---------------------------------------------------------------------------
 # Collections required for Windows automation
@@ -31,25 +38,37 @@ import yaml
 #: Always-required Ansible collections for Windows automation
 _REQUIRED_COLLECTIONS: list[dict[str, str]] = [
     {"name": "ansible.windows", "version": ">=2.4.0"},
-    {"name": "community.windows", "version": ">=2.2.0"},
+    {"name": _COMMUNITY_WINDOWS_NAME, "version": _COMMUNITY_WINDOWS_VERSION},
 ]
 
 #: Additional collections triggered by specific action types
 _CONDITIONAL_COLLECTIONS: dict[str, dict[str, str]] = {
     "chocolatey_install": {"name": "chocolatey.chocolatey", "version": ">=1.5.0"},
     "chocolatey_uninstall": {"name": "chocolatey.chocolatey", "version": ">=1.5.0"},
-    "psmodule_install": {"name": "community.windows", "version": ">=2.2.0"},
+    "psmodule_install": {
+        "name": _COMMUNITY_WINDOWS_NAME,
+        "version": _COMMUNITY_WINDOWS_VERSION,
+    },
     "scheduled_task_register": {
-        "name": "community.windows",
-        "version": ">=2.2.0",
+        "name": _COMMUNITY_WINDOWS_NAME,
+        "version": _COMMUNITY_WINDOWS_VERSION,
     },
     "scheduled_task_unregister": {
-        "name": "community.windows",
-        "version": ">=2.2.0",
+        "name": _COMMUNITY_WINDOWS_NAME,
+        "version": _COMMUNITY_WINDOWS_VERSION,
     },
-    "iis_website_create": {"name": "community.windows", "version": ">=2.2.0"},
-    "dns_client_set": {"name": "community.windows", "version": ">=2.2.0"},
-    "certificate_import": {"name": "community.windows", "version": ">=2.2.0"},
+    "iis_website_create": {
+        "name": _COMMUNITY_WINDOWS_NAME,
+        "version": _COMMUNITY_WINDOWS_VERSION,
+    },
+    "dns_client_set": {
+        "name": _COMMUNITY_WINDOWS_NAME,
+        "version": _COMMUNITY_WINDOWS_VERSION,
+    },
+    "certificate_import": {
+        "name": _COMMUNITY_WINDOWS_NAME,
+        "version": _COMMUNITY_WINDOWS_VERSION,
+    },
 }
 
 #: Action types that map to enterprise tiers (for fidelity report)
@@ -191,9 +210,7 @@ def generate_windows_group_vars(
         "ansible_password": "{{ vault_windows_password }}",
         "ansible_winrm_port": winrm_port,
         "ansible_winrm_transport": transport,
-        "ansible_winrm_server_cert_validation": (
-            "validate" if use_ssl else "ignore"
-        ),
+        "ansible_winrm_server_cert_validation": ("validate" if use_ssl else "ignore"),
         "ansible_winrm_operation_timeout_sec": 60,
         "ansible_winrm_read_timeout_sec": 70,
         "ansible_become": False,
@@ -207,8 +224,9 @@ def generate_windows_group_vars(
         "# WinRM connection settings for all Windows managed nodes.\n"
         "# Sensitive values (passwords) should be stored in Ansible Vault.\n\n"
     )
-    return header + yaml.dump(
-        group_vars, default_flow_style=False, allow_unicode=True
+    return header + cast(
+        str,
+        yaml.dump(group_vars, default_flow_style=False, allow_unicode=True),
     )
 
 
@@ -257,8 +275,9 @@ def generate_ansible_requirements(
         "# requirements.yml\n"
         "# Install with: ansible-galaxy collection install -r requirements.yml\n\n"
     )
-    return header + yaml.dump(
-        requirements, default_flow_style=False, allow_unicode=True
+    return header + cast(
+        str,
+        yaml.dump(requirements, default_flow_style=False, allow_unicode=True),
     )
 
 
@@ -302,7 +321,7 @@ def generate_powershell_role_structure(
     from souschef.converters.powershell import _action_to_task
 
     actions = parsed_ir.get("actions", [])
-    source = parsed_ir.get("source", "<unknown>")
+    source = parsed_ir.get("source", _UNKNOWN_SOURCE)
 
     tasks: list[dict[str, Any]] = []
     handlers: list[dict[str, Any]] = []
@@ -314,51 +333,13 @@ def generate_powershell_role_structure(
         task, warning = _action_to_task(action)
         if warning:
             warnings.append(warning)
-
-        # Detect feature installs that may need a reboot handler
-        if action.get("action_type") in {
-            "windows_feature_install",
-            "windows_feature_remove",
-        }:
-            task["notify"] = "Reboot if required"
-            handler_name = "Reboot if required"
-            if handler_name not in handler_names:
-                handlers.append(
-                    {
-                        "name": handler_name,
-                        "ansible.windows.win_reboot": {
-                            "reboot_timeout": 300,
-                            "msg": "Rebooting after Windows feature change",
-                        },
-                        "listen": handler_name,
-                    }
-                )
-                handler_names.add(handler_name)
-
-        # Detect service starts that should notify a restart handler
-        if action.get("action_type") == "windows_service_configure":
-            svc = action.get("params", {}).get("service_name", "")
-            handler_name = f"Restart {svc}"
-            if svc and handler_name not in handler_names:
-                handlers.append(
-                    {
-                        "name": handler_name,
-                        "ansible.windows.win_service": {
-                            "name": svc,
-                            "state": "restarted",
-                        },
-                        "listen": handler_name,
-                    }
-                )
-                handler_names.add(handler_name)
-            if "notify" not in task:
-                task["notify"] = handler_name
+        _apply_role_handlers_for_action(action, task, handlers, handler_names)
 
         tasks.append(task)
 
     tasks_yaml = yaml.dump(tasks, default_flow_style=False, allow_unicode=True)
     handlers_yaml = yaml.dump(
-        handlers or [{"name": "Reboot if required", "ansible.windows.win_reboot": {}}],
+        handlers or [{"name": _REBOOT_HANDLER_NAME, "ansible.windows.win_reboot": {}}],
         default_flow_style=False,
         allow_unicode=True,
     )
@@ -422,7 +403,7 @@ def generate_powershell_awx_job_template(
     playbook: str = "site.yml",
     inventory: str = "windows-inventory",
     project: str = "windows-migration-project",
-    credential: str = "windows-winrm-credential",
+    credential_name: str = _DEFAULT_WINRM_CREDENTIAL_NAME,
     environment: str = "production",
     include_survey: bool = True,
 ) -> str:
@@ -438,7 +419,7 @@ def generate_powershell_awx_job_template(
         playbook: Playbook filename relative to the project root.
         inventory: Inventory name or ID in AWX.
         project: Project name or ID in AWX.
-        credential: Windows credential name in AWX (Machine credential with
+        credential_name: Windows credential name in AWX (Machine credential with
             WinRM settings).
         environment: Target environment label (used in template description).
         include_survey: Whether to generate a survey spec from script variables.
@@ -449,7 +430,7 @@ def generate_powershell_awx_job_template(
 
     """
     actions = parsed_ir.get("actions", [])
-    source = parsed_ir.get("source", "<unknown>")
+    source = parsed_ir.get("source", _UNKNOWN_SOURCE)
     metrics = parsed_ir.get("metrics", {})
 
     extra_vars = _extract_extra_vars(actions)
@@ -466,7 +447,7 @@ def generate_powershell_awx_job_template(
         "project": project,
         "playbook": playbook,
         "inventory": inventory,
-        "credential": credential,
+        "credential": credential_name,
         "verbosity": 1,
         "become_enabled": True,
         "ask_variables_on_launch": True,
@@ -507,9 +488,7 @@ def generate_powershell_awx_job_template(
         f"```json\n{json.dumps(job_template, indent=2)}\n```\n\n"
         f"## CLI Import Command:\n"
         f"```bash\n{cli_cmd}```\n\n"
-        f"## Script Analysis Summary:\n"
-        + "\n".join(summary_lines)
-        + "\n"
+        f"## Script Analysis Summary:\n" + "\n".join(summary_lines) + "\n"
     )
 
 
@@ -540,7 +519,7 @@ def analyze_powershell_migration_fidelity(
 
     """
     actions = parsed_ir.get("actions", [])
-    source = parsed_ir.get("source", "<unknown>")
+    source = parsed_ir.get("source", _UNKNOWN_SOURCE)
     metrics = parsed_ir.get("metrics", {})
 
     total = len(actions)
@@ -626,9 +605,7 @@ def _build_role_readme(
         for a in actions
     )
     warnings_section = (
-        "\n".join(f"- {w}" for w in warnings)
-        if warnings
-        else "_No warnings._"
+        "\n".join(f"- {w}" for w in warnings) if warnings else "_No warnings._"
     )
 
     return f"""# {role_name}
@@ -680,13 +657,59 @@ def _extract_extra_vars(actions: list[dict[str, Any]]) -> dict[str, Any]:
         if atype in {"environment_set"}:
             name = params.get("name", "")
             if name:
-                var_name = re.sub(r"[^a-zA-Z0-9_]", "_", name).lower()
+                var_name = re.sub(r"\W", "_", name).lower()
                 extra[var_name] = params.get("value", "")
         elif atype in {"chocolatey_install"}:
             pkg = params.get("package_name", "")
             if pkg:
                 extra[f"{pkg}_version"] = "latest"
     return extra
+
+
+def _apply_role_handlers_for_action(
+    action: dict[str, Any],
+    task: dict[str, Any],
+    handlers: list[dict[str, Any]],
+    handler_names: set[str],
+) -> None:
+    """Attach handler notifications for actions that need orchestration."""
+    action_type = action.get("action_type")
+
+    if action_type in {"windows_feature_install", "windows_feature_remove"}:
+        task["notify"] = _REBOOT_HANDLER_NAME
+        if _REBOOT_HANDLER_NAME not in handler_names:
+            handlers.append(
+                {
+                    "name": _REBOOT_HANDLER_NAME,
+                    "ansible.windows.win_reboot": {
+                        "reboot_timeout": 300,
+                        "msg": "Rebooting after Windows feature change",
+                    },
+                    "listen": _REBOOT_HANDLER_NAME,
+                }
+            )
+            handler_names.add(_REBOOT_HANDLER_NAME)
+        return
+
+    if action_type != "windows_service_configure":
+        return
+
+    svc = action.get("params", {}).get("service_name", "")
+    handler_name = f"Restart {svc}"
+    if svc and handler_name not in handler_names:
+        handlers.append(
+            {
+                "name": handler_name,
+                "ansible.windows.win_service": {
+                    "name": svc,
+                    "state": "restarted",
+                },
+                "listen": handler_name,
+            }
+        )
+        handler_names.add(handler_name)
+    if "notify" not in task:
+        task["notify"] = handler_name
 
 
 def _build_survey_spec(extra_vars: dict[str, Any]) -> dict[str, Any]:
@@ -722,8 +745,7 @@ def _review_reason(action_type: str) -> str:
             "manually specified in the generated task."
         ),
         "acl_set": (
-            "ACE user, rights type, and propagation flags "
-            "must be set manually."
+            "ACE user, rights type, and propagation flags must be set manually."
         ),
         "certificate_import": (
             "Certificate store location (LocalMachine/CurrentUser) "
@@ -738,8 +760,7 @@ def _review_reason(action_type: str) -> str:
             "authentication settings must be completed manually."
         ),
         "scheduled_task_register": (
-            "Task action, trigger, principal, and schedule "
-            "must be completed manually."
+            "Task action, trigger, principal, and schedule must be completed manually."
         ),
     }
     return reasons.get(action_type, "Manual review recommended.")

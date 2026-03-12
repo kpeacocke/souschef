@@ -34,7 +34,9 @@ class TestShowPowershellMigrationPage:
 
         mock_st.text_area.return_value = ""
         mock_st.text_input.side_effect = [
-            "powershell_migration", "windows", "windows_provisioning"
+            "powershell_migration",
+            "windows",
+            "windows_provisioning",
         ]
         mock_st.columns.return_value = [MagicMock(), MagicMock(), MagicMock()]
 
@@ -70,9 +72,7 @@ class TestRenderInputs:
         from souschef.ui.pages.powershell_migration import _render_inputs
 
         mock_st.text_area.return_value = "# script content"
-        mock_st.text_input.side_effect = [
-            "my_play", "win_servers", "my_role"
-        ]
+        mock_st.text_input.side_effect = ["my_play", "win_servers", "my_role"]
         col1, col2, col3 = MagicMock(), MagicMock(), MagicMock()
         for col in (col1, col2, col3):
             col.__enter__ = lambda s: s
@@ -118,8 +118,12 @@ class TestHandleParse:
         tab2.__exit__ = MagicMock(return_value=False)
         mock_st.tabs.return_value = [tab1, tab2]
         mock_st.columns.return_value = [
-            MagicMock(), MagicMock(), MagicMock(),
-            MagicMock(), MagicMock(), MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
         ]
 
         _handle_parse("Install-WindowsFeature -Name Web-Server")
@@ -152,9 +156,7 @@ class TestHandleConvert:
         tab2.__exit__ = MagicMock(return_value=False)
         mock_st.tabs.return_value = [tab1, tab2]
 
-        _handle_convert(
-            "Install-WindowsFeature -Name Web-Server", "play", "windows"
-        )
+        _handle_convert("Install-WindowsFeature -Name Web-Server", "play", "windows")
         assert mock_st.session_state.get("ps_convert_result") is not None
         assert mock_st.session_state.get("ps_parse_result") is None
 
