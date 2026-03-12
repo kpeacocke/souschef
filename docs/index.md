@@ -11,9 +11,9 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 SousChef is a complete enterprise-grade platform with two major capabilities:
 
-### 1. Chef to Ansible Migration (38 tools)
+### 1. Chef to Ansible Migration (39 tools)
 
-Complete enterprise-grade migration platform with **45 primary MCP tools** organised across **10 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations and PowerShell-to-Ansible Windows automation. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, and PowerShell enterprise migration, SousChef provides everything needed for a successful infrastructure automation migration.
+Complete enterprise-grade migration platform with **54 primary MCP tools** organised across **11 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations, PowerShell-to-Ansible Windows automation, and Bash script migration. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, PowerShell enterprise migration, and Bash provisioning script conversion, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### 2. Ansible Upgrade Assessment & Planning (5 tools)
 
@@ -30,11 +30,24 @@ Comprehensive Ansible upgrade analysis and planning tools based on official Ansi
 !!! info "About Tool Counts"
     **Complete tool inventory available in source code**
 
-    The MCP server includes primary user-facing tools for Chef-to-Ansible migration, PowerShell-to-Ansible Windows automation, and Ansible upgrade planning. This documentation focuses on the primary user-facing tools (45 migration + 5 upgrade) that cover the main capabilities.
+    The MCP server includes primary user-facing tools for Chef-to-Ansible migration, PowerShell-to-Ansible Windows automation, Bash script migration, and Ansible upgrade planning. This documentation focuses on the primary user-facing tools (39 Chef + 7 PowerShell + 3 Bash + 5 Ansible upgrades = 54 total) that cover the main capabilities.
 
     As a user, you'll primarily interact with the documented tools. Your AI assistant may use additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
     See [api-reference/](api-reference/) and `souschef/server.py` for the complete authoritative list of all MCP tools.
+
+### 3. PowerShell & Bash Script Migration (10 tools)
+
+Enterprise migration for Windows PowerShell provisioning scripts and Linux/Mac Bash provisioning scripts:
+
+- **PowerShell Parsing** — Extract 28+ action types from `.ps1` provisioning scripts
+- **PowerShell Conversion** — Map actions to `ansible.windows.*`, `community.windows.*`, `chocolatey.chocolatey.*`
+- **Windows Artefact Generation** — WinRM inventory, group_vars, requirements.yml, Ansible role, AWX job template
+- **Fidelity Analysis** — Score migration completeness (0–100 %) with actionable recommendations
+- **Bash Parsing** — Detect 13 operation categories with confidence scores and sensitive data alerts
+- **Bash Conversion** — Convert to idiomatic Ansible playbooks with quality scores (A–F) and AAP hints
+- **Bash Role Generation** — Full Ansible role structure with task categorisation and vault stubs
+
 
 ## Model Agnostic - Works with Any AI Model
 
@@ -76,6 +89,12 @@ Modernise Habitat applications to containerised deployments with Docker and Comp
 Enterprise Windows automation migration — convert PowerShell provisioning scripts to idiomatic `ansible.windows` playbooks, roles, inventories, and AWX/AAP job templates.
 
 [Learn more about PowerShell migration →](migration-guide/powershell-migration.md){ .md-button }
+
+### :material-bash: Bash Script to Ansible Migration
+Enterprise-grade conversion of provisioning Bash scripts to idiomatic Ansible playbooks, roles, and AAP job templates with quality scoring and sensitive data detection.
+
+[Learn more about Bash migration →](user-guide/mcp-tools.md#bash-script-migration){ .md-button }
+
 
 ### :material-update: Ansible Upgrade Assessment & Planning
 Comprehensive Ansible upgrade planning based on official compatibility matrices and EOL tracking.

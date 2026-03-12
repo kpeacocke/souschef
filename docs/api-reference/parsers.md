@@ -21,6 +21,7 @@ The following parsers are available:
 - **Habitat Parser** (`souschef.parsers.habitat`) - Parse Habitat plans
 - **Ansible Inventory Parser** (`souschef.parsers.ansible_inventory`) - Parse Ansible inventory files and environments (NEW)
 - **PowerShell Parser** (`souschef.parsers.powershell`) - Parse PowerShell provisioning scripts
+- **Bash Parser** (`souschef.parsers.bash`) - Parse provisioning Bash scripts into a structured IR with 13 operation categories, confidence scores, sensitive data detection, and CM escape detection
 
 For usage examples and patterns, see the [Examples Guide](../user-guide/examples.md).
 

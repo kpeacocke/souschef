@@ -17,6 +17,7 @@ The following converters are available:
 - **Habitat Converter** (`souschef.converters.habitat`) - Convert Habitat plans to Docker
 - **PowerShell Converter** (`souschef.converters.powershell`) - Convert PowerShell scripts to Windows Ansible tasks
 - **PowerShell Generators** (`souschef.generators.powershell`) - Generate enterprise Windows automation artefacts
+- **Bash-to-Ansible Converter** (`souschef.converters.bash_to_ansible`) - Convert Bash scripts to Ansible playbooks or roles, with quality scoring and AAP hints
 
 For detailed conversion patterns and examples, see the [Conversion Guide](../migration-guide/conversion.md).
 

@@ -7,18 +7,33 @@ if str(app_path) not in sys.path:
     sys.path.insert(0, str(app_path))
 
 import contextlib
+import importlib
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Concatenate
+from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
 
 if TYPE_CHECKING:
-    import networkx as nx
     import plotly.graph_objects as go
     import streamlit as st
-    from matplotlib.figure import Figure
+
+    Figure = Any
 else:
     import streamlit as st
+
+
+NxDiGraph = Any
+
+
+def _import_networkx() -> Any:
+    """Import networkx lazily for optional graph rendering paths."""
+    return importlib.import_module("networkx")
+
+
+def _import_matplotlib_pyplot() -> Any:
+    """Import matplotlib.pyplot lazily for static chart rendering."""
+    return importlib.import_module("matplotlib.pyplot")
+
 
 from souschef.core import _ensure_within_base_path, _normalize_path
 from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_is_file
@@ -26,6 +41,7 @@ from souschef.ui.pages.ai_settings import show_ai_settings_page
 from souschef.ui.pages.ansible_assessment import show_ansible_assessment_page
 from souschef.ui.pages.ansible_planning import show_ansible_planning_page
 from souschef.ui.pages.ansible_validation import show_ansible_validation_page
+from souschef.ui.pages.bash_migration import show_bash_migration_page
 from souschef.ui.pages.chef_server_settings import show_chef_server_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
@@ -44,6 +60,7 @@ NAV_VALIDATION_REPORTS = "Validation Reports"
 NAV_AI_SETTINGS = "AI Settings"
 NAV_CHEF_SERVER_SETTINGS = "Chef Server Settings"
 NAV_COOKBOOK_ANALYSIS = "Migrate Cookbook"
+NAV_BASH_MIGRATION = "Bash Migration"
 NAV_HISTORY = "History"
 NAV_ANSIBLE_ASSESSMENT = "Ansible Assessment"
 NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
@@ -57,6 +74,7 @@ ANSIBLE_FEATURES = {
 }
 CHEF_FEATURES = {
     NAV_COOKBOOK_ANALYSIS,
+    NAV_BASH_MIGRATION,
     NAV_MIGRATION_PLANNING,
     NAV_MIGRATION_CONFIG,
     NAV_DEPENDENCY_MAPPING,
@@ -121,17 +139,21 @@ class ProgressTracker:
         self.status_text.empty()
 
 
-def with_progress_tracking[**P, R](
-    operation_func: Callable[Concatenate[ProgressTracker, P], R],
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def with_progress_tracking(
+    operation_func: Callable[Concatenate[ProgressTracker, _P], _R],
     description: str = "Processing...",
     total_steps: int = 100,
-) -> Callable[P, R]:
+) -> Callable[_P, _R]:
     """Add progress tracking to operations."""
 
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         tracker = ProgressTracker(total_steps, description)
         try:
-            result: R = operation_func(tracker, *args, **kwargs)
+            result: _R = operation_func(tracker, *args, **kwargs)
             tracker.complete()
             return result
         except Exception as e:  # noqa: BLE001
@@ -162,6 +184,7 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
     """Render navigation buttons for a given set of features."""
     all_nav_buttons = [
         ("Migrate Cookbook", NAV_COOKBOOK_ANALYSIS),
+        ("Bash Migration", NAV_BASH_MIGRATION),
         ("Migration Planning", NAV_MIGRATION_PLANNING),
         ("Migration Config", NAV_MIGRATION_CONFIG),
         ("Dependency Mapping", NAV_DEPENDENCY_MAPPING),
@@ -229,6 +252,7 @@ def _route_to_page(page: str) -> None:
     page_routes = {
         "Dashboard": show_dashboard,
         NAV_COOKBOOK_ANALYSIS: show_cookbook_analysis_page,
+        NAV_BASH_MIGRATION: show_bash_migration_page,
         NAV_MIGRATION_PLANNING: show_migration_planning,
         NAV_MIGRATION_CONFIG: show_migration_config_page,
         NAV_DEPENDENCY_MAPPING: show_dependency_mapping,
@@ -1217,11 +1241,11 @@ def _create_networkx_graph(
     dependencies: Mapping[str, Sequence[str]],
     circular_deps: Sequence[tuple[str, str]],
     community_cookbooks: Sequence[str],
-) -> "nx.DiGraph":
+) -> NxDiGraph:
     """Create NetworkX graph from dependency data."""
-    import networkx as nx
+    nx = _import_networkx()
 
-    graph: nx.DiGraph = nx.DiGraph()
+    graph = nx.DiGraph()
 
     # Add nodes and edges
     for cookbook, deps in dependencies.items():
@@ -1243,7 +1267,7 @@ def _create_networkx_graph(
 
 
 def _calculate_graph_positions(
-    graph: "nx.DiGraph", layout_algorithm: str
+    graph: NxDiGraph, layout_algorithm: str
 ) -> tuple[dict[Any, tuple[float, float]], str]:
     """
     Calculate positions for graph nodes using the specified layout algorithm.
@@ -1277,11 +1301,9 @@ def _choose_auto_layout_algorithm(num_nodes: int) -> str:
         return "kamada_kawai"
 
 
-def _calculate_positions_with_algorithm(
-    graph: "nx.DiGraph", layout_algorithm: str
-) -> Any:
+def _calculate_positions_with_algorithm(graph: NxDiGraph, layout_algorithm: str) -> Any:
     """Calculate node positions using the specified algorithm."""
-    import networkx as nx
+    nx = _import_networkx()
 
     try:
         if layout_algorithm == "spring":
@@ -1309,10 +1331,10 @@ def _calculate_positions_with_algorithm(
 
 
 def _calculate_shell_layout_positions(
-    graph: "nx.DiGraph",
+    graph: NxDiGraph,
 ) -> Any:
     """Calculate shell layout positions for hierarchical organization."""
-    import networkx as nx
+    nx = _import_networkx()
 
     # Identify leaf nodes (no outgoing edges)
     leaf_nodes = [n for n in graph.nodes() if graph.out_degree(n) == 0]
@@ -1338,7 +1360,7 @@ def _calculate_shell_layout_positions(
 
 
 def _create_plotly_edge_traces(
-    graph: "nx.DiGraph", pos: Mapping[Any, tuple[float, float]]
+    graph: NxDiGraph, pos: Mapping[Any, tuple[float, float]]
 ) -> list["go.Scatter"]:
     """Create edge traces for Plotly graph."""
     import plotly.graph_objects as go
@@ -1393,7 +1415,7 @@ def _create_plotly_edge_traces(
 
 
 def _create_plotly_node_trace(
-    graph: "nx.DiGraph", pos: Mapping[Any, tuple[float, float]]
+    graph: NxDiGraph, pos: Mapping[Any, tuple[float, float]]
 ) -> "go.Scatter":
     """Create node trace for Plotly graph."""
     import plotly.graph_objects as go
@@ -1477,7 +1499,7 @@ def _create_plotly_figure_layout(num_nodes: int, layout_algorithm: str) -> "go.L
 
 
 def _create_interactive_plotly_graph(
-    graph: "nx.DiGraph",
+    graph: NxDiGraph,
     pos: Mapping[Any, tuple[float, float]],
     num_nodes: int,
     layout_algorithm: str,
@@ -1496,13 +1518,13 @@ def _create_interactive_plotly_graph(
 
 
 def _create_static_matplotlib_graph(
-    graph: "nx.DiGraph",
+    graph: NxDiGraph,
     pos: Mapping[Any, tuple[float, float]],
     num_nodes: int,
     layout_algorithm: str,
 ) -> "Figure":
     """Create static matplotlib graph visualization."""
-    import matplotlib.pyplot as plt
+    plt = _import_matplotlib_pyplot()
 
     plt.figure(figsize=(12, 8))
 
@@ -1511,7 +1533,7 @@ def _create_static_matplotlib_graph(
         (u, v) for u, v, d in graph.edges(data=True) if not d.get("circular", False)
     ]
     if regular_edges:
-        import networkx as nx
+        nx = _import_networkx()
 
         nx.draw_networkx_edges(
             graph,
@@ -1529,7 +1551,7 @@ def _create_static_matplotlib_graph(
         (u, v) for u, v, d in graph.edges(data=True) if d.get("circular", False)
     ]
     if circular_edges:
-        import networkx as nx
+        nx = _import_networkx()
 
         nx.draw_networkx_edges(
             graph,
@@ -1565,7 +1587,7 @@ def _create_static_matplotlib_graph(
     ]
 
     # Draw nodes
-    import networkx as nx
+    nx = _import_networkx()
 
     nx.draw_networkx_nodes(
         graph,
@@ -1643,9 +1665,7 @@ def create_dependency_graph(
         return None
 
 
-def _apply_graph_filters(
-    graph: "nx.DiGraph", filters: Mapping[str, Any]
-) -> "nx.DiGraph":
+def _apply_graph_filters(graph: NxDiGraph, filters: Mapping[str, Any]) -> NxDiGraph:
     """Apply filters to the NetworkX graph."""
     filtered_graph = graph.copy()
 
@@ -1658,8 +1678,8 @@ def _apply_graph_filters(
 
 
 def _filter_circular_dependencies_only(
-    graph: "nx.DiGraph", filters: Mapping[str, Any]
-) -> "nx.DiGraph":
+    graph: NxDiGraph, filters: Mapping[str, Any]
+) -> NxDiGraph:
     """Filter graph to show only nodes involved in circular dependencies."""
     if not filters.get("circular_only", False):
         return graph
@@ -1678,8 +1698,8 @@ def _filter_circular_dependencies_only(
 
 
 def _filter_community_cookbooks_only(
-    graph: "nx.DiGraph", filters: Mapping[str, Any]
-) -> "nx.DiGraph":
+    graph: NxDiGraph, filters: Mapping[str, Any]
+) -> NxDiGraph:
     """Filter graph to show only community cookbooks and their dependencies."""
     if not filters.get("community_only", False):
         return graph
@@ -1700,8 +1720,8 @@ def _filter_community_cookbooks_only(
 
 
 def _filter_minimum_connections(
-    graph: "nx.DiGraph", filters: Mapping[str, Any]
-) -> "nx.DiGraph":
+    graph: NxDiGraph, filters: Mapping[str, Any]
+) -> NxDiGraph:
     """Filter graph to show only nodes with minimum connection count."""
     min_connections = filters.get("min_connections", 0)
     if min_connections <= 0:

@@ -8,9 +8,9 @@ SousChef provides **51 specialised MCP tools** for comprehensive Chef-to-Ansible
 !!! info "About the Tool Count"
     **Complete tool inventory available in source code**
 
-    This guide documents the **51 primary user-facing tools** (46 Chef migration + PowerShell migration + 5 Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
+    This guide documents the **54 primary user-facing tools** (39 Chef migration + 7 PowerShell migration + 3 Bash migration + 5 Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
 
-    As a user, you'll primarily interact with these 51 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
+    As a user, you'll primarily interact with these 54 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
 
     See `souschef/server.py` for the complete authoritative list of all MCP tools.
 
@@ -31,6 +31,7 @@ SousChef provides **51 specialised MCP tools** for comprehensive Chef-to-Ansible
 | [Chef Server Integration](#chef-server-integration) | 3 tools | Validate Chef Server connections and query dynamic inventory |
 | [Ansible Upgrade Planning](#ansible-upgrade-planning) | 5 tools | Assess Ansible environments and plan version upgrades |
 | [PowerShell Migration](#powershell-migration) | 7 tools | Convert PowerShell scripts to Windows Ansible automation |
+| [Bash Script Migration](#bash-script-migration) | 3 tools | Convert Bash provisioning scripts to Ansible playbooks and roles |
 
 ---
 
@@ -1918,6 +1919,174 @@ Analyse migration fidelity for a PowerShell provisioning script.
 
 ---
 
+## Bash Script Migration
+
+Enterprise-grade conversion of provisioning Bash scripts to Ansible playbooks and roles. Covers teams breaking out of Salt, Puppet, or Chef into raw Bash, and teams using AI to author Ansible for AAP.
+
+!!! tip "When to use Bash Script Migration"
+    - You have provisioning scripts that install packages, manage services, or configure systems
+    - Your team is breaking out of a CM tool (Salt, Puppet, Chef) into Bash temporarily or permanently
+    - You want to land directly in Ansible/AAP without writing tasks by hand
+    - You need to identify hardcoded secrets before committing to a repository
+
+### parse_bash_script
+
+Parse a Bash provisioning script and extract structured patterns.
+
+**What it does**: Reads a Bash script and detects 13 categories of provisioning operation:
+
+| Category | Patterns detected | Target Ansible module |
+|----------|------------------|-----------------------|
+| Packages | `apt-get`, `yum`, `dnf`, `zypper`, `apk`, `pip` | `ansible.builtin.apt/yum/dnf/…` |
+| Services | `systemctl`, `service` | `ansible.builtin.service` |
+| File writes | heredoc, echo redirect, `tee` | `ansible.builtin.copy` |
+| Downloads | `curl`, `wget` | `ansible.builtin.get_url` |
+| Users | `useradd`, `adduser`, `usermod`, `userdel` | `ansible.builtin.user` |
+| Groups | `groupadd`, `groupmod`, `groupdel` | `ansible.builtin.group` |
+| File permissions | `chmod`, `chown`, `chgrp` | `ansible.builtin.file` |
+| Git operations | `git clone`, `git pull`, `git checkout` | `ansible.builtin.git` |
+| Archives | `tar -x`, `unzip` | `ansible.builtin.unarchive` |
+| sed operations | `sed -i` | `ansible.builtin.lineinfile` / `.replace` |
+| Cron jobs | `crontab`, cron.d writes | `ansible.builtin.cron` |
+| Firewall rules | `ufw`, `firewall-cmd`, `iptables` | `community.general.ufw`, `ansible.posix.firewalld`, `ansible.builtin.iptables` |
+| Hostname | `hostnamectl set-hostname` | `ansible.builtin.hostname` |
+
+Bonus detection: **environment variables** (exported shell vars), **sensitive data** (passwords, API keys, private key material), and **CM escape calls** (Salt, Puppet, Chef invocations inside a Bash script).
+
+**Why you need this**: Before converting, you need to understand what a Bash script actually does. This tool gives you a structured, categorised inventory with confidence scores, idempotency risks, and vault recommendations — making conversion planning fast and reliable.
+
+**What you get**:
+- Categorised inventory of all provisioning operations with line numbers
+- Confidence scores (0–100 %) for each detected pattern
+- Idempotency risk warnings for non-idempotent patterns (e.g. unconditional writes)
+- Environment variable list (with sensitive vars flagged)
+- Sensitive data alerts (value redacted, line number shown)
+- CM escape detection (Salt/Puppet/Chef calls embedded in Bash)
+- Shell-fallback list for lines that cannot be mapped to a module
+
+**Real-world example**: You have a 300-line `bootstrap.sh` that was the emergency replacement for a failing Salt state. Running this tool reveals 8 package installs, 3 service starts, 2 hardcoded passwords, and a `salt-call` escape that will need attention before landing in AAP.
+
+**Parameters:**
+- `script_path` (string, required): Path to the Bash script file
+
+**Returns:**
+- Human-readable summary of all detected patterns, warnings, and idempotency hints
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Parse my provisioning script at scripts/bootstrap.sh
+    and show me all detected patterns
+    ```
+
+=== "CLI"
+    ```bash
+    souschef bash parse scripts/bootstrap.sh
+    ```
+
+---
+
+### convert_bash_to_ansible
+
+Convert a Bash provisioning script to an Ansible playbook.
+
+**What it does**: Maps all detected Bash patterns to their optimal Ansible modules. High-confidence patterns (≥ 80 %) become structured module tasks; low-confidence sections fall back to `ansible.builtin.shell` with `changed_when`, `failed_when`, and idempotency hints embedded as comments. Also returns an **AAP hints** block and a **quality score**.
+
+**Why you need this**: Manually rewriting a Bash script as an Ansible playbook is tedious and error-prone. This tool does the mechanical conversion in seconds, leaving you with a playbook that is idiomatic, idempotent, and ready to review rather than ready to write.
+
+**What you get**:
+- Complete Ansible playbook YAML
+- Per-task confidence metadata
+- Idempotency report (risks, shell fallback count, suggestions)
+- **AAP hints** — recommended Execution Environment image, credential types, survey variables derived from script environment variables, and actionable notes (vault warnings, missing collections, prerequisite packages)
+- **Quality score** — A–F letter grade (A ≥ 90, B ≥ 75, C ≥ 60, D ≥ 40, F < 40), overall coverage percentage, and a ranked list of improvements
+
+**Quality score deductions:**
+- Each hardcoded secret deducts 5 points (max 20)
+- Shell fallback tasks count as non-idempotent
+
+**Real-world example**: Your `deploy.sh` installs nginx, creates a service user, writes a config, and then calls `salt-call` as an escape hatch. The converted playbook maps the first three operations to `ansible.builtin.apt`, `ansible.builtin.user`, and `ansible.builtin.copy` — with the salt call flagged as a CM escape needing manual review. Quality score B (77 %).
+
+**Parameters:**
+- `script_path` (string, required): Path to the Bash script file
+
+**Returns:**
+- JSON string with `playbook_yaml`, `tasks`, `warnings`, `idempotency_report`, `quality_score`, and `aap_hints` keys
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert scripts/deploy.sh to an Ansible playbook
+    ```
+
+=== "CLI"
+    ```bash
+    # Output playbook YAML
+    souschef bash convert scripts/deploy.sh
+
+    # Save playbook to file
+    souschef bash convert scripts/deploy.sh --output playbook.yml
+
+    # Full JSON response (includes quality score and AAP hints)
+    souschef bash convert scripts/deploy.sh --format json
+    ```
+
+---
+
+### generate_ansible_role_from_bash
+
+Generate a complete Ansible role directory structure from a Bash script.
+
+**What it does**: Converts a Bash provisioning script into a full Ansible role — splitting tasks by category into separate task files, generating handlers, defaults, vars, meta, and a README. Sensitive environment variables are stubbed in `defaults/main.yml` with `ansible-vault` TODO comments rather than being embedded as plaintext.
+
+**Why you need this**: A bare playbook is a start, but Ansible best practice for reusable automation is a role. This tool goes the extra mile: it produces a role that can be dropped directly into an AAP project, committed to Git, and executed via a job template with survey variables automatically derived from the script's environment variables.
+
+**What you get**:
+- **`tasks/main.yml`** — imports each category task file
+- **`tasks/packages.yml`** — package install tasks
+- **`tasks/services.yml`** — service management tasks
+- **`tasks/users.yml`** — user and group management tasks
+- **`tasks/files.yml`** — file write and permission tasks
+- **`tasks/misc.yml`** — git, archives, sed, cron, firewall, hostname tasks
+- **`handlers/main.yml`** — service restart handlers
+- **`defaults/main.yml`** — environment variables as Ansible defaults; sensitive vars stubbed with vault comment
+- **`vars/main.yml`** — empty placeholder
+- **`meta/main.yml`** — role metadata (author, description, licence, min Ansible version)
+- **`README.md`** — auto-generated role documentation
+- **Quality score** and **AAP hints** in the JSON response
+
+**Real-world example**: Your team has a `setup_webserver.sh` that has been running via Salt. You're migrating to AAP. Running this tool produces a `webserver` role with 6 task files. The `DB_PASSWORD` env var appears in `defaults/main.yml` stubbed as `''` with a `# TODO: set via ansible-vault` comment. You commit the role, create an AAP project, and create a job template — the tool's AAP hints even tell you which Execution Environment image to use.
+
+**Parameters:**
+- `script_path` (string, required): Path to the Bash script file
+- `role_name` (string, optional): Name for the generated role (default: `bash_converted`)
+
+**Returns:**
+- JSON string with `status`, `role_name`, `files` (dict of relative path → content), `quality_score`, and `aap_hints` keys
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate an Ansible role called "webserver" from scripts/setup_webserver.sh
+    ```
+
+=== "CLI"
+    ```bash
+    # Print role to stdout
+    souschef bash role scripts/setup_webserver.sh --role-name webserver
+
+    # Write role tree to disk
+    souschef bash role scripts/setup_webserver.sh \
+        --role-name webserver \
+        --output-dir ./roles
+    ```
+
+---
+
+
 ## Tool Selection
 
 - **Start with assessment**: Use `assess_ansible_upgrade_readiness` to understand your current state (automatically detects Python version)
@@ -1947,6 +2116,15 @@ All tools provide detailed error messages with suggestions:
 6. **Assessment**: Use `generate_migration_report`
 7. **Chef Server Integration** (optional): Use `validate_chef_server_connection` → `get_chef_nodes` → inventory generation
 
+
+#### Bash Script Migration Workflow
+
+1. **Analyse**: Use `parse_bash_script` to understand what the script does
+2. **Review warnings**: Check idempotency risks, sensitive data alerts, and CM escape calls
+3. **Convert**: Use `convert_bash_to_ansible` for a quick playbook, or `generate_ansible_role_from_bash` for a full reusable role
+4. **Review quality score**: Address improvements flagged in the A–F report
+5. **Secure secrets**: Move any detected credentials to ansible-vault (see `defaults/main.yml` stubs)
+6. **AAP readiness**: Use the `aap_hints` block to configure the correct Execution Environment and credentials in your AAP job template
 #### Ansible Upgrade Workflow
 
 1. **Assessment**: Use `assess_ansible_upgrade_readiness` (automatically detects Python version)

@@ -24,7 +24,7 @@ SousChef is evolving from a Chef-to-Ansible converter into a **multi-source, mul
 - ✅ **Chef** → Ansible (current)
 - 🔄 **Puppet** → Ansible (planned)
 - 🔄 **Salt** → Ansible (planned)
-- 🔄 **Bash scripts** → Ansible (planned)
+- ✅ **Bash scripts** → Ansible
 - ✅ **PowerShell scripts** → Ansible
 - 🔄 **Multi-target**: Ansible, Terraform, CloudFormation (via IR)
 
@@ -165,7 +165,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `parsers/` - Input Parsing
 **Purpose:** Extract structured data from source configuration management tools.
-**Status:** ✅ Exists (Chef parsers, PowerShell parser); 🔄 Planned (Puppet, Salt, Bash)
+**Status:** ✅ Exists (Chef parsers, PowerShell parser, Bash parser); 🔄 Planned (Puppet, Salt)
 **Dependencies:** `core/`, `ir/`, `filesystem/`
 **Contains:**
 - `recipe.py` - Chef recipe parser
@@ -177,7 +177,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - `ansible_inventory.py` - Ansible inventory parser
 - 🔄 `puppet.py` - Puppet manifest parser (planned)
 - 🔄 `salt.py` - Salt state parser (planned)
-- 🔄 `bash.py` - Bash script parser (planned)
+- ✅ `bash.py` - Bash script parser (13 operation categories, confidence scoring, sensitive data detection)
 - ✅ `powershell.py` - PowerShell script parser
 
 **Rules:**
@@ -187,7 +187,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `converters/` - Transformation Logic
 **Purpose:** Transform parsed data into intermediate or target formats.
-**Status:** ✅ Exists (Chef→Ansible); 🔄 Planned (multi-source, multi-target)
+**Status:** ✅ Exists (Chef→Ansible, PowerShell→Ansible, Bash→Ansible); 🔄 Planned (multi-target)
 **Dependencies:** `core/`, `parsers/`, `ir/`
 **Contains:**
 - `playbook.py` - Recipe → Ansible playbook
@@ -198,7 +198,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - 🔄 `puppet_to_ansible.py` - Puppet → Ansible (planned)
 - 🔄 `salt_to_ansible.py` - Salt → Ansible (planned)
 - ✅ `powershell.py` - PowerShell → Ansible (exists)
-- 🔄 `script_to_ansible.py` - Bash → Ansible (planned)
+- ✅ `bash_to_ansible.py` - Bash → Ansible (exists)
 
 **Rules:**
 - ✅ Can import from: `core/`, `parsers/`, `ir/`

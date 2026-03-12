@@ -1,5 +1,9 @@
 """Chef to Ansible converters."""
 
+from souschef.converters.bash_to_ansible import (
+    convert_bash_content_to_ansible,
+    convert_bash_to_ansible,
+)
 from souschef.converters.conversion_rules import (
     ConversionRule,
     RuleEngine,
@@ -43,6 +47,8 @@ from souschef.converters.powershell import (
 from souschef.converters.resource import convert_resource_to_task
 
 __all__ = [
+    "convert_bash_to_ansible",
+    "convert_bash_content_to_ansible",
     "convert_resource_to_task",
     "generate_playbook_from_recipe",
     "convert_chef_search_to_inventory",

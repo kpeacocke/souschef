@@ -43,8 +43,10 @@ from souschef.profiling import (
     profile_function,
 )
 from souschef.server import (
+    convert_bash_to_ansible,
     convert_inspec_to_test,
     convert_resource_to_task,
+    generate_ansible_role_from_bash,
     generate_github_workflow_from_chef,
     generate_gitlab_ci_from_chef,
     generate_inspec_from_recipe,
@@ -52,6 +54,7 @@ from souschef.server import (
     list_cookbook_structure,
     list_directory,
     parse_attributes,
+    parse_bash_script,
     parse_custom_resource,
     parse_inspec_profile,
     parse_recipe,
@@ -112,14 +115,17 @@ CI_JOB_INTEGRATION_TESTS = "  • Integration Tests (Test Kitchen)"
 METADATA_FILENAME = "metadata.rb"
 
 
-@click.group()
+@click.group(name="souschef")
 @click.version_option(version=__version__, prog_name="souschef")
-def cli() -> None:
+def _cli_root() -> None:
     """
     SousChef - Chef to Ansible conversion toolkit.
 
     Parse Chef cookbooks and convert resources to Ansible playbooks.
     """
+
+
+cli: click.Group = _cli_root
 
 
 # Initialize CLI command groups via registry
@@ -306,8 +312,7 @@ def convert(
     if output_format == "json":
         # Parse YAML and convert to JSON for consistency
         try:
-            import yaml
-
+            yaml = __import__("yaml")
             data = yaml.safe_load(result)
             click.echo(json.dumps(data, indent=2))
         except ImportError:
@@ -1857,9 +1862,12 @@ def configure_migration(
         sys.exit(1)
 
 
-@cli.group()
-def history() -> None:
+@cli.group(name="history")
+def _history_group() -> None:
     """Manage analysis and conversion history."""
+
+
+history: click.Group = _history_group
 
 
 @history.command(name="list")
@@ -1986,14 +1994,17 @@ def history_delete(history_type: str, record_id: int, yes: bool) -> None:
         sys.exit(1)
 
 
-@cli.group()
-def ansible() -> None:
+@cli.group(name="ansible")
+def _ansible_group() -> None:
     """
     Manage Ansible upgrade planning and validation.
 
     Provides tools to assess Ansible environments, plan upgrades,
     validate collection compatibility, and generate testing strategies.
     """
+
+
+ansible: click.Group = _ansible_group
 
 
 @ansible.command("assess")
@@ -2265,7 +2276,7 @@ def _parse_collections_file(file_path: str) -> dict[str, str]:
 
     """
     try:
-        import yaml
+        yaml = __import__("yaml")
     except ImportError as e:
         msg = (
             "PyYAML is required to parse collections files. "
@@ -2289,8 +2300,11 @@ def _parse_collections_file(file_path: str) -> dict[str, str]:
             data = yaml.safe_load(f)
     except OSError as e:
         raise ValueError(f"Cannot read collections file: {e}") from e
-    except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML in collections file: {e}") from e
+    except Exception as e:
+        yaml_error = getattr(yaml, "YAMLError", None)
+        if yaml_error is not None and isinstance(e, yaml_error):
+            raise ValueError(f"Invalid YAML in collections file: {e}") from e
+        raise
 
     if not data:
         raise ValueError("Collections file is empty")
@@ -2464,6 +2478,144 @@ def ansible_detect_python(environment_path: str | None) -> None:
     except Exception as e:
         click.echo(f"Error detecting Python version: {e}", err=True)
         sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Bash migration commands
+# ---------------------------------------------------------------------------
+
+
+@cli.group(name="bash")
+def _bash_group() -> None:
+    """Bash script migration commands."""
+
+
+bash: click.Group = _bash_group
+
+
+@bash.command("parse")
+@click.argument("script_path")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output file path (default: stdout).",
+)
+def bash_parse(script_path: str, output: str | None) -> None:
+    """
+    Parse a Bash script and display detected provisioning patterns.
+
+    SCRIPT_PATH is the path to the Bash script to analyse.
+    """
+    try:
+        result = parse_bash_script(script_path)
+        if output is not None:
+            default = Path.cwd() / "bash_analysis.txt"
+            _safe_write_file(result, output, default_path=default)
+        else:
+            click.echo(result)
+    except (OSError, ValueError) as e:
+        click.echo(f"Error parsing Bash script: {e}", err=True)
+        sys.exit(1)
+
+
+@bash.command("convert")
+@click.argument("script_path")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output file path for the generated playbook YAML (default: stdout).",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["yaml", "json"]),
+    default="yaml",
+    show_default=True,
+    help=(
+        "Output format: 'yaml' writes the playbook YAML,"
+        " 'json' writes the full response."
+    ),
+)
+def bash_convert(
+    script_path: str,
+    output: str | None,
+    output_format: str,
+) -> None:
+    """
+    Convert a Bash script to an Ansible playbook.
+
+    SCRIPT_PATH is the path to the Bash script to convert.
+    """
+    import json as _json
+
+    try:
+        raw = convert_bash_to_ansible(script_path)
+        data = _json.loads(raw)
+
+        if data.get("status") == "error":
+            click.echo(f"Error: {data.get('error')}", err=True)
+            sys.exit(1)
+
+        content = data.get("playbook_yaml", "") if output_format == "yaml" else raw
+
+        if output is not None:
+            _safe_write_file(content, output, default_path=Path.cwd() / "playbook.yml")
+        else:
+            click.echo(content)
+
+        # Always print warnings to stderr
+        warnings = data.get("warnings", [])
+        if warnings:
+            click.echo("\nWarnings:", err=True)
+            for w in warnings:
+                click.echo(f"  - {w}", err=True)
+    except _json.JSONDecodeError as exc:
+        click.echo(
+            "Error converting Bash script: invalid JSON in conversion response.",
+            err=True,
+        )
+        click.echo(str(exc), err=True)
+        sys.exit(1)
+
+
+@bash.command("role")
+@click.argument("script_path")
+@click.option(
+    "--role-name",
+    default="bash_converted",
+    show_default=True,
+    help="Name for the generated Ansible role.",
+)
+@click.option(
+    "--output-dir",
+    default=None,
+    help="Directory to write role files to (default: print to stdout).",
+)
+def bash_role(script_path: str, role_name: str, output_dir: str | None) -> None:
+    """
+    Generate an Ansible role structure from SCRIPT_PATH.
+
+    SCRIPT_PATH is the path to the Bash script to convert into a role.
+    """
+    raw = generate_ansible_role_from_bash(script_path, role_name)
+    data = json.loads(raw)
+    if data.get("status") == "error":
+        click.echo(f"Error: {data.get('error')}", err=True)
+        sys.exit(1)
+    files: dict[str, str] = data.get("files", {})
+    if output_dir:
+        base = Path(output_dir) / role_name
+        for filename, content in files.items():
+            fpath = base / filename
+            fpath.parent.mkdir(parents=True, exist_ok=True)
+            fpath.write_text(content)
+        click.echo(f"Role written to {base}")
+    else:
+        for filename, content in files.items():
+            click.echo(f"\n# --- {filename} ---")
+            click.echo(content)
 
 
 def main() -> NoReturn:
