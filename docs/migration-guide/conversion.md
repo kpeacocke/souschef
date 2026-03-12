@@ -855,8 +855,7 @@ SousChef analyses 13 categories of provisioning operation and assigns a confiden
 | Confidence | Meaning | Ansible conversion |
 |-----------|---------|-------------------|
 | ≥ 80 % | High — clear module mapping | Structured Ansible module task |
-| 60–79 % | Medium — likely correct | Module task with review note |
-| < 60 % | Low — ambiguous | `ansible.builtin.shell` fallback |
+| < 80 % | Low — ambiguous | `ansible.builtin.shell` fallback |
 
 ### Bash Resource Mapping
 
