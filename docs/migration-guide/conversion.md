@@ -838,6 +838,129 @@ Overall: PASSED with warnings
 
 ---
 
+## Bash Script to Ansible Conversion
+
+This section covers the enterprise scenario where provisioning Bash scripts — including scripts that break out of Salt, Puppet, or Chef — need to be converted to Ansible playbooks or roles for AAP.
+
+### When Bash Script Migration Applies
+
+- A CM tool (Salt, Puppet, or Chef) was replaced temporarily with a Bash script
+- A team writes new provisioning logic directly in Bash and wants to land in Ansible/AAP
+- An existing Bash script (`bootstrap.sh`, `provision.sh`, `deploy.sh`) needs to become idempotent
+
+### Pattern Detection and Confidence Scores
+
+SousChef analyses 13 categories of provisioning operation and assigns a confidence score to each detected pattern:
+
+| Confidence | Meaning | Ansible conversion |
+|-----------|---------|-------------------|
+| ≥ 80 % | High — clear module mapping | Structured Ansible module task |
+| < 80 % | Low — ambiguous | `ansible.builtin.shell` fallback |
+
+### Bash Resource Mapping
+
+| Bash pattern | Ansible module | Notes |
+|-------------|---------------|-------|
+| `apt-get install` | `ansible.builtin.apt` | `state: present` added automatically |
+| `yum install` / `dnf install` | `ansible.builtin.yum` / `dnf` | |
+| `pip install` | `ansible.builtin.pip` | |
+| `systemctl enable/start` | `ansible.builtin.service` | state: started, enabled: true |
+| `echo … > /file` / heredoc | `ansible.builtin.copy` | content stub with TODO |
+| `curl -o` / `wget` | `ansible.builtin.get_url` | dest uses `{{ download_dest_dir }}` variable |
+| `useradd` / `adduser` | `ansible.builtin.user` | state: present |
+| `groupadd` | `ansible.builtin.group` | state: present |
+| `chmod` / `chown` | `ansible.builtin.file` | mode, owner, recurse supported |
+| `git clone` | `ansible.builtin.git` | repo, dest extracted |
+| `tar -x` / `unzip` | `ansible.builtin.unarchive` | remote_src: true |
+| `sed -i` | `ansible.builtin.shell` | Comment: prefer lineinfile/replace |
+| `crontab` | `ansible.builtin.shell` | Comment: prefer ansible.builtin.cron |
+| `ufw allow` | `community.general.ufw` | Requires community.general collection |
+| `firewall-cmd` | `ansible.posix.firewalld` | Requires ansible.posix collection |
+| `iptables -A/-I` | `ansible.builtin.iptables` | |
+| `hostnamectl set-hostname` | `ansible.builtin.hostname` | |
+
+### Converting a Bash Script
+
+**Step 1 — Analyse**
+
+```bash
+souschef bash parse scripts/provision.sh
+```
+
+Review the output for:
+- Sensitive data warnings (act on these before committing)
+- CM escape calls that need manual review
+- Low-confidence shell fallbacks
+
+**Step 2 — Convert to playbook**
+
+```bash
+souschef bash convert scripts/provision.sh --output playbook.yml
+# Full JSON (quality score + AAP hints)
+souschef bash convert scripts/provision.sh --format json > full_result.json
+```
+
+**Step 3 — Generate role (recommended for production)**
+
+```bash
+souschef bash role scripts/provision.sh \
+    --role-name myservice \
+    --output-dir ./roles
+```
+
+### Idempotency Considerations
+
+Bash scripts are typically not idempotent. The conversion applies these safeguards:
+
+- Package installs use `state: present` (already idempotent in Ansible)
+- Service operations use `state: started/stopped` (idempotent)
+- File copies produce `ansible.builtin.copy` (idempotent by checksum)
+- Shell fallback tasks use `changed_when: "false"` to avoid spurious change reports
+- Non-idempotent patterns (unconditional `echo > file`, raw downloads) are flagged in `idempotency_report`
+
+### Handling CM Escape Calls
+
+When `salt-call`, `puppet apply`, or `chef-client` are detected inside a Bash script:
+
+1. The call is preserved as an `ansible.builtin.shell` fallback with a warning comment
+2. The quality score is penalised and an improvement note is generated
+3. The AAP hints note recommends reviewing the call before deploying
+
+To resolve a CM escape call, identify what the original CM state does and rewrite it as native Ansible tasks in the appropriate task file.
+
+### Securing Secrets
+
+Bash scripts frequently contain hardcoded credentials. SousChef:
+
+1. **Detects** `password=`, `API_KEY=`, and private key material
+2. **Redacts** the value in all output (only the line number and type are shown)
+3. **Generates** a stubbed `defaults/main.yml` entry:
+   ```yaml
+   # DB_PASSWORD: ''  # TODO: set via ansible-vault
+   ```
+4. **Reports** the finding in `aap_hints.notes`
+
+After conversion, use `ansible-vault create group_vars/all/vault.yml` and move the secret there, then reference it as `{{ vault_db_password }}`.
+
+### AAP Job Template Configuration
+
+The `aap_hints` block in the conversion response provides everything needed to configure an AAP job template:
+
+```json
+{
+  "suggested_ee": "registry.redhat.io/ansible-automation-platform/ee-supported-rhel8:latest",
+  "suggested_credentials": ["Machine"],
+  "become_enabled": true,
+  "timeout": 3600,
+  "survey_variables": [...],
+  "notes": [...]
+}
+```
+
+Use the `survey_variables` list to create an AAP survey so operators can override defaults at launch time.
+
+---
+
 ## Best Practices
 
 ### Do's [YES]

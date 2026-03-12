@@ -4,13 +4,13 @@
 # nosec B708: All path operations validated via _ensure_within_base_path and _safe_join
 
 import ast
+import importlib
 import json
 import os
 import re
 from pathlib import Path
 from typing import Any
 
-import yaml  # nosec B506: YAML safe loading enforced in module
 from mcp.server import FastMCP
 
 from souschef.ansible_upgrade import UpgradePath, UpgradePlan
@@ -32,6 +32,37 @@ from souschef.assessment import (
 )
 from souschef.assessment import (
     validate_conversion as _validate_conversion,
+)
+from souschef.converters.bash_to_ansible import (  # noqa: F401, codeql[py/unused-import]
+    _archive_tasks,
+    _build_aap_hints,
+    _build_idempotency_report,
+    _build_quality_score,
+    _build_tasks,
+    _collect_warnings,
+    _cron_tasks,
+    _download_tasks,
+    _file_perm_tasks,
+    _file_write_tasks,
+    _firewall_tasks,
+    _git_tasks,
+    _group_tasks,
+    _hostname_tasks,
+    _package_tasks,
+    _render_playbook,
+    _render_task,
+    _sed_tasks,
+    _service_tasks,
+    _shell_fallback_tasks,
+    _shell_task,
+    _user_tasks,
+    _yaml_str,
+)
+from souschef.converters.bash_to_ansible import (
+    convert_bash_to_ansible as _convert_bash_to_ansible,
+)
+from souschef.converters.bash_to_ansible import (
+    generate_ansible_role_from_bash_file as _generate_ansible_role_from_bash_file,
 )
 from souschef.converters.habitat import (  # noqa: F401, codeql[py/unused-import]
     _add_service_build,
@@ -135,7 +166,7 @@ from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     safe_write_text,
 )
 from souschef.core.ruby_utils import (
-    _normalize_ruby_value,  # noqa: F401 - used by MCP tools and tests
+    _normalize_ruby_value,  # noqa: F401, codeql[py/unused-import] - used by MCP tools and tests
 )
 from souschef.core.validation import (  # noqa: F401, codeql[py/unused-import]
     ValidationCategory,
@@ -218,6 +249,48 @@ from souschef.parsers.attributes import (  # noqa: F401, codeql[py/unused-import
 from souschef.parsers.attributes import (
     parse_attributes as _parse_attributes,
 )
+from souschef.parsers.bash import (  # noqa: F401, codeql[py/unused-import]
+    _extract_archives,
+    _extract_cm_escapes,
+    _extract_cron_jobs,
+    _extract_downloads,
+    _extract_env_vars,
+    _extract_file_perms,
+    _extract_file_writes,
+    _extract_firewall_rules,
+    _extract_git_ops,
+    _extract_groups,
+    _extract_hostname_ops,
+    _extract_idempotency_risks,
+    _extract_packages,
+    _extract_sed_ops,
+    _extract_sensitive_data,
+    _extract_services,
+    _extract_users,
+    _format_archives_section,
+    _format_cm_escapes_section,
+    _format_cron_jobs_section,
+    _format_downloads_section,
+    _format_env_vars_section,
+    _format_file_perms_section,
+    _format_file_writes_section,
+    _format_firewall_rules_section,
+    _format_git_ops_section,
+    _format_groups_section,
+    _format_hostname_ops_section,
+    _format_packages_section,
+    _format_parse_result,
+    _format_risks_and_fallbacks_section,
+    _format_sed_ops_section,
+    _format_sensitive_data_section,
+    _format_services_section,
+    _format_users_section,
+    _identify_shell_fallbacks,
+    _line_number,
+    _parse_bash_content,
+    _parse_package_names,
+)
+from souschef.parsers.bash import parse_bash_script as _parse_bash_script
 from souschef.parsers.habitat import (  # noqa: F401, codeql[py/unused-import]
     _extract_plan_array,
     _extract_plan_exports,
@@ -287,6 +360,8 @@ from souschef.parsers.template import (
     parse_template as _parse_template,
 )
 
+yaml = importlib.import_module("yaml")  # nosec B506: YAML safe loading enforced in module
+
 # Explicit re-exports for language servers and type checkers
 # These names are intentionally available from souschef.server
 __all__ = [
@@ -294,6 +369,14 @@ __all__ = [
     "ValidationEngine",
     "ValidationLevel",
     "ValidationResult",
+    # Backward compatibility re-exports without underscore prefix (for tests)
+    "convert_chef_deployment_to_ansible_strategy",
+    "generate_awx_inventory_source_from_chef",
+    "generate_awx_job_template_from_cookbook",
+    "generate_awx_project_from_cookbooks",
+    "generate_awx_workflow_from_chef_runlist",
+    "generate_blue_green_deployment_playbook",
+    "generate_canary_deployment_strategy",
 ]
 
 # Backward compatibility re-exports without underscore prefix (for tests)
@@ -5551,6 +5634,83 @@ def generate_handler_routing_config(
 
 
 # ==================== End Ansible Upgrade Tools ====================
+
+
+# ==================== V2.2 Bash Script Migration Tools ====================
+
+
+@mcp.tool()
+def parse_bash_script(script_path: str) -> str:
+    """
+    Parse a Bash script and extract provisioning patterns.
+
+    Detects common provisioning operations including package installs
+    (apt, yum, dnf, zypper, apk), service control (systemctl, service),
+    file writes (heredocs, redirects), and downloads (curl, wget).
+    Emits results with confidence scores; low-confidence sections are
+    flagged as shell-fallbacks with idempotency warnings.
+
+    Args:
+        script_path: Path to the Bash script file.
+
+    Returns:
+        Formatted string describing detected patterns, warnings, and
+        idempotency hints.
+
+    """
+    return _parse_bash_script(script_path)
+
+
+@mcp.tool()
+def convert_bash_to_ansible(script_path: str) -> str:
+    """
+    Convert a Bash script to an Ansible playbook.
+
+    Reads the Bash script at *script_path*, maps common provisioning
+    patterns to the most appropriate Ansible modules
+    (``ansible.builtin.package``, ``ansible.builtin.service``,
+    ``ansible.builtin.copy``, ``ansible.builtin.get_url``), and falls
+    back to ``ansible.builtin.shell`` with idempotency hints
+    (``creates``, ``changed_when``, ``failed_when``) for sections that
+    cannot be mapped confidently.
+
+    Args:
+        script_path: Path to the Bash script file.
+
+    Returns:
+        JSON string with ``playbook_yaml``, ``tasks``, ``warnings``,
+        and ``idempotency_report`` keys.
+
+    """
+    return _convert_bash_to_ansible(script_path)
+
+
+@mcp.tool()
+def generate_ansible_role_from_bash(
+    script_path: str,
+    role_name: str = "bash_converted",
+) -> str:
+    """
+    Generate an Ansible role directory structure from a Bash script.
+
+    Reads the Bash script at *script_path*, parses it into an IR,
+    converts patterns to Ansible tasks split across role task files,
+    and returns a JSON envelope containing all role file contents.
+
+    Args:
+        script_path: Path to the Bash script file.
+        role_name: Name for the generated Ansible role.
+
+    Returns:
+        JSON string with ``status``, ``role_name``, ``files`` (dict of
+        relative path → content), ``quality_score``, and ``aap_hints``
+        keys.  Returns a JSON error object on failure.
+
+    """
+    return _generate_ansible_role_from_bash_file(script_path, role_name)
+
+
+# ==================== End V2.2 Bash Script Migration Tools ====================
 
 
 def main() -> None:

@@ -132,6 +132,53 @@ Configure AI providers for enhanced analysis and repository selection:
 - **Model Selection**: Choose specific models based on your provider
 - **Secure Storage**: API keys stored in user-specific configuration directory (~/.souschef/)
 
+### Bash Script Migration Page
+
+The **Bash Script Migration** page provides enterprise-grade conversion of provisioning Bash scripts — including scripts that escape from Salt, Puppet, or Chef — directly into Ansible playbooks or full roles ready for AAP.
+
+#### Input Options
+
+- **Paste Script tab**: Type or paste Bash script content directly into the editor
+- **Upload File tab**: Upload `.sh`, `.bash`, or `.txt` script files
+
+#### Actions Available
+
+| Button | What it does |
+|--------|--------------|
+| Analyse Script | Parses the script and shows all detected patterns |
+| Convert to Ansible | Generates a playbook YAML with quality score and AAP hints |
+| Generate Ansible Role | Generates a complete 11-file role structure (tasks, handlers, defaults, meta, README) |
+
+#### Analysis Output
+
+When you click **Analyse Script**, the page shows:
+
+- **Metric cards** — counts of packages, services, file writes, downloads, users/groups, and security risks
+- **Package installs** — manager, packages, target Ansible module, confidence score
+- **Service control** — systemctl/service operations with Ansible mapping
+- **File writes** — heredoc and redirect operations mapped to `ansible.builtin.copy`
+- **Downloads** — curl/wget operations mapped to `ansible.builtin.get_url`
+- **Users & Groups** — `useradd`/`groupadd` operations mapped to `ansible.builtin.user`/`group`
+- **File permissions** — `chmod`/`chown` operations with recursive support
+- **Git operations** — `git clone`/`pull`/`checkout` mapped to `ansible.builtin.git`
+- **Archives** — `tar -x`/`unzip` mapped to `ansible.builtin.unarchive`
+- **sed operations** — `sed -i` with lineinfile/replace recommendation
+- **Cron jobs** — `crontab` operations with Ansible cron guidance
+- **Firewall rules** — `ufw`/`firewall-cmd`/`iptables` with collection hints
+- **Hostname** — `hostnamectl set-hostname` mapped to `ansible.builtin.hostname`
+- **Environment variables** — extracted shell variables; sensitive ones flagged
+- **Sensitive data** (red alert) — detected passwords, API keys, and private key material with vault recommendation; values are always redacted
+- **CM escape calls** (orange warning) — `salt-call`, `puppet apply`, `chef-client` calls embedded in the script, with native Ansible guidance
+- **Shell fallbacks** — lines with no direct module mapping, with `ansible.builtin.shell` fallback note
+
+#### Conversion & Role Output
+
+When you click **Convert to Ansible** or **Generate Ansible Role**, the page additionally shows:
+
+- **Quality score panel** — letter grade (A–F), structured coverage percentage, shell fallback count, and ranked improvement list
+- **AAP hints panel** — recommended Execution Environment image, credential types, survey variables derived from `export VAR=val` statements, and actionable notes
+- **Playbook YAML** or **Role files** — syntax-highlighted output with a **Download** button
+
 ## Archive Upload Security
 
 The UI includes comprehensive security measures for archive handling:

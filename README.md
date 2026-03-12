@@ -2,7 +2,7 @@
 
 Transform Chef automation to Ansible and plan Ansible version upgrades. Works with any AI assistant via MCP (Model Context Protocol)—Claude, GPT-4, GitHub Copilot, Red Hat AI, local models, and more.
 
-**Quick Facts:** MIT License | Python 3.10+ | 44 MCP Tools | 91% Test Coverage
+**Quick Facts:** MIT License | Python 3.10+ | 47 MCP Tools | 91% Test Coverage
 
 [![GitHub release](https://img.shields.io/github/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
@@ -47,7 +47,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 
 ## Key Features
 
-- **44 MCP tools** for Chef migration and Ansible upgrades
+- **47 MCP tools** for Chef migration, Bash script migration, and Ansible upgrades
 - **Web UI** with interactive migration planner and visualisation
 - **CLI** for automation and CI/CD integration
 - **Production-ready** with 91% test coverage and comprehensive validation
@@ -63,6 +63,14 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Generate AWX/AAP job templates and workflows
 - Convert InSpec tests to Ansible validation tasks
 - Fetch cookbooks from Chef Server with run_list or policy selection
+
+**Bash Script Migration:**
+- Convert provisioning Bash scripts to idiomatic Ansible playbooks
+- Generate full Ansible roles from Bash scripts (tasks, handlers, defaults, meta)
+- Detect and flag hardcoded secrets with ansible-vault guidance
+- Identify CM escape calls (Salt, Puppet, Chef) embedded in Bash
+- Get AAP-ready job template hints with Execution Environment recommendations
+- Score migration quality (A–F) with ranked improvement suggestions
 
 **Ansible Upgrades:**
 - Assess Python and Ansible version compatibility
@@ -86,6 +94,11 @@ souschef-cli recipe /path/to/recipe.rb
 souschef-cli template /path/to/template.erb
 souschef-cli convert package nginx --action install
 
+# Bash script migration
+souschef bash parse scripts/bootstrap.sh
+souschef bash convert scripts/deploy.sh --output playbook.yml
+souschef bash role scripts/setup.sh --role-name myapp --output-dir ./roles
+
 # Ansible upgrades
 souschef ansible assess --environment-path /path/to/ansible
 souschef ansible plan --current 2.9 --target 2.17
@@ -101,7 +114,7 @@ souschef ui  # Launch interactive dashboard
 
 - **[Quick Start Guide](docs/getting-started/quick-start.md)** — Get running in 5 minutes
 - **[Production Safety](docs/migration-guide/safety-and-validation.md)** — Validate migrations before deploying ⚠️
-- **[User Guide](docs/user-guide/mcp-tools.md)** — All 44 tools explained with examples
+- **[User Guide](docs/user-guide/mcp-tools.md)** — All 47 tools explained with examples
 - **[Migration Guide](docs/migration-guide/overview.md)** — Step-by-step migration process
 - **[Ansible Upgrades](docs/user-guide/ansible-upgrades.md)** — Version upgrade planning workflows
 

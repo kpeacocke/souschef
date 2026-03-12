@@ -15,6 +15,7 @@ The following converters are available:
 - **Playbook Converter** (`souschef.converters.playbook`) - Convert recipes to playbooks
 - **Resource Converter** (`souschef.converters.resource`) - Convert Chef resources to Ansible tasks
 - **Habitat Converter** (`souschef.converters.habitat`) - Convert Habitat plans to Docker
+- **Bash-to-Ansible Converter** (`souschef.converters.bash_to_ansible`) - Convert Bash scripts to Ansible playbooks or roles, with quality scoring and AAP hints
 
 For detailed conversion patterns and examples, see the [Conversion Guide](../migration-guide/conversion.md).
 
