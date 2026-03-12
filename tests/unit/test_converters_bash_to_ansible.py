@@ -70,7 +70,7 @@ def test_shell_task_basic() -> None:
     assert "ansible.builtin.shell" in task
     assert task["ansible.builtin.shell"]["cmd"] == "ls -la"
     assert "changed_when" in task
-    assert "failed_when" in task
+    assert "failed_when" not in task
 
 
 def test_shell_task_with_creates() -> None:
@@ -276,7 +276,9 @@ def test_download_tasks_with_url() -> None:
     ]
     tasks = _download_tasks(downloads)
     assert "ansible.builtin.get_url" in tasks[0]
-    assert tasks[0]["ansible.builtin.get_url"]["url"] == "https://example.com/app.tar.gz"
+    assert (
+        tasks[0]["ansible.builtin.get_url"]["url"] == "https://example.com/app.tar.gz"
+    )
 
 
 def test_download_tasks_without_url_falls_back() -> None:
@@ -363,8 +365,11 @@ def test_build_tasks_comprehensive_ir() -> None:
 def test_build_tasks_empty_ir() -> None:
     """Empty IR produces empty task list."""
     ir: dict = {
-        "packages": [], "services": [], "file_writes": [],
-        "downloads": [], "shell_fallbacks": [],
+        "packages": [],
+        "services": [],
+        "file_writes": [],
+        "downloads": [],
+        "shell_fallbacks": [],
     }
     assert _build_tasks(ir) == []
 
@@ -502,9 +507,7 @@ def test_build_idempotency_report_structure() -> None:
                 "raw": "curl url",
             }
         ],
-        "shell_fallbacks": [
-            {"line": 2, "raw": "cmd", "warning": "No mapping"}
-        ],
+        "shell_fallbacks": [{"line": 2, "raw": "cmd", "warning": "No mapping"}],
     }
     report = _build_idempotency_report(ir)
     assert "total_risks" in report

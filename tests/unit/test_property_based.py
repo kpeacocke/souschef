@@ -1289,7 +1289,15 @@ def test_parse_bash_script_content_never_raises(script: str) -> None:
     result = parse_bash_script_content(script)
     assert isinstance(result, dict)
     # All expected keys are present
-    for key in ("packages", "services", "file_writes", "downloads", "idempotency_risks", "shell_fallbacks", "warnings"):
+    for key in (
+        "packages",
+        "services",
+        "file_writes",
+        "downloads",
+        "idempotency_risks",
+        "shell_fallbacks",
+        "warnings",
+    ):
         assert key in result
 
 

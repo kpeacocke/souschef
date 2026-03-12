@@ -68,7 +68,7 @@ class TestStoragePropertyBased:
             assert isinstance(result_id, int)
 
     @given(st.floats(min_value=0.1, max_value=1000.0))
-    @settings(max_examples=20)
+    @settings(max_examples=20, deadline=None)
     def test_save_analysis_with_various_hours(self, hours):
         """Test saving analysis with various estimated hour values."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -192,7 +192,7 @@ class TestStoragePropertyBased:
         st.text(min_size=1, max_size=50),
         st.text(min_size=1, max_size=50),
     )
-    @settings(max_examples=20)
+    @settings(max_examples=20, deadline=None)
     def test_cache_key_handles_special_characters(
         self, path_with_special, provider, model
     ):

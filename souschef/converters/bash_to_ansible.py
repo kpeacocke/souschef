@@ -7,7 +7,7 @@ dedicated Ansible modules (``ansible.builtin.package``,
 ``ansible.builtin.service``, ``ansible.builtin.copy``,
 ``ansible.builtin.get_url``).  Low-confidence and unrecognised lines
 fall back to ``ansible.builtin.shell`` with idempotency hints
-(``creates``, ``changed_when``, ``failed_when``).
+(``creates``, ``changed_when``).
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ def convert_bash_content_to_ansible(
     warnings = _collect_warnings(ir)
     idempotency_report = _build_idempotency_report(ir)
     playbook_yaml = _render_playbook(tasks, script_path)
-    aap_hints = _build_aap_hints(ir, script_path)
+    aap_hints = _build_aap_hints(ir)
     quality_score = _build_quality_score(ir, tasks)
 
     return json.dumps(
@@ -147,7 +147,7 @@ def generate_ansible_role_from_bash(
     """
     ir = _parse_bash_content(content)
     tasks = _build_tasks(ir)
-    aap_hints = _build_aap_hints(ir, script_path)
+    aap_hints = _build_aap_hints(ir)
     quality_score = _build_quality_score(ir, tasks)
 
     files: dict[str, str] = {
@@ -424,7 +424,7 @@ def _download_tasks(downloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "ansible.builtin.get_url": {
                     "url": entry["url"],
                     "dest": "{{ download_dest_dir | default('/opt/downloads') }}"
-                     f"/{dest_name}",
+                    f"/{dest_name}",
                     "mode": "0644",
                 },
                 "_metadata": {
@@ -701,43 +701,38 @@ def _cron_tasks(cron_jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _firewall_tasks(firewall_rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    Convert firewall rule IR entries to Ansible task dicts.
+    Convert firewall rule IR entries to shell task dicts with a hint.
 
-    The Ansible module is chosen based on the detected tool
-    (ufw → ``community.general.ufw``, firewalld → ``ansible.posix.firewalld``,
-    iptables → ``ansible.builtin.iptables``).
+    Firewall rules are currently executed via ``ansible.builtin.shell``.
+    The detected tool (ufw / firewalld / iptables) is only used to
+    provide an idempotency hint recommending replacement with the
+    appropriate Ansible firewall module.
 
     Args:
         firewall_rules: List of firewall rule IR entries.
 
     Returns:
-        List of Ansible task dictionaries.
+        List of Ansible shell task dictionaries.
 
     """
-    tasks = []
+    tasks: list[dict[str, Any]] = []
     for entry in firewall_rules:
-        module = entry.get("ansible_module", "ansible.builtin.shell")
-        if entry["confidence"] >= _CONFIDENCE_THRESHOLD:
-            task: dict[str, Any] = {
-                "name": (f"Configure {entry['tool']} rule (line {entry['line']})"),
-                module: {
-                    "rule": entry["raw"],
-                    "state": "present",
-                },
-                "_metadata": {
-                    "source_line": entry["line"],
-                    "confidence": entry["confidence"],
-                    "idempotent": True,
-                    "idempotency_hint": (f"Review and adjust {module} parameters"),
-                },
-            }
+        hinted_module = entry.get("ansible_module")
+        if hinted_module and hinted_module != "ansible.builtin.shell":
+            idempotency_hint = f"Consider replacing with {hinted_module} task"
         else:
-            task = _shell_task(
-                entry["raw"],
-                entry["line"],
-                entry["confidence"],
-                idempotency_hint=f"Consider using {module}",
+            idempotency_hint = (
+                "Consider replacing with a dedicated firewall module task "
+                "(e.g. community.general.ufw, ansible.posix.firewalld, "
+                "ansible.builtin.iptables)"
             )
+
+        task = _shell_task(
+            entry["raw"],
+            entry["line"],
+            entry["confidence"],
+            idempotency_hint=idempotency_hint,
+        )
         tasks.append(task)
     return tasks
 
@@ -803,7 +798,6 @@ def _shell_task(
         "name": f"Shell: {raw[:60]}{'...' if len(raw) > 60 else ''}",
         "ansible.builtin.shell": module_args,
         "changed_when": "false",
-        "failed_when": "result.rc != 0",
         "_metadata": {
             "source_line": line,
             "confidence": confidence,
@@ -874,23 +868,39 @@ def _render_task(task: dict[str, Any]) -> list[str]:
     for key, value in task.items():
         if key == "name":
             continue
-        if isinstance(value, dict):
-            lines.append(f"    {key}:")
-            for sub_key, sub_val in value.items():
-                if isinstance(sub_val, list):
-                    lines.append(f"      {sub_key}:")
-                    for item in sub_val:
-                        lines.append(f"        - {_yaml_str(str(item))}")
-                elif isinstance(sub_val, bool):
-                    lines.append(f"      {sub_key}: {str(sub_val).lower()}")
-                else:
-                    lines.append(f"      {sub_key}: {_yaml_str(str(sub_val))}")
-        elif isinstance(value, bool):
-            lines.append(f"    {key}: {str(value).lower()}")
-        else:
-            lines.append(f"    {key}: {_yaml_str(str(value))}")
+        _render_task_key_value(lines, key, value)
 
     return lines
+
+
+def _render_task_key_value(lines: list[str], key: str, value: Any) -> None:
+    """Render a task key/value pair into YAML lines."""
+    if isinstance(value, dict):
+        lines.append(f"    {key}:")
+        for sub_key, sub_val in value.items():
+            _render_task_sub_value(lines, sub_key, sub_val)
+        return
+
+    if isinstance(value, bool):
+        lines.append(f"    {key}: {str(value).lower()}")
+        return
+
+    lines.append(f"    {key}: {_yaml_str(str(value))}")
+
+
+def _render_task_sub_value(lines: list[str], key: str, value: Any) -> None:
+    """Render a nested task mapping value into YAML lines."""
+    if isinstance(value, list):
+        lines.append(f"      {key}:")
+        for item in value:
+            lines.append(f"        - {_yaml_str(str(item))}")
+        return
+
+    if isinstance(value, bool):
+        lines.append(f"      {key}: {str(value).lower()}")
+        return
+
+    lines.append(f"      {key}: {_yaml_str(str(value))}")
 
 
 def _yaml_str(value: str) -> str:
@@ -962,7 +972,7 @@ def _build_idempotency_report(ir: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _build_aap_hints(ir: dict[str, Any], script_path: str) -> dict[str, Any]:
+def _build_aap_hints(ir: dict[str, Any]) -> dict[str, Any]:
     """
     Build Ansible Automation Platform (AAP) deployment hints from the IR.
 
@@ -971,7 +981,6 @@ def _build_aap_hints(ir: dict[str, Any], script_path: str) -> dict[str, Any]:
 
     Args:
         ir: Intermediate representation from the Bash parser.
-        script_path: Original script path label used in notes.
 
     Returns:
         Dictionary with ``suggested_ee``, ``suggested_credentials``,
@@ -1197,7 +1206,8 @@ def _render_role_defaults(ir: dict[str, Any]) -> str:
     Render the role ``defaults/main.yml`` from detected env vars.
 
     Sensitive variables are given an empty default and a vault comment.
-    Non-sensitive variables use the detected value as the default.
+    Non-sensitive variables use the detected value as the default while
+    preserving the original variable name.
 
     Args:
         ir: Intermediate representation from the Bash parser.
@@ -1215,7 +1225,7 @@ def _render_role_defaults(ir: dict[str, Any]) -> str:
             lines.append(f"# {var['name']}: ''  # TODO: set via ansible-vault")
         else:
             value = var["value"]
-            lines.append(f"{var['name'].lower()}: {_yaml_str(value)}")
+            lines.append(f"{var['name']}: {_yaml_str(value)}")
     return "\n".join(lines) + "\n"
 
 

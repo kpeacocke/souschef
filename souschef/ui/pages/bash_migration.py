@@ -29,6 +29,8 @@ from souschef.converters.bash_to_ansible import (
 )
 from souschef.parsers.bash import parse_bash_script_content
 
+SHELL_FALLBACKS_LABEL = "Shell Fallbacks"
+
 # ---------------------------------------------------------------------------
 # Page entry point
 # ---------------------------------------------------------------------------
@@ -251,7 +253,7 @@ def _render_shell_fallbacks(ir: dict[str, Any]) -> None:
     fallbacks = ir.get("shell_fallbacks", [])
     if not fallbacks:
         return
-    st.subheader("Shell Fallbacks")
+    st.subheader(SHELL_FALLBACKS_LABEL)
     st.info(
         f"{len(fallbacks)} line(s) will use `ansible.builtin.shell` as no "
         "direct module mapping was found."
@@ -458,7 +460,7 @@ def _render_quality_score(data: dict[str, Any]) -> None:
     with col2:
         st.metric("Structured Tasks", qs.get("structured_operations", 0))
     with col3:
-        st.metric("Shell Fallbacks", qs.get("shell_fallbacks", 0))
+        st.metric(SHELL_FALLBACKS_LABEL, qs.get("shell_fallbacks", 0))
 
     improvements = qs.get("improvements", [])
     if improvements:
@@ -546,7 +548,7 @@ def _display_conversion_results(
         with col1:
             st.metric("Idempotency Risks", total_risks)
         with col2:
-            st.metric("Shell Fallbacks", report.get("non_idempotent_tasks", 0))
+            st.metric(SHELL_FALLBACKS_LABEL, report.get("non_idempotent_tasks", 0))
 
         suggestions = report.get("suggestions", [])
         if suggestions:

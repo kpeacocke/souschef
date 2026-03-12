@@ -1,6 +1,7 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
+import importlib
 import io
 import json
 import os
@@ -17,11 +18,12 @@ from typing import TYPE_CHECKING, Any, cast
 # UI dependencies - required for this module to function
 # At runtime, gracefully handle missing dependencies; for type checking, assume present
 if TYPE_CHECKING:
-    import pandas as pd
     import streamlit as st
+
+    pd: Any
 else:
     try:
-        import pandas as pd
+        pd = importlib.import_module("pandas")
     except ImportError:
         pd = None
 

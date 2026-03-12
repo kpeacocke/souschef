@@ -577,7 +577,11 @@ class TestDisplayConversionResults:
                 "status": "success",
                 "playbook_yaml": "---\n- name: test\n",
                 "warnings": [],
-                "idempotency_report": {"total_risks": 0, "non_idempotent_tasks": 0, "suggestions": []},
+                "idempotency_report": {
+                    "total_risks": 0,
+                    "non_idempotent_tasks": 0,
+                    "suggestions": [],
+                },
                 "tasks": [],
                 "script_path": "test.sh",
             }
@@ -600,9 +604,7 @@ class TestDisplayConversionResults:
 
         from souschef.ui.pages.bash_migration import _display_conversion_results
 
-        mock_response = _json.dumps(
-            {"status": "error", "error": "File not found"}
-        )
+        mock_response = _json.dumps({"status": "error", "error": "File not found"})
 
         with (
             patch("souschef.ui.pages.bash_migration.st") as mock_st,
@@ -625,7 +627,11 @@ class TestDisplayConversionResults:
                 "status": "success",
                 "playbook_yaml": "---\n",
                 "warnings": ["Line 1: some warning"],
-                "idempotency_report": {"total_risks": 0, "non_idempotent_tasks": 0, "suggestions": []},
+                "idempotency_report": {
+                    "total_risks": 0,
+                    "non_idempotent_tasks": 0,
+                    "suggestions": [],
+                },
                 "tasks": [],
                 "script_path": "test.sh",
             }

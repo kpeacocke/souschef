@@ -101,12 +101,15 @@ class TestInspecParser:
         from souschef.parsers.inspec import convert_inspec_to_test
 
         valid_data = json.dumps({"controls": []})
-        with patch(
-            "souschef.parsers.inspec.parse_inspec_profile",
-            return_value=valid_data,
-        ), patch(
-            "souschef.parsers.inspec.json.loads",
-            side_effect=Exception("unexpected"),
+        with (
+            patch(
+                "souschef.parsers.inspec.parse_inspec_profile",
+                return_value=valid_data,
+            ),
+            patch(
+                "souschef.parsers.inspec.json.loads",
+                side_effect=Exception("unexpected"),
+            ),
         ):
             result = convert_inspec_to_test("/fake/path")
         assert "error" in result.lower()
@@ -134,10 +137,13 @@ class TestInspecParser:
         ctrl_file = controls_dir / "test.rb"
         ctrl_file.write_text('control "test-1" do\nend\n')
 
-        with patch(
-            "souschef.parsers.inspec.safe_read_text",
-            side_effect=Exception("read error"),
-        ), pytest.raises(RuntimeError, match="Error reading"):
+        with (
+            patch(
+                "souschef.parsers.inspec.safe_read_text",
+                side_effect=Exception("read error"),
+            ),
+            pytest.raises(RuntimeError, match="Error reading"),
+        ):
             _parse_controls_from_directory(profile_dir)
 
     def test_parse_controls_from_file_raises_on_read_error(
@@ -171,15 +177,22 @@ class TestHabitatParser:
         plan_file = tmp_path / "plan.sh"
         plan_file.write_text("pkg_name=myapp\n")
 
-        with patch(
-            "souschef.parsers.habitat.safe_read_text",
-            side_effect=PermissionError("access denied"),
-        ), patch(
-            "souschef.parsers.habitat._get_workspace_root",
-            return_value=tmp_path,
+        with (
+            patch(
+                "souschef.parsers.habitat.safe_read_text",
+                side_effect=PermissionError("access denied"),
+            ),
+            patch(
+                "souschef.parsers.habitat._get_workspace_root",
+                return_value=tmp_path,
+            ),
         ):
             result = parse_habitat_plan(str(plan_file))
-        assert "Permission" in result or "denied" in result.lower() or "error" in result.lower()
+        assert (
+            "Permission" in result
+            or "denied" in result.lower()
+            or "error" in result.lower()
+        )
 
     def test_parse_habitat_plan_generic_exception(self, tmp_path: Path) -> None:
         """parse_habitat_plan returns an error string for unexpected exceptions."""
@@ -188,12 +201,15 @@ class TestHabitatParser:
         plan_file = tmp_path / "plan.sh"
         plan_file.write_text("pkg_name=myapp\n")
 
-        with patch(
-            "souschef.parsers.habitat.json.dumps",
-            side_effect=RuntimeError("unexpected error"),
-        ), patch(
-            "souschef.parsers.habitat._get_workspace_root",
-            return_value=tmp_path,
+        with (
+            patch(
+                "souschef.parsers.habitat.json.dumps",
+                side_effect=RuntimeError("unexpected error"),
+            ),
+            patch(
+                "souschef.parsers.habitat._get_workspace_root",
+                return_value=tmp_path,
+            ),
         ):
             result = parse_habitat_plan(str(plan_file))
         assert "Error" in result
@@ -307,15 +323,19 @@ class TestMetadataParser:
         from souschef.parsers.metadata import parse_cookbook_metadata
 
         # Pass a directory path directly
-        with patch(
-            "souschef.parsers.metadata.safe_read_text",
-            side_effect=IsADirectoryError("is a dir"),
-        ), patch(
-            "souschef.parsers.metadata.path_utils._get_workspace_root",
-            return_value=tmp_path,
-        ), patch(
-            "souschef.parsers.metadata.path_utils._ensure_within_base_path",
-            return_value=tmp_path,
+        with (
+            patch(
+                "souschef.parsers.metadata.safe_read_text",
+                side_effect=IsADirectoryError("is a dir"),
+            ),
+            patch(
+                "souschef.parsers.metadata.path_utils._get_workspace_root",
+                return_value=tmp_path,
+            ),
+            patch(
+                "souschef.parsers.metadata.path_utils._ensure_within_base_path",
+                return_value=tmp_path,
+            ),
         ):
             result = parse_cookbook_metadata(str(tmp_path))
         assert "error" in result
@@ -324,15 +344,19 @@ class TestMetadataParser:
         """parse_cookbook_metadata returns error dict for PermissionError."""
         from souschef.parsers.metadata import parse_cookbook_metadata
 
-        with patch(
-            "souschef.parsers.metadata.safe_read_text",
-            side_effect=PermissionError("access denied"),
-        ), patch(
-            "souschef.parsers.metadata.path_utils._get_workspace_root",
-            return_value=tmp_path,
-        ), patch(
-            "souschef.parsers.metadata.path_utils._ensure_within_base_path",
-            return_value=tmp_path,
+        with (
+            patch(
+                "souschef.parsers.metadata.safe_read_text",
+                side_effect=PermissionError("access denied"),
+            ),
+            patch(
+                "souschef.parsers.metadata.path_utils._get_workspace_root",
+                return_value=tmp_path,
+            ),
+            patch(
+                "souschef.parsers.metadata.path_utils._ensure_within_base_path",
+                return_value=tmp_path,
+            ),
         ):
             result = parse_cookbook_metadata(str(tmp_path / "metadata.rb"))
         assert "error" in result
@@ -341,15 +365,19 @@ class TestMetadataParser:
         """parse_cookbook_metadata returns error dict for unexpected exceptions."""
         from souschef.parsers.metadata import parse_cookbook_metadata
 
-        with patch(
-            "souschef.parsers.metadata.safe_read_text",
-            side_effect=RuntimeError("unexpected"),
-        ), patch(
-            "souschef.parsers.metadata.path_utils._get_workspace_root",
-            return_value=tmp_path,
-        ), patch(
-            "souschef.parsers.metadata.path_utils._ensure_within_base_path",
-            return_value=tmp_path,
+        with (
+            patch(
+                "souschef.parsers.metadata.safe_read_text",
+                side_effect=RuntimeError("unexpected"),
+            ),
+            patch(
+                "souschef.parsers.metadata.path_utils._get_workspace_root",
+                return_value=tmp_path,
+            ),
+            patch(
+                "souschef.parsers.metadata.path_utils._ensure_within_base_path",
+                return_value=tmp_path,
+            ),
         ):
             result = parse_cookbook_metadata(str(tmp_path / "metadata.rb"))
         assert "error" in result
@@ -390,7 +418,9 @@ class TestRecipeParser:
 
         # Create a recipe with a resource that has an oversized body
         header = "package 'myapp' do\n"
-        oversized_body = "  action :install\n" * (recipe_module.MAX_RESOURCE_BODY_LENGTH + 1)
+        oversized_body = "  action :install\n" * (
+            recipe_module.MAX_RESOURCE_BODY_LENGTH + 1
+        )
         end_marker = "end\n"
         content = header + oversized_body + end_marker
 
@@ -444,7 +474,9 @@ class TestRecipeParser:
         from souschef.parsers import recipe as recipe_module
         from souschef.parsers.recipe import _extract_conditionals
 
-        large_when = "  when 'x'\n    # big\n" * (recipe_module.MAX_CASE_BODY_LENGTH + 1)
+        large_when = "  when 'x'\n    # big\n" * (
+            recipe_module.MAX_CASE_BODY_LENGTH + 1
+        )
         content = f"case platform\n{large_when}\nend\n"
         result = _extract_conditionals(content)
         assert isinstance(result, list)

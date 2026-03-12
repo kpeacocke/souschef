@@ -21,9 +21,7 @@ class TestParseBashScriptMcpTool:
             script.write_text(
                 "#!/bin/bash\napt-get install -y nginx\nsystemctl enable nginx\n"
             )
-            with patch(
-                "souschef.parsers.bash._get_workspace_root", return_value=base
-            ):
+            with patch("souschef.parsers.bash._get_workspace_root", return_value=base):
                 result = parse_bash_script(str(script))
 
         assert isinstance(result, str)
@@ -34,9 +32,7 @@ class TestParseBashScriptMcpTool:
         """Tool returns error string for missing file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
-            with patch(
-                "souschef.parsers.bash._get_workspace_root", return_value=base
-            ):
+            with patch("souschef.parsers.bash._get_workspace_root", return_value=base):
                 result = parse_bash_script(str(base / "missing.sh"))
 
         assert "error" in result.lower() or "not found" in result.lower()
@@ -49,9 +45,7 @@ class TestParseBashScriptMcpTool:
             script.write_text(
                 "#!/bin/bash\ncurl -o /tmp/f.tgz https://example.com/f.tgz\n"
             )
-            with patch(
-                "souschef.parsers.bash._get_workspace_root", return_value=base
-            ):
+            with patch("souschef.parsers.bash._get_workspace_root", return_value=base):
                 result = parse_bash_script(str(script))
 
         assert "Downloads" in result
@@ -61,12 +55,8 @@ class TestParseBashScriptMcpTool:
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
             script = base / "write.sh"
-            script.write_text(
-                '#!/bin/bash\necho "KEY=val" > /etc/app/env\n'
-            )
-            with patch(
-                "souschef.parsers.bash._get_workspace_root", return_value=base
-            ):
+            script.write_text('#!/bin/bash\necho "KEY=val" > /etc/app/env\n')
+            with patch("souschef.parsers.bash._get_workspace_root", return_value=base):
                 result = parse_bash_script(str(script))
 
         assert isinstance(result, str)
@@ -77,9 +67,7 @@ class TestParseBashScriptMcpTool:
             base = Path(tmpdir)
             script = base / "empty.sh"
             script.write_text("")
-            with patch(
-                "souschef.parsers.bash._get_workspace_root", return_value=base
-            ):
+            with patch("souschef.parsers.bash._get_workspace_root", return_value=base):
                 result = parse_bash_script(str(script))
 
         assert "No provisioning patterns detected" in result
@@ -90,9 +78,7 @@ class TestParseBashScriptMcpTool:
             base = Path(tmpdir)
             script = base / "risky.sh"
             script.write_text("apt-get install nginx\nwget https://example.com/f\n")
-            with patch(
-                "souschef.parsers.bash._get_workspace_root", return_value=base
-            ):
+            with patch("souschef.parsers.bash._get_workspace_root", return_value=base):
                 result = parse_bash_script(str(script))
 
         assert "Idempotency Risks" in result
@@ -232,9 +218,7 @@ class TestConvertBashToAnsibleMcpTool:
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
             script = base / "dl.sh"
-            script.write_text(
-                "curl -o /tmp/f.tgz https://example.com/f.tgz\n"
-            )
+            script.write_text("curl -o /tmp/f.tgz https://example.com/f.tgz\n")
             with patch(
                 "souschef.converters.bash_to_ansible._get_workspace_root",
                 return_value=base,
@@ -249,9 +233,7 @@ class TestConvertBashToAnsibleMcpTool:
         with tempfile.TemporaryDirectory() as tmpdir:
             base = Path(tmpdir)
             script = base / "warn.sh"
-            script.write_text(
-                "custom-unknown-cmd --flag value\n"
-            )
+            script.write_text("custom-unknown-cmd --flag value\n")
             with patch(
                 "souschef.converters.bash_to_ansible._get_workspace_root",
                 return_value=base,

@@ -51,7 +51,7 @@ _GROUP_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 # File permissions
 _CHMOD_PATTERN = re.compile(
-    r"\bchmod\s+(-R\s+)?([0-9]{3,4}|[ugoa]+[+\-=][rwxst]+)\s+(\S+)",
+    r"\bchmod\s+(-R\s+)?(\d{3,4}|[ugoa]+[+\-=][rwxst]+)\s+(\S+)",
     re.IGNORECASE,
 )
 _CHOWN_PATTERN = re.compile(
@@ -75,7 +75,7 @@ _TAR_EXTRACT_PATTERN = re.compile(
     r"(\S+\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.Z|tar))\b",
     re.IGNORECASE,
 )
-_UNZIP_PATTERN = re.compile(r"\bunzip\s+(?:-[^\s]+\s+)*(\S+\.zip)", re.IGNORECASE)
+_UNZIP_LINE_PATTERN = re.compile(r"\bunzip\b[^\n]*", re.IGNORECASE)
 
 # sed in-place
 _SED_INPLACE_PATTERN = re.compile(
@@ -117,14 +117,9 @@ _HOSTNAME_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Environment variables (export VAR=val or VAR=val at line start).
-# Using [^\n]* (greedy, line-bounded) avoids polynomial backtracking that
-# (.+?)(?:\s*#.*)?$ can exhibit (CWE-1333).  Inline comment stripping is
-# handled in _extract_env_vars() instead.
-_ENV_VAR_PATTERN = re.compile(
-    r"^(?:export[ \t]+)?([A-Z_][A-Z0-9_]*)=([^\n]*)",
-    re.MULTILINE,
-)
+# Environment variables are parsed line-by-line in _extract_env_vars()
+# using deterministic string operations to avoid regex backtracking risks
+# on uncontrolled input (CWE-1333).
 
 # Sensitive data – detect hardcoded secrets (no actual secrets stored)
 _SENSITIVE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -244,10 +239,7 @@ _FILE_WRITE_PATTERNS: list[re.Pattern[str]] = [
 _DOWNLOAD_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "curl",
-        re.compile(
-            r"\bcurl\s+(?:[^\n]*\s+)?-[oO]\s*(\S+)[^\n]*|(curl\b[^\n]*)",
-            re.IGNORECASE,
-        ),
+        re.compile(r"\bcurl\b[^\n]*", re.IGNORECASE),
     ),
     (
         "wget",
@@ -849,16 +841,43 @@ def _extract_archives(content: str, result: dict[str, Any]) -> None:
                 "confidence": 0.85,
             }
         )
-    for match in _UNZIP_PATTERN.finditer(content):
+    for match in _UNZIP_LINE_PATTERN.finditer(content):
+        source = _extract_unzip_source(match.group(0))
+        if source is None:
+            continue
         result["archives"].append(
             {
                 "tool": "unzip",
-                "source": match.group(1),
+                "source": source,
                 "raw": match.group(0).strip(),
                 "line": _line_number(content, match.start()),
                 "confidence": 0.85,
             }
         )
+
+
+def _extract_unzip_source(raw_line: str) -> str | None:
+    """
+    Extract the zip source path from an unzip command line.
+
+    Uses token parsing rather than a complex regular expression so matching
+    stays linear even for adversarial input containing repeated dashes or tabs.
+
+    Args:
+        raw_line: Raw line containing an ``unzip`` command.
+
+    Returns:
+        The detected ``.zip`` source token, or ``None`` if not found.
+
+    """
+    for token in raw_line.split():
+        if token.startswith("-"):
+            continue
+        if token.lower() == "unzip":
+            continue
+        if token.lower().endswith(".zip"):
+            return token.strip("\"'")
+    return None
 
 
 def _extract_sed_ops(content: str, result: dict[str, Any]) -> None:
@@ -979,27 +998,68 @@ def _extract_env_vars(content: str, result: dict[str, Any]) -> None:
         result: Result dictionary to update in-place.
 
     """
-    for match in _ENV_VAR_PATTERN.finditer(content):
-        name = match.group(1)
-        raw_value = match.group(2)
+    line_start = 0
+    for raw_line in content.splitlines():
+        parsed = _parse_env_assignment_line(raw_line)
+        if parsed is None:
+            line_start += len(raw_line) + 1
+            continue
+        name, raw_value = parsed
         # Strip inline shell comment: whitespace + # + rest-of-line
         comment_pos = raw_value.find(" #")
         if comment_pos == -1:
             comment_pos = raw_value.find("\t#")
         value = (raw_value[:comment_pos] if comment_pos != -1 else raw_value).strip()
-        # Skip if name contains any lower-case letter (shell internals)
-        if re.search(r"[a-z]", name):
-            continue
         is_sensitive = bool(_SECRET_VALUE_RE.search(name))
         result["env_vars"].append(
             {
                 "name": name,
                 "value": value,
-                "raw": match.group(0).strip(),
-                "line": _line_number(content, match.start()),
+                "raw": raw_line.strip(),
+                "line": _line_number(content, line_start),
                 "is_sensitive": is_sensitive,
             }
         )
+        line_start += len(raw_line) + 1
+
+
+def _parse_env_assignment_line(line: str) -> tuple[str, str] | None:
+    """
+    Parse a shell environment assignment line.
+
+    Supports ``export VAR=value`` and ``VAR=value`` forms. Variable names
+    that contain lower-case characters are ignored to match current parser
+    behaviour for shell internals.
+
+    Args:
+        line: Raw script line.
+
+    Returns:
+        Tuple of ``(name, raw_value)`` when the line is a supported
+        assignment, otherwise ``None``.
+
+    """
+    candidate = line.lstrip()
+    if candidate.startswith("export"):
+        remainder = candidate[len("export") :]
+        if not remainder or remainder[0] not in {" ", "\t"}:
+            return None
+        candidate = remainder.lstrip(" \t")
+
+    if "=" not in candidate:
+        return None
+
+    name, raw_value = candidate.split("=", 1)
+    if not name:
+        return None
+    if not (name[0].isupper() or name[0] == "_"):
+        return None
+    if not all(ch.isupper() or ch.isdigit() or ch == "_" for ch in name):
+        return None
+    if any(ch.islower() for ch in name):
+        return None
+
+    return name, raw_value
 
 
 def _extract_sensitive_data(content: str, result: dict[str, Any]) -> None:

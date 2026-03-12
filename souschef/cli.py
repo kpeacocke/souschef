@@ -115,14 +115,17 @@ CI_JOB_INTEGRATION_TESTS = "  • Integration Tests (Test Kitchen)"
 METADATA_FILENAME = "metadata.rb"
 
 
-@click.group()
+@click.group(name="souschef")
 @click.version_option(version=__version__, prog_name="souschef")
-def cli() -> None:
+def _cli_root() -> None:
     """
     SousChef - Chef to Ansible conversion toolkit.
 
     Parse Chef cookbooks and convert resources to Ansible playbooks.
     """
+
+
+cli: click.Group = _cli_root
 
 
 # Initialize CLI command groups via registry
@@ -309,8 +312,7 @@ def convert(
     if output_format == "json":
         # Parse YAML and convert to JSON for consistency
         try:
-            import yaml
-
+            yaml = __import__("yaml")
             data = yaml.safe_load(result)
             click.echo(json.dumps(data, indent=2))
         except ImportError:
@@ -1860,9 +1862,12 @@ def configure_migration(
         sys.exit(1)
 
 
-@cli.group()
-def history() -> None:
+@cli.group(name="history")
+def _history_group() -> None:
     """Manage analysis and conversion history."""
+
+
+history: click.Group = _history_group
 
 
 @history.command(name="list")
@@ -1989,14 +1994,17 @@ def history_delete(history_type: str, record_id: int, yes: bool) -> None:
         sys.exit(1)
 
 
-@cli.group()
-def ansible() -> None:
+@cli.group(name="ansible")
+def _ansible_group() -> None:
     """
     Manage Ansible upgrade planning and validation.
 
     Provides tools to assess Ansible environments, plan upgrades,
     validate collection compatibility, and generate testing strategies.
     """
+
+
+ansible: click.Group = _ansible_group
 
 
 @ansible.command("assess")
@@ -2268,7 +2276,7 @@ def _parse_collections_file(file_path: str) -> dict[str, str]:
 
     """
     try:
-        import yaml
+        yaml = __import__("yaml")
     except ImportError as e:
         msg = (
             "PyYAML is required to parse collections files. "
@@ -2292,8 +2300,11 @@ def _parse_collections_file(file_path: str) -> dict[str, str]:
             data = yaml.safe_load(f)
     except OSError as e:
         raise ValueError(f"Cannot read collections file: {e}") from e
-    except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML in collections file: {e}") from e
+    except Exception as e:
+        yaml_error = getattr(yaml, "YAMLError", None)
+        if yaml_error is not None and isinstance(e, yaml_error):
+            raise ValueError(f"Invalid YAML in collections file: {e}") from e
+        raise
 
     if not data:
         raise ValueError("Collections file is empty")
@@ -2474,9 +2485,12 @@ def ansible_detect_python(environment_path: str | None) -> None:
 # ---------------------------------------------------------------------------
 
 
-@cli.group()
-def bash() -> None:
+@cli.group(name="bash")
+def _bash_group() -> None:
     """Bash script migration commands."""
+
+
+bash: click.Group = _bash_group
 
 
 @bash.command("parse")

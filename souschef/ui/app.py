@@ -7,18 +7,33 @@ if str(app_path) not in sys.path:
     sys.path.insert(0, str(app_path))
 
 import contextlib
+import importlib
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
 
 if TYPE_CHECKING:
-    import networkx as nx
     import plotly.graph_objects as go
     import streamlit as st
-    from matplotlib.figure import Figure
+
+    Figure = Any
 else:
     import streamlit as st
+
+
+NxDiGraph = Any
+
+
+def _import_networkx() -> Any:
+    """Import networkx lazily for optional graph rendering paths."""
+    return importlib.import_module("networkx")
+
+
+def _import_matplotlib_pyplot() -> Any:
+    """Import matplotlib.pyplot lazily for static chart rendering."""
+    return importlib.import_module("matplotlib.pyplot")
+
 
 from souschef.core import _ensure_within_base_path, _normalize_path
 from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_is_file
@@ -1221,11 +1236,11 @@ def _create_networkx_graph(
     dependencies: Mapping[str, Sequence[str]],
     circular_deps: Sequence[tuple[str, str]],
     community_cookbooks: Sequence[str],
-) -> "nx.DiGraph":
+) -> NxDiGraph:
     """Create NetworkX graph from dependency data."""
-    import networkx as nx
+    nx = _import_networkx()
 
-    graph: nx.DiGraph = nx.DiGraph()
+    graph = nx.DiGraph()
 
     # Add nodes and edges
     for cookbook, deps in dependencies.items():
@@ -1247,7 +1262,7 @@ def _create_networkx_graph(
 
 
 def _calculate_graph_positions(
-    graph: "nx.DiGraph", layout_algorithm: str
+    graph: NxDiGraph, layout_algorithm: str
 ) -> tuple[dict[Any, tuple[float, float]], str]:
     """
     Calculate positions for graph nodes using the specified layout algorithm.
@@ -1281,11 +1296,9 @@ def _choose_auto_layout_algorithm(num_nodes: int) -> str:
         return "kamada_kawai"
 
 
-def _calculate_positions_with_algorithm(
-    graph: "nx.DiGraph", layout_algorithm: str
-) -> Any:
+def _calculate_positions_with_algorithm(graph: NxDiGraph, layout_algorithm: str) -> Any:
     """Calculate node positions using the specified algorithm."""
-    import networkx as nx
+    nx = _import_networkx()
 
     try:
         if layout_algorithm == "spring":
@@ -1313,10 +1326,10 @@ def _calculate_positions_with_algorithm(
 
 
 def _calculate_shell_layout_positions(
-    graph: "nx.DiGraph",
+    graph: NxDiGraph,
 ) -> Any:
     """Calculate shell layout positions for hierarchical organization."""
-    import networkx as nx
+    nx = _import_networkx()
 
     # Identify leaf nodes (no outgoing edges)
     leaf_nodes = [n for n in graph.nodes() if graph.out_degree(n) == 0]
@@ -1342,7 +1355,7 @@ def _calculate_shell_layout_positions(
 
 
 def _create_plotly_edge_traces(
-    graph: "nx.DiGraph", pos: Mapping[Any, tuple[float, float]]
+    graph: NxDiGraph, pos: Mapping[Any, tuple[float, float]]
 ) -> list["go.Scatter"]:
     """Create edge traces for Plotly graph."""
     import plotly.graph_objects as go
@@ -1397,7 +1410,7 @@ def _create_plotly_edge_traces(
 
 
 def _create_plotly_node_trace(
-    graph: "nx.DiGraph", pos: Mapping[Any, tuple[float, float]]
+    graph: NxDiGraph, pos: Mapping[Any, tuple[float, float]]
 ) -> "go.Scatter":
     """Create node trace for Plotly graph."""
     import plotly.graph_objects as go
@@ -1481,7 +1494,7 @@ def _create_plotly_figure_layout(num_nodes: int, layout_algorithm: str) -> "go.L
 
 
 def _create_interactive_plotly_graph(
-    graph: "nx.DiGraph",
+    graph: NxDiGraph,
     pos: Mapping[Any, tuple[float, float]],
     num_nodes: int,
     layout_algorithm: str,
@@ -1500,13 +1513,13 @@ def _create_interactive_plotly_graph(
 
 
 def _create_static_matplotlib_graph(
-    graph: "nx.DiGraph",
+    graph: NxDiGraph,
     pos: Mapping[Any, tuple[float, float]],
     num_nodes: int,
     layout_algorithm: str,
 ) -> "Figure":
     """Create static matplotlib graph visualization."""
-    import matplotlib.pyplot as plt
+    plt = _import_matplotlib_pyplot()
 
     plt.figure(figsize=(12, 8))
 
@@ -1515,7 +1528,7 @@ def _create_static_matplotlib_graph(
         (u, v) for u, v, d in graph.edges(data=True) if not d.get("circular", False)
     ]
     if regular_edges:
-        import networkx as nx
+        nx = _import_networkx()
 
         nx.draw_networkx_edges(
             graph,
@@ -1533,7 +1546,7 @@ def _create_static_matplotlib_graph(
         (u, v) for u, v, d in graph.edges(data=True) if d.get("circular", False)
     ]
     if circular_edges:
-        import networkx as nx
+        nx = _import_networkx()
 
         nx.draw_networkx_edges(
             graph,
@@ -1569,7 +1582,7 @@ def _create_static_matplotlib_graph(
     ]
 
     # Draw nodes
-    import networkx as nx
+    nx = _import_networkx()
 
     nx.draw_networkx_nodes(
         graph,
@@ -1647,9 +1660,7 @@ def create_dependency_graph(
         return None
 
 
-def _apply_graph_filters(
-    graph: "nx.DiGraph", filters: Mapping[str, Any]
-) -> "nx.DiGraph":
+def _apply_graph_filters(graph: NxDiGraph, filters: Mapping[str, Any]) -> NxDiGraph:
     """Apply filters to the NetworkX graph."""
     filtered_graph = graph.copy()
 
@@ -1662,8 +1673,8 @@ def _apply_graph_filters(
 
 
 def _filter_circular_dependencies_only(
-    graph: "nx.DiGraph", filters: Mapping[str, Any]
-) -> "nx.DiGraph":
+    graph: NxDiGraph, filters: Mapping[str, Any]
+) -> NxDiGraph:
     """Filter graph to show only nodes involved in circular dependencies."""
     if not filters.get("circular_only", False):
         return graph
@@ -1682,8 +1693,8 @@ def _filter_circular_dependencies_only(
 
 
 def _filter_community_cookbooks_only(
-    graph: "nx.DiGraph", filters: Mapping[str, Any]
-) -> "nx.DiGraph":
+    graph: NxDiGraph, filters: Mapping[str, Any]
+) -> NxDiGraph:
     """Filter graph to show only community cookbooks and their dependencies."""
     if not filters.get("community_only", False):
         return graph
@@ -1704,8 +1715,8 @@ def _filter_community_cookbooks_only(
 
 
 def _filter_minimum_connections(
-    graph: "nx.DiGraph", filters: Mapping[str, Any]
-) -> "nx.DiGraph":
+    graph: NxDiGraph, filters: Mapping[str, Any]
+) -> NxDiGraph:
     """Filter graph to show only nodes with minimum connection count."""
     min_connections = filters.get("min_connections", 0)
     if min_connections <= 0:
