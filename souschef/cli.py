@@ -2496,7 +2496,8 @@ def bash_parse(script_path: str, output: str | None) -> None:
     try:
         result = parse_bash_script(script_path)
         if output is not None:
-            _safe_write_file(result, output, default_path=Path(output))
+            default = Path.cwd() / "bash_analysis.txt"
+            _safe_write_file(result, output, default_path=default)
         else:
             click.echo(result)
     except Exception as e:  # noqa: BLE001
@@ -2546,7 +2547,7 @@ def bash_convert(
         content = data.get("playbook_yaml", "") if output_format == "yaml" else raw
 
         if output is not None:
-            _safe_write_file(content, output, default_path=Path(output))
+            _safe_write_file(content, output, default_path=Path.cwd() / "playbook.yml")
         else:
             click.echo(content)
 
