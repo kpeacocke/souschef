@@ -115,17 +115,13 @@ from souschef.converters.playbook import (
 from souschef.converters.playbook import (
     generate_dynamic_inventory_script as _generate_dynamic_inventory_script,
 )
-from souschef.converters.powershell import (  # noqa: F401, codeql[py/unused-import]
-    _action_to_task,
-    _split_registry_key,
-)
 from souschef.converters.powershell import (
     convert_powershell_content_to_ansible as _convert_powershell_content_to_ansible,
 )
 from souschef.converters.powershell import (
     convert_powershell_to_ansible as _convert_powershell_to_ansible,
 )
-from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-import]
+from souschef.converters.resource import (  # noqa: F401
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
     _get_file_params,
@@ -360,12 +356,6 @@ from souschef.parsers.metadata import (
 from souschef.parsers.metadata import (
     read_cookbook_metadata as _read_cookbook_metadata,
 )
-from souschef.parsers.powershell import (  # noqa: F401, codeql[py/unused-import]
-    _classify_line,
-    _make_action,
-    _make_win_shell_fallback,
-    _parse_powershell_content,
-)
 from souschef.parsers.powershell import (
     parse_powershell_content as _parse_powershell_content_fn,
 )
@@ -373,21 +363,21 @@ from souschef.parsers.powershell import (
     parse_powershell_script as _parse_powershell_script,
 )
 from souschef.parsers.recipe import (
-    _extract_conditionals,  # noqa: F401, codeql[py/unused-import]
-    _extract_resources,  # noqa: F401, codeql[py/unused-import]
-    _format_resources,  # noqa: F401, codeql[py/unused-import]
+    _extract_conditionals,  # noqa: F401
+    _extract_resources,  # noqa: F401
+    _format_resources,  # noqa: F401
 )
 from souschef.parsers.recipe import (
     parse_recipe as _parse_recipe,
 )
 from souschef.parsers.resource import (
-    _extract_resource_actions,  # noqa: F401, codeql[py/unused-import]
-    _extract_resource_properties,  # noqa: F401, codeql[py/unused-import]
+    _extract_resource_actions,  # noqa: F401
+    _extract_resource_properties,  # noqa: F401
 )
 from souschef.parsers.resource import (
     parse_custom_resource as _parse_custom_resource,
 )
-from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
+from souschef.parsers.template import (  # noqa: F401
     _convert_erb_to_jinja2,
     _extract_code_block_variables,
     _extract_heredoc_strings,
@@ -410,13 +400,40 @@ __all__ = [
     "ValidationLevel",
     "ValidationResult",
     # Backward compatibility re-exports without underscore prefix (for tests)
+    "analyze_powershell_migration_fidelity",
     "convert_chef_deployment_to_ansible_strategy",
+    "convert_powershell_content_to_ansible",
+    "convert_powershell_to_ansible",
+    "generate_ansible_requirements",
     "generate_awx_inventory_source_from_chef",
     "generate_awx_job_template_from_cookbook",
     "generate_awx_project_from_cookbooks",
     "generate_awx_workflow_from_chef_runlist",
     "generate_blue_green_deployment_playbook",
     "generate_canary_deployment_strategy",
+    "generate_powershell_awx_job_template",
+    "generate_powershell_role_structure",
+    "generate_windows_group_vars",
+    "generate_windows_inventory",
+    "parse_powershell_content",
+    "parse_powershell_script",
+    # Private backward compatibility re-exports for tests (intentional)
+    "_convert_chef_resource_to_ansible",
+    "_convert_erb_to_jinja2",
+    "_extract_code_block_variables",
+    "_extract_conditionals",
+    "_extract_heredoc_strings",
+    "_extract_node_attribute_path",
+    "_extract_output_variables",
+    "_extract_resource_actions",
+    "_extract_resource_properties",
+    "_extract_resources",
+    "_extract_template_variables",
+    "_format_ansible_task",
+    "_format_resources",
+    "_get_file_params",
+    "_get_service_params",
+    "_strip_ruby_comments",
 ]
 
 # Backward compatibility re-exports without underscore prefix (for tests)

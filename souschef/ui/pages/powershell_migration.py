@@ -251,7 +251,6 @@ def _handle_enterprise(
                 parsed_ir,
                 job_template_name=f"Windows: {playbook_name}",
                 playbook=f"{playbook_name}.yml",
-                hosts=hosts,
             ),
             "fidelity": json.loads(analyze_powershell_migration_fidelity(parsed_ir)),
         }
@@ -310,13 +309,15 @@ def _render_metrics_summary(metrics: dict) -> None:
 
     # Show enterprise metrics if present
     enterprise_keys = [
-        "user", "firewall", "scheduled_task",
-        "environment", "certificate", "other_enterprise",
+        "user",
+        "firewall",
+        "scheduled_task",
+        "environment",
+        "certificate",
+        "other_enterprise",
     ]
     enterprise_vals = {
-        k: metrics.get(k, 0)
-        for k in enterprise_keys
-        if metrics.get(k, 0) > 0
+        k: metrics.get(k, 0) for k in enterprise_keys if metrics.get(k, 0) > 0
     }
     if enterprise_vals:
         cols = st.columns(len(enterprise_vals))
@@ -518,4 +519,3 @@ def _render_role_files(role_files: dict) -> None:
                 mime="text/plain",
                 key=f"ps_download_{rel_path.replace('/', '_').replace('.', '_')}",
             )
-
