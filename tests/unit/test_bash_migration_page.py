@@ -84,7 +84,7 @@ class TestRenderPasteTab:
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
             mock_st.text_area.return_value = ""
-            mock_st.columns.return_value = (_ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             mock_st.button.return_value = False
             _render_paste_tab()
 
@@ -99,9 +99,9 @@ class TestRenderPasteTab:
             ) as mock_display,
         ):
             mock_st.text_area.return_value = "apt-get install nginx\n"
-            mock_st.columns.return_value = (_ctx(), _ctx())
-            # First button (Analyse Script) returns True, second False
-            mock_st.button.side_effect = [True, False]
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
+            # First button (Analyse Script) returns True, rest False
+            mock_st.button.side_effect = [True, False, False]
             _render_paste_tab()
             mock_display.assert_called_once()
 
@@ -116,9 +116,9 @@ class TestRenderPasteTab:
             ) as mock_convert,
         ):
             mock_st.text_area.return_value = "apt-get install nginx\n"
-            mock_st.columns.return_value = (_ctx(), _ctx())
-            # First button False, second True
-            mock_st.button.side_effect = [False, True]
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
+            # First button False, second True, third False
+            mock_st.button.side_effect = [False, True, False]
             _render_paste_tab()
             mock_convert.assert_called_once()
 
@@ -128,8 +128,8 @@ class TestRenderPasteTab:
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
             mock_st.text_area.return_value = ""
-            mock_st.columns.return_value = (_ctx(), _ctx())
-            mock_st.button.side_effect = [True, False]
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
+            mock_st.button.side_effect = [True, False, False]
             _render_paste_tab()
             mock_st.warning.assert_called_once()
 
@@ -139,8 +139,8 @@ class TestRenderPasteTab:
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
             mock_st.text_area.return_value = ""
-            mock_st.columns.return_value = (_ctx(), _ctx())
-            mock_st.button.side_effect = [False, True]
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
+            mock_st.button.side_effect = [False, True, False]
             _render_paste_tab()
             mock_st.warning.assert_called_once()
 
@@ -171,7 +171,7 @@ class TestRenderUploadTab:
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
             mock_st.file_uploader.return_value = mock_file
-            mock_st.columns.return_value = (_ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             mock_st.button.return_value = False
             _render_upload_tab()
             mock_st.code.assert_called_once()
@@ -191,8 +191,8 @@ class TestRenderUploadTab:
             ) as mock_display,
         ):
             mock_st.file_uploader.return_value = mock_file
-            mock_st.columns.return_value = (_ctx(), _ctx())
-            mock_st.button.side_effect = [True, False]
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
+            mock_st.button.side_effect = [True, False, False]
             _render_upload_tab()
             mock_display.assert_called_once()
 
@@ -211,8 +211,8 @@ class TestRenderUploadTab:
             ) as mock_convert,
         ):
             mock_st.file_uploader.return_value = mock_file
-            mock_st.columns.return_value = (_ctx(), _ctx())
-            mock_st.button.side_effect = [False, True]
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
+            mock_st.button.side_effect = [False, True, False]
             _render_upload_tab()
             mock_convert.assert_called_once()
 
@@ -230,7 +230,7 @@ class TestDisplayParseResults:
         from souschef.ui.pages.bash_migration import _display_parse_results
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
-            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             _display_parse_results("apt-get install nginx\n")
             mock_st.subheader.assert_called()
 
@@ -239,7 +239,7 @@ class TestDisplayParseResults:
         from souschef.ui.pages.bash_migration import _display_parse_results
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
-            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             mock_st.expander.return_value = _ctx()
             _display_parse_results("apt-get install -y nginx\n")
             # Should have called subheader at least for "Analysis Results"
@@ -250,7 +250,7 @@ class TestDisplayParseResults:
         from souschef.ui.pages.bash_migration import _display_parse_results
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
-            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             mock_st.expander.return_value = _ctx()
             _display_parse_results("systemctl start nginx\n")
             mock_st.subheader.assert_called()
@@ -260,7 +260,7 @@ class TestDisplayParseResults:
         from souschef.ui.pages.bash_migration import _display_parse_results
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
-            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             mock_st.expander.return_value = _ctx()
             _display_parse_results("curl -o /tmp/f.tgz https://example.com/f.tgz\n")
             mock_st.subheader.assert_called()
@@ -270,7 +270,7 @@ class TestDisplayParseResults:
         from souschef.ui.pages.bash_migration import _display_parse_results
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
-            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             mock_st.expander.return_value = _ctx()
             _display_parse_results("cat <<EOF > /etc/nginx.conf\nfoo\nEOF\n")
             mock_st.subheader.assert_called()
@@ -280,7 +280,7 @@ class TestDisplayParseResults:
         from souschef.ui.pages.bash_migration import _display_parse_results
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
-            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             _display_parse_results("apt-get install nginx\n")
             # warning called for idempotency risk
             mock_st.warning.assert_called()
@@ -290,7 +290,7 @@ class TestDisplayParseResults:
         from souschef.ui.pages.bash_migration import _display_parse_results
 
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
-            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             mock_st.expander.return_value = _ctx()
             _display_parse_results("custom-unknown-cmd --flag\n")
             mock_st.info.assert_called()
@@ -315,7 +315,7 @@ class TestRenderSummaryMetrics:
             "downloads": [{}],
         }
         with patch("souschef.ui.pages.bash_migration.st") as mock_st:
-            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx(), _ctx())
+            mock_st.columns.return_value = (_ctx(), _ctx(), _ctx())
             _render_summary_metrics(ir)
             assert mock_st.columns.called
 
