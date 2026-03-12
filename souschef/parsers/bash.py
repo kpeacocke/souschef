@@ -68,14 +68,21 @@ _GIT_PULL_PATTERN = re.compile(r"\bgit\s+pull\b[^\n]*", re.IGNORECASE)
 _GIT_CHECKOUT_PATTERN = re.compile(r"\bgit\s+checkout\s+(\S+)", re.IGNORECASE)
 
 # Archive extraction
-# Each token is matched as \S+ separated by \s+ to avoid polynomial backtracking
-# that would occur with overlapping [^\n]* and \s+ patterns (CWE-1333).
-_TAR_EXTRACT_PATTERN = re.compile(
-    r"\btar\b(?:\s+\S+)*\s+\S*x\S*(?:\s+\S+)*\s+"
-    r"(\S+\.(?:tar\.gz|tgz|tar\.bz2|tbz2|tar\.xz|txz|tar\.Z|tar))\b",
-    re.IGNORECASE,
-)
+# Match tar command lines and parse tokens in Python so complexity stays linear
+# for adversarial inputs (CWE-1333).
+_TAR_LINE_PATTERN = re.compile(r"\btar\b[^\n]*", re.IGNORECASE)
 _UNZIP_LINE_PATTERN = re.compile(r"\bunzip\b[^\n]*", re.IGNORECASE)
+
+_TAR_ARCHIVE_SUFFIXES: tuple[str, ...] = (
+    ".tar.gz",
+    ".tgz",
+    ".tar.bz2",
+    ".tbz2",
+    ".tar.xz",
+    ".txz",
+    ".tar.z",
+    ".tar",
+)
 
 # sed in-place
 _SED_INPLACE_PATTERN = re.compile(
@@ -831,11 +838,14 @@ def _extract_archives(content: str, result: dict[str, Any]) -> None:
         result: Result dictionary to update in-place.
 
     """
-    for match in _TAR_EXTRACT_PATTERN.finditer(content):
+    for match in _TAR_LINE_PATTERN.finditer(content):
+        source = _extract_tar_source(match.group(0))
+        if source is None:
+            continue
         result["archives"].append(
             {
                 "tool": "tar",
-                "source": match.group(1),
+                "source": source,
                 "raw": match.group(0).strip(),
                 "line": _line_number(content, match.start()),
                 "confidence": 0.85,
@@ -877,6 +887,69 @@ def _extract_unzip_source(raw_line: str) -> str | None:
             continue
         if token.lower().endswith(".zip"):
             return token.strip("\"'")
+    return None
+
+
+def _is_tar_extract_flag(token: str) -> bool:
+    """
+    Return ``True`` when *token* is a tar flag that requests extraction.
+
+    Handles long-form (``--extract``), short-form (``-xzf``), and flag-word
+    (``xzf``) styles.
+
+    Args:
+        token: Lower-cased command token to inspect.
+
+    Returns:
+        ``True`` if the token indicates extraction, ``False`` otherwise.
+
+    """
+    if token.startswith("--"):
+        return "extract" in token
+    if token.startswith("-"):
+        return "x" in token[1:]
+    return token.isalpha() and "x" in token
+
+
+def _extract_tar_source(raw_line: str) -> str | None:
+    """
+    Extract archive source path from a tar extraction command line.
+
+    Uses token parsing rather than a complex regular expression to ensure
+    matching remains linear on adversarial input.
+
+    Args:
+        raw_line: Raw line containing a ``tar`` command.
+
+    Returns:
+        Archive path token when this looks like an extraction command,
+        otherwise ``None``.
+
+    """
+    tokens = raw_line.split()
+    if not tokens:
+        return None
+
+    saw_tar = False
+    has_extract_flag = False
+
+    for token in tokens:
+        lowered = token.lower()
+
+        if lowered == "tar":
+            saw_tar = True
+            continue
+        if not saw_tar:
+            continue
+
+        if _is_tar_extract_flag(lowered):
+            has_extract_flag = True
+            continue
+
+        candidate = token.strip("\"'").lower()
+        if has_extract_flag and candidate.endswith(_TAR_ARCHIVE_SUFFIXES):
+            return token.strip("\"'")
+
     return None
 
 
