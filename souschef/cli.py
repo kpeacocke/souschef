@@ -2495,8 +2495,9 @@ def bash_parse(script_path: str, output: str | None) -> None:
     """
     try:
         result = parse_bash_script(script_path)
-        _safe_write_file(output, result)
-        if output is None:
+        if output is not None:
+            _safe_write_file(result, output, default_path=Path(output))
+        else:
             click.echo(result)
     except Exception as e:  # noqa: BLE001
         click.echo(f"Error parsing Bash script: {e}", err=True)
@@ -2544,8 +2545,9 @@ def bash_convert(
 
         content = data.get("playbook_yaml", "") if output_format == "yaml" else raw
 
-        _safe_write_file(output, content)
-        if output is None:
+        if output is not None:
+            _safe_write_file(content, output, default_path=Path(output))
+        else:
             click.echo(content)
 
         # Always print warnings to stderr
