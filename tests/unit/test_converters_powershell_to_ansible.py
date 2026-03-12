@@ -1052,10 +1052,10 @@ def test_generate_windows_inventory_template_custom_group() -> None:
 def test_generate_windows_inventory_template_custom_hosts() -> None:
     """Test custom hosts in inventory template."""
     result = generate_windows_inventory_template(
-        hosts=["dc01.example.com", "file01.example.com"]
+        hosts=["dc01", "file01"]
     )
-    assert "dc01.example.com" in result
-    assert "file01.example.com" in result
+    assert "dc01" in result
+    assert "file01" in result
 
 
 def test_get_powershell_ansible_module_map() -> None:
