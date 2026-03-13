@@ -1,634 +1,703 @@
 """
-Unit tests for the PowerShell script parser.
+Unit tests for souschef/parsers/powershell.py.
 
-Tests cover:
-- parse_powershell_script: single file parsing
-- parse_powershell_directory: directory parsing
-- Cmdlet extraction (Install-WindowsFeature, Set-Service, etc.)
-- Function and variable extraction
-- Module import detection
-- Unsupported construct detection (.NET, WMI, COM, DSC)
-- Error handling (file not found, directory, permission errors)
-- Helper functions
+Covers all public API functions, helper functions, edge cases,
+error handling, and all action-type classifiers to achieve
+100% line and branch coverage.
 """
 
+from __future__ import annotations
+
+import json
 from pathlib import Path
 from unittest.mock import patch
 
-from souschef.core.path_utils import safe_read_text
-from souschef.parsers.powershell import (
-    _build_line_index,
-    _detect_unsupported_constructs,
-    _extract_cmdlets,
-    _extract_functions,
-    _extract_module_imports,
-    _extract_variables,
-    _format_cmdlets_section,
-    _format_script_results,
-    _format_unsupported_section,
-    _get_line_number,
-    _parse_script_content,
-    _strip_comments,
-    get_powershell_ansible_module_map,
-    get_supported_powershell_cmdlets,
-    parse_powershell_directory,
-    parse_powershell_script,
-)
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+class TestParsePowershellScript:
+    """Tests for the parse_powershell_script() public API."""
 
-SIMPLE_SCRIPT = """\
+    def test_parse_valid_script(self, tmp_path: Path) -> None:
+        """parse_powershell_script returns JSON for a valid .ps1 file."""
+        from souschef.parsers.powershell import parse_powershell_script
+
+        script = tmp_path / "setup.ps1"
+        script.write_text("Install-WindowsFeature -Name Web-Server\n", encoding="utf-8")
+
+        result = json.loads(parse_powershell_script(str(script)))
+        assert result["source"].endswith("setup.ps1")
+        assert any(
+            a["action_type"] == "windows_feature_install" for a in result["actions"]
+        )
+
+    def test_parse_nonexistent_file(self, tmp_path: Path) -> None:
+        """parse_powershell_script returns an error for a missing file."""
+        from souschef.parsers.powershell import parse_powershell_script
+
+        result = parse_powershell_script(str(tmp_path / "missing.ps1"))
+        assert "Error" in result or "not found" in result.lower()
+
+    def test_parse_directory_path(self, tmp_path: Path) -> None:
+        """parse_powershell_script returns an error when path is a directory."""
+        from souschef.parsers.powershell import parse_powershell_script
+
+        result = parse_powershell_script(str(tmp_path))
+        assert "Error" in result or "directory" in result.lower()
+
+    def test_parse_permission_error(self, tmp_path: Path) -> None:
+        """parse_powershell_script handles PermissionError gracefully."""
+        from souschef.parsers.powershell import parse_powershell_script
+
+        script = tmp_path / "setup.ps1"
+        script.write_text("Install-WindowsFeature -Name Web-Server\n", encoding="utf-8")
+
+        with patch(
+            "souschef.parsers.powershell.safe_read_text",
+            side_effect=PermissionError("denied"),
+        ):
+            result = parse_powershell_script(str(script))
+        assert "Error" in result or "denied" in result.lower() or "Permission" in result
+
+    def test_parse_generic_exception(self, tmp_path: Path) -> None:
+        """parse_powershell_script handles generic exceptions gracefully."""
+        from souschef.parsers.powershell import parse_powershell_script
+
+        script = tmp_path / "setup.ps1"
+        script.write_text("Install-WindowsFeature -Name Web-Server\n", encoding="utf-8")
+
+        with patch(
+            "souschef.parsers.powershell._normalize_path",
+            side_effect=RuntimeError("boom"),
+        ):
+            result = parse_powershell_script(str(script))
+        assert "Error" in result
+
+
+class TestParsePowershellContent:
+    """Tests for parse_powershell_content() with inline string input."""
+
+    def test_empty_content(self) -> None:
+        """Empty content produces empty actions."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content(""))
+        assert result["actions"] == []
+        assert result["warnings"] == []
+
+    def test_comment_lines_are_skipped(self) -> None:
+        """Comment lines are not parsed as actions."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        content = "# This is a comment\n# Another comment\n"
+        result = json.loads(parse_powershell_content(content))
+        assert result["actions"] == []
+        assert result["metrics"]["skipped_lines"] == 2
+
+    def test_blank_lines_are_skipped(self) -> None:
+        """Blank lines increment skipped_lines metric."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("\n   \n\n"))
+        assert result["metrics"]["skipped_lines"] == 3
+
+    def test_custom_source_label(self) -> None:
+        """Custom source label is reflected in output."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("", source="my_script.ps1"))
+        assert result["source"] == "my_script.ps1"
+
+    def test_unrecognised_line_produces_win_shell_fallback(self) -> None:
+        """Unrecognised lines produce win_shell fallback actions with warnings."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("Write-Host 'Hello'"))
+        assert any(a["action_type"] == "win_shell" for a in result["actions"])
+        assert len(result["warnings"]) > 0
+        assert result["metrics"]["win_shell_fallback"] == 1
+
+
+class TestWindowsFeatureClassifier:
+    """Tests for Windows feature install/remove patterns."""
+
+    def test_install_windows_feature(self) -> None:
+        """Install-WindowsFeature is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Install-WindowsFeature -Name Web-Server")
+        )
+        actions = result["actions"]
+        assert len(actions) == 1
+        assert actions[0]["action_type"] == "windows_feature_install"
+        assert actions[0]["params"]["feature_name"] == "Web-Server"
+        assert actions[0]["confidence"] == "high"
+
+    def test_add_windows_feature_alias(self) -> None:
+        """Add-WindowsFeature alias is also recognised."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("Add-WindowsFeature Web-Server"))
+        assert result["actions"][0]["action_type"] == "windows_feature_install"
+
+    def test_enable_optional_feature(self) -> None:
+        """Enable-WindowsOptionalFeature is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content(
+                "Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer"
+            )
+        )
+        assert result["actions"][0]["action_type"] == "windows_optional_feature_enable"
+        assert result["actions"][0]["params"]["feature_name"] == "IIS-WebServer"
+
+    def test_remove_windows_feature(self) -> None:
+        """Remove-WindowsFeature is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Remove-WindowsFeature -Name Web-Server")
+        )
+        assert result["actions"][0]["action_type"] == "windows_feature_remove"
+        assert result["actions"][0]["params"]["feature_name"] == "Web-Server"
+
+    def test_uninstall_windows_feature_alias(self) -> None:
+        """Uninstall-WindowsFeature alias is also recognised."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Uninstall-WindowsFeature -Name Web-Server")
+        )
+        assert result["actions"][0]["action_type"] == "windows_feature_remove"
+
+    def test_disable_optional_feature(self) -> None:
+        """Disable-WindowsOptionalFeature is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content(
+                "Disable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer"
+            )
+        )
+        assert result["actions"][0]["action_type"] == "windows_optional_feature_disable"
+        assert result["actions"][0]["params"]["feature_name"] == "IIS-WebServer"
+
+    def test_feature_install_requires_elevation(self) -> None:
+        """Feature installs should require elevation."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Install-WindowsFeature -Name Web-Server")
+        )
+        assert result["actions"][0]["requires_elevation"] is True
+
+
+class TestWindowsServiceClassifier:
+    """Tests for Windows service management patterns."""
+
+    def test_start_service(self) -> None:
+        """Start-Service is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("Start-Service -Name W3SVC"))
+        assert result["actions"][0]["action_type"] == "windows_service_start"
+        assert result["actions"][0]["params"]["service_name"] == "W3SVC"
+
+    def test_stop_service(self) -> None:
+        """Stop-Service is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("Stop-Service -Name W3SVC"))
+        assert result["actions"][0]["action_type"] == "windows_service_stop"
+        assert result["actions"][0]["params"]["service_name"] == "W3SVC"
+
+    def test_set_service_startup_type(self) -> None:
+        """Set-Service with -StartupType is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Set-Service -Name Spooler -StartupType Automatic")
+        )
+        assert result["actions"][0]["action_type"] == "windows_service_configure"
+        assert result["actions"][0]["params"]["service_name"] == "Spooler"
+        assert result["actions"][0]["params"]["startup_type"] == "automatic"
+
+    def test_set_service_manual_startup(self) -> None:
+        """Set-Service with Manual startup type is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Set-Service -Name W3SVC -StartupType Manual")
+        )
+        assert result["actions"][0]["params"]["startup_type"] == "manual"
+
+    def test_set_service_disabled_startup(self) -> None:
+        """Set-Service with Disabled startup type is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Set-Service -Name W3SVC -StartupType Disabled")
+        )
+        assert result["actions"][0]["params"]["startup_type"] == "disabled"
+
+    def test_new_service(self) -> None:
+        """New-Service is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content(
+                "New-Service -Name MyService -BinaryPathName C:\\svc\\svc.exe"
+            )
+        )
+        assert result["actions"][0]["action_type"] == "windows_service_create"
+        assert result["actions"][0]["params"]["service_name"] == "MyService"
+        assert "binary_path" in result["actions"][0]["params"]
+
+    def test_new_service_without_binary_path(self) -> None:
+        """New-Service without -BinaryPathName still produces service_create action."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("New-Service -Name MyService"))
+        assert result["actions"][0]["action_type"] == "windows_service_create"
+        assert "binary_path" not in result["actions"][0]["params"]
+
+
+class TestRegistryClassifier:
+    """Tests for Windows registry operation patterns."""
+
+    def test_set_item_property_hklm(self) -> None:
+        """Set-ItemProperty on HKLM is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content(
+                "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\MyApp' -Name Version -Value '1.0'"
+            )
+        )
+        assert result["actions"][0]["action_type"] == "registry_set"
+        assert "HKLM" in result["actions"][0]["params"]["key"]
+
+    def test_new_item_registry_key(self) -> None:
+        """New-Item on HKLM path is classified as registry_create_key."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("New-Item -Path 'HKLM:\\SOFTWARE\\NewApp'")
+        )
+        assert result["actions"][0]["action_type"] == "registry_create_key"
+
+    def test_remove_item_registry_key(self) -> None:
+        """Remove-Item on HKLM path is classified as registry_remove_key."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Remove-Item -Path 'HKLM:\\SOFTWARE\\OldApp'")
+        )
+        assert result["actions"][0]["action_type"] == "registry_remove_key"
+
+    def test_registry_requires_elevation_for_hklm(self) -> None:
+        """HKLM registry operations should require elevation."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("New-Item -Path 'HKLM:\\SOFTWARE\\NewApp'")
+        )
+        assert result["actions"][0]["requires_elevation"] is True
+
+
+class TestFileClassifier:
+    """Tests for file/directory operation patterns."""
+
+    def test_copy_item(self) -> None:
+        """Copy-Item is classified correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content(
+                "Copy-Item -Path C:\\src\\file.txt -Destination C:\\dest\\"
+            )
+        )
+        assert result["actions"][0]["action_type"] == "file_copy"
+        assert "src" in result["actions"][0]["params"]
+        assert "dest" in result["actions"][0]["params"]
+
+    def test_new_item_directory(self) -> None:
+        """New-Item -ItemType Directory is classified as directory_create."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content(
+                "New-Item -Path C:\\MyApp\\Logs -ItemType Directory"
+            )
+        )
+        assert result["actions"][0]["action_type"] == "directory_create"
+        assert result["actions"][0]["params"]["path"] == "C:\\MyApp\\Logs"
+
+    def test_new_item_folder(self) -> None:
+        """New-Item -ItemType Folder is also classified as directory_create."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("New-Item -Path C:\\MyApp\\Data -ItemType Folder")
+        )
+        assert result["actions"][0]["action_type"] == "directory_create"
+
+    def test_remove_item_file(self) -> None:
+        """Remove-Item on a file path (not registry) is classified as file_remove."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Remove-Item -Path C:\\temp\\old.txt")
+        )
+        assert result["actions"][0]["action_type"] == "file_remove"
+        assert result["actions"][0]["params"]["path"] == "C:\\temp\\old.txt"
+
+    def test_set_content(self) -> None:
+        """Set-Content is classified as file_write."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content(
+                "Set-Content -Path C:\\config.txt -Value 'hello world'"
+            )
+        )
+        assert result["actions"][0]["action_type"] == "file_write"
+        assert result["actions"][0]["params"]["path"] == "C:\\config.txt"
+
+
+class TestPackageClassifier:
+    """Tests for MSI and Chocolatey package install/remove patterns."""
+
+    def test_msi_install_via_msiexec(self) -> None:
+        """Msiexec /i is classified as msi_install."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("msiexec.exe /i C:\\packages\\app.msi /quiet")
+        )
+        assert result["actions"][0]["action_type"] == "msi_install"
+        assert "app.msi" in result["actions"][0]["params"]["package_path"]
+
+    def test_msi_install_via_start_process(self) -> None:
+        """Start-Process msiexec is classified as msi_install."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Start-Process msiexec /i C:\\packages\\app.msi")
+        )
+        assert result["actions"][0]["action_type"] == "msi_install"
+
+    def test_chocolatey_install_choco_command(self) -> None:
+        """Choco install is classified as chocolatey_install."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("choco install notepadplusplus"))
+        assert result["actions"][0]["action_type"] == "chocolatey_install"
+        assert result["actions"][0]["params"]["package_name"] == "notepadplusplus"
+
+    def test_chocolatey_install_install_package(self) -> None:
+        """Install-Package is classified as chocolatey_install."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("Install-Package 'git'"))
+        assert result["actions"][0]["action_type"] == "chocolatey_install"
+
+    def test_chocolatey_uninstall(self) -> None:
+        """Choco uninstall is classified as chocolatey_uninstall."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(parse_powershell_content("choco uninstall notepadplusplus"))
+        assert result["actions"][0]["action_type"] == "chocolatey_uninstall"
+        assert result["actions"][0]["params"]["package_name"] == "notepadplusplus"
+
+
+class TestMetrics:
+    """Tests for metrics counting."""
+
+    def test_metrics_all_categories(self) -> None:
+        """Metrics correctly count all action categories."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        content = "\n".join(
+            [
+                "Install-WindowsFeature -Name Web-Server",
+                "Start-Service -Name W3SVC",
+                "Set-ItemProperty -Path 'HKLM:\\SW\\App' -Name V -Value 1",
+                "New-Item -Path C:\\logs -ItemType Directory",
+                "choco install git",
+                "Write-Host unknown",
+            ]
+        )
+        result = json.loads(parse_powershell_content(content))
+        m = result["metrics"]
+        assert m["windows_feature"] == 1
+        assert m["windows_service"] == 1
+        assert m["registry"] == 1
+        assert m["file"] == 1
+        assert m["package"] == 1
+        assert m["win_shell_fallback"] == 1
+
+    def test_metrics_total_and_skipped_lines(self) -> None:
+        """total_lines and skipped_lines are counted correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        content = "# comment\n\nInstall-WindowsFeature -Name Web-Server\n"
+        result = json.loads(parse_powershell_content(content))
+        assert result["metrics"]["total_lines"] == 3
+        assert result["metrics"]["skipped_lines"] == 2
+
+
+class TestHelperFunctions:
+    """Tests for internal helper functions."""
+
+    def test_is_registry_path_hklm(self) -> None:
+        """HKLM paths are identified as registry paths."""
+        from souschef.parsers.powershell import _is_registry_path
+
+        assert _is_registry_path("HKLM:\\SOFTWARE\\Microsoft") is True
+
+    def test_is_registry_path_hkcu(self) -> None:
+        """HKCU paths are identified as registry paths."""
+        from souschef.parsers.powershell import _is_registry_path
+
+        assert _is_registry_path("HKCU:\\Software\\App") is True
+
+    def test_is_registry_path_hkey_local_machine(self) -> None:
+        """HKEY_LOCAL_MACHINE paths are identified as registry paths."""
+        from souschef.parsers.powershell import _is_registry_path
+
+        assert _is_registry_path("HKEY_LOCAL_MACHINE:\\SOFTWARE") is True
+
+    def test_is_registry_path_non_registry(self) -> None:
+        """Non-registry paths return False."""
+        from souschef.parsers.powershell import _is_registry_path
+
+        assert _is_registry_path("C:\\Windows\\System32") is False
+        assert _is_registry_path("D:\\temp\\file.txt") is False
+
+    def test_make_action_structure(self) -> None:
+        """_make_action returns correctly structured dict."""
+        from souschef.parsers.powershell import _make_action
+
+        action = _make_action(
+            "windows_feature_install",
+            {"feature_name": "Web-Server"},
+            "Install-WindowsFeature -Name Web-Server",
+            5,
+        )
+        assert action["action_type"] == "windows_feature_install"
+        assert action["params"]["feature_name"] == "Web-Server"
+        assert action["source_line"] == 5
+        assert action["confidence"] == "high"
+        assert "requires_elevation" in action
+
+    def test_make_win_shell_fallback_structure(self) -> None:
+        """_make_win_shell_fallback returns correctly structured dict."""
+        from souschef.parsers.powershell import _make_win_shell_fallback
+
+        action = _make_win_shell_fallback("Write-Host 'test'", 10)
+        assert action["action_type"] == "win_shell"
+        assert action["params"]["command"] == "Write-Host 'test'"
+        assert action["confidence"] == "low"
+        assert action["source_line"] == 10
+
+    def test_increment_metric_known_types(self) -> None:
+        """_increment_metric correctly increments known action type categories."""
+        from souschef.parsers.powershell import _increment_metric
+
+        metrics: dict = {
+            "windows_feature": 0,
+            "windows_service": 0,
+            "registry": 0,
+            "file": 0,
+            "package": 0,
+            "win_shell_fallback": 0,
+        }
+        _increment_metric(metrics, "windows_feature_install")
+        assert metrics["windows_feature"] == 1
+        _increment_metric(metrics, "windows_service_start")
+        assert metrics["windows_service"] == 1
+        _increment_metric(metrics, "registry_set")
+        assert metrics["registry"] == 1
+        _increment_metric(metrics, "file_copy")
+        assert metrics["file"] == 1
+        _increment_metric(metrics, "msi_install")
+        assert metrics["package"] == 1
+        _increment_metric(metrics, "win_shell")
+        assert metrics["win_shell_fallback"] == 1
+
+    def test_increment_metric_unknown_type_uses_fallback(self) -> None:
+        """_increment_metric handles unknown action types gracefully."""
+        from souschef.parsers.powershell import _increment_metric
+
+        metrics: dict = {}
+        _increment_metric(metrics, "totally_unknown_action")
+        assert metrics.get("win_shell_fallback", 0) == 1
+
+    def test_requires_elevation_for_feature_install(self) -> None:
+        """Install-WindowsFeature requires elevation."""
+        from souschef.parsers.powershell import _requires_elevation
+
+        assert _requires_elevation("Install-WindowsFeature -Name Web-Server") is True
+
+    def test_requires_elevation_for_hklm(self) -> None:
+        """HKLM registry operations require elevation."""
+        from souschef.parsers.powershell import _requires_elevation
+
+        assert _requires_elevation("New-Item -Path HKLM:\\SOFTWARE\\App") is True
+
+    def test_requires_elevation_for_normal_command(self) -> None:
+        """Normal commands do not require elevation."""
+        from souschef.parsers.powershell import _requires_elevation
+
+        assert _requires_elevation("Start-Service -Name W3SVC") is False
+
+    def test_classify_feature_line_none_for_unknown(self) -> None:
+        """_classify_feature_line returns None for non-feature lines."""
+        from souschef.parsers.powershell import _classify_feature_line
+
+        assert _classify_feature_line("Start-Service -Name W3SVC", 1) is None
+
+    def test_classify_service_line_none_for_unknown(self) -> None:
+        """_classify_service_line returns None for non-service lines."""
+        from souschef.parsers.powershell import _classify_service_line
+
+        assert _classify_service_line("Install-WindowsFeature Web-Server", 1) is None
+
+    def test_classify_registry_line_none_for_unknown(self) -> None:
+        """_classify_registry_line returns None for non-registry lines."""
+        from souschef.parsers.powershell import _classify_registry_line
+
+        assert _classify_registry_line("Start-Service -Name W3SVC", 1) is None
+
+    def test_classify_file_line_none_for_unknown(self) -> None:
+        """_classify_file_line returns None for non-file lines."""
+        from souschef.parsers.powershell import _classify_file_line
+
+        assert _classify_file_line("Install-WindowsFeature Web-Server", 1) is None
+
+    def test_classify_package_line_none_for_unknown(self) -> None:
+        """_classify_package_line returns None for non-package lines."""
+        from souschef.parsers.powershell import _classify_package_line
+
+        assert _classify_package_line("Start-Service -Name W3SVC", 1) is None
+
+    def test_classify_line_returns_none_for_unrecognised(self) -> None:
+        """_classify_line returns None for unrecognised lines."""
+        from souschef.parsers.powershell import _classify_line
+
+        assert _classify_line("Write-Host 'Hello'", 1) is None
+
+    def test_parse_script_from_path(self, tmp_path: Path) -> None:
+        """_parse_script_from_path parses a file directly."""
+        from souschef.parsers.powershell import _parse_script_from_path
+
+        script = tmp_path / "setup.ps1"
+        script.write_text("Start-Service -Name W3SVC\n", encoding="utf-8")
+
+        result = _parse_script_from_path(script)
+        assert any(
+            a["action_type"] == "windows_service_start" for a in result["actions"]
+        )
+
+    def test_parse_powershell_content_internal(self) -> None:
+        """_parse_powershell_content internal function works correctly."""
+        from souschef.parsers.powershell import _parse_powershell_content
+
+        result = _parse_powershell_content("Start-Service -Name W3SVC\n", "test.ps1")
+        assert result["source"] == "test.ps1"
+        assert any(
+            a["action_type"] == "windows_service_start" for a in result["actions"]
+        )
+
+
+class TestMultiLineScript:
+    """Integration-style tests for multi-action scripts."""
+
+    def test_full_provisioning_script(self) -> None:
+        """A realistic provisioning script is parsed correctly."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        content = """\
 # Install IIS
 Install-WindowsFeature -Name Web-Server -IncludeManagementTools
-
 # Configure service
 Set-Service -Name W3SVC -StartupType Automatic
 Start-Service -Name W3SVC
-
+# Registry settings
+Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\MyApp' -Name Version -Value '2.0'
 # Create directory
-New-Item -ItemType Directory -Path "C:\\inetpub\\wwwroot\\myapp"
-
-# Firewall rule
-New-NetFirewallRule -Name "HTTP" -LocalPort 80 -Protocol TCP -Action Allow
+New-Item -Path C:\\MyApp\\Logs -ItemType Directory
+# Install Chocolatey package
+choco install git
+# Unknown command
+Invoke-WebRequest -Uri https://example.com -OutFile C:\\temp\\file.zip
 """
+        result = json.loads(parse_powershell_content(content))
+        action_types = [a["action_type"] for a in result["actions"]]
 
-COMPLEX_SCRIPT = """\
-Import-Module WebAdministration
-#Requires -Modules PSDesiredStateConfiguration
+        assert "windows_feature_install" in action_types
+        assert "windows_service_configure" in action_types
+        assert "windows_service_start" in action_types
+        assert "registry_set" in action_types
+        assert "directory_create" in action_types
+        assert "chocolatey_install" in action_types
+        assert "win_shell" in action_types  # Invoke-WebRequest falls back
 
-$SiteName = "MyApp"
-$Port = 8080
+    def test_all_feature_types_in_one_script(self) -> None:
+        """All feature action types are classified in a single parse."""
+        from souschef.parsers.powershell import parse_powershell_content
 
-function Set-AppPool {
-    param([string]$Name)
-    New-WebAppPool -Name $Name
-}
-
-Install-WindowsFeature -Name Web-Server
-New-LocalUser -Name "svcaccount" -Password (ConvertTo-SecureString "P@ss1" -AsPlainText -Force)
-Set-ItemProperty -Path "HKLM:\\SOFTWARE\\MyApp" -Name "Version" -Value "1.0"
-Register-ScheduledTask -TaskName "Backup" -TaskPath "\\"
-"""
-
-UNSUPPORTED_SCRIPT = """\
-# WMI usage
-$disks = Get-WmiObject -Class Win32_LogicalDisk
-$svc = Get-CimInstance -ClassName Win32_Service
-
-# COM object
-$ie = New-Object -ComObject InternetExplorer.Application
-
-# .NET type
-Add-Type -AssemblyName System.Windows.Forms
-
-# DSC
-Configuration ServerConfig {
-    Import-DscResource -ModuleName PSDesiredStateConfiguration
-    Node localhost {
-        WindowsFeature IIS {
-            Ensure = "Present"
-            Name = "Web-Server"
+        content = "\n".join(
+            [
+                "Install-WindowsFeature -Name Web-Server",
+                "Remove-WindowsFeature -Name Web-Server",
+                "Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer",
+                "Disable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer",
+            ]
+        )
+        result = json.loads(parse_powershell_content(content))
+        action_types = {a["action_type"] for a in result["actions"]}
+        assert action_types == {
+            "windows_feature_install",
+            "windows_feature_remove",
+            "windows_optional_feature_enable",
+            "windows_optional_feature_disable",
         }
-    }
-}
-"""
 
-
-# ---------------------------------------------------------------------------
-# Tests: _strip_comments
-# ---------------------------------------------------------------------------
-
-
-def test_strip_comments_removes_single_line() -> None:
-    """Test that single-line comments are removed."""
-    content = "# This is a comment\nInstall-WindowsFeature -Name IIS"
-    result = _strip_comments(content)
-    assert "This is a comment" not in result
-    assert "Install-WindowsFeature" in result
-
-
-def test_strip_comments_removes_block_comments() -> None:
-    """Test that block comments (<# ... #>) are removed."""
-    content = "<# block comment\n  spanning lines\n#>\nSet-Service -Name W3SVC"
-    result = _strip_comments(content)
-    assert "block comment" not in result
-    assert "Set-Service" in result
-
-
-def test_strip_comments_preserves_line_count() -> None:
-    """Test that stripping block comments preserves line count."""
-    content = "<# line1\nline2\nline3\n#>\nactual code"
-    result = _strip_comments(content)
-    assert result.count("\n") == content.count("\n")
-
-
-# ---------------------------------------------------------------------------
-# Tests: _build_line_index and _get_line_number
-# ---------------------------------------------------------------------------
-
-
-def test_build_line_index_single_line() -> None:
-    """Test line index with a single line."""
-    idx = _build_line_index("hello")
-    assert idx == [0]
-
-
-def test_build_line_index_multiple_lines() -> None:
-    """Test line index with multiple lines."""
-    idx = _build_line_index("a\nb\nc")
-    assert idx == [0, 2, 4]
-
-
-def test_get_line_number_first_line() -> None:
-    """Test line number retrieval for characters on the first line."""
-    idx = _build_line_index("abc\ndef\nghi")
-    assert _get_line_number(0, idx) == 1
-    assert _get_line_number(2, idx) == 1
-
-
-def test_get_line_number_second_line() -> None:
-    """Test line number retrieval for characters on the second line."""
-    idx = _build_line_index("abc\ndef\nghi")
-    assert _get_line_number(4, idx) == 2
-
-
-def test_get_line_number_last_line() -> None:
-    """Test line number retrieval for the last line."""
-    idx = _build_line_index("abc\ndef\nghi")
-    assert _get_line_number(8, idx) == 3
-
-
-# ---------------------------------------------------------------------------
-# Tests: _extract_cmdlets
-# ---------------------------------------------------------------------------
-
-
-def test_extract_cmdlets_finds_install_windowsfeature() -> None:
-    """Test that Install-WindowsFeature is extracted."""
-    stripped = _strip_comments(SIMPLE_SCRIPT)
-    cmdlets = _extract_cmdlets(stripped, "test.ps1")
-    names = [c["name"].lower() for c in cmdlets]
-    assert "install-windowsfeature" in names
-
-
-def test_extract_cmdlets_maps_ansible_module() -> None:
-    """Test that cmdlets are mapped to the correct Ansible module."""
-    stripped = _strip_comments("Install-WindowsFeature -Name IIS")
-    cmdlets = _extract_cmdlets(stripped, "test.ps1")
-    assert any(c["ansible_module"] == "ansible.windows.win_feature" for c in cmdlets)
-
-
-def test_extract_cmdlets_marks_supported_flag() -> None:
-    """Test that known cmdlets are marked supported."""
-    stripped = _strip_comments("Set-Service -Name W3SVC -StartupType Automatic")
-    cmdlets = _extract_cmdlets(stripped, "test.ps1")
-    assert any(c["supported"] is True for c in cmdlets)
-
-
-def test_extract_cmdlets_marks_unknown_as_unsupported() -> None:
-    """Test that unknown cmdlets are marked as needing manual review."""
-    stripped = _strip_comments("Invoke-SomeThing -Arg value")
-    cmdlets = _extract_cmdlets(stripped, "test.ps1")
-    # SomeThing is not in the map so supported should be False
-    assert all(c["supported"] is False for c in cmdlets)
-
-
-def test_extract_cmdlets_includes_line_number() -> None:
-    """Test that extracted cmdlets include a line number."""
-    stripped = _strip_comments("line1\nInstall-WindowsFeature -Name IIS")
-    cmdlets = _extract_cmdlets(stripped, "test.ps1")
-    iis_cmdlets = [c for c in cmdlets if c["name"].lower() == "install-windowsfeature"]
-    assert iis_cmdlets
-    assert iis_cmdlets[0]["line"] == 2
-
-
-def test_extract_cmdlets_deduplicates_same_line() -> None:
-    """Test that the same cmdlet on the same line is not duplicated."""
-    stripped = _strip_comments("Install-WindowsFeature -Name IIS")
-    cmdlets = _extract_cmdlets(stripped, "test.ps1")
-    count = sum(1 for c in cmdlets if c["name"].lower() == "install-windowsfeature")
-    assert count == 1
-
-
-# ---------------------------------------------------------------------------
-# Tests: _extract_functions
-# ---------------------------------------------------------------------------
-
-
-def test_extract_functions_finds_function() -> None:
-    """Test that function definitions are extracted."""
-    stripped = _strip_comments(COMPLEX_SCRIPT)
-    functions = _extract_functions(stripped, "test.ps1")
-    names = [f["name"].lower() for f in functions]
-    assert "set-apppool" in names
-
-
-def test_extract_functions_empty_script() -> None:
-    """Test that no functions are found in a script with none."""
-    functions = _extract_functions("Install-WindowsFeature -Name IIS", "test.ps1")
-    assert functions == []
-
-
-# ---------------------------------------------------------------------------
-# Tests: _extract_variables
-# ---------------------------------------------------------------------------
-
-
-def test_extract_variables_finds_assignment() -> None:
-    """Test that top-level variable assignments are extracted."""
-    stripped = _strip_comments(COMPLEX_SCRIPT)
-    variables = _extract_variables(stripped, "test.ps1")
-    names = [v["name"] for v in variables]
-    assert "$SiteName" in names or "$sitename" in names
-
-
-def test_extract_variables_deduplicates() -> None:
-    """Test that repeated variable names are not duplicated."""
-    content = "$Foo = 1\n$Bar = 2\n$Foo = 3"
-    variables = _extract_variables(content, "test.ps1")
-    names = [v["name"].lower() for v in variables]
-    assert names.count("$foo") == 1
-
-
-# ---------------------------------------------------------------------------
-# Tests: _extract_module_imports
-# ---------------------------------------------------------------------------
-
-
-def test_extract_module_imports_finds_import_module() -> None:
-    """Test that Import-Module statements are detected."""
-    stripped = _strip_comments(COMPLEX_SCRIPT)
-    modules = _extract_module_imports(stripped, "test.ps1")
-    names = [m["name"].lower() for m in modules]
-    assert "webadministration" in names
-
-
-def test_extract_module_imports_finds_requires() -> None:
-    """Test that #Requires -Modules directives are detected."""
-    # Strip doesn't remove #Requires as it's meaningful
-    content = "#Requires -Modules PSDesiredStateConfiguration"
-    modules = _extract_module_imports(content, "test.ps1")
-    names = [m["name"].lower() for m in modules]
-    assert "psdesiredstateconfiguration" in names
-
-
-# ---------------------------------------------------------------------------
-# Tests: _detect_unsupported_constructs
-# ---------------------------------------------------------------------------
-
-
-def test_detect_unsupported_detects_wmi() -> None:
-    """Test that WMI queries are flagged as unsupported."""
-    unsupported = _detect_unsupported_constructs(UNSUPPORTED_SCRIPT, "test.ps1")
-    constructs = [u["construct"] for u in unsupported]
-    assert "WMI query" in constructs
-
-
-def test_detect_unsupported_detects_cim() -> None:
-    """Test that CIM queries are flagged."""
-    unsupported = _detect_unsupported_constructs(UNSUPPORTED_SCRIPT, "test.ps1")
-    constructs = [u["construct"] for u in unsupported]
-    assert "CIM/WMI query" in constructs
-
-
-def test_detect_unsupported_detects_new_object() -> None:
-    """Test that COM/CLR object instantiation is flagged."""
-    unsupported = _detect_unsupported_constructs(UNSUPPORTED_SCRIPT, "test.ps1")
-    constructs = [u["construct"] for u in unsupported]
-    assert "COM/CLR object instantiation" in constructs
-
-
-def test_detect_unsupported_detects_add_type() -> None:
-    """Test that Add-Type (inline .NET) is flagged."""
-    unsupported = _detect_unsupported_constructs(UNSUPPORTED_SCRIPT, "test.ps1")
-    constructs = [u["construct"] for u in unsupported]
-    assert "Inline .NET type compilation" in constructs
-
-
-def test_detect_unsupported_detects_dsc_configuration() -> None:
-    """Test that DSC Configuration blocks are flagged."""
-    unsupported = _detect_unsupported_constructs(UNSUPPORTED_SCRIPT, "test.ps1")
-    constructs = [u["construct"] for u in unsupported]
-    assert "DSC Configuration block" in constructs
-
-
-def test_detect_unsupported_clean_script() -> None:
-    """Test that a clean script has no unsupported constructs."""
-    unsupported = _detect_unsupported_constructs(SIMPLE_SCRIPT, "test.ps1")
-    assert unsupported == []
-
-
-def test_detect_unsupported_ps_remoting() -> None:
-    """Test that PS remoting sessions are flagged."""
-    script = "Enter-PSSession -ComputerName server01"
-    unsupported = _detect_unsupported_constructs(script, "test.ps1")
-    constructs = [u["construct"] for u in unsupported]
-    assert "PS remoting session" in constructs
-
-
-def test_detect_unsupported_using_scope() -> None:
-    """Test that $using: references are flagged."""
-    script = "Invoke-Command { $using:MyVar }"
-    unsupported = _detect_unsupported_constructs(script, "test.ps1")
-    constructs = [u["construct"] for u in unsupported]
-    assert "Cross-scope variable ($using:)" in constructs
-
-
-# ---------------------------------------------------------------------------
-# Tests: _parse_script_content
-# ---------------------------------------------------------------------------
-
-
-def test_parse_script_content_keys() -> None:
-    """Test that _parse_script_content returns all expected keys."""
-    result = _parse_script_content(SIMPLE_SCRIPT, "test.ps1")
-    assert "cmdlets" in result
-    assert "functions" in result
-    assert "variables" in result
-    assert "modules" in result
-    assert "unsupported" in result
-
-
-def test_parse_script_content_limits_cmdlets() -> None:
-    """Test that cmdlets list is capped at MAX_CMDLETS."""
-    from souschef.parsers.powershell import MAX_CMDLETS
-
-    lines = ["Set-Service -Name svc" + str(i) for i in range(MAX_CMDLETS + 100)]
-    big_script = "\n".join(lines)
-    result = _parse_script_content(big_script, "test.ps1")
-    assert len(result["cmdlets"]) <= MAX_CMDLETS
-
-
-# ---------------------------------------------------------------------------
-# Tests: formatting helpers
-# ---------------------------------------------------------------------------
-
-
-def test_format_cmdlets_section_supported_and_unsupported() -> None:
-    """Test that _format_cmdlets_section returns both lists correctly."""
-    cmdlets = [
-        {
-            "name": "Install-WindowsFeature",
-            "ansible_module": "ansible.windows.win_feature",
-            "supported": True,
-            "line": 1,
-        },
-        {
-            "name": "Unknown-Cmdlet",
-            "ansible_module": "ansible.windows.win_shell",
-            "supported": False,
-            "line": 2,
-        },
-    ]
-    parts: list[str] = []
-    supported, unsupported = _format_cmdlets_section(parts, cmdlets)
-    assert len(supported) == 1
-    assert len(unsupported) == 1
-    assert any("Install-WindowsFeature" in p for p in parts)
-
-
-def test_format_cmdlets_section_empty() -> None:
-    """Test _format_cmdlets_section with no cmdlets."""
-    parts: list[str] = []
-    supported, unsupported = _format_cmdlets_section(parts, [])
-    assert supported == []
-    assert unsupported == []
-    assert any("none detected" in p for p in parts)
-
-
-def test_format_cmdlets_section_truncates_at_50() -> None:
-    """Test that _format_cmdlets_section shows at most 50 cmdlets."""
-    cmdlets = [
-        {
-            "name": f"Set-Something{i}",
-            "ansible_module": "ansible.windows.win_shell",
-            "supported": False,
-            "line": i,
-        }
-        for i in range(60)
-    ]
-    parts: list[str] = []
-    _format_cmdlets_section(parts, cmdlets)
-    assert any("and 10 more" in p for p in parts)
-
-
-def test_format_unsupported_section_no_unsupported() -> None:
-    """Test _format_unsupported_section with no unsupported constructs."""
-    parts: list[str] = []
-    _format_unsupported_section(parts, [])
-    assert any("none detected" in p for p in parts)
-
-
-def test_format_unsupported_section_with_items() -> None:
-    """Test _format_unsupported_section with unsupported constructs."""
-    unsupported = [
-        {
-            "construct": "WMI query",
-            "text": "Get-WmiObject",
-            "source_file": "test.ps1",
-            "line": 3,
-        }
-    ]
-    parts: list[str] = []
-    _format_unsupported_section(parts, unsupported)
-    assert any("WMI query" in p for p in parts)
-
-
-def test_format_script_results_summary_section() -> None:
-    """Test that _format_script_results includes a summary section."""
-    result = _format_script_results(
-        _parse_script_content(SIMPLE_SCRIPT, "test.ps1"), "test.ps1"
-    )
-    assert "Summary:" in result
-    assert "Cmdlets:" in result
-
-
-def test_format_script_results_unsupported_note() -> None:
-    """Test that _format_script_results adds a NOTE when unsupported present."""
-    result = _format_script_results(
-        _parse_script_content(UNSUPPORTED_SCRIPT, "test.ps1"), "test.ps1"
-    )
-    assert "NOTE:" in result or "Unsupported" in result
-
-
-def test_format_script_results_no_unsupported_no_note() -> None:
-    """Test that _format_script_results has no NOTE for clean scripts."""
-    result = _format_script_results(
-        _parse_script_content(SIMPLE_SCRIPT, "test.ps1"), "test.ps1"
-    )
-    assert "NOTE: Review unsupported constructs" not in result
-
-
-# ---------------------------------------------------------------------------
-# Tests: parse_powershell_script (public API)
-# ---------------------------------------------------------------------------
-
-
-def test_parse_powershell_script_success(tmp_path: Path) -> None:
-    """Test successful parsing of a PowerShell script file."""
-    script = tmp_path / "setup.ps1"
-    script.write_text(SIMPLE_SCRIPT, encoding="utf-8")
-    result = parse_powershell_script(str(script))
-    assert "PowerShell Script Analysis" in result
-    assert "Install-WindowsFeature" in result
-
-
-def test_parse_powershell_script_file_not_found() -> None:
-    """Test that a missing file returns an error message."""
-    result = parse_powershell_script("/nonexistent/path/script.ps1")
-    assert "Error" in result
-
-
-def test_parse_powershell_script_is_directory(tmp_path: Path) -> None:
-    """Test that passing a directory returns an error message."""
-    result = parse_powershell_script(str(tmp_path))
-    assert "Error" in result
-
-
-def test_parse_powershell_script_permission_denied(tmp_path: Path) -> None:
-    """Test that a permission error returns an error message."""
-    script = tmp_path / "locked.ps1"
-    script.write_text("Set-Service -Name W3SVC", encoding="utf-8")
-    with patch(
-        "souschef.parsers.powershell.safe_read_text",
-        side_effect=PermissionError("denied"),
-    ):
-        result = parse_powershell_script(str(script))
-    assert "Error" in result
-
-
-def test_parse_powershell_script_too_large(tmp_path: Path) -> None:
-    """Test that an oversized script returns an error message."""
-    script = tmp_path / "big.ps1"
-    script.write_text("x", encoding="utf-8")
-    with patch(
-        "souschef.parsers.powershell.safe_read_text",
-        return_value="x" * (2_000_001),
-    ):
-        result = parse_powershell_script(str(script))
-    assert "Error" in result
-
-
-def test_parse_powershell_script_general_exception(tmp_path: Path) -> None:
-    """Test that unexpected exceptions are caught gracefully."""
-    script = tmp_path / "script.ps1"
-    script.write_text("Set-Service -Name W3SVC", encoding="utf-8")
-    with patch(
-        "souschef.parsers.powershell._parse_script_content",
-        side_effect=RuntimeError("unexpected"),
-    ):
-        result = parse_powershell_script(str(script))
-    assert "error occurred" in result.lower() or "Error" in result
-
-
-def test_parse_powershell_script_value_error(tmp_path: Path) -> None:
-    """Test that ValueError is caught and returned as error string."""
-    script = tmp_path / "script.ps1"
-    script.write_text("Set-Service -Name W3SVC", encoding="utf-8")
-    with patch(
-        "souschef.parsers.powershell._normalize_path",
-        side_effect=ValueError("bad path"),
-    ):
-        result = parse_powershell_script(str(script))
-    assert "Error" in result
-
-
-# ---------------------------------------------------------------------------
-# Tests: parse_powershell_directory (public API)
-# ---------------------------------------------------------------------------
-
-
-def test_parse_powershell_directory_success(tmp_path: Path) -> None:
-    """Test successful parsing of a directory of scripts."""
-    (tmp_path / "a.ps1").write_text(SIMPLE_SCRIPT, encoding="utf-8")
-    (tmp_path / "b.ps1").write_text(COMPLEX_SCRIPT, encoding="utf-8")
-    result = parse_powershell_directory(str(tmp_path))
-    assert "PowerShell Script Analysis" in result
-
-
-def test_parse_powershell_directory_no_scripts(tmp_path: Path) -> None:
-    """Test that a directory with no scripts returns a warning."""
-    result = parse_powershell_directory(str(tmp_path))
-    assert "Warning" in result
-
-
-def test_parse_powershell_directory_not_found() -> None:
-    """Test that a missing directory returns an error message."""
-    result = parse_powershell_directory("/nonexistent/dir")
-    assert "Error" in result
-
-
-def test_parse_powershell_directory_not_a_dir(tmp_path: Path) -> None:
-    """Test that passing a file returns an error message."""
-    f = tmp_path / "file.ps1"
-    f.write_text("x")
-    result = parse_powershell_directory(str(f))
-    assert "Error" in result
-
-
-def test_parse_powershell_directory_skips_unreadable(tmp_path: Path) -> None:
-    """Test that unreadable files are skipped gracefully."""
-    good = tmp_path / "good.ps1"
-    bad = tmp_path / "bad.ps1"
-    good.write_text("Install-WindowsFeature -Name IIS", encoding="utf-8")
-    bad.write_text("Set-Service -Name W3SVC", encoding="utf-8")
-
-    def _selective(path: Path, *args: object, **kwargs: object) -> str:
-        if "bad" in str(path):
-            raise OSError("cannot read")
-        return safe_read_text(path, *args, **kwargs)
-
-    with patch(
-        "souschef.parsers.powershell.safe_read_text",
-        side_effect=_selective,
-    ):
-        result = parse_powershell_directory(str(tmp_path))
-    assert "Install-WindowsFeature" in result
-
-
-def test_parse_powershell_directory_permission_denied(tmp_path: Path) -> None:
-    """Test that a permission error on the directory returns an error."""
-    with patch(
-        "souschef.parsers.powershell._normalize_path",
-        side_effect=PermissionError("denied"),
-    ):
-        result = parse_powershell_directory(str(tmp_path))
-    assert "Error" in result
-
-
-def test_parse_powershell_directory_general_exception(tmp_path: Path) -> None:
-    """Test that unexpected exceptions in directory parsing are caught."""
-    with patch(
-        "souschef.parsers.powershell._normalize_path",
-        side_effect=RuntimeError("oops"),
-    ):
-        result = parse_powershell_directory(str(tmp_path))
-    assert "error occurred" in result.lower() or "Error" in result
-
-
-# ---------------------------------------------------------------------------
-# Tests: get_powershell_ansible_module_map / get_supported_powershell_cmdlets
-# ---------------------------------------------------------------------------
-
-
-def test_get_powershell_ansible_module_map_returns_dict() -> None:
-    """Test that the module map is a non-empty dictionary."""
-    m = get_powershell_ansible_module_map()
-    assert isinstance(m, dict)
-    assert len(m) > 0
-
-
-def test_get_powershell_ansible_module_map_contains_win_feature() -> None:
-    """Test that Install-WindowsFeature maps to win_feature."""
-    m = get_powershell_ansible_module_map()
-    assert m.get("install-windowsfeature") == "ansible.windows.win_feature"
-
-
-def test_get_supported_powershell_cmdlets_returns_sorted_list() -> None:
-    """Test that the cmdlet list is a sorted list of strings."""
-    cmdlets = get_supported_powershell_cmdlets()
-    assert isinstance(cmdlets, list)
-    assert cmdlets == sorted(cmdlets)
-    assert "install-windowsfeature" in cmdlets
+    def test_all_registry_types_in_one_script(self) -> None:
+        """All registry action types are classified in a single parse."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        content = "\n".join(
+            [
+                "Set-ItemProperty -Path 'HKLM:\\SW\\App' -Name V -Value 1",
+                "New-Item -Path 'HKLM:\\SW\\NewKey'",
+                "Remove-Item -Path 'HKLM:\\SW\\OldKey'",
+            ]
+        )
+        result = json.loads(parse_powershell_content(content))
+        action_types = {a["action_type"] for a in result["actions"]}
+        assert "registry_set" in action_types
+        assert "registry_create_key" in action_types
+        assert "registry_remove_key" in action_types
+
+    def test_remove_item_file_not_confused_with_registry(self) -> None:
+        """Remove-Item on a file path is NOT classified as registry_remove_key."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        result = json.loads(
+            parse_powershell_content("Remove-Item -Path C:\\temp\\old.log")
+        )
+        assert result["actions"][0]["action_type"] == "file_remove"
+
+    def test_new_item_file_path_not_registry(self) -> None:
+        """New-Item on a file path without -ItemType is a win_shell fallback."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        # Without -ItemType Directory, and without HKLM path -> unrecognised
+        result = json.loads(
+            parse_powershell_content("New-Item -Path C:\\temp\\newfile.txt")
+        )
+        # Should be a win_shell fallback as it doesn't match directory or registry
+        assert result["actions"][0]["action_type"] == "win_shell"

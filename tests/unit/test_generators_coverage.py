@@ -381,7 +381,10 @@ def test_get_include_recipe_params_known_cookbook() -> None:
     """Test _get_include_recipe_params returns cookbook-specific config."""
     with patch(
         "souschef.converters.resource.get_cookbook_package_config",
-        return_value={"module": "ansible.builtin.include_role", "params": {"name": "base"}},
+        return_value={
+            "module": "ansible.builtin.include_role",
+            "params": {"name": "base"},
+        },
     ):
         result = _get_include_recipe_params("base::default", "include", {})
 
@@ -593,9 +596,7 @@ def test_parse_recipe_oversized_case_body(tmp_path: Path) -> None:
     """Test parse_recipe skips case bodies exceeding max length."""
     # Create a recipe with a case block with very long body
     large_case = (
-        "case node['platform']\n"
-         "when 'ubuntu'\n"
-         "  # " + "x" * 300 + "\n"
+        "case node['platform']\nwhen 'ubuntu'\n  # " + "x" * 300 + "\n"
     ) * 10 + "end\n"
     recipe_file = tmp_path / "default.rb"
     recipe_file.write_text(large_case)

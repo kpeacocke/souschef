@@ -1,29 +1,25 @@
 """
-PowerShell script parser.
+PowerShell script parser for Chef-to-Ansible migration.
 
-Parses PowerShell scripts (``.ps1``, ``.psm1``, ``.psd1`` files) and
-module directories to extract cmdlet invocations, function definitions,
-variables, and module imports into a structured format suitable for
-conversion to Ansible playbooks targeting Windows hosts via AAP/AWX.
+Parses PowerShell provisioning scripts and extracts structured actions
+(Windows features, services, registry operations, file operations,
+MSI installs, Chocolatey installs, user management, firewall rules,
+scheduled tasks, environment variables, certificates, WinRM, IIS, DNS,
+and ACL operations) that can be converted to Ansible tasks.
 
-Cmdlet coverage includes the most common Windows Server administration
-commands (package management, file system, services, registry, users,
-network, IIS, scheduled tasks, etc.) as well as Windows-specific Desired
-State Configuration (DSC) resources.
-
-Constructs that cannot be converted automatically (COM objects, .NET P/Invoke,
-WMI queries, complex remoting, etc.) are flagged for manual review or
-AI-assisted conversion.
+Actions with recognised patterns produce structured IR entries; unrecognised
+fragments are preserved as raw ``win_shell`` fallbacks with source locations
+and confidence warnings.
 """
 
+from __future__ import annotations
+
+import json
 import re
+from pathlib import Path
 from typing import Any
 
-from souschef.core.constants import (
-    ERROR_FILE_NOT_FOUND,
-    ERROR_IS_DIRECTORY,
-    ERROR_PERMISSION_DENIED,
-)
+from souschef.core.constants import ERROR_FILE_NOT_FOUND, ERROR_PERMISSION_DENIED
 from souschef.core.path_utils import (
     _ensure_within_base_path,
     _get_workspace_root,
@@ -31,727 +27,849 @@ from souschef.core.path_utils import (
     safe_read_text,
 )
 
-# Maximum script content length to prevent resource exhaustion
-MAX_SCRIPT_LENGTH = 2_000_000
-
-# Maximum number of cmdlet invocations to extract per file
-MAX_CMDLETS = 10_000
-
 # ---------------------------------------------------------------------------
-# Supported cmdlet → Ansible module mapping
+# Regex patterns for PowerShell provisioning actions
 # ---------------------------------------------------------------------------
 
-# Registry of PowerShell cmdlets that have a direct Ansible equivalent.
-# Maps cmdlet name (lower-case) → Ansible module name.
-CMDLET_MODULE_MAP: dict[str, str] = {
-    # Package management
-    "install-windowsfeature": "ansible.windows.win_feature",
-    "uninstall-windowsfeature": "ansible.windows.win_feature",
-    "add-windowsfeature": "ansible.windows.win_feature",
-    "remove-windowsfeature": "ansible.windows.win_feature",
-    "install-package": "ansible.windows.win_package",
-    "uninstall-package": "ansible.windows.win_package",
-    "install-module": "community.windows.win_psmodule",
-    "uninstall-module": "community.windows.win_psmodule",
-    # File system
-    "new-item": "ansible.windows.win_file",
-    "remove-item": "ansible.windows.win_file",
-    "copy-item": "ansible.windows.win_copy",
-    "move-item": "ansible.windows.win_copy",
-    "get-content": "ansible.windows.win_copy",
-    "set-content": "ansible.windows.win_copy",
-    "add-content": "ansible.windows.win_lineinfile",
-    "test-path": "ansible.windows.win_stat",
-    "rename-item": "ansible.windows.win_file",
-    # Services
-    "start-service": "ansible.windows.win_service",
-    "stop-service": "ansible.windows.win_service",
-    "restart-service": "ansible.windows.win_service",
-    "set-service": "ansible.windows.win_service",
-    "new-service": "ansible.windows.win_service",
-    "remove-service": "ansible.windows.win_service",
-    # Registry
-    "new-itemproperty": "ansible.windows.win_regedit",
-    "set-itemproperty": "ansible.windows.win_regedit",
-    "remove-itemproperty": "ansible.windows.win_regedit",
-    "new-item-registry": "ansible.windows.win_regedit",
-    "remove-item-registry": "ansible.windows.win_regedit",
-    # Users and groups
-    "new-localuser": "ansible.windows.win_user",
-    "set-localuser": "ansible.windows.win_user",
-    "remove-localuser": "ansible.windows.win_user",
-    "add-localgroupmember": "ansible.windows.win_group_membership",
-    "remove-localgroupmember": "ansible.windows.win_group_membership",
-    "new-localgroup": "ansible.windows.win_group",
-    "remove-localgroup": "ansible.windows.win_group",
-    # ACL / permissions
-    "set-acl": "ansible.windows.win_acl",
-    "get-acl": "ansible.windows.win_acl",
-    # Network
-    "new-netfirewallrule": "community.windows.win_firewall_rule",
-    "set-netfirewallrule": "community.windows.win_firewall_rule",
-    "remove-netfirewallrule": "community.windows.win_firewall_rule",
-    "enable-netfirewallrule": "community.windows.win_firewall_rule",
-    "disable-netfirewallrule": "community.windows.win_firewall_rule",
-    "set-dnsserversearchorder": "community.windows.win_dns_client",
-    # Scheduled tasks
-    "register-scheduledtask": "community.windows.win_scheduled_task",
-    "unregister-scheduledtask": "community.windows.win_scheduled_task",
-    "enable-scheduledtask": "community.windows.win_scheduled_task",
-    "disable-scheduledtask": "community.windows.win_scheduled_task",
-    # Environment variables
-    "set-environmentvariable": "ansible.windows.win_environment",
-    "[environment]::setenvironmentvariable": "ansible.windows.win_environment",
-    # IIS (requires IIS Administration module / win_iis_*)
-    "new-website": "community.windows.win_iis_website",
-    "start-website": "community.windows.win_iis_website",
-    "stop-website": "community.windows.win_iis_website",
-    "remove-website": "community.windows.win_iis_website",
-    "new-webapplication": "community.windows.win_iis_webapplication",
-    "new-webvirtualdirectory": "community.windows.win_iis_virtualdirectory",
-    "new-webbinding": "community.windows.win_iis_webbinding",
-    # DSC resources (map to win_dsc)
-    "invoke-dscresource": "ansible.windows.win_dsc",
-    # General shell / command execution
-    "invoke-expression": "ansible.windows.win_shell",
-    "invoke-command": "ansible.windows.win_shell",
-    "start-process": "ansible.windows.win_shell",
-    "cmd": "ansible.windows.win_command",
-    # Certificates
-    "import-certificate": "community.windows.win_certificate_store",
-    "remove-item-certificate": "community.windows.win_certificate_store",
-    # Chocolatey (common on Windows)
-    "choco": "chocolatey.chocolatey.win_chocolatey",
-    # Downloads
-    "invoke-webrequest": "ansible.windows.win_get_url",
-    "start-bitstransfer": "ansible.windows.win_get_url",
-    # Reboot / wait
-    "restart-computer": "ansible.windows.win_reboot",
-    # Zip / archive
-    "expand-archive": "community.windows.win_unzip",
-    "compress-archive": "community.windows.win_zip",
-    # Windows Updates
-    "install-windowsupdate": "ansible.windows.win_updates",
-    "get-windowsupdate": "ansible.windows.win_updates",
-    # MSI / installer
-    "start-msiexec": "ansible.windows.win_package",
-    # Output / debug
-    "write-host": "ansible.builtin.debug",
-    "write-output": "ansible.builtin.debug",
-    "write-verbose": "ansible.builtin.debug",
-    "write-warning": "ansible.builtin.debug",
-    "write-error": "ansible.builtin.fail",
-    "throw": "ansible.builtin.fail",
-}
-
-# ---------------------------------------------------------------------------
-# Constructs that require manual review or AI-assisted conversion
-# ---------------------------------------------------------------------------
-
-UNSUPPORTED_CONSTRUCTS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"\[.*::.*\]", re.IGNORECASE), ".NET static method call"),
-    (re.compile(r"New-Object\s+", re.IGNORECASE), "COM/CLR object instantiation"),
-    (re.compile(r"Add-Type\s+", re.IGNORECASE), "Inline .NET type compilation"),
-    (re.compile(r"Get-WmiObject\s+", re.IGNORECASE), "WMI query"),
-    (re.compile(r"Get-CimInstance\s+", re.IGNORECASE), "CIM/WMI query"),
-    (re.compile(r"Invoke-WmiMethod\s+", re.IGNORECASE), "WMI method invocation"),
-    (
-        re.compile(r"Enter-PSSession\s+|New-PSSession\s+", re.IGNORECASE),
-        "PS remoting session",
-    ),
-    (re.compile(r"\$using:", re.IGNORECASE), "Cross-scope variable ($using:)"),
-    (re.compile(r"Register-ObjectEvent\s+", re.IGNORECASE), "Event subscription"),
-    (re.compile(r"#Requires\s+-", re.IGNORECASE), "#Requires directive"),
-    (
-        re.compile(r"Import-Module\s+\w+\s+-UseWindowsPowerShell", re.IGNORECASE),
-        "Windows PowerShell compatibility mode",
-    ),
-    (re.compile(r"Configuration\s+\w+\s*\{", re.IGNORECASE), "DSC Configuration block"),
-]
-
-# ---------------------------------------------------------------------------
-# Regex patterns for extraction
-# ---------------------------------------------------------------------------
-
-# Match a PowerShell function definition
-_RE_FUNCTION = re.compile(
-    r"(?:^|\n)\s*function\s+([A-Za-z_][A-Za-z0-9_\-]*)\s*"
-    r"(?:\(([^)]*)\))?\s*\{",
+# Windows Features (Install-WindowsFeature / Enable-WindowsOptionalFeature)
+_RE_INSTALL_WINDOWS_FEATURE = re.compile(
+    r"(?<!\w)(?:Install-WindowsFeature|Add-WindowsFeature)"
+    r"\s+(?:-Name\s+)?[\"']?(?P<feature>[\w\-]+)[\"']?"
+    r"(?:.*?-IncludeManagementTools)?",
+    re.IGNORECASE,
+)
+_RE_ENABLE_OPTIONAL_FEATURE = re.compile(
+    r"Enable-WindowsOptionalFeature\s+(?:-Online\s+)?(?:-FeatureName\s+)?[\"']?(?P<feature>[\w\-]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_REMOVE_WINDOWS_FEATURE = re.compile(
+    r"(?:Remove-WindowsFeature|Uninstall-WindowsFeature)\s+(?:-Name\s+)?[\"']?(?P<feature>[\w\-]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_DISABLE_OPTIONAL_FEATURE = re.compile(
+    r"Disable-WindowsOptionalFeature\s+(?:-Online\s+)?(?:-FeatureName\s+)?[\"']?(?P<feature>[\w\-]+)[\"']?",
     re.IGNORECASE,
 )
 
-# Match a variable assignment  $VarName = value  (or  $VarName = "value")
-_RE_VARIABLE = re.compile(
-    r"(?m)^\s*\$([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.{0,120})",
+# Windows Services (Start-Service / Stop-Service / Set-Service)
+_RE_START_SERVICE = re.compile(
+    r"Start-Service\s+(?:-Name\s+)?[\"']?(?P<service>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_STOP_SERVICE = re.compile(
+    r"Stop-Service\s+(?:-Name\s+)?[\"']?(?P<service>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_SET_SERVICE = re.compile(
+    r"Set-Service\s+(?:-Name\s+)?[\"']?(?P<service>[\w\-\.]+)[\"']?"
+    r".*?-StartupType\s+(?P<startup>Automatic|Manual|Disabled)",
+    re.IGNORECASE,
+)
+_RE_NEW_SERVICE = re.compile(
+    r"New-Service\s+(?:-Name\s+)?[\"']?(?P<service>[\w\-\.]+)[\"']?"
+    r"(?:.*?-BinaryPathName\s+[\"']?(?P<path>[^\"'\s;]+)[\"']?)?",
     re.IGNORECASE,
 )
 
-# Match #Requires -Modules <name>
-_RE_REQUIRES_MODULE = re.compile(
-    r"#Requires\s+-Modules?\s+([A-Za-z0-9_\.,\s]+)", re.IGNORECASE
+# Registry operations (Set-ItemProperty, New-Item, Remove-Item on HKLM/HKCU)
+_RE_SET_REG_PROPERTY = re.compile(
+    r"Set-ItemProperty\s+(?:-Path\s+)?[\"']?(?P<key>(?:HKLM|HKCU|HKEY_[A-Z_]+)[:\\][^\"'\s;,]+)[\"']?"
+    r"\s+(?:-Name\s+)?[\"']?(?P<name>[\w\-\s]+)[\"']?"
+    r"\s+(?:-Value\s+)?[\"']?(?P<value>[^\"'\n;]+)[\"']?",
+    re.IGNORECASE,
 )
-
-# Match Import-Module <name>
-_RE_IMPORT_MODULE = re.compile(
-    r"Import-Module\s+['\"]?([A-Za-z0-9_\.\-]+)['\"]?", re.IGNORECASE
+_RE_NEW_REG_KEY = re.compile(
+    r"New-Item\s+(?:-Path\s+)?[\"']?(?P<key>(?:HKLM|HKCU|HKEY_[A-Z_]+)[:\\][^\"'\s;,]+)[\"']?",
+    re.IGNORECASE,
 )
-
-# Match param() block parameters
-_RE_PARAM = re.compile(
-    r"\[Parameter[^\]]*\]\s*\$([A-Za-z_][A-Za-z0-9_]*)", re.IGNORECASE
-)
-
-# Generic cmdlet / function call with optional -parameters
-_RE_CMDLET_CALL = re.compile(
-    r"(?m)(?:^|;|\|)\s*"
-    r"([A-Za-z]+-[A-Za-z]+(?:-[A-Za-z]+)*)"  # VerbNoun cmdlet
-    r"((?:\s+-[A-Za-z][A-Za-z0-9]*\s+[^-\n][^\n]*|\s+-[A-Za-z][A-Za-z0-9]*)*)",
+_RE_REMOVE_REG_KEY = re.compile(
+    r"Remove-Item\s+(?:-Path\s+)?[\"']?(?P<key>(?:HKLM|HKCU|HKEY_[A-Z_]+)[:\\][^\"'\s;,]+)[\"']?",
     re.IGNORECASE,
 )
 
+# File operations
+_RE_COPY_ITEM = re.compile(
+    r"Copy-Item\s+(?:-Path\s+)?[\"']?(?P<src>[^\"'\s;,]+)[\"']?"
+    r"\s+(?:-Destination\s+)?[\"']?(?P<dest>[^\"'\s;,]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_NEW_ITEM_DIR = re.compile(
+    r"New-Item\s+(?:-Path\s+)?[\"']?(?P<path>[^\"'\s;,]+)[\"']?"
+    r".*?-ItemType\s+(?:Directory|Folder)",
+    re.IGNORECASE,
+)
+_RE_REMOVE_ITEM = re.compile(
+    r"Remove-Item\s+(?:-Path\s+)?[\"']?(?P<path>[^\"'\s;,]+(?:\.[a-z0-9]+)?)[\"']?",
+    re.IGNORECASE,
+)
+_RE_SET_CONTENT = re.compile(
+    r"Set-Content\s+(?:-Path\s+)?[\"']?(?P<path>[^\"'\s;,]+)[\"']?"
+    r"\s+(?:-Value\s+)?[\"']?(?P<content>[^\"'\n]+)[\"']?",
+    re.IGNORECASE,
+)
 
-def parse_powershell_script(path: str) -> str:
+# MSI installs via Start-Process / msiexec
+_RE_MSI_INSTALL = re.compile(
+    r"(?:Start-Process\s+msiexec|msiexec\.exe?)\s+.*?(?:/i|/package)\s+[\"']?(?P<path>[^\"'\s;]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Chocolatey installs
+_RE_CHOCO_INSTALL = re.compile(
+    r"(?:choco(?:latey)?(?:\.exe?)?\s+)?Install-Package\s+[\"']?(?P<package>[\w\.\-]+)[\"']?"
+    r"|choco(?:latey)?(?:\.exe?)?\s+install\s+[\"']?(?P<choco_package>[\w\.\-]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_CHOCO_UNINSTALL = re.compile(
+    r"choco(?:latey)?(?:\.exe?)?\s+uninstall\s+[\"']?(?P<package>[\w\.\-]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# User management
+_RE_NEW_LOCAL_USER = re.compile(
+    r"New-LocalUser\s+(?:-Name\s+)?[\"']?(?P<username>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_SET_LOCAL_USER = re.compile(
+    r"Set-LocalUser\s+(?:-Name\s+)?[\"']?(?P<username>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_REMOVE_LOCAL_USER = re.compile(
+    r"Remove-LocalUser\s+(?:-Name\s+)?[\"']?(?P<username>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_ADD_LOCAL_GROUP_MEMBER = re.compile(
+    r"Add-LocalGroupMember\s+(?:-Group\s+)?[\"']?(?P<group>[\w\-\s]+?)[\"']?"
+    r"\s+-Member\s+[\"']?(?P<member>[\w\-\.\\]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_REMOVE_LOCAL_GROUP_MEMBER = re.compile(
+    r"Remove-LocalGroupMember\s+(?:-Group\s+)?[\"']?(?P<group>[\w\-\s]+?)[\"']?"
+    r"\s+-Member\s+[\"']?(?P<member>[\w\-\.\\]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Firewall rules
+_RE_NEW_FIREWALL_RULE = re.compile(
+    r"New-NetFirewallRule\s+(?:-DisplayName\s+|-Name\s+)?[\"']?(?P<name>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_ENABLE_FIREWALL_RULE = re.compile(
+    r"Enable-NetFirewallRule\s+(?:-DisplayName\s+|-Name\s+)?[\"']?(?P<name>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_DISABLE_FIREWALL_RULE = re.compile(
+    r"Disable-NetFirewallRule\s+(?:-DisplayName\s+|-Name\s+)?[\"']?(?P<name>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_REMOVE_FIREWALL_RULE = re.compile(
+    r"Remove-NetFirewallRule\s+(?:-DisplayName\s+|-Name\s+)?[\"']?(?P<name>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Scheduled tasks
+_RE_REGISTER_SCHEDULED_TASK = re.compile(
+    r"(?<!Un)Register-ScheduledTask\s+(?:-TaskName\s+)?[\"']?(?P<taskname>[\w\-\s\.\\]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_UNREGISTER_SCHEDULED_TASK = re.compile(
+    r"Unregister-ScheduledTask\s+(?:-TaskName\s+)?[\"']?(?P<taskname>[\w\-\s\.\\]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Environment variables
+_RE_SET_ENV_VAR = re.compile(
+    r"\[(?:System\.)?Environment\]::SetEnvironmentVariable\s*\([\"'](?P<varname>[\w\-\.]+)[\"']\s*,\s*[\"']?(?P<value>[^\"',)]+)[\"']?",
+    re.IGNORECASE,
+)
+_RE_SET_ENV_ITEM = re.compile(
+    r"Set-Item\s+Env:(?P<varname>[\w\-\.]+)\s+[\"']?(?P<value>[^\"'\s;]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# PowerShell modules
+_RE_INSTALL_MODULE = re.compile(
+    r"Install-Module\s+(?:-Name\s+)?[\"']?(?P<module>[\w\-\.]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Certificates
+_RE_IMPORT_CERTIFICATE = re.compile(
+    r"(?:Import-Certificate|Import-PfxCertificate)\s+.*?(?:-FilePath\s+)?[\"']?(?P<path>[^\"'\s;,]+\.(?:cer|pfx|p12|crt))[\"']?",
+    re.IGNORECASE,
+)
+
+# WinRM / remoting
+_RE_ENABLE_PSREMOTING = re.compile(
+    r"(?:Enable-PSRemoting|winrm\s+(?:quickconfig|set|create))",
+    re.IGNORECASE,
+)
+
+# IIS
+_RE_NEW_WEBSITE = re.compile(
+    r"New-WebSite\s+(?:-Name\s+)?[\"']?(?P<sitename>[\w\-\s\.]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# DNS client
+_RE_SET_DNS_CLIENT = re.compile(
+    r"Set-DnsClientServerAddress\s+.*?-ServerAddresses\s+[\"']?(?P<addresses>[0-9a-f\.:,\s\[\]]+)(?=\s*(?:-|$))",
+    re.IGNORECASE,
+)
+
+# ACL
+_RE_SET_ACL = re.compile(
+    r"(?:Set-Acl|icacls\.exe?)\s+[\"']?(?P<path>[^\"'\s;]+)[\"']?",
+    re.IGNORECASE,
+)
+
+# Elevation requirement: commands that need admin
+_ELEVATION_PATTERNS = re.compile(
+    r"Install-WindowsFeature|Enable-WindowsOptionalFeature|New-Service|"
+    r"Set-Service|msiexec|New-Item\s+.*HKLM|Set-ItemProperty\s+.*HKLM|"
+    r"New-LocalUser|Remove-LocalUser|Add-LocalGroupMember|Remove-LocalGroupMember|"
+    r"New-NetFirewallRule|Enable-NetFirewallRule|Disable-NetFirewallRule|"
+    r"Remove-NetFirewallRule|Register-ScheduledTask|Unregister-ScheduledTask|"
+    r"Enable-PSRemoting|winrm\s+quickconfig|Import-Certificate|Import-PfxCertificate|"
+    r"New-WebSite|Set-Acl|icacls|Install-Module",
+    re.IGNORECASE,
+)
+
+# Comment / blank lines to skip
+_RE_COMMENT = re.compile(r"^\s*#")
+_RE_BLANK = re.compile(r"^\s*$")
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def parse_powershell_script(script_path: str) -> str:
     """
-    Parse a PowerShell script file and extract its structure.
+    Parse a PowerShell provisioning script and extract structured actions.
 
-    Identifies cmdlet invocations, function definitions, variable assignments,
-    module imports, and constructs that cannot be automatically converted.
+    Analyses the script line by line using pattern matching to identify
+    common Windows provisioning operations.  Each recognised action is
+    returned as a structured entry in the intermediate representation (IR).
+    Unrecognised lines are captured as raw ``win_shell`` fallbacks.
 
     Args:
-        path: Path to a PowerShell script (``.ps1``, ``.psm1``, or ``.psd1``).
+        script_path: Path to the ``.ps1`` PowerShell script file.
 
     Returns:
-        Formatted analysis string summarising the script contents, or an
-        error message string prefixed with ``"Error:"`` if reading fails.
+        JSON string containing the parsed IR with the following top-level
+        keys:
+
+        - ``source``: absolute path of the parsed file.
+        - ``actions``: list of structured action dicts.
+        - ``warnings``: list of warning messages (e.g. unrecognised lines).
+        - ``metrics``: summary counts per action type.
 
     """
     try:
-        file_path = _normalize_path(path)
+        normalized_path = _normalize_path(script_path)
         workspace_root = _get_workspace_root()
-        safe_path = _ensure_within_base_path(file_path, workspace_root)
+        safe_path = _ensure_within_base_path(normalized_path, workspace_root)
+        if not safe_path.exists():  # NOSONAR
+            return ERROR_FILE_NOT_FOUND.format(path=safe_path)
+        if safe_path.is_dir():
+            return f"Error: Path is a directory, expected a .ps1 file: {safe_path}"
+
         content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
+        result = _parse_powershell_content(content, str(safe_path))
+        return json.dumps(result, indent=2)
 
-        if len(content) > MAX_SCRIPT_LENGTH:
-            return f"Error: Script too large to parse safely ({len(content)} bytes)"
-
-        results = _parse_script_content(content, path)
-        return _format_script_results(results, path)
-
-    except ValueError as e:
-        return f"Error: {e}"
-    except FileNotFoundError:
-        return ERROR_FILE_NOT_FOUND.format(path=path)
-    except IsADirectoryError:
-        return ERROR_IS_DIRECTORY.format(path=path)
     except PermissionError:
-        return ERROR_PERMISSION_DENIED.format(path=path)
+        return ERROR_PERMISSION_DENIED.format(path=script_path)
     except Exception as e:
-        return f"An error occurred: {e}"
+        return f"Error parsing PowerShell script: {e}"
 
 
-def parse_powershell_directory(directory_path: str) -> str:
+def parse_powershell_content(content: str, source: str = "<inline>") -> str:
     """
-    Parse all PowerShell scripts in a directory.
+    Parse PowerShell script content (string) and extract structured actions.
 
-    Recursively finds all ``.ps1``, ``.psm1``, and ``.psd1`` files and
-    produces a combined analysis report across all scripts.
+    Useful when the script content is already in memory rather than on disk.
 
     Args:
-        directory_path: Path to the directory containing PowerShell scripts.
+        content: PowerShell script text to parse.
+        source: Optional label for the source (shown in IR output).
 
     Returns:
-        Formatted summary report across all scripts, or an error message.
+        JSON string with the same schema as :func:`parse_powershell_script`.
 
     """
-    try:
-        dir_path = _normalize_path(directory_path)
-        workspace_root = _get_workspace_root()
-        safe_dir = _ensure_within_base_path(dir_path, workspace_root)
+    result = _parse_powershell_content(content, source)
+    return json.dumps(result, indent=2)
 
-        if not safe_dir.exists():  # NOSONAR
-            return ERROR_FILE_NOT_FOUND.format(path=directory_path)
-        if not safe_dir.is_dir():
-            return ERROR_IS_DIRECTORY.format(path=directory_path)
 
-        scripts = sorted(
-            list(safe_dir.rglob("*.ps1"))
-            + list(safe_dir.rglob("*.psm1"))
-            + list(safe_dir.rglob("*.psd1"))
-        )
-        if not scripts:
-            return (
-                f"Warning: No PowerShell scripts (.ps1/.psm1/.psd1) found "
-                f"in {directory_path}"
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _parse_powershell_content(content: str, source: str) -> dict[str, Any]:
+    """Parse PowerShell content and return the IR dict."""
+    actions: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    metrics: dict[str, int] = {
+        "windows_feature": 0,
+        "windows_service": 0,
+        "registry": 0,
+        "file": 0,
+        "package": 0,
+        "user": 0,
+        "firewall": 0,
+        "scheduled_task": 0,
+        "environment": 0,
+        "certificate": 0,
+        "other_enterprise": 0,
+        "win_shell_fallback": 0,
+        "total_lines": 0,
+        "skipped_lines": 0,
+    }
+
+    lines = content.splitlines()
+    metrics["total_lines"] = len(lines)
+
+    for lineno, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+
+        # Skip blank lines and comments
+        if _RE_BLANK.match(line) or _RE_COMMENT.match(line):
+            metrics["skipped_lines"] += 1
+            continue
+
+        action = _classify_line(line, lineno)
+        if action is not None:
+            actions.append(action)
+            _increment_metric(metrics, action["action_type"])
+        else:
+            # Unrecognised line – emit as win_shell fallback
+            msg = (
+                f"Line {lineno}: Unrecognised pattern – falling back to"
+                f" win_shell: {line[:80]}"
             )
-
-        all_cmdlets: list[dict[str, Any]] = []
-        all_functions: list[dict[str, Any]] = []
-        all_variables: list[dict[str, Any]] = []
-        all_unsupported: list[dict[str, Any]] = []
-        all_modules: list[dict[str, Any]] = []
-
-        for script_path in scripts:
-            try:
-                content = safe_read_text(
-                    script_path, workspace_root, encoding="utf-8"
-                )
-                rel_path = str(script_path.relative_to(workspace_root))
-                parsed = _parse_script_content(content, rel_path)
-                all_cmdlets.extend(parsed.get("cmdlets", []))
-                all_functions.extend(parsed.get("functions", []))
-                all_variables.extend(parsed.get("variables", []))
-                all_unsupported.extend(parsed.get("unsupported", []))
-                all_modules.extend(parsed.get("modules", []))
-            except (OSError, ValueError):
-                continue
-
-        combined: dict[str, Any] = {
-            "cmdlets": all_cmdlets,
-            "functions": all_functions,
-            "variables": all_variables,
-            "unsupported": all_unsupported,
-            "modules": all_modules,
-        }
-        return _format_script_results(combined, directory_path)
-
-    except ValueError as e:
-        return f"Error: {e}"
-    except FileNotFoundError:
-        return ERROR_FILE_NOT_FOUND.format(path=directory_path)
-    except PermissionError:
-        return ERROR_PERMISSION_DENIED.format(path=directory_path)
-    except Exception as e:
-        return f"An error occurred: {e}"
-
-
-# ---------------------------------------------------------------------------
-# Internal parsing helpers
-# ---------------------------------------------------------------------------
-
-
-def _parse_script_content(content: str, source_path: str) -> dict[str, Any]:
-    """
-    Parse PowerShell script content and return structured data.
-
-    Args:
-        content: Raw PowerShell script text.
-        source_path: Source file path (used for provenance in results).
-
-    Returns:
-        Dictionary with keys: cmdlets, functions, variables, modules,
-        unsupported.
-
-    """
-    stripped = _strip_comments(content)
-    cmdlets = _extract_cmdlets(stripped, source_path)
-    functions = _extract_functions(stripped, source_path)
-    variables = _extract_variables(stripped, source_path)
-    modules = _extract_module_imports(stripped, source_path)
-    unsupported = _detect_unsupported_constructs(content, source_path)
+            warnings.append(msg)
+            actions.append(_make_win_shell_fallback(line, lineno))
+            metrics["win_shell_fallback"] += 1
 
     return {
-        "cmdlets": cmdlets[:MAX_CMDLETS],
-        "functions": functions,
-        "variables": variables,
-        "modules": modules,
-        "unsupported": unsupported,
+        "source": source,
+        "actions": actions,
+        "warnings": warnings,
+        "metrics": metrics,
     }
 
 
-def _strip_comments(content: str) -> str:
+def _increment_metric(metrics: dict[str, int], action_type: str) -> None:
+    """Increment the metric counter for a given action type."""
+    category_map = {
+        "windows_feature_install": "windows_feature",
+        "windows_feature_remove": "windows_feature",
+        "windows_optional_feature_enable": "windows_feature",
+        "windows_optional_feature_disable": "windows_feature",
+        "windows_service_start": "windows_service",
+        "windows_service_stop": "windows_service",
+        "windows_service_configure": "windows_service",
+        "windows_service_create": "windows_service",
+        "registry_set": "registry",
+        "registry_create_key": "registry",
+        "registry_remove_key": "registry",
+        "file_copy": "file",
+        "directory_create": "file",
+        "file_remove": "file",
+        "file_write": "file",
+        "msi_install": "package",
+        "chocolatey_install": "package",
+        "chocolatey_uninstall": "package",
+        "user_create": "user",
+        "user_modify": "user",
+        "user_remove": "user",
+        "group_member_add": "user",
+        "group_member_remove": "user",
+        "firewall_rule_create": "firewall",
+        "firewall_rule_enable": "firewall",
+        "firewall_rule_disable": "firewall",
+        "firewall_rule_remove": "firewall",
+        "scheduled_task_register": "scheduled_task",
+        "scheduled_task_unregister": "scheduled_task",
+        "environment_set": "environment",
+        "psmodule_install": "other_enterprise",
+        "certificate_import": "certificate",
+        "winrm_enable": "other_enterprise",
+        "iis_website_create": "other_enterprise",
+        "dns_client_set": "other_enterprise",
+        "acl_set": "other_enterprise",
+        "win_shell": "win_shell_fallback",
+    }
+    category = category_map.get(action_type, "win_shell_fallback")
+    metrics[category] = metrics.get(category, 0) + 1
+
+
+def _requires_elevation(line: str) -> bool:
+    """Return True if the command typically requires elevated privileges."""
+    return bool(_ELEVATION_PATTERNS.search(line))
+
+
+def _classify_line(line: str, lineno: int) -> dict[str, Any] | None:
     """
-    Remove single-line (#) and block (<# ... #>) PowerShell comments.
+    Attempt to classify a single PowerShell line as a known action.
+
+    Returns an action dict if a pattern matches, or ``None`` if the line
+    is not recognised.
 
     Args:
-        content: Raw PowerShell text.
+        line: Stripped script line.
+        lineno: 1-based line number for source location metadata.
 
     Returns:
-        Text with comments replaced by whitespace to preserve line numbers.
+        Action dict or ``None``.
 
     """
-    # Remove block comments <# ... #>
-    content = re.sub(
-        r"<#.*?#>",
-        lambda m: "\n" * m.group(0).count("\n"),
-        content,
-        flags=re.DOTALL,
+    return (
+        _classify_feature_line(line, lineno)
+        or _classify_service_line(line, lineno)
+        or _classify_registry_line(line, lineno)
+        or _classify_file_line(line, lineno)
+        or _classify_package_line(line, lineno)
+        or _classify_user_line(line, lineno)
+        or _classify_firewall_line(line, lineno)
+        or _classify_enterprise_line(line, lineno)
     )
-    # Remove single-line comments
-    content = re.sub(r"#[^\n]*", "", content)
-    return content
 
 
-def _build_line_index(content: str) -> list[int]:
-    """
-    Build an index of character offsets for the start of each line.
-
-    Args:
-        content: Script text.
-
-    Returns:
-        Sorted list of character offsets at which each line starts.
-
-    """
-    offsets = [0]
-    for i, ch in enumerate(content):
-        if ch == "\n":
-            offsets.append(i + 1)
-    return offsets
-
-
-def _get_line_number(offset: int, line_starts: list[int]) -> int:
-    """
-    Return the 1-based line number for a given character offset.
-
-    Args:
-        offset: Character offset within the script.
-        line_starts: Sorted list of line-start offsets from
-            :func:`_build_line_index`.
-
-    Returns:
-        1-based line number.
-
-    """
-    lo, hi = 0, len(line_starts) - 1
-    while lo < hi:
-        mid = (lo + hi + 1) // 2
-        if line_starts[mid] <= offset:
-            lo = mid
-        else:
-            hi = mid - 1
-    return lo + 1
-
-
-def _extract_cmdlets(
-    content: str, source_path: str
-) -> list[dict[str, Any]]:
-    """
-    Extract PowerShell cmdlet invocations from script content.
-
-    Args:
-        content: Comment-stripped PowerShell text.
-        source_path: Source file path for provenance.
-
-    Returns:
-        List of cmdlet dictionaries with ``name``, ``ansible_module``,
-        ``parameters``, ``source_file``, and ``line`` keys.
-
-    """
-    line_starts = _build_line_index(content)
-    found: list[dict[str, Any]] = []
-    seen: set[tuple[str, int]] = set()
-
-    for match in _RE_CMDLET_CALL.finditer(content):
-        name = match.group(1)
-        params_raw = (match.group(2) or "").strip()
-        line_num = _get_line_number(match.start(), line_starts)
-        key = (name.lower(), line_num)
-        if key in seen:
-            continue
-        seen.add(key)
-
-        ansible_module = CMDLET_MODULE_MAP.get(name.lower())
-        found.append(
-            {
-                "name": name,
-                "ansible_module": ansible_module or "ansible.windows.win_shell",
-                "supported": ansible_module is not None,
-                "parameters_raw": params_raw[:200],
-                "source_file": source_path,
-                "line": line_num,
-            }
+def _classify_feature_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify Windows feature installation/removal lines."""
+    m = _RE_INSTALL_WINDOWS_FEATURE.search(line)
+    if m:
+        return _make_action(
+            "windows_feature_install",
+            {"feature_name": m.group("feature")},
+            line,
+            lineno,
         )
-    return found
 
-
-def _extract_functions(
-    content: str, source_path: str
-) -> list[dict[str, Any]]:
-    """
-    Extract PowerShell function definitions.
-
-    Args:
-        content: Comment-stripped PowerShell text.
-        source_path: Source file path for provenance.
-
-    Returns:
-        List of function definition dictionaries.
-
-    """
-    line_starts = _build_line_index(content)
-    functions = []
-    for match in _RE_FUNCTION.finditer(content):
-        functions.append(
-            {
-                "name": match.group(1),
-                "params": match.group(2) or "",
-                "source_file": source_path,
-                "line": _get_line_number(match.start(), line_starts),
-            }
+    m = _RE_ENABLE_OPTIONAL_FEATURE.search(line)
+    if m:
+        return _make_action(
+            "windows_optional_feature_enable",
+            {"feature_name": m.group("feature")},
+            line,
+            lineno,
         )
-    return functions
 
-
-def _extract_variables(
-    content: str, source_path: str
-) -> list[dict[str, Any]]:
-    """
-    Extract top-level variable assignments from script content.
-
-    Args:
-        content: Comment-stripped PowerShell text.
-        source_path: Source file path for provenance.
-
-    Returns:
-        List of variable dictionaries.
-
-    """
-    line_starts = _build_line_index(content)
-    seen_names: set[str] = set()
-    variables = []
-    for match in _RE_VARIABLE.finditer(content):
-        name = match.group(1)
-        if name.lower() in seen_names:
-            continue
-        seen_names.add(name.lower())
-        variables.append(
-            {
-                "name": f"${name}",
-                "value_snippet": match.group(2).strip()[:100],
-                "source_file": source_path,
-                "line": _get_line_number(match.start(), line_starts),
-            }
+    m = _RE_REMOVE_WINDOWS_FEATURE.search(line)
+    if m:
+        return _make_action(
+            "windows_feature_remove",
+            {"feature_name": m.group("feature")},
+            line,
+            lineno,
         )
-    return variables
+
+    m = _RE_DISABLE_OPTIONAL_FEATURE.search(line)
+    if m:
+        return _make_action(
+            "windows_optional_feature_disable",
+            {"feature_name": m.group("feature")},
+            line,
+            lineno,
+        )
+
+    return None
 
 
-def _extract_module_imports(
-    content: str, source_path: str
-) -> list[dict[str, Any]]:
-    """
-    Extract PowerShell module imports (Import-Module and #Requires).
+def _classify_service_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify Windows service management lines."""
+    # New-Service must be checked before Set-Service to avoid partial match
+    m = _RE_NEW_SERVICE.search(line)
+    if m:
+        params: dict[str, Any] = {"service_name": m.group("service")}
+        if m.group("path"):
+            params["binary_path"] = m.group("path")
+        return _make_action("windows_service_create", params, line, lineno)
 
-    Args:
-        content: Comment-stripped PowerShell text.
-        source_path: Source file path for provenance.
+    m = _RE_SET_SERVICE.search(line)
+    if m:
+        return _make_action(
+            "windows_service_configure",
+            {
+                "service_name": m.group("service"),
+                "startup_type": m.group("startup").lower(),
+            },
+            line,
+            lineno,
+        )
 
-    Returns:
-        List of module import dictionaries.
+    m = _RE_START_SERVICE.search(line)
+    if m:
+        return _make_action(
+            "windows_service_start",
+            {"service_name": m.group("service")},
+            line,
+            lineno,
+        )
 
-    """
-    line_starts = _build_line_index(content)
-    modules: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    m = _RE_STOP_SERVICE.search(line)
+    if m:
+        return _make_action(
+            "windows_service_stop",
+            {"service_name": m.group("service")},
+            line,
+            lineno,
+        )
 
-    for pattern, import_type in [
-        (_RE_IMPORT_MODULE, "Import-Module"),
-        (_RE_REQUIRES_MODULE, "#Requires"),
-    ]:
-        for match in pattern.finditer(content):
-            name = match.group(1).strip().rstrip(",")
-            if name.lower() in seen:
-                continue
-            seen.add(name.lower())
-            modules.append(
-                {
-                    "name": name,
-                    "import_type": import_type,
-                    "source_file": source_path,
-                    "line": _get_line_number(match.start(), line_starts),
-                }
-            )
-    return modules
+    return None
 
 
-def _detect_unsupported_constructs(
-    content: str, source_path: str
-) -> list[dict[str, Any]]:
-    """
-    Detect PowerShell constructs that cannot be automatically converted.
+def _classify_registry_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify Windows registry operation lines."""
+    m = _RE_SET_REG_PROPERTY.search(line)
+    if m:
+        return _make_action(
+            "registry_set",
+            {
+                "key": m.group("key"),
+                "name": m.group("name").strip(),
+                "value": m.group("value").strip(),
+            },
+            line,
+            lineno,
+        )
 
-    Args:
-        content: Raw PowerShell script text (including comments, for context).
-        source_path: Source file path for provenance.
+    m = _RE_REMOVE_REG_KEY.search(line)
+    if m and _is_registry_path(m.group("key")):
+        return _make_action(
+            "registry_remove_key",
+            {"key": m.group("key")},
+            line,
+            lineno,
+        )
 
-    Returns:
-        List of unsupported construct dictionaries.
+    m = _RE_NEW_REG_KEY.search(line)
+    if m and _is_registry_path(m.group("key")):
+        return _make_action(
+            "registry_create_key",
+            {"key": m.group("key")},
+            line,
+            lineno,
+        )
 
-    """
-    line_starts = _build_line_index(content)
-    unsupported = []
-    for pattern, construct_name in UNSUPPORTED_CONSTRUCTS:
-        for match in pattern.finditer(content):
-            line_num = _get_line_number(match.start(), line_starts)
-            unsupported.append(
-                {
-                    "construct": construct_name,
-                    "text": match.group(0)[:80],
-                    "source_file": source_path,
-                    "line": line_num,
-                }
-            )
-    return unsupported
+    return None
+
+
+def _classify_file_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify file/directory operation lines."""
+    # Directory creation before generic remove/copy
+    m = _RE_NEW_ITEM_DIR.search(line)
+    if m:
+        return _make_action(
+            "directory_create",
+            {"path": m.group("path")},
+            line,
+            lineno,
+        )
+
+    m = _RE_COPY_ITEM.search(line)
+    if m:
+        return _make_action(
+            "file_copy",
+            {"src": m.group("src"), "dest": m.group("dest")},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_CONTENT.search(line)
+    if m:
+        return _make_action(
+            "file_write",
+            {"path": m.group("path"), "content": m.group("content").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_REMOVE_ITEM.search(line)
+    if m and not _is_registry_path(m.group("path")):
+        return _make_action(
+            "file_remove",
+            {"path": m.group("path")},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _classify_package_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify package installation/removal lines (MSI, Chocolatey)."""
+    m = _RE_MSI_INSTALL.search(line)
+    if m:
+        return _make_action(
+            "msi_install",
+            {"package_path": m.group("path")},
+            line,
+            lineno,
+        )
+
+    m = _RE_CHOCO_INSTALL.search(line)
+    if m:
+        pkg = m.group("package") or m.group("choco_package")
+        return _make_action(
+            "chocolatey_install",
+            {"package_name": pkg},
+            line,
+            lineno,
+        )
+
+    m = _RE_CHOCO_UNINSTALL.search(line)
+    if m:
+        return _make_action(
+            "chocolatey_uninstall",
+            {"package_name": m.group("package")},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _classify_user_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify Windows local user management lines."""
+    m = _RE_NEW_LOCAL_USER.search(line)
+    if m:
+        return _make_action(
+            "user_create",
+            {"username": m.group("username")},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_LOCAL_USER.search(line)
+    if m:
+        return _make_action(
+            "user_modify",
+            {"username": m.group("username")},
+            line,
+            lineno,
+        )
+
+    m = _RE_REMOVE_LOCAL_USER.search(line)
+    if m:
+        return _make_action(
+            "user_remove",
+            {"username": m.group("username")},
+            line,
+            lineno,
+        )
+
+    m = _RE_ADD_LOCAL_GROUP_MEMBER.search(line)
+    if m:
+        return _make_action(
+            "group_member_add",
+            {"group": m.group("group").strip(), "member": m.group("member").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_REMOVE_LOCAL_GROUP_MEMBER.search(line)
+    if m:
+        return _make_action(
+            "group_member_remove",
+            {"group": m.group("group").strip(), "member": m.group("member").strip()},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _classify_firewall_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify Windows firewall rule lines."""
+    m = _RE_NEW_FIREWALL_RULE.search(line)
+    if m:
+        return _make_action(
+            "firewall_rule_create",
+            {"rule_name": m.group("name").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_ENABLE_FIREWALL_RULE.search(line)
+    if m:
+        return _make_action(
+            "firewall_rule_enable",
+            {"rule_name": m.group("name").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_DISABLE_FIREWALL_RULE.search(line)
+    if m:
+        return _make_action(
+            "firewall_rule_disable",
+            {"rule_name": m.group("name").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_REMOVE_FIREWALL_RULE.search(line)
+    if m:
+        return _make_action(
+            "firewall_rule_remove",
+            {"rule_name": m.group("name").strip()},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _classify_enterprise_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify enterprise Windows operations."""
+    return _classify_task_env_line(line, lineno) or _classify_infra_line(line, lineno)
+
+
+def _classify_task_env_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify scheduled task and environment variable lines."""
+    m = _RE_REGISTER_SCHEDULED_TASK.search(line)
+    if m:
+        return _make_action(
+            "scheduled_task_register",
+            {"task_name": m.group("taskname").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_UNREGISTER_SCHEDULED_TASK.search(line)
+    if m:
+        return _make_action(
+            "scheduled_task_unregister",
+            {"task_name": m.group("taskname").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_ENV_VAR.search(line)
+    if m:
+        return _make_action(
+            "environment_set",
+            {"name": m.group("varname"), "value": m.group("value").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_ENV_ITEM.search(line)
+    if m:
+        return _make_action(
+            "environment_set",
+            {"name": m.group("varname"), "value": m.group("value").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_INSTALL_MODULE.search(line)
+    if m:
+        return _make_action(
+            "psmodule_install",
+            {"module_name": m.group("module")},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _classify_infra_line(line: str, lineno: int) -> dict[str, Any] | None:
+    """Classify certificate, WinRM, IIS, DNS, and ACL lines."""
+    m = _RE_IMPORT_CERTIFICATE.search(line)
+    if m:
+        return _make_action(
+            "certificate_import",
+            {"certificate_path": m.group("path")},
+            line,
+            lineno,
+        )
+
+    if _RE_ENABLE_PSREMOTING.search(line):
+        return _make_action(
+            "winrm_enable",
+            {"raw_command": line},
+            line,
+            lineno,
+        )
+
+    m = _RE_NEW_WEBSITE.search(line)
+    if m:
+        return _make_action(
+            "iis_website_create",
+            {"site_name": m.group("sitename").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_DNS_CLIENT.search(line)
+    if m:
+        return _make_action(
+            "dns_client_set",
+            {"server_addresses": m.group("addresses").strip()},
+            line,
+            lineno,
+        )
+
+    m = _RE_SET_ACL.search(line)
+    if m:
+        return _make_action(
+            "acl_set",
+            {"path": m.group("path")},
+            line,
+            lineno,
+        )
+
+    return None
+
+
+def _is_registry_path(path: str) -> bool:
+    """Return True if *path* looks like a Windows registry path."""
+    return bool(re.match(r"(?:HKLM|HKCU|HKEY_[A-Z_]+)[:\\]", path, re.IGNORECASE))
+
+
+def _make_action(
+    action_type: str,
+    params: dict[str, Any],
+    raw_line: str,
+    lineno: int,
+) -> dict[str, Any]:
+    """Build a structured action dict."""
+    return {
+        "action_type": action_type,
+        "params": params,
+        "requires_elevation": _requires_elevation(raw_line),
+        "source_line": lineno,
+        "raw": raw_line,
+        "confidence": "high",
+    }
+
+
+def _make_win_shell_fallback(line: str, lineno: int) -> dict[str, Any]:
+    """Build a win_shell fallback action for unrecognised lines."""
+    return {
+        "action_type": "win_shell",
+        "params": {"command": line},
+        "requires_elevation": False,
+        "source_line": lineno,
+        "raw": line,
+        "confidence": "low",
+    }
 
 
 # ---------------------------------------------------------------------------
-# Result formatting
+# Convenience: parse from a Path object (internal use)
 # ---------------------------------------------------------------------------
 
 
-def _format_cmdlets_section(
-    parts: list[str], cmdlets: list[dict[str, Any]]
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """
-    Append the cmdlets section to *parts* and return (supported, unsupported) lists.
-
-    Args:
-        parts: Mutable list of strings to append to.
-        cmdlets: List of parsed cmdlet dictionaries.
-
-    Returns:
-        Tuple of (supported_cmdlets, unsupported_cmdlets) lists.
-
-    """
-    supported = [c for c in cmdlets if c.get("supported")]
-    unsupported_cmdlets = [c for c in cmdlets if not c.get("supported")]
-
-    parts.append(
-        f"Cmdlet Invocations ({len(cmdlets)} total, "
-        f"{len(supported)} directly mappable):"
-    )
-    if cmdlets:
-        for c in cmdlets[:50]:
-            tag = "" if c.get("supported") else " [needs manual review]"
-            parts.append(
-                f"  {c['name']} → {c['ansible_module']}"
-                f"  [line {c['line']}]{tag}"
-            )
-        if len(cmdlets) > 50:
-            parts.append(f"  ... and {len(cmdlets) - 50} more")
-    else:
-        parts.append("  (none detected)")
-
-    return supported, unsupported_cmdlets
-
-
-def _format_script_results(results: dict[str, Any], source_path: str) -> str:
-    """
-    Format parsed script results as a human-readable report string.
-
-    Args:
-        results: Parsed data dictionary from :func:`_parse_script_content`.
-        source_path: Source file or directory path (used in heading).
-
-    Returns:
-        Formatted multi-line string report.
-
-    """
-    cmdlets = results.get("cmdlets", [])
-    functions = results.get("functions", [])
-    variables = results.get("variables", [])
-    modules = results.get("modules", [])
-    unsupported = results.get("unsupported", [])
-
-    parts: list[str] = [
-        f"PowerShell Script Analysis: {source_path}",
-        "=" * 60,
-        "",
-    ]
-
-    supported, unsupported_cmdlets = _format_cmdlets_section(parts, cmdlets)
-
-    # Functions
-    parts.append("")
-    parts.append(f"Function Definitions ({len(functions)}):")
-    if functions:
-        for f in functions:
-            parts.append(f"  {f['name']}()  [line {f['line']}]")
-    else:
-        parts.append("  (none detected)")
-
-    # Modules
-    parts.append("")
-    parts.append(f"Module Imports ({len(modules)}):")
-    if modules:
-        for m in modules:
-            parts.append(f"  {m['import_type']}: {m['name']}  [line {m['line']}]")
-    else:
-        parts.append("  (none detected)")
-
-    # Variables
-    parts.append("")
-    parts.append(f"Variables ({len(variables)}):")
-    if variables:
-        for v in variables[:20]:
-            parts.append(f"  {v['name']} = {v['value_snippet']}  [line {v['line']}]")
-        if len(variables) > 20:
-            parts.append(f"  ... and {len(variables) - 20} more")
-    else:
-        parts.append("  (none detected)")
-
-    # Unsupported constructs
-    parts.append("")
-    _format_unsupported_section(parts, unsupported)
-
-    # Summary
-    parts.extend(
-        [
-            "",
-            "Summary:",
-            f"  Cmdlets:              {len(cmdlets)}",
-            f"  Directly mappable:    {len(supported)}",
-            f"  Needs manual review:  {len(unsupported_cmdlets)}",
-            f"  Functions:            {len(functions)}",
-            f"  Module imports:       {len(modules)}",
-            f"  Unsupported constructs: {len(unsupported)}",
-        ]
-    )
-    if unsupported:
-        parts.append("  NOTE: Review unsupported constructs before migration.")
-
-    return "\n".join(parts)
-
-
-def _format_unsupported_section(
-    parts: list[str], unsupported: list[dict[str, Any]]
-) -> None:
-    """
-    Append the unsupported constructs section to the report parts list.
-
-    Args:
-        parts: Mutable list of string parts to append to.
-        unsupported: List of unsupported construct dicts.
-
-    """
-    count = len(unsupported)
-    parts.append(f"Unsupported Constructs ({count}):")
-    if unsupported:
-        for item in unsupported:
-            parts.append(
-                f"  [{item['construct']}] at {item['source_file']}:{item['line']}"
-                f" — {item['text']!r}"
-            )
-    else:
-        parts.append("  none detected")
-
-
-def get_powershell_ansible_module_map() -> dict[str, str]:
-    """
-    Return the mapping of PowerShell cmdlets to Ansible modules.
-
-    Returns:
-        Dictionary mapping PowerShell cmdlet names to Ansible module names.
-
-    """
-    return dict(CMDLET_MODULE_MAP)
-
-
-def get_supported_powershell_cmdlets() -> list[str]:
-    """
-    Return the sorted list of cmdlets that map directly to Ansible modules.
-
-    Returns:
-        Sorted list of supported PowerShell cmdlet names.
-
-    """
-    return sorted(CMDLET_MODULE_MAP.keys())
+def _parse_script_from_path(path: Path) -> dict[str, Any]:
+    """Parse a PowerShell script from a :class:`pathlib.Path` (internal)."""
+    content = path.read_text(encoding="utf-8")
+    return _parse_powershell_content(content, str(path))

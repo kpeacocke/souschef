@@ -4,13 +4,13 @@
 # nosec B708: All path operations validated via _ensure_within_base_path and _safe_join
 
 import ast
+import importlib
 import json
 import os
 import re
 from pathlib import Path
 from typing import Any
 
-import yaml  # nosec B506: YAML safe loading enforced in module
 from mcp.server import FastMCP
 
 from souschef.ansible_upgrade import UpgradePath, UpgradePlan
@@ -32,6 +32,37 @@ from souschef.assessment import (
 )
 from souschef.assessment import (
     validate_conversion as _validate_conversion,
+)
+from souschef.converters.bash_to_ansible import (  # noqa: F401, codeql[py/unused-import]
+    _archive_tasks,
+    _build_aap_hints,
+    _build_idempotency_report,
+    _build_quality_score,
+    _build_tasks,
+    _collect_warnings,
+    _cron_tasks,
+    _download_tasks,
+    _file_perm_tasks,
+    _file_write_tasks,
+    _firewall_tasks,
+    _git_tasks,
+    _group_tasks,
+    _hostname_tasks,
+    _package_tasks,
+    _render_playbook,
+    _render_task,
+    _sed_tasks,
+    _service_tasks,
+    _shell_fallback_tasks,
+    _shell_task,
+    _user_tasks,
+    _yaml_str,
+)
+from souschef.converters.bash_to_ansible import (
+    convert_bash_to_ansible as _convert_bash_to_ansible,
+)
+from souschef.converters.bash_to_ansible import (
+    generate_ansible_role_from_bash_file as _generate_ansible_role_from_bash_file,
 )
 from souschef.converters.habitat import (  # noqa: F401, codeql[py/unused-import]
     _add_service_build,
@@ -84,88 +115,13 @@ from souschef.converters.playbook import (
 from souschef.converters.playbook import (
     generate_dynamic_inventory_script as _generate_dynamic_inventory_script,
 )
-from souschef.converters.puppet_to_ansible import (  # noqa: F401, codeql[py/unused-import]
-    _RESOURCE_CONVERTERS,
-    _build_construct_guidance,
-    _clean_puppet_ai_response,
-    _collect_module_manifests,
-    _convert_cron,
-    _convert_exec,
-    _convert_file,
-    _convert_group,
-    _convert_host,
-    _convert_manifest_with_ai,
-    _convert_mount,
-    _convert_package,
-    _convert_service,
-    _convert_ssh_authorized_key,
-    _convert_unsupported,
-    _convert_user,
-    _create_puppet_ai_prompt,
-    _format_module_analysis,
-    _format_unsupported_for_prompt,
-    _generate_puppet_playbook,
-    _map_ensure,
-    _source_to_play_name,
-    get_puppet_ansible_module_map,
-    get_supported_puppet_types,
+from souschef.converters.powershell import (
+    convert_powershell_content_to_ansible as _convert_powershell_content_to_ansible,
 )
-from souschef.converters.puppet_to_ansible import (
-    convert_puppet_manifest_to_ansible as _convert_puppet_manifest_to_ansible,
+from souschef.converters.powershell import (
+    convert_powershell_to_ansible as _convert_powershell_to_ansible,
 )
-from souschef.converters.puppet_to_ansible import (
-    convert_puppet_manifest_to_ansible_with_ai as _convert_puppet_manifest_ai,
-)
-from souschef.converters.puppet_to_ansible import (
-    convert_puppet_module_to_ansible as _convert_puppet_module_to_ansible,
-)
-from souschef.converters.puppet_to_ansible import (
-    convert_puppet_module_to_ansible_with_ai as _convert_puppet_module_ai,
-)
-from souschef.converters.puppet_to_ansible import (
-    convert_puppet_resource_to_task as _convert_puppet_resource_to_task,
-)
-from souschef.converters.powershell_to_ansible import (  # noqa: F401, codeql[py/unused-import]
-    get_powershell_ansible_module_map,
-    get_supported_powershell_cmdlets,
-)
-from souschef.converters.powershell_to_ansible import (
-    convert_powershell_script_to_ansible as _convert_ps_script,
-)
-from souschef.converters.powershell_to_ansible import (
-    convert_powershell_directory_to_ansible as _convert_ps_dir,
-)
-from souschef.converters.powershell_to_ansible import (
-    convert_powershell_script_to_ansible_with_ai as _convert_ps_script_ai,
-)
-from souschef.converters.powershell_to_ansible import (
-    convert_powershell_directory_to_ansible_with_ai as _convert_ps_dir_ai,
-)
-from souschef.converters.powershell_to_ansible import (
-    generate_windows_ee_definition as _gen_windows_ee,
-)
-from souschef.converters.powershell_to_ansible import (
-    generate_aap_windows_credential_vars as _gen_aap_cred_vars,
-)
-from souschef.converters.powershell_to_ansible import (
-    generate_windows_inventory_template as _gen_windows_inv,
-)
-from souschef.parsers.powershell import (  # noqa: F401, codeql[py/unused-import]
-    _parse_script_content,
-    _strip_comments,
-    _extract_cmdlets,
-    _extract_functions,
-    _extract_variables,
-    _extract_module_imports,
-    _detect_unsupported_constructs,
-)
-from souschef.parsers.powershell import (
-    parse_powershell_script as _parse_powershell_script,
-)
-from souschef.parsers.powershell import (
-    parse_powershell_directory as _parse_powershell_directory,
-)
-from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-import]
+from souschef.converters.resource import (  # noqa: F401
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
     _get_file_params,
@@ -216,7 +172,7 @@ from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     safe_write_text,
 )
 from souschef.core.ruby_utils import (
-    _normalize_ruby_value,  # noqa: F401 - used by MCP tools and tests
+    _normalize_ruby_value,  # noqa: F401, codeql[py/unused-import] - used by MCP tools and tests
 )
 from souschef.core.validation import (  # noqa: F401, codeql[py/unused-import]
     ValidationCategory,
@@ -269,6 +225,24 @@ from souschef.filesystem import (
 from souschef.filesystem import (
     read_file as _read_file,
 )
+from souschef.generators.powershell import (
+    analyze_powershell_migration_fidelity as _analyze_powershell_migration_fidelity,
+)
+from souschef.generators.powershell import (
+    generate_ansible_requirements as _generate_ansible_requirements,
+)
+from souschef.generators.powershell import (
+    generate_powershell_awx_job_template as _generate_powershell_awx_job_template,
+)
+from souschef.generators.powershell import (
+    generate_powershell_role_structure as _generate_powershell_role_structure,
+)
+from souschef.generators.powershell import (
+    generate_windows_group_vars as _generate_windows_group_vars,
+)
+from souschef.generators.powershell import (
+    generate_windows_inventory as _generate_windows_inventory,
+)
 from souschef.generators.repo import (
     create_ansible_repository_from_roles as _create_ansible_repository_from_roles,
 )
@@ -299,6 +273,48 @@ from souschef.parsers.attributes import (  # noqa: F401, codeql[py/unused-import
 from souschef.parsers.attributes import (
     parse_attributes as _parse_attributes,
 )
+from souschef.parsers.bash import (  # noqa: F401, codeql[py/unused-import]
+    _extract_archives,
+    _extract_cm_escapes,
+    _extract_cron_jobs,
+    _extract_downloads,
+    _extract_env_vars,
+    _extract_file_perms,
+    _extract_file_writes,
+    _extract_firewall_rules,
+    _extract_git_ops,
+    _extract_groups,
+    _extract_hostname_ops,
+    _extract_idempotency_risks,
+    _extract_packages,
+    _extract_sed_ops,
+    _extract_sensitive_data,
+    _extract_services,
+    _extract_users,
+    _format_archives_section,
+    _format_cm_escapes_section,
+    _format_cron_jobs_section,
+    _format_downloads_section,
+    _format_env_vars_section,
+    _format_file_perms_section,
+    _format_file_writes_section,
+    _format_firewall_rules_section,
+    _format_git_ops_section,
+    _format_groups_section,
+    _format_hostname_ops_section,
+    _format_packages_section,
+    _format_parse_result,
+    _format_risks_and_fallbacks_section,
+    _format_sed_ops_section,
+    _format_sensitive_data_section,
+    _format_services_section,
+    _format_users_section,
+    _identify_shell_fallbacks,
+    _line_number,
+    _parse_bash_content,
+    _parse_package_names,
+)
+from souschef.parsers.bash import parse_bash_script as _parse_bash_script
 from souschef.parsers.habitat import (  # noqa: F401, codeql[py/unused-import]
     _extract_plan_array,
     _extract_plan_exports,
@@ -340,46 +356,28 @@ from souschef.parsers.metadata import (
 from souschef.parsers.metadata import (
     read_cookbook_metadata as _read_cookbook_metadata,
 )
-from souschef.parsers.puppet import (  # noqa: F401, codeql[py/unused-import]
-    _build_line_index,
-    _detect_unsupported_constructs,
-    _extract_puppet_classes,
-    _extract_puppet_resources,
-    _extract_puppet_variables,
-    _format_classes_section,
-    _format_manifest_results,
-    _format_resources_section,
-    _format_unsupported_section,
-    _format_variables_section,
-    _get_line_number,
-    _parse_class_params,
-    _parse_manifest_content,
-    _parse_puppet_attributes,
-    _parse_resource_titles,
-    get_puppet_resource_types,
+from souschef.parsers.powershell import (
+    parse_powershell_content as _parse_powershell_content_fn,
 )
-from souschef.parsers.puppet import (
-    parse_puppet_manifest as _parse_puppet_manifest,
-)
-from souschef.parsers.puppet import (
-    parse_puppet_module as _parse_puppet_module,
+from souschef.parsers.powershell import (
+    parse_powershell_script as _parse_powershell_script,
 )
 from souschef.parsers.recipe import (
-    _extract_conditionals,  # noqa: F401, codeql[py/unused-import]
-    _extract_resources,  # noqa: F401, codeql[py/unused-import]
-    _format_resources,  # noqa: F401, codeql[py/unused-import]
+    _extract_conditionals,  # noqa: F401
+    _extract_resources,  # noqa: F401
+    _format_resources,  # noqa: F401
 )
 from souschef.parsers.recipe import (
     parse_recipe as _parse_recipe,
 )
 from souschef.parsers.resource import (
-    _extract_resource_actions,  # noqa: F401, codeql[py/unused-import]
-    _extract_resource_properties,  # noqa: F401, codeql[py/unused-import]
+    _extract_resource_actions,  # noqa: F401
+    _extract_resource_properties,  # noqa: F401
 )
 from souschef.parsers.resource import (
     parse_custom_resource as _parse_custom_resource,
 )
-from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
+from souschef.parsers.template import (  # noqa: F401
     _convert_erb_to_jinja2,
     _extract_code_block_variables,
     _extract_heredoc_strings,
@@ -392,6 +390,8 @@ from souschef.parsers.template import (
     parse_template as _parse_template,
 )
 
+yaml = importlib.import_module("yaml")  # nosec B506: YAML safe loading enforced in module
+
 # Explicit re-exports for language servers and type checkers
 # These names are intentionally available from souschef.server
 __all__ = [
@@ -399,6 +399,41 @@ __all__ = [
     "ValidationEngine",
     "ValidationLevel",
     "ValidationResult",
+    # Backward compatibility re-exports without underscore prefix (for tests)
+    "analyze_powershell_migration_fidelity",
+    "convert_chef_deployment_to_ansible_strategy",
+    "convert_powershell_content_to_ansible",
+    "convert_powershell_to_ansible",
+    "generate_ansible_requirements",
+    "generate_awx_inventory_source_from_chef",
+    "generate_awx_job_template_from_cookbook",
+    "generate_awx_project_from_cookbooks",
+    "generate_awx_workflow_from_chef_runlist",
+    "generate_blue_green_deployment_playbook",
+    "generate_canary_deployment_strategy",
+    "generate_powershell_awx_job_template",
+    "generate_powershell_role_structure",
+    "generate_windows_group_vars",
+    "generate_windows_inventory",
+    "parse_powershell_content",
+    "parse_powershell_script",
+    # Private backward compatibility re-exports for tests (intentional)
+    "_convert_chef_resource_to_ansible",
+    "_convert_erb_to_jinja2",
+    "_extract_code_block_variables",
+    "_extract_conditionals",
+    "_extract_heredoc_strings",
+    "_extract_node_attribute_path",
+    "_extract_output_variables",
+    "_extract_resource_actions",
+    "_extract_resource_properties",
+    "_extract_resources",
+    "_extract_template_variables",
+    "_format_ansible_task",
+    "_format_resources",
+    "_get_file_params",
+    "_get_service_params",
+    "_strip_ruby_comments",
 ]
 
 # Backward compatibility re-exports without underscore prefix (for tests)
@@ -422,6 +457,16 @@ generate_blue_green_deployment_playbook = (  # noqa: F401
 generate_canary_deployment_strategy = (  # noqa: F401
     _generate_canary_deployment_strategy
 )
+parse_powershell_script = _parse_powershell_script  # noqa: F401
+parse_powershell_content = _parse_powershell_content_fn  # noqa: F401
+convert_powershell_to_ansible = _convert_powershell_to_ansible  # noqa: F401
+convert_powershell_content_to_ansible = _convert_powershell_content_to_ansible  # noqa: F401
+generate_windows_inventory = _generate_windows_inventory  # noqa: F401
+generate_windows_group_vars = _generate_windows_group_vars  # noqa: F401
+generate_ansible_requirements = _generate_ansible_requirements  # noqa: F401
+generate_powershell_role_structure = _generate_powershell_role_structure  # noqa: F401
+generate_powershell_awx_job_template = _generate_powershell_awx_job_template  # noqa: F401
+analyze_powershell_migration_fidelity = _analyze_powershell_migration_fidelity  # noqa: F401
 
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
@@ -5658,523 +5703,346 @@ def generate_handler_routing_config(
 # ==================== End Ansible Upgrade Tools ====================
 
 
-# ==================== Puppet Migration Tools ====================
-
-
-@mcp.tool()
-def parse_puppet_manifest(manifest_path: str) -> str:
-    """
-    Parse a Puppet manifest file and extract resources, classes, and variables.
-
-    Analyses a Puppet manifest (``.pp`` file) to identify resources (package,
-    file, service, user, group, exec, etc.), class definitions, variable
-    assignments, and constructs that cannot be automatically converted.
-
-    Args:
-        manifest_path: Path to the Puppet manifest (``.pp``) file.
-
-    Returns:
-        Formatted report listing all discovered resources, classes, variables,
-        and unsupported constructs with source locations and migration notes.
-
-    """
-    return _parse_puppet_manifest(manifest_path)
-
-
-@mcp.tool()
-def parse_puppet_module(module_path: str) -> str:
-    """
-    Parse a Puppet module directory and extract all resources from manifests.
-
-    Recursively processes all ``.pp`` files in the given module directory,
-    producing a combined report of resources, classes, variables, and
-    unsupported constructs across all manifests.
-
-    Args:
-        module_path: Path to the Puppet module directory.
-
-    Returns:
-        Combined report listing resources, classes, unsupported constructs,
-        and a summary suitable for migration planning.
-
-    """
-    return _parse_puppet_module(module_path)
-
-
-@mcp.tool()
-def convert_puppet_manifest_to_ansible(manifest_path: str) -> str:
-    """
-    Convert a Puppet manifest file to an Ansible playbook.
-
-    Parses the Puppet manifest and generates an Ansible playbook with tasks
-    mapped from Puppet resources. Unsupported constructs are included as
-    debug warning tasks requiring manual review.
-
-    Supported resource types:
-    - ``package`` → ``ansible.builtin.package``
-    - ``service`` → ``ansible.builtin.service``
-    - ``file`` → ``ansible.builtin.file`` / ``copy`` / ``template``
-    - ``user`` → ``ansible.builtin.user``
-    - ``group`` → ``ansible.builtin.group``
-    - ``exec`` → ``ansible.builtin.command``
-    - ``cron`` → ``ansible.builtin.cron``
-    - ``host`` → ``ansible.builtin.lineinfile``
-    - ``mount`` → ``ansible.posix.mount``
-    - ``ssh_authorized_key`` → ``ansible.posix.authorized_key``
-
-    Args:
-        manifest_path: Path to the Puppet manifest (``.pp``) file.
-
-    Returns:
-        Ansible playbook in YAML format as a string.
-
-    """
-    return _convert_puppet_manifest_to_ansible(manifest_path)
-
-
-@mcp.tool()
-def convert_puppet_module_to_ansible(module_path: str) -> str:
-    """
-    Convert a Puppet module directory to an Ansible playbook.
-
-    Recursively processes all ``.pp`` files in the module directory and
-    generates a combined Ansible playbook from all discovered resources.
-
-    Args:
-        module_path: Path to the Puppet module directory.
-
-    Returns:
-        Combined Ansible playbook in YAML format as a string.
-
-    """
-    return _convert_puppet_module_to_ansible(module_path)
-
-
-@mcp.tool()
-def convert_puppet_resource_to_task(
-    resource_type: str,
-    title: str,
-    attributes: str = "",
-) -> str:
-    """
-    Convert a single Puppet resource declaration to an Ansible task.
-
-    Useful for converting individual resources without a full manifest file,
-    for example when migrating manually or testing specific resource types.
-
-    Args:
-        resource_type: Puppet resource type (e.g. ``package``, ``service``).
-        title: Resource title / name (e.g. ``nginx``).
-        attributes: Resource attributes as a comma-separated key=value string
-            (e.g. ``"ensure=installed,version=1.20"``).
-
-    Returns:
-        Ansible task in YAML format as a string.
-
-    """
-    import yaml as _yaml
-
-    # Parse attributes string to dict
-    attrs: dict[str, str] = {}
-    if attributes:
-        for pair in attributes.split(","):
-            pair = pair.strip()
-            if "=" in pair:
-                key, _, val = pair.partition("=")
-                attrs[key.strip()] = val.strip()
-
-    task = _convert_puppet_resource_to_task(resource_type, title, attrs)
-    return _yaml.dump(task, default_flow_style=False, sort_keys=False, allow_unicode=True)
-
-
-@mcp.tool()
-def list_puppet_supported_resource_types() -> str:
-    """
-    List all Puppet resource types that can be automatically converted to Ansible.
-
-    Returns:
-        Formatted list of supported Puppet resource types and their
-        corresponding Ansible module equivalents.
-
-    """
-    module_map = get_puppet_ansible_module_map()
-    lines = ["Supported Puppet resource types and Ansible equivalents:", ""]
-    for puppet_type, ansible_module in sorted(module_map.items()):
-        lines.append(f"  {puppet_type:25s} → {ansible_module}")
-    lines.append("")
-    lines.append(f"Total: {len(module_map)} resource types supported")
-    return "\n".join(lines)
-
-
-@mcp.tool()
-def convert_puppet_manifest_to_ansible_with_ai(
-    manifest_path: str,
-    ai_provider: str = "anthropic",
-    api_key: str = "",
-    model: str = "claude-3-5-sonnet-20241022",
-    temperature: float = 0.3,
-    max_tokens: int = 4000,
-    project_id: str = "",
-    base_url: str = "",
-) -> str:
-    """
-    Convert a Puppet manifest to an Ansible playbook using AI for unsupported constructs.
-
-    Uses an LLM to intelligently convert Puppet constructs that the deterministic
-    converter cannot handle automatically, such as Hiera lookups, create_resources
-    calls, exported/virtual resources, and inline templates.
-
-    Falls back to the standard deterministic conversion when no unsupported
-    constructs are detected.
-
-    Args:
-        manifest_path: Path to the Puppet manifest (.pp) file.
-        ai_provider: AI provider to use ('anthropic', 'openai', 'watson',
-            'lightspeed').
-        api_key: API key for the chosen provider.
-        model: Model identifier (e.g. 'claude-3-5-sonnet-20241022').
-        temperature: Sampling temperature (0.0 – 1.0). Lower values are more
-            deterministic; default is 0.3 for code-generation tasks.
-        max_tokens: Maximum tokens in the AI response.
-        project_id: Project ID (required for IBM Watsonx).
-        base_url: Custom base URL for the provider endpoint.
-
-    Returns:
-        Ansible playbook YAML string, or an error message if conversion fails.
-
-    """
-    return _convert_puppet_manifest_ai(
-        manifest_path,
-        ai_provider=ai_provider,
-        api_key=api_key,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        project_id=project_id,
-        base_url=base_url,
-    )
-
-
-@mcp.tool()
-def convert_puppet_module_to_ansible_with_ai(
-    module_path: str,
-    ai_provider: str = "anthropic",
-    api_key: str = "",
-    model: str = "claude-3-5-sonnet-20241022",
-    temperature: float = 0.3,
-    max_tokens: int = 4000,
-    project_id: str = "",
-    base_url: str = "",
-) -> str:
-    """
-    Convert a Puppet module directory to an Ansible playbook using AI.
-
-    Combines all .pp files in the module directory and applies AI-assisted
-    conversion for unsupported constructs. Falls back to the deterministic
-    converter when no unsupported constructs are present.
-
-    Args:
-        module_path: Path to the Puppet module directory.
-        ai_provider: AI provider to use ('anthropic', 'openai', 'watson',
-            'lightspeed').
-        api_key: API key for the chosen provider.
-        model: Model identifier.
-        temperature: Sampling temperature; default is 0.3.
-        max_tokens: Maximum tokens in the AI response.
-        project_id: Project ID for IBM Watsonx.
-        base_url: Custom provider endpoint URL.
-
-    Returns:
-        Ansible playbook YAML string, or an error message if conversion fails.
-
-    """
-    return _convert_puppet_module_ai(
-        module_path,
-        ai_provider=ai_provider,
-        api_key=api_key,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        project_id=project_id,
-        base_url=base_url,
-    )
-
-
-# ==================== End Puppet Migration Tools ====================
-
-
 # ==================== PowerShell Migration Tools ====================
 
 
 @mcp.tool()
-def parse_powershell_script(script_path: str) -> str:
+def parse_powershell(script_path: str) -> str:
     """
-    Parse a PowerShell script and extract its structure.
+    Parse a PowerShell provisioning script and extract structured actions.
 
-    Identifies cmdlet invocations, function definitions, variable assignments,
-    module imports, and constructs that cannot be automatically converted to
-    Ansible (e.g. .NET P/Invoke, WMI, COM objects, DSC Configuration blocks).
+    Analyses the ``.ps1`` script using pattern matching to identify common
+    Windows provisioning operations: Windows features, services, registry
+    edits, file operations, MSI installs, and Chocolatey packages.
+
+    Addresses GitHub issues #204 and #205.
 
     Args:
-        script_path: Path to a PowerShell script (.ps1 or .psm1).
+        script_path: Path to the PowerShell script (``.ps1`` file).
 
     Returns:
-        Formatted analysis report string, or an error message.
+        JSON string with keys:
+
+        - ``source``: absolute path of the parsed file.
+        - ``actions``: list of structured action dicts (type, params,
+          confidence, source location, elevation requirement).
+        - ``warnings``: list of warnings for unrecognised lines.
+        - ``metrics``: summary counts per action category.
 
     """
     return _parse_powershell_script(script_path)
 
 
 @mcp.tool()
-def parse_powershell_directory(directory_path: str) -> str:
-    """
-    Parse all PowerShell scripts in a directory.
-
-    Recursively finds .ps1, .psm1, and .psd1 files and produces a combined
-    analysis report.
-
-    Args:
-        directory_path: Path to the directory containing PowerShell scripts.
-
-    Returns:
-        Combined analysis report string, or an error message.
-
-    """
-    return _parse_powershell_directory(directory_path)
-
-
-@mcp.tool()
-def convert_powershell_script_to_ansible(script_path: str) -> str:
-    """
-    Convert a PowerShell script to an Ansible playbook.
-
-    Parses the script and maps supported cmdlets to Windows Ansible modules
-    (ansible.windows.*, community.windows.*).  Unsupported cmdlets are
-    emitted as ansible.windows.win_shell stubs with a WARNING comment.
-
-    Args:
-        script_path: Path to the PowerShell script (.ps1 or .psm1).
-
-    Returns:
-        Ansible playbook YAML string targeting Windows hosts, or an error.
-
-    """
-    return _convert_ps_script(script_path)
-
-
-@mcp.tool()
-def convert_powershell_directory_to_ansible(directory_path: str) -> str:
-    """
-    Convert all PowerShell scripts in a directory to an Ansible playbook.
-
-    Combines plays from every .ps1/.psm1 file found into a single
-    multi-play Windows playbook.
-
-    Args:
-        directory_path: Path to the directory containing PowerShell scripts.
-
-    Returns:
-        Combined Ansible playbook YAML string, or an error message.
-
-    """
-    return _convert_ps_dir(directory_path)
-
-
-@mcp.tool()
-def convert_powershell_script_to_ansible_with_ai(
+def convert_powershell(
     script_path: str,
-    ai_provider: str = "anthropic",
-    api_key: str = "",
-    model: str = "claude-3-5-sonnet-20241022",
-    temperature: float = 0.3,
-    max_tokens: int = 4000,
-    project_id: str = "",
-    base_url: str = "",
+    playbook_name: str = "powershell_migration",
+    hosts: str = "windows",
 ) -> str:
     """
-    Convert a PowerShell script to an Ansible playbook using AI.
+    Convert a PowerShell provisioning script to an Ansible playbook.
 
-    When unsupported constructs are detected (.NET P/Invoke, WMI, COM objects,
-    DSC Configuration blocks, PS remoting sessions, etc.), delegates to an
-    LLM for best-effort conversion.  Falls back to the deterministic converter
-    if no unsupported constructs exist.
+    Maps recognised PowerShell provisioning actions to their idiomatic
+    ``ansible.windows`` module equivalents.  Unrecognised commands fall
+    back to ``ansible.windows.win_shell`` with warnings.
+
+    Addresses GitHub issues #204, #205, and #206.
 
     Args:
-        script_path: Path to the PowerShell script (.ps1 or .psm1).
-        ai_provider: AI provider ('anthropic', 'openai', 'watson', 'lightspeed').
-        api_key: API key for the chosen provider.
-        model: Model identifier (e.g. 'claude-3-5-sonnet-20241022').
-        temperature: Sampling temperature; default is 0.3.
-        max_tokens: Maximum tokens in the AI response.
-        project_id: Project ID for IBM Watsonx.
-        base_url: Custom provider endpoint URL.
+        script_path: Path to the PowerShell script (``.ps1`` file).
+        playbook_name: Name for the generated Ansible play.
+        hosts: Ansible inventory group / host pattern (default: ``windows``).
 
     Returns:
-        Ansible playbook YAML string, or an error message if conversion fails.
+        JSON string with keys:
+
+        - ``status``: ``"success"`` or ``"error"``.
+        - ``playbook_yaml``: the generated Ansible playbook as YAML text.
+        - ``tasks_generated``: total number of tasks.
+        - ``win_shell_fallbacks``: count of low-confidence fallback tasks.
+        - ``warnings``: list of warning messages with source locations.
+        - ``source``: absolute path of the input file.
 
     """
-    return _convert_ps_script_ai(
-        script_path,
-        ai_provider=ai_provider,
-        api_key=api_key,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        project_id=project_id,
-        base_url=base_url,
-    )
+    return _convert_powershell_to_ansible(script_path, playbook_name, hosts)
 
 
 @mcp.tool()
-def convert_powershell_directory_to_ansible_with_ai(
-    directory_path: str,
-    ai_provider: str = "anthropic",
-    api_key: str = "",
-    model: str = "claude-3-5-sonnet-20241022",
-    temperature: float = 0.3,
-    max_tokens: int = 4000,
-    project_id: str = "",
-    base_url: str = "",
+def generate_windows_inventory_tool(
+    hosts: str = "",
+    winrm_port: int = 5986,
+    use_ssl: bool = True,
+    validate_certs: bool = False,
 ) -> str:
     """
-    Convert a directory of PowerShell scripts to Ansible using AI.
+    Generate a WinRM-ready Ansible inventory file for Windows managed nodes.
+
+    Produces an INI-format inventory with a ``[windows]`` group and a
+    ``[windows:vars]`` section containing the WinRM connection settings
+    required by the ``ansible.windows`` collection.
 
     Args:
-        directory_path: Path to the directory containing PowerShell scripts.
-        ai_provider: AI provider identifier.
-        api_key: API key for the chosen provider.
-        model: Model identifier.
-        temperature: Sampling temperature; default is 0.3.
-        max_tokens: Maximum tokens in the AI response.
-        project_id: Project ID for IBM Watsonx.
-        base_url: Custom provider endpoint URL.
+        hosts: Comma-separated list of Windows host names or IPs to include.
+            When empty, a placeholder host is used.
+        winrm_port: WinRM HTTPS listener port (default ``5986``).
+        use_ssl: Whether to use HTTPS (``ssl``) or HTTP (``basic``) transport.
+        validate_certs: Whether to validate the WinRM SSL certificate.
 
     Returns:
-        Combined Ansible playbook YAML string, or an error message.
+        INI-formatted inventory string ready to save as ``inventory/hosts``.
 
     """
-    return _convert_ps_dir_ai(
-        directory_path,
-        ai_provider=ai_provider,
-        api_key=api_key,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        project_id=project_id,
-        base_url=base_url,
-    )
-
-
-@mcp.tool()
-def generate_windows_ee_definition(
-    ee_name: str = "windows-ee",
-    base_image: str = "registry.redhat.io/ansible-automation-platform-25/ee-supported-rhel9:latest",
-    python_packages: str = "",
-    galaxy_collections: str = "",
-) -> str:
-    """
-    Generate an Ansible Builder execution-environment.yml for Windows targets.
-
-    Includes the ansible.windows and community.windows collections and the
-    pywinrm Python package required for WinRM connectivity.
-
-    Args:
-        ee_name: Human-readable name for the execution environment.
-        base_image: Base image reference (defaults to AAP 2.5 supported EE).
-        python_packages: Comma-separated extra Python packages (e.g. 'pykerberos').
-        galaxy_collections: Comma-separated extra Galaxy collections.
-
-    Returns:
-        YAML string for the execution-environment.yml file.
-
-    """
-    py_list = [p.strip() for p in python_packages.split(",") if p.strip()]
-    col_list = [c.strip() for c in galaxy_collections.split(",") if c.strip()]
-    return _gen_windows_ee(
-        ee_name=ee_name,
-        base_image=base_image,
-        python_packages=py_list or None,
-        galaxy_collections=col_list or None,
-    )
-
-
-@mcp.tool()
-def generate_aap_windows_credential_vars(
-    transport: str = "ntlm",
-    port: int = 5985,
-    validate_certs: bool = True,
-) -> str:
-    """
-    Generate a Windows credential variable template for AAP/AWX inventories.
-
-    Produces a group_vars/windows.yml stub with WinRM connection variables
-    appropriate for an enterprise Windows inventory.
-
-    Args:
-        transport: WinRM authentication transport ('ntlm', 'kerberos',
-            'certificate', 'basic').
-        port: WinRM port (5985 for HTTP, 5986 for HTTPS).
-        validate_certs: Whether to validate SSL certificates.
-
-    Returns:
-        YAML string for group_vars/windows.yml.
-
-    """
-    return _gen_aap_cred_vars(
-        transport=transport,
-        port=port,
+    host_list = [h.strip() for h in hosts.split(",") if h.strip()] or None
+    return _generate_windows_inventory(
+        hosts=host_list,
+        winrm_port=winrm_port,
+        use_ssl=use_ssl,
         validate_certs=validate_certs,
     )
 
 
 @mcp.tool()
-def generate_windows_inventory_template(
-    hosts: str = "win-server-01,win-server-02",
-    group_name: str = "windows",
-    transport: str = "ntlm",
+def generate_windows_requirements(
+    script_path: str = "",
 ) -> str:
     """
-    Generate a Windows inventory YAML template for AAP/AWX.
+    Generate ``requirements.yml`` with required Ansible collections for Windows.
+
+    Examines the parsed PowerShell script to determine which collections are
+    actually needed (``ansible.windows``, ``community.windows``,
+    ``chocolatey.chocolatey``, etc.) and produces a ``requirements.yml`` file.
 
     Args:
-        hosts: Comma-separated host names or IPs.
-        group_name: Inventory group name (default 'windows').
-        transport: WinRM transport type.
+        script_path: Optional path to a PowerShell script.  When provided the
+            output is tailored to the collections needed by that script.  When
+            omitted all Windows collections are included.
 
     Returns:
-        YAML inventory template string.
+        YAML string for ``requirements.yml``.
 
     """
-    host_list = [h.strip() for h in hosts.split(",") if h.strip()]
-    return _gen_windows_inv(
-        hosts=host_list or None,
-        group_name=group_name,
-        transport=transport,
+    parsed_ir: dict | None = None
+    if script_path.strip():
+        import json as _json
+
+        raw = _parse_powershell_script(script_path)
+        if not raw.startswith("Error"):
+            parsed_ir = _json.loads(raw)
+    return _generate_ansible_requirements(parsed_ir)
+
+
+@mcp.tool()
+def generate_powershell_role(
+    script_path: str,
+    role_name: str = "windows_provisioning",
+    playbook_name: str = "site",
+    hosts: str = "windows",
+) -> str:
+    """
+    Generate a complete Ansible Role structure from a PowerShell script.
+
+    Parses the script and produces all files for a production-ready Ansible
+    role: ``tasks/main.yml``, ``handlers/main.yml``, ``defaults/main.yml``,
+    ``vars/main.yml``, ``meta/main.yml``, ``README.md``, a top-level
+    playbook, WinRM inventory, ``group_vars/windows.yml``, and
+    ``requirements.yml``.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+        role_name: Name of the role directory.
+        playbook_name: Base name for the top-level playbook file.
+        hosts: Ansible inventory host / group pattern.
+
+    Returns:
+        JSON string mapping relative file path → file content for all
+        generated artefacts.
+
+    """
+    import json as _json
+
+    raw = _parse_powershell_script(script_path)
+    if raw.startswith("Error"):
+        return _json.dumps({"status": "error", "error": raw}, indent=2)
+
+    parsed_ir = _json.loads(raw)
+    files = _generate_powershell_role_structure(
+        parsed_ir,
+        role_name=role_name,
+        playbook_name=playbook_name,
+        hosts=hosts,
+    )
+    return _json.dumps(
+        {"status": "success", "files": files, "file_count": len(files)},
+        indent=2,
     )
 
 
 @mcp.tool()
-def list_powershell_supported_cmdlets() -> str:
+def generate_powershell_job_template(
+    script_path: str,
+    job_template_name: str = "Windows PowerShell Migration",
+    playbook: str = "site.yml",
+    inventory: str = "windows-inventory",
+    project: str = "windows-migration-project",
+    credential_name: str = "windows-winrm-credential",
+    environment: str = "production",
+    include_survey: bool = True,
+) -> str:
     """
-    List PowerShell cmdlets that have direct Ansible module equivalents.
+    Generate an AWX / AAP Windows job template from a PowerShell script.
+
+    Parses the script and produces a JSON configuration importable via
+    ``awx-cli`` or the AWX/AAP REST API pre-configured for WinRM Windows
+    automation with optional survey specs derived from script variables.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+        job_template_name: Display name for the AWX job template.
+        playbook: Playbook file name relative to the project root.
+        inventory: Inventory name or ID in AWX.
+        project: Project name or ID in AWX.
+        credential_name: Windows credential name in AWX (Machine credential).
+        environment: Target environment label.
+        include_survey: Whether to generate a survey spec.
 
     Returns:
-        Formatted list of supported cmdlets with their Ansible modules.
+        Formatted text block with job template JSON, CLI import command,
+        and an action summary.
 
     """
-    module_map = get_powershell_ansible_module_map()
-    lines = [
-        "Supported PowerShell Cmdlets → Ansible Modules",
-        "=" * 55,
-        "",
-    ]
-    for cmdlet, module in sorted(module_map.items()):
-        lines.append(f"  {cmdlet:<45} → {module}")
-    lines.extend(["", f"Total: {len(module_map)} cmdlets with direct mappings"])
-    return "\n".join(lines)
+    import json as _json
+
+    raw = _parse_powershell_script(script_path)
+    if raw.startswith("Error"):
+        return raw
+
+    parsed_ir = _json.loads(raw)
+    return _generate_powershell_awx_job_template(
+        parsed_ir,
+        job_template_name=job_template_name,
+        playbook=playbook,
+        inventory=inventory,
+        project=project,
+        credential_name=credential_name,
+        environment=environment,
+        include_survey=include_survey,
+    )
+
+
+@mcp.tool()
+def analyze_powershell_fidelity(
+    script_path: str,
+) -> str:
+    """
+    Analyse migration fidelity for a PowerShell provisioning script.
+
+    Calculates the percentage of actions that can be automatically mapped to
+    idiomatic Ansible modules, lists actions needing manual review, and
+    provides actionable next steps.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+
+    Returns:
+        JSON string with keys:
+
+        - ``fidelity_score``: Percentage (0-100) automated.
+        - ``total_actions``: Total action count.
+        - ``automated_actions``: High-confidence idiomatic mappings.
+        - ``fallback_actions``: ``win_shell`` fallbacks.
+        - ``review_required``: Actions needing manual completion.
+        - ``summary``: Human-readable summary.
+        - ``recommendations``: Actionable next steps.
+
+    """
+    import json as _json
+
+    raw = _parse_powershell_script(script_path)
+    if raw.startswith("Error"):
+        return _json.dumps({"status": "error", "error": raw}, indent=2)
+
+    parsed_ir = _json.loads(raw)
+    return _analyze_powershell_migration_fidelity(parsed_ir)
 
 
 # ==================== End PowerShell Migration Tools ====================
+
+
+# ==================== V2.2 Bash Script Migration Tools ====================
+
+
+@mcp.tool()
+def parse_bash_script(script_path: str) -> str:
+    """
+    Parse a Bash script and extract provisioning patterns.
+
+    Detects common provisioning operations including package installs
+    (apt, yum, dnf, zypper, apk), service control (systemctl, service),
+    file writes (heredocs, redirects), and downloads (curl, wget).
+    Emits results with confidence scores; low-confidence sections are
+    flagged as shell-fallbacks with idempotency warnings.
+
+    Args:
+        script_path: Path to the Bash script file.
+
+    Returns:
+        Formatted string describing detected patterns, warnings, and
+        idempotency hints.
+
+    """
+    return _parse_bash_script(script_path)
+
+
+@mcp.tool()
+def convert_bash_to_ansible(script_path: str) -> str:
+    """
+    Convert a Bash script to an Ansible playbook.
+
+    Reads the Bash script at *script_path*, maps common provisioning
+    patterns to the most appropriate Ansible modules
+    (``ansible.builtin.package``, ``ansible.builtin.service``,
+    ``ansible.builtin.copy``, ``ansible.builtin.get_url``), and falls
+    back to ``ansible.builtin.shell`` with idempotency hints
+    (``creates``, ``changed_when``, ``failed_when``) for sections that
+    cannot be mapped confidently.
+
+    Args:
+        script_path: Path to the Bash script file.
+
+    Returns:
+        JSON string with ``playbook_yaml``, ``tasks``, ``warnings``,
+        and ``idempotency_report`` keys.
+
+    """
+    return _convert_bash_to_ansible(script_path)
+
+
+@mcp.tool()
+def generate_ansible_role_from_bash(
+    script_path: str,
+    role_name: str = "bash_converted",
+) -> str:
+    """
+    Generate an Ansible role directory structure from a Bash script.
+
+    Reads the Bash script at *script_path*, parses it into an IR,
+    converts patterns to Ansible tasks split across role task files,
+    and returns a JSON envelope containing all role file contents.
+
+    Args:
+        script_path: Path to the Bash script file.
+        role_name: Name for the generated Ansible role.
+
+    Returns:
+        JSON string with ``status``, ``role_name``, ``files`` (dict of
+        relative path → content), ``quality_score``, and ``aap_hints``
+        keys.  Returns a JSON error object on failure.
+
+    """
+    return _generate_ansible_role_from_bash_file(script_path, role_name)
+
+
+# ==================== End V2.2 Bash Script Migration Tools ====================
 
 
 def main() -> None:

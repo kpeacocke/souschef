@@ -1,6 +1,7 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
+import importlib
 import io
 import json
 import os
@@ -17,11 +18,12 @@ from typing import TYPE_CHECKING, Any, cast
 # UI dependencies - required for this module to function
 # At runtime, gracefully handle missing dependencies; for type checking, assume present
 if TYPE_CHECKING:
-    import pandas as pd
     import streamlit as st
+
+    pd: Any
 else:
     try:
-        import pandas as pd
+        pd = importlib.import_module("pandas")
     except ImportError:
         pd = None
 
@@ -82,8 +84,8 @@ from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
 from souschef.ui.pages.cookbook_analysis_security import (
     _extract_tar_securely,
     _extract_zip_securely,
-    _validate_tar_file_security,  # noqa: F401 - re-exported for backward compatibility
-    _validate_zip_file_security,  # noqa: F401 - re-exported for backward compatibility
+    _validate_tar_file_security,  # noqa: F401, codeql[py/unused-import] - re-exported for backward compatibility
+    _validate_zip_file_security,  # noqa: F401, codeql[py/unused-import] - re-exported for backward compatibility
 )
 from souschef.ui.pages.cookbook_analysis_utilities import (
     _get_secure_ai_config_path,
