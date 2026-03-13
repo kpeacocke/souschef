@@ -217,23 +217,6 @@ def convert_puppet_module_to_ansible(module_path: str) -> str:
         return f"An error occurred: {e}"
 
 
-# Dispatch table for resource type converters
-_RESOURCE_CONVERTERS = {
-    "package": lambda title, attrs: _convert_package(title, attrs),
-    "service": lambda title, attrs: _convert_service(title, attrs),
-    "file": lambda title, attrs: _convert_file(title, attrs),
-    "user": lambda title, attrs: _convert_user(title, attrs),
-    "group": lambda title, attrs: _convert_group(title, attrs),
-    "exec": lambda title, attrs: _convert_exec(title, attrs),
-    "cron": lambda title, attrs: _convert_cron(title, attrs),
-    "host": lambda title, attrs: _convert_host(title, attrs),
-    "mount": lambda title, attrs: _convert_mount(title, attrs),
-    "ssh_authorized_key": lambda title, attrs: _convert_ssh_authorized_key(
-        title, attrs
-    ),
-}
-
-
 def convert_puppet_resource_to_task(
     resource_type: str,
     title: str,
@@ -690,6 +673,21 @@ def _convert_ssh_authorized_key(title: str, attrs: dict[str, str]) -> dict[str, 
     }
 
 
+# Dispatch table for resource type converters — defined after all _convert_* functions
+_RESOURCE_CONVERTERS = {
+    "package": _convert_package,
+    "service": _convert_service,
+    "file": _convert_file,
+    "user": _convert_user,
+    "group": _convert_group,
+    "exec": _convert_exec,
+    "cron": _convert_cron,
+    "host": _convert_host,
+    "mount": _convert_mount,
+    "ssh_authorized_key": _convert_ssh_authorized_key,
+}
+
+
 def _convert_unsupported(resource_type: str, title: str) -> dict[str, Any]:
     """
     Generate a debug warning task for an unsupported Puppet resource type.
@@ -1079,8 +1077,10 @@ def _create_puppet_ai_prompt(
 
     parts = [
         "You are an expert Puppet-to-Ansible migration engineer.",
-        "Convert the Puppet manifest below into a complete, production-ready "
-        "Ansible playbook.",
+        (
+            "Convert the Puppet manifest below into a complete, production-ready "
+            "Ansible playbook."
+        ),
         "",
         "PUPPET MANIFEST CONTENT:",
         raw_content,
@@ -1099,13 +1099,17 @@ def _create_puppet_ai_prompt(
         "- Use fully-qualified Ansible module names (ansible.builtin.*).",
         "- Set `become: true` at the play level.",
         "- Name the play: 'Converted from Puppet: " + manifest_name + "'",
-        "- Preserve the logical order: install packages, then configure, "
-        "then start services.",
+        (
+            "- Preserve the logical order: install packages, then configure, "
+            "then start services."
+        ),
         "",
         "OUTPUT FORMAT:",
-        "Return ONLY valid YAML for a single Ansible playbook. "
-        "Do NOT include markdown code fences, explanations, "
-        "or any text outside the YAML.",
+        (
+            "Return ONLY valid YAML for a single Ansible playbook. "
+            "Do NOT include markdown code fences, explanations, "
+            "or any text outside the YAML."
+        ),
     ]
     return "\n".join(parts)
 
