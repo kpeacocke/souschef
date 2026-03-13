@@ -2,7 +2,7 @@
 
 Transform Chef automation to Ansible and plan Ansible version upgrades. Works with any AI assistant via MCP (Model Context Protocol)—Claude, GPT-4, GitHub Copilot, Red Hat AI, local models, and more.
 
-**Quick Facts:** MIT License | Python 3.10+ | 54 MCP Tools | 91% Test Coverage
+**Quick Facts:** MIT License | Python 3.10+ | 83 MCP Tools | 91% Test Coverage
 
 [![GitHub release](https://img.shields.io/github/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
@@ -28,6 +28,8 @@ A fair bit of this relies on mocked Chef/AWX/AAP APIs because *shockingly* I don
 
 **Chef-to-Ansible Migration** — Convert cookbooks, recipes, custom resources, data bags, and Habitat plans to Ansible playbooks, roles, and containers. Supports infrastructure, applications, and day-2 operations.
 
+**Puppet to Ansible Migration** — Convert Puppet manifests and module directories to Ansible playbooks using idiomatic `ansible.builtin` modules. Recognises 14 Puppet resource types; maps 10 to Ansible modules with AI-assisted conversion for complex constructs.
+
 **PowerShell to Ansible Migration** — Convert Windows PowerShell provisioning scripts to idiomatic `ansible.windows` playbooks, roles, WinRM inventories, and AWX/AAP job templates.
 
 **Bash Script Migration** — Convert provisioning Bash scripts to Ansible playbooks and roles with quality scoring, sensitive data detection, and AAP readiness hints.
@@ -51,7 +53,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 
 ## Key Features
 
-- **54 MCP tools** for Chef migration, PowerShell migration, Bash script migration, and Ansible upgrades
+- **83 MCP tools** for Chef migration, Puppet migration, PowerShell migration, Bash script migration, and Ansible upgrades
 - **Web UI** with interactive migration planner and visualisation
 - **CLI** for automation and CI/CD integration
 - **Production-ready** with 91% test coverage and comprehensive validation
@@ -67,6 +69,13 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Generate AWX/AAP job templates and workflows
 - Convert InSpec tests to Ansible validation tasks
 - Fetch cookbooks from Chef Server with run_list or policy selection
+
+**Puppet Migration:**
+- Convert Puppet manifests (`.pp`) and module directories to Ansible playbooks
+- Recognise 14 Puppet resource types; map 10 to idiomatic `ansible.builtin` modules (`package`, `service`, `file`, `user`, `group`, `exec`, `cron`, `host`, `mount`, `ssh_authorized_key`)
+- Warn about unsupported constructs (Hiera lookups, exported resources, `create_resources`) with manual-review guidance
+- AI-assisted conversion for complex Puppet DSL that cannot be mapped automatically
+- Convert individual Puppet resource declarations to standalone Ansible tasks
 
 **PowerShell Migration:**
 - Convert Windows PowerShell provisioning scripts to idiomatic Ansible playbooks
@@ -111,6 +120,11 @@ souschef-cli powershell-parse scripts/setup.ps1
 souschef-cli powershell-convert scripts/setup.ps1 --output playbook.yml
 souschef-cli powershell-role scripts/setup.ps1 --output-dir ./ansible-role
 
+# Puppet migration
+souschef-cli puppet parse manifests/site.pp
+souschef-cli puppet convert manifests/site.pp --output playbook.yml
+souschef-cli puppet convert-module modules/myapp --output-dir ./ansible-role
+
 # Bash script migration
 souschef bash parse scripts/bootstrap.sh
 souschef bash convert scripts/deploy.sh --output playbook.yml
@@ -131,8 +145,10 @@ souschef ui  # Launch interactive dashboard
 
 - **[Quick Start Guide](docs/getting-started/quick-start.md)** — Get running in 5 minutes
 - **[Production Safety](docs/migration-guide/safety-and-validation.md)** — Validate migrations before deploying ⚠️
-- **[User Guide](docs/user-guide/mcp-tools.md)** — All 54 tools explained with examples
+- **[User Guide](docs/user-guide/mcp-tools.md)** — All 83 tools explained with examples
 - **[Migration Guide](docs/migration-guide/overview.md)** — Step-by-step migration process
+- **[Puppet Migration Guide](docs/migration-guide/puppet-migration.md)** — Puppet to Ansible conversion
+- **[PowerShell Migration Guide](docs/migration-guide/powershell-migration.md)** — PowerShell to Windows Ansible conversion
 - **[Ansible Upgrades](docs/user-guide/ansible-upgrades.md)** — Version upgrade planning workflows
 
 ### Reference

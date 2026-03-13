@@ -8,8 +8,6 @@ and converting them to Ansible playbooks.
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -19,9 +17,6 @@ else:
         import streamlit as st
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
-
-# Ensure the souschef package is importable from the UI context
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from souschef.converters.bash_to_ansible import (
     convert_bash_content_to_ansible,
@@ -38,6 +33,8 @@ SHELL_FALLBACKS_LABEL = "Shell Fallbacks"
 
 def show_bash_migration_page() -> None:
     """Render the Bash Script Migration page."""
+    if st is None:  # pragma: no cover
+        return
     st.title("Bash Script Migration")
     st.markdown(
         """

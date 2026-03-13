@@ -84,13 +84,19 @@ from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
 from souschef.ui.pages.cookbook_analysis_security import (
     _extract_tar_securely,
     _extract_zip_securely,
-    _validate_tar_file_security,  # noqa: F401, codeql[py/unused-import] - re-exported for backward compatibility
-    _validate_zip_file_security,  # noqa: F401, codeql[py/unused-import] - re-exported for backward compatibility
+    _validate_tar_file_security,  # noqa: F401 - re-exported for backward compatibility
+    _validate_zip_file_security,  # noqa: F401 - re-exported for backward compatibility
 )
 from souschef.ui.pages.cookbook_analysis_utilities import (
     _get_secure_ai_config_path,
     _sanitize_filename,
 )
+
+# Explicit re-exports so CodeQL and type-checkers recognise these as intentional
+__all__ = [
+    "_validate_tar_file_security",
+    "_validate_zip_file_security",
+]
 
 generate_playbook_from_recipe_with_ai = (
     orchestrate_generate_playbook_from_recipe_with_ai
@@ -439,24 +445,11 @@ METADATA_COLUMN_NAME = "Has Metadata"
 MIME_TYPE_ZIP = "application/zip"
 UNKNOWN_ERROR = "Unknown error"
 
-# Security limits for archive extraction
+# Security limits for archive extraction.
+# MAX_ARCHIVE_SIZE is used locally in extract_archive() below.
+# The per-file limits (MAX_FILE_SIZE, MAX_FILES, MAX_DEPTH, BLOCKED_EXTENSIONS)
+# are defined canonically in cookbook_analysis_security.py where they are used.
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024  # 100MB total
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB per file
-MAX_FILES = 1000  # Maximum number of files
-MAX_DEPTH = 10  # Maximum directory depth
-BLOCKED_EXTENSIONS = {
-    ".exe",
-    ".bat",
-    ".cmd",
-    ".com",
-    ".pif",
-    ".scr",
-    ".vbs",
-    ".js",
-    ".jar",
-    # Note: .sh files are allowed as they are common in Chef cookbooks
-}
-
 
 def extract_archive(uploaded_file) -> tuple[Path, Path, Path]:
     """

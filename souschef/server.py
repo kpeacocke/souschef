@@ -121,6 +121,47 @@ from souschef.converters.powershell import (
 from souschef.converters.powershell import (
     convert_powershell_to_ansible as _convert_powershell_to_ansible,
 )
+from souschef.converters.puppet_to_ansible import (  # noqa: F401, codeql[py/unused-import]
+    _RESOURCE_CONVERTERS,
+    _build_construct_guidance,
+    _clean_puppet_ai_response,
+    _collect_module_manifests,
+    _convert_cron,
+    _convert_exec,
+    _convert_file,
+    _convert_group,
+    _convert_host,
+    _convert_manifest_with_ai,
+    _convert_mount,
+    _convert_package,
+    _convert_service,
+    _convert_ssh_authorized_key,
+    _convert_unsupported,
+    _convert_user,
+    _create_puppet_ai_prompt,
+    _format_module_analysis,
+    _format_unsupported_for_prompt,
+    _generate_puppet_playbook,
+    _map_ensure,
+    _source_to_play_name,
+    get_puppet_ansible_module_map,
+    get_supported_puppet_types,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_manifest_to_ansible as _convert_puppet_manifest_to_ansible,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_manifest_to_ansible_with_ai as _convert_puppet_manifest_ai,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_module_to_ansible as _convert_puppet_module_to_ansible,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_module_to_ansible_with_ai as _convert_puppet_module_ai,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_resource_to_task as _convert_puppet_resource_to_task,
+)
 from souschef.converters.resource import (  # noqa: F401
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
@@ -362,6 +403,30 @@ from souschef.parsers.powershell import (
 from souschef.parsers.powershell import (
     parse_powershell_script as _parse_powershell_script,
 )
+from souschef.parsers.puppet import (  # noqa: F401, codeql[py/unused-import]
+    _build_line_index,
+    _detect_unsupported_constructs,
+    _extract_puppet_classes,
+    _extract_puppet_resources,
+    _extract_puppet_variables,
+    _format_classes_section,
+    _format_manifest_results,
+    _format_resources_section,
+    _format_unsupported_section,
+    _format_variables_section,
+    _get_line_number,
+    _parse_class_params,
+    _parse_manifest_content,
+    _parse_puppet_attributes,
+    _parse_resource_titles,
+    get_puppet_resource_types,
+)
+from souschef.parsers.puppet import (
+    parse_puppet_manifest as _parse_puppet_manifest,
+)
+from souschef.parsers.puppet import (
+    parse_puppet_module as _parse_puppet_module,
+)
 from souschef.parsers.recipe import (
     _extract_conditionals,  # noqa: F401
     _extract_resources,  # noqa: F401
@@ -434,6 +499,192 @@ __all__ = [
     "_get_file_params",
     "_get_service_params",
     "_strip_ruby_comments",
+    # Bash converter helpers (re-exported for tests)
+    "_archive_tasks",
+    "_build_aap_hints",
+    "_build_idempotency_report",
+    "_build_quality_score",
+    "_build_tasks",
+    "_collect_warnings",
+    "_cron_tasks",
+    "_download_tasks",
+    "_file_perm_tasks",
+    "_file_write_tasks",
+    "_firewall_tasks",
+    "_git_tasks",
+    "_group_tasks",
+    "_hostname_tasks",
+    "_package_tasks",
+    "_render_playbook",
+    "_render_task",
+    "_sed_tasks",
+    "_service_tasks",
+    "_shell_fallback_tasks",
+    "_shell_task",
+    "_user_tasks",
+    "_yaml_str",
+    # Habitat converter helpers (re-exported for tests)
+    "_add_service_build",
+    "_add_service_dependencies",
+    "_add_service_environment",
+    "_add_service_ports",
+    "_add_service_volumes",
+    "_build_compose_service",
+    "_extract_default_port",
+    "_map_habitat_deps_to_apt",
+    "_needs_data_volume",
+    "_validate_docker_image_name",
+    "_validate_docker_network_name",
+    # Playbook converter helpers (re-exported for tests)
+    "_add_general_recommendations",
+    "_convert_chef_block_to_ansible",
+    "_convert_chef_condition_to_ansible",
+    "_convert_guards_to_when_conditions",
+    "_create_handler",
+    "_create_handler_with_timing",
+    "_determine_query_complexity",
+    "_extract_chef_guards",
+    "_extract_enhanced_notifications",
+    "_extract_guard_patterns",
+    "_extract_search_patterns_from_cookbook",
+    "_extract_search_patterns_from_file",
+    "_find_search_patterns_in_content",
+    "_generate_ansible_inventory_from_search",
+    "_generate_group_name_from_condition",
+    "_generate_inventory_script_content",
+    "_get_current_timestamp",
+    "_parse_chef_search_query",
+    "_parse_guard_array",
+    "_parse_search_condition",
+    "_process_subscribes",
+    # Puppet converter helpers (re-exported for tests)
+    "_RESOURCE_CONVERTERS",
+    "_build_construct_guidance",
+    "_clean_puppet_ai_response",
+    "_collect_module_manifests",
+    "_convert_cron",
+    "_convert_exec",
+    "_convert_file",
+    "_convert_group",
+    "_convert_host",
+    "_convert_manifest_with_ai",
+    "_convert_mount",
+    "_convert_package",
+    "_convert_service",
+    "_convert_ssh_authorized_key",
+    "_convert_unsupported",
+    "_convert_user",
+    "_create_puppet_ai_prompt",
+    "_format_module_analysis",
+    "_format_unsupported_for_prompt",
+    "_generate_puppet_playbook",
+    "_map_ensure",
+    "_source_to_play_name",
+    "get_puppet_ansible_module_map",
+    "get_supported_puppet_types",
+    # Constants (re-exported for tests)
+    "ACTION_TO_STATE",
+    "ANSIBLE_SERVICE_MODULE",
+    "RESOURCE_MAPPINGS",
+    # Ruby utils (re-exported for tests)
+    "_normalize_ruby_value",
+    # Deployment helpers (re-exported for tests)
+    "_analyse_cookbook_for_awx",
+    "_analyse_cookbooks_directory",
+    "_detect_deployment_patterns_in_recipe",
+    "_extract_cookbook_attributes",
+    "_extract_cookbook_dependencies",
+    "_format_chef_resources_analysis",
+    "_format_cookbook_analysis",
+    "_format_deployment_patterns",
+    "_generate_deployment_migration_recommendations",
+    "_generate_survey_fields_from_attributes",
+    "_parse_chef_runlist",
+    "_recommend_ansible_strategies",
+    "analyse_chef_application_patterns",
+    # Attributes parser helpers (re-exported for tests)
+    "_extract_attributes",
+    "_format_attributes",
+    "_format_resolved_attributes",
+    "_get_precedence_level",
+    "_resolve_attribute_precedence",
+    # Bash parser helpers (re-exported for tests)
+    "_extract_archives",
+    "_extract_cm_escapes",
+    "_extract_cron_jobs",
+    "_extract_downloads",
+    "_extract_env_vars",
+    "_extract_file_perms",
+    "_extract_file_writes",
+    "_extract_firewall_rules",
+    "_extract_git_ops",
+    "_extract_groups",
+    "_extract_hostname_ops",
+    "_extract_idempotency_risks",
+    "_extract_packages",
+    "_extract_sed_ops",
+    "_extract_sensitive_data",
+    "_extract_services",
+    "_extract_users",
+    "_format_archives_section",
+    "_format_cm_escapes_section",
+    "_format_cron_jobs_section",
+    "_format_downloads_section",
+    "_format_env_vars_section",
+    "_format_file_perms_section",
+    "_format_file_writes_section",
+    "_format_firewall_rules_section",
+    "_format_git_ops_section",
+    "_format_groups_section",
+    "_format_hostname_ops_section",
+    "_format_packages_section",
+    "_format_parse_result",
+    "_format_risks_and_fallbacks_section",
+    "_format_sed_ops_section",
+    "_format_sensitive_data_section",
+    "_format_services_section",
+    "_format_users_section",
+    "_identify_shell_fallbacks",
+    "_line_number",
+    "_parse_bash_content",
+    "_parse_package_names",
+    # Habitat parser helpers (re-exported for tests)
+    "_extract_plan_array",
+    "_extract_plan_exports",
+    "_extract_plan_function",
+    "_extract_plan_var",
+    "_update_quote_state",
+    # InSpec parser helpers (re-exported for tests)
+    "_convert_inspec_to_ansible_assert",
+    "_convert_inspec_to_goss",
+    "_convert_inspec_to_serverspec",
+    "_convert_inspec_to_testinfra",
+    "_extract_inspec_describe_blocks",
+    "_generate_inspec_from_resource",
+    "_parse_controls_from_directory",
+    "_parse_controls_from_file",
+    "_parse_inspec_control",
+    # Metadata parser helpers (re-exported for tests)
+    "_extract_metadata",
+    "_format_cookbook_structure",
+    "_format_metadata",
+    # Puppet parser helpers (re-exported for tests)
+    "_build_line_index",
+    "_detect_unsupported_constructs",
+    "_extract_puppet_classes",
+    "_extract_puppet_resources",
+    "_extract_puppet_variables",
+    "_format_classes_section",
+    "_format_manifest_results",
+    "_format_resources_section",
+    "_format_unsupported_section",
+    "_format_variables_section",
+    "_get_line_number",
+    "_parse_class_params",
+    "_parse_manifest_content",
+    "_parse_puppet_attributes",
+    "_parse_resource_titles",
+    "get_puppet_resource_types",
 ]
 
 # Backward compatibility re-exports without underscore prefix (for tests)
@@ -6043,6 +6294,253 @@ def generate_ansible_role_from_bash(
 
 
 # ==================== End V2.2 Bash Script Migration Tools ====================
+
+
+# ==================== Puppet Migration Tools ====================
+
+
+@mcp.tool()
+def parse_puppet_manifest(manifest_path: str) -> str:
+    """
+    Parse a Puppet manifest file and extract resources, classes, and variables.
+
+    Analyses a Puppet manifest (``.pp`` file) to identify resources (package,
+    file, service, user, group, exec, etc.), class definitions, variable
+    assignments, and constructs that cannot be automatically converted.
+
+    Args:
+        manifest_path: Path to the Puppet manifest (``.pp``) file.
+
+    Returns:
+        Formatted report listing all discovered resources, classes, variables,
+        and unsupported constructs with source locations and migration notes.
+
+    """
+    return _parse_puppet_manifest(manifest_path)
+
+
+@mcp.tool()
+def parse_puppet_module(module_path: str) -> str:
+    """
+    Parse a Puppet module directory and extract all resources from manifests.
+
+    Recursively processes all ``.pp`` files in the given module directory,
+    producing a combined report of resources, classes, variables, and
+    unsupported constructs across all manifests.
+
+    Args:
+        module_path: Path to the Puppet module directory.
+
+    Returns:
+        Combined report listing resources, classes, unsupported constructs,
+        and a summary suitable for migration planning.
+
+    """
+    return _parse_puppet_module(module_path)
+
+
+@mcp.tool()
+def convert_puppet_manifest_to_ansible(manifest_path: str) -> str:
+    """
+    Convert a Puppet manifest file to an Ansible playbook.
+
+    Parses the Puppet manifest and generates an Ansible playbook with tasks
+    mapped from Puppet resources. Unsupported constructs are included as
+    debug warning tasks requiring manual review.
+
+    Supported resource types:
+    - ``package`` → ``ansible.builtin.package``
+    - ``service`` → ``ansible.builtin.service``
+    - ``file`` → ``ansible.builtin.file`` / ``copy`` / ``template``
+    - ``user`` → ``ansible.builtin.user``
+    - ``group`` → ``ansible.builtin.group``
+    - ``exec`` → ``ansible.builtin.command``
+    - ``cron`` → ``ansible.builtin.cron``
+    - ``host`` → ``ansible.builtin.lineinfile``
+    - ``mount`` → ``ansible.posix.mount``
+    - ``ssh_authorized_key`` → ``ansible.posix.authorized_key``
+
+    Args:
+        manifest_path: Path to the Puppet manifest (``.pp``) file.
+
+    Returns:
+        Ansible playbook in YAML format as a string.
+
+    """
+    return _convert_puppet_manifest_to_ansible(manifest_path)
+
+
+@mcp.tool()
+def convert_puppet_module_to_ansible(module_path: str) -> str:
+    """
+    Convert a Puppet module directory to an Ansible playbook.
+
+    Recursively processes all ``.pp`` files in the module directory and
+    generates a combined Ansible playbook from all discovered resources.
+
+    Args:
+        module_path: Path to the Puppet module directory.
+
+    Returns:
+        Combined Ansible playbook in YAML format as a string.
+
+    """
+    return _convert_puppet_module_to_ansible(module_path)
+
+
+@mcp.tool()
+def convert_puppet_resource_to_task(
+    resource_type: str,
+    title: str,
+    attributes: str = "",
+) -> str:
+    """
+    Convert a single Puppet resource declaration to an Ansible task.
+
+    Useful for converting individual resources without a full manifest file,
+    for example when migrating manually or testing specific resource types.
+
+    Args:
+        resource_type: Puppet resource type (e.g. ``package``, ``service``).
+        title: Resource title / name (e.g. ``nginx``).
+        attributes: Resource attributes as a comma-separated key=value string
+            (e.g. ``"ensure=installed,version=1.20"``).
+
+    Returns:
+        Ansible task in YAML format as a string.
+
+    """
+    import yaml as _yaml
+
+    # Parse attributes string to dict
+    attrs: dict[str, str] = {}
+    if attributes:
+        for pair in attributes.split(","):
+            pair = pair.strip()
+            if "=" in pair:
+                key, _, val = pair.partition("=")
+                attrs[key.strip()] = val.strip()
+
+    task = _convert_puppet_resource_to_task(resource_type, title, attrs)
+    return _yaml.dump(
+        task, default_flow_style=False, sort_keys=False, allow_unicode=True
+    )
+
+
+@mcp.tool()
+def list_puppet_supported_resource_types() -> str:
+    """
+    List all Puppet resource types that can be automatically converted to Ansible.
+
+    Returns:
+        Formatted list of supported Puppet resource types and their
+        corresponding Ansible module equivalents.
+
+    """
+    module_map = get_puppet_ansible_module_map()
+    lines = ["Supported Puppet resource types and Ansible equivalents:", ""]
+    for puppet_type, ansible_module in sorted(module_map.items()):
+        lines.append(f"  {puppet_type:25s} → {ansible_module}")
+    lines.append("")
+    lines.append(f"Total: {len(module_map)} resource types supported")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def convert_puppet_manifest_to_ansible_with_ai(
+    manifest_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a Puppet manifest to an Ansible playbook using AI for unsupported constructs.
+
+    Uses an LLM to intelligently convert Puppet constructs that the deterministic
+    converter cannot handle automatically, such as Hiera lookups, create_resources
+    calls, exported/virtual resources, and inline templates.
+
+    Falls back to the standard deterministic conversion when no unsupported
+    constructs are detected.
+
+    Args:
+        manifest_path: Path to the Puppet manifest (.pp) file.
+        ai_provider: AI provider to use ('anthropic', 'openai', 'watson',
+            'lightspeed').
+        api_key: API key for the chosen provider.
+        model: Model identifier (e.g. 'claude-3-5-sonnet-20241022').
+        temperature: Sampling temperature (0.0 – 1.0). Lower values are more
+            deterministic; default is 0.3 for code-generation tasks.
+        max_tokens: Maximum tokens in the AI response.
+        project_id: Project ID (required for IBM Watsonx).
+        base_url: Custom base URL for the provider endpoint.
+
+    Returns:
+        Ansible playbook YAML string, or an error message if conversion fails.
+
+    """
+    return _convert_puppet_manifest_ai(
+        manifest_path,
+        ai_provider=ai_provider,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        project_id=project_id,
+        base_url=base_url,
+    )
+
+
+@mcp.tool()
+def convert_puppet_module_to_ansible_with_ai(
+    module_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a Puppet module directory to an Ansible playbook using AI.
+
+    Combines all .pp files in the module directory and applies AI-assisted
+    conversion for unsupported constructs. Falls back to the deterministic
+    converter when no unsupported constructs are present.
+
+    Args:
+        module_path: Path to the Puppet module directory.
+        ai_provider: AI provider to use ('anthropic', 'openai', 'watson',
+            'lightspeed').
+        api_key: API key for the chosen provider.
+        model: Model identifier.
+        temperature: Sampling temperature; default is 0.3.
+        max_tokens: Maximum tokens in the AI response.
+        project_id: Project ID for IBM Watsonx.
+        base_url: Custom provider endpoint URL.
+
+    Returns:
+        Ansible playbook YAML string, or an error message if conversion fails.
+
+    """
+    return _convert_puppet_module_ai(
+        module_path,
+        ai_provider=ai_provider,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        project_id=project_id,
+        base_url=base_url,
+    )
+
+
+# ==================== End Puppet Migration Tools ====================
 
 
 def main() -> None:

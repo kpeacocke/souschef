@@ -271,9 +271,63 @@ services:
       - ./reports:/app/reports
 ```
 
-## PowerShell Migration
+## Puppet Migration
 
-The PowerShell Migration page provides a web-based interface for converting PowerShell provisioning scripts to Windows Ansible automation.
+The **Puppet Migration** page provides a web-based interface for converting Puppet manifests (`.pp` files) and module directories to Ansible playbooks.
+
+### Location
+
+Navigate to: **Chef** tab → **Puppet Migration**
+
+### Input Options
+
+The page supports two input modes selectable via a dropdown:
+
+- **Manifest File Path**: Enter the path to a single `.pp` manifest file
+- **Module Directory Path**: Enter the path to a Puppet module root directory to convert all manifests in the module
+
+### Actions Available
+
+The page has two sub-sections: **Analyse Puppet Manifest** (for single `.pp` files) and **Analyse Puppet Module** (for full module directories). Each sub-section provides these buttons:
+
+| Button | Action |
+|--------|--------|
+| **Analyse Manifest** / **Analyse Module** | Extract and display all resources, classes, variables, and unsupported constructs |
+| **Convert to Ansible** | Generate an Ansible playbook from all parsed resources |
+| **Convert with AI** | Use an LLM to handle Hiera lookups, exported resources, and other unsupported constructs |
+
+A **Download Playbook** button appears in the conversion result panel once a playbook has been generated.
+
+### Analysis Output
+
+The parse output shows:
+
+- **Resources**: Each resource type, title, attributes, and source line number
+- **Classes**: Puppet class definitions with parameters
+- **Variables**: Variable assignments found in the manifest
+- **Unsupported constructs**: Hiera lookups, exported/virtual resources, `create_resources`, and other constructs that require manual review, each with a line number and guidance note
+
+### Conversion Output
+
+The playbook preview shows the generated Ansible YAML with:
+
+- One task per Puppet resource, using the idiomatic `ansible.builtin` module
+- `ansible.builtin.debug` placeholder tasks for unsupported constructs, with a `msg` explaining what manual work is needed
+- Download button to save the playbook to disk
+
+### AI-Assisted Conversion
+
+For manifests with Hiera lookups or other unsupported constructs, expand the **AI Settings** panel to configure:
+
+- **AI Provider**: `anthropic`, `openai`, `watson`, or `lightspeed`
+- **API Key**: Your provider's API key
+- **Model**: Model name (default: `claude-3-5-sonnet-20241022`)
+
+The AI-assisted converter sends only the unsupported construct descriptions and manifest structure to the LLM — no file system paths or credential values are included in the prompt.
+
+---
+
+## PowerShell Migration
 
 ### Location
 
@@ -383,6 +437,9 @@ souschef/ui/
 ├── pages/              # Page modules
 │   ├── cookbook_analysis.py    # Unified migration interface (analysis + orchestration)
 │   ├── migration_planning.py   # Migration planning wizards
+│   ├── bash_migration.py       # Bash script to Ansible conversion
+│   ├── puppet_migration.py     # Puppet manifest/module to Ansible conversion
+│   ├── powershell_migration.py # PowerShell to Windows Ansible conversion
 │   ├── ai_settings.py          # AI provider configuration
 │   └── reports.py              # Report generation
 ├── components/         # Reusable UI components

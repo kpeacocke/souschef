@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-03-13
+
+### Added
+
+* **Puppet Migration:** Full Puppet-to-Ansible migration pipeline
+  - `parsers/puppet.py` — parse Puppet manifests (`.pp`) and module directories; recognises 15 resource types and flags unsupported constructs (Hiera lookups, exported/virtual resources, `create_resources`) with source line numbers
+  - `converters/puppet_to_ansible.py` — convert parsed resources to idiomatic `ansible.builtin` tasks; AI-assisted fallback for unsupported constructs via `*_with_ai` functions
+  - `ui/pages/puppet_migration.py` — Streamlit page accessible under **Chef → Puppet Migration** with manifest/module input, parse, convert, AI-assisted convert, and playbook download
+  - 8 MCP tools: `parse_puppet_manifest`, `parse_puppet_module`, `convert_puppet_manifest_to_ansible`, `convert_puppet_module_to_ansible`, `convert_puppet_resource_to_task`, `list_puppet_supported_resource_types`, `convert_puppet_manifest_to_ansible_with_ai`, `convert_puppet_module_to_ansible_with_ai`
+  - CLI commands: `souschef puppet parse`, `parse-module`, `convert`, `convert-module`, `list-types`
+  - Documentation: `docs/migration-guide/puppet-migration.md`, updates to README, ARCHITECTURE, mcp-tools, cli-usage, and ui guides
+
+* **Bash Migration** (from develop branch):
+  - `parsers/bash.py` — parse provisioning Bash scripts with 13 operation categories
+  - `converters/bash_to_ansible.py` — convert Bash scripts to Ansible playbooks and roles
+  - `ui/pages/bash_migration.py` — web UI page for Bash migration
+  - 3 MCP tools: `parse_bash_script`, `convert_bash_to_ansible`, `generate_ansible_role_from_bash`
+
+* **PowerShell Migration** (refactored architecture from develop branch):
+  - Modular architecture: separate `parsers/powershell.py`, `converters/powershell.py`, `generators/powershell.py`
+  - `ui/pages/powershell_migration.py` — dedicated web UI page
+  - 7 MCP tools: `parse_powershell`, `convert_powershell`, `generate_windows_inventory_tool`, `generate_windows_requirements`, `generate_powershell_role`, `generate_powershell_job_template`, `analyze_powershell_fidelity`
+
+### Changed
+
+* Total MCP tool count: 54 → 83 (Chef migration, Puppet migration, PowerShell migration, Bash migration, Ansible upgrades)
+
 ## [Unreleased] - 2026-02-17
 
 ### Added

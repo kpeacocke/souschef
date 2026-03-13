@@ -47,6 +47,7 @@ from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
 from souschef.ui.pages.migration_config import show_migration_config_page
 from souschef.ui.pages.powershell_migration import show_powershell_migration_page
+from souschef.ui.pages.puppet_migration import show_puppet_migration_page
 
 # Constants
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
@@ -66,6 +67,7 @@ NAV_ANSIBLE_ASSESSMENT = "Ansible Assessment"
 NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
 NAV_ANSIBLE_VALIDATION = "Collection Validation"
 NAV_POWERSHELL_MIGRATION = "PowerShell Migration"
+NAV_PUPPET_MIGRATION = "Puppet Migration"
 ANSIBLE_FEATURES = {
     NAV_ANSIBLE_ASSESSMENT,
     NAV_ANSIBLE_PLANNING,
@@ -75,6 +77,7 @@ ANSIBLE_FEATURES = {
 CHEF_FEATURES = {
     NAV_COOKBOOK_ANALYSIS,
     NAV_BASH_MIGRATION,
+    NAV_PUPPET_MIGRATION,
     NAV_MIGRATION_PLANNING,
     NAV_MIGRATION_CONFIG,
     NAV_DEPENDENCY_MAPPING,
@@ -185,6 +188,7 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
     all_nav_buttons = [
         ("Migrate Cookbook", NAV_COOKBOOK_ANALYSIS),
         ("Bash Migration", NAV_BASH_MIGRATION),
+        ("Puppet Migration", NAV_PUPPET_MIGRATION),
         ("Migration Planning", NAV_MIGRATION_PLANNING),
         ("Migration Config", NAV_MIGRATION_CONFIG),
         ("Dependency Mapping", NAV_DEPENDENCY_MAPPING),
@@ -253,6 +257,7 @@ def _route_to_page(page: str) -> None:
         "Dashboard": show_dashboard,
         NAV_COOKBOOK_ANALYSIS: show_cookbook_analysis_page,
         NAV_BASH_MIGRATION: show_bash_migration_page,
+        NAV_PUPPET_MIGRATION: show_puppet_migration_page,
         NAV_MIGRATION_PLANNING: show_migration_planning,
         NAV_MIGRATION_CONFIG: show_migration_config_page,
         NAV_DEPENDENCY_MAPPING: show_dependency_mapping,
