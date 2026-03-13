@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-SousChef provides **54 specialised MCP tools** for comprehensive Chef-to-Ansible migration, PowerShell-to-Ansible Windows automation, and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **83 specialised MCP tools** for comprehensive Chef-to-Ansible migration, Puppet-to-Ansible conversion, PowerShell-to-Ansible Windows automation, Bash script migration, and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
@@ -8,9 +8,9 @@ SousChef provides **54 specialised MCP tools** for comprehensive Chef-to-Ansible
 !!! info "About the Tool Count"
     **Complete tool inventory available in source code**
 
-    This guide documents the **54 primary user-facing tools** (39 Chef migration + 7 PowerShell migration + 3 Bash migration + 5 Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
+    This guide documents the **83 primary user-facing tools** (Chef migration, Puppet migration, PowerShell migration, Bash migration, and Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
 
-    As a user, you'll primarily interact with these 54 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
+    As a user, you'll primarily interact with these documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
 
     See `souschef/server.py` for the complete authoritative list of all MCP tools.
 
@@ -32,6 +32,7 @@ SousChef provides **54 specialised MCP tools** for comprehensive Chef-to-Ansible
 | [Ansible Upgrade Planning](#ansible-upgrade-planning) | 5 tools | Assess Ansible environments and plan version upgrades |
 | [PowerShell Migration](#powershell-migration) | 7 tools | Convert PowerShell scripts to Windows Ansible automation |
 | [Bash Script Migration](#bash-script-migration) | 3 tools | Convert Bash provisioning scripts to Ansible playbooks and roles |
+| [Puppet Migration](#puppet-migration) | 8 tools | Convert Puppet manifests and modules to Ansible playbooks |
 
 ---
 
@@ -2087,6 +2088,246 @@ Generate a complete Ansible role directory structure from a Bash script.
 ---
 
 
+## Puppet Migration
+
+Convert Puppet manifests (`.pp` files) and module directories to idiomatic Ansible playbooks using `ansible.builtin` modules.
+
+!!! tip "When to use Puppet Migration"
+    - You have existing Puppet manifests you want to convert to Ansible
+    - You are migrating infrastructure managed by Puppet to AAP
+    - You need to translate Puppet classes and resource declarations to Ansible tasks
+
+### Supported Puppet Resource Types
+
+SousChef maps **15 Puppet resource types** to idiomatic Ansible modules:
+
+| Puppet Resource | Ansible Module |
+|-----------------|----------------|
+| `package` | `ansible.builtin.package` |
+| `service` | `ansible.builtin.service` |
+| `file` (absent/directory) | `ansible.builtin.file` |
+| `file` (with content) | `ansible.builtin.copy` |
+| `file` (with source template) | `ansible.builtin.template` |
+| `user` | `ansible.builtin.user` |
+| `group` | `ansible.builtin.group` |
+| `exec` | `ansible.builtin.command` (with idempotency warning) |
+| `cron` | `ansible.builtin.cron` |
+| `host` | `ansible.builtin.lineinfile` (with warning) |
+| `mount` | `ansible.posix.mount` |
+| `ssh_authorized_key` | `ansible.builtin.authorized_key` |
+| `notify` | `ansible.builtin.debug` |
+| `augeas` | `ansible.builtin.debug` (manual review required) |
+| Others | `ansible.builtin.debug` warning task |
+
+Unsupported constructs (Hiera lookups, exported/virtual resources, `create_resources`) are flagged with line numbers and manual-review guidance — nothing is silently discarded.
+
+---
+
+### parse_puppet_manifest
+
+Parse a Puppet manifest file (`.pp`) and extract resources, classes, and variables.
+
+**What it does**: Reads a Puppet manifest and identifies all resource declarations, class definitions, variables, and any constructs that cannot be auto-converted (Hiera lookups, exported resources, etc.).
+
+**Parameters:**
+- `manifest_path` (string, required): Path to the Puppet manifest (`.pp`) file
+
+**Returns:**
+- Human-readable summary of all resources, classes, variables, and unsupported constructs with line numbers
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Parse my Puppet manifest at manifests/site.pp and show me all the resources
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet parse manifests/site.pp
+    ```
+
+---
+
+### parse_puppet_module
+
+Parse a Puppet module directory and analyse all manifests.
+
+**What it does**: Recursively scans a Puppet module directory for `.pp` files and extracts all resources, classes, and defined types across every manifest.
+
+**Parameters:**
+- `module_path` (string, required): Path to the Puppet module directory
+
+**Returns:**
+- Aggregated summary of all resources and classes across all manifests in the module
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Analyse the Puppet module at modules/nginx and show me what it contains
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet parse-module modules/nginx
+    ```
+
+---
+
+### convert_puppet_manifest_to_ansible
+
+Convert a Puppet manifest to an Ansible playbook.
+
+**What it does**: Parses the manifest and maps every resource declaration to the corresponding `ansible.builtin` module task. High-fidelity resources produce structured module tasks; unsupported constructs become `ansible.builtin.debug` placeholder tasks with guidance comments.
+
+**Parameters:**
+- `manifest_path` (string, required): Path to the Puppet manifest (`.pp`) file
+
+**Returns:**
+- YAML Ansible playbook string ready to review and deploy
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert my Puppet manifest at manifests/webserver.pp to an Ansible playbook
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet convert manifests/webserver.pp
+    souschef puppet convert manifests/webserver.pp --output playbook.yml
+    ```
+
+---
+
+### convert_puppet_module_to_ansible
+
+Convert an entire Puppet module directory to Ansible playbooks.
+
+**What it does**: Iterates all `.pp` manifests in the module, converts each to Ansible tasks, and returns a consolidated playbook covering the full module.
+
+**Parameters:**
+- `module_path` (string, required): Path to the Puppet module directory
+
+**Returns:**
+- YAML Ansible playbook string combining all converted manifests
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert the Puppet module at modules/nginx to an Ansible playbook
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet convert-module modules/nginx
+    souschef puppet convert-module modules/nginx --output-dir ./roles
+    ```
+
+---
+
+### convert_puppet_resource_to_task
+
+Convert a single Puppet resource declaration to an Ansible task.
+
+**What it does**: Takes an inline Puppet resource definition string (not a file path) and returns the equivalent Ansible task YAML. Useful for quick one-off lookups during a migration.
+
+**Parameters:**
+- `resource_type` (string, required): Puppet resource type (e.g., `package`, `service`, `file`)
+- `title` (string, required): Resource title (e.g., `nginx`, `/etc/nginx/nginx.conf`)
+- `attributes` (dict, optional): Resource attributes (e.g., `{"ensure": "installed"}`)
+
+**Returns:**
+- YAML Ansible task string
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert a Puppet package resource for nginx with ensure => installed to an Ansible task
+    ```
+
+---
+
+### list_puppet_supported_resource_types
+
+List all Puppet resource types that SousChef can convert automatically.
+
+**What it does**: Returns the full table of Puppet→Ansible module mappings.
+
+**Parameters:** None
+
+**Returns:**
+- Human-readable table of resource types and their Ansible equivalents
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    What Puppet resource types can you convert?
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet list-types
+    ```
+
+---
+
+### convert_puppet_manifest_to_ansible_with_ai
+
+Convert a Puppet manifest to Ansible using AI assistance for complex constructs.
+
+**What it does**: Converts the manifest using rule-based mapping for standard resources, and uses a configured LLM to produce best-effort Ansible tasks for unsupported constructs (Hiera lookups, exported resources, `create_resources`, etc.).
+
+**Parameters:**
+- `manifest_path` (string, required): Path to the Puppet manifest (`.pp`) file
+- `ai_provider` (string, optional): AI provider — `anthropic`, `openai`, `watson`, `lightspeed` (default: `anthropic`)
+- `api_key` (string, optional): API key for the chosen provider
+- `model` (string, optional): Model name (default: `claude-3-5-sonnet-20241022`)
+- `temperature` (float, optional): Sampling temperature (default: `0.1`)
+- `max_tokens` (int, optional): Maximum tokens for AI response
+- `project_id` (string, optional): Project ID for Watson/Lightspeed
+- `base_url` (string, optional): Custom base URL for API calls
+
+**Returns:**
+- YAML Ansible playbook string with AI-generated tasks for unsupported constructs
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert manifests/complex.pp to Ansible — it uses Hiera lookups that need AI assistance
+    ```
+
+---
+
+### convert_puppet_module_to_ansible_with_ai
+
+Convert a Puppet module to Ansible using AI assistance for complex constructs.
+
+**What it does**: Same as `convert_puppet_manifest_to_ansible_with_ai` but operates on a full module directory.
+
+**Parameters:**
+- `module_path` (string, required): Path to the Puppet module directory
+- `ai_provider`, `api_key`, `model`, `temperature`, `max_tokens`, `project_id`, `base_url` — same as above
+
+**Returns:**
+- YAML Ansible playbook string covering all module manifests
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert the modules/complex_app directory using AI for the Hiera lookups
+    ```
+
+---
+
+
 ## Tool Selection
 
 - **Start with assessment**: Use `assess_ansible_upgrade_readiness` to understand your current state (automatically detects Python version)
@@ -2125,6 +2366,15 @@ All tools provide detailed error messages with suggestions:
 4. **Review quality score**: Address improvements flagged in the A–F report
 5. **Secure secrets**: Move any detected credentials to ansible-vault (see `defaults/main.yml` stubs)
 6. **AAP readiness**: Use the `aap_hints` block to configure the correct Execution Environment and credentials in your AAP job template
+
+#### Puppet Migration Workflow
+
+1. **Inventory**: Use `parse_puppet_manifest` or `parse_puppet_module` to understand resource coverage
+2. **Review unsupported constructs**: Check Hiera lookups, exported resources, and `create_resources` flagged in the parse output
+3. **Convert**: Use `convert_puppet_manifest_to_ansible` or `convert_puppet_module_to_ansible` for standard manifests
+4. **Handle complex DSL**: Use `convert_puppet_manifest_to_ansible_with_ai` for manifests with unsupported constructs
+5. **One-off tasks**: Use `convert_puppet_resource_to_task` to convert individual resource declarations during review
+6. **Validate**: Review generated playbook against the original manifest and test on a staging environment
 #### Ansible Upgrade Workflow
 
 1. **Assessment**: Use `assess_ansible_upgrade_readiness` (automatically detects Python version)

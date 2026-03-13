@@ -39,6 +39,11 @@ souschef-cli --help
 | [`cat`](#cat) | Display file contents | `souschef-cli cat default.rb` |
 | [`v2 migrate`](#v2-migrate) | Run v2 migration orchestration | `souschef-cli v2 migrate --cookbook-path cookbooks/app` |
 | [`v2 status`](#v2-status) | Load v2 migration state | `souschef-cli v2 status --migration-id mig-abc123` |
+| [`puppet parse`](#puppet-parse) | Parse Puppet manifest | `souschef puppet parse manifests/site.pp` |
+| [`puppet parse-module`](#puppet-parse-module) | Parse Puppet module directory | `souschef puppet parse-module modules/nginx` |
+| [`puppet convert`](#puppet-convert) | Convert Puppet manifest to playbook | `souschef puppet convert manifests/site.pp -o playbook.yml` |
+| [`puppet convert-module`](#puppet-convert-module) | Convert Puppet module to playbook | `souschef puppet convert-module modules/nginx -o role.yml` |
+| [`puppet list-types`](#puppet-list-types) | List supported Puppet resource types | `souschef puppet list-types` |
 
 ---
 
@@ -1131,6 +1136,178 @@ ansible-playbook site.yml -e @vault.yml
 # DB_PASSWORD: ''  # TODO: set via ansible-vault
 APP_PORT: '8080'
 APP_ENV: 'production'
+```
+
+---
+
+## Puppet Migration Commands
+
+Convert Puppet manifests and module directories to Ansible playbooks using `ansible.builtin` modules.
+
+### puppet parse
+
+Parse a Puppet manifest file and display all discovered resources, classes, and variables.
+
+**Syntax:**
+```bash
+souschef puppet parse MANIFEST_PATH [OPTIONS]
+```
+
+**Options:**
+- `MANIFEST_PATH` (required): Path to the Puppet manifest (`.pp`) file
+- `--output`, `-o`: Save output to file instead of stdout
+
+**What it detects:**
+
+| Category | Examples |
+|----------|----------|
+| Resources | `package`, `service`, `file`, `user`, `group`, `exec`, `cron`, `host`, `mount` |
+| Classes | Class definitions with parameters |
+| Variables | Variable assignments |
+| Unsupported | Hiera lookups, exported resources, `create_resources`, `inline_template` |
+
+**Examples:**
+
+```bash
+# Parse a manifest and print to stdout
+souschef puppet parse manifests/site.pp
+
+# Save analysis to file
+souschef puppet parse manifests/webserver.pp --output analysis.txt
+```
+
+---
+
+### puppet parse-module
+
+Parse a Puppet module directory and analyse all manifests.
+
+**Syntax:**
+```bash
+souschef puppet parse-module MODULE_PATH [OPTIONS]
+```
+
+**Options:**
+- `MODULE_PATH` (required): Path to the Puppet module directory
+- `--output`, `-o`: Save output to file instead of stdout
+
+**Examples:**
+
+```bash
+souschef puppet parse-module modules/nginx
+souschef puppet parse-module modules/postgresql --output analysis.txt
+```
+
+---
+
+### puppet convert
+
+Convert a Puppet manifest to an Ansible playbook.
+
+**Syntax:**
+```bash
+souschef puppet convert MANIFEST_PATH [OPTIONS]
+```
+
+**Options:**
+- `MANIFEST_PATH` (required): Path to the Puppet manifest (`.pp`) file
+- `--output`, `-o`: Path to save the generated playbook YAML
+
+**Puppet → Ansible module mapping:**
+
+| Puppet Resource | Ansible Module |
+|-----------------|----------------|
+| `package` | `ansible.builtin.package` |
+| `service` | `ansible.builtin.service` |
+| `file` | `ansible.builtin.file` / `copy` / `template` |
+| `user` | `ansible.builtin.user` |
+| `group` | `ansible.builtin.group` |
+| `exec` | `ansible.builtin.command` |
+| `cron` | `ansible.builtin.cron` |
+| `host` | `ansible.builtin.lineinfile` |
+| `mount` | `ansible.posix.mount` |
+| `ssh_authorized_key` | `ansible.builtin.authorized_key` |
+
+**Examples:**
+
+```bash
+# Print playbook to stdout
+souschef puppet convert manifests/webserver.pp
+
+# Save playbook to file
+souschef puppet convert manifests/webserver.pp --output playbook.yml
+```
+
+**Example output:**
+```yaml
+---
+- name: Converted from manifests/webserver.pp
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: "package[nginx]"
+      ansible.builtin.package:
+        name: nginx
+        state: present
+
+    - name: "service[nginx]"
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+```
+
+---
+
+### puppet convert-module
+
+Convert an entire Puppet module directory to an Ansible playbook.
+
+**Syntax:**
+```bash
+souschef puppet convert-module MODULE_PATH [OPTIONS]
+```
+
+**Options:**
+- `MODULE_PATH` (required): Path to the Puppet module directory
+- `--output`, `-o`: Path to save the generated playbook YAML
+- `--output-dir`: Save individual playbook files per manifest into this directory
+
+**Examples:**
+
+```bash
+# Convert module to a single consolidated playbook
+souschef puppet convert-module modules/nginx --output nginx_playbook.yml
+
+# Save per-manifest playbooks into a directory
+souschef puppet convert-module modules/myapp --output-dir ./roles/myapp
+```
+
+---
+
+### puppet list-types
+
+List all Puppet resource types that SousChef can convert automatically.
+
+**Syntax:**
+```bash
+souschef puppet list-types
+```
+
+**Example output:**
+```
+Supported Puppet Resource Types
+================================
+package  → ansible.builtin.package
+service  → ansible.builtin.service
+file     → ansible.builtin.file / copy / template
+user     → ansible.builtin.user
+group    → ansible.builtin.group
+exec     → ansible.builtin.command
+cron     → ansible.builtin.cron
+host     → ansible.builtin.lineinfile
+mount    → ansible.posix.mount
+ssh_authorized_key → ansible.builtin.authorized_key
 ```
 
 ---
