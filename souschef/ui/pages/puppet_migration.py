@@ -10,6 +10,7 @@ to Ansible playbooks. Supports:
 - AI-assisted conversion for unsupported constructs
 """
 
+import os as _os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -56,7 +57,10 @@ def _validate_ui_path(path_str: str) -> str | None:
     Validate and normalise a user-provided filesystem path.
 
     Ensures the path stays within the workspace root to prevent directory
-    traversal attacks (CWE-22).
+    traversal attacks (CWE-22).  Uses a pure string-level traversal check
+    (``os.path.normpath`` + ``startswith``) before any filesystem access —
+    the pattern recognised by CodeQL as a path-injection sanitiser — and then
+    applies a final resolution-based containment guard for symlink safety.
 
     Args:
         path_str: Raw path string from a UI text input.
@@ -66,9 +70,23 @@ def _validate_ui_path(path_str: str) -> str | None:
         unsafe or outside the workspace root.
 
     """
+    if not path_str or "\x00" in path_str:
+        return None
     try:
         workspace = _get_workspace_root()
-        return str(_ensure_within_base_path(_normalize_path(path_str), workspace))
+        workspace_str = str(workspace)
+        # Pure string normalisation — no filesystem access.  join() handles
+        # both relative and absolute inputs; normpath collapses ".." segments.
+        # This is the CodeQL-recognised sanitiser pattern for py/path-injection.
+        candidate_str = _os.path.normpath(str(Path(workspace_str) / path_str))
+        # Use commonpath for pure-string containment check (no filesystem access).
+        # commonpath([candidate, base]) == base iff candidate is within base.
+        # This handles the root ("/") case correctly and is the CodeQL-recognised
+        # sanitiser pattern for py/path-injection.
+        if _os.path.commonpath([candidate_str, workspace_str]) != workspace_str:
+            return None
+        # Full resolution with containment check (handles symlinks)
+        return str(_ensure_within_base_path(_normalize_path(candidate_str), workspace))
     except ValueError:
         return None
 

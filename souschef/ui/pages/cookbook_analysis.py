@@ -96,6 +96,10 @@ from souschef.ui.pages.cookbook_analysis_utilities import (
 __all__ = [
     "_validate_tar_file_security",
     "_validate_zip_file_security",
+    "MAX_FILE_SIZE",
+    "MAX_FILES",
+    "MAX_DEPTH",
+    "BLOCKED_EXTENSIONS",
 ]
 
 generate_playbook_from_recipe_with_ai = (
