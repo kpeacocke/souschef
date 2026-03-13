@@ -222,14 +222,22 @@ class TestNormalizePathSecurity:
         with pytest.raises(ValueError, match="must be a string or Path"):
             _normalize_path(123)
 
-    def test_normalize_path_home_directory_expansion(self):
-        """Test that home directory paths are expanded correctly."""
+    def test_normalize_path_tilde_preserved(self) -> None:
+        """
+        Test that tilde paths are preserved unchanged by _normalize_path.
+
+        _normalize_path is a pure string normaliser — it intentionally does
+        NOT call expanduser() to avoid filesystem I/O on user-controlled data
+        (CodeQL py/path-injection).  Callers that need tilde expansion must use
+        _resolve_path_under_base, which expands tildes after the inline
+        containment barrier.
+        """
         path_with_tilde = "~/cookbook/recipe.rb"
         result = _normalize_path(path_with_tilde)
 
         assert isinstance(result, Path)
-        assert "~" not in str(result)
-        assert result.is_absolute()
+        # Tilde is preserved — no filesystem I/O performed.
+        assert str(result) == "~/cookbook/recipe.rb"
 
 
 class TestSafeJoinSecurity:

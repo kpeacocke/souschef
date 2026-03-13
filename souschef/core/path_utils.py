@@ -65,22 +65,28 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
 
 def _normalize_path(path_str: str | Path) -> Path:
     """
-    Normalize a file path for safe filesystem operations.
+    Normalise a file path using only pure string operations.
 
-    This function validates input and resolves relative paths and symlinks
-    to absolute paths, preventing path traversal attacks (CWE-23).
+    This function validates the input for null bytes and applies
+    ``os.path.normpath`` to canonicalise the path (collapse ``..`` and
+    repeated separators) without performing any filesystem I/O.
 
-    This is a sanitizer for path inputs - it validates and normalizes
-    paths before any filesystem operations.
+    Tilde (``~``) expansion is intentionally **not** performed here to
+    avoid filesystem reads on user-controlled data (CWE-22/CWE-23,
+    CodeQL ``py/path-injection``).  Callers that need ``~`` expansion
+    should either supply absolute paths or use ``_resolve_path_under_base``,
+    which expands tildes only after the inline ``commonpath`` containment
+    barrier so CodeQL cannot trace taint to a filesystem sink inside this
+    function.
 
     Args:
-        path_str: Path string or Path object to normalize.
+        path_str: Path string or Path object to normalise.
 
     Returns:
-        Resolved absolute Path object.
+        Normalised Path object (not necessarily absolute for relative inputs).
 
     Raises:
-        ValueError: If the path contains null bytes or is invalid.
+        ValueError: If the path contains null bytes or is of an invalid type.
 
     """
     if isinstance(path_str, Path):
@@ -93,11 +99,13 @@ def _normalize_path(path_str: str | Path) -> Path:
         raise ValueError(f"Path must be a string or Path object, got {type(path_str)}")
 
     try:
-        # Use normpath (pure string operation) rather than resolve() to avoid
-        # filesystem I/O on user-controlled data (CodeQL py/path-injection).
-        # Containment is enforced by the callers via _resolve_path_under_base.
-        expanded = path_obj.expanduser()
-        normalized = Path(os.path.normpath(str(expanded)))
+        # Pure string normalisation — no filesystem I/O on user-controlled data.
+        # expanduser() is intentionally omitted: tilde expansion is the caller's
+        # responsibility.  Callers that accept user-supplied paths must use
+        # _resolve_path_under_base, which performs expanduser AFTER the inline
+        # commonpath containment barrier so CodeQL does not trace taint from
+        # user input to a filesystem sink inside this function.
+        normalized = Path(os.path.normpath(str(path_obj)))
         return normalized
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
