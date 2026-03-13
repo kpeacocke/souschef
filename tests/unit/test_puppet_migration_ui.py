@@ -570,3 +570,103 @@ def test_show_module_no_path_ai_clicked(mock_streamlit: MagicMock) -> None:
     mock_streamlit.button.side_effect = [False, False, True]
     _show_module_directory_section()
     mock_streamlit.warning.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests: _validate_ui_path security
+# ---------------------------------------------------------------------------
+
+
+def test_validate_ui_path_accepts_workspace_path(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """_validate_ui_path should accept a path within the workspace root."""
+    import os
+
+    from souschef.ui.pages.puppet_migration import _validate_ui_path
+
+    old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+    try:
+        os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(tmp_path)
+        target = str(tmp_path / "manifest.pp")
+        result = _validate_ui_path(target)
+        assert result is not None
+        assert "manifest.pp" in result
+    finally:
+        if old_root is None:
+            os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+        else:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+
+
+def test_validate_ui_path_rejects_traversal(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """_validate_ui_path should reject paths that escape the workspace root."""
+    import os
+
+    from souschef.ui.pages.puppet_migration import _validate_ui_path
+
+    old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+    try:
+        os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(tmp_path)
+        # This resolves outside tmp_path
+        result = _validate_ui_path("/etc/passwd")
+        assert result is None
+    finally:
+        if old_root is None:
+            os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+        else:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+
+
+def test_validate_ui_path_rejects_relative_traversal(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """_validate_ui_path should reject relative traversal sequences."""
+    import os
+
+    from souschef.ui.pages.puppet_migration import _validate_ui_path
+
+    old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+    try:
+        os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(tmp_path)
+        result = _validate_ui_path(str(tmp_path / ".." / ".." / "etc" / "shadow"))
+        assert result is None
+    finally:
+        if old_root is None:
+            os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+        else:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+
+
+def test_run_manifest_analysis_invalid_path(mock_streamlit: MagicMock) -> None:
+    """_run_manifest_analysis should show error for a path outside workspace."""
+    import os
+
+    old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+    try:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as restricted_root:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = restricted_root
+            _run_manifest_analysis("/etc/passwd")
+            mock_streamlit.error.assert_called()
+    finally:
+        if old_root is None:
+            os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+        else:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+
+
+def test_run_module_analysis_invalid_path(mock_streamlit: MagicMock) -> None:
+    """_run_module_analysis should show error for a path outside workspace."""
+    import os
+
+    old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
+    try:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as restricted_root:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = restricted_root
+            _run_module_analysis("/etc")
+            mock_streamlit.error.assert_called()
+    finally:
+        if old_root is None:
+            os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
+        else:
+            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
