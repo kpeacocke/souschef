@@ -10,7 +10,6 @@ to Ansible playbooks. Supports:
 - AI-assisted conversion for unsupported constructs
 """
 
-import os as _os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -30,9 +29,8 @@ from souschef.converters.puppet_to_ansible import (
     get_puppet_ansible_module_map,
 )
 from souschef.core.path_utils import (
-    _ensure_within_base_path,
     _get_workspace_root,
-    _normalize_path,
+    _resolve_path_under_base,
 )
 from souschef.parsers.puppet import (
     parse_puppet_manifest,
@@ -57,10 +55,13 @@ def _validate_ui_path(path_str: str) -> str | None:
     Validate and normalise a user-provided filesystem path.
 
     Ensures the path stays within the workspace root to prevent directory
-    traversal attacks (CWE-22).  Uses a pure string-level traversal check
-    (``os.path.normpath`` + ``startswith``) before any filesystem access —
-    the pattern recognised by CodeQL as a path-injection sanitiser — and then
-    applies a final resolution-based containment guard for symlink safety.
+    traversal attacks (CWE-22).
+
+    Uses ``_resolve_path_under_base`` which enforces:
+    - Null-byte rejection (CWE-158)
+    - Character allowlist via ``re.fullmatch`` (CodeQL-recognised sanitiser)
+    - Symlink-safe resolution via ``os.path.realpath``
+    - Canonical containment check via ``os.path.commonpath``
 
     Args:
         path_str: Raw path string from a UI text input.
@@ -70,31 +71,11 @@ def _validate_ui_path(path_str: str) -> str | None:
         unsafe or outside the workspace root.
 
     """
-    if "\x00" in (path_str or ""):
-        # Null bytes terminate the string in many C-based OS functions (CWE-158),
-        # potentially allowing an attacker to bypass extension or suffix checks.
-        return None
     if not path_str:
         return None
     try:
         workspace = _get_workspace_root()
-        workspace_str = str(workspace)
-        # Pure string normalisation — no filesystem access.
-        # Path(...) / path_str handles both relative and absolute inputs;
-        # normpath then collapses any remaining ".." segments.  We cannot use
-        # Path.resolve() here because that IS a filesystem access and would be
-        # flagged as a path-injection sink before the containment guard runs.
-        # The normpath + commonpath combination is the CodeQL-recognised
-        # sanitiser pattern for py/path-injection.
-        candidate_str = _os.path.normpath(str(Path(workspace_str) / path_str))
-        # commonpath([candidate, base]) == base iff candidate is within base.
-        # This handles the root ("/") edge case and both POSIX and Windows paths.
-        # On Windows with different drive letters, commonpath raises ValueError
-        # which is caught below — that case is always rejected, as intended.
-        if _os.path.commonpath([candidate_str, workspace_str]) != workspace_str:
-            return None
-        # Final resolution with containment check covers symlink edge cases.
-        return str(_ensure_within_base_path(_normalize_path(candidate_str), workspace))
+        return str(_resolve_path_under_base(path_str, workspace))
     except ValueError:
         return None
 
