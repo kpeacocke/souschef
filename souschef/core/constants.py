@@ -37,6 +37,7 @@ __all__ = [
     "INSPEC_SHOULD_EXIST",
     "ERROR_FILE_NOT_FOUND",
     "ERROR_IS_DIRECTORY",
+    "ERROR_NOT_A_DIRECTORY",
     "ERROR_PERMISSION_DENIED",
     "RESOURCE_MAPPINGS",
     "ACTION_TO_STATE",
@@ -124,6 +125,7 @@ INSPEC_SHOULD_EXIST = "    it { should exist }"
 # Error message templates
 ERROR_FILE_NOT_FOUND = "Error: File not found at {path}"
 ERROR_IS_DIRECTORY = "Error: {path} is a directory, not a file"
+ERROR_NOT_A_DIRECTORY = "Error: {path} is not a directory"
 ERROR_PERMISSION_DENIED = "Error: Permission denied for {path}"
 
 # Chef resource to Ansible module mappings

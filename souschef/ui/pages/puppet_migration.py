@@ -10,12 +10,8 @@ to Ansible playbooks. Supports:
 - AI-assisted conversion for unsupported constructs
 """
 
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-# Add parent directory to path for module imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 if TYPE_CHECKING:
     import streamlit as st

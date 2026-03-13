@@ -288,12 +288,15 @@ The page supports two input modes selectable via a dropdown:
 
 ### Actions Available
 
+The page has two sub-sections: **Analyse Puppet Manifest** (for single `.pp` files) and **Analyse Puppet Module** (for full module directories). Each sub-section provides these buttons:
+
 | Button | Action |
 |--------|--------|
-| **Parse** | Extract and display all resources, classes, variables, and unsupported constructs |
+| **Analyse Manifest** / **Analyse Module** | Extract and display all resources, classes, variables, and unsupported constructs |
 | **Convert to Ansible** | Generate an Ansible playbook from all parsed resources |
-| **AI-Assisted Convert** | Use an LLM to handle Hiera lookups, exported resources, and other unsupported constructs |
-| **Download Playbook** | Download the generated playbook as a `.yml` file |
+| **Convert with AI** | Use an LLM to handle Hiera lookups, exported resources, and other unsupported constructs |
+
+A **Download Playbook** button appears in the conversion result panel once a playbook has been generated.
 
 ### Analysis Output
 

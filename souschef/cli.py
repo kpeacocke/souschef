@@ -2606,11 +2606,16 @@ def bash_role(script_path: str, role_name: str, output_dir: str | None) -> None:
         sys.exit(1)
     files: dict[str, str] = data.get("files", {})
     if output_dir:
-        base = Path(output_dir) / role_name
+        workspace_root = _get_workspace_root()
+        base = _ensure_within_base_path(
+            _normalize_path(Path(output_dir) / role_name), workspace_root
+        )
         for filename, content in files.items():
-            fpath = base / filename
+            fpath = _ensure_within_base_path(
+                _normalize_path(base / filename), workspace_root
+            )
             fpath.parent.mkdir(parents=True, exist_ok=True)
-            fpath.write_text(content)
+            safe_write_text(fpath, workspace_root, content)
         click.echo(f"Role written to {base}")
     else:
         for filename, content in files.items():

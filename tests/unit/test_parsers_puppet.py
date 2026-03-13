@@ -351,6 +351,34 @@ def test_parse_puppet_module_skips_unreadable_file(tmp_path: Path) -> None:
     assert "vim" in result or "Puppet Manifest Analysis" in result
 
 
+def test_parse_puppet_module_skipped_file_warning_included(tmp_path: Path) -> None:
+    """Test that skipped unreadable files appear in a Warnings section."""
+    good = tmp_path / "good.pp"
+    bad = tmp_path / "bad.pp"
+    good.write_text("package { 'vim': ensure => installed }", encoding="utf-8")
+    bad.write_text("package { 'curl': ensure => installed }", encoding="utf-8")
+
+    def _selective_read(path: Path, *args: object, **kwargs: object) -> str:
+        if "bad" in str(path):
+            raise OSError("cannot read bad.pp")
+        return safe_read_text(path, *args, **kwargs)
+
+    with patch("souschef.parsers.puppet.safe_read_text", side_effect=_selective_read):
+        result = parse_puppet_module(str(tmp_path))
+
+    assert "Warnings" in result
+    assert "bad.pp" in result
+    assert "cannot read bad.pp" in result
+
+
+def test_parse_puppet_module_is_file_error_message(tmp_path: Path) -> None:
+    """Test that passing a file returns 'is not a directory' message."""
+    manifest = tmp_path / "site.pp"
+    manifest.write_text("", encoding="utf-8")
+    result = parse_puppet_module(str(manifest))
+    assert "is not a directory" in result
+
+
 # ---------------------------------------------------------------------------
 # Tests: _extract_puppet_resources
 # ---------------------------------------------------------------------------

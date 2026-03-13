@@ -10,11 +10,13 @@ Warns about unsupported constructs (Hiera lookups, complex DSL expressions).
 """
 
 import re
+from pathlib import Path
 from typing import Any
 
 from souschef.core.constants import (
     ERROR_FILE_NOT_FOUND,
     ERROR_IS_DIRECTORY,
+    ERROR_NOT_A_DIRECTORY,
     ERROR_PERMISSION_DENIED,
 )
 from souschef.core.path_utils import (
@@ -104,6 +106,48 @@ def parse_puppet_manifest(path: str) -> str:
         return f"An error occurred: {e}"
 
 
+def _accumulate_manifests(
+    manifests: list[Path],
+    workspace_root: Path,
+) -> tuple[dict[str, list[dict[str, Any]]], list[str]]:
+    """
+    Parse a list of manifest paths and accumulate results.
+
+    Args:
+        manifests: Sorted list of Path objects pointing to ``.pp`` files.
+        workspace_root: Trusted workspace root for path containment checks.
+
+    Returns:
+        A tuple of (combined_data_dict, skipped_file_warnings).
+
+    """
+    all_resources: list[dict[str, Any]] = []
+    all_classes: list[dict[str, Any]] = []
+    all_variables: list[dict[str, Any]] = []
+    all_unsupported: list[dict[str, Any]] = []
+    skipped_files: list[str] = []
+
+    for manifest_path in manifests:
+        try:
+            content = safe_read_text(manifest_path, workspace_root, encoding="utf-8")
+            rel_path = str(manifest_path.relative_to(workspace_root))
+            parsed = _parse_manifest_content(content, rel_path)
+            all_resources.extend(parsed.get("resources", []))
+            all_classes.extend(parsed.get("classes", []))
+            all_variables.extend(parsed.get("variables", []))
+            all_unsupported.extend(parsed.get("unsupported", []))
+        except (OSError, ValueError) as exc:
+            skipped_files.append(f"{manifest_path.name}: {exc}")
+
+    combined: dict[str, list[dict[str, Any]]] = {
+        "resources": all_resources,
+        "classes": all_classes,
+        "variables": all_variables,
+        "unsupported": all_unsupported,
+    }
+    return combined, skipped_files
+
+
 def parse_puppet_module(module_path: str) -> str:
     """
     Parse a Puppet module directory and extract all resources from manifests.
@@ -128,38 +172,19 @@ def parse_puppet_module(module_path: str) -> str:
         if not safe_dir.exists():  # NOSONAR
             return ERROR_FILE_NOT_FOUND.format(path=module_path)
         if not safe_dir.is_dir():
-            return ERROR_IS_DIRECTORY.format(path=module_path)
+            return ERROR_NOT_A_DIRECTORY.format(path=module_path)
 
         manifests = sorted(safe_dir.rglob("*.pp"))
         if not manifests:
             return f"Warning: No Puppet manifests (.pp files) found in {module_path}"
 
-        all_resources: list[dict[str, Any]] = []
-        all_classes: list[dict[str, Any]] = []
-        all_variables: list[dict[str, Any]] = []
-        all_unsupported: list[dict[str, Any]] = []
-
-        for manifest_path in manifests:
-            try:
-                content = safe_read_text(
-                    manifest_path, workspace_root, encoding="utf-8"
-                )
-                rel_path = str(manifest_path.relative_to(workspace_root))
-                parsed = _parse_manifest_content(content, rel_path)
-                all_resources.extend(parsed.get("resources", []))
-                all_classes.extend(parsed.get("classes", []))
-                all_variables.extend(parsed.get("variables", []))
-                all_unsupported.extend(parsed.get("unsupported", []))
-            except (OSError, ValueError):
-                continue
-
-        combined: dict[str, Any] = {
-            "resources": all_resources,
-            "classes": all_classes,
-            "variables": all_variables,
-            "unsupported": all_unsupported,
-        }
-        return _format_manifest_results(combined, module_path)
+        combined, skipped_files = _accumulate_manifests(manifests, workspace_root)
+        report = _format_manifest_results(combined, module_path)
+        if skipped_files:
+            warning_lines = "\n".join(f"  - {w}" for w in skipped_files)
+            skip_count = len(skipped_files)
+            report += f"\n\nWarnings (skipped {skip_count} file(s)):\n{warning_lines}"
+        return report
 
     except ValueError as e:
         return f"Error: {e}"
@@ -220,7 +245,7 @@ def _extract_puppet_resources(content: str, source_path: str) -> list[dict[str, 
         r"(\w+)\s*\{[\s\n]*"  # resource_type {
         r"((?:\'[^\']*\'|\"[^\"]*\"|\[[^\]]*\]))"  # 'title' or ['t1', 't2']
         r"\s*:\s*"  # :
-        r"([^}]*)",  # attributes (up to 2000 chars for safety)
+        r"([^}]*)",  # attributes: all content up to the closing brace
         re.DOTALL,
     )
 
