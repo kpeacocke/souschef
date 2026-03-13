@@ -743,6 +743,38 @@ __all__ = [
     "_parse_puppet_attributes",
     "_parse_resource_titles",
     "get_puppet_resource_types",
+    # Salt converter helpers (re-exported for tests)
+    "_apply_file_ownership",
+    "_build_cmd_task",
+    "_build_file_task",
+    "_build_generic_task",
+    "_build_git_task",
+    "_build_group_task",
+    "_build_pip_task",
+    "_build_pkg_task",
+    "_build_service_task",
+    "_build_user_task",
+    "_convert_state_to_task",
+    "_extract_watch_handlers",
+    "_pillar_to_ansible_vars",
+    "_pillar_to_vault_vars",
+    "_render_param_value",
+    "_render_playbook_yaml",
+    "_render_task_lines",
+    "_top_to_ansible_inventory",
+    # Salt parser helpers (re-exported for tests)
+    "_build_state_entry",
+    "_detect_salt_dependencies",
+    "_extract_args_from_value",
+    "_extract_grains",
+    "_extract_pillars",
+    "_extract_state_id_and_module",
+    "_list_sls_files",
+    "_parse_sls_states",
+    "_parse_sls_yaml",
+    "_parse_top_environments",
+    "_score_state_complexity",
+    "_summarise_states",
 ]
 
 # Backward compatibility re-exports without underscore prefix (for tests)
@@ -6169,7 +6201,6 @@ def query_salt_master(
         JSON string with query results or error details.
 
     """
-    import re
     import ssl
     import urllib.error
     import urllib.parse

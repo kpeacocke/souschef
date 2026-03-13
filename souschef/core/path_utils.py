@@ -93,8 +93,11 @@ def _normalize_path(path_str: str | Path) -> Path:
         raise ValueError(f"Path must be a string or Path object, got {type(path_str)}")
 
     try:
-        resolved_path = path_obj.expanduser().resolve()
-        normalized: Path = resolved_path
+        # Use normpath (pure string operation) rather than resolve() to avoid
+        # filesystem I/O on user-controlled data (CodeQL py/path-injection).
+        # Containment is enforced by the callers via _resolve_path_under_base.
+        expanded = path_obj.expanduser()
+        normalized = Path(os.path.normpath(str(expanded)))
         return normalized
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
