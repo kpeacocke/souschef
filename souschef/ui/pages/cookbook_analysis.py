@@ -96,10 +96,6 @@ from souschef.ui.pages.cookbook_analysis_utilities import (
 __all__ = [
     "_validate_tar_file_security",
     "_validate_zip_file_security",
-    "MAX_FILE_SIZE",
-    "MAX_FILES",
-    "MAX_DEPTH",
-    "BLOCKED_EXTENSIONS",
 ]
 
 generate_playbook_from_recipe_with_ai = (
@@ -449,24 +445,9 @@ METADATA_COLUMN_NAME = "Has Metadata"
 MIME_TYPE_ZIP = "application/zip"
 UNKNOWN_ERROR = "Unknown error"
 
-# Security limits for archive extraction
+# Security limits for archive extraction (canonical definitions are in
+# cookbook_analysis_security.py; these were duplicate constants)
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024  # 100MB total
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB per file
-MAX_FILES = 1000  # Maximum number of files
-MAX_DEPTH = 10  # Maximum directory depth
-BLOCKED_EXTENSIONS = {
-    ".exe",
-    ".bat",
-    ".cmd",
-    ".com",
-    ".pif",
-    ".scr",
-    ".vbs",
-    ".js",
-    ".jar",
-    # Note: .sh files are allowed as they are common in Chef cookbooks
-}
-
 
 def extract_archive(uploaded_file) -> tuple[Path, Path, Path]:
     """

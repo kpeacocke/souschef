@@ -71,6 +71,9 @@ def _validate_ui_path(path_str: str) -> str | None:
 
     """
     if not path_str or "\x00" in path_str:
+        # Reject empty paths and null-byte injections (CWE-158).  A null byte
+        # terminates the string in many C-based OS functions, potentially
+        # allowing an attacker to bypass extension checks.
         return None
     try:
         workspace = _get_workspace_root()
