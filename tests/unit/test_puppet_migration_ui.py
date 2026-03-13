@@ -5,6 +5,7 @@ Tests cover the show_puppet_migration_page and all helper functions
 including section renderers, analysis/conversion runners, and display helpers.
 """
 
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -579,8 +580,6 @@ def test_show_module_no_path_ai_clicked(mock_streamlit: MagicMock) -> None:
 
 def test_validate_ui_path_accepts_workspace_path(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """_validate_ui_path should accept a path within the workspace root."""
-    import os
-
     from souschef.ui.pages.puppet_migration import _validate_ui_path
 
     old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
@@ -599,8 +598,6 @@ def test_validate_ui_path_accepts_workspace_path(tmp_path) -> None:  # type: ign
 
 def test_validate_ui_path_rejects_traversal(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """_validate_ui_path should reject paths that escape the workspace root."""
-    import os
-
     from souschef.ui.pages.puppet_migration import _validate_ui_path
 
     old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
@@ -618,8 +615,6 @@ def test_validate_ui_path_rejects_traversal(tmp_path) -> None:  # type: ignore[n
 
 def test_validate_ui_path_rejects_relative_traversal(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """_validate_ui_path should reject relative traversal sequences."""
-    import os
-
     from souschef.ui.pages.puppet_migration import _validate_ui_path
 
     old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
@@ -634,18 +629,15 @@ def test_validate_ui_path_rejects_relative_traversal(tmp_path) -> None:  # type:
             os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
 
 
-def test_run_manifest_analysis_invalid_path(mock_streamlit: MagicMock) -> None:
+def test_run_manifest_analysis_invalid_path(
+    mock_streamlit: MagicMock, tmp_path
+) -> None:  # type: ignore[no-untyped-def]
     """_run_manifest_analysis should show error for a path outside workspace."""
-    import os
-
     old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
     try:
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as restricted_root:
-            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = restricted_root
-            _run_manifest_analysis("/etc/passwd")
-            mock_streamlit.error.assert_called()
+        os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(tmp_path)
+        _run_manifest_analysis("/etc/passwd")
+        mock_streamlit.error.assert_called()
     finally:
         if old_root is None:
             os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
@@ -653,18 +645,15 @@ def test_run_manifest_analysis_invalid_path(mock_streamlit: MagicMock) -> None:
             os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
 
 
-def test_run_module_analysis_invalid_path(mock_streamlit: MagicMock) -> None:
+def test_run_module_analysis_invalid_path(
+    mock_streamlit: MagicMock, tmp_path
+) -> None:  # type: ignore[no-untyped-def]
     """_run_module_analysis should show error for a path outside workspace."""
-    import os
-
     old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
     try:
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as restricted_root:
-            os.environ["SOUSCHEF_WORKSPACE_ROOT"] = restricted_root
-            _run_module_analysis("/etc")
-            mock_streamlit.error.assert_called()
+        os.environ["SOUSCHEF_WORKSPACE_ROOT"] = str(tmp_path)
+        _run_module_analysis("/etc")
+        mock_streamlit.error.assert_called()
     finally:
         if old_root is None:
             os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
