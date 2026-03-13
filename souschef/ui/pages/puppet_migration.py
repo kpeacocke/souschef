@@ -70,25 +70,30 @@ def _validate_ui_path(path_str: str) -> str | None:
         unsafe or outside the workspace root.
 
     """
-    if not path_str or "\x00" in path_str:
-        # Reject empty paths and null-byte injections (CWE-158).  A null byte
-        # terminates the string in many C-based OS functions, potentially
-        # allowing an attacker to bypass extension checks.
+    if "\x00" in (path_str or ""):
+        # Null bytes terminate the string in many C-based OS functions (CWE-158),
+        # potentially allowing an attacker to bypass extension or suffix checks.
+        return None
+    if not path_str:
         return None
     try:
         workspace = _get_workspace_root()
         workspace_str = str(workspace)
-        # Pure string normalisation — no filesystem access.  join() handles
-        # both relative and absolute inputs; normpath collapses ".." segments.
-        # This is the CodeQL-recognised sanitiser pattern for py/path-injection.
-        candidate_str = _os.path.normpath(str(Path(workspace_str) / path_str))
-        # Use commonpath for pure-string containment check (no filesystem access).
-        # commonpath([candidate, base]) == base iff candidate is within base.
-        # This handles the root ("/") case correctly and is the CodeQL-recognised
+        # Pure string normalisation — no filesystem access.
+        # Path(...) / path_str handles both relative and absolute inputs;
+        # normpath then collapses any remaining ".." segments.  We cannot use
+        # Path.resolve() here because that IS a filesystem access and would be
+        # flagged as a path-injection sink before the containment guard runs.
+        # The normpath + commonpath combination is the CodeQL-recognised
         # sanitiser pattern for py/path-injection.
+        candidate_str = _os.path.normpath(str(Path(workspace_str) / path_str))
+        # commonpath([candidate, base]) == base iff candidate is within base.
+        # This handles the root ("/") edge case and both POSIX and Windows paths.
+        # On Windows with different drive letters, commonpath raises ValueError
+        # which is caught below — that case is always rejected, as intended.
         if _os.path.commonpath([candidate_str, workspace_str]) != workspace_str:
             return None
-        # Full resolution with containment check (handles symlinks)
+        # Final resolution with containment check covers symlink edge cases.
         return str(_ensure_within_base_path(_normalize_path(candidate_str), workspace))
     except ValueError:
         return None

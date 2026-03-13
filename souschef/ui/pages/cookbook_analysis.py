@@ -445,8 +445,10 @@ METADATA_COLUMN_NAME = "Has Metadata"
 MIME_TYPE_ZIP = "application/zip"
 UNKNOWN_ERROR = "Unknown error"
 
-# Security limits for archive extraction (canonical definitions are in
-# cookbook_analysis_security.py; these were duplicate constants)
+# Security limits for archive extraction.
+# MAX_ARCHIVE_SIZE is used locally in extract_archive() below.
+# The per-file limits (MAX_FILE_SIZE, MAX_FILES, MAX_DEPTH, BLOCKED_EXTENSIONS)
+# are defined canonically in cookbook_analysis_security.py where they are used.
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024  # 100MB total
 
 def extract_archive(uploaded_file) -> tuple[Path, Path, Path]:
