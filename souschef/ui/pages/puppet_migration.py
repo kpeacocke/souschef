@@ -28,6 +28,11 @@ from souschef.converters.puppet_to_ansible import (
     convert_puppet_module_to_ansible_with_ai,
     get_puppet_ansible_module_map,
 )
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+)
 from souschef.parsers.puppet import (
     parse_puppet_manifest,
     parse_puppet_module,
@@ -44,6 +49,28 @@ MIME_TEXT_PLAIN = "text/plain"
 _AI_PROVIDERS = ["anthropic", "openai", "watson", "lightspeed"]
 _DEFAULT_PROVIDER = "anthropic"
 _DEFAULT_MODEL = "claude-3-5-sonnet-20241022"
+
+
+def _validate_ui_path(path_str: str) -> str | None:
+    """
+    Validate and normalise a user-provided filesystem path.
+
+    Ensures the path stays within the workspace root to prevent directory
+    traversal attacks (CWE-22).
+
+    Args:
+        path_str: Raw path string from a UI text input.
+
+    Returns:
+        Resolved absolute path string if valid, ``None`` if the path is
+        unsafe or outside the workspace root.
+
+    """
+    try:
+        workspace = _get_workspace_root()
+        return str(_ensure_within_base_path(_normalize_path(path_str), workspace))
+    except ValueError:
+        return None
 
 
 def show_puppet_migration_page() -> None:
@@ -264,8 +291,13 @@ def _run_manifest_analysis(manifest_path: str) -> None:
     if st is None:
         return  # pragma: no cover
 
+    safe = _validate_ui_path(manifest_path)
+    if safe is None:
+        st.error(f"Invalid or unsafe path: {manifest_path!r}")
+        return
+
     with st.spinner("Analysing Puppet manifest..."):
-        result = parse_puppet_manifest(manifest_path)
+        result = parse_puppet_manifest(safe)
 
     _display_analysis_result(result, "manifest")
 
@@ -275,8 +307,13 @@ def _run_module_analysis(module_path: str) -> None:
     if st is None:
         return  # pragma: no cover
 
+    safe = _validate_ui_path(module_path)
+    if safe is None:
+        st.error(f"Invalid or unsafe path: {module_path!r}")
+        return
+
     with st.spinner("Analysing Puppet module..."):
-        result = parse_puppet_module(module_path)
+        result = parse_puppet_module(safe)
 
     _display_analysis_result(result, "module")
 
@@ -286,10 +323,15 @@ def _run_manifest_conversion(manifest_path: str) -> None:
     if st is None:
         return  # pragma: no cover
 
-    with st.spinner("Converting Puppet manifest to Ansible..."):
-        playbook = convert_puppet_manifest_to_ansible(manifest_path)
+    safe = _validate_ui_path(manifest_path)
+    if safe is None:
+        st.error(f"Invalid or unsafe path: {manifest_path!r}")
+        return
 
-    _display_conversion_result(playbook, manifest_path)
+    with st.spinner("Converting Puppet manifest to Ansible..."):
+        playbook = convert_puppet_manifest_to_ansible(safe)
+
+    _display_conversion_result(playbook, safe)
 
 
 def _run_module_conversion(module_path: str) -> None:
@@ -297,10 +339,15 @@ def _run_module_conversion(module_path: str) -> None:
     if st is None:
         return  # pragma: no cover
 
-    with st.spinner("Converting Puppet module to Ansible..."):
-        playbook = convert_puppet_module_to_ansible(module_path)
+    safe = _validate_ui_path(module_path)
+    if safe is None:
+        st.error(f"Invalid or unsafe path: {module_path!r}")
+        return
 
-    _display_conversion_result(playbook, module_path)
+    with st.spinner("Converting Puppet module to Ansible..."):
+        playbook = convert_puppet_module_to_ansible(safe)
+
+    _display_conversion_result(playbook, safe)
 
 
 def _run_manifest_ai_conversion(
@@ -317,9 +364,14 @@ def _run_manifest_ai_conversion(
         )
         return
 
+    safe = _validate_ui_path(manifest_path)
+    if safe is None:
+        st.error(f"Invalid or unsafe path: {manifest_path!r}")
+        return
+
     with st.spinner("Converting Puppet manifest to Ansible with AI..."):
         playbook = convert_puppet_manifest_to_ansible_with_ai(
-            manifest_path,
+            safe,
             ai_provider=str(ai_cfg.get("provider", _DEFAULT_PROVIDER)),
             api_key=str(ai_cfg.get("api_key", "")),
             model=str(ai_cfg.get("model", _DEFAULT_MODEL)),
@@ -329,7 +381,7 @@ def _run_manifest_ai_conversion(
             base_url=str(ai_cfg.get("base_url", "")),
         )
 
-    _display_conversion_result(playbook, manifest_path, ai_enhanced=True)
+    _display_conversion_result(playbook, safe, ai_enhanced=True)
 
 
 def _run_module_ai_conversion(
@@ -346,9 +398,14 @@ def _run_module_ai_conversion(
         )
         return
 
+    safe = _validate_ui_path(module_path)
+    if safe is None:
+        st.error(f"Invalid or unsafe path: {module_path!r}")
+        return
+
     with st.spinner("Converting Puppet module to Ansible with AI..."):
         playbook = convert_puppet_module_to_ansible_with_ai(
-            module_path,
+            safe,
             ai_provider=str(ai_cfg.get("provider", _DEFAULT_PROVIDER)),
             api_key=str(ai_cfg.get("api_key", "")),
             model=str(ai_cfg.get("model", _DEFAULT_MODEL)),
@@ -358,7 +415,7 @@ def _run_module_ai_conversion(
             base_url=str(ai_cfg.get("base_url", "")),
         )
 
-    _display_conversion_result(playbook, module_path, ai_enhanced=True)
+    _display_conversion_result(playbook, safe, ai_enhanced=True)
 
 
 def _display_analysis_result(result: str, source_type: str) -> None:

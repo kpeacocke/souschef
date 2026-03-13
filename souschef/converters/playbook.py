@@ -383,6 +383,15 @@ def _call_lightspeed_api(
     if requests is None:
         return f"{ERROR_PREFIX} requests library not available"
 
+    # Validate the base URL at point of use (defence-in-depth against SSRF)
+    try:
+        safe_base_url = validate_user_provided_url(
+            client["base_url"],
+            allowed_hosts={"api.redhat.com"},
+        )
+    except (ValueError, KeyError) as exc:
+        return f"{ERROR_PREFIX} Invalid Lightspeed base URL: {exc}"
+
     headers = {
         "Authorization": f"Bearer {client['api_key']}",
         "Content-Type": "application/json",
@@ -397,7 +406,7 @@ def _call_lightspeed_api(
         payload["response_format"] = response_format
 
     response = requests.post(
-        f"{client['base_url']}/v1/completions",
+        f"{safe_base_url}/v1/completions",
         headers=headers,
         json=payload,
         timeout=60,
@@ -423,6 +432,15 @@ def _call_github_copilot_api(
     if requests is None:
         return f"{ERROR_PREFIX} requests library not available"
 
+    # Validate the base URL at point of use (defence-in-depth against SSRF)
+    try:
+        safe_base_url = validate_user_provided_url(
+            client["base_url"],
+            allowed_hosts={"api.github.com", "copilot-proxy.githubusercontent.com"},
+        )
+    except (ValueError, KeyError) as exc:
+        return f"{ERROR_PREFIX} Invalid GitHub Copilot base URL: {exc}"
+
     headers = {
         "Authorization": f"Bearer {client['api_key']}",
         "Content-Type": "application/json",
@@ -439,7 +457,7 @@ def _call_github_copilot_api(
 
     # GitHub Copilot uses OpenAI-compatible chat completions endpoint
     response = requests.post(
-        f"{client['base_url']}/copilot/chat/completions",
+        f"{safe_base_url}/copilot/chat/completions",
         headers=headers,
         json=payload,
         timeout=60,

@@ -84,13 +84,19 @@ from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
 from souschef.ui.pages.cookbook_analysis_security import (
     _extract_tar_securely,
     _extract_zip_securely,
-    _validate_tar_file_security,  # noqa: F401, codeql[py/unused-import] - re-exported for backward compatibility
-    _validate_zip_file_security,  # noqa: F401, codeql[py/unused-import] - re-exported for backward compatibility
+    _validate_tar_file_security,  # noqa: F401 - re-exported for backward compatibility
+    _validate_zip_file_security,  # noqa: F401 - re-exported for backward compatibility
 )
 from souschef.ui.pages.cookbook_analysis_utilities import (
     _get_secure_ai_config_path,
     _sanitize_filename,
 )
+
+# Explicit re-exports so CodeQL and type-checkers recognise these as intentional
+__all__ = [
+    "_validate_tar_file_security",
+    "_validate_zip_file_security",
+]
 
 generate_playbook_from_recipe_with_ai = (
     orchestrate_generate_playbook_from_recipe_with_ai
