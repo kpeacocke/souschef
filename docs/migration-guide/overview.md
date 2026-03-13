@@ -603,7 +603,7 @@ Now that you understand the overall migration methodology:
 
 Or explore specific topics:
 
-- [MCP Tools Reference](../user-guide/mcp-tools.md) - All 38 available tools
+- [MCP Tools Reference](../user-guide/mcp-tools.md) - All 54 available tools
 - [CLI Usage](../user-guide/cli-usage.md) - Command-line workflow
 - [Examples](../user-guide/examples.md) - Real-world migration patterns
 
@@ -617,4 +617,4 @@ Or explore specific topics:
 - **InSpec Documentation**: [docs.chef.io/inspec/](https://docs.chef.io/inspec/)
 
 !!! success "Ready to Migrate?"
-    With SousChef's 47 tools and this methodology, you have everything needed for a successful Chef-to-Ansible migration. Start with assessment, follow the phases, and leverage automation throughout the process.
+    With SousChef's 54 tools and this methodology, you have everything needed for a successful Chef-to-Ansible or Bash/PowerShell migration. Start with assessment, follow the phases, and leverage automation throughout the process.

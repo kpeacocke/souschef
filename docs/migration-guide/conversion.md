@@ -1053,3 +1053,14 @@ Or explore related topics:
 
 !!! success "Ready to Convert?"
     Use SousChef's conversion tools to transform Chef cookbooks systematically. Start simple, validate continuously, and build confidence with each successful conversion.
+
+---
+
+## PowerShell Script to Ansible Conversion
+
+For Windows PowerShell provisioning scripts, see the dedicated [PowerShell Migration Guide](powershell-migration.md), which covers:
+
+- Parsing 28+ PowerShell provisioning patterns
+- Mapping to `ansible.windows.*`, `community.windows.*`, and `chocolatey.chocolatey.*` modules
+- Generating enterprise artefacts (WinRM inventory, group_vars, Ansible role, AWX job template)
+- Fidelity scoring and actionable recommendations

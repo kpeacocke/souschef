@@ -271,6 +271,67 @@ services:
       - ./reports:/app/reports
 ```
 
+## PowerShell Migration
+
+The PowerShell Migration page provides a web-based interface for converting PowerShell provisioning scripts to Windows Ansible automation.
+
+### Location
+
+Navigate to: **Ansible** tab → **PowerShell Migration**
+
+### Script Input and Conversion
+
+The page uses a single script input area with controls beneath it for all operations.
+
+- **Script input area**: Paste your PowerShell provisioning script directly into the text area
+- **Parse Script button**: Extracts all provisioning actions and displays a structured summary with action types, confidence levels, source line numbers, and a metrics summary
+- **Warnings panel**: Lists unrecognised commands that will fall back to `win_shell`
+
+#### Conversion tools
+
+The PowerShell migration UI uses a single script input area with a row of controls beneath it. Conversion actions share the same context as the analysis results; there are no separate workflow tabs.
+
+- **Playbook name field**: Optional text field to set the Ansible play name (default: `powershell_migration`)
+- **Hosts field**: Optional text field to set the inventory group or host pattern (default: `windows`)
+- **Convert to playbook button**: Generates the Ansible playbook YAML and shows it in an on-page preview panel
+- **Playbook preview**: Syntax-highlighted YAML output rendered below the editor
+- **Statistics summary**: Task count breakdown (idiomatic modules vs. `win_shell` fallbacks) displayed alongside the preview
+
+#### Enterprise artefacts (single-page workflow)
+
+Enterprise artefact generation reuses the same script input and operates on the analysed script in place. Output is rendered inline in the browser for inspection and copy/paste; the UI does not create ZIP archives or initiate file downloads.
+
+**Fidelity report**
+
+- **Generate fidelity report button**: Calculates the fidelity score for the script
+- **Score display**: Percentage of actions fully automatable
+- **Review list**: Actions needing manual attention
+- **Recommendations**: Actionable suggestions for improving automation coverage
+- **Report output**: JSON-style text shown in a scrollable panel that you can copy into your own files
+
+**Ansible role scaffold**
+
+- **Role name field**: Optional text field to set the role directory name
+- **Playbook name field**: Optional text field to set the top-level playbook base name
+- **Hosts field**: Optional text field to set the inventory group pattern
+- **Generate role button**: Produces a role-style task structure as text output within the UI
+
+**Inventory**
+
+- **Hosts field**: Enter comma-separated Windows host names or IPs
+- **WinRM port field**: Set the WinRM listener port (default: 5986)
+- **SSL toggle**: Switch between HTTPS (default) and HTTP transport
+- **Generate button**: Produces the INI inventory displayed inline
+
+**requirements.yml**
+
+- **Generate button**: Produces `requirements.yml` tailored to the script, displayed inline
+
+**AWX Job Template**
+
+- **Job template name field**: Display name for the AWX job template
+- **Generate button**: Produces the importable job template JSON displayed inline
+
 ## Troubleshooting
 
 ### Common Issues

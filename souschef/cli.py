@@ -2625,5 +2625,443 @@ def main() -> NoReturn:
     sys.exit(0)
 
 
+# ==================== PowerShell Migration Commands ====================
+
+
+@cli.command("powershell-parse")
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+    help="Output format (default: json)",
+)
+def powershell_parse(path: str, output_format: str) -> None:
+    r"""
+    Parse a PowerShell provisioning script.
+
+    Extracts structured actions from the script, including Windows features,
+    services, registry edits, file operations, MSI installs, and Chocolatey
+    packages.  Unrecognised commands are preserved as win_shell fallbacks.
+
+    PATH: Path to the PowerShell script (.ps1 file)
+
+    Example:
+        souschef powershell-parse C:\scripts\setup.ps1
+
+    """
+    from souschef.server import parse_powershell_script
+
+    result = parse_powershell_script(path)
+    _output_result(result, output_format)
+
+
+@cli.command("powershell-convert")
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--playbook-name",
+    default="powershell_migration",
+    help="Name for the generated Ansible play (default: powershell_migration)",
+)
+@click.option(
+    "--hosts",
+    default="windows",
+    help="Ansible inventory group or host pattern (default: windows)",
+)
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Write the generated playbook YAML to this file path",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+    help="Output format for the full result (default: json)",
+)
+def powershell_convert(
+    path: str,
+    playbook_name: str,
+    hosts: str,
+    output: str | None,
+    output_format: str,
+) -> None:
+    r"""
+    Convert a PowerShell script to an Ansible playbook.
+
+    Maps recognised PowerShell provisioning actions to ansible.windows
+    module tasks.  Unrecognised commands fall back to win_shell with
+    warnings and source locations.
+
+    PATH: Path to the PowerShell script (.ps1 file)
+
+    Example:
+        souschef powershell-convert C:\scripts\setup.ps1 \
+            --playbook-name my_playbook \
+            --hosts windows_servers \
+            --output playbook.yml
+
+    """
+    from souschef.server import convert_powershell_to_ansible
+
+    result_json = convert_powershell_to_ansible(path, playbook_name, hosts)
+
+    if output:
+        try:
+            result = json.loads(result_json)
+            playbook_yaml = result.get("playbook_yaml", "")
+            if playbook_yaml:
+                workspace_root = _get_workspace_root()
+                out_path = _ensure_within_base_path(
+                    _normalize_path(output), workspace_root
+                )
+                safe_write_text(out_path, workspace_root, playbook_yaml)
+                click.echo(f"Playbook written to: {out_path}")
+                # Also show stats
+                tasks = result.get("tasks_generated", 0)
+                fallbacks = result.get("win_shell_fallbacks", 0)
+                click.echo(
+                    f"Tasks generated: {tasks} (win_shell fallbacks: {fallbacks})"
+                )
+                warnings = result.get("warnings", [])
+                if warnings:
+                    click.echo(f"Warnings: {len(warnings)}")
+                return
+        except json.JSONDecodeError as e:
+            click.echo(f"Error parsing conversion result: {e}", err=True)
+            sys.exit(1)
+        except (ValueError, OSError) as e:
+            click.echo(f"Error writing output file '{output}': {e}", err=True)
+            sys.exit(1)
+        except Exception as e:
+            click.echo(f"Unexpected error during output: {e}", err=True)
+            sys.exit(1)
+
+    _output_result(result_json, output_format)
+
+
+@cli.command("powershell-inventory")
+@click.option(
+    "--hosts",
+    default="",
+    help="Comma-separated Windows host names or IPs (default: placeholder)",
+)
+@click.option(
+    "--winrm-port",
+    default=5986,
+    type=int,
+    help="WinRM port (default: 5986 for HTTPS)",
+)
+@click.option(
+    "--no-ssl",
+    is_flag=True,
+    default=False,
+    help="Use HTTP transport instead of HTTPS (port 5985)",
+)
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Write inventory to this file path",
+)
+def powershell_inventory(
+    hosts: str,
+    winrm_port: int,
+    no_ssl: bool,
+    output: str | None,
+) -> None:
+    """
+    Generate a WinRM-ready Ansible inventory for Windows managed nodes.
+
+    Produces an INI-format inventory with [windows] group and WinRM
+    connection variables ready for use with ansible.windows collection.
+
+    Example:
+        souschef powershell-inventory --hosts "win01.example.com,win02.example.com"
+
+    """
+    from souschef.generators.powershell import generate_windows_inventory
+
+    host_list = [h.strip() for h in hosts.split(",") if h.strip()] or None
+    result = generate_windows_inventory(
+        hosts=host_list,
+        winrm_port=winrm_port,
+        use_ssl=not no_ssl,
+    )
+    if output:
+        try:
+            workspace_root = _get_workspace_root()
+            out_path = _ensure_within_base_path(_normalize_path(output), workspace_root)
+            safe_write_text(out_path, workspace_root, result)
+            click.echo(f"Inventory written to: {out_path}")
+        except (ValueError, OSError) as e:
+            click.echo(f"Error writing inventory file '{output}': {e}", err=True)
+            sys.exit(1)
+    else:
+        click.echo(result)
+
+
+@cli.command("powershell-requirements")
+@click.argument("path", type=click.Path(exists=True), required=False)
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Write requirements.yml to this file path",
+)
+def powershell_requirements(
+    path: str | None,
+    output: str | None,
+) -> None:
+    """
+    Generate requirements.yml for Windows Ansible collections.
+
+    When PATH is provided, tailors the output to collections actually
+    needed by the script.  Without PATH, all Windows collections are included.
+
+    PATH: Optional path to a PowerShell script (.ps1 file)
+
+    Example:
+        souschef powershell-requirements setup.ps1 -o requirements.yml
+
+    """
+    from souschef.generators.powershell import generate_ansible_requirements
+    from souschef.parsers.powershell import parse_powershell_script
+
+    parsed_ir = None
+    if path:
+        raw = parse_powershell_script(path)
+        if not raw.startswith("Error"):
+            parsed_ir = json.loads(raw)
+
+    result = generate_ansible_requirements(parsed_ir)
+    if output:
+        try:
+            workspace_root = _get_workspace_root()
+            out_path = _ensure_within_base_path(_normalize_path(output), workspace_root)
+            safe_write_text(out_path, workspace_root, result)
+            click.echo(f"requirements.yml written to: {out_path}")
+        except (ValueError, OSError) as e:
+            click.echo(f"Error writing requirements file '{output}': {e}", err=True)
+            sys.exit(1)
+    else:
+        click.echo(result)
+
+
+@cli.command("powershell-role")
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--role-name",
+    default="windows_provisioning",
+    help="Name for the generated Ansible role (default: windows_provisioning)",
+)
+@click.option(
+    "--playbook-name",
+    default="site",
+    help="Base name for the top-level playbook file (default: site)",
+)
+@click.option(
+    "--hosts",
+    default="windows",
+    help="Ansible inventory host/group pattern (default: windows)",
+)
+@click.option(
+    "--output-dir",
+    "-o",
+    default=None,
+    help="Write all role files under this directory",
+)
+def powershell_role(
+    path: str,
+    role_name: str,
+    playbook_name: str,
+    hosts: str,
+    output_dir: str | None,
+) -> None:
+    r"""
+    Generate a complete Ansible role from a PowerShell script.
+
+    Produces tasks/main.yml, handlers/main.yml, defaults/main.yml,
+    vars/main.yml, meta/main.yml, README.md, a top-level playbook,
+    WinRM inventory, group_vars/windows.yml, and requirements.yml.
+
+    PATH: Path to the PowerShell script (.ps1 file)
+
+    Example:
+        souschef powershell-role setup.ps1 --output-dir ./ansible-role
+
+    """
+    from souschef.generators.powershell import generate_powershell_role_structure
+    from souschef.parsers.powershell import parse_powershell_script
+
+    raw = parse_powershell_script(path)
+    if raw.startswith("Error"):
+        click.echo(f"Error: {raw}", err=True)
+        sys.exit(1)
+
+    parsed_ir = json.loads(raw)
+    files = generate_powershell_role_structure(
+        parsed_ir,
+        role_name=role_name,
+        playbook_name=playbook_name,
+        hosts=hosts,
+    )
+
+    if output_dir:
+        try:
+            workspace_root = _get_workspace_root()
+            base = _ensure_within_base_path(_normalize_path(output_dir), workspace_root)
+            for rel_path, content in files.items():
+                out_path = base / rel_path
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                safe_write_text(out_path, workspace_root, content)
+            click.echo(f"Role files written to: {base}")
+            click.echo(f"Files generated: {len(files)}")
+        except (ValueError, OSError) as e:
+            click.echo(f"Error writing role files: {e}", err=True)
+            sys.exit(1)
+    else:
+        click.echo(json.dumps({"files": files, "file_count": len(files)}, indent=2))
+
+
+@cli.command("powershell-job-template")
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--name",
+    "job_template_name",
+    default="Windows PowerShell Migration",
+    help="Display name for the AWX job template",
+)
+@click.option(
+    "--playbook",
+    default="site.yml",
+    help="Playbook file relative to project root (default: site.yml)",
+)
+@click.option(
+    "--inventory",
+    default="windows-inventory",
+    help="Inventory name or ID in AWX (default: windows-inventory)",
+)
+@click.option(
+    "--project",
+    default="windows-migration-project",
+    help="Project name or ID in AWX (default: windows-migration-project)",
+)
+@click.option(
+    "--credential",
+    default="windows-winrm-credential",
+    help="Windows credential name in AWX (default: windows-winrm-credential)",
+)
+@click.option(
+    "--environment",
+    default="production",
+    help="Target environment label (default: production)",
+)
+@click.option(
+    "--no-survey",
+    is_flag=True,
+    default=False,
+    help="Skip survey spec generation",
+)
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Write job template to this file path",
+)
+def powershell_job_template(
+    path: str,
+    job_template_name: str,
+    playbook: str,
+    inventory: str,
+    project: str,
+    credential: str,
+    environment: str,
+    no_survey: bool,
+    output: str | None,
+) -> None:
+    r"""
+    Generate an AWX/AAP Windows job template from a PowerShell script.
+
+    Produces importable job template JSON plus a CLI import command and
+    an action summary.
+
+    PATH: Path to the PowerShell script (.ps1 file)
+
+    Example:
+        souschef powershell-job-template setup.ps1 --name "Setup Windows"
+
+    """
+    from souschef.generators.powershell import generate_powershell_awx_job_template
+    from souschef.parsers.powershell import parse_powershell_script
+
+    raw = parse_powershell_script(path)
+    if raw.startswith("Error"):
+        click.echo(f"Error: {raw}", err=True)
+        sys.exit(1)
+
+    parsed_ir = json.loads(raw)
+    result = generate_powershell_awx_job_template(
+        parsed_ir,
+        job_template_name=job_template_name,
+        playbook=playbook,
+        inventory=inventory,
+        project=project,
+        credential_name=credential,
+        environment=environment,
+        include_survey=not no_survey,
+    )
+
+    if output:
+        try:
+            workspace_root = _get_workspace_root()
+            out_path = _ensure_within_base_path(_normalize_path(output), workspace_root)
+            safe_write_text(out_path, workspace_root, result)
+            click.echo(f"Job template written to: {out_path}")
+        except (ValueError, OSError) as e:
+            click.echo(f"Error writing job template file '{output}': {e}", err=True)
+            sys.exit(1)
+    else:
+        click.echo(result)
+
+
+@cli.command("powershell-fidelity")
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="json",
+    help="Output format (default: json)",
+)
+def powershell_fidelity(path: str, output_format: str) -> None:
+    r"""
+    Analyse migration fidelity for a PowerShell provisioning script.
+
+    Reports the percentage of actions that map to idiomatic Ansible modules,
+    lists items requiring manual review, and provides next-step recommendations.
+
+    PATH: Path to the PowerShell script (.ps1 file)
+
+    Example:
+        souschef powershell-fidelity setup.ps1
+
+    """
+    from souschef.generators.powershell import analyze_powershell_migration_fidelity
+    from souschef.parsers.powershell import parse_powershell_script
+
+    raw = parse_powershell_script(path)
+    if raw.startswith("Error"):
+        click.echo(f"Error: {raw}", err=True)
+        sys.exit(1)
+
+    parsed_ir = json.loads(raw)
+    result = analyze_powershell_migration_fidelity(parsed_ir)
+    _output_result(result, output_format)
+
+
 if __name__ == "__main__":
     main()

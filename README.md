@@ -2,7 +2,7 @@
 
 Transform Chef automation to Ansible and plan Ansible version upgrades. Works with any AI assistant via MCP (Model Context Protocol)—Claude, GPT-4, GitHub Copilot, Red Hat AI, local models, and more.
 
-**Quick Facts:** MIT License | Python 3.10+ | 47 MCP Tools | 91% Test Coverage
+**Quick Facts:** MIT License | Python 3.10+ | 54 MCP Tools | 91% Test Coverage
 
 [![GitHub release](https://img.shields.io/github/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
@@ -28,6 +28,10 @@ A fair bit of this relies on mocked Chef/AWX/AAP APIs because *shockingly* I don
 
 **Chef-to-Ansible Migration** — Convert cookbooks, recipes, custom resources, data bags, and Habitat plans to Ansible playbooks, roles, and containers. Supports infrastructure, applications, and day-2 operations.
 
+**PowerShell to Ansible Migration** — Convert Windows PowerShell provisioning scripts to idiomatic `ansible.windows` playbooks, roles, WinRM inventories, and AWX/AAP job templates.
+
+**Bash Script Migration** — Convert provisioning Bash scripts to Ansible playbooks and roles with quality scoring, sensitive data detection, and AAP readiness hints.
+
 **Ansible Upgrade Planning** — Assess compatibility, plan version upgrades, validate collections, identify breaking changes, and generate testing strategies.
 
 ## Installation & Setup
@@ -47,7 +51,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 
 ## Key Features
 
-- **47 MCP tools** for Chef migration, Bash script migration, and Ansible upgrades
+- **54 MCP tools** for Chef migration, PowerShell migration, Bash script migration, and Ansible upgrades
 - **Web UI** with interactive migration planner and visualisation
 - **CLI** for automation and CI/CD integration
 - **Production-ready** with 91% test coverage and comprehensive validation
@@ -63,6 +67,14 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Generate AWX/AAP job templates and workflows
 - Convert InSpec tests to Ansible validation tasks
 - Fetch cookbooks from Chef Server with run_list or policy selection
+
+**PowerShell Migration:**
+- Convert Windows PowerShell provisioning scripts to idiomatic Ansible playbooks
+- Generate full Ansible roles with WinRM inventory and `group_vars`
+- Map 28+ PowerShell patterns to `ansible.windows.*`, `community.windows.*`, `chocolatey.chocolatey.*`
+- Generate AWX/AAP Windows job templates with WinRM credentials
+- Analyse migration fidelity (0–100 %) with actionable recommendations
+- Create complete `requirements.yml` for required Windows collections
 
 **Bash Script Migration:**
 - Convert provisioning Bash scripts to idiomatic Ansible playbooks
@@ -94,6 +106,11 @@ souschef-cli recipe /path/to/recipe.rb
 souschef-cli template /path/to/template.erb
 souschef-cli convert package nginx --action install
 
+# PowerShell migration
+souschef-cli powershell-parse scripts/setup.ps1
+souschef-cli powershell-convert scripts/setup.ps1 --output playbook.yml
+souschef-cli powershell-role scripts/setup.ps1 --output-dir ./ansible-role
+
 # Bash script migration
 souschef bash parse scripts/bootstrap.sh
 souschef bash convert scripts/deploy.sh --output playbook.yml
@@ -114,7 +131,7 @@ souschef ui  # Launch interactive dashboard
 
 - **[Quick Start Guide](docs/getting-started/quick-start.md)** — Get running in 5 minutes
 - **[Production Safety](docs/migration-guide/safety-and-validation.md)** — Validate migrations before deploying ⚠️
-- **[User Guide](docs/user-guide/mcp-tools.md)** — All 47 tools explained with examples
+- **[User Guide](docs/user-guide/mcp-tools.md)** — All 54 tools explained with examples
 - **[Migration Guide](docs/migration-guide/overview.md)** — Step-by-step migration process
 - **[Ansible Upgrades](docs/user-guide/ansible-upgrades.md)** — Version upgrade planning workflows
 
