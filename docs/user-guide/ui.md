@@ -132,6 +132,53 @@ Configure AI providers for enhanced analysis and repository selection:
 - **Model Selection**: Choose specific models based on your provider
 - **Secure Storage**: API keys stored in user-specific configuration directory (~/.souschef/)
 
+### Bash Script Migration Page
+
+The **Bash Script Migration** page provides enterprise-grade conversion of provisioning Bash scripts — including scripts that escape from Salt, Puppet, or Chef — directly into Ansible playbooks or full roles ready for AAP.
+
+#### Input Options
+
+- **Paste Script tab**: Type or paste Bash script content directly into the editor
+- **Upload File tab**: Upload `.sh`, `.bash`, or `.txt` script files
+
+#### Actions Available
+
+| Button | What it does |
+|--------|--------------|
+| Analyse Script | Parses the script and shows all detected patterns |
+| Convert to Ansible | Generates a playbook YAML with quality score and AAP hints |
+| Generate Ansible Role | Generates a complete 11-file role structure (tasks, handlers, defaults, meta, README) |
+
+#### Analysis Output
+
+When you click **Analyse Script**, the page shows:
+
+- **Metric cards** — counts of packages, services, file writes, downloads, users/groups, and security risks
+- **Package installs** — manager, packages, target Ansible module, confidence score
+- **Service control** — systemctl/service operations with Ansible mapping
+- **File writes** — heredoc and redirect operations mapped to `ansible.builtin.copy`
+- **Downloads** — curl/wget operations mapped to `ansible.builtin.get_url`
+- **Users & Groups** — `useradd`/`groupadd` operations mapped to `ansible.builtin.user`/`group`
+- **File permissions** — `chmod`/`chown` operations with recursive support
+- **Git operations** — `git clone`/`pull`/`checkout` mapped to `ansible.builtin.git`
+- **Archives** — `tar -x`/`unzip` mapped to `ansible.builtin.unarchive`
+- **sed operations** — `sed -i` with lineinfile/replace recommendation
+- **Cron jobs** — `crontab` operations with Ansible cron guidance
+- **Firewall rules** — `ufw`/`firewall-cmd`/`iptables` with collection hints
+- **Hostname** — `hostnamectl set-hostname` mapped to `ansible.builtin.hostname`
+- **Environment variables** — extracted shell variables; sensitive ones flagged
+- **Sensitive data** (red alert) — detected passwords, API keys, and private key material with vault recommendation; values are always redacted
+- **CM escape calls** (orange warning) — `salt-call`, `puppet apply`, `chef-client` calls embedded in the script, with native Ansible guidance
+- **Shell fallbacks** — lines with no direct module mapping, with `ansible.builtin.shell` fallback note
+
+#### Conversion & Role Output
+
+When you click **Convert to Ansible** or **Generate Ansible Role**, the page additionally shows:
+
+- **Quality score panel** — letter grade (A–F), structured coverage percentage, shell fallback count, and ranked improvement list
+- **AAP hints panel** — recommended Execution Environment image, credential types, survey variables derived from `export VAR=val` statements, and actionable notes
+- **Playbook YAML** or **Role files** — syntax-highlighted output with a **Download** button
+
 ## Archive Upload Security
 
 The UI includes comprehensive security measures for archive handling:
@@ -224,6 +271,121 @@ services:
       - ./reports:/app/reports
 ```
 
+## Puppet Migration
+
+The **Puppet Migration** page provides a web-based interface for converting Puppet manifests (`.pp` files) and module directories to Ansible playbooks.
+
+### Location
+
+Navigate to: **Chef** tab → **Puppet Migration**
+
+### Input Options
+
+The page supports two input modes selectable via a dropdown:
+
+- **Manifest File Path**: Enter the path to a single `.pp` manifest file
+- **Module Directory Path**: Enter the path to a Puppet module root directory to convert all manifests in the module
+
+### Actions Available
+
+The page has two sub-sections: **Analyse Puppet Manifest** (for single `.pp` files) and **Analyse Puppet Module** (for full module directories). Each sub-section provides these buttons:
+
+| Button | Action |
+|--------|--------|
+| **Analyse Manifest** / **Analyse Module** | Extract and display all resources, classes, variables, and unsupported constructs |
+| **Convert to Ansible** | Generate an Ansible playbook from all parsed resources |
+| **Convert with AI** | Use an LLM to handle Hiera lookups, exported resources, and other unsupported constructs |
+
+A **Download Playbook** button appears in the conversion result panel once a playbook has been generated.
+
+### Analysis Output
+
+The parse output shows:
+
+- **Resources**: Each resource type, title, attributes, and source line number
+- **Classes**: Puppet class definitions with parameters
+- **Variables**: Variable assignments found in the manifest
+- **Unsupported constructs**: Hiera lookups, exported/virtual resources, `create_resources`, and other constructs that require manual review, each with a line number and guidance note
+
+### Conversion Output
+
+The playbook preview shows the generated Ansible YAML with:
+
+- One task per Puppet resource, using the idiomatic `ansible.builtin` module
+- `ansible.builtin.debug` placeholder tasks for unsupported constructs, with a `msg` explaining what manual work is needed
+- Download button to save the playbook to disk
+
+### AI-Assisted Conversion
+
+For manifests with Hiera lookups or other unsupported constructs, expand the **AI Settings** panel to configure:
+
+- **AI Provider**: `anthropic`, `openai`, `watson`, or `lightspeed`
+- **API Key**: Your provider's API key
+- **Model**: Model name (default: `claude-3-5-sonnet-20241022`)
+
+The AI-assisted converter sends only the unsupported construct descriptions and manifest structure to the LLM — no file system paths or credential values are included in the prompt.
+
+---
+
+## PowerShell Migration
+
+### Location
+
+Navigate to: **Ansible** tab → **PowerShell Migration**
+
+### Script Input and Conversion
+
+The page uses a single script input area with controls beneath it for all operations.
+
+- **Script input area**: Paste your PowerShell provisioning script directly into the text area
+- **Parse Script button**: Extracts all provisioning actions and displays a structured summary with action types, confidence levels, source line numbers, and a metrics summary
+- **Warnings panel**: Lists unrecognised commands that will fall back to `win_shell`
+
+#### Conversion tools
+
+The PowerShell migration UI uses a single script input area with a row of controls beneath it. Conversion actions share the same context as the analysis results; there are no separate workflow tabs.
+
+- **Playbook name field**: Optional text field to set the Ansible play name (default: `powershell_migration`)
+- **Hosts field**: Optional text field to set the inventory group or host pattern (default: `windows`)
+- **Convert to playbook button**: Generates the Ansible playbook YAML and shows it in an on-page preview panel
+- **Playbook preview**: Syntax-highlighted YAML output rendered below the editor
+- **Statistics summary**: Task count breakdown (idiomatic modules vs. `win_shell` fallbacks) displayed alongside the preview
+
+#### Enterprise artefacts (single-page workflow)
+
+Enterprise artefact generation reuses the same script input and operates on the analysed script in place. Output is rendered inline in the browser for inspection and copy/paste; the UI does not create ZIP archives or initiate file downloads.
+
+**Fidelity report**
+
+- **Generate fidelity report button**: Calculates the fidelity score for the script
+- **Score display**: Percentage of actions fully automatable
+- **Review list**: Actions needing manual attention
+- **Recommendations**: Actionable suggestions for improving automation coverage
+- **Report output**: JSON-style text shown in a scrollable panel that you can copy into your own files
+
+**Ansible role scaffold**
+
+- **Role name field**: Optional text field to set the role directory name
+- **Playbook name field**: Optional text field to set the top-level playbook base name
+- **Hosts field**: Optional text field to set the inventory group pattern
+- **Generate role button**: Produces a role-style task structure as text output within the UI
+
+**Inventory**
+
+- **Hosts field**: Enter comma-separated Windows host names or IPs
+- **WinRM port field**: Set the WinRM listener port (default: 5986)
+- **SSL toggle**: Switch between HTTPS (default) and HTTP transport
+- **Generate button**: Produces the INI inventory displayed inline
+
+**requirements.yml**
+
+- **Generate button**: Produces `requirements.yml` tailored to the script, displayed inline
+
+**AWX Job Template**
+
+- **Job template name field**: Display name for the AWX job template
+- **Generate button**: Produces the importable job template JSON displayed inline
+
 ## Troubleshooting
 
 ### Common Issues
@@ -275,6 +437,9 @@ souschef/ui/
 ├── pages/              # Page modules
 │   ├── cookbook_analysis.py    # Unified migration interface (analysis + orchestration)
 │   ├── migration_planning.py   # Migration planning wizards
+│   ├── bash_migration.py       # Bash script to Ansible conversion
+│   ├── puppet_migration.py     # Puppet manifest/module to Ansible conversion
+│   ├── powershell_migration.py # PowerShell to Windows Ansible conversion
 │   ├── ai_settings.py          # AI provider configuration
 │   └── reports.py              # Report generation
 ├── components/         # Reusable UI components

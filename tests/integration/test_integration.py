@@ -11,6 +11,7 @@ import pytest
 
 from souschef.core.url_validation import validate_user_provided_url
 from souschef.server import (
+    convert_bash_to_ansible,
     convert_habitat_to_dockerfile,
     convert_inspec_to_test,
     convert_resource_to_task,
@@ -20,6 +21,7 @@ from souschef.server import (
     list_cookbook_structure,
     list_directory,
     parse_attributes,
+    parse_bash_script,
     parse_custom_resource,
     parse_habitat_plan,
     parse_inspec_profile,
@@ -35,6 +37,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_COOKBOOK = FIXTURES_DIR / "sample_cookbook"
 SAMPLE_INSPEC_PROFILE = FIXTURES_DIR / "sample_inspec_profile"
 SIMPLE_CONTROL = FIXTURES_DIR / "simple_control.rb"
+SAMPLE_BASH_SCRIPT = FIXTURES_DIR / "sample_bash_script.sh"
 
 
 def _sample_api_key() -> str:
@@ -1529,3 +1532,122 @@ class TestGitHubAgentControlIntegration:
                 assert state.replace("_", " ").title() in result
                 assert "#123" in result
                 assert "testorg/testrepo" in result
+
+
+class TestBashMigration:
+    """Integration tests for Bash script migration with real fixtures."""
+
+    def test_parse_bash_script_with_real_fixture(self):
+        """Test parsing the sample Bash script fixture."""
+        with patch(
+            "souschef.parsers.bash._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = parse_bash_script(str(SAMPLE_BASH_SCRIPT))
+
+        assert "Package Installs" in result
+        assert "Service Control" in result
+        assert "nginx" in result
+
+    def test_parse_bash_script_detects_apt(self):
+        """Fixture script has apt-get install commands."""
+        with patch(
+            "souschef.parsers.bash._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = parse_bash_script(str(SAMPLE_BASH_SCRIPT))
+
+        assert "apt" in result
+
+    def test_parse_bash_script_detects_services(self):
+        """Fixture script has systemctl commands."""
+        with patch(
+            "souschef.parsers.bash._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = parse_bash_script(str(SAMPLE_BASH_SCRIPT))
+
+        assert "nginx" in result
+
+    def test_parse_bash_script_detects_downloads(self):
+        """Fixture script has curl and wget downloads."""
+        with patch(
+            "souschef.parsers.bash._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = parse_bash_script(str(SAMPLE_BASH_SCRIPT))
+
+        assert "Downloads" in result
+
+    def test_parse_bash_script_detects_shell_fallbacks(self):
+        """Fixture script has unknown commands that fall back to shell."""
+        with patch(
+            "souschef.parsers.bash._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = parse_bash_script(str(SAMPLE_BASH_SCRIPT))
+
+        assert "Shell Fallbacks" in result
+
+    def test_convert_bash_to_ansible_with_real_fixture(self):
+        """Test converting the sample Bash script to Ansible playbook."""
+        with patch(
+            "souschef.converters.bash_to_ansible._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = convert_bash_to_ansible(str(SAMPLE_BASH_SCRIPT))
+
+        data = json.loads(result)
+        assert data["status"] == "success"
+        assert "playbook_yaml" in data
+        assert "---" in data["playbook_yaml"]
+        assert "tasks" in data
+        assert len(data["tasks"]) > 0
+
+    def test_convert_bash_to_ansible_generates_apt_tasks(self):
+        """Converted playbook includes ansible.builtin.apt tasks."""
+        with patch(
+            "souschef.converters.bash_to_ansible._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = convert_bash_to_ansible(str(SAMPLE_BASH_SCRIPT))
+
+        data = json.loads(result)
+        playbook = data["playbook_yaml"]
+        assert "ansible.builtin.apt" in playbook
+
+    def test_convert_bash_to_ansible_generates_service_tasks(self):
+        """Converted playbook includes ansible.builtin.service tasks."""
+        with patch(
+            "souschef.converters.bash_to_ansible._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = convert_bash_to_ansible(str(SAMPLE_BASH_SCRIPT))
+
+        data = json.loads(result)
+        playbook = data["playbook_yaml"]
+        assert "ansible.builtin.service" in playbook
+
+    def test_convert_bash_to_ansible_generates_get_url_tasks(self):
+        """Converted playbook includes ansible.builtin.get_url tasks for downloads."""
+        with patch(
+            "souschef.converters.bash_to_ansible._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = convert_bash_to_ansible(str(SAMPLE_BASH_SCRIPT))
+
+        data = json.loads(result)
+        playbook = data["playbook_yaml"]
+        assert "ansible.builtin.get_url" in playbook
+
+    def test_convert_bash_to_ansible_has_idempotency_report(self):
+        """Converted response includes an idempotency report."""
+        with patch(
+            "souschef.converters.bash_to_ansible._get_workspace_root",
+            return_value=FIXTURES_DIR,
+        ):
+            result = convert_bash_to_ansible(str(SAMPLE_BASH_SCRIPT))
+
+        data = json.loads(result)
+        assert "idempotency_report" in data
+        assert data["idempotency_report"]["total_risks"] >= 0

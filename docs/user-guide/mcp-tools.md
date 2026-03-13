@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-SousChef provides **56 specialised MCP tools** for comprehensive Chef-to-Ansible migration, Ansible upgrade planning, and SaltStack-to-Ansible migration. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **95 specialised MCP tools** for comprehensive Chef-to-Ansible migration, SaltStack-to-Ansible migration, Puppet-to-Ansible conversion, PowerShell-to-Ansible Windows automation, Bash script migration, and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
@@ -8,9 +8,9 @@ SousChef provides **56 specialised MCP tools** for comprehensive Chef-to-Ansible
 !!! info "About the Tool Count"
     **Complete tool inventory available in source code**
 
-    This guide documents the **56 primary user-facing tools** (39 Chef migration + 5 Ansible upgrades + 12 Salt migration) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
+    This guide documents the primary user-facing tools (Chef migration, SaltStack migration, Puppet migration, PowerShell migration, Bash migration, and Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
 
-    As a user, you'll primarily interact with these 56 documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
+    As a user, you'll primarily interact with these documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
 
     See `souschef/server.py` for the complete authoritative list of all MCP tools.
 
@@ -31,6 +31,9 @@ SousChef provides **56 specialised MCP tools** for comprehensive Chef-to-Ansible
 | [Chef Server Integration](#chef-server-integration) | 3 tools | Validate Chef Server connections and query dynamic inventory |
 | [Ansible Upgrade Planning](#ansible-upgrade-planning) | 5 tools | Assess Ansible environments and plan version upgrades |
 | [SaltStack Migration](#saltstack-migration) | 12 tools | Parse, convert, assess, and plan SaltStack-to-Ansible migrations |
+| [PowerShell Migration](#powershell-migration) | 7 tools | Convert PowerShell scripts to Windows Ansible automation |
+| [Bash Script Migration](#bash-script-migration) | 3 tools | Convert Bash provisioning scripts to Ansible playbooks and roles |
+| [Puppet Migration](#puppet-migration) | 8 tools | Convert Puppet manifests and modules to Ansible playbooks |
 
 ---
 
@@ -1624,6 +1627,709 @@ The plan provides a structured approach to validating that your Ansible upgrade 
 
 ---
 
+---
+
+## PowerShell Migration
+
+Enterprise Windows automation — convert PowerShell provisioning scripts to idiomatic Ansible playbooks, roles, WinRM inventories, and AWX/AAP job templates using the `ansible.windows`, `community.windows`, and `chocolatey.chocolatey` collections.
+
+### parse_powershell
+
+Parse a PowerShell provisioning script and extract structured actions.
+
+**What it does**: Analyses a `.ps1` script using pattern matching to identify 28+ common Windows provisioning operations: Windows features, services, registry edits, file operations, MSI installs, Chocolatey packages, users/groups, firewall rules, scheduled tasks, environment variables, PS modules, certificates, WinRM, IIS, DNS, and ACL operations. Unrecognised commands are preserved as `win_shell` fallbacks with confidence warnings and source locations.
+
+**Why you need this**: Before converting a PowerShell script you need to understand what it actually does. This tool gives you a structured inventory of every provisioning action so you can assess scope, estimate effort, and plan your Ansible migration.
+
+**What you get**:
+- Structured list of all recognised actions with type, parameters, and confidence
+- Source location (line number) for every extracted action
+- Metrics summary broken down by action category
+- Warnings for unrecognised commands that will need manual review
+
+**Real-world example**: A 300-line `setup.ps1` that installs IIS, configures the Windows Firewall, and creates scheduled tasks is parsed into 42 structured actions with full parameter detail — ready for automated conversion.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+
+**Returns:**
+- JSON string with `source`, `actions`, `warnings`, and `metrics` keys
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Parse the PowerShell script at scripts/setup.ps1 and show me
+    what provisioning actions it contains
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-parse scripts/setup.ps1
+    souschef-cli powershell-parse scripts/setup.ps1 --format text
+    ```
+
+---
+
+### convert_powershell
+
+Convert a PowerShell provisioning script to an Ansible playbook.
+
+**What it does**: Maps recognised PowerShell provisioning actions to their idiomatic `ansible.windows.*`, `community.windows.*`, and `chocolatey.chocolatey.*` module equivalents. Produces a complete, runnable Ansible playbook YAML. Unrecognised commands fall back to `ansible.windows.win_shell` with warnings so nothing is silently lost.
+
+**Why you need this**: Manually rewriting PowerShell scripts as Ansible playbooks is time-consuming and error-prone. This tool automates the mapping so you can focus on reviewing the output rather than writing boilerplate.
+
+**What you get**:
+- Complete Ansible playbook YAML using idiomatic Windows collection modules
+- Task count breakdown (idiomatic vs. `win_shell` fallbacks)
+- Warning list with source locations for every fallback task
+- Ready to use with `ansible-playbook` against a WinRM inventory
+
+**Real-world example**: `Install-WindowsFeature Web-Server` becomes `ansible.windows.win_feature: name: Web-Server state: present include_management_tools: true` — idiomatic, idempotent, and production-ready.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+- `playbook_name` (string, optional): Name for the generated Ansible play (default: `powershell_migration`)
+- `hosts` (string, optional): Ansible inventory group or host pattern (default: `windows`)
+
+**Returns:**
+- JSON string with `status`, `playbook_yaml`, `tasks_generated`, `win_shell_fallbacks`, `warnings`, and `source`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert the PowerShell script at scripts/setup.ps1 to an Ansible playbook
+    targeting the windows_servers inventory group
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-convert scripts/setup.ps1 \
+        --playbook-name my_windows_setup \
+        --hosts windows_servers \
+        --output playbook.yml
+    ```
+
+---
+
+### generate_windows_inventory_tool
+
+Generate a WinRM-ready Ansible inventory file for Windows managed nodes.
+
+**What it does**: Produces an INI-format Ansible inventory with a `[windows]` group and a `[windows:vars]` section containing all the WinRM connection variables required by the `ansible.windows` collection (`ansible_connection`, `ansible_winrm_transport`, `ansible_port`, etc.).
+
+**Why you need this**: Setting up WinRM inventory variables correctly is fiddly and easy to get wrong. This tool generates a battle-tested template so you can start running Windows playbooks immediately.
+
+**What you get**:
+- INI-format `inventory/hosts` file with `[windows]` group
+- Pre-configured WinRM connection variables
+- SSL and non-SSL variants supported
+- Placeholder host comments with credential guidance
+
+**Real-world example**: Generates an inventory for `win01.example.com` and `win02.example.com` with HTTPS WinRM on port 5986, ready for `ansible-playbook -i inventory/hosts site.yml`.
+
+**Parameters:**
+- `hosts` (string, optional): Comma-separated Windows host names or IPs (default: placeholder)
+- `winrm_port` (integer, optional): WinRM HTTPS listener port (default: `5986`)
+- `use_ssl` (boolean, optional): Use HTTPS transport (default: `true`)
+- `validate_certs` (boolean, optional): Validate WinRM SSL certificate (default: `false`)
+
+**Returns:**
+- INI-formatted inventory string ready to save as `inventory/hosts`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a WinRM inventory for win01.example.com and win02.example.com
+    using HTTPS on port 5986
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-inventory \
+        --hosts "win01.example.com,win02.example.com" \
+        --output inventory/hosts
+    ```
+
+---
+
+### generate_windows_requirements
+
+Generate `requirements.yml` with required Ansible collections for Windows automation.
+
+**What it does**: Examines the parsed PowerShell script to determine which Ansible collections are actually needed (`ansible.windows`, `community.windows`, `chocolatey.chocolatey`, etc.) and produces a `requirements.yml` file pinned to stable versions. When no script is provided, all Windows collections are included.
+
+**Why you need this**: Manually identifying and versioning Ansible collection dependencies is error-prone. This tool auto-detects which collections your converted playbook needs so `ansible-galaxy collection install -r requirements.yml` just works.
+
+**What you get**:
+- `requirements.yml` with all needed Windows Ansible collections
+- Pinned to tested, stable versions
+- Tailored to your script when a path is provided (omits unused collections)
+
+**Real-world example**: A script using Chocolatey installs produces a `requirements.yml` with both `ansible.windows` and `chocolatey.chocolatey`; a script with only Windows Features and Services omits the Chocolatey entry.
+
+**Parameters:**
+- `script_path` (string, optional): Path to a PowerShell script. When omitted all Windows collections are included.
+
+**Returns:**
+- YAML string for `requirements.yml`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a requirements.yml for the PowerShell script at scripts/setup.ps1
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-requirements scripts/setup.ps1 -o requirements.yml
+    ```
+
+---
+
+### generate_powershell_role
+
+Generate a complete Ansible role structure from a PowerShell script.
+
+**What it does**: Parses the PowerShell script and produces all files for a production-ready Ansible role: `tasks/main.yml`, `handlers/main.yml`, `defaults/main.yml`, `vars/main.yml`, `meta/main.yml`, `README.md`, a top-level playbook, WinRM inventory, `group_vars/windows.yml`, and `requirements.yml`. Returns a JSON map of relative path → file content.
+
+**Why you need this**: A single tool call produces a complete, deployable Ansible role skeleton instead of requiring you to manually create a dozen files in the right directory structure. Ideal as a starting point for production Windows automation.
+
+**What you get**:
+- Full Ansible role directory structure
+- `tasks/main.yml` with converted tasks
+- `handlers/main.yml` for service restart handlers
+- `defaults/main.yml` and `vars/main.yml` for variable management
+- `meta/main.yml` with collection dependencies
+- `README.md` with role documentation
+- Top-level playbook, WinRM inventory, `group_vars/windows.yml`, and `requirements.yml`
+
+**Real-world example**: Running this on a 50-line `setup.ps1` produces 10 files ready to commit to your Ansible project and run against a WinRM inventory.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+- `role_name` (string, optional): Name of the role directory (default: `windows_provisioning`)
+- `playbook_name` (string, optional): Base name for the top-level playbook file (default: `site`)
+- `hosts` (string, optional): Ansible inventory host/group pattern (default: `windows`)
+
+**Returns:**
+- JSON string with `status`, `files` (path → content map), and `file_count`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a complete Ansible role from scripts/setup.ps1 with role name
+    iis_server and save the files to ./ansible-role/
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-role scripts/setup.ps1 \
+        --role-name iis_server \
+        --output-dir ./ansible-role
+    ```
+
+---
+
+### generate_powershell_job_template
+
+Generate an AWX/AAP Windows job template from a PowerShell script.
+
+**What it does**: Parses the PowerShell script and produces a JSON configuration importable via `awx-cli` or the AWX/AAP REST API. The job template is pre-configured for WinRM Windows automation with optional survey specs derived from script variables, an action summary, and the exact CLI import command to run.
+
+**Why you need this**: Manually creating AWX/AAP job templates with correct Windows credentials, inventory, and survey specs is tedious. This tool generates importable JSON so you can get your Windows automation running in AAP with a single `awx` command.
+
+**What you get**:
+- AWX/AAP-compatible job template JSON
+- Pre-configured Windows credential and WinRM settings
+- Optional survey spec for runtime variable overrides
+- CLI import command ready to copy-paste
+- Action summary showing what the job template will automate
+
+**Real-world example**: Generates a job template named "Setup IIS Web Server" referencing your `windows-migration-project` project and `windows-winrm-credential` credential, ready to import with `awx job_templates create`.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+- `job_template_name` (string, optional): Display name for the AWX job template (default: `Windows PowerShell Migration`)
+- `playbook` (string, optional): Playbook file relative to project root (default: `site.yml`)
+- `inventory` (string, optional): Inventory name or ID in AWX (default: `windows-inventory`)
+- `project` (string, optional): Project name or ID in AWX (default: `windows-migration-project`)
+- `credential` (string, optional): Windows credential name in AWX (default: `windows-winrm-credential`)
+- `environment` (string, optional): Target environment label (default: `production`)
+- `include_survey` (boolean, optional): Whether to generate a survey spec (default: `true`)
+
+**Returns:**
+- Formatted text block with job template JSON, CLI import command, and action summary
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate an AWX job template from scripts/setup.ps1 named "Setup IIS"
+    using the iis-winrm-credential credential
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-job-template scripts/setup.ps1 \
+        --name "Setup IIS Web Server" \
+        --credential iis-winrm-credential \
+        --output job_template.json
+    ```
+
+---
+
+### analyze_powershell_fidelity
+
+Analyse migration fidelity for a PowerShell provisioning script.
+
+**What it does**: Calculates the percentage of actions that can be automatically mapped to idiomatic Ansible modules (the fidelity score), lists actions needing manual review, and provides actionable next-step recommendations. A score of 100% means full automation is achievable; lower scores highlight areas requiring manual attention.
+
+**Why you need this**: Before committing to a migration you need to know how much of the work can be automated vs. how much requires manual effort. This tool gives you that answer in seconds so you can plan your sprint and set stakeholder expectations.
+
+**What you get**:
+- Fidelity score (0–100%) — percentage of actions fully automatable
+- Total action count broken down by automated, fallback, and manual-review
+- List of specific actions requiring manual completion
+- Actionable recommendations with suggested Ansible modules
+
+**Real-world example**: A `setup.ps1` with 40 actions scores 87.5% fidelity — 35 actions map automatically, 5 `win_shell` fallbacks need manual review. The report lists the 5 fallbacks and suggests replacements.
+
+**Parameters:**
+- `script_path` (string, required): Path to the PowerShell script (`.ps1` file)
+
+**Returns:**
+- JSON string with `fidelity_score`, `total_actions`, `automated_actions`, `fallback_actions`, `review_required`, `summary`, and `recommendations`
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Analyse the migration fidelity of scripts/setup.ps1 and tell me
+    what percentage can be automated
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli powershell-fidelity scripts/setup.ps1
+    souschef-cli powershell-fidelity scripts/setup.ps1 --format text
+    ```
+
+---
+
+## Bash Script Migration
+
+Enterprise-grade conversion of provisioning Bash scripts to Ansible playbooks and roles. Covers teams breaking out of Salt, Puppet, or Chef into raw Bash, and teams using AI to author Ansible for AAP.
+
+!!! tip "When to use Bash Script Migration"
+    - You have provisioning scripts that install packages, manage services, or configure systems
+    - Your team is breaking out of a CM tool (Salt, Puppet, Chef) into Bash temporarily or permanently
+    - You want to land directly in Ansible/AAP without writing tasks by hand
+    - You need to identify hardcoded secrets before committing to a repository
+
+### parse_bash_script
+
+Parse a Bash provisioning script and extract structured patterns.
+
+**What it does**: Reads a Bash script and detects 13 categories of provisioning operation:
+
+| Category | Patterns detected | Target Ansible module |
+|----------|------------------|-----------------------|
+| Packages | `apt-get`, `yum`, `dnf`, `zypper`, `apk`, `pip` | `ansible.builtin.apt/yum/dnf/…` |
+| Services | `systemctl`, `service` | `ansible.builtin.service` |
+| File writes | heredoc, echo redirect, `tee` | `ansible.builtin.copy` |
+| Downloads | `curl`, `wget` | `ansible.builtin.get_url` |
+| Users | `useradd`, `adduser`, `usermod`, `userdel` | `ansible.builtin.user` |
+| Groups | `groupadd`, `groupmod`, `groupdel` | `ansible.builtin.group` |
+| File permissions | `chmod`, `chown`, `chgrp` | `ansible.builtin.file` |
+| Git operations | `git clone`, `git pull`, `git checkout` | `ansible.builtin.git` |
+| Archives | `tar -x`, `unzip` | `ansible.builtin.unarchive` |
+| sed operations | `sed -i` | `ansible.builtin.lineinfile` / `.replace` |
+| Cron jobs | `crontab`, cron.d writes | `ansible.builtin.cron` |
+| Firewall rules | `ufw`, `firewall-cmd`, `iptables` | `community.general.ufw`, `ansible.posix.firewalld`, `ansible.builtin.iptables` |
+| Hostname | `hostnamectl set-hostname` | `ansible.builtin.hostname` |
+
+Bonus detection: **environment variables** (exported shell vars), **sensitive data** (passwords, API keys, private key material), and **CM escape calls** (Salt, Puppet, Chef invocations inside a Bash script).
+
+**Why you need this**: Before converting, you need to understand what a Bash script actually does. This tool gives you a structured, categorised inventory with confidence scores, idempotency risks, and vault recommendations — making conversion planning fast and reliable.
+
+**What you get**:
+- Categorised inventory of all provisioning operations with line numbers
+- Confidence scores (0–100 %) for each detected pattern
+- Idempotency risk warnings for non-idempotent patterns (e.g. unconditional writes)
+- Environment variable list (with sensitive vars flagged)
+- Sensitive data alerts (value redacted, line number shown)
+- CM escape detection (Salt/Puppet/Chef calls embedded in Bash)
+- Shell-fallback list for lines that cannot be mapped to a module
+
+**Real-world example**: You have a 300-line `bootstrap.sh` that was the emergency replacement for a failing Salt state. Running this tool reveals 8 package installs, 3 service starts, 2 hardcoded passwords, and a `salt-call` escape that will need attention before landing in AAP.
+
+**Parameters:**
+- `script_path` (string, required): Path to the Bash script file
+
+**Returns:**
+- Human-readable summary of all detected patterns, warnings, and idempotency hints
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Parse my provisioning script at scripts/bootstrap.sh
+    and show me all detected patterns
+    ```
+
+=== "CLI"
+    ```bash
+    souschef bash parse scripts/bootstrap.sh
+    ```
+
+---
+
+### convert_bash_to_ansible
+
+Convert a Bash provisioning script to an Ansible playbook.
+
+**What it does**: Maps all detected Bash patterns to their optimal Ansible modules. High-confidence patterns (≥ 80 %) become structured module tasks; low-confidence sections fall back to `ansible.builtin.shell` with `changed_when`, `failed_when`, and idempotency hints embedded as comments. Also returns an **AAP hints** block and a **quality score**.
+
+**Why you need this**: Manually rewriting a Bash script as an Ansible playbook is tedious and error-prone. This tool does the mechanical conversion in seconds, leaving you with a playbook that is idiomatic, idempotent, and ready to review rather than ready to write.
+
+**What you get**:
+- Complete Ansible playbook YAML
+- Per-task confidence metadata
+- Idempotency report (risks, shell fallback count, suggestions)
+- **AAP hints** — recommended Execution Environment image, credential types, survey variables derived from script environment variables, and actionable notes (vault warnings, missing collections, prerequisite packages)
+- **Quality score** — A–F letter grade (A ≥ 90, B ≥ 75, C ≥ 60, D ≥ 40, F < 40), overall coverage percentage, and a ranked list of improvements
+
+**Quality score deductions:**
+- Each hardcoded secret deducts 5 points (max 20)
+- Shell fallback tasks count as non-idempotent
+
+**Real-world example**: Your `deploy.sh` installs nginx, creates a service user, writes a config, and then calls `salt-call` as an escape hatch. The converted playbook maps the first three operations to `ansible.builtin.apt`, `ansible.builtin.user`, and `ansible.builtin.copy` — with the salt call flagged as a CM escape needing manual review. Quality score B (77 %).
+
+**Parameters:**
+- `script_path` (string, required): Path to the Bash script file
+
+**Returns:**
+- JSON string with `playbook_yaml`, `tasks`, `warnings`, `idempotency_report`, `quality_score`, and `aap_hints` keys
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert scripts/deploy.sh to an Ansible playbook
+    ```
+
+=== "CLI"
+    ```bash
+    # Output playbook YAML
+    souschef bash convert scripts/deploy.sh
+
+    # Save playbook to file
+    souschef bash convert scripts/deploy.sh --output playbook.yml
+
+    # Full JSON response (includes quality score and AAP hints)
+    souschef bash convert scripts/deploy.sh --format json
+    ```
+
+---
+
+### generate_ansible_role_from_bash
+
+Generate a complete Ansible role directory structure from a Bash script.
+
+**What it does**: Converts a Bash provisioning script into a full Ansible role — splitting tasks by category into separate task files, generating handlers, defaults, vars, meta, and a README. Sensitive environment variables are stubbed in `defaults/main.yml` with `ansible-vault` TODO comments rather than being embedded as plaintext.
+
+**Why you need this**: A bare playbook is a start, but Ansible best practice for reusable automation is a role. This tool goes the extra mile: it produces a role that can be dropped directly into an AAP project, committed to Git, and executed via a job template with survey variables automatically derived from the script's environment variables.
+
+**What you get**:
+- **`tasks/main.yml`** — imports each category task file
+- **`tasks/packages.yml`** — package install tasks
+- **`tasks/services.yml`** — service management tasks
+- **`tasks/users.yml`** — user and group management tasks
+- **`tasks/files.yml`** — file write and permission tasks
+- **`tasks/misc.yml`** — git, archives, sed, cron, firewall, hostname tasks
+- **`handlers/main.yml`** — service restart handlers
+- **`defaults/main.yml`** — environment variables as Ansible defaults; sensitive vars stubbed with vault comment
+- **`vars/main.yml`** — empty placeholder
+- **`meta/main.yml`** — role metadata (author, description, licence, min Ansible version)
+- **`README.md`** — auto-generated role documentation
+- **Quality score** and **AAP hints** in the JSON response
+
+**Real-world example**: Your team has a `setup_webserver.sh` that has been running via Salt. You're migrating to AAP. Running this tool produces a `webserver` role with 6 task files. The `DB_PASSWORD` env var appears in `defaults/main.yml` stubbed as `''` with a `# TODO: set via ansible-vault` comment. You commit the role, create an AAP project, and create a job template — the tool's AAP hints even tell you which Execution Environment image to use.
+
+**Parameters:**
+- `script_path` (string, required): Path to the Bash script file
+- `role_name` (string, optional): Name for the generated role (default: `bash_converted`)
+
+**Returns:**
+- JSON string with `status`, `role_name`, `files` (dict of relative path → content), `quality_score`, and `aap_hints` keys
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate an Ansible role called "webserver" from scripts/setup_webserver.sh
+    ```
+
+=== "CLI"
+    ```bash
+    # Print role to stdout
+    souschef bash role scripts/setup_webserver.sh --role-name webserver
+
+    # Write role tree to disk
+    souschef bash role scripts/setup_webserver.sh \
+        --role-name webserver \
+        --output-dir ./roles
+    ```
+
+---
+
+
+## Puppet Migration
+
+Convert Puppet manifests (`.pp` files) and module directories to idiomatic Ansible playbooks using `ansible.builtin` modules.
+
+!!! tip "When to use Puppet Migration"
+    - You have existing Puppet manifests you want to convert to Ansible
+    - You are migrating infrastructure managed by Puppet to AAP
+    - You need to translate Puppet classes and resource declarations to Ansible tasks
+
+### Supported Puppet Resource Types
+
+SousChef recognises **14 Puppet resource types**. Ten are fully mapped to idiomatic Ansible modules; four (`augeas`, `filebucket`, `notify`, `tidy`) are recognised but produce `ansible.builtin.debug` placeholder tasks with manual-review guidance.
+
+**Fully mapped (10 types):**
+
+| Puppet Resource | Ansible Module |
+|-----------------|----------------|
+| `package` | `ansible.builtin.package` |
+| `service` | `ansible.builtin.service` |
+| `file` (absent/directory) | `ansible.builtin.file` |
+| `file` (with content) | `ansible.builtin.copy` |
+| `file` (with source template) | `ansible.builtin.template` |
+| `user` | `ansible.builtin.user` |
+| `group` | `ansible.builtin.group` |
+| `exec` | `ansible.builtin.command` (with idempotency warning) |
+| `cron` | `ansible.builtin.cron` |
+| `host` | `ansible.builtin.lineinfile` (with warning) |
+| `mount` | `ansible.posix.mount` |
+| `ssh_authorized_key` | `ansible.posix.authorized_key` |
+
+**Recognised but not auto-converted (4 types):** `augeas`, `filebucket`, `notify`, `tidy` — each produces an `ansible.builtin.debug` placeholder task with a guidance message.
+
+Unsupported DSL constructs (Hiera lookups, exported/virtual resources, `create_resources`) are flagged with line numbers and manual-review guidance — nothing is silently discarded.
+
+---
+
+### parse_puppet_manifest
+
+Parse a Puppet manifest file (`.pp`) and extract resources, classes, and variables.
+
+**What it does**: Reads a Puppet manifest and identifies all resource declarations, class definitions, variables, and any constructs that cannot be auto-converted (Hiera lookups, exported resources, etc.).
+
+**Parameters:**
+- `manifest_path` (string, required): Path to the Puppet manifest (`.pp`) file
+
+**Returns:**
+- Human-readable summary of all resources, classes, variables, and unsupported constructs with line numbers
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Parse my Puppet manifest at manifests/site.pp and show me all the resources
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet parse manifests/site.pp
+    ```
+
+---
+
+### parse_puppet_module
+
+Parse a Puppet module directory and analyse all manifests.
+
+**What it does**: Recursively scans a Puppet module directory for `.pp` files and extracts all resources, classes, and defined types across every manifest.
+
+**Parameters:**
+- `module_path` (string, required): Path to the Puppet module directory
+
+**Returns:**
+- Aggregated summary of all resources and classes across all manifests in the module
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Analyse the Puppet module at modules/nginx and show me what it contains
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet parse-module modules/nginx
+    ```
+
+---
+
+### convert_puppet_manifest_to_ansible
+
+Convert a Puppet manifest to an Ansible playbook.
+
+**What it does**: Parses the manifest and maps every resource declaration to the corresponding `ansible.builtin` module task. High-fidelity resources produce structured module tasks; unsupported constructs become `ansible.builtin.debug` placeholder tasks with guidance comments.
+
+**Parameters:**
+- `manifest_path` (string, required): Path to the Puppet manifest (`.pp`) file
+
+**Returns:**
+- YAML Ansible playbook string ready to review and deploy
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert my Puppet manifest at manifests/webserver.pp to an Ansible playbook
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet convert manifests/webserver.pp
+    souschef puppet convert manifests/webserver.pp --output playbook.yml
+    ```
+
+---
+
+### convert_puppet_module_to_ansible
+
+Convert an entire Puppet module directory to Ansible playbooks.
+
+**What it does**: Iterates all `.pp` manifests in the module, converts each to Ansible tasks, and returns a consolidated playbook covering the full module.
+
+**Parameters:**
+- `module_path` (string, required): Path to the Puppet module directory
+
+**Returns:**
+- YAML Ansible playbook string combining all converted manifests
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert the Puppet module at modules/nginx to an Ansible playbook
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet convert-module modules/nginx
+    souschef puppet convert-module modules/nginx --output-dir ./roles
+    ```
+
+---
+
+### convert_puppet_resource_to_task
+
+Convert a single Puppet resource declaration to an Ansible task.
+
+**What it does**: Takes an inline Puppet resource definition string (not a file path) and returns the equivalent Ansible task YAML. Useful for quick one-off lookups during a migration.
+
+**Parameters:**
+- `resource_type` (string, required): Puppet resource type (e.g., `package`, `service`, `file`)
+- `title` (string, required): Resource title (e.g., `nginx`, `/etc/nginx/nginx.conf`)
+- `attributes` (dict, optional): Resource attributes (e.g., `{"ensure": "installed"}`)
+
+**Returns:**
+- YAML Ansible task string
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert a Puppet package resource for nginx with ensure => installed to an Ansible task
+    ```
+
+---
+
+### list_puppet_supported_resource_types
+
+List all Puppet resource types that SousChef can convert automatically.
+
+**What it does**: Returns the full table of Puppet→Ansible module mappings.
+
+**Parameters:** None
+
+**Returns:**
+- Human-readable table of resource types and their Ansible equivalents
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    What Puppet resource types can you convert?
+    ```
+
+=== "CLI"
+    ```bash
+    souschef puppet list-types
+    ```
+
+---
+
+### convert_puppet_manifest_to_ansible_with_ai
+
+Convert a Puppet manifest to Ansible using AI assistance for complex constructs.
+
+**What it does**: Converts the manifest using rule-based mapping for standard resources, and uses a configured LLM to produce best-effort Ansible tasks for unsupported constructs (Hiera lookups, exported resources, `create_resources`, etc.).
+
+**Parameters:**
+- `manifest_path` (string, required): Path to the Puppet manifest (`.pp`) file
+- `ai_provider` (string, optional): AI provider — `anthropic`, `openai`, `watson`, `lightspeed` (default: `anthropic`)
+- `api_key` (string, optional): API key for the chosen provider
+- `model` (string, optional): Model name (default: `claude-3-5-sonnet-20241022`)
+- `temperature` (float, optional): Sampling temperature (default: `0.1`)
+- `max_tokens` (int, optional): Maximum tokens for AI response
+- `project_id` (string, optional): Project ID for Watson/Lightspeed
+- `base_url` (string, optional): Custom base URL for API calls
+
+**Returns:**
+- YAML Ansible playbook string with AI-generated tasks for unsupported constructs
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert manifests/complex.pp to Ansible — it uses Hiera lookups that need AI assistance
+    ```
+
+---
+
+### convert_puppet_module_to_ansible_with_ai
+
+Convert a Puppet module to Ansible using AI assistance for complex constructs.
+
+**What it does**: Same as `convert_puppet_manifest_to_ansible_with_ai` but operates on a full module directory.
+
+**Parameters:**
+- `module_path` (string, required): Path to the Puppet module directory
+- `ai_provider`, `api_key`, `model`, `temperature`, `max_tokens`, `project_id`, `base_url` — same as above
+
+**Returns:**
+- YAML Ansible playbook string covering all module manifests
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert the modules/complex_app directory using AI for the Hiera lookups
+    ```
+
+---
+
+
 ## Tool Selection
 
 - **Start with assessment**: Use `assess_ansible_upgrade_readiness` to understand your current state (automatically detects Python version)
@@ -1653,6 +2359,24 @@ All tools provide detailed error messages with suggestions:
 6. **Assessment**: Use `generate_migration_report`
 7. **Chef Server Integration** (optional): Use `validate_chef_server_connection` → `get_chef_nodes` → inventory generation
 
+
+#### Bash Script Migration Workflow
+
+1. **Analyse**: Use `parse_bash_script` to understand what the script does
+2. **Review warnings**: Check idempotency risks, sensitive data alerts, and CM escape calls
+3. **Convert**: Use `convert_bash_to_ansible` for a quick playbook, or `generate_ansible_role_from_bash` for a full reusable role
+4. **Review quality score**: Address improvements flagged in the A–F report
+5. **Secure secrets**: Move any detected credentials to ansible-vault (see `defaults/main.yml` stubs)
+6. **AAP readiness**: Use the `aap_hints` block to configure the correct Execution Environment and credentials in your AAP job template
+
+#### Puppet Migration Workflow
+
+1. **Inventory**: Use `parse_puppet_manifest` or `parse_puppet_module` to understand resource coverage
+2. **Review unsupported constructs**: Check Hiera lookups, exported resources, and `create_resources` flagged in the parse output
+3. **Convert**: Use `convert_puppet_manifest_to_ansible` or `convert_puppet_module_to_ansible` for standard manifests
+4. **Handle complex DSL**: Use `convert_puppet_manifest_to_ansible_with_ai` for manifests with unsupported constructs
+5. **One-off tasks**: Use `convert_puppet_resource_to_task` to convert individual resource declarations during review
+6. **Validate**: Review generated playbook against the original manifest and test on a staging environment
 #### Ansible Upgrade Workflow
 
 1. **Assessment**: Use `assess_ansible_upgrade_readiness` (automatically detects Python version)
