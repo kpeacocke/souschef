@@ -6985,6 +6985,7 @@ def generate_powershell_role(
     Returns:
         JSON string mapping relative file path → file content for all
         generated artefacts.
+
     """
     import json as _json
 

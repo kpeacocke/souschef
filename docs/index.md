@@ -13,7 +13,7 @@ SousChef is a complete enterprise-grade platform with six major capabilities:
 
 ### 1. Chef to Ansible Migration (39 tools)
 
-Complete enterprise-grade migration platform with **54 primary MCP tools** organised across **11 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations, PowerShell-to-Ansible Windows automation, and Bash script migration. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments, Chef Server integration, PowerShell enterprise migration, and Bash provisioning script conversion, SousChef provides everything needed for a successful infrastructure automation migration.
+Complete enterprise-grade migration platform organised across **11 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and Chef Server integration, SousChef provides everything needed for a successful infrastructure automation migration.
 
 ### 2. Ansible Upgrade Assessment & Planning (5 tools)
 

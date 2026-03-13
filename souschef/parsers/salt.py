@@ -97,7 +97,7 @@ def _parse_sls_yaml(content: str) -> dict[str, Any]:
 
     """
     try:
-        import yaml  # type: ignore[import-untyped]
+        import yaml
 
         # Strip Jinja2 blocks and expressions for basic parsing
         # Replace {%...%} blocks with comments
