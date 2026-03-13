@@ -221,7 +221,7 @@ print(f"Warnings: {len(result['warnings'])}")
 print(f"Metrics: {result['metrics']}")
 
 for action in result["actions"]:
-    print(f"  Line {action['lineno']}: {action['action_type']} (confidence: {action['confidence']})")
+    print(f"  Line {action['source_line']}: {action['action_type']} (confidence: {action['confidence']})")
 
 # Parse from inline content
 script_content = """
@@ -240,10 +240,12 @@ result = json.loads(result_json)
     "actions": [
         {
             "action_type": "windows_feature_install",
-            "feature": "Web-Server",
-            "include_management_tools": True,
+            "params": {
+                "feature_name": "Web-Server",
+                "include_management_tools": True,
+            },
             "confidence": "high",
-            "lineno": 1,
+            "source_line": 1,
             "requires_elevation": True
         }
     ],

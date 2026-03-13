@@ -660,11 +660,11 @@ def _convert_certificate_import(
 def _convert_winrm_enable(
     params: dict[str, Any], raw: str
 ) -> tuple[str, dict[str, Any]]:
-    """Convert winrm_enable to win_shell task args (with note)."""
+    """Convert winrm_enable to win_shell task args (non-idempotent)."""
     cmd = params.get("raw_command", raw)
     return (
         "Enable WinRM / PSRemoting",
-        {"cmd": cmd, "creates": "C:\\Windows\\System32\\winrm.cmd"},
+        {"cmd": cmd},
     )
 
 
@@ -696,17 +696,45 @@ def _convert_dns_client_set(
 
 
 def _convert_acl_set(params: dict[str, Any], _raw: str) -> tuple[str, dict[str, Any]]:
-    """Convert acl_set to win_acl task args."""
+    """
+    Convert acl_set to win_acl task args.
+
+    Attempts to derive ACL principal and rights from the parsed parameters. If
+    these cannot be inferred, emits a conservative placeholder that requires
+    manual review rather than fabricating a potentially dangerous permission.
+    """
     path = params.get("path", "")
+    user = params.get("user")
+    rights = params.get("rights")
+
+    args: dict[str, Any] = {
+        "path": path,
+        "state": "present",
+    }
+
+    if user and rights:
+        args.update(
+            {
+                "user": user,
+                "rights": rights,
+                "type": "allow",
+            }
+        )
+    else:
+        args.update(
+            {
+                "review_required": True,
+                "notes": (
+                    "win_acl parameters 'user' and 'rights' could not be "
+                    "inferred from PowerShell acl_set; please update these "
+                    "values before running this playbook."
+                ),
+            }
+        )
+
     return (
         f"Set ACL on: {path}",
-        {
-            "path": path,
-            "user": "DOMAIN\\ServiceAccount",
-            "rights": "FullControl",
-            "type": "allow",
-            "state": "present",
-        },
+        args,
     )
 
 

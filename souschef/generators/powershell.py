@@ -159,7 +159,6 @@ def generate_windows_inventory(
     """
     host_list = hosts or ["windows-host1.example.com"]
     ssl_flag = "ssl" if use_ssl else "basic"
-    cert_validate = str(validate_certs).lower()
 
     lines = ["[windows]"]
     for h in host_list:
@@ -169,11 +168,10 @@ def generate_windows_inventory(
         "",
         "[windows:vars]",
         "ansible_connection=winrm",
-        f"ansible_winrm_port={winrm_port}",
+        f"ansible_port={winrm_port}",
         f"ansible_winrm_transport={ssl_flag}",
         "ansible_winrm_server_cert_validation="
         + ("validate" if validate_certs else "ignore"),
-        f"ansible_winrm_cert_validation={cert_validate}",
         "ansible_winrm_operation_timeout_sec=60",
         "ansible_winrm_read_timeout_sec=70",
         "# ansible_user=Administrator",
@@ -187,6 +185,7 @@ def generate_windows_group_vars(
     ansible_user: str = "Administrator",
     winrm_port: int = 5986,
     use_ssl: bool = True,
+    validate_certs: bool = False,
 ) -> str:
     """
     Generate ``group_vars/windows.yml`` for WinRM connection settings.
@@ -198,6 +197,8 @@ def generate_windows_group_vars(
         ansible_user: Default Windows user for Ansible to connect as.
         winrm_port: WinRM port (5986 for HTTPS, 5985 for HTTP).
         use_ssl: Whether to use HTTPS WinRM transport.
+        validate_certs: Whether to validate the WinRM SSL certificate.
+            Typically ``False`` for self-signed certs.
 
     Returns:
         YAML string for ``group_vars/windows.yml``.
@@ -208,9 +209,11 @@ def generate_windows_group_vars(
         "ansible_connection": "winrm",
         "ansible_user": ansible_user,
         "ansible_password": "{{ vault_windows_password }}",
-        "ansible_winrm_port": winrm_port,
+        "ansible_port": winrm_port,
         "ansible_winrm_transport": transport,
-        "ansible_winrm_server_cert_validation": ("validate" if use_ssl else "ignore"),
+        "ansible_winrm_server_cert_validation": (
+            "validate" if validate_certs else "ignore"
+        ),
         "ansible_winrm_operation_timeout_sec": 60,
         "ansible_winrm_read_timeout_sec": 70,
         "ansible_become": False,

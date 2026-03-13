@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-SousChef provides **51 specialised MCP tools** for comprehensive Chef-to-Ansible migration, PowerShell-to-Ansible Windows automation, and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **54 specialised MCP tools** for comprehensive Chef-to-Ansible migration, PowerShell-to-Ansible Windows automation, and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.

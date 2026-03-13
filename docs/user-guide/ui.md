@@ -279,75 +279,58 @@ The PowerShell Migration page provides a web-based interface for converting Powe
 
 Navigate to: **Ansible** tab → **PowerShell Migration**
 
-### Workflow Tabs
+### Script Input and Conversion
 
-The page is organised into three workflow tabs:
+The page uses a single script input area with controls beneath it for all operations.
 
-#### Parse Tab
-
-Upload or paste a PowerShell `.ps1` script and parse it into structured actions.
-
-- **Upload field**: Drop or browse to a `.ps1` file
-- **Parse button**: Extracts all provisioning actions
-- **Results display**: Shows action types, confidence levels, source line numbers, and a metrics summary
+- **Script input area**: Paste your PowerShell provisioning script directly into the text area
+- **Parse Script button**: Extracts all provisioning actions and displays a structured summary with action types, confidence levels, source line numbers, and a metrics summary
 - **Warnings panel**: Lists unrecognised commands that will fall back to `win_shell`
 
-#### Convert Tab
+#### Conversion tools
 
-Convert the parsed script directly to an Ansible playbook.
+The PowerShell migration UI uses a single script input area with a row of controls beneath it. Conversion actions share the same context as the analysis results; there are no separate workflow tabs.
 
-- **Playbook name field**: Set the Ansible play name (default: `powershell_migration`)
-- **Hosts field**: Set the inventory group or host pattern (default: `windows`)
-- **Convert button**: Generates the Ansible playbook YAML
-- **Playbook preview**: Syntax-highlighted YAML output
-- **Download button**: Download the generated `playbook.yml`
-- **Statistics**: Task count breakdown (idiomatic modules vs. `win_shell` fallbacks)
+- **Playbook name field**: Optional text field to set the Ansible play name (default: `powershell_migration`)
+- **Hosts field**: Optional text field to set the inventory group or host pattern (default: `windows`)
+- **Convert to playbook button**: Generates the Ansible playbook YAML and shows it in an on-page preview panel
+- **Playbook preview**: Syntax-highlighted YAML output rendered below the editor
+- **Statistics summary**: Task count breakdown (idiomatic modules vs. `win_shell` fallbacks) displayed alongside the preview
 
-#### Enterprise Artefacts Tab
+#### Enterprise artefacts (single-page workflow)
 
-Generate the full suite of enterprise deployment artefacts. Contains five sub-tabs:
+Enterprise artefact generation reuses the same script input and operates on the analysed script in place. Output is rendered inline in the browser for inspection and copy/paste; the UI does not create ZIP archives or initiate file downloads.
 
-**Fidelity Report**
+**Fidelity report**
 
-- **Analyse button**: Calculates the fidelity score for the script
+- **Generate fidelity report button**: Calculates the fidelity score for the script
 - **Score display**: Percentage of actions fully automatable
 - **Review list**: Actions needing manual attention
 - **Recommendations**: Actionable suggestions for improving automation coverage
-- **Download button**: Download the fidelity report as JSON
+- **Report output**: JSON-style text shown in a scrollable panel that you can copy into your own files
 
-**Ansible Role**
+**Ansible role scaffold**
 
-- **Role name field**: Set the role directory name
-- **Playbook name field**: Set the top-level playbook base name
-- **Hosts field**: Set the inventory group pattern
-- **Generate button**: Produces the complete role skeleton
-- **File tree**: Preview all generated files
-- **Download ZIP button**: Download all role files as a ZIP archive
+- **Role name field**: Optional text field to set the role directory name
+- **Playbook name field**: Optional text field to set the top-level playbook base name
+- **Hosts field**: Optional text field to set the inventory group pattern
+- **Generate role button**: Produces a role-style task structure as text output within the UI
 
 **Inventory**
 
 - **Hosts field**: Enter comma-separated Windows host names or IPs
 - **WinRM port field**: Set the WinRM listener port (default: 5986)
 - **SSL toggle**: Switch between HTTPS (default) and HTTP transport
-- **Generate button**: Produces the INI inventory
-- **Preview**: Displays the generated `inventory/hosts`
-- **Download button**: Download `hosts` file
+- **Generate button**: Produces the INI inventory displayed inline
 
 **requirements.yml**
 
-- **Generate button**: Produces `requirements.yml` tailored to the script
-- **Preview**: Displays the generated YAML
-- **Download button**: Download `requirements.yml`
+- **Generate button**: Produces `requirements.yml` tailored to the script, displayed inline
 
 **AWX Job Template**
 
 - **Job template name field**: Display name for the AWX job template
-- **Project/Inventory/Credential fields**: AWX object references
-- **Environment field**: Target environment label
-- **Survey toggle**: Include or exclude survey spec generation
-- **Generate button**: Produces the importable job template JSON
-- **Preview**: Displays the JSON and CLI import command
-- **Download button**: Download `job_template.json`
+- **Generate button**: Produces the importable job template JSON displayed inline
 
 ## Troubleshooting
 

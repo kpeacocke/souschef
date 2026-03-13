@@ -189,7 +189,7 @@ class TestGenerateWindowsGroupVars:
         from souschef.generators.powershell import generate_windows_group_vars
 
         parsed = yaml.safe_load(generate_windows_group_vars(winrm_port=5985))
-        assert parsed["ansible_winrm_port"] == 5985
+        assert parsed["ansible_port"] == 5985
 
     def test_ssl_transport(self) -> None:
         """use_ssl=True sets winrm transport to ssl."""

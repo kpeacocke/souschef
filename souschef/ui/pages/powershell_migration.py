@@ -27,10 +27,7 @@ from souschef.generators.powershell import (
     generate_windows_group_vars,
     generate_windows_inventory,
 )
-from souschef.parsers.powershell import (
-    _parse_powershell_content,
-    parse_powershell_content,
-)
+from souschef.parsers.powershell import parse_powershell_content
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -236,7 +233,7 @@ def _handle_enterprise(
         return
 
     with st.spinner("Generating enterprise Ansible artefacts..."):
-        parsed_ir = _parse_powershell_content(script_content, "<inline>")
+        parsed_ir = json.loads(parse_powershell_content(script_content, "<inline>"))
         enterprise_result = {
             "parsed_ir": parsed_ir,
             "inventory": generate_windows_inventory(),

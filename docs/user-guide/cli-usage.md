@@ -1303,8 +1303,6 @@ Enable shell completion for faster command entry:
     eval (env _SOUSCHEF_CLI_COMPLETE=fish_source souschef-cli)
     ```
 
-```
-
 ---
 
 ## PowerShell Migration Commands
@@ -1338,10 +1336,12 @@ souschef-cli powershell-parse scripts/setup.ps1
   "actions": [
     {
       "action_type": "windows_feature_install",
-      "feature": "Web-Server",
-      "include_management_tools": true,
+      "params": {
+        "feature_name": "Web-Server",
+        "include_management_tools": true
+      },
       "confidence": "high",
-      "lineno": 3,
+      "source_line": 3,
       "requires_elevation": true
     }
   ],
