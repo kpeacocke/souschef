@@ -289,8 +289,7 @@ def _generate_puppet_playbook(parsed: dict[str, Any], source: str) -> str:
         tasks.append(
             {
                 "name": (
-                    f"WARNING: Unsupported construct '{item['construct']}'"
-                    f" at {loc}"
+                    f"WARNING: Unsupported construct '{item['construct']}' at {loc}"
                 ),
                 "ansible.builtin.debug": {
                     "msg": (
@@ -626,8 +625,7 @@ def _convert_host(title: str, attrs: dict[str, str]) -> dict[str, Any]:
         "name": f"Manage host: {title} (manual review required — no IP specified)",
         "ansible.builtin.debug": {
             "msg": (
-                f"Puppet host '{title}' has no IP address;"
-                " review /etc/hosts manually"
+                f"Puppet host '{title}' has no IP address; review /etc/hosts manually"
             )
         },
     }
@@ -945,9 +943,7 @@ def _collect_module_manifests(
 
     for manifest_path in manifests:
         try:
-            content = safe_read_text(
-                manifest_path, workspace_root, encoding="utf-8"
-            )
+            content = safe_read_text(manifest_path, workspace_root, encoding="utf-8")
             rel_path = str(manifest_path.relative_to(workspace_root))
             parsed = _parse_manifest_content(content, rel_path)
             all_resources.extend(parsed.get("resources", []))
@@ -1130,9 +1126,7 @@ def _format_unsupported_for_prompt(unsupported: list[dict[str, Any]]) -> str:
     lines = []
     for item in unsupported:
         loc = f"{item['source_file']}:{item['line']}"
-        lines.append(
-            f"  - [{item['construct']}] at {loc}: {item['text']!r}"
-        )
+        lines.append(f"  - [{item['construct']}] at {loc}: {item['text']!r}")
     return "\n".join(lines)
 
 
@@ -1202,8 +1196,8 @@ def _build_construct_guidance(unsupported: list[dict[str, Any]]) -> str:
         if construct in seen:
             lines.append(f"- {hint}")
 
-    return "\n".join(lines) if lines else (
-        "- Follow best practices for idempotent tasks."
+    return (
+        "\n".join(lines) if lines else ("- Follow best practices for idempotent tasks.")
     )
 
 

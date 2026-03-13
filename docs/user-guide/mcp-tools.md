@@ -2099,7 +2099,9 @@ Convert Puppet manifests (`.pp` files) and module directories to idiomatic Ansib
 
 ### Supported Puppet Resource Types
 
-SousChef maps **15 Puppet resource types** to idiomatic Ansible modules:
+SousChef recognises **14 Puppet resource types**. Ten are fully mapped to idiomatic Ansible modules; four (`augeas`, `filebucket`, `notify`, `tidy`) are recognised but produce `ansible.builtin.debug` placeholder tasks with manual-review guidance.
+
+**Fully mapped (10 types):**
 
 | Puppet Resource | Ansible Module |
 |-----------------|----------------|
@@ -2114,12 +2116,11 @@ SousChef maps **15 Puppet resource types** to idiomatic Ansible modules:
 | `cron` | `ansible.builtin.cron` |
 | `host` | `ansible.builtin.lineinfile` (with warning) |
 | `mount` | `ansible.posix.mount` |
-| `ssh_authorized_key` | `ansible.builtin.authorized_key` |
-| `notify` | `ansible.builtin.debug` |
-| `augeas` | `ansible.builtin.debug` (manual review required) |
-| Others | `ansible.builtin.debug` warning task |
+| `ssh_authorized_key` | `ansible.posix.authorized_key` |
 
-Unsupported constructs (Hiera lookups, exported/virtual resources, `create_resources`) are flagged with line numbers and manual-review guidance — nothing is silently discarded.
+**Recognised but not auto-converted (4 types):** `augeas`, `filebucket`, `notify`, `tidy` — each produces an `ansible.builtin.debug` placeholder task with a guidance message.
+
+Unsupported DSL constructs (Hiera lookups, exported/virtual resources, `create_resources`) are flagged with line numbers and manual-review guidance — nothing is silently discarded.
 
 ---
 

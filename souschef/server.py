@@ -6236,7 +6236,9 @@ def convert_puppet_resource_to_task(
                 attrs[key.strip()] = val.strip()
 
     task = _convert_puppet_resource_to_task(resource_type, title, attrs)
-    return _yaml.dump(task, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    return _yaml.dump(
+        task, default_flow_style=False, sort_keys=False, allow_unicode=True
+    )
 
 
 @mcp.tool()

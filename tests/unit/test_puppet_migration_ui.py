@@ -109,7 +109,9 @@ def test_show_manifest_file_no_path_no_click(mock_streamlit: MagicMock) -> None:
     mock_streamlit.warning.assert_not_called()
 
 
-def test_show_manifest_file_no_path_with_analyse_click(mock_streamlit: MagicMock) -> None:
+def test_show_manifest_file_no_path_with_analyse_click(
+    mock_streamlit: MagicMock,
+) -> None:
     """Test that warning is shown when analyse clicked with empty path."""
     mock_streamlit.text_input.return_value = ""
     # First button = analyse (secondary), second = convert (primary)
@@ -118,7 +120,9 @@ def test_show_manifest_file_no_path_with_analyse_click(mock_streamlit: MagicMock
     mock_streamlit.warning.assert_called()
 
 
-def test_show_manifest_file_no_path_with_convert_click(mock_streamlit: MagicMock) -> None:
+def test_show_manifest_file_no_path_with_convert_click(
+    mock_streamlit: MagicMock,
+) -> None:
     """Test that warning is shown when convert clicked with empty path."""
     mock_streamlit.text_input.return_value = ""
     mock_streamlit.button.side_effect = [False, True, False]
@@ -131,9 +135,7 @@ def test_show_manifest_file_analyse_clicked(mock_streamlit: MagicMock) -> None:
     mock_streamlit.text_input.return_value = "/path/to/manifest.pp"
     mock_streamlit.button.side_effect = [True, False, False]
 
-    with patch(
-        "souschef.ui.pages.puppet_migration._run_manifest_analysis"
-    ) as mock_run:
+    with patch("souschef.ui.pages.puppet_migration._run_manifest_analysis") as mock_run:
         _show_manifest_file_section()
         mock_run.assert_called_once_with("/path/to/manifest.pp")
 
@@ -176,9 +178,7 @@ def test_show_module_analyse_clicked(mock_streamlit: MagicMock) -> None:
     mock_streamlit.text_input.return_value = "/path/to/module"
     mock_streamlit.button.side_effect = [True, False, False]
 
-    with patch(
-        "souschef.ui.pages.puppet_migration._run_module_analysis"
-    ) as mock_run:
+    with patch("souschef.ui.pages.puppet_migration._run_module_analysis") as mock_run:
         _show_module_directory_section()
         mock_run.assert_called_once_with("/path/to/module")
 
@@ -188,9 +188,7 @@ def test_show_module_convert_clicked(mock_streamlit: MagicMock) -> None:
     mock_streamlit.text_input.return_value = "/path/to/module"
     mock_streamlit.button.side_effect = [False, True, False]
 
-    with patch(
-        "souschef.ui.pages.puppet_migration._run_module_conversion"
-    ) as mock_run:
+    with patch("souschef.ui.pages.puppet_migration._run_module_conversion") as mock_run:
         _show_module_directory_section()
         mock_run.assert_called_once_with("/path/to/module")
 
@@ -220,36 +218,45 @@ def test_run_manifest_analysis_success(mock_streamlit: MagicMock) -> None:
 
 def test_run_module_analysis_success(mock_streamlit: MagicMock) -> None:
     """Test _run_module_analysis calls parse and display."""
-    with patch(
-        "souschef.ui.pages.puppet_migration.parse_puppet_module",
-        return_value="Puppet Manifest Analysis: /module\nResources: none found",
-    ), patch(
-        "souschef.ui.pages.puppet_migration._display_analysis_result"
-    ) as mock_display:
+    with (
+        patch(
+            "souschef.ui.pages.puppet_migration.parse_puppet_module",
+            return_value="Puppet Manifest Analysis: /module\nResources: none found",
+        ),
+        patch(
+            "souschef.ui.pages.puppet_migration._display_analysis_result"
+        ) as mock_display,
+    ):
         _run_module_analysis("/module")
         mock_display.assert_called_once()
 
 
 def test_run_manifest_conversion_success(mock_streamlit: MagicMock) -> None:
     """Test _run_manifest_conversion calls convert and display."""
-    with patch(
-        "souschef.ui.pages.puppet_migration.convert_puppet_manifest_to_ansible",
-        return_value="- name: play\n  hosts: all\n  tasks: []\n",
-    ), patch(
-        "souschef.ui.pages.puppet_migration._display_conversion_result"
-    ) as mock_display:
+    with (
+        patch(
+            "souschef.ui.pages.puppet_migration.convert_puppet_manifest_to_ansible",
+            return_value="- name: play\n  hosts: all\n  tasks: []\n",
+        ),
+        patch(
+            "souschef.ui.pages.puppet_migration._display_conversion_result"
+        ) as mock_display,
+    ):
         _run_manifest_conversion("/some.pp")
         mock_display.assert_called_once()
 
 
 def test_run_module_conversion_success(mock_streamlit: MagicMock) -> None:
     """Test _run_module_conversion calls convert and display."""
-    with patch(
-        "souschef.ui.pages.puppet_migration.convert_puppet_module_to_ansible",
-        return_value="- name: play\n  hosts: all\n  tasks: []\n",
-    ), patch(
-        "souschef.ui.pages.puppet_migration._display_conversion_result"
-    ) as mock_display:
+    with (
+        patch(
+            "souschef.ui.pages.puppet_migration.convert_puppet_module_to_ansible",
+            return_value="- name: play\n  hosts: all\n  tasks: []\n",
+        ),
+        patch(
+            "souschef.ui.pages.puppet_migration._display_conversion_result"
+        ) as mock_display,
+    ):
         _run_module_conversion("/module")
         mock_display.assert_called_once()
 
@@ -281,7 +288,9 @@ def test_display_analysis_result_success(mock_streamlit: MagicMock) -> None:
     mock_streamlit.download_button.assert_called_once()
 
 
-def test_display_analysis_result_with_unsupported_warning(mock_streamlit: MagicMock) -> None:
+def test_display_analysis_result_with_unsupported_warning(
+    mock_streamlit: MagicMock,
+) -> None:
     """Test that unsupported constructs trigger a warning."""
     result = "Puppet Manifest Analysis: test.pp\nUnsupported Constructs (3) - require manual review:"
     _display_analysis_result(result, "manifest")
@@ -395,12 +404,15 @@ def test_run_manifest_ai_conversion_with_api_key(mock_streamlit: MagicMock) -> N
         "base_url": "",
     }
     ai_result = "- name: play\n  hosts: all\n  tasks: []\n"
-    with patch(
-        "souschef.ui.pages.puppet_migration.convert_puppet_manifest_to_ansible_with_ai",
-        return_value=ai_result,
-    ) as mock_conv, patch(
-        "souschef.ui.pages.puppet_migration._display_conversion_result"
-    ) as mock_display:
+    with (
+        patch(
+            "souschef.ui.pages.puppet_migration.convert_puppet_manifest_to_ansible_with_ai",
+            return_value=ai_result,
+        ) as mock_conv,
+        patch(
+            "souschef.ui.pages.puppet_migration._display_conversion_result"
+        ) as mock_display,
+    ):
         _run_manifest_ai_conversion("/some.pp", cfg)
         mock_conv.assert_called_once()
         mock_display.assert_called_once()
@@ -427,12 +439,15 @@ def test_run_module_ai_conversion_with_api_key(mock_streamlit: MagicMock) -> Non
         "base_url": "",
     }
     ai_result = "- name: play\n  hosts: all\n  tasks: []\n"
-    with patch(
-        "souschef.ui.pages.puppet_migration.convert_puppet_module_to_ansible_with_ai",
-        return_value=ai_result,
-    ) as mock_conv, patch(
-        "souschef.ui.pages.puppet_migration._display_conversion_result"
-    ) as mock_display:
+    with (
+        patch(
+            "souschef.ui.pages.puppet_migration.convert_puppet_module_to_ansible_with_ai",
+            return_value=ai_result,
+        ) as mock_conv,
+        patch(
+            "souschef.ui.pages.puppet_migration._display_conversion_result"
+        ) as mock_display,
+    ):
         _run_module_ai_conversion("/some/module", cfg)
         mock_conv.assert_called_once()
         mock_display.assert_called_once()

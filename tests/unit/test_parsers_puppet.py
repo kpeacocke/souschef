@@ -320,7 +320,9 @@ def test_parse_puppet_module_file_not_found_error(tmp_path: Path) -> None:
 
 def test_parse_puppet_module_permission_error(tmp_path: Path) -> None:
     """Test handling of PermissionError during module parsing."""
-    (tmp_path / "init.pp").write_text("package { 'vim': ensure => installed }", encoding="utf-8")
+    (tmp_path / "init.pp").write_text(
+        "package { 'vim': ensure => installed }", encoding="utf-8"
+    )
 
     with patch(
         "souschef.parsers.puppet._get_workspace_root",

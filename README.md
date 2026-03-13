@@ -28,7 +28,7 @@ A fair bit of this relies on mocked Chef/AWX/AAP APIs because *shockingly* I don
 
 **Chef-to-Ansible Migration** — Convert cookbooks, recipes, custom resources, data bags, and Habitat plans to Ansible playbooks, roles, and containers. Supports infrastructure, applications, and day-2 operations.
 
-**Puppet to Ansible Migration** — Convert Puppet manifests and module directories to Ansible playbooks using idiomatic `ansible.builtin` modules. Supports 15 Puppet resource types with AI-assisted conversion for complex constructs.
+**Puppet to Ansible Migration** — Convert Puppet manifests and module directories to Ansible playbooks using idiomatic `ansible.builtin` modules. Recognises 14 Puppet resource types; maps 10 to Ansible modules with AI-assisted conversion for complex constructs.
 
 **PowerShell to Ansible Migration** — Convert Windows PowerShell provisioning scripts to idiomatic `ansible.windows` playbooks, roles, WinRM inventories, and AWX/AAP job templates.
 
@@ -72,7 +72,7 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 
 **Puppet Migration:**
 - Convert Puppet manifests (`.pp`) and module directories to Ansible playbooks
-- Map 15 Puppet resource types (`package`, `file`, `service`, `user`, `group`, `exec`, `cron`, `host`, `mount`, `ssh_authorized_key`, and more) to idiomatic `ansible.builtin` modules
+- Recognise 14 Puppet resource types; map 10 to idiomatic `ansible.builtin` modules (`package`, `service`, `file`, `user`, `group`, `exec`, `cron`, `host`, `mount`, `ssh_authorized_key`)
 - Warn about unsupported constructs (Hiera lookups, exported resources, `create_resources`) with manual-review guidance
 - AI-assisted conversion for complex Puppet DSL that cannot be mapped automatically
 - Convert individual Puppet resource declarations to standalone Ansible tasks

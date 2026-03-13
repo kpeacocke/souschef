@@ -195,9 +195,7 @@ def _parse_manifest_content(content: str, source_path: str) -> dict[str, Any]:
     }
 
 
-def _extract_puppet_resources(
-    content: str, source_path: str
-) -> list[dict[str, Any]]:
+def _extract_puppet_resources(content: str, source_path: str) -> list[dict[str, Any]]:
     """
     Extract Puppet resource declarations from manifest content.
 
@@ -256,9 +254,7 @@ def _extract_puppet_resources(
     return resources
 
 
-def _extract_puppet_classes(
-    content: str, source_path: str
-) -> list[dict[str, Any]]:
+def _extract_puppet_classes(content: str, source_path: str) -> list[dict[str, Any]]:
     """
     Extract Puppet class definitions from manifest content.
 
@@ -297,9 +293,7 @@ def _extract_puppet_classes(
     return classes
 
 
-def _extract_puppet_variables(
-    content: str, source_path: str
-) -> list[dict[str, Any]]:
+def _extract_puppet_variables(content: str, source_path: str) -> list[dict[str, Any]]:
     """
     Extract Puppet variable assignments from manifest content.
 
@@ -509,10 +503,7 @@ def _format_resources_section(
     if resources:
         parts.append(f"Resources ({len(resources)}):")
         for res in resources:
-            parts.append(
-                f"  {res['type']} {{ '{res['title']}' }}"
-                f" [line {res['line']}]"
-            )
+            parts.append(f"  {res['type']} {{ '{res['title']}' }} [line {res['line']}]")
             for attr_key, attr_val in res.get("attributes", {}).items():
                 parts.append(f"    {attr_key}: {attr_val}")
         parts.append("")
@@ -521,20 +512,14 @@ def _format_resources_section(
         parts.append("")
 
 
-def _format_classes_section(
-    parts: list[str], classes: list[dict[str, Any]]
-) -> None:
+def _format_classes_section(parts: list[str], classes: list[dict[str, Any]]) -> None:
     """Append the classes section to the report parts list."""
     if classes:
         parts.append(f"Classes ({len(classes)}):")
         for cls in classes:
             param_names = [p["name"] for p in cls.get("parameters", [])]
-            param_str = (
-                ", ".join(f"${n}" for n in param_names) if param_names else ""
-            )
-            parts.append(
-                f"  class {cls['name']}({param_str}) [line {cls['line']}]"
-            )
+            param_str = ", ".join(f"${n}" for n in param_names) if param_names else ""
+            parts.append(f"  class {cls['name']}({param_str}) [line {cls['line']}]")
         parts.append("")
 
 
@@ -545,9 +530,7 @@ def _format_variables_section(
     if variables:
         parts.append(f"Variables ({len(variables)}):")
         for var in variables[:20]:  # Show first 20 to avoid overwhelming output
-            parts.append(
-                f"  ${var['name']} = {var['value']} [line {var['line']}]"
-            )
+            parts.append(f"  ${var['name']} = {var['value']} [line {var['line']}]")
         if len(variables) > 20:
             parts.append(f"  ... and {len(variables) - 20} more")
         parts.append("")
@@ -559,9 +542,7 @@ def _format_unsupported_section(
     """Append the unsupported constructs section to the report parts list."""
     if unsupported:
         count = len(unsupported)
-        parts.append(
-            f"Unsupported Constructs ({count}) - require manual review:"
-        )
+        parts.append(f"Unsupported Constructs ({count}) - require manual review:")
         for item in unsupported:
             parts.append(
                 f"  [{item['construct']}] at"

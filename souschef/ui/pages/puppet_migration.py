@@ -418,9 +418,7 @@ def _display_conversion_result(
         return
 
     if ai_enhanced:
-        st.success(
-            "Puppet manifest converted to Ansible playbook with AI assistance."
-        )
+        st.success("Puppet manifest converted to Ansible playbook with AI assistance.")
         st.info(
             "The AI-generated playbook may include best-effort conversions for "
             "unsupported constructs. Review carefully before use in production."

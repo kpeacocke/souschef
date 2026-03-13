@@ -200,9 +200,7 @@ def test_convert_manifest_package_task(tmp_path: Path) -> None:
     playbook = _load_yaml(result)
     tasks = playbook[0]["tasks"]
 
-    pkg_tasks = [
-        t for t in tasks if "ansible.builtin.package" in t
-    ]
+    pkg_tasks = [t for t in tasks if "ansible.builtin.package" in t]
     assert len(pkg_tasks) >= 1
     assert pkg_tasks[0]["ansible.builtin.package"]["name"] == "nginx"
     assert pkg_tasks[0]["ansible.builtin.package"]["state"] == "present"
@@ -228,9 +226,7 @@ def test_convert_manifest_service_task(tmp_path: Path) -> None:
 def test_convert_manifest_file_directory_task(tmp_path: Path) -> None:
     """Test that file[directory] resources produce file tasks with state=directory."""
     manifest = tmp_path / "f.pp"
-    manifest.write_text(
-        "file { '/etc/app': ensure => directory }", encoding="utf-8"
-    )
+    manifest.write_text("file { '/etc/app': ensure => directory }", encoding="utf-8")
 
     result = convert_puppet_manifest_to_ansible(str(manifest))
     playbook = _load_yaml(result)
@@ -872,7 +868,9 @@ def test_clean_puppet_ai_response_valid_yaml_list() -> None:
 
 def test_clean_puppet_ai_response_valid_yaml_with_dashes() -> None:
     """Test that responses starting with '---' are accepted."""
-    response = "---\n- name: Install nginx\n  ansible.builtin.package:\n    name: nginx\n"
+    response = (
+        "---\n- name: Install nginx\n  ansible.builtin.package:\n    name: nginx\n"
+    )
     result = _clean_puppet_ai_response(response)
     assert result.startswith("---")
 
@@ -1117,9 +1115,7 @@ def test_collect_module_manifests_skips_unreadable(tmp_path: Path) -> None:
         "souschef.converters.puppet_to_ansible.safe_read_text",
         side_effect=_selective,
     ):
-        result = _collect_module_manifests(
-            sorted([good, bad]), tmp_path.parent
-        )
+        result = _collect_module_manifests(sorted([good, bad]), tmp_path.parent)
 
     assert isinstance(result["resources"], list)
     assert isinstance(result["unsupported"], list)
@@ -1198,9 +1194,7 @@ def test_convert_manifest_with_ai_calls_ai_for_unsupported(
 
 def test_convert_manifest_with_ai_file_not_found() -> None:
     """Test error handling for missing manifest file."""
-    result = convert_puppet_manifest_to_ansible_with_ai(
-        "/nonexistent/path/missing.pp"
-    )
+    result = convert_puppet_manifest_to_ansible_with_ai("/nonexistent/path/missing.pp")
     assert "Error" in result or "not found" in result.lower()
 
 
@@ -1248,18 +1242,13 @@ def test_convert_module_with_ai_calls_ai_for_unsupported(tmp_path: Path) -> None
         encoding="utf-8",
     )
     ai_playbook = (
-        "- name: Converted from Puppet\n"
-        "  hosts: all\n"
-        "  become: true\n"
-        "  tasks: []\n"
+        "- name: Converted from Puppet\n  hosts: all\n  become: true\n  tasks: []\n"
     )
     with patch(
         "souschef.converters.puppet_to_ansible._convert_manifest_with_ai",
         return_value=ai_playbook,
     ) as mock_ai:
-        result = convert_puppet_module_to_ansible_with_ai(
-            str(tmp_path), api_key="key"
-        )
+        result = convert_puppet_module_to_ansible_with_ai(str(tmp_path), api_key="key")
         mock_ai.assert_called_once()
     assert "Converted from Puppet" in result
 
@@ -1304,12 +1293,15 @@ def test_convert_manifest_with_ai_returns_playbook() -> None:
     """Test that _convert_manifest_with_ai returns cleaned playbook."""
     mock_client = MagicMock()
 
-    with patch(
-        "souschef.converters.playbook._initialize_ai_client",
-        return_value=mock_client,
-    ), patch(
-        "souschef.converters.playbook._call_ai_api",
-        return_value="- name: play\n  hosts: all\n  tasks: []\n",
+    with (
+        patch(
+            "souschef.converters.playbook._initialize_ai_client",
+            return_value=mock_client,
+        ),
+        patch(
+            "souschef.converters.playbook._call_ai_api",
+            return_value="- name: play\n  hosts: all\n  tasks: []\n",
+        ),
     ):
         result = _convert_manifest_with_ai(
             raw_content="$x = hiera('key')",

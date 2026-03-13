@@ -3063,5 +3063,160 @@ def powershell_fidelity(path: str, output_format: str) -> None:
     _output_result(result, output_format)
 
 
+# ==================== Puppet Migration Commands ====================
+
+
+@cli.group(name="puppet")
+def _puppet_group() -> None:
+    """Puppet manifest and module migration commands."""
+
+
+puppet: click.Group = _puppet_group
+
+
+@puppet.command("parse")
+@click.argument("manifest_path")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output file path (default: stdout).",
+)
+def puppet_parse(manifest_path: str, output: str | None) -> None:
+    """
+    Parse a Puppet manifest file and display discovered resources.
+
+    MANIFEST_PATH is the path to the Puppet manifest (.pp) file.
+    """
+    from souschef.server import parse_puppet_manifest as _parse_puppet_manifest
+
+    try:
+        result = _parse_puppet_manifest(manifest_path)
+        if output is not None:
+            default = Path.cwd() / "puppet_analysis.txt"
+            _safe_write_file(result, output, default_path=default)
+        else:
+            click.echo(result)
+    except (OSError, ValueError) as e:
+        click.echo(f"Error parsing Puppet manifest: {e}", err=True)
+        sys.exit(1)
+
+
+@puppet.command("parse-module")
+@click.argument("module_path")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output file path (default: stdout).",
+)
+def puppet_parse_module(module_path: str, output: str | None) -> None:
+    """
+    Parse a Puppet module directory and analyse all manifests.
+
+    MODULE_PATH is the path to the Puppet module root directory.
+    """
+    from souschef.server import parse_puppet_module as _parse_puppet_module
+
+    try:
+        result = _parse_puppet_module(module_path)
+        if output is not None:
+            default = Path.cwd() / "puppet_module_analysis.txt"
+            _safe_write_file(result, output, default_path=default)
+        else:
+            click.echo(result)
+    except (OSError, ValueError) as e:
+        click.echo(f"Error parsing Puppet module: {e}", err=True)
+        sys.exit(1)
+
+
+@puppet.command("convert")
+@click.argument("manifest_path")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output file path for the generated playbook YAML (default: stdout).",
+)
+def puppet_convert(manifest_path: str, output: str | None) -> None:
+    """
+    Convert a Puppet manifest to an Ansible playbook.
+
+    MANIFEST_PATH is the path to the Puppet manifest (.pp) file.
+    """
+    from souschef.server import (
+        convert_puppet_manifest_to_ansible as _convert_puppet_manifest,
+    )
+
+    try:
+        result = _convert_puppet_manifest(manifest_path)
+        if output is not None:
+            default = Path.cwd() / "puppet_playbook.yml"
+            _safe_write_file(result, output, default_path=default)
+        else:
+            click.echo(result)
+    except (OSError, ValueError) as e:
+        click.echo(f"Error converting Puppet manifest: {e}", err=True)
+        sys.exit(1)
+
+
+@puppet.command("convert-module")
+@click.argument("module_path")
+@click.option(
+    "--output",
+    "-o",
+    default=None,
+    help="Output file path for the generated playbook YAML (default: stdout).",
+)
+@click.option(
+    "--output-dir",
+    default=None,
+    help="Directory to write per-manifest playbook files to.",
+)
+def puppet_convert_module(
+    module_path: str,
+    output: str | None,
+    output_dir: str | None,
+) -> None:
+    """
+    Convert a Puppet module directory to an Ansible playbook.
+
+    MODULE_PATH is the path to the Puppet module root directory.
+    """
+    from souschef.server import (
+        convert_puppet_module_to_ansible as _convert_puppet_module,
+    )
+
+    try:
+        result = _convert_puppet_module(module_path)
+        if output_dir is not None:
+            base = Path(output_dir)
+            base.mkdir(parents=True, exist_ok=True)
+            out_path = base / "playbook.yml"
+            out_path.write_text(result)
+            click.echo(f"Playbook written to {out_path}")
+        elif output is not None:
+            default = Path.cwd() / "puppet_module_playbook.yml"
+            _safe_write_file(result, output, default_path=default)
+        else:
+            click.echo(result)
+    except (OSError, ValueError) as e:
+        click.echo(f"Error converting Puppet module: {e}", err=True)
+        sys.exit(1)
+
+
+@puppet.command("list-types")
+def puppet_list_types() -> None:
+    """List all Puppet resource types that SousChef can convert automatically."""
+    from souschef.server import (
+        list_puppet_supported_resource_types as _list_puppet_types,
+    )
+
+    click.echo(_list_puppet_types())
+
+
+# ==================== End Puppet Migration Commands ====================
+
+
 if __name__ == "__main__":
     main()

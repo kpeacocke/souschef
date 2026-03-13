@@ -249,9 +249,7 @@ def test_mcp_convert_puppet_manifest_with_ai_calls_ai(tmp_path: Path) -> None:
         "souschef.converters.puppet_to_ansible._convert_manifest_with_ai",
         return_value=ai_playbook,
     ) as mock_ai:
-        result = convert_puppet_manifest_to_ansible_with_ai(
-            str(m), api_key="test-key"
-        )
+        result = convert_puppet_manifest_to_ansible_with_ai(str(m), api_key="test-key")
         mock_ai.assert_called_once()
     assert "Converted from Puppet" in result
 
@@ -283,18 +281,13 @@ def test_mcp_convert_puppet_module_with_ai_calls_ai(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     ai_playbook = (
-        "- name: Converted from Puppet\n"
-        "  hosts: all\n"
-        "  become: true\n"
-        "  tasks: []\n"
+        "- name: Converted from Puppet\n  hosts: all\n  become: true\n  tasks: []\n"
     )
     with patch(
         "souschef.converters.puppet_to_ansible._convert_manifest_with_ai",
         return_value=ai_playbook,
     ) as mock_ai:
-        result = convert_puppet_module_to_ansible_with_ai(
-            str(tmp_path), api_key="key"
-        )
+        result = convert_puppet_module_to_ansible_with_ai(str(tmp_path), api_key="key")
         mock_ai.assert_called_once()
     assert "Converted from Puppet" in result
 

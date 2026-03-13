@@ -1226,7 +1226,7 @@ souschef puppet convert MANIFEST_PATH [OPTIONS]
 | `cron` | `ansible.builtin.cron` |
 | `host` | `ansible.builtin.lineinfile` |
 | `mount` | `ansible.posix.mount` |
-| `ssh_authorized_key` | `ansible.builtin.authorized_key` |
+| `ssh_authorized_key` | `ansible.posix.authorized_key` |
 
 **Examples:**
 
@@ -1307,7 +1307,7 @@ exec     → ansible.builtin.command
 cron     → ansible.builtin.cron
 host     → ansible.builtin.lineinfile
 mount    → ansible.posix.mount
-ssh_authorized_key → ansible.builtin.authorized_key
+ssh_authorized_key → ansible.posix.authorized_key
 ```
 
 ---

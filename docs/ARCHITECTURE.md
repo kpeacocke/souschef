@@ -175,7 +175,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - `habitat.py` - Habitat plan parser
 - `inspec.py` - InSpec profile parser
 - `ansible_inventory.py` - Ansible inventory parser
-- ✅ `puppet.py` - Puppet manifest parser (15 resource types, unsupported construct detection)
+- ✅ `puppet.py` - Puppet manifest parser (14 recognised resource types, 10 mapped to Ansible modules, unsupported construct detection)
 - 🔄 `salt.py` - Salt state parser (planned)
 - ✅ `bash.py` - Bash script parser (13 operation categories, confidence scoring, sensitive data detection)
 - ✅ `powershell.py` - PowerShell script parser
@@ -195,7 +195,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - `habitat.py` - Habitat → Docker
 - `template.py` - ERB → Jinja2
 - `conversion_rules.py` - Transformation rules engine
-- ✅ `puppet_to_ansible.py` - Puppet → Ansible (15 resource types + AI-assisted conversion)
+- ✅ `puppet_to_ansible.py` - Puppet → Ansible (10 resource types fully mapped + AI-assisted conversion for complex constructs)
 - 🔄 `salt_to_ansible.py` - Salt → Ansible (planned)
 - ✅ `powershell.py` - PowerShell → Ansible (exists)
 - ✅ `bash_to_ansible.py` - Bash → Ansible (exists)
@@ -472,7 +472,7 @@ NEW FEATURE/CODE
 ### Examples
 
 **Puppet Support (Implemented):**
-1. ✅ `parsers/puppet.py` - Parse Puppet manifests → structured data (15 resource types)
+1. ✅ `parsers/puppet.py` - Parse Puppet manifests → structured data (14 recognised resource types, 10 fully mapped to Ansible)
 2. ✅ `converters/puppet_to_ansible.py` - Puppet → Ansible via `ansible.builtin` modules
 3. ✅ `ui/pages/puppet_migration.py` - Streamlit UI page for manifest/module conversion
 4. ✅ 8 MCP tools in `server.py` — parse, convert, list types, AI-assisted conversion

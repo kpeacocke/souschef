@@ -16,7 +16,9 @@ Each stage is supported by dedicated MCP tools, CLI commands, and a web UI page,
 
 ### What Gets Converted
 
-SousChef recognises **15 Puppet resource types** and maps them to idiomatic Ansible modules:
+SousChef recognises **14 Puppet resource types**. Ten are fully mapped to idiomatic Ansible modules; four (`augeas`, `filebucket`, `notify`, `tidy`) are recognised and produce `ansible.builtin.debug` placeholder tasks with manual-review guidance.
+
+**Fully mapped resource types:**
 
 | Puppet Resource | Ansible Module | Notes |
 |-----------------|----------------|-------|
@@ -31,10 +33,9 @@ SousChef recognises **15 Puppet resource types** and maps them to idiomatic Ansi
 | `cron` | `ansible.builtin.cron` | Schedule, command, user |
 | `host` | `ansible.builtin.lineinfile` | `/etc/hosts` entry (with warning) |
 | `mount` | `ansible.posix.mount` | Device, path, fstype, options |
-| `ssh_authorized_key` | `ansible.builtin.authorized_key` | Key, user, state |
-| `notify` | `ansible.builtin.debug` | Informational task |
-| `augeas` | `ansible.builtin.debug` (placeholder) | Manual review required |
-| Unsupported | `ansible.builtin.debug` (placeholder) | Manual review required |
+| `ssh_authorized_key` | `ansible.posix.authorized_key` | Key, user, state |
+
+**Recognised but not auto-converted:** `augeas`, `filebucket`, `notify`, `tidy` — each produces an `ansible.builtin.debug` placeholder task with a guidance message.
 
 Unsupported constructs are never silently discarded — each one becomes a `debug` placeholder task with a `msg` field explaining what manual work is needed.
 
