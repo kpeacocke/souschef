@@ -45,6 +45,7 @@ from souschef.converters.powershell import (
     convert_powershell_to_ansible,
 )
 from souschef.converters.resource import convert_resource_to_task
+from souschef.converters.salt import convert_salt_sls_to_ansible
 
 __all__ = [
     "convert_bash_to_ansible",
@@ -78,4 +79,5 @@ __all__ = [
     "create_service_rule",
     "create_custom_rule",
     "build_default_rule_engine",
+    "convert_salt_sls_to_ansible",
 ]

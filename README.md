@@ -1,8 +1,8 @@
-# SousChef: Chef-to-Ansible Migration & Ansible Upgrade Planning
+# SousChef: Multi-Platform to Ansible Migration + Ansible Upgrade Planning
 
-Transform Chef automation to Ansible and plan Ansible version upgrades. Works with any AI assistant via MCP (Model Context Protocol)—Claude, GPT-4, GitHub Copilot, Red Hat AI, local models, and more.
+Transform Chef, SaltStack, Puppet, PowerShell, and Bash automation to Ansible, and plan Ansible version upgrades. Works with any AI assistant via MCP (Model Context Protocol)—Claude, GPT-4, GitHub Copilot, Red Hat AI, local models, and more.
 
-**Quick Facts:** MIT License | Python 3.10+ | 83 MCP Tools | 91% Test Coverage
+**Quick Facts:** MIT License | Python 3.10+ | 95 MCP Tools | 91% Test Coverage
 
 [![GitHub release](https://img.shields.io/github/release/kpeacocke/souschef)](https://github.com/kpeacocke/souschef/releases)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
@@ -27,6 +27,8 @@ A fair bit of this relies on mocked Chef/AWX/AAP APIs because *shockingly* I don
 ## What It Does
 
 **Chef-to-Ansible Migration** — Convert cookbooks, recipes, custom resources, data bags, and Habitat plans to Ansible playbooks, roles, and containers. Supports infrastructure, applications, and day-2 operations.
+
+**SaltStack-to-Ansible Migration** — Convert Salt states, pillars, and top.sls targeting to Ansible roles, variable files, Ansible Vault, and INI inventory. Assess complexity, generate phased migration plans, and produce executive reports.
 
 **Puppet to Ansible Migration** — Convert Puppet manifests and module directories to Ansible playbooks using idiomatic `ansible.builtin` modules. Recognises 14 Puppet resource types; maps 10 to Ansible modules with AI-assisted conversion for complex constructs.
 
@@ -53,8 +55,8 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 
 ## Key Features
 
-- **83 MCP tools** for Chef migration, Puppet migration, PowerShell migration, Bash script migration, and Ansible upgrades
-- **Web UI** with interactive migration planner and visualisation
+- **95 MCP tools** for Chef migration, SaltStack migration, Puppet migration, PowerShell migration, Bash script migration, and Ansible upgrades
+- **Web UI** with interactive migration planner and visualisation (including Salt, Puppet, PowerShell, and Bash tabs)
 - **CLI** for automation and CI/CD integration
 - **Production-ready** with 91% test coverage and comprehensive validation
 - **Model-agnostic** — works with any AI assistant supporting MCP
@@ -69,6 +71,14 @@ cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_deskt
 - Generate AWX/AAP job templates and workflows
 - Convert InSpec tests to Ansible validation tasks
 - Fetch cookbooks from Chef Server with run_list or policy selection
+
+**SaltStack Migration:**
+- Parse SLS state files and extract states, pillars, and grain references
+- Convert Salt states to Ansible playbooks and role task files
+- Migrate pillar data to Ansible `group_vars/` and Ansible Vault
+- Generate Ansible inventory from `top.sls` targeting rules
+- Batch-convert a full Salt state tree to an Ansible roles structure
+- Assess migration complexity and generate phased migration plans
 
 **Puppet Migration:**
 - Convert Puppet manifests (`.pp`) and module directories to Ansible playbooks
@@ -115,6 +125,12 @@ souschef-cli recipe /path/to/recipe.rb
 souschef-cli template /path/to/template.erb
 souschef-cli convert package nginx --action install
 
+# SaltStack migration
+souschef-cli salt assess /srv/salt/states/
+souschef-cli salt convert /srv/salt/states/webserver/init.sls
+souschef-cli salt inventory /srv/salt/top.sls
+souschef-cli salt batch-convert /srv/salt/states/ --output-dir ./ansible-roles/
+
 # PowerShell migration
 souschef-cli powershell-parse scripts/setup.ps1
 souschef-cli powershell-convert scripts/setup.ps1 --output playbook.yml
@@ -145,8 +161,9 @@ souschef ui  # Launch interactive dashboard
 
 - **[Quick Start Guide](docs/getting-started/quick-start.md)** — Get running in 5 minutes
 - **[Production Safety](docs/migration-guide/safety-and-validation.md)** — Validate migrations before deploying ⚠️
-- **[User Guide](docs/user-guide/mcp-tools.md)** — All 83 tools explained with examples
-- **[Migration Guide](docs/migration-guide/overview.md)** — Step-by-step migration process
+- **[User Guide](docs/user-guide/mcp-tools.md)** — All 95 tools explained with examples
+- **[Chef Migration Guide](docs/migration-guide/overview.md)** — Step-by-step Chef-to-Ansible migration process
+- **[Salt Migration Guide](docs/migration-guide/salt-migration.md)** — Step-by-step SaltStack-to-Ansible migration process
 - **[Puppet Migration Guide](docs/migration-guide/puppet-migration.md)** — Puppet to Ansible conversion
 - **[PowerShell Migration Guide](docs/migration-guide/powershell-migration.md)** — PowerShell to Windows Ansible conversion
 - **[Ansible Upgrades](docs/user-guide/ansible-upgrades.md)** — Version upgrade planning workflows

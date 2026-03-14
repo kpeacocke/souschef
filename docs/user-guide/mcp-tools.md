@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-SousChef provides **83 specialised MCP tools** for comprehensive Chef-to-Ansible migration, Puppet-to-Ansible conversion, PowerShell-to-Ansible Windows automation, Bash script migration, and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
+SousChef provides **95 specialised MCP tools** for comprehensive Chef-to-Ansible migration, SaltStack-to-Ansible migration, Puppet-to-Ansible conversion, PowerShell-to-Ansible Windows automation, Bash script migration, and Ansible upgrade planning. Each tool is designed to work seamlessly with any AI model through the Model Context Protocol.
 
 !!! tip "Working with MCP Tools"
     These tools are invoked through your AI assistant (Claude, GPT-4, Red Hat AI, local models, etc.). Simply describe what you need in natural language, and your AI assistant will use the appropriate tools.
@@ -8,7 +8,7 @@ SousChef provides **83 specialised MCP tools** for comprehensive Chef-to-Ansible
 !!! info "About the Tool Count"
     **Complete tool inventory available in source code**
 
-    This guide documents the **83 primary user-facing tools** (Chef migration, Puppet migration, PowerShell migration, Bash migration, and Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
+    This guide documents the primary user-facing tools (Chef migration, SaltStack migration, Puppet migration, PowerShell migration, Bash migration, and Ansible upgrades) that cover the main capabilities. The MCP server includes additional internal helper tools that your AI assistant uses automatically behind the scenes.
 
     As a user, you'll primarily interact with these documented tools. Your AI assistant may use additional tools automatically when needed (e.g., low-level file operations), but you don't need to invoke them directly.
 
@@ -30,6 +30,7 @@ SousChef provides **83 specialised MCP tools** for comprehensive Chef-to-Ansible
 | [AWX/AAP Integration](#awx-aap-integration) | 3 tools | Generate AWX job templates, workflows, and inventory |
 | [Chef Server Integration](#chef-server-integration) | 3 tools | Validate Chef Server connections and query dynamic inventory |
 | [Ansible Upgrade Planning](#ansible-upgrade-planning) | 5 tools | Assess Ansible environments and plan version upgrades |
+| [SaltStack Migration](#saltstack-migration) | 12 tools | Parse, convert, assess, and plan SaltStack-to-Ansible migrations |
 | [PowerShell Migration](#powershell-migration) | 7 tools | Convert PowerShell scripts to Windows Ansible automation |
 | [Bash Script Migration](#bash-script-migration) | 3 tools | Convert Bash provisioning scripts to Ansible playbooks and roles |
 | [Puppet Migration](#puppet-migration) | 8 tools | Convert Puppet manifests and modules to Ansible playbooks |
@@ -2394,3 +2395,469 @@ All tools provide detailed error messages with suggestions:
 - **[Examples](examples.md)** - Real-world usage examples
 - **[Migration Guide](../migration-guide/overview.md)** - Step-by-step migration process
 - **[Configuration](../getting-started/configuration.md)** - Configure SousChef for your environment
+
+---
+
+## SaltStack Migration
+
+Complete enterprise-grade SaltStack-to-Ansible migration tools covering parsing, conversion, assessment, planning, and reporting. For the full migration methodology and concept mapping, see the [Salt Migration Guide](../migration-guide/salt-migration.md).
+
+### parse_salt_sls
+
+Parse a SaltStack SLS state file and extract all states, pillar references, and grain usage.
+
+**What it does**: Reads a Salt SLS state file and extracts every state declaration, including the state module, state function, parameters, and requisites. Also identifies all pillar references (`pillar.get`, `{{ pillar['...'] }}`) and grain references used within the file.
+
+**Why you need this**: SLS files are the primary unit of Salt configuration. Before converting them to Ansible, you need to understand their contents—what state modules are used, how requisites chain states together, and which pillar values need to be migrated to Ansible variables. This tool provides that structured analysis.
+
+**What you get**:
+- Complete list of all states and their parameters
+- State module and function for each declaration (e.g., `pkg.installed`, `service.running`)
+- All requisites (`require`, `watch`, `onchanges`, `onfail`)
+- Pillar references and their default values
+- Grain references used for conditional logic
+
+**Parameters:**
+- `sls_path` (string, required): Path to the SLS state file
+
+**Returns:**
+- JSON string with extracted states, pillar references, grain references, and requisite graph
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Parse the Salt state file at /srv/salt/states/webserver/init.sls
+    and show me all states, their modules, and any pillar references
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt parse-sls /srv/salt/states/webserver/init.sls
+    ```
+
+---
+
+### parse_salt_pillar
+
+Parse a Salt pillar file and extract all variable definitions.
+
+**What it does**: Reads a Salt pillar SLS file and extracts the complete variable tree it defines. Identifies nested structures, default values, and whether values appear to be sensitive (passwords, keys, tokens) so they can be targeted for Ansible Vault during conversion.
+
+**Why you need this**: Salt pillars are the primary mechanism for storing configuration data, including secrets. Before converting states, you need a complete inventory of all pillar variables so you can map them to the correct Ansible variable files (`group_vars/`, `host_vars/`) or Ansible Vault.
+
+**What you get**:
+- Complete variable tree from the pillar file
+- Identification of potentially sensitive values
+- Nested key paths for each variable (e.g., `database:host`, `database:password`)
+- Suggested Ansible variable names (flattened from Salt nested structure)
+
+**Parameters:**
+- `pillar_path` (string, required): Path to the pillar SLS file
+
+**Returns:**
+- JSON string with extracted variable tree, sensitivity classification, and suggested Ansible variable names
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Parse the pillar file at /srv/pillar/database.sls and identify
+    which values should be stored in Ansible Vault
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt parse-pillar /srv/pillar/database.sls
+    ```
+
+---
+
+### parse_salt_top
+
+Parse the Salt `top.sls` file and extract all environment, target, and state mappings.
+
+**What it does**: Reads the Salt `top.sls` file (the master targeting file that maps minions to states) and extracts the full targeting tree. Understands glob, grain, compound, and nodegroup matchers. Produces a structured map of which hosts receive which states in which environments.
+
+**Why you need this**: `top.sls` is the starting point for understanding your entire Salt infrastructure. Its targeting rules become your Ansible inventory groups. Without understanding it, you cannot correctly map minions to Ansible host groups or ensure every host receives the right playbooks.
+
+**What you get**:
+- All environment blocks (`base`, `production`, `staging`, etc.)
+- Targeting expressions per environment (glob, grain, compound)
+- States assigned to each target
+- Matcher type for each target (glob, grain, compound, nodegroup, pcre)
+- Suggested Ansible inventory group names
+
+**Parameters:**
+- `top_path` (string, required): Path to the `top.sls` file
+
+**Returns:**
+- JSON string with environment → target → state mappings, matcher types, and suggested inventory groups
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Parse /srv/salt/top.sls and show me all environments,
+    targeting rules, and which states each group of minions receives
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt parse-top /srv/salt/top.sls
+    ```
+
+---
+
+### parse_salt_directory
+
+Scan a full Salt state tree directory and produce a structural inventory.
+
+**What it does**: Recursively scans a Salt state directory and catalogues every SLS file found, grouping them by logical role (based on directory structure). Identifies `init.sls` files, detects included states, and builds a dependency summary across the tree.
+
+**Why you need this**: Before assessing or converting a large Salt installation, you need to know what you are working with. This tool gives you an instant overview of the entire state tree—how many states exist, how they are organised, and which states include or require others.
+
+**What you get**:
+- Complete list of all SLS files in the tree
+- Logical grouping by directory (each directory typically maps to a role)
+- Counts of states per directory
+- Cross-directory include relationships
+- Summary statistics (total files, total states, unique state modules used)
+
+**Parameters:**
+- `salt_dir` (string, required): Path to the Salt states directory
+
+**Returns:**
+- JSON string with directory structure, file inventory, include relationships, and summary statistics
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Scan the Salt state directory at /srv/salt/states/ and give me
+    an overview of the structure and complexity
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt scan /srv/salt/states/
+    ```
+
+---
+
+### convert_salt_to_ansible
+
+Convert a single Salt SLS state file to an Ansible playbook YAML file.
+
+**What it does**: Transforms a Salt SLS file into an Ansible playbook. Converts each state declaration to the equivalent Ansible task using the correct Ansible module. Maps Salt requisites (`require`, `watch`, `onchanges`, `onfail`) to Ansible task ordering and `notify`/handler patterns. Replaces pillar references with Ansible variable syntax.
+
+**Why you need this**: Manual SLS-to-playbook conversion is labour-intensive and error-prone. This tool automates the mechanical translation, handling the 18 supported Salt state modules and common Jinja2 patterns. You then review and refine the output rather than writing from scratch.
+
+**What you get**:
+- Complete Ansible playbook YAML ready for review and use
+- One Ansible task per Salt state declaration
+- Handlers generated from `watch` requisites
+- Pillar references converted to `{{ variable_name }}` syntax
+- Comments noting any patterns that required manual attention
+
+**Parameters:**
+- `sls_path` (string, required): Path to the SLS file to convert
+
+**Returns:**
+- YAML string containing the converted Ansible playbook
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert /srv/salt/states/webserver/init.sls to an Ansible playbook
+    and show me the generated YAML
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt convert /srv/salt/states/webserver/init.sls
+    ```
+
+---
+
+### query_salt_master
+
+Query a live Salt Master REST API (CherryPy netapi) for minion data and state information.
+
+**What it does**: Connects to a running Salt Master's CherryPy REST API and retrieves live data about minions, grains, and available states. Useful for building an accurate inventory before migration or verifying minion targeting before running converted playbooks.
+
+**Why you need this**: Static analysis of `top.sls` and pillar files may not reflect the actual state of your Salt infrastructure. Minion lists may differ from targeting rules, grains may have changed, and some minions may be inactive. Querying the live Salt Master gives you ground truth for inventory generation.
+
+**What you get**:
+- List of all accepted minions
+- Grain data for targeted minions
+- Minion connectivity status
+- Applied highstate status (last run result)
+
+**Parameters:**
+- `master_url` (string, required): URL of the Salt Master REST API (e.g., `https://salt-master.example.com:8000`)
+- `username` (string, required): Salt API authentication username
+- `password` (string, required): Salt API authentication password
+- `target` (string, optional, default: `*`): Salt targeting expression for minion selection
+
+**Returns:**
+- JSON string with minion list, grain data, and connectivity status
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Query the Salt Master at https://salt.internal.example.com:8000
+    and get a list of all minions with their os grain values
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt query-master \
+      --url https://salt.internal.example.com:8000 \
+      --username saltapi \
+      --password secret \
+      --target '*'
+    ```
+
+---
+
+### assess_salt_migration_complexity
+
+Assess the migration complexity and estimate effort for a Salt state directory.
+
+**What it does**: Analyses a Salt state directory and produces a complexity score and effort estimate for migrating it to Ansible. Evaluates factors including state count, pillar usage depth, requisite complexity, custom module usage, grain targeting intricacy, and use of advanced Salt features (reactors, beacons, mine).
+
+**Why you need this**: Before committing to a Salt migration, you need to understand its scope. This tool provides objective complexity scoring that you can use to justify timeline and resource estimates to stakeholders, and to prioritise which state directories to migrate first.
+
+**What you get**:
+- Overall complexity score (Low / Medium / High / Very High)
+- Per-directory complexity breakdown
+- Estimated effort in person-days
+- List of high-complexity states requiring manual attention
+- Recommended migration order (simplest first)
+- Key risk factors identified
+
+**Parameters:**
+- `salt_dir` (string, required): Path to the Salt states directory to assess
+
+**Returns:**
+- JSON string with complexity scores, effort estimates, risk factors, and recommended migration order
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Assess the migration complexity of /srv/salt/states/ and
+    give me an effort estimate and recommended migration order
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt assess /srv/salt/states/
+    ```
+
+---
+
+### plan_salt_migration
+
+Generate a phased migration plan with timeline for a Salt-to-Ansible migration.
+
+**What it does**: Produces a detailed, phased migration plan tailored to your target platform and available timeline. Breaks the migration into structured phases (Discovery, Assessment, Conversion, Validation, Deployment), assigns states to phases based on complexity, and generates a week-by-week schedule.
+
+**Why you need this**: A successful migration needs a plan. This tool generates a professional migration plan you can present to stakeholders and use to track progress. It accounts for dependencies between states, allocates time for validation, and adjusts the schedule to fit your target timeline.
+
+**What you get**:
+- Phased migration plan with objectives and activities per phase
+- Week-by-week schedule based on your timeline
+- States grouped by phase (simplest first)
+- Target platform-specific guidance (AAP, AWX, or Ansible Core)
+- Resource requirements per phase
+- Risk mitigation recommendations
+
+**Parameters:**
+- `salt_dir` (string, required): Path to the Salt states directory
+- `timeline_weeks` (integer, required): Total available migration timeline in weeks
+- `target_platform` (string, required): Target platform — `aap`, `awx`, or `ansible_core`
+
+**Returns:**
+- Markdown-formatted migration plan with phased schedule and platform-specific guidance
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a 12-week migration plan for /srv/salt/states/
+    targeting Ansible Automation Platform (AAP)
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt plan /srv/salt/states/ \
+      --timeline-weeks 12 \
+      --target-platform aap
+    ```
+
+---
+
+### generate_salt_migration_report
+
+Generate an executive migration report for a Salt-to-Ansible migration.
+
+**What it does**: Produces a comprehensive migration report covering the full state tree. Includes an executive summary, complexity analysis, effort estimates, risk assessment, and recommended approach. Suitable for presentation to technical leads, project managers, or business stakeholders.
+
+**Why you need this**: Enterprise migrations require documentation for governance, budget approval, and project tracking. This tool generates a professional report in your chosen format that communicates migration scope, risks, and plan without requiring manual document authoring.
+
+**What you get**:
+- Executive summary with headline metrics
+- Full complexity analysis per state directory
+- Total effort estimate with confidence range
+- Risk register with mitigations
+- Recommended migration approach and phasing
+- Technology recommendations (AAP/AWX vs Ansible Core)
+
+**Parameters:**
+- `salt_dir` (string, required): Path to the Salt states directory
+- `report_format` (string, required): Output format — `markdown` or `json`
+
+**Returns:**
+- Migration report in the requested format
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Generate a Markdown migration report for our Salt installation
+    at /srv/salt/states/ for presentation to the infrastructure team
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt report /srv/salt/states/ --format markdown
+    ```
+
+---
+
+### generate_salt_inventory
+
+Convert a `top.sls` file to an Ansible INI inventory file.
+
+**What it does**: Reads a Salt `top.sls` file and converts its targeting rules into an Ansible INI inventory. Maps each targeting block to an Ansible host group, preserving environment separation. Handles glob, grain, compound, and nodegroup matchers by generating appropriately named groups.
+
+**Why you need this**: Your Ansible inventory must replicate the targeting logic of your Salt `top.sls` so that each host receives the same configuration after migration. Manual inventory creation from complex top.sls files is tedious and error-prone. This tool automates the translation.
+
+**What you get**:
+- Ansible INI inventory with host groups corresponding to Salt targeting
+- Environment separation (Salt environments → inventory directories or group naming)
+- Host group hierarchy for compound matchers
+- Comments explaining the targeting logic from the original top.sls
+
+**Parameters:**
+- `top_path` (string, required): Path to the Salt `top.sls` file
+
+**Returns:**
+- INI-formatted Ansible inventory string
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert /srv/salt/top.sls to an Ansible inventory file
+    that replicates the Salt targeting logic
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt inventory /srv/salt/top.sls
+    ```
+
+---
+
+### convert_salt_pillar_to_vars
+
+Convert a Salt pillar file to Ansible variable files, with optional Vault encryption for sensitive values.
+
+**What it does**: Reads a Salt pillar file and converts its contents to Ansible variable YAML. When `output_format` is `vault`, produces two files: one with non-sensitive variables for `group_vars/` and one formatted for Ansible Vault encryption containing sensitive values (identified by key name heuristics such as `password`, `secret`, `key`, `token`).
+
+**Why you need this**: Pillars are Salt's equivalent of Ansible `vars/` and Ansible Vault combined. To complete a migration, every pillar value must be mapped to an Ansible variable. Doing this manually for large pillar trees is time-consuming and risks missing sensitive values that should be encrypted.
+
+**What you get**:
+- Plain variable YAML for non-sensitive pillar values
+- Separate vault YAML for sensitive values (when `output_format: vault`)
+- Ansible variable names derived from Salt pillar key paths
+- Comments mapping original pillar keys to new Ansible variable names
+
+**Parameters:**
+- `pillar_path` (string, required): Path to the pillar SLS file
+- `output_format` (string, required): Output format — `yaml` (all variables in one file) or `vault` (split into plain and vault files)
+
+**Returns:**
+- YAML string(s) with converted variable definitions
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert the pillar at /srv/pillar/database.sls to Ansible variables,
+    separating sensitive values into a Vault file
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt pillar-to-vars /srv/pillar/database.sls --format vault
+    ```
+
+---
+
+### convert_salt_directory_to_ansible
+
+Batch convert an entire Salt state directory to a full Ansible roles structure.
+
+**What it does**: Converts a complete Salt state directory tree to an Ansible roles directory structure in a single operation. Each Salt state directory becomes an Ansible role with the standard layout (`tasks/main.yml`, `handlers/main.yml`, `templates/`, `vars/main.yml`, `defaults/main.yml`). Generates a `site.yml` playbook that orchestrates all roles.
+
+**Why you need this**: Manually converting each SLS file and assembling a roles structure takes days or weeks for large Salt installations. This tool automates the entire conversion, giving you a starting point that is structurally correct and covers all states. You then refine the output rather than authoring from scratch.
+
+**What you get**:
+- Full Ansible roles directory structure (one role per Salt state directory)
+- `tasks/main.yml` with converted tasks for each role
+- `handlers/main.yml` with handlers generated from `watch` requisites
+- `defaults/main.yml` with default variable values from pillar references
+- `site.yml` orchestrating all roles
+- Summary of any states that required manual attention
+
+**Parameters:**
+- `salt_dir` (string, required): Path to the Salt states directory to convert
+- `output_dir` (string, required): Path to the output directory for the Ansible roles structure
+
+**Returns:**
+- JSON string with conversion summary, file list, and list of items requiring manual review
+
+**Example Usage:**
+
+=== "MCP (AI Assistant)"
+    ```
+    Convert the entire Salt state tree at /srv/salt/states/
+    to an Ansible roles structure in ./ansible-roles/
+    ```
+
+=== "CLI"
+    ```bash
+    souschef-cli salt batch-convert /srv/salt/states/ \
+      --output-dir ./ansible-roles/
+    ```
+
+---
+
+## Tool Selection
+
+- **Start with assessment**: Use `assess_salt_migration_complexity` to understand your current state
+- **Understand targeting**: Use `parse_salt_top` to map minion targeting before generating inventory
+- **Migrate pillars first**: Use `convert_salt_pillar_to_vars` before converting states
+- **Generate inventory**: Use `generate_salt_inventory` to produce your Ansible inventory from top.sls
+- **Single file conversion**: Use `convert_salt_to_ansible` for targeted SLS conversions
+- **Batch conversion**: Use `convert_salt_directory_to_ansible` for full tree migrations
+- **Plan your timeline**: Use `plan_salt_migration` with your target platform and available weeks
+- **Report to stakeholders**: Use `generate_salt_migration_report` for executive documentation
+
+For the full Salt migration methodology, see the [Salt Migration Guide](../migration-guide/salt-migration.md).

@@ -5,36 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-03-13
+## [Unreleased]
 
 ### Added
 
-* **Puppet Migration:** Full Puppet-to-Ansible migration pipeline
+* **SaltStack Migration:** Enterprise-grade SaltStack to AAP/Ansible migration (12 MCP tools)
+  - 12 MCP tools covering parse, convert, assess, plan, report, inventory, and batch roles conversion
+  - SLS state file parsing for 18 Salt modules with pillar and grain extraction
+  - Pillar-to-Ansible-Vault conversion for secure variable migration
+  - `top.sls` to Ansible INI inventory conversion
+  - Batch directory-to-roles conversion producing full Ansible role structure
+  - Interactive Salt Migration UI (8 tabs: Parse SLS, Convert to Ansible, Pillar Files, Directory Scan, Assessment, Migration Plan, Batch Convert, Inventory)
+  - Live Salt Master REST API integration (CherryPy netapi)
+  - Comprehensive Salt migration guide at `docs/migration-guide/salt-migration.md`
+
+* **Puppet Migration:** Full Puppet-to-Ansible migration pipeline (8 MCP tools)
   - `parsers/puppet.py` — parse Puppet manifests (`.pp`) and module directories; recognises 15 resource types and flags unsupported constructs (Hiera lookups, exported/virtual resources, `create_resources`) with source line numbers
   - `converters/puppet_to_ansible.py` — convert parsed resources to idiomatic `ansible.builtin` tasks; AI-assisted fallback for unsupported constructs via `*_with_ai` functions
-  - `ui/pages/puppet_migration.py` — Streamlit page accessible under **Chef → Puppet Migration** with manifest/module input, parse, convert, AI-assisted convert, and playbook download
-  - 8 MCP tools: `parse_puppet_manifest`, `parse_puppet_module`, `convert_puppet_manifest_to_ansible`, `convert_puppet_module_to_ansible`, `convert_puppet_resource_to_task`, `list_puppet_supported_resource_types`, `convert_puppet_manifest_to_ansible_with_ai`, `convert_puppet_module_to_ansible_with_ai`
+  - `ui/pages/puppet_migration.py` — Streamlit page with manifest/module input, parse, convert, AI-assisted convert, and playbook download
+  - MCP tools: `parse_puppet_manifest`, `parse_puppet_module`, `convert_puppet_manifest_to_ansible`, `convert_puppet_module_to_ansible`, `convert_puppet_resource_to_task`, `list_puppet_supported_resource_types`, `convert_puppet_manifest_to_ansible_with_ai`, `convert_puppet_module_to_ansible_with_ai`
   - CLI commands: `souschef puppet parse`, `parse-module`, `convert`, `convert-module`, `list-types`
-  - Documentation: `docs/migration-guide/puppet-migration.md`, updates to README, ARCHITECTURE, mcp-tools, cli-usage, and ui guides
+  - Documentation: `docs/migration-guide/puppet-migration.md`
 
-* **Bash Migration** (from develop branch):
-  - `parsers/bash.py` — parse provisioning Bash scripts with 13 operation categories
-  - `converters/bash_to_ansible.py` — convert Bash scripts to Ansible playbooks and roles
+* **Bash Script Migration:** Provisioning script analysis and conversion (3 MCP tools)
+  - `parsers/bash.py` — parse provisioning Bash scripts with 13 operation categories and confidence scoring
+  - `converters/bash_to_ansible.py` — convert Bash scripts to Ansible playbooks and roles with quality scoring (A–F) and AAP readiness hints
   - `ui/pages/bash_migration.py` — web UI page for Bash migration
-  - 3 MCP tools: `parse_bash_script`, `convert_bash_to_ansible`, `generate_ansible_role_from_bash`
+  - MCP tools: `parse_bash_script`, `convert_bash_to_ansible`, `generate_ansible_role_from_bash`
 
-* **PowerShell Migration** (refactored architecture from develop branch):
-  - Modular architecture: separate `parsers/powershell.py`, `converters/powershell.py`, `generators/powershell.py`
-  - `ui/pages/powershell_migration.py` — dedicated web UI page
-  - 7 MCP tools: `parse_powershell`, `convert_powershell`, `generate_windows_inventory_tool`, `generate_windows_requirements`, `generate_powershell_role`, `generate_powershell_job_template`, `analyze_powershell_fidelity`
-
-### Changed
-
-* Total MCP tool count: 54 → 83 (Chef migration, Puppet migration, PowerShell migration, Bash migration, Ansible upgrades)
-
-## [Unreleased] - 2026-02-17
-
-### Added
+* **PowerShell Migration:** Windows automation migration with modular architecture (7 MCP tools)
+  - Separate `parsers/powershell.py`, `converters/powershell.py`, `generators/powershell.py`
+  - `ui/pages/powershell_migration.py` — dedicated web UI page for PowerShell migration
+  - MCP tools: `parse_powershell`, `convert_powershell`, `generate_windows_inventory_tool`, `generate_windows_requirements`, `generate_powershell_role`, `generate_powershell_job_template`, `analyze_powershell_fidelity`
+  - Documentation: `docs/migration-guide/powershell-migration.md`
 
 * **v2.2:** Interactive CLI migration wizard with step-by-step guidance
 * **v2.2:** Custom rule engine for resource conversion with user-defined mappings
@@ -43,14 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* **documentation:** Aggressive documentation refactoring for clarity and conciseness
-  - README: 185 → 165 lines with improved structure and status line
-  - CONTRIBUTING: 722 → 587 lines, trimmed release process bloat (135 line reduction)
-  - ARCHITECTURE: Replaced ASCII diagram with Mermaid flowchart
-  - Added "Documentation Guide" with role-based routing for users
+* Total MCP tool count reaches 95 (Chef, SaltStack, Puppet, PowerShell, Bash, Ansible upgrades)
+* **documentation:** Unified documentation covering all four new migration tools
+  - All tools documented in `docs/user-guide/mcp-tools.md`
+  - Dedicated migration guides for Salt, Puppet, and PowerShell
+  - `docs/user-guide/ui.md` covers all four new migration UI tabs
   - Standardised Australian English across all documentation
-* **documentation:** Consolidated ansible_versions.py documentation with master-link pattern
-* **documentation:** Condensed CodeQL section from 130 lines to 16 lines (87% reduction)
+* **documentation:** CONTRIBUTING and ARCHITECTURE refined for clarity and accuracy
 
 ## [5.1.4] - 2026-02-14
 

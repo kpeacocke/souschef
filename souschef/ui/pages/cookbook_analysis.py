@@ -451,6 +451,7 @@ UNKNOWN_ERROR = "Unknown error"
 # are defined canonically in cookbook_analysis_security.py where they are used.
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024  # 100MB total
 
+
 def extract_archive(uploaded_file) -> tuple[Path, Path, Path]:
     """
     Extract uploaded archive to a temporary directory with security checks.
