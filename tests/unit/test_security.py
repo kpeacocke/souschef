@@ -222,22 +222,27 @@ class TestNormalizePathSecurity:
         with pytest.raises(ValueError, match="must be a string or Path"):
             _normalize_path(123)
 
-    def test_normalize_path_tilde_preserved(self) -> None:
+    def test_normalize_path_tilde_not_expanded(self) -> None:
         """
-        Test that tilde paths are preserved unchanged by _normalize_path.
+        Test that tilde paths are NOT home-expanded by _normalize_path.
 
-        _normalize_path is a pure string normaliser — it intentionally does
-        NOT call expanduser() to avoid filesystem I/O on user-controlled data
-        (CodeQL py/path-injection).  Callers that need tilde expansion must use
-        _resolve_path_under_base, which expands tildes after the inline
-        containment barrier.
+        _normalize_path uses ``os.path.abspath`` which makes relative paths
+        absolute (relative to cwd) but does NOT call ``expanduser()``.  A
+        leading ``~`` is therefore treated as a literal directory name, not
+        expanded to the home directory.  This avoids filesystem I/O
+        (``/etc/passwd`` reads) on user-controlled data (CodeQL
+        ``py/path-injection``).  Trusted callers that need ``~`` expansion
+        (e.g. admin-supplied env vars) must call ``os.path.expanduser``
+        before passing the value to this function.
         """
         path_with_tilde = "~/cookbook/recipe.rb"
         result = _normalize_path(path_with_tilde)
 
         assert isinstance(result, Path)
-        # Tilde is preserved — no filesystem I/O performed.
-        assert str(result) == "~/cookbook/recipe.rb"
+        # abspath makes the path absolute, treating ~ as a literal directory.
+        assert result.is_absolute()
+        # The tilde was NOT expanded to the home directory.
+        assert str(result) != str(Path.home() / "cookbook" / "recipe.rb")
 
 
 class TestSafeJoinSecurity:

@@ -23,7 +23,13 @@ def _get_workspace_root() -> Path:
 
     """
     env_root = os.getenv("SOUSCHEF_WORKSPACE_ROOT")
-    base_path = _normalize_path(env_root) if env_root else _trusted_workspace_root()
+    if env_root:
+        # env_root is an admin/system-supplied value, not user input; it is safe
+        # to expand tilde here before delegating to _normalize_path.
+        expanded_root = Path(env_root).expanduser()
+        base_path = _normalize_path(expanded_root)
+    else:
+        base_path = _trusted_workspace_root()
 
     if not base_path.exists():
         raise ValueError(f"Workspace root does not exist: {base_path}")
@@ -65,28 +71,36 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
 
 def _normalize_path(path_str: str | Path) -> Path:
     """
-    Normalise a file path using only pure string operations.
+    Normalise a file path to an absolute, canonical form.
 
-    This function validates the input for null bytes and applies
-    ``os.path.normpath`` to canonicalise the path (collapse ``..`` and
-    repeated separators) without performing any filesystem I/O.
+    This function validates the input for null bytes, then produces an
+    absolute, normalised path using ``Path.cwd()`` (trusted system state)
+    combined with ``os.path.normpath`` (pure string normalisation).  This
+    is semantically equivalent to ``os.path.abspath()`` but expressed in
+    pathlib terms.
 
-    Tilde (``~``) expansion is intentionally **not** performed here to
-    avoid filesystem reads on user-controlled data (CWE-22/CWE-23,
-    CodeQL ``py/path-injection``).  Callers that need ``~`` expansion
-    should either supply absolute paths or use ``_resolve_path_under_base``,
-    which expands tildes only after the inline ``commonpath`` containment
-    barrier so CodeQL cannot trace taint to a filesystem sink inside this
-    function.
+    No filesystem I/O is performed on the user-controlled ``path_str``
+    argument.  In particular, this function intentionally does **not** call
+    ``Path.resolve()`` (which follows symlinks) or ``os.path.abspath()`` to
+    avoid CodeQL ``py/path-injection`` (CWE-22/CWE-23).
+
+    Tilde (``~``) expansion is intentionally **not** performed here.
+    Callers that need ``~`` expansion for **trusted** inputs (e.g. an
+    admin-supplied environment variable) should call
+    ``Path(...).expanduser()`` before passing the value to this function.
+    User-supplied paths should be handled by ``_resolve_path_under_base``,
+    which enforces containment before any filesystem operation.
 
     Args:
         path_str: Path string or Path object to normalise.
 
     Returns:
-        Normalised Path object (not necessarily absolute for relative inputs).
+        Absolute, normalised Path object.
 
     Raises:
-        ValueError: If the path contains null bytes or is of an invalid type.
+        ValueError: If the path contains null bytes, is of an invalid type,
+            or if an OS-level error occurs whilst resolving the current
+            working directory.
 
     """
     if isinstance(path_str, Path):
@@ -99,13 +113,17 @@ def _normalize_path(path_str: str | Path) -> Path:
         raise ValueError(f"Path must be a string or Path object, got {type(path_str)}")
 
     try:
-        # Pure string normalisation — no filesystem I/O on user-controlled data.
-        # expanduser() is intentionally omitted: tilde expansion is the caller's
-        # responsibility.  Callers that accept user-supplied paths must use
-        # _resolve_path_under_base, which performs expanduser AFTER the inline
-        # commonpath containment barrier so CodeQL does not trace taint from
-        # user input to a filesystem sink inside this function.
-        normalized = Path(os.path.normpath(str(path_obj)))
+        # Produce an absolute, normalised path without calling os.path.abspath()
+        # (PTH100) or Path.resolve() (follows symlinks — filesystem I/O on
+        # user-controlled data would re-introduce CodeQL py/path-injection).
+        #
+        # Path.cwd() is trusted system state, NOT derived from user input.
+        # The / operator is pure string concatenation (same as os.path.join).
+        # os.path.normpath collapses ".", "..", and repeated separators.
+        if path_obj.is_absolute():
+            normalized = Path(os.path.normpath(str(path_obj)))
+        else:
+            normalized = Path(os.path.normpath(str(Path.cwd() / path_obj)))
         return normalized
     except (OSError, RuntimeError) as e:
         raise ValueError(f"Invalid path {path_str}: {e}") from e
