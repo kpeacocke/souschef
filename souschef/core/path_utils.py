@@ -418,7 +418,6 @@ def safe_mkdir(
     # Resolve and validate the candidate path against the trusted base.
     safe_path = _resolve_path_under_base(path_obj, base_path)
     Path(candidate_str).mkdir(parents=parents, exist_ok=exist_ok)
-    candidate_str = os.path.normpath(str(safe_path))
 
 def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
     """
