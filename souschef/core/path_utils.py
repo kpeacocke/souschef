@@ -458,17 +458,45 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
 def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
     """
     Raises:
-        ValueError: If the path escapes the base directory.
+    path_obj: Path,
+    base_path: Path,
+    text: str,
+    encoding: str = "utf-8",
+    *,
+    allow_sensitive: bool = False,
 
     Iterate directory contents after enforcing base containment.
-    # Resolve and validate the path against the trusted base **once**.
+    Write non-sensitive text to a file after enforcing base containment.
     # _resolve_path_under_base performs full normalisation, symlink
+    This helper is intended for regular content such as generated playbooks,
+    reports, or other non-secret data. It MUST NOT be used for credentials,
+    API tokens, private keys, or any other sensitive secrets. Callers that
+    need to persist secrets should use an explicit, encrypted storage
+    mechanism instead of this function.
+
     # resolution and commonpath-based containment checks before any I/O.
     safe_path = _resolve_path_under_base(path_obj, base_path)
     safe_base = _normalize_trusted_base(base_path)
-    # All filesystem access is performed via the fully validated path.
+        text: Text content to write (must not contain sensitive secrets).
     safe_path.write_text(text, encoding=encoding)
+        allow_sensitive: Reserved flag to explicitly mark sensitive content.
+            This flag exists to make misuse explicit; if set to True a
+            ValueError is raised to prevent accidental clear-text storage of
+            secrets.
     _resolve_path_under_base(path_obj, safe_base)
+    Raises:
+        ValueError: If the path escapes the base directory, or if
+            ``allow_sensitive`` is set to True.
+
+
+    # Defensive guard: do not permit callers to explicitly mark content as
+    # sensitive while still using this non-secret helper. This both documents
+    # intent and provides a barrier for static analysis tools.
+    if allow_sensitive:
+        raise ValueError(
+            "safe_write_text must not be used to store sensitive data; use a "
+            "dedicated, encrypted storage mechanism instead."
+        )
 
     base_str = str(safe_base)
     candidate_str = os.path.normpath(str(path_obj))
