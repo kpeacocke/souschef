@@ -307,18 +307,12 @@ def _validated_candidate(path_obj: Path | str, safe_base: Path | str) -> Path:
 def safe_exists(path_obj: Path, base_path: Path) -> bool:
     """Check existence after enforcing base containment."""
     # Full security validation: raises on symlink escape, char violations, etc.
-    validated = _resolve_path_under_base(path_obj, base_path)
-    # Inline BARRIER so CodeQL sees normpath+commonpath in the same scope as
-    # the I/O call (.exists).  Mirrors the containment checks inside
-    # _resolve_path_under_base and applies to the sanitised value.
-    safe_base = _normalize_trusted_base(base_path)
-    base_str = os.path.normpath(str(safe_base))
-
-    # Build a candidate path string that is explicitly rooted under the
-    # trusted base and then normalised. This keeps the containment logic
-    # in pure string space and matches the CodeQL-recognised pattern for
-    # path sanitisation.
-    candidate_str = os.path.normpath(str(Path(base_str) / path_obj))
+    _resolve_path_under_base(path_obj, base_path)
+    # Inline BARRIER on the ORIGINAL path_obj so CodeQL sees normpath+commonpath
+    # in the same scope as the I/O call (.exists).  Mirrors BARRIER 1 inside
+    # _resolve_path_under_base — must apply to the untransformed tainted value.
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
@@ -326,92 +320,41 @@ def safe_exists(path_obj: Path, base_path: Path) -> bool:
         raise ValueError(msg) from e
     if common != base_str:
         msg = f"Path traversal attempt: escapes {base_path}"
-    # First, normalise the trusted base using the dedicated helper.
-    safe_base = _normalize_trusted_base(base_path)
-    base_str = os.path.normpath(str(safe_base))
-
-    # Build a candidate path string that is explicitly rooted under the
-    # trusted base and then normalised. This mirrors the sanitisation
-    # pattern used in ``safe_is_file`` and keeps the containment logic
-    # in pure string space for CodeQL's barrier model.
-    candidate_str = os.path.normpath(str(Path(base_str) / path_obj))
-    candidate_path = Path(candidate_str)
-    return candidate_path.exists()
+        raise ValueError(msg)
+    return Path(candidate_str).exists()
 
 
 def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
     """Check directory-ness after enforcing base containment."""
-    validated = _resolve_path_under_base(path_obj, base_path)
-    # escape attempt before we touch the filesystem.
     _resolve_path_under_base(path_obj, base_path)
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
+    try:
         common = os.path.commonpath([candidate_str, base_str])
-    # Only use the fully validated, normalised candidate for filesystem I/O.
-    return Path(candidate_str).is_dir()
-
-
     except ValueError as e:
         msg = f"Path traversal attempt: escapes {base_path}"
-
-    # BARRIER 1: Ensure the candidate path stays within the trusted base
-    # using a pure string commonpath check.
         raise ValueError(msg) from e
     if common != base_str:
         msg = f"Path traversal attempt: escapes {base_path}"
         raise ValueError(msg)
-    return validated.is_dir()
+    return Path(candidate_str).is_dir()
 
 
 def safe_is_file(path_obj: Path, base_path: Path) -> bool:
     """Check file-ness after enforcing base containment."""
-    # BARRIER 2: Resolve symlinks via realpath() and re-validate containment.
-    base_resolved = os.path.realpath(base_str)
-    resolved_str = os.path.realpath(candidate_str)
-    try:
-        common2 = os.path.commonpath([resolved_str, base_resolved])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg) from e
-    if common2 != base_resolved:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
-
-    # First, enforce containment using the path utilities' resolver. This
-    validated_path = Path(resolved_str)
-    return validated_path.is_file()
-    validated = _resolve_path_under_base(path_obj, base_path)
-
-    # Normalise the trusted base using the dedicated helper.
-    safe_base = _normalize_trusted_base(base_path)
-    base_str = os.path.normpath(str(safe_base))
-
-    # Build a candidate path string that is explicitly rooted under the
-    # trusted base and then normalised. This keeps the containment logic
-    # in pure string space and matches the CodeQL-recognised pattern for
-    # path sanitisation.
-    candidate_str = os.path.normpath(str(Path(base_str) / path_obj))
+    _resolve_path_under_base(path_obj, base_path)
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
         msg = f"Path traversal attempt: escapes {base_path}"
-    # Normalise and resolve the trusted base directory.
         raise ValueError(msg) from e
     if common != base_str:
         msg = f"Path traversal attempt: escapes {base_path}"
-    base_str = os.path.normpath(str(safe_base))
-    results: list[Path] = []
+        raise ValueError(msg)
+    return Path(candidate_str).is_file()
 
-    # Only use the fully validated, normalised candidate for filesystem I/O.
-        # Resolve each result to an absolute, normalised string.
-        candidate_str = os.path.normpath(str(result))
-        try:
-            common = os.path.commonpath([candidate_str, base_str])
-        except ValueError as e:
-            msg = f"Path traversal attempt during glob: escapes {base_path}"
-            raise ValueError(msg) from e
-        if common != base_str:
-            msg = f"Path traversal attempt during glob: escapes {base_path}"
-            raise ValueError(msg)
-        results.append(result)
 
 def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     """
@@ -429,11 +372,10 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     safe_base = _normalize_trusted_base(base_path)
     safe_dir = _resolve_path_under_base(dir_path, safe_base)
 
-    # Resolve and validate the candidate path against the trusted base.
-    safe_path = _resolve_path_under_base(path_obj, base_path)
+    results: list[Path] = []
     for result in safe_dir.glob(pattern):
+        validated_result: Path = _resolve_path_under_base(result, safe_base)
         results.append(validated_result)
-
 
     return results
 
@@ -441,16 +383,10 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
 def safe_mkdir(
     path_obj: Path, base_path: Path, parents: bool = False, exist_ok: bool = False
 ) -> None:
-    safe_path.mkdir(parents=parents, exist_ok=exist_ok)
-    # Enforce containment at the path utilities level.
+    """Create directory after enforcing base containment."""
     _resolve_path_under_base(path_obj, base_path)
-
-    safe_base = _normalize_trusted_base(base_path)
-    base_str = os.path.normpath(str(safe_base))
-
-    # Root the candidate under the trusted base and normalise before
-    # applying the commonpath containment guard.
-    candidate_str = os.path.normpath(str(Path(base_str) / path_obj))
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
@@ -459,10 +395,8 @@ def safe_mkdir(
     if common != base_str:
         msg = f"Path traversal attempt: escapes {base_path}"
         raise ValueError(msg)
-
-    # Resolve and validate the candidate path against the trusted base.
-    safe_path = _resolve_path_under_base(path_obj, base_path)
     Path(candidate_str).mkdir(parents=parents, exist_ok=exist_ok)
+
 
 def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
     """
@@ -471,25 +405,46 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
     Args:
         path_obj: Path to the file to read.
         base_path: Trusted base directory for containment check.
-
         encoding: Text encoding (default: 'utf-8').
+
+    Returns:
         File contents as string.
 
     Raises:
         ValueError: If the path escapes the base directory.
 
     """
-    safe_path = _resolve_path_under_base(path_obj, base_path)
-        common = os.path.commonpath([candidate_str, base_str])
-    # Resolve and validate the path against the trusted base **once**.
-    # _resolve_path_under_base performs full normalisation, symlink
-    # resolution and commonpath-based containment checks before any I/O.
-    Write text to file after enforcing base containment.
-    """
-    # All filesystem access is performed via the fully validated path.
-    return safe_path.read_text(encoding=encoding)
+    _resolve_path_under_base(path_obj, base_path)
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
     try:
+        common = os.path.commonpath([candidate_str, base_str])
+    except ValueError as e:
+        msg = f"Path traversal attempt: escapes {base_path}"
+        raise ValueError(msg) from e
+    if common != base_str:
+        msg = f"Path traversal attempt: escapes {base_path}"
+        raise ValueError(msg)
+    return Path(candidate_str).read_text(encoding=encoding)
 
+
+def safe_write_text(
+    path_obj: Path, base_path: Path, text: str, encoding: str = "utf-8"
+) -> None:
+    """
+    Write text to file after enforcing base containment.
+
+    Args:
+        path_obj: Path to the file to write.
+        base_path: Trusted base directory for containment check.
+        text: Text content to write.
+        encoding: Text encoding (default: 'utf-8').
+
+    """
+    _resolve_path_under_base(path_obj, base_path)
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
+    try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
         msg = f"Path traversal attempt: escapes {base_path}"
@@ -502,47 +457,21 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
 
 def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
     """
-    Raises:
-    path_obj: Path,
-    base_path: Path,
-    text: str,
-    encoding: str = "utf-8",
-    *,
-    allow_sensitive: bool = False,
-
     Iterate directory contents after enforcing base containment.
-    Write non-sensitive text to a file after enforcing base containment.
-    # _resolve_path_under_base performs full normalisation, symlink
-    This helper is intended for regular content such as generated playbooks,
-    reports, or other non-secret data. It MUST NOT be used for credentials,
-    API tokens, private keys, or any other sensitive secrets. Callers that
-    need to persist secrets should use an explicit, encrypted storage
-    mechanism instead of this function.
 
-    # resolution and commonpath-based containment checks before any I/O.
-    safe_path = _resolve_path_under_base(path_obj, base_path)
-    safe_base = _normalize_trusted_base(base_path)
-        text: Text content to write (must not contain sensitive secrets).
-    safe_path.write_text(text, encoding=encoding)
-        allow_sensitive: Reserved flag to explicitly mark sensitive content.
-            This flag exists to make misuse explicit; if set to True a
-            ValueError is raised to prevent accidental clear-text storage of
-            secrets.
-    _resolve_path_under_base(path_obj, safe_base)
+    Args:
+        path_obj: Directory path to iterate.
+        base_path: Trusted base directory for containment check.
+
+    Returns:
+        List of validated paths within the directory.
+
     Raises:
-        ValueError: If the path escapes the base directory, or if
-            ``allow_sensitive`` is set to True.
+        ValueError: If path escapes the base directory.
 
-
-    # Defensive guard: do not permit callers to explicitly mark content as
-    # sensitive while still using this non-secret helper. This both documents
-    # intent and provides a barrier for static analysis tools.
-    if allow_sensitive:
-        raise ValueError(
-            "safe_write_text must not be used to store sensitive data; use a "
-            "dedicated, encrypted storage mechanism instead."
-        )
-
+    """
+    safe_base = _normalize_trusted_base(base_path)
+    _resolve_path_under_base(path_obj, safe_base)
     base_str = str(safe_base)
     candidate_str = os.path.normpath(str(path_obj))
     try:
@@ -598,5 +527,5 @@ def _check_symlink_safety(path_obj: Path, base_path: Path | None = None) -> None
                 )
                 raise ValueError(msg)
             current = current.parent
-    except (FileNotFoundError, PermissionError, NotADirectoryError):
+    except (FileNotFoundError, PermissionError, NotADirectoryError, OSError):
         return

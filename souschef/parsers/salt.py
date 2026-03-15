@@ -1,6 +1,7 @@
 """SaltStack SLS file parser."""
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -533,30 +534,20 @@ def _list_sls_files(directory: Path, base_path: Path) -> list[str]:
         List of relative SLS file paths.
 
     """
-    # Ensure we are working with Path objects.
-    # Normalise paths using the shared path_utils helper. This performs
-    # pure string normalisation (no filesystem I/O on user-controlled data)
-    # and yields absolute paths suitable for string-based containment checks.
-    base = _normalize_path(base_path)
-    candidate = _normalize_path(directory)
-    # Enforce that the candidate directory is within the trusted base.
-    # Enforce that the candidate directory is within the trusted base using
-    # os.path.commonpath, which CodeQL models as a sanitiser/boundary for
-    # py/path-injection (CWE-22).
-    base_str = os.path.normpath(str(base))
-    candidate_str = os.path.normpath(str(candidate))
-        candidate.relative_to(base)
-        if os.path.commonpath([candidate_str, base_str]) != base_str:
-            msg = f"Path traversal attempt: escapes {base_str}"
-            raise ValueError(msg)
+    base_str = os.path.normpath(str(base_path))
+    candidate_str = os.path.normpath(str(directory))
+    try:
+        common = os.path.commonpath([candidate_str, base_str])
+    except ValueError as exc:
         msg = f"Path traversal attempt: escapes {base_path}"
-        # Re-wrap any ValueError from commonpath to keep a consistent message.
-        msg = f"Path traversal attempt: escapes {base_str}"
-
+        raise ValueError(msg) from exc
+    if common != base_str:
+        msg = f"Path traversal attempt: escapes {base_path}"
+        raise ValueError(msg)
     return [
-        str(p.relative_to(candidate))
-        for p in sorted(candidate.rglob("*.sls"))
-        for p in sorted(Path(candidate).rglob("*.sls"))
+        str(p.relative_to(directory))
+        for p in sorted(Path(candidate_str).rglob("*.sls"))
+    ]
 
 
 def parse_salt_directory(salt_dir: str) -> str:
