@@ -387,8 +387,8 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     # Resolve and validate the candidate path against the trusted base.
     safe_path = _resolve_path_under_base(path_obj, base_path)
     for result in safe_dir.glob(pattern):
-    candidate_str = os.path.normpath(str(safe_path))
         results.append(validated_result)
+
 
     return results
 
