@@ -534,19 +534,20 @@ def _list_sls_files(directory: Path, base_path: Path) -> list[str]:
         List of relative SLS file paths.
 
     """
-    base_str = os.path.normpath(str(base_path))
-    candidate_str = os.path.normpath(str(directory))
+    # Ensure we are working with Path objects.
+    base = base_path if isinstance(base_path, Path) else Path(base_path)
+    candidate = directory if isinstance(directory, Path) else Path(directory)
+
+    # Enforce that the candidate directory is within the trusted base.
     try:
-        common = os.path.commonpath([candidate_str, base_str])
+        candidate.relative_to(base)
     except ValueError as exc:
         msg = f"Path traversal attempt: escapes {base_path}"
         raise ValueError(msg) from exc
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
+
     return [
-        str(p.relative_to(directory))
-        for p in sorted(Path(candidate_str).rglob("*.sls"))
+        str(p.relative_to(candidate))
+        for p in sorted(candidate.rglob("*.sls"))
     ]
 
 
