@@ -12,7 +12,11 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _get_workspace_root,
     _normalize_path,
+    safe_exists,
+    safe_is_dir,
+    safe_mkdir,
     safe_read_text,
+    safe_write_text,
 )
 from souschef.parsers.salt import (
     SALT_PKG_FUNCTIONS,
@@ -478,9 +482,9 @@ def convert_salt_sls_to_ansible(sls_path: str, playbook_name: str = "") -> str:
         workspace_root = _get_workspace_root()
         safe_path = _ensure_within_base_path(normalized_path, workspace_root)
 
-        if not safe_path.exists():  # NOSONAR
+        if not safe_exists(safe_path, workspace_root):
             return json.dumps({"error": ERROR_FILE_NOT_FOUND.format(path=safe_path)})
-        if safe_path.is_dir():
+        if safe_is_dir(safe_path, workspace_root):
             return json.dumps({"error": ERROR_IS_DIRECTORY.format(path=safe_path)})
 
         content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
@@ -815,9 +819,9 @@ def convert_salt_pillar_to_vars(pillar_path: str, output_format: str = "yaml") -
         workspace_root = _get_workspace_root()
         safe_path = _ensure_within_base_path(normalized_path, workspace_root)
 
-        if not safe_path.exists():  # NOSONAR
+        if not safe_exists(safe_path, workspace_root):
             return json.dumps({"error": ERROR_FILE_NOT_FOUND.format(path=safe_path)})
-        if safe_path.is_dir():
+        if safe_is_dir(safe_path, workspace_root):
             return json.dumps({"error": ERROR_IS_DIRECTORY.format(path=safe_path)})
 
         content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
@@ -892,9 +896,9 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
         workspace_root = _get_workspace_root()
         safe_salt = _ensure_within_base_path(normalized_salt, workspace_root)
 
-        if not safe_salt.exists():  # NOSONAR
+        if not safe_exists(safe_salt, workspace_root):
             return json.dumps({"error": f"Salt directory not found: {salt_dir}"})
-        if not safe_salt.is_dir():
+        if not safe_is_dir(safe_salt, workspace_root):
             return json.dumps({"error": f"Path is not a directory: {salt_dir}"})
 
         normalized_out = _normalize_path(output_dir)
@@ -952,16 +956,16 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
         # Write role files
         try:
             role_tasks_dir = role_dir / "tasks"
-            role_tasks_dir.mkdir(parents=True, exist_ok=True)
+            safe_mkdir(role_tasks_dir, workspace_root, parents=True, exist_ok=True)
 
             role_handlers_dir = role_dir / "handlers"
-            role_handlers_dir.mkdir(parents=True, exist_ok=True)
+            safe_mkdir(role_handlers_dir, workspace_root, parents=True, exist_ok=True)
 
             role_defaults_dir = role_dir / "defaults"
-            role_defaults_dir.mkdir(parents=True, exist_ok=True)
+            safe_mkdir(role_defaults_dir, workspace_root, parents=True, exist_ok=True)
 
             role_meta_dir = role_dir / "meta"
-            role_meta_dir.mkdir(parents=True, exist_ok=True)
+            safe_mkdir(role_meta_dir, workspace_root, parents=True, exist_ok=True)
 
         except PermissionError as exc:
             warnings.append(f"Cannot create role directory for {role_name}: {exc}")
@@ -970,7 +974,7 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
         # tasks/main.yml
         tasks_file = role_tasks_dir / "main.yml"
         tasks_content = _render_playbook_yaml(role_name, all_tasks, {})
-        tasks_file.write_text(tasks_content, encoding="utf-8")
+        safe_write_text(tasks_file, workspace_root, tasks_content, encoding="utf-8")
         tasks_rel = str(tasks_file.relative_to(safe_out))
         files_written.append(tasks_rel)
 
@@ -982,14 +986,16 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
             )
         else:
             handlers_yaml = "---\n# No handlers\n"
-        handlers_file.write_text(handlers_yaml, encoding="utf-8")
+        safe_write_text(handlers_file, workspace_root, handlers_yaml, encoding="utf-8")
         handlers_rel = str(handlers_file.relative_to(safe_out))
         files_written.append(handlers_rel)
 
         # defaults/main.yml
         defaults_file = role_defaults_dir / "main.yml"
         defaults_content = _pillar_to_vault_vars(all_defaults)
-        defaults_file.write_text(defaults_content, encoding="utf-8")
+        safe_write_text(
+            defaults_file, workspace_root, defaults_content, encoding="utf-8"
+        )
         defaults_rel = str(defaults_file.relative_to(safe_out))
         files_written.append(defaults_rel)
 
@@ -1003,7 +1009,7 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
             "  min_ansible_version: '2.9'\n"
             "dependencies: []\n"
         )
-        meta_file.write_text(meta_content, encoding="utf-8")
+        safe_write_text(meta_file, workspace_root, meta_content, encoding="utf-8")
         meta_rel = str(meta_file.relative_to(safe_out))
         files_written.append(meta_rel)
 
@@ -1024,8 +1030,13 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
         )
     site_file = safe_out / "site.yml"
     try:
-        site_file.parent.mkdir(parents=True, exist_ok=True)
-        site_file.write_text("\n".join(site_lines) + "\n", encoding="utf-8")
+        safe_mkdir(safe_out, workspace_root, parents=True, exist_ok=True)
+        safe_write_text(
+            site_file,
+            workspace_root,
+            "\n".join(site_lines) + "\n",
+            encoding="utf-8",
+        )
         files_written.append("site.yml")
     except PermissionError as exc:
         warnings.append(f"Could not write site.yml: {exc}")
@@ -1033,7 +1044,7 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
     # Generate inventory/hosts from top.sls if present
     top_candidates = [safe_salt / "top.sls"]
     for candidate in top_candidates:
-        if candidate.exists():
+        if safe_exists(candidate, workspace_root):
             try:
                 top_content = safe_read_text(
                     candidate, workspace_root, encoding="utf-8"
@@ -1044,9 +1055,11 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
                     {"environments": environments}
                 )
                 inv_dir = safe_out / "inventory"
-                inv_dir.mkdir(parents=True, exist_ok=True)
+                safe_mkdir(inv_dir, workspace_root, parents=True, exist_ok=True)
                 inv_file = inv_dir / "hosts"
-                inv_file.write_text(inventory_str, encoding="utf-8")
+                safe_write_text(
+                    inv_file, workspace_root, inventory_str, encoding="utf-8"
+                )
                 files_written.append("inventory/hosts")
             except (PermissionError, OSError) as exc:
                 warnings.append(f"Could not generate inventory: {exc}")

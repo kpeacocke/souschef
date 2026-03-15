@@ -665,12 +665,16 @@ def _render_batch_convert_section() -> None:
 
         safe_salt_dir = _validate_ui_path(salt_dir)
         if safe_salt_dir is None:
-            st.error("Invalid or unsafe Salt directory path. Must be within the workspace.")
+            st.error(
+                "Invalid or unsafe Salt directory path. Must be within the workspace."
+            )
             return
 
         safe_output_dir = _validate_ui_path(output_dir)
         if safe_output_dir is None:
-            st.error("Invalid or unsafe output directory path. Must be within the workspace.")
+            st.error(
+                "Invalid or unsafe output directory path. Must be within the workspace."
+            )
             return
 
         with st.spinner("Converting Salt directory to Ansible roles..."):

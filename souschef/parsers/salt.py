@@ -14,6 +14,8 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _get_workspace_root,
     _normalize_path,
+    safe_exists,
+    safe_is_dir,
     safe_read_text,
 )
 
@@ -349,9 +351,9 @@ def parse_salt_sls(sls_path: str) -> str:
         workspace_root = _get_workspace_root()
         safe_path = _ensure_within_base_path(normalized_path, workspace_root)
 
-        if not safe_path.exists():  # NOSONAR
+        if not safe_exists(safe_path, workspace_root):
             return ERROR_FILE_NOT_FOUND.format(path=safe_path)
-        if safe_path.is_dir():
+        if safe_is_dir(safe_path, workspace_root):
             return ERROR_IS_DIRECTORY.format(path=safe_path)
 
         content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
@@ -401,9 +403,9 @@ def parse_salt_pillar(pillar_path: str) -> str:
         workspace_root = _get_workspace_root()
         safe_path = _ensure_within_base_path(normalized_path, workspace_root)
 
-        if not safe_path.exists():  # NOSONAR
+        if not safe_exists(safe_path, workspace_root):
             return ERROR_FILE_NOT_FOUND.format(path=safe_path)
-        if safe_path.is_dir():
+        if safe_is_dir(safe_path, workspace_root):
             return ERROR_IS_DIRECTORY.format(path=safe_path)
 
         content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
@@ -461,9 +463,9 @@ def parse_salt_top(top_path: str) -> str:
         workspace_root = _get_workspace_root()
         safe_path = _ensure_within_base_path(normalized_path, workspace_root)
 
-        if not safe_path.exists():  # NOSONAR
+        if not safe_exists(safe_path, workspace_root):
             return ERROR_FILE_NOT_FOUND.format(path=safe_path)
-        if safe_path.is_dir():
+        if safe_is_dir(safe_path, workspace_root):
             return ERROR_IS_DIRECTORY.format(path=safe_path)
 
         content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
@@ -552,9 +554,9 @@ def parse_salt_directory(salt_dir: str) -> str:
         workspace_root = _get_workspace_root()
         safe_path = _ensure_within_base_path(normalized_path, workspace_root)
 
-        if not safe_path.exists():  # NOSONAR
+        if not safe_exists(safe_path, workspace_root):
             return ERROR_FILE_NOT_FOUND.format(path=safe_path)
-        if not safe_path.is_dir():
+        if not safe_is_dir(safe_path, workspace_root):
             return f"Error: Path is not a directory: {salt_dir}"
 
     except PermissionError:
@@ -739,9 +741,9 @@ def assess_salt_complexity(salt_dir: str) -> str:
         workspace_root = _get_workspace_root()
         safe_path = _ensure_within_base_path(normalized_path, workspace_root)
 
-        if not safe_path.exists():  # NOSONAR
+        if not safe_exists(safe_path, workspace_root):
             return json.dumps({"error": f"Directory not found: {salt_dir}"})
-        if not safe_path.is_dir():
+        if not safe_is_dir(safe_path, workspace_root):
             return json.dumps({"error": f"Path is not a directory: {salt_dir}"})
 
     except PermissionError:

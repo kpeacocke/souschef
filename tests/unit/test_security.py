@@ -551,10 +551,10 @@ class TestPathSecurityIntegration:
         link.symlink_to(target)
 
         # Attempts to use symlink should be blocked
-        with pytest.raises(ValueError, match="Symlink detected"):
+        with pytest.raises(ValueError, match="Path traversal attempt"):
             safe_read_text(link, base)
 
-        with pytest.raises(ValueError, match="Symlink detected"):
+        with pytest.raises(ValueError, match="Path traversal attempt"):
             safe_write_text(link, base, "new content")
 
     def test_workflow_recursive_glob_stays_contained(self, tmp_path):

@@ -645,9 +645,7 @@ def test_run_manifest_analysis_invalid_path(
             os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
 
 
-def test_run_module_analysis_invalid_path(
-    mock_streamlit: MagicMock, tmp_path
-) -> None:  # type: ignore[no-untyped-def]
+def test_run_module_analysis_invalid_path(mock_streamlit: MagicMock, tmp_path) -> None:  # type: ignore[no-untyped-def]
     """_run_module_analysis should show error for a path outside workspace."""
     old_root = os.environ.get("SOUSCHEF_WORKSPACE_ROOT")
     try:

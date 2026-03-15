@@ -188,10 +188,20 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
     """
     Resolve ``path_obj`` and enforce that it remains under ``base_path``.
 
-    This function normalises both paths using pure string operations (no
-    filesystem I/O on user-controlled data), rejects relative traversal, and
-    then validates canonical containment with ``os.path.commonpath`` before
-    returning a safe path for downstream filesystem operations.
+    This function performs a two-stage containment check:
+
+    1. **normpath + commonpath (BARRIER 1)** — pure string normalisation (no
+       filesystem I/O on user-controlled data) that collapses all ``..`` and
+       repeated-separator sequences.  ``os.path.commonpath`` is the CodeQL-
+       recognised barrier for ``py/path-injection``.
+
+    2. **realpath + commonpath (BARRIER 2, inline)** — after BARRIER 1
+       sanitises the candidate, ``os.path.realpath`` is called in the *same
+       inline scope* to follow any symlinks and produce the true filesystem
+       path.  A second ``os.path.commonpath`` check then confirms that the
+       resolved target also lies within the workspace.  Calling ``realpath``
+       *inline* (not in a helper) after the first barrier is CodeQL-safe
+       because the guard and the filesystem call share the same function scope.
 
     Tilde (``~``) expansion is intentionally **not** performed on user-supplied
     paths.  The UI layer (or any trusted caller) must call
@@ -199,12 +209,6 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
     this function.  ``expanduser()`` on user-controlled data is a CodeQL
     ``py/path-injection`` filesystem sink (reads ``/etc/passwd`` for
     ``~user`` form).
-
-    Note: symlinks are **not** dereferenced during the path normalisation
-    step.  However, ``_check_symlink_safety`` is called on the validated
-    result to detect symlinks in the path ancestry that point outside the
-    workspace.  Callers that need the full target path of a symlink must
-    dereference it explicitly after this function returns.
     """
     safe_base = _normalize_trusted_base(base_path)
     # Use normpath-based absolute string — no filesystem I/O on base_path which
@@ -213,7 +217,6 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
 
     # Normalise the candidate path using pure string operations.
     # Do NOT call expanduser() — that reads /etc/passwd for ~user form.
-    # Do NOT call realpath() — that follows symlinks (filesystem I/O).
     if isinstance(path_obj, Path):
         # Path objects: normalise in-place (no string validation needed here;
         # validation was performed before the Path object was created).
@@ -234,8 +237,9 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
         relative = _validate_relative_parts(raw_path.parts)
         candidate_str = os.path.normpath(str(Path(base_str) / relative))
 
-    # os.path.commonpath is a pure string operation recognised by CodeQL as a
-    # containment barrier for py/path-injection.
+    # BARRIER 1: os.path.commonpath is a pure string operation recognised by
+    # CodeQL as a containment barrier for py/path-injection.  After this check
+    # passes, candidate_str is safe for downstream use in the same scope.
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
@@ -246,16 +250,24 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
         msg = f"Path traversal attempt: escapes {safe_base}"
         raise ValueError(msg)
 
-    safe_result = _ensure_within_base_path(Path(candidate_str), Path(base_str))
+    # BARRIER 2 (inline, same scope): Follow symlinks via realpath() — now
+    # safe to call because candidate_str was sanitised by BARRIER 1 above —
+    # and re-validate containment with a second commonpath check.  Doing this
+    # inline (not in a helper) keeps the guard and the filesystem I/O in the
+    # same function scope, which is required for CodeQL's barrier model.
+    base_resolved = os.path.realpath(base_str)
+    resolved_str = os.path.realpath(candidate_str)
+    try:
+        common2 = os.path.commonpath([resolved_str, base_resolved])
+    except ValueError as e:
+        msg = f"Path traversal attempt: escapes {safe_base}"
+        raise ValueError(msg) from e
 
-    # Check for symlinks that could escape the workspace by pointing outside it.
-    # This is a defence-in-depth check: the normpath containment check above
-    # validates the *name* of the path, but symlinks can point anywhere.
-    # _check_symlink_safety is defined later in this module; Python resolves it
-    # at call time, not at definition time.
-    _check_symlink_safety(safe_result)
+    if common2 != base_resolved:
+        msg = f"Path traversal attempt: escapes {safe_base}"
+        raise ValueError(msg)
 
-    return safe_result
+    return _ensure_within_base_path(Path(resolved_str), Path(base_resolved))
 
 
 def _safe_join(base_path: Path, *parts: str) -> Path:
