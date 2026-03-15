@@ -306,11 +306,13 @@ def _validated_candidate(path_obj: Path | str, safe_base: Path | str) -> Path:
 
 def safe_exists(path_obj: Path, base_path: Path) -> bool:
     """Check existence after enforcing base containment."""
-    validated = _resolve_path_under_base(path_obj, base_path)
-    # Inline barrier: normpath + commonpath in this scope so CodeQL sees the guard
-    # immediately before the filesystem I/O call (exists).
-    base_str = os.path.realpath(str(base_path))
-    candidate_str = os.path.normpath(str(validated))
+    # Full security validation: raises on symlink escape, char violations, etc.
+    _resolve_path_under_base(path_obj, base_path)
+    # Inline BARRIER on the ORIGINAL path_obj so CodeQL sees normpath+commonpath
+    # in the same scope as the I/O call (.exists).  Mirrors BARRIER 1 inside
+    # _resolve_path_under_base — must apply to the untransformed tainted value.
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
@@ -324,10 +326,9 @@ def safe_exists(path_obj: Path, base_path: Path) -> bool:
 
 def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
     """Check directory-ness after enforcing base containment."""
-    validated = _resolve_path_under_base(path_obj, base_path)
-    # Inline barrier in same scope as is_dir().
-    base_str = os.path.realpath(str(base_path))
-    candidate_str = os.path.normpath(str(validated))
+    _resolve_path_under_base(path_obj, base_path)
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
@@ -341,8 +342,18 @@ def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
 
 def safe_is_file(path_obj: Path, base_path: Path) -> bool:
     """Check file-ness after enforcing base containment."""
-    candidate = _resolve_path_under_base(path_obj, base_path)
-    return candidate.is_file()
+    _resolve_path_under_base(path_obj, base_path)
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
+    try:
+        common = os.path.commonpath([candidate_str, base_str])
+    except ValueError as e:
+        msg = f"Path traversal attempt: escapes {base_path}"
+        raise ValueError(msg) from e
+    if common != base_str:
+        msg = f"Path traversal attempt: escapes {base_path}"
+        raise ValueError(msg)
+    return Path(candidate_str).is_file()
 
 
 def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
@@ -373,10 +384,9 @@ def safe_mkdir(
     path_obj: Path, base_path: Path, parents: bool = False, exist_ok: bool = False
 ) -> None:
     """Create directory after enforcing base containment."""
-    validated = _resolve_path_under_base(path_obj, base_path)
-    # Inline barrier in same scope as mkdir().
-    base_str = os.path.realpath(str(base_path))
-    candidate_str = os.path.normpath(str(validated))
+    _resolve_path_under_base(path_obj, base_path)
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
@@ -404,10 +414,9 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
         ValueError: If the path escapes the base directory.
 
     """
-    validated = _resolve_path_under_base(path_obj, base_path)
-    # Inline barrier in same scope as read_text() so CodeQL recognises the guard.
-    base_str = os.path.realpath(str(base_path))
-    candidate_str = os.path.normpath(str(validated))
+    _resolve_path_under_base(path_obj, base_path)
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
@@ -432,10 +441,9 @@ def safe_write_text(
         encoding: Text encoding (default: 'utf-8').
 
     """
-    validated = _resolve_path_under_base(path_obj, base_path)
-    # Inline barrier in same scope as write_text() so CodeQL recognises the guard.
-    base_str = os.path.realpath(str(base_path))
-    candidate_str = os.path.normpath(str(validated))
+    _resolve_path_under_base(path_obj, base_path)
+    base_str = str(_normalize_trusted_base(base_path))
+    candidate_str = os.path.normpath(str(path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
@@ -463,10 +471,9 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
 
     """
     safe_base = _normalize_trusted_base(base_path)
-    validated = _resolve_path_under_base(path_obj, safe_base)
-    # Inline barrier in same scope as iterdir() so CodeQL recognises the guard.
-    base_str = os.path.realpath(str(safe_base))
-    candidate_str = os.path.normpath(str(validated))
+    _resolve_path_under_base(path_obj, safe_base)
+    base_str = str(safe_base)
+    candidate_str = os.path.normpath(str(path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:

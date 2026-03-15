@@ -272,14 +272,14 @@ def test_list_sls_files(tmp_path: Path) -> None:
     (tmp_path / "states" / "init.sls").write_text("# sls", encoding="utf-8")
     (tmp_path / "states" / "sub").mkdir()
     (tmp_path / "states" / "sub" / "install.sls").write_text("# sls", encoding="utf-8")
-    files = _list_sls_files(tmp_path)
+    files = _list_sls_files(tmp_path, tmp_path)
     assert len(files) == 2
     assert all(f.endswith(".sls") for f in files)
 
 
 def test_list_sls_files_empty_dir(tmp_path: Path) -> None:
     """Empty directory returns empty list."""
-    assert _list_sls_files(tmp_path) == []
+    assert _list_sls_files(tmp_path, tmp_path) == []
 
 
 # ---------------------------------------------------------------------------
