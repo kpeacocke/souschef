@@ -427,7 +427,6 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
     Args:
         path_obj: Path to the file to read.
         base_path: Trusted base directory for containment check.
-    return safe_path.read_text(encoding=encoding)
 
     Returns:
         File contents as string.
@@ -436,27 +435,13 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
         ValueError: If the path escapes the base directory.
 
     """
-    # Enforce containment before any filesystem access.
-    _resolve_path_under_base(path_obj, base_path)
-
-    safe_base = _normalize_trusted_base(base_path)
-    base_str = os.path.normpath(str(safe_base))
-
-    # Resolve and validate the candidate path against the trusted base.
     safe_path = _resolve_path_under_base(path_obj, base_path)
         common = os.path.commonpath([candidate_str, base_str])
-    candidate_str = os.path.normpath(str(safe_path))
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg) from e
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
-
     # Read from the fully validated, normalised path only.
     return Path(candidate_str).read_text(encoding=encoding)
-    safe_path.write_text(text, encoding=encoding)
-
+    return safe_path.read_text(encoding=encoding)
 def safe_write_text(
+
     path_obj: Path, base_path: Path, text: str, encoding: str = "utf-8"
 ) -> None:
     """
