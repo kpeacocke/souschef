@@ -384,9 +384,10 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     safe_base = _normalize_trusted_base(base_path)
     safe_dir = _resolve_path_under_base(dir_path, safe_base)
 
-    results: list[Path] = []
+    # Resolve and validate the candidate path against the trusted base.
+    safe_path = _resolve_path_under_base(path_obj, base_path)
     for result in safe_dir.glob(pattern):
-        validated_result: Path = _resolve_path_under_base(result, safe_base)
+    candidate_str = os.path.normpath(str(safe_path))
         results.append(validated_result)
 
     return results
@@ -395,7 +396,7 @@ def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
 def safe_mkdir(
     path_obj: Path, base_path: Path, parents: bool = False, exist_ok: bool = False
 ) -> None:
-    """Create directory after enforcing base containment."""
+    safe_path.mkdir(parents=parents, exist_ok=exist_ok)
     # Enforce containment at the path utilities level.
     _resolve_path_under_base(path_obj, base_path)
 
@@ -414,9 +415,10 @@ def safe_mkdir(
         msg = f"Path traversal attempt: escapes {base_path}"
         raise ValueError(msg)
 
-    # Perform the filesystem operation only on the validated candidate.
+    # Resolve and validate the candidate path against the trusted base.
+    safe_path = _resolve_path_under_base(path_obj, base_path)
     Path(candidate_str).mkdir(parents=parents, exist_ok=exist_ok)
-
+    candidate_str = os.path.normpath(str(safe_path))
 
 def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
     """
@@ -425,7 +427,7 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
     Args:
         path_obj: Path to the file to read.
         base_path: Trusted base directory for containment check.
-        encoding: Text encoding (default: 'utf-8').
+    return safe_path.read_text(encoding=encoding)
 
     Returns:
         File contents as string.
@@ -441,9 +443,10 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
     base_str = os.path.normpath(str(safe_base))
 
     candidate_str = os.path.normpath(str(Path(base_str) / path_obj))
-    try:
+    # Resolve and validate the candidate path against the trusted base.
+    safe_path = _resolve_path_under_base(path_obj, base_path)
         common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
+    candidate_str = os.path.normpath(str(safe_path))
         msg = f"Path traversal attempt: escapes {base_path}"
         raise ValueError(msg) from e
     if common != base_str:
@@ -452,7 +455,7 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
 
     # Read from the fully validated, normalised path only.
     return Path(candidate_str).read_text(encoding=encoding)
-
+    safe_path.write_text(text, encoding=encoding)
 
 def safe_write_text(
     path_obj: Path, base_path: Path, text: str, encoding: str = "utf-8"
