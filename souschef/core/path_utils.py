@@ -342,10 +342,6 @@ def safe_exists(path_obj: Path, base_path: Path) -> bool:
 def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
     """Check directory-ness after enforcing base containment."""
     validated = _resolve_path_under_base(path_obj, base_path)
-    base_str = str(_normalize_trusted_base(base_path))
-    try:
-    # Additionally enforce containment and character-level validation via the
-    # central resolver. This performs symlink-aware checks and raises on any
     # escape attempt before we touch the filesystem.
     _resolve_path_under_base(path_obj, base_path)
         common = os.path.commonpath([candidate_str, base_str])
@@ -355,6 +351,9 @@ def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
 
     except ValueError as e:
         msg = f"Path traversal attempt: escapes {base_path}"
+
+    # BARRIER 1: Ensure the candidate path stays within the trusted base
+    # using a pure string commonpath check.
         raise ValueError(msg) from e
     if common != base_str:
         msg = f"Path traversal attempt: escapes {base_path}"
@@ -364,8 +363,21 @@ def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
 
 def safe_is_file(path_obj: Path, base_path: Path) -> bool:
     """Check file-ness after enforcing base containment."""
+    # BARRIER 2: Resolve symlinks via realpath() and re-validate containment.
+    base_resolved = os.path.realpath(base_str)
+    resolved_str = os.path.realpath(candidate_str)
+    try:
+        common2 = os.path.commonpath([resolved_str, base_resolved])
+    except ValueError as e:
+        msg = f"Path traversal attempt: escapes {base_path}"
+        raise ValueError(msg) from e
+    if common2 != base_resolved:
+        msg = f"Path traversal attempt: escapes {base_path}"
+        raise ValueError(msg)
+
     # First, enforce containment using the path utilities' resolver. This
-    # ensures the candidate cannot escape the trusted base directory.
+    validated_path = Path(resolved_str)
+    return validated_path.is_file()
     validated = _resolve_path_under_base(path_obj, base_path)
 
     # Normalise the trusted base using the dedicated helper.
@@ -381,14 +393,25 @@ def safe_is_file(path_obj: Path, base_path: Path) -> bool:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
         msg = f"Path traversal attempt: escapes {base_path}"
+    # Normalise and resolve the trusted base directory.
         raise ValueError(msg) from e
     if common != base_str:
         msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
+    base_str = os.path.normpath(str(safe_base))
+    results: list[Path] = []
 
     # Only use the fully validated, normalised candidate for filesystem I/O.
-    return validated.is_file()
-
+        # Resolve each result to an absolute, normalised string.
+        candidate_str = os.path.normpath(str(result))
+        try:
+            common = os.path.commonpath([candidate_str, base_str])
+        except ValueError as e:
+            msg = f"Path traversal attempt during glob: escapes {base_path}"
+            raise ValueError(msg) from e
+        if common != base_str:
+            msg = f"Path traversal attempt during glob: escapes {base_path}"
+            raise ValueError(msg)
+        results.append(result)
 
 def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
     """
