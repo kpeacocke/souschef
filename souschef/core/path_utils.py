@@ -527,5 +527,8 @@ def _check_symlink_safety(path_obj: Path, base_path: Path | None = None) -> None
                 )
                 raise ValueError(msg)
             current = current.parent
-    except (FileNotFoundError, PermissionError, NotADirectoryError, OSError):
+    except OSError:
+        # FileNotFoundError, PermissionError, NotADirectoryError, and
+        # OSError(ENAMETOOLONG) all indicate the path doesn't/can't exist
+        # as a symlink — treat as safe.
         return
