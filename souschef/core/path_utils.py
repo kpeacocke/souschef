@@ -311,8 +311,14 @@ def safe_exists(path_obj: Path, base_path: Path) -> bool:
     # Inline BARRIER so CodeQL sees normpath+commonpath in the same scope as
     # the I/O call (.exists).  Mirrors the containment checks inside
     # _resolve_path_under_base and applies to the sanitised value.
-    base_str = str(_normalize_trusted_base(base_path))
-    candidate_str = os.path.normpath(str(validated))
+    safe_base = _normalize_trusted_base(base_path)
+    base_str = os.path.normpath(str(safe_base))
+
+    # Build a candidate path string that is explicitly rooted under the
+    # trusted base and then normalised. This keeps the containment logic
+    # in pure string space and matches the CodeQL-recognised pattern for
+    # path sanitisation.
+    candidate_str = os.path.normpath(str(Path(base_str) / path_obj))
     try:
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
@@ -321,7 +327,10 @@ def safe_exists(path_obj: Path, base_path: Path) -> bool:
     if common != base_str:
         msg = f"Path traversal attempt: escapes {base_path}"
         raise ValueError(msg)
-    return validated.exists()
+
+    # Only use the fully validated, normalised candidate for filesystem I/O.
+    candidate_path = Path(candidate_str)
+    return candidate_path.exists()
 
 
 def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
