@@ -1,6 +1,7 @@
 """SaltStack SLS file parser."""
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -521,18 +522,32 @@ def _parse_top_environments(data: dict[str, Any]) -> dict[str, dict[str, list[st
     return environments
 
 
-def _list_sls_files(directory: Path) -> list[str]:
+def _list_sls_files(directory: Path, base_path: Path) -> list[str]:
     """
     Recursively list all SLS files in a directory.
 
     Args:
         directory: Root directory to search.
+        base_path: Trusted base directory for path containment check.
 
     Returns:
         List of relative SLS file paths.
 
     """
-    return [str(p.relative_to(directory)) for p in sorted(directory.rglob("*.sls"))]
+    base_str = os.path.normpath(str(base_path))
+    candidate_str = os.path.normpath(str(directory))
+    try:
+        common = os.path.commonpath([candidate_str, base_str])
+    except ValueError as exc:
+        msg = f"Path traversal attempt: escapes {base_path}"
+        raise ValueError(msg) from exc
+    if common != base_str:
+        msg = f"Path traversal attempt: escapes {base_path}"
+        raise ValueError(msg)
+    return [
+        str(p.relative_to(directory))
+        for p in sorted(Path(candidate_str).rglob("*.sls"))
+    ]
 
 
 def parse_salt_directory(salt_dir: str) -> str:
@@ -564,7 +579,7 @@ def parse_salt_directory(salt_dir: str) -> str:
     except ValueError as e:
         return f"Error: {e}"
 
-    sls_files = _list_sls_files(safe_path)
+    sls_files = _list_sls_files(safe_path, workspace_root)
     top_files = [f for f in sls_files if Path(f).name == "top.sls"]
     pillar_files = [f for f in sls_files if "pillar" in f.lower()]
     state_files = [f for f in sls_files if f not in top_files and f not in pillar_files]
@@ -751,7 +766,7 @@ def assess_salt_complexity(salt_dir: str) -> str:
     except ValueError as e:
         return json.dumps({"error": str(e)})
 
-    sls_files = _list_sls_files(safe_path)
+    sls_files = _list_sls_files(safe_path, workspace_root)
     file_reports: list[dict[str, Any]] = []
     total_score_sum = 0.0
     total_states = 0

@@ -914,7 +914,7 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
     warnings: list[str] = []
     structure: dict[str, list[str]] = {}
 
-    sls_files = _list_sls_files(safe_salt)
+    sls_files = _list_sls_files(safe_salt, workspace_root)
 
     # Group files by top-level directory (role name)
     role_files: dict[str, list[str]] = {}
