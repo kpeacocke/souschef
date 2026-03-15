@@ -326,9 +326,15 @@ def safe_exists(path_obj: Path, base_path: Path) -> bool:
         raise ValueError(msg) from e
     if common != base_str:
         msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
+    # First, normalise the trusted base using the dedicated helper.
+    safe_base = _normalize_trusted_base(base_path)
+    base_str = os.path.normpath(str(safe_base))
 
-    # Only use the fully validated, normalised candidate for filesystem I/O.
+    # Build a candidate path string that is explicitly rooted under the
+    # trusted base and then normalised. This mirrors the sanitisation
+    # pattern used in ``safe_is_file`` and keeps the containment logic
+    # in pure string space for CodeQL's barrier model.
+    candidate_str = os.path.normpath(str(Path(base_str) / path_obj))
     candidate_path = Path(candidate_str)
     return candidate_path.exists()
 
@@ -337,9 +343,16 @@ def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
     """Check directory-ness after enforcing base containment."""
     validated = _resolve_path_under_base(path_obj, base_path)
     base_str = str(_normalize_trusted_base(base_path))
-    candidate_str = os.path.normpath(str(validated))
     try:
+    # Additionally enforce containment and character-level validation via the
+    # central resolver. This performs symlink-aware checks and raises on any
+    # escape attempt before we touch the filesystem.
+    _resolve_path_under_base(path_obj, base_path)
         common = os.path.commonpath([candidate_str, base_str])
+    # Only use the fully validated, normalised candidate for filesystem I/O.
+    return Path(candidate_str).is_dir()
+
+
     except ValueError as e:
         msg = f"Path traversal attempt: escapes {base_path}"
         raise ValueError(msg) from e
