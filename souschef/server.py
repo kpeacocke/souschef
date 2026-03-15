@@ -516,7 +516,7 @@ from souschef.parsers.template import (
 yaml = importlib.import_module("yaml")  # nosec B506: YAML safe loading enforced in module
 
 # Concrete references keep test-facing Salt re-exports visible to static analysers.
-_SALT_TEST_EXPORT_REFERENCES = (
+_unused_SALT_TEST_EXPORT_REFERENCES = (
     _build_state_entry,
     _detect_salt_dependencies,
     _extract_args_from_value,
