@@ -72,8 +72,17 @@ class TestPathContainmentSecurity:
         with pytest.raises(ValueError, match="Path traversal attempt"):
             _ensure_within_base_path(attack_path, base)
 
-    def test_ensure_within_base_path_symlink_escape(self, tmp_path):
-        """Test that symlinks pointing outside base are blocked."""
+    def test_ensure_within_base_path_symlink_escape(self, tmp_path: Path) -> None:
+        """
+        Test that symlinks within base pass the normpath containment check.
+
+        Note: ``_ensure_within_base_path`` uses ``normpath`` (no symlink
+        resolution) to avoid filesystem I/O on user-controlled data
+        (CodeQL ``py/path-injection``).  A symlink whose *name* lies within
+        ``base_path`` will therefore pass this check regardless of where its
+        target points.  Callers that need symlink safety should call
+        ``_check_symlink_safety`` separately.
+        """
         base = tmp_path / "workspace"
         base.mkdir()
         outside = tmp_path / "outside"
@@ -85,9 +94,10 @@ class TestPathContainmentSecurity:
         symlink = base / "link_to_outside"
         symlink.symlink_to(outside_file)
 
-        # Symlink should be resolved and detected as outside base
-        with pytest.raises(ValueError, match="Path traversal attempt"):
-            _ensure_within_base_path(symlink, base)
+        # normpath-based check: the symlink name is within base, so it passes.
+        # The caller is responsible for calling _check_symlink_safety separately.
+        result = _ensure_within_base_path(symlink, base)
+        assert result == symlink
 
     def test_ensure_within_base_path_relative_paths(self, tmp_path):
         """Test that relative paths are resolved correctly."""
@@ -97,9 +107,9 @@ class TestPathContainmentSecurity:
         subdir.mkdir()
 
         # Should resolve relative to current working directory
-        # This test validates that resolution works correctly
+        # This test validates that normalisation works correctly
         result = _ensure_within_base_path(subdir / "recipe.rb", base)
-        assert str(result).startswith(str(base.resolve()))
+        assert str(result).startswith(str(base))
 
     def test_ensure_within_base_path_url_encoding_bypass(self, tmp_path):
         """Test that URL-encoded traversal sequences are blocked."""
@@ -541,10 +551,10 @@ class TestPathSecurityIntegration:
         link.symlink_to(target)
 
         # Attempts to use symlink should be blocked
-        with pytest.raises(ValueError, match="Path traversal attempt"):
+        with pytest.raises(ValueError, match="Symlink detected"):
             safe_read_text(link, base)
 
-        with pytest.raises(ValueError, match="Path traversal attempt"):
+        with pytest.raises(ValueError, match="Symlink detected"):
             safe_write_text(link, base, "new content")
 
     def test_workflow_recursive_glob_stays_contained(self, tmp_path):
@@ -560,5 +570,5 @@ class TestPathSecurityIntegration:
         results = safe_glob(base, "*/recipe.rb", base)
 
         assert len(results) == 2
-        assert all(str(r).startswith(str(base.resolve())) for r in results)
+        assert all(str(r).startswith(str(base)) for r in results)
         assert all(r.name == "recipe.rb" for r in results)

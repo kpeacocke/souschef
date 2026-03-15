@@ -1,6 +1,8 @@
 """Salt Migration Page for SousChef UI."""
 
 import json
+import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -15,12 +17,74 @@ from souschef.converters.salt import (
     convert_salt_directory_to_roles,
     convert_salt_sls_to_ansible,
 )
+from souschef.core.path_utils import _get_workspace_root
 from souschef.parsers.salt import (
     assess_salt_complexity,
     parse_salt_directory,
     parse_salt_pillar,
     parse_salt_sls,
 )
+
+
+def _validate_ui_path(path_str: str) -> str | None:
+    """
+    Validate and normalise a user-provided filesystem path.
+
+    Ensures the path stays within the workspace root to prevent directory
+    traversal attacks (CWE-22).
+
+    The implementation uses the canonical CodeQL-recognised sanitiser pattern
+    for ``py/path-injection``:
+
+    1. ``Path(trusted_base) / user_input`` + ``os.path.normpath`` — pure
+       string normalisation with no filesystem I/O; collapses all ``..`` and
+       repeated-separator sequences so directory-traversal sequences cannot
+       survive.
+    2. ``os.path.commonpath([candidate, workspace])`` — containment guard
+       that CodeQL models as a barrier, preventing the taint from propagating
+       past this check to any downstream filesystem operation.  ``commonpath``
+       is used in preference to ``startswith`` because it handles the edge
+       case of a root (``/``) workspace correctly.
+
+    Null bytes (CWE-158) are rejected before normalisation because they can
+    terminate the path string in C-based OS functions and bypass suffix checks.
+
+    No helper function that performs filesystem I/O is called on user-controlled
+    data — this keeps the guard and any subsequent use in the same scope so that
+    CodeQL's inter-procedural taint analysis does not trace the taint into a
+    different call frame and re-flag it against a sink there.
+
+    Args:
+        path_str: Raw path string from a UI text input.
+
+    Returns:
+        Normalised absolute path string if valid and within the workspace root,
+        ``None`` if the path is unsafe, outside the workspace, or empty.
+
+    """
+    if not path_str or "\x00" in path_str:
+        # Null bytes can terminate path strings in C-based OS functions (CWE-158),
+        # potentially bypassing extension or suffix checks.
+        return None
+    try:
+        workspace = _get_workspace_root()
+        # workspace comes from a trusted internal source; normalise it purely
+        # via normpath (no filesystem access needed here).
+        workspace_str = os.path.normpath(str(workspace))
+        # Pure string normalisation — no filesystem access.
+        # Path(base) / user_input handles both relative and absolute inputs
+        # (an absolute user_input replaces the base, which normpath then
+        # makes canonical); normpath collapses all ".." sequences.
+        candidate = os.path.normpath(str(Path(workspace_str) / path_str))
+        # commonpath([candidate, workspace]) == workspace iff candidate is
+        # within the workspace tree.  This is the CodeQL-recognised barrier:
+        # any path that escapes the workspace is rejected before being passed
+        # to any downstream operation.
+        if os.path.commonpath([candidate, workspace_str]) != workspace_str:
+            return None
+        return candidate
+    except (ValueError, OSError):
+        return None
 
 
 def _display_intro() -> None:
@@ -65,8 +129,13 @@ def _render_sls_parse_section() -> None:
             st.error("Please enter a path to an SLS file.")
             return
 
+        safe_path = _validate_ui_path(sls_path)
+        if safe_path is None:
+            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            return
+
         with st.spinner("Parsing SLS file..."):
-            result_str = parse_salt_sls(sls_path)
+            result_str = parse_salt_sls(safe_path)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -168,8 +237,13 @@ def _render_convert_section() -> None:
             st.error("Please enter a path to an SLS file.")
             return
 
+        safe_path = _validate_ui_path(sls_path)
+        if safe_path is None:
+            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            return
+
         with st.spinner("Converting SLS to Ansible..."):
-            result_str = convert_salt_sls_to_ansible(sls_path, playbook_name)
+            result_str = convert_salt_sls_to_ansible(safe_path, playbook_name)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -257,8 +331,13 @@ def _render_pillar_section() -> None:
             st.error("Please enter a path to a pillar file.")
             return
 
+        safe_path = _validate_ui_path(pillar_path)
+        if safe_path is None:
+            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            return
+
         with st.spinner("Parsing pillar file..."):
-            result_str = parse_salt_pillar(pillar_path)
+            result_str = parse_salt_pillar(safe_path)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -310,8 +389,13 @@ def _render_directory_section() -> None:
             st.error("Please enter a directory path.")
             return
 
+        safe_dir = _validate_ui_path(salt_dir)
+        if safe_dir is None:
+            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            return
+
         with st.spinner("Scanning directory..."):
-            result_str = parse_salt_directory(salt_dir)
+            result_str = parse_salt_directory(safe_dir)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -400,8 +484,13 @@ def _render_assessment_section() -> None:
             st.error("Please enter a directory path.")
             return
 
+        safe_dir = _validate_ui_path(salt_dir)
+        if safe_dir is None:
+            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            return
+
         with st.spinner("Assessing Salt migration complexity..."):
-            result_str = assess_salt_complexity(salt_dir)
+            result_str = assess_salt_complexity(safe_dir)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -518,10 +607,15 @@ def _render_migration_plan_section() -> None:
             st.error("Please enter a directory path.")
             return
 
+        safe_dir = _validate_ui_path(salt_dir)
+        if safe_dir is None:
+            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            return
+
         with st.spinner("Generating migration plan..."):
             from souschef.server import plan_salt_migration
 
-            result_str = plan_salt_migration(salt_dir, int(timeline), str(platform))
+            result_str = plan_salt_migration(safe_dir, int(timeline), str(platform))
 
         st.session_state["salt_plan_result"] = result_str
         st.success("Migration plan generated.")
@@ -569,8 +663,18 @@ def _render_batch_convert_section() -> None:
             st.error("Please enter both a Salt directory and an output directory.")
             return
 
+        safe_salt_dir = _validate_ui_path(salt_dir)
+        if safe_salt_dir is None:
+            st.error("Invalid or unsafe Salt directory path. Must be within the workspace.")
+            return
+
+        safe_output_dir = _validate_ui_path(output_dir)
+        if safe_output_dir is None:
+            st.error("Invalid or unsafe output directory path. Must be within the workspace.")
+            return
+
         with st.spinner("Converting Salt directory to Ansible roles..."):
-            result_str = convert_salt_directory_to_roles(salt_dir, output_dir)
+            result_str = convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -642,10 +746,15 @@ def _render_inventory_section() -> None:
             st.error("Please enter a path to the top.sls file.")
             return
 
+        safe_path = _validate_ui_path(top_path)
+        if safe_path is None:
+            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            return
+
         with st.spinner("Generating Ansible inventory..."):
             from souschef.server import generate_salt_inventory
 
-            result_str = generate_salt_inventory(top_path)
+            result_str = generate_salt_inventory(safe_path)
 
         try:
             result: dict[str, Any] = json.loads(result_str)

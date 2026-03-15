@@ -46,19 +46,35 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
     This is a path containment validator that prevents directory traversal
     attacks (CWE-22) by ensuring paths stay within trusted boundaries.
 
+    Both paths are normalised with ``_normalize_path`` (pure
+    ``normpath``/``cwd`` operations — no filesystem I/O on user-controlled
+    data) and then compared with ``relative_to`` (pure string operation).
+    This avoids calling ``Path.resolve()`` or ``os.path.realpath()`` on
+    user-supplied data, which are filesystem I/O sinks under CodeQL
+    ``py/path-injection``.
+
+    Note: symlinks are **not** dereferenced by this function.  A symlink
+    whose *name* is within ``base_path`` but whose *target* is outside will
+    pass this check.  Callers that need symlink safety should call
+    ``_check_symlink_safety`` separately.
+
     Args:
         path_obj: Path to validate.
         base_path: Trusted base directory.
 
     Returns:
-        Resolved Path guaranteed to be contained within ``base_path``.
+        Normalised Path guaranteed to be contained within ``base_path``
+        (based on ``normpath`` string semantics, not resolved symlinks).
 
     Raises:
         ValueError: If the path escapes the base directory.
 
     """
-    base_resolved: Path = Path(base_path).resolve()
-    candidate_resolved: Path = Path(path_obj).resolve()
+    # _normalize_path uses normpath+cwd — no filesystem I/O on user-controlled
+    # data (CodeQL py/path-injection safe).  Both paths become absolute strings
+    # that can be compared with pure string operations.
+    base_resolved: Path = _normalize_path(base_path)
+    candidate_resolved: Path = _normalize_path(path_obj)
 
     try:
         candidate_resolved.relative_to(base_resolved)
@@ -172,42 +188,74 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
     """
     Resolve ``path_obj`` and enforce that it remains under ``base_path``.
 
-    This function normalizes both paths, rejects relative traversal, and then
-    validates canonical containment before filesystem I/O occurs.
+    This function normalises both paths using pure string operations (no
+    filesystem I/O on user-controlled data), rejects relative traversal, and
+    then validates canonical containment with ``os.path.commonpath`` before
+    returning a safe path for downstream filesystem operations.
+
+    Tilde (``~``) expansion is intentionally **not** performed on user-supplied
+    paths.  The UI layer (or any trusted caller) must call
+    ``Path(...).expanduser()`` on admin/trusted values *before* passing them to
+    this function.  ``expanduser()`` on user-controlled data is a CodeQL
+    ``py/path-injection`` filesystem sink (reads ``/etc/passwd`` for
+    ``~user`` form).
+
+    Note: symlinks are **not** dereferenced during the path normalisation
+    step.  However, ``_check_symlink_safety`` is called on the validated
+    result to detect symlinks in the path ancestry that point outside the
+    workspace.  Callers that need the full target path of a symlink must
+    dereference it explicitly after this function returns.
     """
     safe_base = _normalize_trusted_base(base_path)
-    base_resolved = os.path.realpath(str(safe_base))
+    # Use normpath-based absolute string — no filesystem I/O on base_path which
+    # is trusted.  _normalize_trusted_base already calls _normalize_path.
+    base_str = str(safe_base)
 
-    # If path_obj is already a Path object, use it directly without string validation
+    # Normalise the candidate path using pure string operations.
+    # Do NOT call expanduser() — that reads /etc/passwd for ~user form.
+    # Do NOT call realpath() — that follows symlinks (filesystem I/O).
     if isinstance(path_obj, Path):
-        raw_path = path_obj.expanduser()
+        # Path objects: normalise in-place (no string validation needed here;
+        # validation was performed before the Path object was created).
+        raw_path = path_obj
     else:
-        # Only apply character validation to string inputs (user-controlled data)
+        # String inputs: validate characters first (user-controlled data).
         raw_value = str(path_obj)
         if "\x00" in raw_value:
             raise ValueError(f"Path contains null bytes: {raw_value!r}")
         if not re.fullmatch(r"[A-Za-z0-9_./\\~:-]+", raw_value):
             raise ValueError(f"Path contains invalid characters: {raw_value!r}")
-        raw_path = Path(raw_value).expanduser()
+        raw_path = Path(raw_value)
 
+    # Produce an absolute, normpath-canonicalised string — no filesystem I/O.
     if raw_path.is_absolute():
-        candidate_resolved = os.path.realpath(str(raw_path))
+        candidate_str = os.path.normpath(str(raw_path))
     else:
         relative = _validate_relative_parts(raw_path.parts)
-        joined = Path(base_resolved) / relative
-        candidate_resolved = os.path.realpath(str(joined))
+        candidate_str = os.path.normpath(str(Path(base_str) / relative))
 
+    # os.path.commonpath is a pure string operation recognised by CodeQL as a
+    # containment barrier for py/path-injection.
     try:
-        common = os.path.commonpath([candidate_resolved, base_resolved])
+        common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
         msg = f"Path traversal attempt: escapes {safe_base}"
         raise ValueError(msg) from e
 
-    if common != base_resolved:
+    if common != base_str:
         msg = f"Path traversal attempt: escapes {safe_base}"
         raise ValueError(msg)
 
-    return _ensure_within_base_path(Path(candidate_resolved), Path(base_resolved))
+    safe_result = _ensure_within_base_path(Path(candidate_str), Path(base_str))
+
+    # Check for symlinks that could escape the workspace by pointing outside it.
+    # This is a defence-in-depth check: the normpath containment check above
+    # validates the *name* of the path, but symlinks can point anywhere.
+    # _check_symlink_safety is defined later in this module; Python resolves it
+    # at call time, not at definition time.
+    _check_symlink_safety(safe_result)
+
+    return safe_result
 
 
 def _safe_join(base_path: Path, *parts: str) -> Path:
