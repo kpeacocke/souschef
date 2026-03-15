@@ -534,20 +534,29 @@ def _list_sls_files(directory: Path, base_path: Path) -> list[str]:
 
     """
     # Ensure we are working with Path objects.
-    base = base_path if isinstance(base_path, Path) else Path(base_path)
-    candidate = directory if isinstance(directory, Path) else Path(directory)
-
+    # Normalise paths using the shared path_utils helper. This performs
+    # pure string normalisation (no filesystem I/O on user-controlled data)
+    # and yields absolute paths suitable for string-based containment checks.
+    base = _normalize_path(base_path)
+    candidate = _normalize_path(directory)
     # Enforce that the candidate directory is within the trusted base.
-    try:
+    # Enforce that the candidate directory is within the trusted base using
+    # os.path.commonpath, which CodeQL models as a sanitiser/boundary for
+    # py/path-injection (CWE-22).
+    base_str = os.path.normpath(str(base))
+    candidate_str = os.path.normpath(str(candidate))
         candidate.relative_to(base)
-    except ValueError as exc:
+        if os.path.commonpath([candidate_str, base_str]) != base_str:
+            msg = f"Path traversal attempt: escapes {base_str}"
+            raise ValueError(msg)
         msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg) from exc
+        # Re-wrap any ValueError from commonpath to keep a consistent message.
+        msg = f"Path traversal attempt: escapes {base_str}"
 
     return [
         str(p.relative_to(candidate))
         for p in sorted(candidate.rglob("*.sls"))
-    ]
+        for p in sorted(Path(candidate).rglob("*.sls"))
 
 
 def parse_salt_directory(salt_dir: str) -> str:
