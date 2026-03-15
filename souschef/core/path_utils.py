@@ -427,7 +427,7 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
         path_obj: Path to the file to read.
         base_path: Trusted base directory for containment check.
 
-    Returns:
+        encoding: Text encoding (default: 'utf-8').
         File contents as string.
 
     Raises:
@@ -436,27 +436,15 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
     """
     safe_path = _resolve_path_under_base(path_obj, base_path)
         common = os.path.commonpath([candidate_str, base_str])
-    # Read from the fully validated, normalised path only.
-    return Path(candidate_str).read_text(encoding=encoding)
-    return safe_path.read_text(encoding=encoding)
-def safe_write_text(
-
-    path_obj: Path, base_path: Path, text: str, encoding: str = "utf-8"
-) -> None:
-    """
+    # Resolve and validate the path against the trusted base **once**.
+    # _resolve_path_under_base performs full normalisation, symlink
+    # resolution and commonpath-based containment checks before any I/O.
     Write text to file after enforcing base containment.
-
-    Args:
-        path_obj: Path to the file to write.
-        base_path: Trusted base directory for containment check.
-        text: Text content to write.
-        encoding: Text encoding (default: 'utf-8').
-
     """
-    _resolve_path_under_base(path_obj, base_path)
-    base_str = str(_normalize_trusted_base(base_path))
-    candidate_str = os.path.normpath(str(path_obj))
+    # All filesystem access is performed via the fully validated path.
+    return safe_path.read_text(encoding=encoding)
     try:
+
         common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
         msg = f"Path traversal attempt: escapes {base_path}"
@@ -469,21 +457,19 @@ def safe_write_text(
 
 def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
     """
-    Iterate directory contents after enforcing base containment.
-
-    Args:
-        path_obj: Directory path to iterate.
-        base_path: Trusted base directory for containment check.
-
-    Returns:
-        List of validated paths within the directory.
-
     Raises:
-        ValueError: If path escapes the base directory.
+        ValueError: If the path escapes the base directory.
 
-    """
+    Iterate directory contents after enforcing base containment.
+    # Resolve and validate the path against the trusted base **once**.
+    # _resolve_path_under_base performs full normalisation, symlink
+    # resolution and commonpath-based containment checks before any I/O.
+    safe_path = _resolve_path_under_base(path_obj, base_path)
     safe_base = _normalize_trusted_base(base_path)
+    # All filesystem access is performed via the fully validated path.
+    safe_path.write_text(text, encoding=encoding)
     _resolve_path_under_base(path_obj, safe_base)
+
     base_str = str(safe_base)
     candidate_str = os.path.normpath(str(path_obj))
     try:
