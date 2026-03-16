@@ -388,6 +388,7 @@ def _call_lightspeed_api(
         safe_base_url = validate_user_provided_url(
             client["base_url"],
             allowed_hosts={"api.redhat.com"},
+            strip_path=True,
         )
     except (ValueError, KeyError) as exc:
         return f"{ERROR_PREFIX} Invalid Lightspeed base URL: {exc}"

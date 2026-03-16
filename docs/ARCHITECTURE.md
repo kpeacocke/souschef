@@ -165,7 +165,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `parsers/` - Input Parsing
 **Purpose:** Extract structured data from source configuration management tools.
-**Status:** ✅ Exists (Chef parsers, PowerShell parser, Bash parser, Puppet parser); 🔄 Planned (Salt)
+**Status:** ✅ Exists (Chef parsers, PowerShell parser, Bash parser, Puppet parser, Salt parser)
 **Dependencies:** `core/`, `ir/`, `filesystem/`
 **Contains:**
 - `recipe.py` - Chef recipe parser
@@ -176,7 +176,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - `inspec.py` - InSpec profile parser
 - `ansible_inventory.py` - Ansible inventory parser
 - ✅ `puppet.py` - Puppet manifest parser (14 recognised resource types, 10 mapped to Ansible modules, unsupported construct detection)
-- 🔄 `salt.py` - Salt state parser (planned)
+- ✅ `salt.py` - Salt state parser
 - ✅ `bash.py` - Bash script parser (13 operation categories, confidence scoring, sensitive data detection)
 - ✅ `powershell.py` - PowerShell script parser
 
