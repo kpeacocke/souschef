@@ -13,7 +13,7 @@ The `souschef.server` module provides the MCP (Model Context Protocol) server im
 
 ## MCP Tools
 
-See the [MCP Tools Reference](../user-guide/mcp-tools.md) for complete documentation of all 47 available MCP tools with usage examples.
+See the [MCP Tools Reference](../user-guide/mcp-tools.md) for complete documentation of all available MCP tools with usage examples.
 
 ---
 
