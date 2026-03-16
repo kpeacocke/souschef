@@ -48,6 +48,7 @@ from souschef.ui.pages.history import show_history_page
 from souschef.ui.pages.migration_config import show_migration_config_page
 from souschef.ui.pages.powershell_migration import show_powershell_migration_page
 from souschef.ui.pages.puppet_migration import show_puppet_migration_page
+from souschef.ui.pages.salt_migration import show_salt_migration_page
 
 # Constants
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
@@ -68,6 +69,7 @@ NAV_ANSIBLE_PLANNING = "Ansible Upgrade Planning"
 NAV_ANSIBLE_VALIDATION = "Collection Validation"
 NAV_POWERSHELL_MIGRATION = "PowerShell Migration"
 NAV_PUPPET_MIGRATION = "Puppet Migration"
+NAV_SALT_MIGRATION = "Salt Migration"
 ANSIBLE_FEATURES = {
     NAV_ANSIBLE_ASSESSMENT,
     NAV_ANSIBLE_PLANNING,
@@ -81,6 +83,9 @@ CHEF_FEATURES = {
     NAV_MIGRATION_PLANNING,
     NAV_MIGRATION_CONFIG,
     NAV_DEPENDENCY_MAPPING,
+}
+SALT_FEATURES = {
+    NAV_SALT_MIGRATION,
 }
 SHARED_FEATURES = {
     NAV_HISTORY,
@@ -196,6 +201,7 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
         ("Ansible Assessment", NAV_ANSIBLE_ASSESSMENT),
         ("Ansible Upgrade", NAV_ANSIBLE_PLANNING),
         ("Collection Validation", NAV_ANSIBLE_VALIDATION),
+        ("Salt Migration", NAV_SALT_MIGRATION),
         ("History", NAV_HISTORY),
         ("Validation Reports", NAV_VALIDATION_REPORTS),
         ("AI Settings", NAV_AI_SETTINGS),
@@ -216,13 +222,18 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
 
 def _display_navigation_section(current_page: str) -> None:
     """Display tabbed navigation with feature-specific buttons."""
-    tab_chef, tab_ansible, tab_tools = st.tabs(["Chef", "Ansible", "Tools"])
+    tab_chef, tab_ansible, tab_salt, tab_tools = st.tabs(
+        ["Chef", "Ansible", "Salt", "Tools"]
+    )
 
     with tab_chef:
         _render_buttons_for_features(CHEF_FEATURES, current_page)
 
     with tab_ansible:
         _render_buttons_for_features(ANSIBLE_FEATURES, current_page)
+
+    with tab_salt:
+        _render_buttons_for_features(SALT_FEATURES, current_page)
 
     with tab_tools:
         _render_buttons_for_features(SHARED_FEATURES, current_page)
@@ -269,6 +280,7 @@ def _route_to_page(page: str) -> None:
         NAV_ANSIBLE_PLANNING: show_ansible_planning_page,
         NAV_ANSIBLE_VALIDATION: show_ansible_validation_page,
         NAV_POWERSHELL_MIGRATION: show_powershell_migration_page,
+        NAV_SALT_MIGRATION: show_salt_migration_page,
     }
 
     route_func = page_routes.get(page)

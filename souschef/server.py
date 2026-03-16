@@ -171,6 +171,35 @@ from souschef.converters.resource import (  # noqa: F401
 from souschef.converters.resource import (
     convert_resource_to_task as _convert_resource_to_task,
 )
+from souschef.converters.salt import (  # noqa: F401, codeql[py/unused-import]
+    _apply_file_ownership,
+    _build_cmd_task,
+    _build_file_task,
+    _build_generic_task,
+    _build_git_task,
+    _build_group_task,
+    _build_pip_task,
+    _build_pkg_task,
+    _build_service_task,
+    _build_user_task,
+    _convert_state_to_task,
+    _extract_watch_handlers,  # noqa: F401
+    _pillar_to_ansible_vars,
+    _pillar_to_vault_vars,  # noqa: F401
+    _render_param_value,
+    _render_playbook_yaml,
+    _render_task_lines,
+    _top_to_ansible_inventory,  # noqa: F401
+)
+from souschef.converters.salt import (
+    convert_salt_directory_to_roles as _convert_salt_directory_to_roles,
+)
+from souschef.converters.salt import (
+    convert_salt_pillar_to_vars as _convert_salt_pillar_to_vars,
+)
+from souschef.converters.salt import (
+    convert_salt_sls_to_ansible as _convert_salt_sls_to_ansible,
+)
 from souschef.converters.template import (
     convert_template_with_ai as _convert_template_with_ai,
 )
@@ -442,7 +471,36 @@ from souschef.parsers.resource import (
 from souschef.parsers.resource import (
     parse_custom_resource as _parse_custom_resource,
 )
-from souschef.parsers.template import (  # noqa: F401
+from souschef.parsers.salt import (  # noqa: F401, codeql[py/unused-import]
+    _build_state_entry,
+    _detect_salt_dependencies,  # noqa: F401
+    _extract_args_from_value,
+    _extract_grains,
+    _extract_pillars,
+    _extract_state_id_and_module,
+    _list_sls_files,
+    _parse_sls_states,
+    _parse_sls_yaml,
+    _parse_top_environments,
+    _score_state_complexity,  # noqa: F401
+    _summarise_states,
+)
+from souschef.parsers.salt import (
+    assess_salt_complexity as _assess_salt_complexity,
+)
+from souschef.parsers.salt import (
+    parse_salt_directory as _parse_salt_directory,
+)
+from souschef.parsers.salt import (
+    parse_salt_pillar as _parse_salt_pillar,
+)
+from souschef.parsers.salt import (
+    parse_salt_sls as _parse_salt_sls,
+)
+from souschef.parsers.salt import (
+    parse_salt_top as _parse_salt_top,
+)
+from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
     _convert_erb_to_jinja2,
     _extract_code_block_variables,
     _extract_heredoc_strings,
@@ -685,6 +743,38 @@ __all__ = [
     "_parse_puppet_attributes",
     "_parse_resource_titles",
     "get_puppet_resource_types",
+    # Salt converter helpers (re-exported for tests)
+    "_apply_file_ownership",
+    "_build_cmd_task",
+    "_build_file_task",
+    "_build_generic_task",
+    "_build_git_task",
+    "_build_group_task",
+    "_build_pip_task",
+    "_build_pkg_task",
+    "_build_service_task",
+    "_build_user_task",
+    "_convert_state_to_task",
+    "_extract_watch_handlers",
+    "_pillar_to_ansible_vars",
+    "_pillar_to_vault_vars",
+    "_render_param_value",
+    "_render_playbook_yaml",
+    "_render_task_lines",
+    "_top_to_ansible_inventory",
+    # Salt parser helpers (re-exported for tests)
+    "_build_state_entry",
+    "_detect_salt_dependencies",
+    "_extract_args_from_value",
+    "_extract_grains",
+    "_extract_pillars",
+    "_extract_state_id_and_module",
+    "_list_sls_files",
+    "_parse_sls_states",
+    "_parse_sls_yaml",
+    "_parse_top_environments",
+    "_score_state_complexity",
+    "_summarise_states",
 ]
 
 # Backward compatibility re-exports without underscore prefix (for tests)
@@ -5952,6 +6042,825 @@ def generate_handler_routing_config(
 
 
 # ==================== End Ansible Upgrade Tools ====================
+
+
+# ==================== Salt Migration Tools ====================
+# Closes: https://github.com/kpeacocke/souschef/issues/210
+# Closes: https://github.com/kpeacocke/souschef/issues/211
+# Closes: https://github.com/kpeacocke/souschef/issues/212
+
+
+@mcp.tool()
+def parse_salt_sls(sls_path: str) -> str:
+    """
+    Parse a SaltStack SLS state file and extract structured state data.
+
+    Analyses SLS files to extract state definitions, pillar variable references,
+    grain references, and provides a summary suitable for Ansible conversion.
+
+    Supported state modules: pkg, file, service, cmd, user, group, git, pip,
+    npm, gem, cron, mount, firewall, sysctl, timezone, locale, host, archive.
+
+    Args:
+        sls_path: Path to the SLS state file.
+
+    Returns:
+        JSON string with parsed state metadata including states list, pillar
+        provenance mapping, grain references, and summary counts.
+
+    """
+    try:
+        _validate_path_length(sls_path, "SLS path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating SLS path", sls_path)
+    return _parse_salt_sls(sls_path)
+
+
+@mcp.tool()
+def parse_salt_pillar(pillar_path: str) -> str:
+    """
+    Parse a SaltStack pillar file and extract variable definitions.
+
+    Pillar files define configuration data injected into states. This parser
+    extracts variable names, values, and nesting structure.
+
+    Args:
+        pillar_path: Path to the pillar SLS file.
+
+    Returns:
+        JSON string with pillar variable definitions and structure.
+
+    """
+    try:
+        _validate_path_length(pillar_path, "Pillar path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating pillar path", pillar_path)
+    return _parse_salt_pillar(pillar_path)
+
+
+@mcp.tool()
+def parse_salt_top(top_path: str) -> str:
+    """
+    Parse a SaltStack top.sls file and extract target-to-state mappings.
+
+    The top file maps minion targets (hostnames/globs/grains) to the SLS
+    states that should be applied to them.
+
+    Args:
+        top_path: Path to the top.sls file.
+
+    Returns:
+        JSON string with target-to-state mappings per environment.
+
+    """
+    try:
+        _validate_path_length(top_path, "Top file path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating top file path", top_path)
+    return _parse_salt_top(top_path)
+
+
+@mcp.tool()
+def parse_salt_directory(salt_dir: str) -> str:
+    """
+    Parse a SaltStack state directory structure.
+
+    Scans a Salt states directory to discover SLS files, top files,
+    and pillar files, then returns a structural overview.
+
+    Args:
+        salt_dir: Path to the Salt states root directory.
+
+    Returns:
+        JSON string with directory structure overview.
+
+    """
+    try:
+        _validate_path_length(salt_dir, "Salt directory path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating Salt directory path", salt_dir)
+    return _parse_salt_directory(salt_dir)
+
+
+@mcp.tool()
+def convert_salt_to_ansible(sls_path: str, playbook_name: str = "") -> str:
+    """
+    Convert a SaltStack SLS state file to an Ansible playbook.
+
+    Reads a Salt SLS file, converts each state definition to the equivalent
+    Ansible task, maps pillar variables to Ansible vars, and returns the
+    complete playbook as YAML text with a JSON report.
+
+    Supported Salt modules: pkg, file, service, cmd, user, group, git, pip.
+    Unsupported modules generate debug tasks tagged ``salt_unconverted``.
+
+    Args:
+        sls_path: Path to the SLS state file.
+        playbook_name: Optional name for the generated playbook. Defaults to
+            the SLS file stem.
+
+    Returns:
+        JSON string with keys:
+            - ``playbook``: YAML text of the generated Ansible playbook.
+            - ``tasks_converted``: Count of successfully mapped tasks.
+            - ``tasks_unconverted``: Count of tasks requiring manual review.
+            - ``ansible_vars``: Ansible variable definitions from pillar keys.
+            - ``warnings``: List of conversion warning messages.
+
+    """
+    try:
+        _validate_path_length(sls_path, "SLS path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating SLS path", sls_path)
+    return _convert_salt_sls_to_ansible(sls_path, playbook_name)
+
+
+@mcp.tool()
+def query_salt_master(
+    master_url: str,
+    username: str,
+    password: str,
+    target: str = "*",
+    query_type: str = "top",
+) -> str:
+    """
+    Query a SaltStack Salt Master API to retrieve state and pillar data.
+
+    Connects to the Salt Master REST API (CherryPy netapi) to retrieve top
+    file entries, SLS state lists, and pillar data for minion targets.
+
+    Args:
+        master_url: URL of the Salt Master API (e.g., ``https://salt-master:8080``).
+        username: Salt API username.
+        password: Salt API password.
+        target: Minion target glob or grain match (default: ``*`` for all minions).
+        query_type: Type of query - ``top`` for top file, ``states`` for state
+            list, or ``pillar`` for pillar data (default: ``top``).
+
+    Returns:
+        JSON string with query results or error details.
+
+    """
+    import ssl
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    try:
+        _validate_path_length(master_url, "Salt Master URL")
+    except ValueError as e:
+        return json.dumps({"error": str(e), "status": "error"})
+
+    # Validate URL scheme to prevent SSRF - only allow https:// and http://
+    _url_pattern = re.compile(r"^https?://[a-zA-Z0-9._-]+(:[0-9]{1,5})?(/.*)?$")
+    if not _url_pattern.match(master_url):
+        return json.dumps(
+            {
+                "error": "Invalid master_url format. Must be an http:// or https:// URL with a hostname.",
+                "status": "error",
+            }
+        )
+
+    valid_query_types = {"top", "states", "pillar"}
+    if query_type not in valid_query_types:
+        return json.dumps(
+            {
+                "error": f"Invalid query_type '{query_type}'. Must be one of: {sorted(valid_query_types)}",
+                "status": "error",
+            }
+        )
+
+    try:
+        # Build SSL context that verifies certificates by default
+        ssl_context = ssl.create_default_context()
+
+        # Login to Salt API
+        login_data = urllib.parse.urlencode(
+            {
+                "username": username,
+                "password": password,
+                "eauth": "pam",
+            }
+        ).encode("utf-8")
+
+        login_url = f"{master_url.rstrip('/')}/login"
+        login_req = urllib.request.Request(  # noqa: S310
+            login_url,
+            data=login_data,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+
+        with urllib.request.urlopen(login_req, context=ssl_context, timeout=30) as resp:  # noqa: S310
+            import json as _json
+
+            login_result = _json.loads(resp.read().decode("utf-8"))
+
+        token = login_result.get("return", [{}])[0].get("token", "")
+        if not token:
+            return json.dumps(
+                {
+                    "error": "Authentication failed - no token returned",
+                    "status": "error",
+                }
+            )
+
+        # Build query based on type
+        if query_type == "top":
+            fun = "state.show_top"
+        elif query_type == "states":
+            fun = "state.show_highstate"
+        else:
+            fun = "pillar.items"
+
+        query_data = urllib.parse.urlencode(
+            {
+                "client": "local",
+                "tgt": target,
+                "fun": fun,
+            }
+        ).encode("utf-8")
+
+        api_url = master_url.rstrip("/")
+        query_req = urllib.request.Request(  # noqa: S310
+            api_url,
+            data=query_data,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Auth-Token": token,
+            },
+        )
+
+        with urllib.request.urlopen(query_req, context=ssl_context, timeout=60) as resp:  # noqa: S310
+            query_result = _json.loads(resp.read().decode("utf-8"))
+
+        return json.dumps(
+            {
+                "status": "success",
+                "query_type": query_type,
+                "target": target,
+                "result": query_result.get("return", []),
+            },
+            indent=2,
+        )
+
+    except urllib.error.HTTPError as e:
+        return json.dumps(
+            {"error": f"HTTP error {e.code}: {e.reason}", "status": "error"}
+        )
+    except urllib.error.URLError as e:
+        return json.dumps({"error": f"Connection error: {e.reason}", "status": "error"})
+    except Exception as e:
+        return json.dumps(
+            {"error": f"Error querying Salt Master: {e}", "status": "error"}
+        )
+
+
+@mcp.tool()
+def assess_salt_migration_complexity(salt_dir: str) -> str:
+    """
+    Assess the complexity of migrating a SaltStack state directory to Ansible.
+
+    Analyses all SLS files in the directory, scores each state's migration
+    complexity, and produces a comprehensive report with effort estimates
+    and per-file complexity levels suitable for project planning.
+
+    Args:
+        salt_dir: Path to the SaltStack states root directory.
+
+    Returns:
+        JSON string with overall complexity level (LOW/MEDIUM/HIGH), per-file
+        breakdown, total effort estimates in days/hours/weeks, and module breakdown.
+
+    """
+    try:
+        _validate_path_length(salt_dir, "Salt directory path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating Salt directory path", salt_dir)
+    return _assess_salt_complexity(salt_dir)
+
+
+@mcp.tool()
+def plan_salt_migration(
+    salt_dir: str,
+    timeline_weeks: int = 8,
+    target_platform: str = "aap",
+) -> str:
+    """
+    Generate a phased migration plan for SaltStack to Ansible/AAP.
+
+    Creates a structured migration plan with phases, task breakdown, resource
+    recommendations, and tooling guidance based on the complexity assessment
+    of the Salt state directory.
+
+    Args:
+        salt_dir: Path to the SaltStack states root directory.
+        timeline_weeks: Target timeline in weeks (default 8).
+        target_platform: Target platform: ``"aap"``, ``"awx"``, or
+            ``"ansible_core"``.
+
+    Returns:
+        Markdown-formatted migration plan with phases, tasks, and timeline.
+
+    """
+    try:
+        _validate_path_length(salt_dir, "Salt directory path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating Salt directory path", salt_dir)
+
+    import json as _json
+
+    complexity_json = _assess_salt_complexity(salt_dir)
+    try:
+        data = _json.loads(complexity_json)
+    except Exception:  # noqa: BLE001
+        return complexity_json
+
+    if "error" in data:
+        return str(data["error"])
+
+    summary = data.get("summary", {})
+    complexity_level = summary.get("complexity_level", "medium")
+    total_files = summary.get("total_files", 0)
+    total_states = summary.get("total_states", 0)
+    effort_days = summary.get("estimated_effort_days", 0)
+    effort_days_sc = summary.get("estimated_effort_days_with_souschef", 0)
+    high_files = summary.get("high_complexity_files", [])
+    module_breakdown = summary.get("module_breakdown", {})
+
+    # Platform-specific guidance
+    platform_guidance = {
+        "aap": (
+            "**Target Platform: Ansible Automation Platform (AAP)**\n\n"
+            "- Import roles into AAP Execution Environments\n"
+            "- Use AAP Projects for SCM-backed role storage\n"
+            "- Configure AAP Inventories to replace Salt targeting\n"
+            "- Leverage AAP Surveys for parameterised execution\n"
+            "- Use AAP Credentials for vault-encrypted pillar data"
+        ),
+        "awx": (
+            "**Target Platform: AWX (Open Source)**\n\n"
+            "- Use AWX Projects linked to Git repositories\n"
+            "- Configure AWX Inventories using dynamic inventory plugins\n"
+            "- Store sensitive pillar data in AWX Credentials\n"
+            "- Use AWX Job Templates to replace Salt highstate execution"
+        ),
+        "ansible_core": (
+            "**Target Platform: Ansible Core (CLI)**\n\n"
+            "- Run playbooks with `ansible-playbook site.yml`\n"
+            "- Use Ansible Vault for sensitive pillar variables\n"
+            "- Manage inventory with static or dynamic inventory files\n"
+            "- Use `ansible-pull` for decentralised execution similar to Salt minions"
+        ),
+    }
+    platform_text = platform_guidance.get(
+        target_platform,
+        f"**Target Platform: {target_platform}**\n\nRefer to platform documentation.",
+    )
+
+    phase1_weeks = max(1, timeline_weeks // 4)
+    phase2_weeks = max(1, timeline_weeks // 4)
+    phase3_weeks = max(2, timeline_weeks // 3)
+    phase4_weeks = max(1, timeline_weeks - phase1_weeks - phase2_weeks - phase3_weeks)
+
+    top_modules = sorted(module_breakdown.items(), key=lambda x: x[1], reverse=True)[:5]
+    module_list = (
+        "\n".join(f"  - `{m}` ({c} states)" for m, c in top_modules)
+        if top_modules
+        else "  - No modules detected"
+    )
+
+    high_files_list = (
+        "\n".join(f"  - `{f}`" for f in high_files[:10])
+        if high_files
+        else "  - None identified"
+    )
+
+    plan = f"""# SaltStack to Ansible Migration Plan
+
+## Overview
+
+| Metric | Value |
+|--------|-------|
+| Salt Directory | `{salt_dir}` |
+| Total SLS Files | {total_files} |
+| Total States | {total_states} |
+| Complexity Level | {complexity_level.upper()} |
+| Estimated Effort (manual) | {effort_days} days |
+| Estimated Effort (with SousChef) | {effort_days_sc} days |
+| Target Timeline | {timeline_weeks} weeks |
+
+## Platform Guidance
+
+{platform_text}
+
+## Migration Phases
+
+### Phase 1: Assessment and Preparation (Weeks 1-{phase1_weeks})
+
+**Objectives:** Inventory all Salt states, identify dependencies, set up tooling.
+
+**Tasks:**
+- Run `assess_salt_migration_complexity` on all state directories
+- Map Salt pillar data to Ansible group_vars/host_vars structure
+- Identify custom execution modules requiring Ansible module equivalents
+- Set up target {target_platform} environment
+- Establish Git repository structure for Ansible roles
+- Configure CI/CD pipeline for Ansible testing
+
+**Deliverables:**
+- Complexity assessment report
+- Ansible project skeleton with roles structure
+- Variable mapping spreadsheet
+
+### Phase 2: Simple State Conversion (Weeks {phase1_weeks + 1}-{phase1_weeks + phase2_weeks})
+
+**Objectives:** Convert low-complexity SLS files using SousChef automation.
+
+**Tasks:**
+- Run `convert_salt_to_ansible` for LOW complexity states
+- Run `convert_salt_directory_to_ansible` for batch conversion
+- Review and validate generated playbooks
+- Test converted roles against development environment
+- Convert pillar files using `convert_salt_pillar_to_vars`
+
+**Target modules:** pkg, service, file (managed/directory)
+
+### Phase 3: Complex State Conversion (Weeks {phase1_weeks + phase2_weeks + 1}-{phase1_weeks + phase2_weeks + phase3_weeks})
+
+**Objectives:** Manually convert high-complexity states and custom logic.
+
+**High-complexity files to prioritise:**
+{high_files_list}
+
+**Tasks:**
+- Convert cmd, git, archive, mount states with manual review
+- Replace Salt mine/reactor/beacon patterns with Ansible equivalents
+- Implement Jinja2 template conversions
+- Convert Salt orchestration states to Ansible workflows
+- Implement notification/handler chains from watch/listen dependencies
+
+**Top Salt modules requiring attention:**
+{module_list}
+
+### Phase 4: Validation and Cutover (Weeks {timeline_weeks - phase4_weeks + 1}-{timeline_weeks})
+
+**Objectives:** Validate all conversions and execute production cutover.
+
+**Tasks:**
+- Run parallel execution: Salt highstate vs Ansible playbook on test nodes
+- Compare configuration drift between Salt and Ansible outputs
+- Performance benchmark: Salt highstate vs Ansible run time
+- Train operations team on Ansible/AAP workflows
+- Execute phased cutover by minion group
+- Decommission Salt master after validation period
+
+## Resource Requirements
+
+| Role | Responsibility |
+|------|----------------|
+| Ansible Engineer | Role conversion and testing |
+| DevOps Lead | Architecture decisions and AAP setup |
+| QA Engineer | Validation and drift testing |
+| Operations | Cutover coordination |
+
+## Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Custom Salt modules without Ansible equivalents | {"High" if complexity_level == "high" else "Medium"} | High | Develop custom Ansible modules early |
+| Pillar data migration complexity | Medium | High | Map all pillar keys to Ansible vars first |
+| Targeting pattern translation | Low | Medium | Use `generate_salt_inventory` tool |
+| State ordering dependencies | {"High" if total_states > 100 else "Low"} | Medium | Review require/watch chains carefully |
+"""
+
+    return plan
+
+
+@mcp.tool()
+def generate_salt_migration_report(
+    salt_dir: str,
+    report_format: str = "markdown",
+) -> str:
+    """
+    Generate a comprehensive Salt-to-Ansible migration report.
+
+    Produces an executive-level migration report covering complexity assessment,
+    file inventory, conversion coverage, effort estimates, and recommended
+    migration strategy for SaltStack to AAP/AWX migrations.
+
+    Args:
+        salt_dir: Path to the SaltStack states root directory.
+        report_format: Output format: ``"markdown"`` or ``"json"``.
+
+    Returns:
+        Migration report in the requested format.
+
+    """
+    try:
+        _validate_path_length(salt_dir, "Salt directory path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating Salt directory path", salt_dir)
+
+    import json as _json
+
+    complexity_json = _assess_salt_complexity(salt_dir)
+    try:
+        data = _json.loads(complexity_json)
+    except Exception:  # noqa: BLE001
+        return complexity_json
+
+    if "error" in data:
+        return str(data["error"])
+
+    summary = data.get("summary", {})
+    files = data.get("files", [])
+
+    complexity_level = summary.get("complexity_level", "unknown")
+    total_files = summary.get("total_files", 0)
+    total_states = summary.get("total_states", 0)
+    effort_days = summary.get("estimated_effort_days", 0)
+    effort_days_sc = summary.get("estimated_effort_days_with_souschef", 0)
+    effort_hours = summary.get("estimated_effort_hours", 0)
+    effort_weeks = summary.get("estimated_effort_weeks", "unknown")
+    high_files = summary.get("high_complexity_files", [])
+    module_breakdown = summary.get("module_breakdown", {})
+
+    if report_format == "json":
+        return _json.dumps(
+            {
+                "report_type": "salt_migration",
+                "directory": salt_dir,
+                "summary": summary,
+                "files": files,
+                "module_coverage": _get_module_coverage(module_breakdown),
+            },
+            indent=2,
+        )
+
+    # Markdown report
+    by_level: dict[str, int] = {"low": 0, "medium": 0, "high": 0}
+    for file_report in files:
+        lvl = file_report.get("complexity_level", "low")
+        by_level[lvl] = by_level.get(lvl, 0) + 1
+
+    module_coverage = _get_module_coverage(module_breakdown)
+    supported_count = sum(1 for v in module_coverage.values() if v["supported"])
+    total_module_types = len(module_coverage)
+
+    file_table_rows = "\n".join(
+        f"| `{f['file']}` | {f['state_count']} | {f['complexity_score']:.1f} | {f['complexity_level'].upper()} |"
+        for f in sorted(
+            files, key=lambda x: x.get("complexity_score", 0), reverse=True
+        )[:20]
+    )
+
+    module_table_rows = "\n".join(
+        f"| `{mod}` | {info['count']} | {'Yes' if info['supported'] else 'Manual'} | `{info.get('ansible_equiv', 'N/A')}` |"
+        for mod, info in sorted(
+            module_coverage.items(), key=lambda x: x[1]["count"], reverse=True
+        )
+    )
+
+    report = f"""# SaltStack Migration Report
+
+**Generated by SousChef Salt Migration Analyser**
+
+---
+
+## Executive Summary
+
+This report analyses the SaltStack state directory `{salt_dir}` for migration
+to Ansible/AAP. The overall migration complexity is assessed as **{complexity_level.upper()}**.
+
+| Metric | Value |
+|--------|-------|
+| Total SLS Files | {total_files} |
+| Total States | {total_states} |
+| Overall Complexity | {complexity_level.upper()} |
+| Estimated Effort (manual) | {effort_days} days ({effort_hours:.0f} hours) |
+| Estimated Effort (with SousChef) | {effort_days_sc} days |
+| Estimated Timeline | {effort_weeks} |
+
+---
+
+## Complexity Analysis
+
+| Complexity Level | File Count | Percentage |
+|-----------------|-----------|-----------|
+| LOW | {by_level.get("low", 0)} | {by_level.get("low", 0) * 100 // total_files if total_files else 0}% |
+| MEDIUM | {by_level.get("medium", 0)} | {by_level.get("medium", 0) * 100 // total_files if total_files else 0}% |
+| HIGH | {by_level.get("high", 0)} | {by_level.get("high", 0) * 100 // total_files if total_files else 0}% |
+
+---
+
+## File Inventory (Top 20 by Complexity)
+
+| File | States | Score | Level |
+|------|--------|-------|-------|
+{file_table_rows}
+
+---
+
+## Module Coverage
+
+| Salt Module | State Count | Direct Ansible Equiv | Ansible Module |
+|------------|------------|---------------------|----------------|
+{module_table_rows}
+
+**Coverage: {supported_count}/{total_module_types} modules have direct Ansible equivalents ({supported_count * 100 // total_module_types if total_module_types else 0}% auto-convertible)**
+
+---
+
+## Effort Estimates
+
+| Approach | Days | Hours | Timeline |
+|----------|------|-------|---------|
+| Manual migration | {effort_days} | {effort_hours:.0f} | {effort_weeks} |
+| With SousChef | {effort_days_sc} | {effort_days_sc * 8:.0f} | ~{max(1, int(effort_days_sc / 5))} weeks |
+
+---
+
+## High-Complexity Files Requiring Manual Review
+
+{"".join(f"- `{f}`\\n" for f in high_files) if high_files else "- None identified - all files are LOW or MEDIUM complexity"}
+
+---
+
+## Recommended Migration Strategy
+
+{"**Big Bang Migration** - Low overall complexity allows for a single-phase conversion." if complexity_level == "low" else "**Phased Migration** - Given the " + complexity_level + " complexity, a phased approach is recommended."}
+
+1. Use `convert_salt_directory_to_ansible` for batch conversion of simple states
+2. Use `convert_salt_pillar_to_vars` to migrate pillar data to Ansible vars
+3. Use `generate_salt_inventory` to convert top.sls targeting to Ansible inventory
+4. Manually review HIGH complexity files: {len(high_files)} file(s) require attention
+5. Use `plan_salt_migration` for a detailed phased plan
+
+---
+
+## Risk Assessment
+
+| Risk | Level | Recommendation |
+|------|-------|---------------|
+| Custom execution modules | {"HIGH" if "cmd" in module_breakdown else "LOW"} | {"Review all cmd states for shell injection risks" if "cmd" in module_breakdown else "No cmd states detected"} |
+| Template complexity | MEDIUM | Test all Jinja2 template conversions thoroughly |
+| Pillar data sensitivity | HIGH | Encrypt sensitive pillar vars with Ansible Vault |
+| State ordering | {"HIGH" if total_states > 50 else "LOW"} | {"Review require/watch dependency chains" if total_states > 50 else "Low state count minimises ordering risk"} |
+"""
+
+    return report
+
+
+def _get_module_coverage(module_breakdown: dict[str, int]) -> dict[str, Any]:
+    """
+    Build a module coverage report showing Ansible equivalents.
+
+    Args:
+        module_breakdown: Dict mapping Salt module names to state counts.
+
+    Returns:
+        Dict mapping module names to coverage info dicts.
+
+    """
+    # Salt modules with direct Ansible equivalents
+    direct_support = {
+        "pkg": ("ansible.builtin.package", True),
+        "service": ("ansible.builtin.service", True),
+        "file": ("ansible.builtin.file / template / copy", True),
+        "cmd": ("ansible.builtin.command / shell", True),
+        "user": ("ansible.builtin.user", True),
+        "group": ("ansible.builtin.group", True),
+        "git": ("ansible.builtin.git", True),
+        "pip": ("ansible.builtin.pip", True),
+        "cron": ("ansible.builtin.cron", True),
+        "mount": ("ansible.posix.mount", True),
+        "archive": ("ansible.builtin.unarchive", True),
+        "sysctl": ("ansible.posix.sysctl", True),
+        "host": ("ansible.builtin.lineinfile", True),
+        "npm": ("community.general.npm", True),
+        "gem": ("community.general.gem", True),
+    }
+
+    coverage: dict[str, Any] = {}
+    for mod, count in module_breakdown.items():
+        equiv, supported = direct_support.get(mod, ("Custom/Manual", False))
+        coverage[mod] = {
+            "count": count,
+            "supported": supported,
+            "ansible_equiv": equiv,
+        }
+    return coverage
+
+
+@mcp.tool()
+def generate_salt_inventory(top_path: str) -> str:
+    """
+    Generate an Ansible inventory from a SaltStack top.sls file.
+
+    Converts Salt minion targeting patterns (glob, grain, compound) from
+    top.sls into Ansible INI inventory groups suitable for AAP/AWX.
+
+    Args:
+        top_path: Path to the top.sls file.
+
+    Returns:
+        JSON string with ``"inventory"`` (INI text), ``"groups"``, ``"hosts"``.
+
+    """
+    import json as _json
+
+    try:
+        _validate_path_length(top_path, "top.sls path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating top.sls path", top_path)
+
+    top_json = _parse_salt_top(top_path)
+    try:
+        top_data = _json.loads(top_json)
+    except Exception:  # noqa: BLE001
+        return _json.dumps({"error": top_json})
+
+    if "Error" in top_json and "environments" not in top_data:
+        return _json.dumps({"error": top_json})
+
+    inventory = _top_to_ansible_inventory(top_data)
+
+    # Extract groups and hosts from inventory
+    groups: list[str] = []
+    hosts: list[str] = []
+    for line in inventory.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            groups.append(stripped[1:-1])
+        elif stripped and not stripped.startswith("#") and not stripped.startswith("["):
+            hosts.append(stripped)
+
+    return _json.dumps(
+        {
+            "inventory": inventory,
+            "groups": groups,
+            "hosts": hosts,
+        },
+        indent=2,
+    )
+
+
+@mcp.tool()
+def convert_salt_pillar_to_vars(pillar_path: str, output_format: str = "yaml") -> str:
+    """
+    Convert a SaltStack pillar file to Ansible variable definitions.
+
+    Transforms Salt pillar data into Ansible vars files suitable for use as
+    group_vars, host_vars, or Ansible Vault-encrypted variable files.
+
+    Args:
+        pillar_path: Path to the SaltStack pillar SLS file.
+        output_format: ``"yaml"`` for plain vars file, ``"vault"`` for
+            Vault-annotated format.
+
+    Returns:
+        JSON string with ``"vars_file"`` (YAML content), ``"variable_count"``,
+        and ``"format"``.
+
+    """
+    try:
+        _validate_path_length(pillar_path, "Pillar path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating pillar path", pillar_path)
+    return _convert_salt_pillar_to_vars(pillar_path, output_format)
+
+
+@mcp.tool()
+def convert_salt_directory_to_ansible(salt_dir: str, output_dir: str) -> str:
+    """
+    Convert an entire Salt states directory to Ansible roles structure.
+
+    Creates one Ansible role per top-level SLS module, generating tasks,
+    handlers, defaults, and meta files. Also produces a site.yml master
+    playbook and an inventory/hosts file from top.sls if present.
+
+    Args:
+        salt_dir: Path to the Salt states root directory.
+        output_dir: Path where Ansible roles should be written.
+
+    Returns:
+        JSON string with ``"roles_created"``, ``"files_written"``,
+        ``"warnings"``, and ``"structure"``.
+
+    """
+    try:
+        _validate_path_length(salt_dir, "Salt directory path")
+        _validate_path_length(output_dir, "Output directory path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating paths", salt_dir)
+    return _convert_salt_directory_to_roles(salt_dir, output_dir)
+
+
+# ==================== End Salt Migration Tools ====================
 
 
 # ==================== PowerShell Migration Tools ====================
