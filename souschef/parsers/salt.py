@@ -1,5 +1,6 @@
 """SaltStack SLS file parser."""
 
+import importlib
 import json
 import os
 import re
@@ -100,14 +101,14 @@ def _parse_sls_yaml(content: str) -> dict[str, Any]:
 
     """
     try:
-        import yaml
+        yaml_module = importlib.import_module("yaml")
 
         # Strip Jinja2 blocks and expressions for basic parsing
         # Replace {%...%} blocks with comments
         clean = re.sub(r"\{%-?\s*.*?-?%\}", "", content, flags=re.DOTALL)
         # Replace {{...}} expressions with placeholder string
         clean = re.sub(r"\{\{.*?\}\}", "'__JINJA2__'", clean)
-        result = yaml.safe_load(clean)
+        result = yaml_module.safe_load(clean)
         if isinstance(result, dict):
             return result
         return {}
@@ -417,20 +418,7 @@ def parse_salt_pillar(pillar_path: str) -> str:
         return f"Error: {e}"
 
     data = _parse_sls_yaml(content)
-
-    def _flatten(obj: Any, prefix: str = "") -> dict[str, Any]:
-        """Flatten nested dict into dot-notation keys."""
-        flat: dict[str, Any] = {}
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                full_key = f"{prefix}.{k}" if prefix else k
-                if isinstance(v, dict):
-                    flat.update(_flatten(v, full_key))
-                else:
-                    flat[full_key] = v
-        return flat
-
-    flattened = _flatten(data)
+    flattened = _flatten_dict_to_dot_notation(data)
 
     result: dict[str, Any] = {
         "file": pillar_path,
@@ -443,6 +431,21 @@ def parse_salt_pillar(pillar_path: str) -> str:
     }
 
     return json.dumps(result, indent=2)
+
+
+def _flatten_dict_to_dot_notation(obj: Any, prefix: str = "") -> dict[str, Any]:
+    """Flatten nested dictionaries into dot-notation keys."""
+    flat: dict[str, Any] = {}
+    if not isinstance(obj, dict):
+        return flat
+
+    for key, value in obj.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            flat.update(_flatten_dict_to_dot_notation(value, full_key))
+        else:
+            flat[full_key] = value
+    return flat
 
 
 def parse_salt_top(top_path: str) -> str:
@@ -621,41 +624,61 @@ def _score_state_complexity(state: dict[str, Any]) -> float:
     func = state.get("function", "")
     args = state.get("args", {})
 
-    complex_modules = {"cmd", "git", "archive", "mount", "firewall", "sysctl"}
-    simple_modules = {"pkg", "service"}
-
-    if module in complex_modules:
-        score = 0.4
-    elif module in simple_modules:
-        score = 0.1
-    else:
-        score = 0.2
-
-    # Extra penalty for shell/script execution
-    if module == "cmd" and func in ("run", "script", "call"):
-        score += 0.2
-
-    # Count Jinja2 references in arg values
-    jinja_count = 0
-    for val in args.values():
-        if isinstance(val, str) and "__JINJA2__" in val:
-            jinja_count += 1
-        elif isinstance(val, list):
-            for item in val:
-                if isinstance(item, str) and "__JINJA2__" in item:
-                    jinja_count += 1
-
-    jinja_penalty = min(jinja_count * 0.1, 0.3)
-    score += jinja_penalty
-
-    # Arg count penalty
-    arg_count = len(args)
-    if arg_count > 5:
-        score += 0.2
-    elif arg_count > 3:
-        score += 0.1
+    score = _base_complexity_for_module(module)
+    score += _command_function_penalty(module, func)
+    score += _jinja_penalty(args)
+    score += _arg_count_penalty(args)
 
     return min(score, 1.0)
+
+
+def _base_complexity_for_module(module: str) -> float:
+    """Return base complexity by Salt module type."""
+    complex_modules = {"cmd", "git", "archive", "mount", "firewall", "sysctl"}
+    simple_modules = {"pkg", "service"}
+    if module in complex_modules:
+        return 0.4
+    if module in simple_modules:
+        return 0.1
+    return 0.2
+
+
+def _command_function_penalty(module: str, function: str) -> float:
+    """Return additional complexity for imperative command execution."""
+    if module == "cmd" and function in {"run", "script", "call"}:
+        return 0.2
+    return 0.0
+
+
+def _count_jinja_markers(value: Any) -> int:
+    """Count Jinja2 placeholders in a scalar/list argument value."""
+    if isinstance(value, str):
+        return 1 if "__JINJA2__" in value else 0
+    if isinstance(value, list):
+        return sum(
+            1 for item in value if isinstance(item, str) and "__JINJA2__" in item
+        )
+    return 0
+
+
+def _jinja_penalty(args: Any) -> float:
+    """Return complexity penalty based on Jinja2 usage in arguments."""
+    if not isinstance(args, dict):
+        return 0.0
+    jinja_count = sum(_count_jinja_markers(value) for value in args.values())
+    return min(jinja_count * 0.1, 0.3)
+
+
+def _arg_count_penalty(args: Any) -> float:
+    """Return complexity penalty based on number of arguments."""
+    if not isinstance(args, dict):
+        return 0.0
+    arg_count = len(args)
+    if arg_count > 5:
+        return 0.2
+    if arg_count > 3:
+        return 0.1
+    return 0.0
 
 
 def _detect_salt_dependencies(content: str) -> dict[str, list[str]]:
@@ -674,50 +697,75 @@ def _detect_salt_dependencies(content: str) -> dict[str, list[str]]:
 
     """
     data = _parse_sls_yaml(content)
-    dependencies: dict[str, list[str]] = {}
-
-    # Handle include: clause
-    includes = data.get("include")
-    if isinstance(includes, list):
-        dependencies["__include__"] = [str(inc) for inc in includes]
-
-    dep_keywords = {"require", "watch", "onchanges", "onfail", "listen"}
+    dependencies = _extract_include_dependencies(data)
 
     for state_id, state_def in data.items():
         if state_id in ("include", "extend"):
             continue
 
-        # Collect all args from list or dict format
-        arg_list: list[dict[str, Any]] = []
-        if isinstance(state_def, dict):
-            for val in state_def.values():
-                if isinstance(val, list):
-                    for item in val:
-                        if isinstance(item, dict):
-                            arg_list.append(item)
-        elif isinstance(state_def, list):
-            for item in state_def:
-                if isinstance(item, dict):
-                    for val in item.values():
-                        if isinstance(val, list):
-                            for sub in val:
-                                if isinstance(sub, dict):
-                                    arg_list.append(sub)
-
-        state_deps: list[str] = []
-        for arg_dict in arg_list:
-            for keyword in dep_keywords:
-                dep_list = arg_dict.get(keyword)
-                if isinstance(dep_list, list):
-                    for dep_item in dep_list:
-                        if isinstance(dep_item, dict):
-                            for dep_module, dep_id in dep_item.items():
-                                state_deps.append(f"{dep_module}:{dep_id}")
-
+        arg_dicts = _extract_dependency_arg_dicts(state_def)
+        state_deps = _collect_state_dependencies(arg_dicts)
         if state_deps:
             dependencies[str(state_id)] = state_deps
 
     return dependencies
+
+
+def _extract_include_dependencies(data: dict[str, Any]) -> dict[str, list[str]]:
+    """Extract dependencies introduced via the top-level include clause."""
+    dependencies: dict[str, list[str]] = {}
+    includes = data.get("include")
+    if isinstance(includes, list):
+        dependencies["__include__"] = [str(inc) for inc in includes]
+    return dependencies
+
+
+def _extract_dependency_arg_dicts(state_def: Any) -> list[dict[str, Any]]:
+    """Extract nested argument dictionaries from Salt state definition formats."""
+    arg_dicts: list[dict[str, Any]] = []
+
+    if isinstance(state_def, dict):
+        sources = state_def.values()
+    elif isinstance(state_def, list):
+        sources = [
+            val for item in state_def if isinstance(item, dict) for val in item.values()
+        ]
+    else:
+        return arg_dicts
+
+    for value in sources:
+        if not isinstance(value, list):
+            continue
+        arg_dicts.extend(item for item in value if isinstance(item, dict))
+
+    return arg_dicts
+
+
+def _collect_state_dependencies(arg_dicts: list[dict[str, Any]]) -> list[str]:
+    """Collect dependency tokens from extracted argument dictionaries."""
+    dep_keywords = {"require", "watch", "onchanges", "onfail", "listen"}
+    dependencies: list[str] = []
+
+    for arg_dict in arg_dicts:
+        for keyword in dep_keywords:
+            dep_list = arg_dict.get(keyword)
+            if not isinstance(dep_list, list):
+                continue
+            dependencies.extend(_dependency_items_to_tokens(dep_list))
+
+    return dependencies
+
+
+def _dependency_items_to_tokens(dep_items: list[Any]) -> list[str]:
+    """Convert Salt dependency item dictionaries into module:id tokens."""
+    tokens: list[str] = []
+    for dep_item in dep_items:
+        if not isinstance(dep_item, dict):
+            continue
+        tokens.extend(
+            f"{dep_module}:{dep_id}" for dep_module, dep_id in dep_item.items()
+        )
+    return tokens
 
 
 def assess_salt_complexity(salt_dir: str) -> str:
@@ -777,7 +825,7 @@ def assess_salt_complexity(salt_dir: str) -> str:
         file_path = safe_path / rel_path
         try:
             content = safe_read_text(file_path, workspace_root, encoding="utf-8")
-        except (PermissionError, OSError):
+        except OSError:
             continue
 
         states = _parse_sls_states(content)

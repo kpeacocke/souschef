@@ -28,10 +28,9 @@ accept the same ``ai_provider``, ``api_key``, ``model``, ``temperature``,
 recipe AI-assisted converters in :mod:`souschef.converters.playbook`.
 """
 
+import importlib
 import re
 from typing import Any
-
-import yaml
 
 from souschef.core.constants import (
     ERROR_FILE_NOT_FOUND,
@@ -51,6 +50,9 @@ from souschef.parsers.puppet import (
 
 # Error prefix used for error detection in callers
 _ERROR_PREFIX = "Error:"
+
+# Shared Ansible module names
+_ANSIBLE_DEBUG_MODULE = "ansible.builtin.debug"
 
 # Maximum content length for safe processing
 MAX_CONTENT_LENGTH = 2_000_000
@@ -274,7 +276,7 @@ def _generate_puppet_playbook(parsed: dict[str, Any], source: str) -> str:
                 "name": (
                     f"WARNING: Unsupported construct '{item['construct']}' at {loc}"
                 ),
-                "ansible.builtin.debug": {
+                _ANSIBLE_DEBUG_MODULE: {
                     "msg": (
                         f"Manual migration required: {item['construct']} "
                         f"— {item['text']!r}"
@@ -295,14 +297,15 @@ def _generate_puppet_playbook(parsed: dict[str, Any], source: str) -> str:
         play["tasks"] = [
             {
                 "name": "No convertible resources found",
-                "ansible.builtin.debug": {
+                _ANSIBLE_DEBUG_MODULE: {
                     "msg": f"No Puppet resources were found in {source}"
                 },
             }
         ]
 
     playbook = [play]
-    result: str = yaml.dump(
+    yaml_module = importlib.import_module("yaml")
+    result: str = yaml_module.dump(
         playbook, default_flow_style=False, sort_keys=False, allow_unicode=True
     )
     return result
@@ -606,7 +609,7 @@ def _convert_host(title: str, attrs: dict[str, str]) -> dict[str, Any]:
 
     return {
         "name": f"Manage host: {title} (manual review required — no IP specified)",
-        "ansible.builtin.debug": {
+        _ANSIBLE_DEBUG_MODULE: {
             "msg": (
                 f"Puppet host '{title}' has no IP address; review /etc/hosts manually"
             )
@@ -702,7 +705,7 @@ def _convert_unsupported(resource_type: str, title: str) -> dict[str, Any]:
     """
     return {
         "name": f"WARNING: Unsupported Puppet resource type '{resource_type}': {title}",
-        "ansible.builtin.debug": {
+        _ANSIBLE_DEBUG_MODULE: {
             "msg": (
                 f"Manual migration required: Puppet resource type '{resource_type}' "
                 f"has no automatic Ansible equivalent. Resource: {title!r}"
