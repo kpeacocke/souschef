@@ -876,11 +876,12 @@ def _display_dependency_mapping_history() -> None:
 def _get_cookbook_path_from_input_method(input_method: str) -> str | None:
     """Get cookbook path based on selected input method."""
     if input_method == INPUT_METHOD_DIRECTORY_PATH:
-        return st.text_input(
+        text: str = st.text_input(
             "Cookbook Directory Path",
             placeholder="/path/to/your/cookbooks",
             help="Enter the path to your cookbooks directory for dependency analysis",
         )
+        return text
 
     if input_method == "Use History":
         if "dep_analysis_cookbook_path" in st.session_state:
@@ -2869,7 +2870,7 @@ def _render_validation_input_ui(default_path: str) -> str:
     )
 
     if input_type == "Directory":
-        input_path = st.text_input(
+        input_path: str = st.text_input(
             "Directory Path",
             value=default_path,
             placeholder="/path/to/ansible/playbooks",
@@ -3283,37 +3284,41 @@ def _display_validation_status(errors: int, warnings: int) -> None:
         st.success("**Validation Passed**: All checks successful!")
 
 
+_VALIDATION_SECTION_NAMES: tuple[str, ...] = (
+    "Syntax Validation",
+    "Logic Validation",
+    "Security Validation",
+    "Performance Validation",
+    SCOPE_BEST_PRACTICES,
+    "Recommendations",
+)
+
+
+def _display_single_validation_section(section: str) -> None:
+    """
+    Display one validation section with an expander for known section names.
+
+    Args:
+        section: Markdown section string, already prefixed with "## " if needed.
+
+    """
+    for name in _VALIDATION_SECTION_NAMES:
+        if section.startswith(f"## {name}"):
+            with st.expander(name):
+                st.markdown(section.replace(f"## {name}", "", 1))
+            return
+    st.markdown(section)
+
+
 def _display_validation_sections(validation_result: str) -> None:
     """Display validation results in expandable sections."""
-    # Split results into sections
     sections = validation_result.split("\n## ")
 
     for section in sections:
         if section.strip():
             if not section.startswith("#"):
                 section = "## " + section
-
-            # Add expanders for different sections
-            if "Syntax Validation" in section:
-                with st.expander("Syntax Validation"):
-                    st.markdown(section.replace("## Syntax Validation", ""))
-            elif "Logic Validation" in section:
-                with st.expander("Logic Validation"):
-                    st.markdown(section.replace("## Logic Validation", ""))
-            elif "Security Validation" in section:
-                with st.expander("Security Validation"):
-                    st.markdown(section.replace("## Security Validation", ""))
-            elif "Performance Validation" in section:
-                with st.expander("Performance Validation"):
-                    st.markdown(section.replace("## Performance Validation", ""))
-            elif SCOPE_BEST_PRACTICES in section:
-                with st.expander(f"{SCOPE_BEST_PRACTICES}"):
-                    st.markdown(section.replace(f"## {SCOPE_BEST_PRACTICES}", ""))
-            elif "Recommendations" in section:
-                with st.expander("Recommendations"):
-                    st.markdown(section.replace("## Recommendations", ""))
-            else:
-                st.markdown(section)
+            _display_single_validation_section(section)
 
 
 def _display_validation_action_items(errors: int, warnings: int) -> None:
