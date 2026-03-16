@@ -353,38 +353,37 @@ The PowerShell migration UI uses a single script input area with a row of contro
 
 #### Enterprise artefacts (single-page workflow)
 
-Enterprise artefact generation reuses the same script input and operates on the analysed script in place. Output is rendered inline in the browser for inspection, and each artefact panel provides dedicated download buttons (for example: inventory, group vars, requirements, job template, role files, and playbook outputs).
+Clicking **Generate Enterprise Artefacts** runs all generators in one step and renders each artefact in a dedicated tab for inspection and download.
 
-**Fidelity report**
+The following artefacts are produced automatically from the parsed script without additional configuration inputs:
 
-- **Generate fidelity report button**: Calculates the fidelity score for the script
+**Fidelity report tab**
+
 - **Score display**: Percentage of actions fully automatable
+- **Total / automated / fallback action counts**: Breakdown of conversion coverage
 - **Review list**: Actions needing manual attention
 - **Recommendations**: Actionable suggestions for improving automation coverage
-- **Report output**: JSON-style text shown in a scrollable panel that you can copy into your own files
 
-**Ansible role scaffold**
+**Inventory tab**
 
-- **Role name field**: Optional text field to set the role directory name
-- **Playbook name field**: Optional text field to set the top-level playbook base name
-- **Hosts field**: Optional text field to set the inventory group pattern
-- **Generate role button**: Produces a role-style task structure as text output within the UI
+- **inventory/hosts**: WinRM-ready INI inventory for the ``[windows]`` group, with default connection settings (NTLM transport, HTTPS scheme, port 5986)
+- **group_vars/windows.yml**: Centralised WinRM connection variables (user, password vault reference, timeouts, cert validation)
+- Download buttons for both files
 
-**Inventory**
+**Role tab**
 
-- **Hosts field**: Enter comma-separated Windows host names or IPs
-- **WinRM port field**: Set the WinRM listener port (default: 5986)
-- **SSL toggle**: Switch between HTTPS (default) and HTTP transport
-- **Generate button**: Produces the INI inventory displayed inline
+- Role-style task structure derived from the parsed actions, using the optional role name and playbook name from the input fields above
+- Download button for the role archive
 
-**requirements.yml**
+**Requirements tab**
 
-- **Generate button**: Produces `requirements.yml` tailored to the script, displayed inline
+- **requirements.yml**: Collections required by the generated tasks, tailored to the detected action types
+- Download button
 
-**AWX Job Template**
+**Job Template tab**
 
-- **Job template name field**: Display name for the AWX job template
-- **Generate button**: Produces the importable job template JSON displayed inline
+- AWX/Tower-compatible job template JSON, derived from the parsed playbook
+- Download button
 
 ## Troubleshooting
 
