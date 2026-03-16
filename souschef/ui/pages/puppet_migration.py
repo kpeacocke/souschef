@@ -369,7 +369,7 @@ def _run_manifest_conversion(manifest_path: str) -> None:
     with st.spinner("Converting Puppet manifest to Ansible..."):
         playbook = convert_puppet_manifest_to_ansible(safe)
 
-    _display_conversion_result(playbook, safe)
+    _display_conversion_result(playbook, safe, source_type="manifest")
 
 
 def _run_module_conversion(module_path: str) -> None:
@@ -385,7 +385,7 @@ def _run_module_conversion(module_path: str) -> None:
     with st.spinner("Converting Puppet module to Ansible..."):
         playbook = convert_puppet_module_to_ansible(safe)
 
-    _display_conversion_result(playbook, safe)
+    _display_conversion_result(playbook, safe, source_type="module")
 
 
 def _run_manifest_ai_conversion(
@@ -419,7 +419,7 @@ def _run_manifest_ai_conversion(
             base_url=str(ai_cfg.get("base_url", "")),
         )
 
-    _display_conversion_result(playbook, safe, ai_enhanced=True)
+    _display_conversion_result(playbook, safe, source_type="manifest", ai_enhanced=True)
 
 
 def _run_module_ai_conversion(
@@ -453,7 +453,7 @@ def _run_module_ai_conversion(
             base_url=str(ai_cfg.get("base_url", "")),
         )
 
-    _display_conversion_result(playbook, safe, ai_enhanced=True)
+    _display_conversion_result(playbook, safe, source_type="module", ai_enhanced=True)
 
 
 def _display_analysis_result(result: str, source_type: str) -> None:
@@ -494,7 +494,11 @@ def _display_analysis_result(result: str, source_type: str) -> None:
 
 
 def _display_conversion_result(
-    playbook: str, source_path: str, *, ai_enhanced: bool = False
+    playbook: str,
+    source_path: str,
+    *,
+    source_type: str,
+    ai_enhanced: bool = False,
 ) -> None:
     """Display converted Ansible playbook with download option."""
     if st is None:
@@ -508,14 +512,16 @@ def _display_conversion_result(
         st.warning(playbook)
         return
 
+    source_label = f"Puppet {source_type}"
+
     if ai_enhanced:
-        st.success("Puppet manifest converted to Ansible playbook with AI assistance.")
+        st.success(f"{source_label} converted to Ansible playbook with AI assistance.")
         st.info(
             "The AI-generated playbook may include best-effort conversions for "
             "unsupported constructs. Review carefully before use in production."
         )
     else:
-        st.success("Puppet manifest converted to Ansible playbook successfully.")
+        st.success(f"{source_label} converted to Ansible playbook successfully.")
 
     # Warn if debug tasks present (unsupported constructs, non-AI path)
     if not ai_enhanced and (

@@ -306,54 +306,20 @@ def _validated_candidate(path_obj: Path | str, safe_base: Path | str) -> Path:
 
 def safe_exists(path_obj: Path, base_path: Path) -> bool:
     """Check existence after enforcing base containment."""
-    # Full security validation: raises on symlink escape, char violations, etc.
-    _resolve_path_under_base(path_obj, base_path)
-    # Inline BARRIER on the ORIGINAL path_obj so CodeQL sees normpath+commonpath
-    # in the same scope as the I/O call (.exists).  Mirrors BARRIER 1 inside
-    # _resolve_path_under_base — must apply to the untransformed tainted value.
-    base_str = str(_normalize_trusted_base(base_path))
-    candidate_str = os.path.normpath(str(path_obj))
-    try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg) from e
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
-    return Path(candidate_str).exists()
+    validated = _resolve_path_under_base(path_obj, base_path)
+    return validated.exists()
 
 
 def safe_is_dir(path_obj: Path, base_path: Path) -> bool:
     """Check directory-ness after enforcing base containment."""
-    _resolve_path_under_base(path_obj, base_path)
-    base_str = str(_normalize_trusted_base(base_path))
-    candidate_str = os.path.normpath(str(path_obj))
-    try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg) from e
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
-    return Path(candidate_str).is_dir()
+    validated = _resolve_path_under_base(path_obj, base_path)
+    return validated.is_dir()
 
 
 def safe_is_file(path_obj: Path, base_path: Path) -> bool:
     """Check file-ness after enforcing base containment."""
-    _resolve_path_under_base(path_obj, base_path)
-    base_str = str(_normalize_trusted_base(base_path))
-    candidate_str = os.path.normpath(str(path_obj))
-    try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg) from e
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
-    return Path(candidate_str).is_file()
+    validated = _resolve_path_under_base(path_obj, base_path)
+    return validated.is_file()
 
 
 def safe_glob(dir_path: Path, pattern: str, base_path: Path) -> list[Path]:
@@ -384,18 +350,8 @@ def safe_mkdir(
     path_obj: Path, base_path: Path, parents: bool = False, exist_ok: bool = False
 ) -> None:
     """Create directory after enforcing base containment."""
-    _resolve_path_under_base(path_obj, base_path)
-    base_str = str(_normalize_trusted_base(base_path))
-    candidate_str = os.path.normpath(str(path_obj))
-    try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg) from e
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
-    Path(candidate_str).mkdir(parents=parents, exist_ok=exist_ok)
+    validated = _resolve_path_under_base(path_obj, base_path)
+    validated.mkdir(parents=parents, exist_ok=exist_ok)
 
 
 def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
@@ -414,18 +370,8 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
         ValueError: If the path escapes the base directory.
 
     """
-    _resolve_path_under_base(path_obj, base_path)
-    base_str = str(_normalize_trusted_base(base_path))
-    candidate_str = os.path.normpath(str(path_obj))
-    try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg) from e
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
-    return Path(candidate_str).read_text(encoding=encoding)
+    validated = _resolve_path_under_base(path_obj, base_path)
+    return validated.read_text(encoding=encoding)
 
 
 def safe_write_text(
@@ -441,18 +387,8 @@ def safe_write_text(
         encoding: Text encoding (default: 'utf-8').
 
     """
-    _resolve_path_under_base(path_obj, base_path)
-    base_str = str(_normalize_trusted_base(base_path))
-    candidate_str = os.path.normpath(str(path_obj))
-    try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg) from e
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {base_path}"
-        raise ValueError(msg)
-    Path(candidate_str).write_text(text, encoding=encoding)
+    validated = _resolve_path_under_base(path_obj, base_path)
+    validated.write_text(text, encoding=encoding)
 
 
 def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
@@ -471,20 +407,10 @@ def safe_iterdir(path_obj: Path, base_path: Path) -> list[Path]:
 
     """
     safe_base = _normalize_trusted_base(base_path)
-    _resolve_path_under_base(path_obj, safe_base)
-    base_str = str(safe_base)
-    candidate_str = os.path.normpath(str(path_obj))
-    try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg) from e
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg)
+    validated = _resolve_path_under_base(path_obj, safe_base)
 
     results: list[Path] = []
-    for item in Path(candidate_str).iterdir():
+    for item in validated.iterdir():
         validated_item: Path = _resolve_path_under_base(item, safe_base)
         results.append(validated_item)
 

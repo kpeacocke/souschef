@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import streamlit as st
@@ -14,9 +13,6 @@ else:
         import streamlit as st
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
-
-# Add the parent directory to the path so we can import souschef modules
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from souschef.converters.powershell import convert_powershell_content_to_ansible
 from souschef.generators.powershell import (
@@ -72,6 +68,9 @@ _MIME_YAML = "text/yaml"
 
 def show_powershell_migration_page() -> None:
     """Render the PowerShell Migration page."""
+    if st is None:
+        return  # pragma: no cover
+
     _display_intro()
     script_content, playbook_name, hosts, role_name = _render_inputs()
     _render_action_buttons(script_content, playbook_name, hosts, role_name)
@@ -84,6 +83,9 @@ def show_powershell_migration_page() -> None:
 
 def _display_intro() -> None:
     """Render the page title and introduction."""
+    if st is None:
+        return  # pragma: no cover
+
     st.title("PowerShell to Ansible Migration")
     st.markdown(
         """
@@ -109,6 +111,9 @@ def _render_inputs() -> tuple[str, str, str, str]:
         Tuple of (script_content, playbook_name, hosts, role_name).
 
     """
+    if st is None:
+        return "", "", "", ""  # pragma: no cover
+
     script_content: str = st.text_area(
         _LABEL_SCRIPT_INPUT,
         value=_PLACEHOLDER_SCRIPT,
@@ -147,6 +152,9 @@ def _render_action_buttons(
     script_content: str, playbook_name: str, hosts: str, role_name: str
 ) -> None:
     """Render Parse, Convert, and Enterprise buttons and display results."""
+    if st is None:
+        return  # pragma: no cover
+
     col_parse, col_convert, col_enterprise = st.columns(3)
 
     with col_parse:
@@ -188,8 +196,30 @@ def _render_action_buttons(
 # ---------------------------------------------------------------------------
 
 
+def _load_json_payload(raw_json: str, operation: str) -> dict[str, Any] | None:
+    """Parse a JSON payload and surface UI-friendly errors when malformed."""
+    if st is None:
+        return None  # pragma: no cover
+
+    try:
+        payload = json.loads(raw_json)
+    except json.JSONDecodeError:
+        st.error(f"{operation} returned invalid JSON output.")
+        st.text(raw_json)
+        return None
+
+    if not isinstance(payload, dict):
+        st.error(f"{operation} returned an unexpected response shape.")
+        return None
+
+    return payload
+
+
 def _handle_parse(script_content: str) -> None:
     """Parse the script and display structured actions."""
+    if st is None:
+        return  # pragma: no cover
+
     if not script_content.strip():
         st.warning("Please enter a PowerShell script to parse.")
         return
@@ -197,7 +227,10 @@ def _handle_parse(script_content: str) -> None:
     with st.spinner("Parsing PowerShell script..."):
         result_json = parse_powershell_content(script_content)
 
-    result = json.loads(result_json)
+    result = _load_json_payload(result_json, "Parse")
+    if result is None:
+        return
+
     st.session_state["ps_parse_result"] = result
     st.session_state["ps_convert_result"] = None
     st.session_state["ps_enterprise_result"] = None
@@ -206,6 +239,9 @@ def _handle_parse(script_content: str) -> None:
 
 def _handle_convert(script_content: str, playbook_name: str, hosts: str) -> None:
     """Convert the script and display the Ansible playbook."""
+    if st is None:
+        return  # pragma: no cover
+
     if not script_content.strip():
         st.warning("Please enter a PowerShell script to convert.")
         return
@@ -217,7 +253,10 @@ def _handle_convert(script_content: str, playbook_name: str, hosts: str) -> None
             hosts=hosts,
         )
 
-    result = json.loads(result_json)
+    result = _load_json_payload(result_json, "Convert")
+    if result is None:
+        return
+
     st.session_state["ps_convert_result"] = result
     st.session_state["ps_parse_result"] = None
     st.session_state["ps_enterprise_result"] = None
@@ -228,12 +267,24 @@ def _handle_enterprise(
     script_content: str, playbook_name: str, hosts: str, role_name: str
 ) -> None:
     """Generate enterprise artefacts and display them."""
+    if st is None:
+        return  # pragma: no cover
+
     if not script_content.strip():
         st.warning("Please enter a PowerShell script.")
         return
 
     with st.spinner("Generating enterprise Ansible artefacts..."):
-        parsed_ir = json.loads(parse_powershell_content(script_content, "<inline>"))
+        parsed_raw = parse_powershell_content(script_content, "<inline>")
+        parsed_ir = _load_json_payload(parsed_raw, "Parse")
+        if parsed_ir is None:
+            return
+
+        fidelity_raw = analyze_powershell_migration_fidelity(parsed_ir)
+        fidelity = _load_json_payload(fidelity_raw, "Fidelity analysis")
+        if fidelity is None:
+            return
+
         enterprise_result = {
             "parsed_ir": parsed_ir,
             "inventory": generate_windows_inventory(),
@@ -250,7 +301,7 @@ def _handle_enterprise(
                 job_template_name=f"Windows: {playbook_name}",
                 playbook=f"{playbook_name}.yml",
             ),
-            "fidelity": json.loads(analyze_powershell_migration_fidelity(parsed_ir)),
+            "fidelity": fidelity,
         }
 
     st.session_state["ps_enterprise_result"] = enterprise_result
@@ -261,6 +312,9 @@ def _handle_enterprise(
 
 def _display_stored_results() -> None:
     """Re-display previously computed results from session state."""
+    if st is None:
+        return  # pragma: no cover
+
     parse_result = st.session_state.get("ps_parse_result")
     convert_result = st.session_state.get("ps_convert_result")
     enterprise_result = st.session_state.get("ps_enterprise_result")

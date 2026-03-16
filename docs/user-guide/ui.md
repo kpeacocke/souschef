@@ -353,7 +353,7 @@ The PowerShell migration UI uses a single script input area with a row of contro
 
 #### Enterprise artefacts (single-page workflow)
 
-Enterprise artefact generation reuses the same script input and operates on the analysed script in place. Output is rendered inline in the browser for inspection and copy/paste; the UI does not create ZIP archives or initiate file downloads.
+Enterprise artefact generation reuses the same script input and operates on the analysed script in place. Output is rendered inline in the browser for inspection, and each artefact panel provides dedicated download buttons (for example: inventory, group vars, requirements, job template, role files, and playbook outputs).
 
 **Fidelity report**
 

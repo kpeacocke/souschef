@@ -18,9 +18,8 @@ from typing import TYPE_CHECKING, Any, cast
 # UI dependencies - required for this module to function
 # At runtime, gracefully handle missing dependencies; for type checking, assume present
 if TYPE_CHECKING:
+    import pandas as pd
     import streamlit as st
-
-    pd: Any
 else:
     try:
         pd = importlib.import_module("pandas")

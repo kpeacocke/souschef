@@ -544,9 +544,9 @@ def _list_sls_files(directory: Path, base_path: Path) -> list[str]:
     if common != base_str:
         msg = f"Path traversal attempt: escapes {base_path}"
         raise ValueError(msg)
+    validated_dir = Path(candidate_str)
     return [
-        str(p.relative_to(directory))
-        for p in sorted(Path(candidate_str).rglob("*.sls"))
+        str(p.relative_to(validated_dir)) for p in sorted(validated_dir.rglob("*.sls"))
     ]
 
 
