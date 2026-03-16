@@ -438,6 +438,7 @@ def _call_github_copilot_api(
         safe_base_url = validate_user_provided_url(
             client["base_url"],
             allowed_hosts={"api.github.com", "copilot-proxy.githubusercontent.com"},
+            strip_path=True,
         )
     except (ValueError, KeyError) as exc:
         return f"{ERROR_PREFIX} Invalid GitHub Copilot base URL: {exc}"

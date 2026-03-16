@@ -13,12 +13,26 @@ import tempfile
 import zipfile
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 # UI dependencies - required for this module to function
 # At runtime, gracefully handle missing dependencies; for type checking, assume present
 if TYPE_CHECKING:
-    import pandas as pd
+
+    class _PandasTimestampProtocol(Protocol):
+        """Typing-only protocol for pandas.Timestamp static constructor."""
+
+        @staticmethod
+        def now() -> Any:
+            """Return current timestamp-like object with ``isoformat()``."""
+
+    class _PandasModuleProtocol(Protocol):
+        """Typing-only protocol for the pandas API surface used in this module."""
+
+        Timestamp: _PandasTimestampProtocol
+        DataFrame: Any
+
+    pd: _PandasModuleProtocol
     import streamlit as st
 else:
     try:

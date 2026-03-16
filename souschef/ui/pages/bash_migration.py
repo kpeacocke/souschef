@@ -436,20 +436,20 @@ def _render_quality_score(data: dict[str, Any]) -> None:
         return
 
     st.subheader("Quality Score")
-    grade = qs.get("grade", "N/A")
-    grade_colours = {
-        "A": "green",
-        "B": "blue",
-        "C": "orange",
-        "D": "orange",
-        "F": "red",
-    }
-    colour = grade_colours.get(grade, "grey")
-    st.markdown(
-        f"<span style='font-size:2rem;color:{colour};font-weight:bold'>"
-        f"Grade: {grade}</span>",
-        unsafe_allow_html=True,
-    )
+    grade = str(qs.get("grade", "N/A")).strip().upper()
+    if grade not in {"A", "B", "C", "D", "F"}:
+        grade = "N/A"
+
+    if grade == "A":
+        st.success(f"Grade: {grade}")
+    elif grade == "B":
+        st.info(f"Grade: {grade}")
+    elif grade in {"C", "D"}:
+        st.warning(f"Grade: {grade}")
+    elif grade == "F":
+        st.error(f"Grade: {grade}")
+    else:
+        st.write(f"Grade: {grade}")
 
     col1, col2, col3 = st.columns(3)
     with col1:

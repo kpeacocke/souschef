@@ -464,7 +464,7 @@ def _parse_class_params(params_raw: str) -> list[dict[str, str]]:
     param_pattern = re.compile(
         r"(?:([\w\[\]]+)\s+)?"  # optional type
         r"\$(\w+)"  # $param_name
-        r"(?:\s*=\s*([^\n,)]{0,200}))?"  # optional = default
+        r"(?:\s*=\s*([^\n,)]{0,200}))?"
     )
     for match in param_pattern.finditer(params_raw):
         param_type = (match.group(1) or "").strip()
