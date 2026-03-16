@@ -6049,6 +6049,9 @@ def generate_handler_routing_config(
 # Closes: https://github.com/kpeacocke/souschef/issues/211
 # Closes: https://github.com/kpeacocke/souschef/issues/212
 
+_SALT_DIRECTORY_PATH_LABEL = "Salt directory path"
+_VALIDATING_SALT_DIRECTORY_PATH = "validating Salt directory path"
+
 
 @mcp.tool()
 def parse_salt_sls(sls_path: str) -> str:
@@ -6136,9 +6139,9 @@ def parse_salt_directory(salt_dir: str) -> str:
 
     """
     try:
-        _validate_path_length(salt_dir, "Salt directory path")
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
     except ValueError as e:
-        return format_error_with_context(e, "validating Salt directory path", salt_dir)
+        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
     return _parse_salt_directory(salt_dir)
 
 
@@ -6212,7 +6215,7 @@ def query_salt_master(
         return json.dumps({"error": str(e), "status": "error"})
 
     # Validate URL scheme to prevent SSRF - only allow https:// and http://
-    _url_pattern = re.compile(r"^https?://[a-zA-Z0-9._-]+(:[0-9]{1,5})?(/.*)?$")
+    _url_pattern = re.compile(r"^https?://[a-zA-Z0-9._-]+(:\d{1,5})?(/.*)?$")
     if not _url_pattern.match(master_url):
         return json.dumps(
             {
@@ -6233,6 +6236,7 @@ def query_salt_master(
     try:
         # Build SSL context that verifies certificates by default
         ssl_context = ssl.create_default_context()
+        ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
 
         # Login to Salt API
         login_data = urllib.parse.urlencode(
@@ -6337,9 +6341,9 @@ def assess_salt_migration_complexity(salt_dir: str) -> str:
 
     """
     try:
-        _validate_path_length(salt_dir, "Salt directory path")
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
     except ValueError as e:
-        return format_error_with_context(e, "validating Salt directory path", salt_dir)
+        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
     return _assess_salt_complexity(salt_dir)
 
 
@@ -6367,9 +6371,9 @@ def plan_salt_migration(
 
     """
     try:
-        _validate_path_length(salt_dir, "Salt directory path")
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
     except ValueError as e:
-        return format_error_with_context(e, "validating Salt directory path", salt_dir)
+        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
 
     import json as _json
 
@@ -6540,45 +6544,33 @@ def plan_salt_migration(
     return plan
 
 
-@mcp.tool()
-def generate_salt_migration_report(
+def _build_salt_migration_report_json(
     salt_dir: str,
-    report_format: str = "markdown",
+    summary: dict[str, Any],
+    files: list[dict[str, Any]],
+    module_breakdown: dict[str, int],
 ) -> str:
-    """
-    Generate a comprehensive Salt-to-Ansible migration report.
-
-    Produces an executive-level migration report covering complexity assessment,
-    file inventory, conversion coverage, effort estimates, and recommended
-    migration strategy for SaltStack to AAP/AWX migrations.
-
-    Args:
-        salt_dir: Path to the SaltStack states root directory.
-        report_format: Output format: ``"markdown"`` or ``"json"``.
-
-    Returns:
-        Migration report in the requested format.
-
-    """
-    try:
-        _validate_path_length(salt_dir, "Salt directory path")
-    except ValueError as e:
-        return format_error_with_context(e, "validating Salt directory path", salt_dir)
-
+    """Build the JSON Salt migration report payload."""
     import json as _json
 
-    complexity_json = _assess_salt_complexity(salt_dir)
-    try:
-        data = _json.loads(complexity_json)
-    except Exception:  # noqa: BLE001
-        return complexity_json
+    return _json.dumps(
+        {
+            "report_type": "salt_migration",
+            "directory": salt_dir,
+            "summary": summary,
+            "files": files,
+            "module_coverage": _get_module_coverage(module_breakdown),
+        },
+        indent=2,
+    )
 
-    if "error" in data:
-        return str(data["error"])
 
-    summary = data.get("summary", {})
-    files = data.get("files", [])
-
+def _build_salt_migration_report_markdown(
+    salt_dir: str,
+    summary: dict[str, Any],
+    files: list[dict[str, Any]],
+) -> str:
+    """Build the markdown Salt migration report payload."""
     complexity_level = summary.get("complexity_level", "unknown")
     total_files = summary.get("total_files", 0)
     total_states = summary.get("total_states", 0)
@@ -6589,23 +6581,10 @@ def generate_salt_migration_report(
     high_files = summary.get("high_complexity_files", [])
     module_breakdown = summary.get("module_breakdown", {})
 
-    if report_format == "json":
-        return _json.dumps(
-            {
-                "report_type": "salt_migration",
-                "directory": salt_dir,
-                "summary": summary,
-                "files": files,
-                "module_coverage": _get_module_coverage(module_breakdown),
-            },
-            indent=2,
-        )
-
-    # Markdown report
     by_level: dict[str, int] = {"low": 0, "medium": 0, "high": 0}
     for file_report in files:
-        lvl = file_report.get("complexity_level", "low")
-        by_level[lvl] = by_level.get(lvl, 0) + 1
+        level = str(file_report.get("complexity_level", "low"))
+        by_level[level] = by_level.get(level, 0) + 1
 
     module_coverage = _get_module_coverage(module_breakdown)
     supported_count = sum(1 for v in module_coverage.values() if v["supported"])
@@ -6625,7 +6604,7 @@ def generate_salt_migration_report(
         )
     )
 
-    report = f"""# SaltStack Migration Report
+    return f"""# SaltStack Migration Report
 
 **Generated by SousChef Salt Migration Analyser**
 
@@ -6712,7 +6691,60 @@ to Ansible/AAP. The overall migration complexity is assessed as **{complexity_le
 | State ordering | {"HIGH" if total_states > 50 else "LOW"} | {"Review require/watch dependency chains" if total_states > 50 else "Low state count minimises ordering risk"} |
 """
 
-    return report
+
+@mcp.tool()
+def generate_salt_migration_report(
+    salt_dir: str,
+    report_format: str = "markdown",
+) -> str:
+    """
+    Generate a comprehensive Salt-to-Ansible migration report.
+
+    Produces an executive-level migration report covering complexity assessment,
+    file inventory, conversion coverage, effort estimates, and recommended
+    migration strategy for SaltStack to AAP/AWX migrations.
+
+    Args:
+        salt_dir: Path to the SaltStack states root directory.
+        report_format: Output format: ``"markdown"`` or ``"json"``.
+
+    Returns:
+        Migration report in the requested format.
+
+    """
+    try:
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
+    except ValueError as e:
+        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
+
+    import json as _json
+
+    complexity_json = _assess_salt_complexity(salt_dir)
+    try:
+        data = _json.loads(complexity_json)
+    except Exception:  # noqa: BLE001
+        return complexity_json
+
+    if "error" in data:
+        return str(data["error"])
+
+    summary = data.get("summary", {})
+    files = data.get("files", [])
+    module_breakdown = summary.get("module_breakdown", {})
+
+    if report_format == "json":
+        return _build_salt_migration_report_json(
+            salt_dir=salt_dir,
+            summary=summary,
+            files=files,
+            module_breakdown=module_breakdown,
+        )
+
+    return _build_salt_migration_report_markdown(
+        salt_dir=salt_dir,
+        summary=summary,
+        files=files,
+    )
 
 
 def _get_module_coverage(module_breakdown: dict[str, int]) -> dict[str, Any]:
@@ -6853,7 +6885,7 @@ def convert_salt_directory_to_ansible(salt_dir: str, output_dir: str) -> str:
 
     """
     try:
-        _validate_path_length(salt_dir, "Salt directory path")
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
         _validate_path_length(output_dir, "Output directory path")
     except ValueError as e:
         return format_error_with_context(e, "validating paths", salt_dir)
@@ -7319,8 +7351,6 @@ def convert_puppet_resource_to_task(
         Ansible task in YAML format as a string.
 
     """
-    import yaml as _yaml
-
     # Parse attributes string to dict
     attrs: dict[str, str] = {}
     if attributes:
@@ -7331,9 +7361,7 @@ def convert_puppet_resource_to_task(
                 attrs[key.strip()] = val.strip()
 
     task = _convert_puppet_resource_to_task(resource_type, title, attrs)
-    return _yaml.dump(
-        task, default_flow_style=False, sort_keys=False, allow_unicode=True
-    )
+    return _format_ansible_task(task)
 
 
 @mcp.tool()

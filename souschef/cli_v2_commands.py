@@ -7,7 +7,7 @@ Provides the v2 migration orchestrator workflow and state tracking.
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 
@@ -51,13 +51,16 @@ def create_v2_group() -> click.Group:
         Provides the v2 migration orchestrator workflow and state tracking.
         """
 
-    # Register v2 commands to the group
-    v2.add_command(v2_migrate)
-    v2.add_command(v2_status)
-    v2.add_command(v2_list)
-    v2.add_command(v2_rollback)
+    # Cast to click.Group: @click.group() returns a Group, Pylance infers FunctionType
+    v2_typed = cast(click.Group, v2)
 
-    return v2
+    # Register v2 commands to the group
+    v2_typed.add_command(v2_migrate)
+    v2_typed.add_command(v2_status)
+    v2_typed.add_command(v2_list)
+    v2_typed.add_command(v2_rollback)
+
+    return v2_typed
 
 
 def _validate_user_path(path_input: str | None) -> Path:

@@ -42,7 +42,9 @@ try:
     from souschef.server import analyse_chef_search_patterns
 except ImportError:  # pragma: no cover
     # Define a placeholder function for when MCP is not available
-    def analyse_chef_search_patterns(*args, **kwargs):  # pragma: no cover
+    def analyse_chef_search_patterns(
+        recipe_or_cookbook_path: str,
+    ) -> str:  # pragma: no cover
         raise NotImplementedError("MCP server not available")
 
 
