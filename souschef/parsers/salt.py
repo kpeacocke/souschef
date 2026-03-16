@@ -548,9 +548,15 @@ def _list_sls_files(directory: Path, base_path: Path) -> list[str]:
         msg = f"Path traversal attempt: escapes {base_path}"
         raise ValueError(msg)
     validated_dir = Path(candidate_str)
-    return [
-        str(p.relative_to(validated_dir)) for p in sorted(validated_dir.rglob("*.sls"))
-    ]
+    results: list[str] = []
+    for p in sorted(validated_dir.rglob("*.sls")):
+        try:
+            rel = p.relative_to(validated_dir)
+        except ValueError:
+            # Skip paths that are not descendants of the validated directory
+            continue
+        results.append(str(rel))
+    return results
 
 
 def parse_salt_directory(salt_dir: str) -> str:

@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive Salt migration guide at `docs/migration-guide/salt-migration.md`
 
 * **Puppet Migration:** Full Puppet-to-Ansible migration pipeline (8 MCP tools)
-  - `parsers/puppet.py` — parse Puppet manifests (`.pp`) and module directories; recognises 15 resource types and flags unsupported constructs (Hiera lookups, exported/virtual resources, `create_resources`) with source line numbers
+  - `parsers/puppet.py` — parse Puppet manifests (`.pp`) and module directories; recognises 14 resource types and flags unsupported constructs (Hiera lookups, exported/virtual resources, `create_resources`) with source line numbers
   - `converters/puppet_to_ansible.py` — convert parsed resources to idiomatic `ansible.builtin` tasks; AI-assisted fallback for unsupported constructs via `*_with_ai` functions
   - `ui/pages/puppet_migration.py` — Streamlit page with manifest/module input, parse, convert, AI-assisted convert, and playbook download
   - MCP tools: `parse_puppet_manifest`, `parse_puppet_module`, `convert_puppet_manifest_to_ansible`, `convert_puppet_module_to_ansible`, `convert_puppet_resource_to_task`, `list_puppet_supported_resource_types`, `convert_puppet_manifest_to_ansible_with_ai`, `convert_puppet_module_to_ansible_with_ai`
