@@ -876,11 +876,12 @@ def _display_dependency_mapping_history() -> None:
 def _get_cookbook_path_from_input_method(input_method: str) -> str | None:
     """Get cookbook path based on selected input method."""
     if input_method == INPUT_METHOD_DIRECTORY_PATH:
-        return st.text_input(
+        text: str = st.text_input(
             "Cookbook Directory Path",
             placeholder="/path/to/your/cookbooks",
             help="Enter the path to your cookbooks directory for dependency analysis",
         )
+        return text
 
     if input_method == "Use History":
         if "dep_analysis_cookbook_path" in st.session_state:
@@ -2869,7 +2870,7 @@ def _render_validation_input_ui(default_path: str) -> str:
     )
 
     if input_type == "Directory":
-        input_path = st.text_input(
+        input_path: str = st.text_input(
             "Directory Path",
             value=default_path,
             placeholder="/path/to/ansible/playbooks",

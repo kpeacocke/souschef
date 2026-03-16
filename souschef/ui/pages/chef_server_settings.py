@@ -475,7 +475,7 @@ def _confirm_bulk_operation(estimated_time: float, operation: str) -> bool:
     if estimated_time <= 60:
         return True
 
-    confirm = st.checkbox(
+    confirm: bool = st.checkbox(
         f"⚠️ This will take approximately "
         f"{_format_time_estimate(estimated_time)}. Continue?",
         key=f"confirm_{operation}_all",

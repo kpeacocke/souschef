@@ -894,13 +894,14 @@ def _setup_cookbook_analysis_ui() -> None:
 
 def _get_cookbook_path_input() -> str:
     """Get the cookbook path input from the user."""
-    return st.text_input(
+    result: str = st.text_input(
         "Cookbook Directory Path",
         placeholder="cookbooks/ or ../shared/cookbooks/",
         help="Enter a path to your Chef cookbooks directory. "
         "Relative paths (e.g., 'cookbooks/') and absolute paths inside the workspace "
         "(e.g., '/workspaces/souschef/cookbooks/') are allowed.",
     )
+    return result
 
 
 def _get_archive_upload_input() -> Any:
