@@ -510,7 +510,15 @@ def _display_conversion_results(
 ) -> None:
     """Convert *content* and render the playbook output."""
     raw = convert_bash_content_to_ansible(content, script_path=script_path)
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        st.error(
+            "Failed to parse converter output as JSON. "
+            "Raw output from converter:\n\n"
+            f"{raw}"
+        )
+        return
 
     if data.get("status") == "error":
         st.error(f"Conversion error: {data.get('error')}")
@@ -571,7 +579,15 @@ def _display_role_results(
     raw = generate_ansible_role_from_bash(
         content, role_name=role_name, script_path=script_path
     )
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        st.error(
+            "Failed to parse role generator output as JSON. "
+            "Raw output from role generator:\n\n"
+            f"{raw}"
+        )
+        return
 
     if data.get("status") == "error":
         st.error(f"Role generation error: {data.get('error')}")
