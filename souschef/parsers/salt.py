@@ -729,9 +729,10 @@ def _extract_include_dependencies(data: dict[str, Any]) -> dict[str, list[str]]:
 def _extract_dependency_arg_dicts(state_def: Any) -> list[dict[str, Any]]:
     """Extract nested argument dictionaries from Salt state definition formats."""
     arg_dicts: list[dict[str, Any]] = []
+    sources: list[Any]
 
     if isinstance(state_def, dict):
-        sources = state_def.values()
+        sources = list(state_def.values())
     elif isinstance(state_def, list):
         sources = [
             val for item in state_def if isinstance(item, dict) for val in item.values()

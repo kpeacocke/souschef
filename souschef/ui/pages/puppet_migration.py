@@ -497,7 +497,7 @@ def _display_conversion_result(
     playbook: str,
     source_path: str,
     *,
-    source_type: str,
+    source_type: str = "manifest",
     ai_enhanced: bool = False,
 ) -> None:
     """Display converted Ansible playbook with download option."""

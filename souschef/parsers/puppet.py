@@ -26,6 +26,9 @@ from souschef.core.path_utils import (
     safe_read_text,
 )
 
+# Backward-compatible alias for tests patching this symbol at use-site.
+_ensure_within_base_path = _resolve_path_under_base
+
 # Maximum manifest content length to prevent resource exhaustion
 MAX_MANIFEST_LENGTH = 2_000_000
 
@@ -85,7 +88,7 @@ def parse_puppet_manifest(path: str) -> str:
     try:
         file_path = _normalize_path(path)
         workspace_root = _get_workspace_root()
-        safe_path = _resolve_path_under_base(file_path, workspace_root)
+        safe_path = _ensure_within_base_path(file_path, workspace_root)
         content = safe_read_text(safe_path, workspace_root, encoding="utf-8")
 
         if len(content) > MAX_MANIFEST_LENGTH:
@@ -167,7 +170,7 @@ def parse_puppet_module(module_path: str) -> str:
     try:
         dir_path = _normalize_path(module_path)
         workspace_root = _get_workspace_root()
-        safe_dir = _resolve_path_under_base(dir_path, workspace_root)
+        safe_dir = _ensure_within_base_path(dir_path, workspace_root)
 
         if not safe_dir.exists():  # NOSONAR
             return ERROR_FILE_NOT_FOUND.format(path=module_path)
