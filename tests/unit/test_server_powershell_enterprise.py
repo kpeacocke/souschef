@@ -40,12 +40,12 @@ class TestGenerateWindowsInventoryTool:
         result = generate_windows_inventory_tool(winrm_port=5985)
         assert "5985" in result
 
-    def test_no_ssl_uses_basic_transport(self) -> None:
-        """Tool switches to basic transport when use_ssl=False."""
+    def test_no_ssl_uses_http_scheme(self) -> None:
+        """Tool switches to http scheme when use_ssl=False."""
         from souschef.server import generate_windows_inventory_tool
 
         result = generate_windows_inventory_tool(use_ssl=False)
-        assert "basic" in result
+        assert "ansible_winrm_scheme=http" in result
 
 
 class TestGenerateWindowsRequirements:
