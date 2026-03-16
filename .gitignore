@@ -129,5 +129,8 @@ tests/integration/fixtures/*.tar.xz
 # Accidental mock path output
 MagicMock/
 
+# Temporary simulation output directories (created by souschef UI at runtime)
+souschef_simulation_*/
+
 # Docker Compose persistent storage
 data/
