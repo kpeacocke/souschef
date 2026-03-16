@@ -1,5 +1,6 @@
-# Python-generated files
+# ──────────────────────────────────────────────
 # Python
+# ──────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -23,41 +24,63 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# mypy
-.mypy_cache/
+# ──────────────────────────────────────────────
+# Virtual Environments
+# ──────────────────────────────────────────────
+.venv/
+venv/
+ENV/
 
-# pytest
+# ──────────────────────────────────────────────
+# Static Analysis & Linting
+# ──────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# ──────────────────────────────────────────────
+# Testing & Coverage
+# ──────────────────────────────────────────────
 .pytest_cache/
 .coverage
 coverage.xml
 coverage.json
 htmlcov/
-
-# Go coverage artifacts
-*.cover
-*.out
-*.lcov
-
-# Mutation testing
 .mutmut-cache
 mutants/
 
+# ──────────────────────────────────────────────
+# Security Scanning
+# ──────────────────────────────────────────────
+
 # Snyk
 requirements.txt
+.github/instructions/snyk_rules.instructions.md
 
-# Hypothesis
-.hypothesis/
+# CodeQL — ignore databases and build artefacts, but commit config and reports
+.codeql/databases/
+.codeql/queries/**
+!.codeql/queries/.gitkeep
+.codeql-db/
+codeql-db/
+python-db/
+codeql-results/
+# Ignore downloaded CodeQL pack modules (created by `codeql pack install`)
+**/codeql_modules/
+# Note: .codeql/config/, .codeql/reports/, and specific .sarif files are committed
+# See .codeql/.gitignore for details
 
-# ruff
-.ruff_cache/
+# GitHub Security Scanning exports
+code_scanning_alerts*.json
 
-# Ruby LSP
-.ruby-lsp/
+# ──────────────────────────────────────────────
+# Documentation
+# ──────────────────────────────────────────────
+site/
 
-# Virtualenv
-.venv/
-venv/
-ENV/
+# ──────────────────────────────────────────────
+# IDE & Editors
+# ──────────────────────────────────────────────
 
 # VS Code
 .vscode/*
@@ -74,53 +97,36 @@ ENV/
 !.devcontainer/post-start.sh
 !.devcontainer/Dockerfile
 
-# macOS
-.DS_Store
+# Ruby LSP
+.ruby-lsp/
 
-# Windows
+# ──────────────────────────────────────────────
+# Operating Systems
+# ──────────────────────────────────────────────
+.DS_Store
 Thumbs.db
 
+# ──────────────────────────────────────────────
+# Go
+# ──────────────────────────────────────────────
+*.cover
+*.out
+*.lcov
 
-# Virtual environments
-.venv
-
-# Snyk Security Extension - AI Rules (auto-generated)
-.github/instructions/snyk_rules.instructions.md
-
-# CodeQL Security Scanning
-# Ignore databases and build artifacts, but commit config and reports
-.codeql/databases/
-.codeql/queries/**
-!.codeql/queries/.gitkeep
-.codeql-db/
-codeql-db/
-python-db/
-codeql-results/
-# Ignore downloaded CodeQL pack modules (created by `codeql pack install`)
-**/codeql_modules/
-
-# Note: .codeql/config/, .codeql/reports/, and specific .sarif files are committed
-# See .codeql/.gitignore for details
-
-# GitHub Security Scanning Exports
-code_scanning_alerts*.json
-
-# GitHub Security Scanning Exports
-code_scanning_alerts*.json
-
-# MkDocs
-site/
+# ──────────────────────────────────────────────
+# Runtime Artefacts
+# ──────────────────────────────────────────────
 
 # Log files
 *.log
 
-# Environment files (but keep examples)
+# Environment files (keep examples)
 .env
 !.env.example
 .env.devcontainer
 !.env.devcontainer.example
 
-# Test artifacts
+# Test fixtures (binary archives)
 tests/integration/fixtures/*.tar.gz
 tests/integration/fixtures/*.zip
 tests/integration/fixtures/*.tar.bz2
