@@ -368,7 +368,7 @@ def test_benchmark_my_new_feature(benchmark):
     assert benchmark.stats['max'] < 0.010   # <10ms max
 ```
 
-See [tests/integration/test_integration.py](../../tests/integration/test_integration.py) for examples.
+See the integration test examples in the repository: https://github.com/kpeacocke/souschef/blob/main/tests/integration/test_integration.py
 
 ## Resources
 

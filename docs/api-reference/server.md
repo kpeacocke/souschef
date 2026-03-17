@@ -4,7 +4,7 @@ MCP server implementation and internal functions for the SousChef tool.
 
 ## Overview
 
-The `souschef.server` module provides the MCP (Model Context Protocol) server implementation that exposes Chef-to-Ansible conversion tools to AI assistants like Claude Desktop and GitHub Copilot.
+The `souschef.server` module provides the MCP (Model Context Protocol) server implementation that exposes multi-platform migration and upgrade tools to AI assistants like Claude Desktop and GitHub Copilot.
 
 !!! info "MCP Framework"
     SousChef uses [FastMCP](https://github.com/jlowin/fastmcp) to implement the Model Context Protocol server. Tools are registered using the `@mcp.tool()` decorator.
@@ -13,7 +13,7 @@ The `souschef.server` module provides the MCP (Model Context Protocol) server im
 
 ## MCP Tools
 
-See the [MCP Tools Reference](../user-guide/mcp-tools.md) for complete documentation of all 45 available MCP tools with usage examples.
+See the [MCP Tools Reference](../user-guide/mcp-tools.md) for complete documentation of all available MCP tools with usage examples.
 
 ---
 

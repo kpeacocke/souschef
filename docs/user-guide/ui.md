@@ -1,6 +1,6 @@
 # Visual Migration Planning Interface
 
-SousChef provides a modern web-based interface for interactive Chef-to-Ansible migration planning and visualisation. The UI complements the MCP tools and CLI with visual workflows, real-time analysis, and interactive dependency mapping.
+SousChef provides a modern web-based interface for interactive multi-platform-to-Ansible migration planning and visualisation. The UI complements the MCP tools and CLI with visual workflows, real-time analysis, and interactive dependency mapping.
 
 ## Overview
 
@@ -58,7 +58,7 @@ services:
 
 ### Unified Cookbook Migration Interface
 
-The **Migrate Cookbook** page provides a comprehensive interface for end-to-end Chef-to-Ansible migrations with analysis, conversion, and deployment capabilities:
+The **Migrate Cookbook** page provides a comprehensive interface for end-to-end migrations with analysis, conversion, and deployment capabilities:
 
 #### Analysis & Conversion
 - **Archive Upload**: Secure handling of ZIP and TAR archives with size limits and security validation
@@ -131,6 +131,81 @@ Configure AI providers for enhanced analysis and repository selection:
 - **Configuration Validation**: Test connection to AI providers before saving
 - **Model Selection**: Choose specific models based on your provider
 - **Secure Storage**: API keys stored in user-specific configuration directory (~/.souschef/)
+
+### Bash Script Migration Page
+
+The **Bash Script Migration** page provides enterprise-grade conversion of provisioning Bash scripts — including scripts that escape from Salt, Puppet, or Chef — directly into Ansible playbooks or full roles ready for AAP.
+
+#### Input Options
+
+- **Paste Script tab**: Type or paste Bash script content directly into the editor
+- **Upload File tab**: Upload `.sh`, `.bash`, or `.txt` script files
+
+#### Actions Available
+
+| Button | What it does |
+|--------|--------------|
+| Analyse Script | Parses the script and shows all detected patterns |
+| Convert to Ansible | Generates a playbook YAML with quality score and AAP hints |
+| Generate Ansible Role | Generates a complete 11-file role structure (tasks, handlers, defaults, meta, README) |
+
+#### Analysis Output
+
+When you click **Analyse Script**, the page shows:
+
+- **Metric cards** — counts of packages, services, file writes, downloads, users/groups, and security risks
+- **Package installs** — manager, packages, target Ansible module, confidence score
+- **Service control** — systemctl/service operations with Ansible mapping
+- **File writes** — heredoc and redirect operations mapped to `ansible.builtin.copy`
+- **Downloads** — curl/wget operations mapped to `ansible.builtin.get_url`
+- **Users & Groups** — `useradd`/`groupadd` operations mapped to `ansible.builtin.user`/`group`
+- **File permissions** — `chmod`/`chown` operations with recursive support
+- **Git operations** — `git clone`/`pull`/`checkout` mapped to `ansible.builtin.git`
+- **Archives** — `tar -x`/`unzip` mapped to `ansible.builtin.unarchive`
+- **sed operations** — `sed -i` with lineinfile/replace recommendation
+- **Cron jobs** — `crontab` operations with Ansible cron guidance
+- **Firewall rules** — `ufw`/`firewall-cmd`/`iptables` with collection hints
+- **Hostname** — `hostnamectl set-hostname` mapped to `ansible.builtin.hostname`
+- **Environment variables** — extracted shell variables; sensitive ones flagged
+- **Sensitive data** (red alert) — detected passwords, API keys, and private key material with vault recommendation; values are always redacted
+- **CM escape calls** (orange warning) — `salt-call`, `puppet apply`, `chef-client` calls embedded in the script, with native Ansible guidance
+- **Shell fallbacks** — lines with no direct module mapping, with `ansible.builtin.shell` fallback note
+
+#### Conversion & Role Output
+
+When you click **Convert to Ansible** or **Generate Ansible Role**, the page additionally shows:
+
+- **Quality score panel** — letter grade (A–F), structured coverage percentage, shell fallback count, and ranked improvement list
+- **AAP hints panel** — recommended Execution Environment image, credential types, survey variables derived from `export VAR=val` statements, and actionable notes
+- **Playbook YAML** or **Role files** — syntax-highlighted output with a **Download** button
+
+## SaltStack Migration
+
+The **Salt Migration** page provides an interactive workflow for analysing and converting Salt states, pillars, and targeting definitions.
+
+### Location
+
+Navigate to: **Ansible** tab → **Salt Migration**
+
+### Core Tabs and Actions
+
+| Tab | Primary action |
+|-----|----------------|
+| Parse SLS | Parse a single `.sls` state file and inspect extracted states, modules, and dependencies |
+| Convert to Ansible | Convert SLS content to Ansible playbook YAML |
+| Pillar Files | Parse pillar files and convert to Ansible variable structures |
+| Directory Scan | Discover states and top files across a Salt tree |
+| Assessment | Compute migration complexity and effort indicators |
+| Migration Plan | Generate phased migration plans for AWX/AAP/Core targets |
+| Batch Convert | Convert a full Salt state tree into role-oriented output |
+| Inventory | Convert `top.sls` targeting into Ansible inventory output |
+
+### What the UI Highlights
+
+- State module coverage and unsupported patterns requiring review
+- Pillar variable extraction and vault-suitable secret candidates
+- Dependency visibility for safer migration sequencing
+- Structured conversion output and downloadable artefacts
 
 ## Archive Upload Security
 
@@ -224,6 +299,120 @@ services:
       - ./reports:/app/reports
 ```
 
+## Puppet Migration
+
+The **Puppet Migration** page provides a web-based interface for converting Puppet manifests (`.pp` files) and module directories to Ansible playbooks.
+
+### Location
+
+Navigate to: **Chef** tab → **Puppet Migration**
+
+### Input Options
+
+The page supports two input modes selectable via a dropdown:
+
+- **Manifest File Path**: Enter the path to a single `.pp` manifest file
+- **Module Directory Path**: Enter the path to a Puppet module root directory to convert all manifests in the module
+
+### Actions Available
+
+The page has two sub-sections: **Analyse Puppet Manifest** (for single `.pp` files) and **Analyse Puppet Module** (for full module directories). Each sub-section provides these buttons:
+
+| Button | Action |
+|--------|--------|
+| **Analyse Manifest** / **Analyse Module** | Extract and display all resources, classes, variables, and unsupported constructs |
+| **Convert to Ansible** | Generate an Ansible playbook from all parsed resources |
+| **Convert with AI** | Use an LLM to handle Hiera lookups, exported resources, and other unsupported constructs |
+
+A **Download Playbook** button appears in the conversion result panel once a playbook has been generated.
+
+### Analysis Output
+
+The parse output shows:
+
+- **Resources**: Each resource type, title, attributes, and source line number
+- **Classes**: Puppet class definitions with parameters
+- **Variables**: Variable assignments found in the manifest
+- **Unsupported constructs**: Hiera lookups, exported/virtual resources, `create_resources`, and other constructs that require manual review, each with a line number and guidance note
+
+### Conversion Output
+
+The playbook preview shows the generated Ansible YAML with:
+
+- One task per Puppet resource, using the idiomatic `ansible.builtin` module
+- `ansible.builtin.debug` placeholder tasks for unsupported constructs, with a `msg` explaining what manual work is needed
+- Download button to save the playbook to disk
+
+### AI-Assisted Conversion
+
+For manifests with Hiera lookups or other unsupported constructs, expand the **AI Settings** panel to configure:
+
+- **AI Provider**: `anthropic`, `openai`, `watson`, or `lightspeed`
+- **API Key**: Your provider's API key
+- **Model**: Model name (default: `claude-3-5-sonnet-20241022`)
+
+The AI-assisted converter sends only the unsupported construct descriptions and manifest structure to the LLM — no file system paths or credential values are included in the prompt.
+
+---
+
+## PowerShell Migration
+
+### Location
+
+Navigate to: **Ansible** tab → **PowerShell Migration**
+
+### Script Input and Conversion
+
+The page uses a single script input area with controls beneath it for all operations.
+
+- **Script input area**: Paste your PowerShell provisioning script directly into the text area
+- **Parse Script button**: Extracts all provisioning actions and displays a structured summary with action types, confidence levels, source line numbers, and a metrics summary
+- **Warnings panel**: Lists unrecognised commands that will fall back to `win_shell`
+
+#### Conversion tools
+
+The PowerShell migration UI uses a single script input area with a row of controls beneath it. Conversion actions share the same context as the analysis results; there are no separate workflow tabs.
+
+- **Playbook name field**: Optional text field to set the Ansible play name (default: `powershell_migration`)
+- **Hosts field**: Optional text field to set the inventory group or host pattern (default: `windows`)
+- **Convert to playbook button**: Generates the Ansible playbook YAML and shows it in an on-page preview panel
+- **Playbook preview**: Syntax-highlighted YAML output rendered below the editor
+- **Statistics summary**: Task count breakdown (idiomatic modules vs. `win_shell` fallbacks) displayed alongside the preview
+
+#### Enterprise artefacts (single-page workflow)
+
+Clicking **Generate Enterprise Artefacts** runs all generators in one step and renders each artefact in a dedicated tab for inspection and download.
+
+The following artefacts are produced automatically from the parsed script without additional configuration inputs:
+
+**Fidelity report tab**
+
+- **Score display**: Percentage of actions fully automatable
+- **Total / automated / fallback action counts**: Breakdown of conversion coverage
+- **Review list**: Actions needing manual attention
+- **Recommendations**: Actionable suggestions for improving automation coverage
+
+**Inventory tab**
+
+- **inventory/hosts**: WinRM-ready INI inventory for the ``[windows]`` group, with default connection settings (NTLM transport, HTTPS scheme, port 5986)
+- **group_vars/windows.yml**: Centralised WinRM connection variables (user, password vault reference, timeouts, cert validation)
+- Download buttons for both files
+
+**Role tab**
+
+- Role-style task structure derived from the parsed actions, using the optional role name and playbook name from the input fields above
+- Download button for the role archive
+
+**Requirements tab**
+
+- **requirements.yml**: Collections required by the generated tasks, tailored to the detected action types
+- Download button
+
+**Job Template tab**
+
+- AWX/Tower-compatible job template JSON, derived from the parsed playbook
+- Download button
+
 ## Troubleshooting
 
 ### Common Issues
@@ -275,6 +464,9 @@ souschef/ui/
 ├── pages/              # Page modules
 │   ├── cookbook_analysis.py    # Unified migration interface (analysis + orchestration)
 │   ├── migration_planning.py   # Migration planning wizards
+│   ├── bash_migration.py       # Bash script to Ansible conversion
+│   ├── puppet_migration.py     # Puppet manifest/module to Ansible conversion
+│   ├── powershell_migration.py # PowerShell to Windows Ansible conversion
 │   ├── ai_settings.py          # AI provider configuration
 │   └── reports.py              # Report generation
 ├── components/         # Reusable UI components
@@ -287,10 +479,117 @@ souschef/ui/
     └── report_generator.py     # Report creation
 ```
 
+## Salt Migration Tab
+
+The **Salt** tab provides a dedicated interface for SaltStack-to-Ansible migrations, complementing the 12 Salt MCP tools with interactive visualisation and guided workflows.
+
+### Accessing the Salt Tab
+
+The Salt tab appears in the main navigation alongside the Chef migration and Ansible upgrade tabs. Launch the UI and select **Salt** to access all Salt migration features.
+
+### Sub-tabs
+
+The Salt tab is divided into eight sub-tabs, each corresponding to a stage of the migration workflow:
+
+#### Parse SLS
+
+Interactive parser for Salt SLS state files.
+
+- **File selection**: Browse or enter a path to any `.sls` state file
+- **State tree view**: Expandable tree showing every state declaration, its module, function, and parameters
+- **Pillar references**: List of all pillar keys referenced in the file with their default values
+- **Grain references**: Grain keys used for conditional logic
+- **Requisite graph**: Visual representation of `require`, `watch`, and `onchanges` dependencies between states
+- **Export**: Download parsed results as JSON for further analysis
+
+#### Convert to Ansible
+
+Single-file SLS-to-playbook conversion with live preview.
+
+- **Source file**: Select an SLS file to convert
+- **Live preview**: Converted Ansible playbook YAML displayed alongside the original SLS for comparison
+- **Handler extraction**: `watch` requisites highlighted and extracted to a handlers section
+- **Variable mapping**: Pillar references shown with their Ansible equivalent variable names
+- **Copy to clipboard**: One-click copy of the generated YAML
+- **Download**: Save the converted playbook as a `.yml` file
+
+#### Pillar Files
+
+Pillar-to-variables conversion interface.
+
+- **Pillar browser**: Navigate your pillar directory tree
+- **Variable classification**: Automatic identification of sensitive values (passwords, keys, tokens)
+- **Output format selector**: Choose between `yaml` (all vars together) or `vault` (split into plain + vault files)
+- **Preview pane**: Side-by-side preview of the generated `group_vars` file and Vault file
+- **Bulk export**: Convert an entire pillar directory in one operation
+
+#### Directory Scan
+
+Full Salt state tree scanner and structural overview.
+
+- **Directory picker**: Enter or browse to your Salt states root directory
+- **Tree view**: Collapsible directory tree showing all SLS files
+- **Summary statistics**: Total state files, unique modules used, states per directory
+- **Include graph**: Visual map of cross-directory include relationships
+- **Export manifest**: Download the full directory inventory as JSON
+
+#### Assessment
+
+Complexity scoring and effort estimation for a Salt directory.
+
+- **Directory input**: Point to any Salt state directory
+- **Complexity dashboard**: Visual complexity score (Low / Medium / High / Very High) with contributing factor breakdown
+- **Effort estimate**: Estimated person-days with confidence range
+- **Per-directory breakdown**: Table showing complexity score and estimated effort for each state directory
+- **Risk register**: Identified risk factors with suggested mitigations
+- **Migration order**: Recommended sequence for converting state directories (simplest first)
+- **Export report**: Download the assessment as Markdown or JSON
+
+#### Migration Plan
+
+Phased migration planning with timeline generation.
+
+- **Directory input**: Salt states directory to plan for
+- **Timeline input**: Available migration timeline in weeks
+- **Target platform selector**: Choose from Ansible Automation Platform (AAP), AWX (open source), or Ansible Core
+- **Generated plan**: Week-by-week phased plan displayed in a structured timeline view
+- **Phase breakdown**: Objectives, activities, and deliverables for each phase
+- **Resource estimate**: Person-days per phase
+- **Export**: Download the plan as Markdown for inclusion in project documentation
+
+#### Batch Convert
+
+Full directory-to-roles conversion for large-scale migrations.
+
+- **Source directory**: Salt states directory to convert
+- **Output directory**: Target directory for the generated Ansible roles structure
+- **Conversion options**:
+  - Generate `site.yml` orchestration playbook
+  - Include role `README.md` files
+  - Preserve original SLS comments as task comments
+- **Progress tracking**: Real-time progress bar and per-file status during conversion
+- **Conversion summary**: Count of roles created, tasks generated, and items flagged for manual review
+- **Review panel**: List of states that required manual attention with explanatory notes
+- **Download archive**: Package the entire generated roles structure as a ZIP or TAR archive
+
+#### Inventory
+
+`top.sls`-to-Ansible-inventory conversion.
+
+- **top.sls file**: Select or enter path to your `top.sls`
+- **Targeting analysis**: Visual breakdown of all targeting expressions by environment
+- **Inventory preview**: Generated Ansible INI inventory displayed with group structure
+- **Group mapping**: Table showing each Salt target expression and its corresponding Ansible group
+- **Matcher support**: Handles glob, grain, compound, pcre, and nodegroup matchers
+- **Export**: Download the generated inventory as `hosts.ini`
+
+---
+
 ## See Also
 
 - **[MCP Tools Reference](mcp-tools.md)** - All available MCP tools
 - **[CLI Usage Guide](cli-usage.md)** - Command-line interface
 - **[Migration Guide](../migration-guide/overview.md)** - Complete migration methodology
-- **[Security Documentation](../security.md)** - Security features and best practices</content>
+- **[Salt Migration Guide](../migration-guide/salt-migration.md)** - Complete Salt migration methodology
+- **[Security Documentation](../SECURITY.md)** - Security features and best practices</content>
 <parameter name="filePath">/workspaces/souschef/docs/user-guide/ui.md

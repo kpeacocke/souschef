@@ -4,7 +4,7 @@ Command-line interface implementation for SousChef.
 
 ## Overview
 
-The `souschef.cli` module provides a command-line interface for Chef-to-Ansible conversion using the Click framework. All commands are accessible via the `souschef-cli` entry point.
+The `souschef.cli` module provides a command-line interface for migration and upgrade workflows using the Click framework. All commands are accessible via the `souschef-cli` entry point.
 
 ---
 

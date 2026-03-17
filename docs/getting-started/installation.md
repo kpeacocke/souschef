@@ -130,10 +130,10 @@ souschef-cli --help
 
 Restart your MCP client and ask:
 ```
-What Chef migration tools are available?
+What migration tools are available?
 ```
 
-The AI should respond with a list of SousChef's 44 MCP tools.
+The AI should respond with a list of SousChef's migration and upgrade MCP tools (the exact set may evolve between releases).
 
 ## Troubleshooting
 

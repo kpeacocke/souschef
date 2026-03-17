@@ -7,6 +7,7 @@ from souschef.core.validation import (
     ValidationResult,
 )
 from souschef.parsers.attributes import parse_attributes
+from souschef.parsers.bash import parse_bash_script, parse_bash_script_content
 from souschef.parsers.habitat import parse_habitat_plan
 from souschef.parsers.inspec import (
     convert_inspec_to_test,
@@ -18,11 +19,23 @@ from souschef.parsers.metadata import (
     parse_cookbook_metadata,
     read_cookbook_metadata,
 )
+from souschef.parsers.powershell import (
+    parse_powershell_content,
+    parse_powershell_script,
+)
 from souschef.parsers.recipe import parse_recipe
 from souschef.parsers.resource import parse_custom_resource
+from souschef.parsers.salt import (
+    parse_salt_directory,
+    parse_salt_pillar,
+    parse_salt_sls,
+    parse_salt_top,
+)
 from souschef.parsers.template import parse_template
 
 __all__ = [
+    "parse_bash_script",
+    "parse_bash_script_content",
     "parse_template",
     "parse_recipe",
     "parse_attributes",
@@ -34,6 +47,12 @@ __all__ = [
     "convert_inspec_to_test",
     "generate_inspec_from_chef",
     "parse_habitat_plan",
+    "parse_salt_sls",
+    "parse_salt_pillar",
+    "parse_salt_top",
+    "parse_salt_directory",
+    "parse_powershell_script",
+    "parse_powershell_content",
     "ValidationCategory",
     "ValidationEngine",
     "ValidationLevel",

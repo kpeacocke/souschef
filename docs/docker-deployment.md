@@ -61,8 +61,8 @@ The SousChef project automatically publishes Docker images to [GitHub Container 
 
 The image metadata includes:
 
-- **Title**: "SousChef - MCP AI Chef to Ansible Converter"
-- **Description**: "AI-powered Model Context Protocol server and web UI for converting Chef cookbooks to Ansible playbooks"
+- **Title**: "SousChef - MCP AI Migration Platform"
+- **Description**: "AI-powered Model Context Protocol server and web UI for migrating automation assets to Ansible"
 - **License**: MIT
 - **Vendor**: SousChef Project
 - **Documentation**: https://kpeacocke.github.io/souschef/
@@ -499,7 +499,7 @@ The image includes comprehensive OCI metadata:
 
 ```
 org.opencontainers.image.title=SousChef UI
-org.opencontainers.image.description=AI-powered UI for Chef to Ansible conversion
+org.opencontainers.image.description=AI-powered UI for multi-platform to Ansible migration
 org.opencontainers.image.authors=SousChef Contributors
 org.opencontainers.image.licenses=MIT
 org.opencontainers.image.url=https://github.com/kpeacocke/souschef

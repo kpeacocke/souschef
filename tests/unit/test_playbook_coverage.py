@@ -76,7 +76,7 @@ def test_call_lightspeed_api_requests_none() -> None:
 
 def test_call_github_copilot_api_requests_none() -> None:
     """Test _call_github_copilot_api returns error when requests is None."""
-    client = {"api_key": "key", "base_url": "https://api.example.com"}
+    client = {"api_key": "key", "base_url": "https://api.github.com"}
     with patch("souschef.converters.playbook.requests", None):
         result = _call_github_copilot_api(client, "prompt", "model", 0.5, 100)
 
@@ -361,7 +361,7 @@ def test_call_github_copilot_api_success_with_format() -> None:
     }
     mock_requests.post.return_value = mock_resp
 
-    client = {"api_key": "key", "base_url": "https://api.example.com"}
+    client = {"api_key": "key", "base_url": "https://api.github.com"}
     with patch("souschef.converters.playbook.requests", mock_requests):
         result = _call_github_copilot_api(
             client,
@@ -383,7 +383,7 @@ def test_call_github_copilot_api_non_200() -> None:
     mock_resp.text = "Unauthorized"
     mock_requests.post.return_value = mock_resp
 
-    client = {"api_key": "key", "base_url": "https://api.example.com"}
+    client = {"api_key": "key", "base_url": "https://api.github.com"}
     with patch("souschef.converters.playbook.requests", mock_requests):
         result = _call_github_copilot_api(client, "prompt", "gpt-4", 0.5, 100)
 
@@ -472,7 +472,7 @@ def test_call_ai_api_routes_github_copilot() -> None:
     }
     mock_requests.post.return_value = mock_resp
 
-    client = {"api_key": "key", "base_url": "https://api.example.com"}
+    client = {"api_key": "key", "base_url": "https://api.github.com"}
     with patch("souschef.converters.playbook.requests", mock_requests):
         result = _call_ai_api(client, "github_copilot", "prompt", "gpt-4", 0.5, 100)
 

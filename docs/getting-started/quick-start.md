@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get up and running with SousChef in minutes. This guide walks you through your first Chef-to-Ansible migration.
+Get up and running with SousChef in minutes. This guide walks you through your first migration workflow.
 
 ## Prerequisites
 
@@ -8,7 +8,7 @@ Before you begin, make sure you have:
 
 - [x] SousChef installed ([Installation guide](installation.md))
 - [x] MCP client configured (choose one below)
-- [x] A Chef cookbook to migrate
+- [x] Source content to migrate (Chef cookbook, Salt states, Puppet manifests, PowerShell script, or Bash script)
 
 ## MCP Client Setup
 
@@ -40,7 +40,7 @@ Choose your preferred AI assistant and follow the setup instructions:
 
     **3. Restart Claude Desktop**
 
-    **4. Verify:** Open Claude and ask "What Chef migration tools are available?"
+    **4. Verify:** Open Claude and ask "What migration tools are available?"
 
 === "VS Code + GitHub Copilot"
 
@@ -100,7 +100,7 @@ Choose your preferred AI assistant and follow the setup instructions:
 
     **Example Prompts:**
     ```
-    What Chef cookbooks are in /path/to/cookbooks?
+    What migration assets are in /path/to/project?
     Convert this Chef recipe to Ansible
     Assess the complexity of migrating cookbook XYZ
     ```
@@ -133,6 +133,16 @@ Choose your preferred AI assistant and follow the setup instructions:
     **3. Restart your MCP client**
 
 ## Your First Migration
+
+### Choose Your Source Platform
+
+Use the dedicated migration guide for your source platform:
+
+- Chef: [Migration Guide Overview](../migration-guide/overview.md)
+- SaltStack: [SaltStack Migration Guide](../migration-guide/salt-migration.md)
+- Bash: [Bash Migration Guide](../migration-guide/bash-migration.md)
+- PowerShell: [PowerShell Migration Guide](../migration-guide/powershell-migration.md)
+- Puppet: [Puppet Migration Guide](../migration-guide/puppet-migration.md)
 
 ### Step 1: Analyze a Cookbook
 

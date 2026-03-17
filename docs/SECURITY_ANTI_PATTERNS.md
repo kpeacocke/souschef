@@ -106,28 +106,28 @@ pkg_shasum="f9187468ff2eb159260bfd53867c25ff8e334726237acf5021f65f95f8d3f945"
 # 2. If dynamic URLs needed, validate thoroughly:
 validate_url() {
   local url="$1"
-  
+
   # Parse URL components
   if ! [[ "$url" =~ ^https:// ]]; then
     echo "Error: Only HTTPS URLs allowed" >&2
     return 1
   fi
-  
+
   # Extract hostname
   hostname=$(echo "$url" | sed -E 's|^https://([^/]+).*|\1|')
-  
+
   # Block private IP ranges
   if host "$hostname" | grep -qE '(^127\.)|(^10\.)|(^172\.(1[6-9]|2[0-9]|3[0-1])\.)|(^192\.168\.)'; then
     echo "Error: Private IP addresses not allowed" >&2
     return 1
   fi
-  
+
   # Block local/internal domains
   if [[ "$hostname" =~ \.(local|internal|localhost)$ ]]; then
     echo "Error: Local domains not allowed" >&2
     return 1
   fi
-  
+
   echo "$url"
 }
 
@@ -420,9 +420,8 @@ For each anti-pattern, tests should verify:
 - [InSpec Security Testing](https://www.inspec.io/docs/)
 
 ### Related SousChef Documentation
-- [SECURITY.md](../SECURITY.md) - Security policy and features
-- [SECURITY_REVIEW.md](../SECURITY_REVIEW.md) - Comprehensive security assessment
-- [docs/migration-guide/security-considerations.md](migration-guide/security-considerations.md) - Migration security
+- [SECURITY.md](SECURITY.md) - Security policy and features
+- [Migration Safety and Validation](migration-guide/safety-and-validation.md) - Migration security practices
 
 ---
 
@@ -436,4 +435,4 @@ When adding new test fixtures with security anti-patterns:
 4. Include test cases that verify security warnings
 5. Never use real credentials or sensitive data
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for full guidelines.
+See [Contributing](contributing.md) for full guidelines.

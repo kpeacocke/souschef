@@ -22,10 +22,10 @@ SousChef is evolving from a Chef-to-Ansible converter into a **multi-source, mul
 
 ### Transformation Capabilities (Current & Planned)
 - ✅ **Chef** → Ansible (current)
-- 🔄 **Puppet** → Ansible (planned)
+- ✅ **Puppet** → Ansible (current)
 - 🔄 **Salt** → Ansible (planned)
-- 🔄 **Bash scripts** → Ansible (planned)
-- 🔄 **PowerShell scripts** → Ansible (planned)
+- ✅ **Bash scripts** → Ansible
+- ✅ **PowerShell scripts** → Ansible
 - 🔄 **Multi-target**: Ansible, Terraform, CloudFormation (via IR)
 
 ### Enterprise Features (Planned)
@@ -165,7 +165,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `parsers/` - Input Parsing
 **Purpose:** Extract structured data from source configuration management tools.
-**Status:** ✅ Exists (Chef parsers); 🔄 Planned (Puppet, Salt, Bash, PowerShell)
+**Status:** ✅ Exists (Chef parsers, PowerShell parser, Bash parser, Puppet parser, Salt parser)
 **Dependencies:** `core/`, `ir/`, `filesystem/`
 **Contains:**
 - `recipe.py` - Chef recipe parser
@@ -175,10 +175,10 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - `habitat.py` - Habitat plan parser
 - `inspec.py` - InSpec profile parser
 - `ansible_inventory.py` - Ansible inventory parser
-- 🔄 `puppet.py` - Puppet manifest parser (planned)
-- 🔄 `salt.py` - Salt state parser (planned)
-- 🔄 `bash.py` - Bash script parser (planned)
-- 🔄 `powershell.py` - PowerShell script parser (planned)
+- ✅ `puppet.py` - Puppet manifest parser (14 recognised resource types, 10 mapped to Ansible modules, unsupported construct detection)
+- ✅ `salt.py` - Salt state parser
+- ✅ `bash.py` - Bash script parser (13 operation categories, confidence scoring, sensitive data detection)
+- ✅ `powershell.py` - PowerShell script parser
 
 **Rules:**
 - ✅ Can import from: `core/`, `ir/`, `filesystem/`
@@ -187,7 +187,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `converters/` - Transformation Logic
 **Purpose:** Transform parsed data into intermediate or target formats.
-**Status:** ✅ Exists (Chef→Ansible); 🔄 Planned (multi-source, multi-target)
+**Status:** ✅ Exists (Chef→Ansible, PowerShell→Ansible, Bash→Ansible, Puppet→Ansible); 🔄 Planned (multi-target)
 **Dependencies:** `core/`, `parsers/`, `ir/`
 **Contains:**
 - `playbook.py` - Recipe → Ansible playbook
@@ -195,9 +195,10 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - `habitat.py` - Habitat → Docker
 - `template.py` - ERB → Jinja2
 - `conversion_rules.py` - Transformation rules engine
-- 🔄 `puppet_to_ansible.py` - Puppet → Ansible (planned)
+- ✅ `puppet_to_ansible.py` - Puppet → Ansible (10 resource types fully mapped + AI-assisted conversion for complex constructs)
 - 🔄 `salt_to_ansible.py` - Salt → Ansible (planned)
-- 🔄 `script_to_ansible.py` - Bash/PS → Ansible (planned)
+- ✅ `powershell.py` - PowerShell → Ansible (exists)
+- ✅ `bash_to_ansible.py` - Bash → Ansible (exists)
 
 **Rules:**
 - ✅ Can import from: `core/`, `parsers/`, `ir/`
@@ -206,10 +207,11 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `generators/` - Output Generation
 **Purpose:** Generate target configuration files from IR or converter output.
-**Status:** ✅ Exists (repo.py)
+**Status:** ✅ Exists (repo.py, powershell.py)
 **Dependencies:** `core/`, `converters/`, `ir/`, `filesystem/`
 **Contains:**
 - `repo.py` - Ansible repository structure generation
+- ✅ `powershell.py` - Windows inventory, group_vars, requirements.yml, role skeleton, AWX job template, fidelity report
 - 🔄 `terraform.py` - Terraform module generation (planned)
 - 🔄 `cloudformation.py` - CloudFormation template generation (planned)
 
@@ -469,12 +471,14 @@ NEW FEATURE/CODE
 
 ### Examples
 
-**Adding Puppet Support:**
-1. `parsers/puppet.py` - Parse Puppet manifests → IR
-2. `converters/puppet_to_ansible.py` - Puppet → Ansible via IR
-3. `orchestrators/migration.py` - Update to support Puppet workflows
-4. `cli/commands/puppet.py` - CLI commands for Puppet conversion
-5. `api/routes/puppet.py` - REST endpoints for Puppet conversion
+**Puppet Support (Implemented):**
+1. ✅ `parsers/puppet.py` - Parse Puppet manifests → structured data (14 recognised resource types, 10 fully mapped to Ansible)
+2. ✅ `converters/puppet_to_ansible.py` - Puppet → Ansible via `ansible.builtin` modules
+3. ✅ `ui/pages/puppet_migration.py` - Streamlit UI page for manifest/module conversion
+4. ✅ 8 MCP tools in `server.py` — parse, convert, list types, AI-assisted conversion
+5. ✅ CLI commands via `souschef puppet` subcommand group
+6. 🔄 `orchestrators/migration.py` - Full Puppet workflow orchestration (planned)
+7. 🔄 `api/routes/puppet.py` - REST endpoints for Puppet conversion (planned)
 
 **Adding RBAC:**
 1. `auth/rbac.py` - Role and permission management

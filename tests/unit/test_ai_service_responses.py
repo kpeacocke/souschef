@@ -415,7 +415,7 @@ class TestLightspeedAPIResponses:
             }
             mock_requests.post.return_value = mock_response
 
-            client = {"api_key": "test-key", "base_url": "https://api.lightspeed.local"}
+            client = {"api_key": "test-key", "base_url": "https://api.redhat.com"}
             result = playbook_call_lightspeed_api(
                 client=client,
                 prompt="Convert to Lightspeed format",
@@ -436,7 +436,7 @@ class TestLightspeedAPIResponses:
             mock_response.text = "Rate limit exceeded"
             mock_requests.post.return_value = mock_response
 
-            client = {"api_key": "test-key", "base_url": "https://api.lightspeed.local"}
+            client = {"api_key": "test-key", "base_url": "https://api.redhat.com"}
             result = playbook_call_lightspeed_api(
                 client=client,
                 prompt="Test prompt",
@@ -463,7 +463,7 @@ class TestLightspeedAPIResponses:
             }
             mock_requests.post.return_value = mock_response
 
-            client = {"api_key": "test-key", "base_url": "https://api.lightspeed.local"}
+            client = {"api_key": "test-key", "base_url": "https://api.redhat.com"}
             result = playbook_call_lightspeed_api(
                 client=client,
                 prompt="Generate structured playbook",
@@ -487,7 +487,7 @@ class TestLightspeedAPIResponses:
             }
             mock_requests.post.return_value = mock_response
 
-            client = {"api_key": "test-key", "base_url": "https://api.lightspeed.local"}
+            client = {"api_key": "test-key", "base_url": "https://api.redhat.com"}
             result = playbook_call_lightspeed_api(
                 client=client,
                 prompt="Test timeout handling",
@@ -502,7 +502,7 @@ class TestLightspeedAPIResponses:
     def test_lightspeed_missing_requests_library(self):
         """Test Lightspeed API when requests library is not available."""
         with patch("souschef.converters.playbook.requests", None):
-            client = {"api_key": "test-key", "base_url": "https://api.lightspeed.local"}
+            client = {"api_key": "test-key", "base_url": "https://api.redhat.com"}
             result = playbook_call_lightspeed_api(
                 client=client,
                 prompt="Test without requests",
@@ -756,7 +756,7 @@ Key Modules:
             mock_response.json.return_value = {"choices": [{"text": json_response}]}
             mock_requests.post.return_value = mock_response
 
-            client = {"api_key": "test-key", "base_url": "https://api.local"}
+            client = {"api_key": "test-key", "base_url": "https://api.redhat.com"}
             result = playbook_call_lightspeed_api(
                 client=client,
                 prompt="Generate JSON playbook",
@@ -861,7 +861,7 @@ class TestAIResponseErrorHandling:
             mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
             mock_requests.post.return_value = mock_response
 
-            client = {"api_key": "test-key", "base_url": "https://api.local"}
+            client = {"api_key": "test-key", "base_url": "https://api.redhat.com"}
 
             with pytest.raises(json.JSONDecodeError):
                 playbook_call_lightspeed_api(

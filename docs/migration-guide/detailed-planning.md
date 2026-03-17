@@ -6,7 +6,7 @@ This guide provides comprehensive questions and considerations for planning a co
 1. [Chef Environment Assessment](#chef-environment-assessment)
 2. [Target Ansible Architecture](#target-ansible-architecture)
 3. [Technical Migration Challenges](#technical-migration-challenges)
-4. [Organisational & Change Management](#organisational--change-management)
+4. [Organisational & Change Management](#organisational-change-management)
 5. [SousChef Integration Strategy](#souschef-integration-strategy)
 6. [Success Metrics](#success-metrics)
 
@@ -484,4 +484,4 @@ souschef-cli dependencies cookbook/
 
 ---
 
-**Need help?** Create a [Migration Support Request](../ISSUE_TEMPLATE/migration_support.md) on GitHub or consult the SousChef documentation.
+**Need help?** Create a migration support request at: https://github.com/kpeacocke/souschef/issues/new

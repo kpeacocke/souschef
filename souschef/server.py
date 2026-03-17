@@ -4,13 +4,13 @@
 # nosec B708: All path operations validated via _ensure_within_base_path and _safe_join
 
 import ast
+import importlib
 import json
 import os
 import re
 from pathlib import Path
 from typing import Any
 
-import yaml  # nosec B506: YAML safe loading enforced in module
 from mcp.server import FastMCP
 
 from souschef.ansible_upgrade import UpgradePath, UpgradePlan
@@ -32,6 +32,37 @@ from souschef.assessment import (
 )
 from souschef.assessment import (
     validate_conversion as _validate_conversion,
+)
+from souschef.converters.bash_to_ansible import (  # noqa: F401, codeql[py/unused-import]
+    _archive_tasks,
+    _build_aap_hints,
+    _build_idempotency_report,
+    _build_quality_score,
+    _build_tasks,
+    _collect_warnings,
+    _cron_tasks,
+    _download_tasks,
+    _file_perm_tasks,
+    _file_write_tasks,
+    _firewall_tasks,
+    _git_tasks,
+    _group_tasks,
+    _hostname_tasks,
+    _package_tasks,
+    _render_playbook,
+    _render_task,
+    _sed_tasks,
+    _service_tasks,
+    _shell_fallback_tasks,
+    _shell_task,
+    _user_tasks,
+    _yaml_str,
+)
+from souschef.converters.bash_to_ansible import (
+    convert_bash_to_ansible as _convert_bash_to_ansible,
+)
+from souschef.converters.bash_to_ansible import (
+    generate_ansible_role_from_bash_file as _generate_ansible_role_from_bash_file,
 )
 from souschef.converters.habitat import (  # noqa: F401, codeql[py/unused-import]
     _add_service_build,
@@ -84,7 +115,54 @@ from souschef.converters.playbook import (
 from souschef.converters.playbook import (
     generate_dynamic_inventory_script as _generate_dynamic_inventory_script,
 )
-from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-import]
+from souschef.converters.powershell import (
+    convert_powershell_content_to_ansible as _convert_powershell_content_to_ansible,
+)
+from souschef.converters.powershell import (
+    convert_powershell_to_ansible as _convert_powershell_to_ansible,
+)
+from souschef.converters.puppet_to_ansible import (  # noqa: F401, codeql[py/unused-import]
+    _RESOURCE_CONVERTERS,
+    _build_construct_guidance,
+    _clean_puppet_ai_response,
+    _collect_module_manifests,
+    _convert_cron,
+    _convert_exec,
+    _convert_file,
+    _convert_group,
+    _convert_host,
+    _convert_manifest_with_ai,
+    _convert_mount,
+    _convert_package,
+    _convert_service,
+    _convert_ssh_authorized_key,
+    _convert_unsupported,
+    _convert_user,
+    _create_puppet_ai_prompt,
+    _format_module_analysis,
+    _format_unsupported_for_prompt,
+    _generate_puppet_playbook,
+    _map_ensure,
+    _source_to_play_name,
+    get_puppet_ansible_module_map,
+    get_supported_puppet_types,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_manifest_to_ansible as _convert_puppet_manifest_to_ansible,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_manifest_to_ansible_with_ai as _convert_puppet_manifest_ai,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_module_to_ansible as _convert_puppet_module_to_ansible,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_module_to_ansible_with_ai as _convert_puppet_module_ai,
+)
+from souschef.converters.puppet_to_ansible import (
+    convert_puppet_resource_to_task as _convert_puppet_resource_to_task,
+)
+from souschef.converters.resource import (  # noqa: F401
     _convert_chef_resource_to_ansible,
     _format_ansible_task,
     _get_file_params,
@@ -92,6 +170,35 @@ from souschef.converters.resource import (  # noqa: F401, codeql[py/unused-impor
 )
 from souschef.converters.resource import (
     convert_resource_to_task as _convert_resource_to_task,
+)
+from souschef.converters.salt import (  # noqa: F401, codeql[py/unused-import]
+    _apply_file_ownership,
+    _build_cmd_task,
+    _build_file_task,
+    _build_generic_task,
+    _build_git_task,
+    _build_group_task,
+    _build_pip_task,
+    _build_pkg_task,
+    _build_service_task,
+    _build_user_task,
+    _convert_state_to_task,
+    _extract_watch_handlers,  # noqa: F401
+    _pillar_to_ansible_vars,
+    _pillar_to_vault_vars,  # noqa: F401
+    _render_param_value,
+    _render_playbook_yaml,
+    _render_task_lines,
+    _top_to_ansible_inventory,  # noqa: F401
+)
+from souschef.converters.salt import (
+    convert_salt_directory_to_roles as _convert_salt_directory_to_roles,
+)
+from souschef.converters.salt import (
+    convert_salt_pillar_to_vars as _convert_salt_pillar_to_vars,
+)
+from souschef.converters.salt import (
+    convert_salt_sls_to_ansible as _convert_salt_sls_to_ansible,
 )
 from souschef.converters.template import (
     convert_template_with_ai as _convert_template_with_ai,
@@ -135,7 +242,7 @@ from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     safe_write_text,
 )
 from souschef.core.ruby_utils import (
-    _normalize_ruby_value,  # noqa: F401 - used by MCP tools and tests
+    _normalize_ruby_value,  # noqa: F401, codeql[py/unused-import] - used by MCP tools and tests
 )
 from souschef.core.validation import (  # noqa: F401, codeql[py/unused-import]
     ValidationCategory,
@@ -188,6 +295,24 @@ from souschef.filesystem import (
 from souschef.filesystem import (
     read_file as _read_file,
 )
+from souschef.generators.powershell import (
+    analyze_powershell_migration_fidelity as _analyze_powershell_migration_fidelity,
+)
+from souschef.generators.powershell import (
+    generate_ansible_requirements as _generate_ansible_requirements,
+)
+from souschef.generators.powershell import (
+    generate_powershell_awx_job_template as _generate_powershell_awx_job_template,
+)
+from souschef.generators.powershell import (
+    generate_powershell_role_structure as _generate_powershell_role_structure,
+)
+from souschef.generators.powershell import (
+    generate_windows_group_vars as _generate_windows_group_vars,
+)
+from souschef.generators.powershell import (
+    generate_windows_inventory as _generate_windows_inventory,
+)
 from souschef.generators.repo import (
     create_ansible_repository_from_roles as _create_ansible_repository_from_roles,
 )
@@ -218,6 +343,48 @@ from souschef.parsers.attributes import (  # noqa: F401, codeql[py/unused-import
 from souschef.parsers.attributes import (
     parse_attributes as _parse_attributes,
 )
+from souschef.parsers.bash import (  # noqa: F401, codeql[py/unused-import]
+    _extract_archives,
+    _extract_cm_escapes,
+    _extract_cron_jobs,
+    _extract_downloads,
+    _extract_env_vars,
+    _extract_file_perms,
+    _extract_file_writes,
+    _extract_firewall_rules,
+    _extract_git_ops,
+    _extract_groups,
+    _extract_hostname_ops,
+    _extract_idempotency_risks,
+    _extract_packages,
+    _extract_sed_ops,
+    _extract_sensitive_data,
+    _extract_services,
+    _extract_users,
+    _format_archives_section,
+    _format_cm_escapes_section,
+    _format_cron_jobs_section,
+    _format_downloads_section,
+    _format_env_vars_section,
+    _format_file_perms_section,
+    _format_file_writes_section,
+    _format_firewall_rules_section,
+    _format_git_ops_section,
+    _format_groups_section,
+    _format_hostname_ops_section,
+    _format_packages_section,
+    _format_parse_result,
+    _format_risks_and_fallbacks_section,
+    _format_sed_ops_section,
+    _format_sensitive_data_section,
+    _format_services_section,
+    _format_users_section,
+    _identify_shell_fallbacks,
+    _line_number,
+    _parse_bash_content,
+    _parse_package_names,
+)
+from souschef.parsers.bash import parse_bash_script as _parse_bash_script
 from souschef.parsers.habitat import (  # noqa: F401, codeql[py/unused-import]
     _extract_plan_array,
     _extract_plan_exports,
@@ -259,20 +426,79 @@ from souschef.parsers.metadata import (
 from souschef.parsers.metadata import (
     read_cookbook_metadata as _read_cookbook_metadata,
 )
+from souschef.parsers.powershell import (
+    parse_powershell_content as _parse_powershell_content_fn,
+)
+from souschef.parsers.powershell import (
+    parse_powershell_script as _parse_powershell_script,
+)
+from souschef.parsers.puppet import (  # noqa: F401, codeql[py/unused-import]
+    _build_line_index,
+    _detect_unsupported_constructs,
+    _extract_puppet_classes,
+    _extract_puppet_resources,
+    _extract_puppet_variables,
+    _format_classes_section,
+    _format_manifest_results,
+    _format_resources_section,
+    _format_unsupported_section,
+    _format_variables_section,
+    _get_line_number,
+    _parse_class_params,
+    _parse_manifest_content,
+    _parse_puppet_attributes,
+    _parse_resource_titles,
+    get_puppet_resource_types,
+)
+from souschef.parsers.puppet import (
+    parse_puppet_manifest as _parse_puppet_manifest,
+)
+from souschef.parsers.puppet import (
+    parse_puppet_module as _parse_puppet_module,
+)
 from souschef.parsers.recipe import (
-    _extract_conditionals,  # noqa: F401, codeql[py/unused-import]
-    _extract_resources,  # noqa: F401, codeql[py/unused-import]
-    _format_resources,  # noqa: F401, codeql[py/unused-import]
+    _extract_conditionals,  # noqa: F401
+    _extract_resources,  # noqa: F401
+    _format_resources,  # noqa: F401
 )
 from souschef.parsers.recipe import (
     parse_recipe as _parse_recipe,
 )
 from souschef.parsers.resource import (
-    _extract_resource_actions,  # noqa: F401, codeql[py/unused-import]
-    _extract_resource_properties,  # noqa: F401, codeql[py/unused-import]
+    _extract_resource_actions,  # noqa: F401
+    _extract_resource_properties,  # noqa: F401
 )
 from souschef.parsers.resource import (
     parse_custom_resource as _parse_custom_resource,
+)
+from souschef.parsers.salt import (  # noqa: F401, codeql[py/unused-import]
+    _build_state_entry,
+    _detect_salt_dependencies,  # noqa: F401
+    _extract_args_from_value,
+    _extract_grains,
+    _extract_pillars,
+    _extract_state_id_and_module,
+    _list_sls_files,
+    _parse_sls_states,
+    _parse_sls_yaml,
+    _parse_top_environments,
+    _score_state_complexity,  # noqa: F401
+    _summarise_states,
+)
+from souschef.parsers.salt import (
+    assess_salt_complexity as _assess_salt_complexity,
+)
+from souschef.parsers.salt import (
+    parse_salt_directory as _parse_salt_directory,
+)
+from souschef.parsers.salt import (
+    parse_salt_pillar as _parse_salt_pillar,
+)
+from souschef.parsers.salt import (
+    parse_salt_sls as _parse_salt_sls,
+)
+from souschef.parsers.salt import (
+    parse_salt_top as _parse_salt_top,
 )
 from souschef.parsers.template import (  # noqa: F401, codeql[py/unused-import]
     _convert_erb_to_jinja2,
@@ -287,6 +513,8 @@ from souschef.parsers.template import (
     parse_template as _parse_template,
 )
 
+yaml = importlib.import_module("yaml")  # nosec B506: YAML safe loading enforced in module
+
 # Explicit re-exports for language servers and type checkers
 # These names are intentionally available from souschef.server
 __all__ = [
@@ -294,6 +522,259 @@ __all__ = [
     "ValidationEngine",
     "ValidationLevel",
     "ValidationResult",
+    # Backward compatibility re-exports without underscore prefix (for tests)
+    "analyze_powershell_migration_fidelity",
+    "convert_chef_deployment_to_ansible_strategy",
+    "convert_powershell_content_to_ansible",
+    "convert_powershell_to_ansible",
+    "generate_ansible_requirements",
+    "generate_awx_inventory_source_from_chef",
+    "generate_awx_job_template_from_cookbook",
+    "generate_awx_project_from_cookbooks",
+    "generate_awx_workflow_from_chef_runlist",
+    "generate_blue_green_deployment_playbook",
+    "generate_canary_deployment_strategy",
+    "generate_powershell_awx_job_template",
+    "generate_powershell_role_structure",
+    "generate_windows_group_vars",
+    "generate_windows_inventory",
+    "parse_powershell_content",
+    "parse_powershell_script",
+    # Private backward compatibility re-exports for tests (intentional)
+    "_convert_chef_resource_to_ansible",
+    "_convert_erb_to_jinja2",
+    "_extract_code_block_variables",
+    "_extract_conditionals",
+    "_extract_heredoc_strings",
+    "_extract_node_attribute_path",
+    "_extract_output_variables",
+    "_extract_resource_actions",
+    "_extract_resource_properties",
+    "_extract_resources",
+    "_extract_template_variables",
+    "_format_ansible_task",
+    "_format_resources",
+    "_get_file_params",
+    "_get_service_params",
+    "_strip_ruby_comments",
+    # Bash converter helpers (re-exported for tests)
+    "_archive_tasks",
+    "_build_aap_hints",
+    "_build_idempotency_report",
+    "_build_quality_score",
+    "_build_tasks",
+    "_collect_warnings",
+    "_cron_tasks",
+    "_download_tasks",
+    "_file_perm_tasks",
+    "_file_write_tasks",
+    "_firewall_tasks",
+    "_git_tasks",
+    "_group_tasks",
+    "_hostname_tasks",
+    "_package_tasks",
+    "_render_playbook",
+    "_render_task",
+    "_sed_tasks",
+    "_service_tasks",
+    "_shell_fallback_tasks",
+    "_shell_task",
+    "_user_tasks",
+    "_yaml_str",
+    # Habitat converter helpers (re-exported for tests)
+    "_add_service_build",
+    "_add_service_dependencies",
+    "_add_service_environment",
+    "_add_service_ports",
+    "_add_service_volumes",
+    "_build_compose_service",
+    "_extract_default_port",
+    "_map_habitat_deps_to_apt",
+    "_needs_data_volume",
+    "_validate_docker_image_name",
+    "_validate_docker_network_name",
+    # Playbook converter helpers (re-exported for tests)
+    "_add_general_recommendations",
+    "_convert_chef_block_to_ansible",
+    "_convert_chef_condition_to_ansible",
+    "_convert_guards_to_when_conditions",
+    "_create_handler",
+    "_create_handler_with_timing",
+    "_determine_query_complexity",
+    "_extract_chef_guards",
+    "_extract_enhanced_notifications",
+    "_extract_guard_patterns",
+    "_extract_search_patterns_from_cookbook",
+    "_extract_search_patterns_from_file",
+    "_find_search_patterns_in_content",
+    "_generate_ansible_inventory_from_search",
+    "_generate_group_name_from_condition",
+    "_generate_inventory_script_content",
+    "_get_current_timestamp",
+    "_parse_chef_search_query",
+    "_parse_guard_array",
+    "_parse_search_condition",
+    "_process_subscribes",
+    # Puppet converter helpers (re-exported for tests)
+    "_RESOURCE_CONVERTERS",
+    "_build_construct_guidance",
+    "_clean_puppet_ai_response",
+    "_collect_module_manifests",
+    "_convert_cron",
+    "_convert_exec",
+    "_convert_file",
+    "_convert_group",
+    "_convert_host",
+    "_convert_manifest_with_ai",
+    "_convert_mount",
+    "_convert_package",
+    "_convert_service",
+    "_convert_ssh_authorized_key",
+    "_convert_unsupported",
+    "_convert_user",
+    "_create_puppet_ai_prompt",
+    "_format_module_analysis",
+    "_format_unsupported_for_prompt",
+    "_generate_puppet_playbook",
+    "_map_ensure",
+    "_source_to_play_name",
+    "get_puppet_ansible_module_map",
+    "get_supported_puppet_types",
+    # Constants (re-exported for tests)
+    "ACTION_TO_STATE",
+    "ANSIBLE_SERVICE_MODULE",
+    "RESOURCE_MAPPINGS",
+    # Ruby utils (re-exported for tests)
+    "_normalize_ruby_value",
+    # Deployment helpers (re-exported for tests)
+    "_analyse_cookbook_for_awx",
+    "_analyse_cookbooks_directory",
+    "_detect_deployment_patterns_in_recipe",
+    "_extract_cookbook_attributes",
+    "_extract_cookbook_dependencies",
+    "_format_chef_resources_analysis",
+    "_format_cookbook_analysis",
+    "_format_deployment_patterns",
+    "_generate_deployment_migration_recommendations",
+    "_generate_survey_fields_from_attributes",
+    "_parse_chef_runlist",
+    "_recommend_ansible_strategies",
+    "analyse_chef_application_patterns",
+    # Attributes parser helpers (re-exported for tests)
+    "_extract_attributes",
+    "_format_attributes",
+    "_format_resolved_attributes",
+    "_get_precedence_level",
+    "_resolve_attribute_precedence",
+    # Bash parser helpers (re-exported for tests)
+    "_extract_archives",
+    "_extract_cm_escapes",
+    "_extract_cron_jobs",
+    "_extract_downloads",
+    "_extract_env_vars",
+    "_extract_file_perms",
+    "_extract_file_writes",
+    "_extract_firewall_rules",
+    "_extract_git_ops",
+    "_extract_groups",
+    "_extract_hostname_ops",
+    "_extract_idempotency_risks",
+    "_extract_packages",
+    "_extract_sed_ops",
+    "_extract_sensitive_data",
+    "_extract_services",
+    "_extract_users",
+    "_format_archives_section",
+    "_format_cm_escapes_section",
+    "_format_cron_jobs_section",
+    "_format_downloads_section",
+    "_format_env_vars_section",
+    "_format_file_perms_section",
+    "_format_file_writes_section",
+    "_format_firewall_rules_section",
+    "_format_git_ops_section",
+    "_format_groups_section",
+    "_format_hostname_ops_section",
+    "_format_packages_section",
+    "_format_parse_result",
+    "_format_risks_and_fallbacks_section",
+    "_format_sed_ops_section",
+    "_format_sensitive_data_section",
+    "_format_services_section",
+    "_format_users_section",
+    "_identify_shell_fallbacks",
+    "_line_number",
+    "_parse_bash_content",
+    "_parse_package_names",
+    # Habitat parser helpers (re-exported for tests)
+    "_extract_plan_array",
+    "_extract_plan_exports",
+    "_extract_plan_function",
+    "_extract_plan_var",
+    "_update_quote_state",
+    # InSpec parser helpers (re-exported for tests)
+    "_convert_inspec_to_ansible_assert",
+    "_convert_inspec_to_goss",
+    "_convert_inspec_to_serverspec",
+    "_convert_inspec_to_testinfra",
+    "_extract_inspec_describe_blocks",
+    "_generate_inspec_from_resource",
+    "_parse_controls_from_directory",
+    "_parse_controls_from_file",
+    "_parse_inspec_control",
+    # Metadata parser helpers (re-exported for tests)
+    "_extract_metadata",
+    "_format_cookbook_structure",
+    "_format_metadata",
+    # Puppet parser helpers (re-exported for tests)
+    "_build_line_index",
+    "_detect_unsupported_constructs",
+    "_extract_puppet_classes",
+    "_extract_puppet_resources",
+    "_extract_puppet_variables",
+    "_format_classes_section",
+    "_format_manifest_results",
+    "_format_resources_section",
+    "_format_unsupported_section",
+    "_format_variables_section",
+    "_get_line_number",
+    "_parse_class_params",
+    "_parse_manifest_content",
+    "_parse_puppet_attributes",
+    "_parse_resource_titles",
+    "get_puppet_resource_types",
+    # Salt converter helpers (re-exported for tests)
+    "_apply_file_ownership",
+    "_build_cmd_task",
+    "_build_file_task",
+    "_build_generic_task",
+    "_build_git_task",
+    "_build_group_task",
+    "_build_pip_task",
+    "_build_pkg_task",
+    "_build_service_task",
+    "_build_user_task",
+    "_convert_state_to_task",
+    "_extract_watch_handlers",
+    "_pillar_to_ansible_vars",
+    "_pillar_to_vault_vars",
+    "_render_param_value",
+    "_render_playbook_yaml",
+    "_render_task_lines",
+    "_top_to_ansible_inventory",
+    # Salt parser helpers (re-exported for tests)
+    "_build_state_entry",
+    "_detect_salt_dependencies",
+    "_extract_args_from_value",
+    "_extract_grains",
+    "_extract_pillars",
+    "_extract_state_id_and_module",
+    "_list_sls_files",
+    "_parse_sls_states",
+    "_parse_sls_yaml",
+    "_parse_top_environments",
+    "_score_state_complexity",
+    "_summarise_states",
 ]
 
 # Backward compatibility re-exports without underscore prefix (for tests)
@@ -317,6 +798,16 @@ generate_blue_green_deployment_playbook = (  # noqa: F401
 generate_canary_deployment_strategy = (  # noqa: F401
     _generate_canary_deployment_strategy
 )
+parse_powershell_script = _parse_powershell_script  # noqa: F401
+parse_powershell_content = _parse_powershell_content_fn  # noqa: F401
+convert_powershell_to_ansible = _convert_powershell_to_ansible  # noqa: F401
+convert_powershell_content_to_ansible = _convert_powershell_content_to_ansible  # noqa: F401
+generate_windows_inventory = _generate_windows_inventory  # noqa: F401
+generate_windows_group_vars = _generate_windows_group_vars  # noqa: F401
+generate_ansible_requirements = _generate_ansible_requirements  # noqa: F401
+generate_powershell_role_structure = _generate_powershell_role_structure  # noqa: F401
+generate_powershell_awx_job_template = _generate_powershell_awx_job_template  # noqa: F401
+analyze_powershell_migration_fidelity = _analyze_powershell_migration_fidelity  # noqa: F401
 
 # Create a new FastMCP server
 mcp = FastMCP("souschef")
@@ -5551,6 +6042,1442 @@ def generate_handler_routing_config(
 
 
 # ==================== End Ansible Upgrade Tools ====================
+
+
+# ==================== Salt Migration Tools ====================
+# Closes: https://github.com/kpeacocke/souschef/issues/210
+# Closes: https://github.com/kpeacocke/souschef/issues/211
+# Closes: https://github.com/kpeacocke/souschef/issues/212
+
+_SALT_DIRECTORY_PATH_LABEL = "Salt directory path"
+_VALIDATING_SALT_DIRECTORY_PATH = "validating Salt directory path"
+
+
+@mcp.tool()
+def parse_salt_sls(sls_path: str) -> str:
+    """
+    Parse a SaltStack SLS state file and extract structured state data.
+
+    Analyses SLS files to extract state definitions, pillar variable references,
+    grain references, and provides a summary suitable for Ansible conversion.
+
+    Supported state modules: pkg, file, service, cmd, user, group, git, pip,
+    npm, gem, cron, mount, firewall, sysctl, timezone, locale, host, archive.
+
+    Args:
+        sls_path: Path to the SLS state file.
+
+    Returns:
+        JSON string with parsed state metadata including states list, pillar
+        provenance mapping, grain references, and summary counts.
+
+    """
+    try:
+        _validate_path_length(sls_path, "SLS path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating SLS path", sls_path)
+    return _parse_salt_sls(sls_path)
+
+
+@mcp.tool()
+def parse_salt_pillar(pillar_path: str) -> str:
+    """
+    Parse a SaltStack pillar file and extract variable definitions.
+
+    Pillar files define configuration data injected into states. This parser
+    extracts variable names, values, and nesting structure.
+
+    Args:
+        pillar_path: Path to the pillar SLS file.
+
+    Returns:
+        JSON string with pillar variable definitions and structure.
+
+    """
+    try:
+        _validate_path_length(pillar_path, "Pillar path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating pillar path", pillar_path)
+    return _parse_salt_pillar(pillar_path)
+
+
+@mcp.tool()
+def parse_salt_top(top_path: str) -> str:
+    """
+    Parse a SaltStack top.sls file and extract target-to-state mappings.
+
+    The top file maps minion targets (hostnames/globs/grains) to the SLS
+    states that should be applied to them.
+
+    Args:
+        top_path: Path to the top.sls file.
+
+    Returns:
+        JSON string with target-to-state mappings per environment.
+
+    """
+    try:
+        _validate_path_length(top_path, "Top file path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating top file path", top_path)
+    return _parse_salt_top(top_path)
+
+
+@mcp.tool()
+def parse_salt_directory(salt_dir: str) -> str:
+    """
+    Parse a SaltStack state directory structure.
+
+    Scans a Salt states directory to discover SLS files, top files,
+    and pillar files, then returns a structural overview.
+
+    Args:
+        salt_dir: Path to the Salt states root directory.
+
+    Returns:
+        JSON string with directory structure overview.
+
+    """
+    try:
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
+    except ValueError as e:
+        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
+    return _parse_salt_directory(salt_dir)
+
+
+@mcp.tool()
+def convert_salt_to_ansible(sls_path: str, playbook_name: str = "") -> str:
+    """
+    Convert a SaltStack SLS state file to an Ansible playbook.
+
+    Reads a Salt SLS file, converts each state definition to the equivalent
+    Ansible task, maps pillar variables to Ansible vars, and returns the
+    complete playbook as YAML text with a JSON report.
+
+    Supported Salt modules: pkg, file, service, cmd, user, group, git, pip.
+    Unsupported modules generate debug tasks tagged ``salt_unconverted``.
+
+    Args:
+        sls_path: Path to the SLS state file.
+        playbook_name: Optional name for the generated playbook. Defaults to
+            the SLS file stem.
+
+    Returns:
+        JSON string with keys:
+            - ``playbook``: YAML text of the generated Ansible playbook.
+            - ``tasks_converted``: Count of successfully mapped tasks.
+            - ``tasks_unconverted``: Count of tasks requiring manual review.
+            - ``ansible_vars``: Ansible variable definitions from pillar keys.
+            - ``warnings``: List of conversion warning messages.
+
+    """
+    try:
+        _validate_path_length(sls_path, "SLS path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating SLS path", sls_path)
+    return _convert_salt_sls_to_ansible(sls_path, playbook_name)
+
+
+@mcp.tool()
+def query_salt_master(
+    master_url: str,
+    username: str,
+    password: str,
+    target: str = "*",
+    query_type: str = "top",
+) -> str:
+    """
+    Query a SaltStack Salt Master API to retrieve state and pillar data.
+
+    Connects to the Salt Master REST API (CherryPy netapi) to retrieve top
+    file entries, SLS state lists, and pillar data for minion targets.
+
+    Args:
+        master_url: URL of the Salt Master API (e.g., ``https://salt-master:8080``).
+        username: Salt API username.
+        password: Salt API password.
+        target: Minion target glob or grain match (default: ``*`` for all minions).
+        query_type: Type of query - ``top`` for top file, ``states`` for state
+            list, or ``pillar`` for pillar data (default: ``top``).
+
+    Returns:
+        JSON string with query results or error details.
+
+    """
+    import ssl
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    try:
+        _validate_path_length(master_url, "Salt Master URL")
+    except ValueError as e:
+        return json.dumps({"error": str(e), "status": "error"})
+
+    # Validate URL scheme to prevent SSRF - only allow https:// and http://
+    _url_pattern = re.compile(r"^https?://[a-zA-Z0-9._-]+(:\d{1,5})?(/.*)?$")
+    if not _url_pattern.match(master_url):
+        return json.dumps(
+            {
+                "error": "Invalid master_url format. Must be an http:// or https:// URL with a hostname.",
+                "status": "error",
+            }
+        )
+
+    valid_query_types = {"top", "states", "pillar"}
+    if query_type not in valid_query_types:
+        return json.dumps(
+            {
+                "error": f"Invalid query_type '{query_type}'. Must be one of: {sorted(valid_query_types)}",
+                "status": "error",
+            }
+        )
+
+    try:
+        # Build SSL context that verifies certificates by default
+        ssl_context = ssl.create_default_context()
+        ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+
+        # Login to Salt API
+        login_data = urllib.parse.urlencode(
+            {
+                "username": username,
+                "password": password,
+                "eauth": "pam",
+            }
+        ).encode("utf-8")
+
+        login_url = f"{master_url.rstrip('/')}/login"
+        login_req = urllib.request.Request(  # noqa: S310
+            login_url,
+            data=login_data,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        )
+
+        with urllib.request.urlopen(login_req, context=ssl_context, timeout=30) as resp:  # noqa: S310
+            import json as _json
+
+            login_result = _json.loads(resp.read().decode("utf-8"))
+
+        token = login_result.get("return", [{}])[0].get("token", "")
+        if not token:
+            return json.dumps(
+                {
+                    "error": "Authentication failed - no token returned",
+                    "status": "error",
+                }
+            )
+
+        # Build query based on type
+        if query_type == "top":
+            fun = "state.show_top"
+        elif query_type == "states":
+            fun = "state.show_highstate"
+        else:
+            fun = "pillar.items"
+
+        query_data = urllib.parse.urlencode(
+            {
+                "client": "local",
+                "tgt": target,
+                "fun": fun,
+            }
+        ).encode("utf-8")
+
+        api_url = master_url.rstrip("/")
+        query_req = urllib.request.Request(  # noqa: S310
+            api_url,
+            data=query_data,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Auth-Token": token,
+            },
+        )
+
+        with urllib.request.urlopen(query_req, context=ssl_context, timeout=60) as resp:  # noqa: S310
+            query_result = _json.loads(resp.read().decode("utf-8"))
+
+        return json.dumps(
+            {
+                "status": "success",
+                "query_type": query_type,
+                "target": target,
+                "result": query_result.get("return", []),
+            },
+            indent=2,
+        )
+
+    except urllib.error.HTTPError as e:
+        return json.dumps(
+            {"error": f"HTTP error {e.code}: {e.reason}", "status": "error"}
+        )
+    except urllib.error.URLError as e:
+        return json.dumps({"error": f"Connection error: {e.reason}", "status": "error"})
+    except Exception as e:
+        return json.dumps(
+            {"error": f"Error querying Salt Master: {e}", "status": "error"}
+        )
+
+
+@mcp.tool()
+def assess_salt_migration_complexity(salt_dir: str) -> str:
+    """
+    Assess the complexity of migrating a SaltStack state directory to Ansible.
+
+    Analyses all SLS files in the directory, scores each state's migration
+    complexity, and produces a comprehensive report with effort estimates
+    and per-file complexity levels suitable for project planning.
+
+    Args:
+        salt_dir: Path to the SaltStack states root directory.
+
+    Returns:
+        JSON string with overall complexity level (LOW/MEDIUM/HIGH), per-file
+        breakdown, total effort estimates in days/hours/weeks, and module breakdown.
+
+    """
+    try:
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
+    except ValueError as e:
+        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
+    return _assess_salt_complexity(salt_dir)
+
+
+@mcp.tool()
+def plan_salt_migration(
+    salt_dir: str,
+    timeline_weeks: int = 8,
+    target_platform: str = "aap",
+) -> str:
+    """
+    Generate a phased migration plan for SaltStack to Ansible/AAP.
+
+    Creates a structured migration plan with phases, task breakdown, resource
+    recommendations, and tooling guidance based on the complexity assessment
+    of the Salt state directory.
+
+    Args:
+        salt_dir: Path to the SaltStack states root directory.
+        timeline_weeks: Target timeline in weeks (default 8).
+        target_platform: Target platform: ``"aap"``, ``"awx"``, or
+            ``"ansible_core"``.
+
+    Returns:
+        Markdown-formatted migration plan with phases, tasks, and timeline.
+
+    """
+    try:
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
+    except ValueError as e:
+        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
+
+    import json as _json
+
+    complexity_json = _assess_salt_complexity(salt_dir)
+    try:
+        data = _json.loads(complexity_json)
+    except Exception:  # noqa: BLE001
+        return complexity_json
+
+    if "error" in data:
+        return str(data["error"])
+
+    summary = data.get("summary", {})
+    complexity_level = summary.get("complexity_level", "medium")
+    total_files = summary.get("total_files", 0)
+    total_states = summary.get("total_states", 0)
+    effort_days = summary.get("estimated_effort_days", 0)
+    effort_days_sc = summary.get("estimated_effort_days_with_souschef", 0)
+    high_files = summary.get("high_complexity_files", [])
+    module_breakdown = summary.get("module_breakdown", {})
+
+    # Platform-specific guidance
+    platform_guidance = {
+        "aap": (
+            "**Target Platform: Ansible Automation Platform (AAP)**\n\n"
+            "- Import roles into AAP Execution Environments\n"
+            "- Use AAP Projects for SCM-backed role storage\n"
+            "- Configure AAP Inventories to replace Salt targeting\n"
+            "- Leverage AAP Surveys for parameterised execution\n"
+            "- Use AAP Credentials for vault-encrypted pillar data"
+        ),
+        "awx": (
+            "**Target Platform: AWX (Open Source)**\n\n"
+            "- Use AWX Projects linked to Git repositories\n"
+            "- Configure AWX Inventories using dynamic inventory plugins\n"
+            "- Store sensitive pillar data in AWX Credentials\n"
+            "- Use AWX Job Templates to replace Salt highstate execution"
+        ),
+        "ansible_core": (
+            "**Target Platform: Ansible Core (CLI)**\n\n"
+            "- Run playbooks with `ansible-playbook site.yml`\n"
+            "- Use Ansible Vault for sensitive pillar variables\n"
+            "- Manage inventory with static or dynamic inventory files\n"
+            "- Use `ansible-pull` for decentralised execution similar to Salt minions"
+        ),
+    }
+    platform_text = platform_guidance.get(
+        target_platform,
+        f"**Target Platform: {target_platform}**\n\nRefer to platform documentation.",
+    )
+
+    phase1_weeks = max(1, timeline_weeks // 4)
+    phase2_weeks = max(1, timeline_weeks // 4)
+    phase3_weeks = max(2, timeline_weeks // 3)
+    phase4_weeks = max(1, timeline_weeks - phase1_weeks - phase2_weeks - phase3_weeks)
+
+    top_modules = sorted(module_breakdown.items(), key=lambda x: x[1], reverse=True)[:5]
+    module_list = (
+        "\n".join(f"  - `{m}` ({c} states)" for m, c in top_modules)
+        if top_modules
+        else "  - No modules detected"
+    )
+
+    high_files_list = (
+        "\n".join(f"  - `{f}`" for f in high_files[:10])
+        if high_files
+        else "  - None identified"
+    )
+
+    plan = f"""# SaltStack to Ansible Migration Plan
+
+## Overview
+
+| Metric | Value |
+|--------|-------|
+| Salt Directory | `{salt_dir}` |
+| Total SLS Files | {total_files} |
+| Total States | {total_states} |
+| Complexity Level | {complexity_level.upper()} |
+| Estimated Effort (manual) | {effort_days} days |
+| Estimated Effort (with SousChef) | {effort_days_sc} days |
+| Target Timeline | {timeline_weeks} weeks |
+
+## Platform Guidance
+
+{platform_text}
+
+## Migration Phases
+
+### Phase 1: Assessment and Preparation (Weeks 1-{phase1_weeks})
+
+**Objectives:** Inventory all Salt states, identify dependencies, set up tooling.
+
+**Tasks:**
+- Run `assess_salt_migration_complexity` on all state directories
+- Map Salt pillar data to Ansible group_vars/host_vars structure
+- Identify custom execution modules requiring Ansible module equivalents
+- Set up target {target_platform} environment
+- Establish Git repository structure for Ansible roles
+- Configure CI/CD pipeline for Ansible testing
+
+**Deliverables:**
+- Complexity assessment report
+- Ansible project skeleton with roles structure
+- Variable mapping spreadsheet
+
+### Phase 2: Simple State Conversion (Weeks {phase1_weeks + 1}-{phase1_weeks + phase2_weeks})
+
+**Objectives:** Convert low-complexity SLS files using SousChef automation.
+
+**Tasks:**
+- Run `convert_salt_to_ansible` for LOW complexity states
+- Run `convert_salt_directory_to_ansible` for batch conversion
+- Review and validate generated playbooks
+- Test converted roles against development environment
+- Convert pillar files using `convert_salt_pillar_to_vars`
+
+**Target modules:** pkg, service, file (managed/directory)
+
+### Phase 3: Complex State Conversion (Weeks {phase1_weeks + phase2_weeks + 1}-{phase1_weeks + phase2_weeks + phase3_weeks})
+
+**Objectives:** Manually convert high-complexity states and custom logic.
+
+**High-complexity files to prioritise:**
+{high_files_list}
+
+**Tasks:**
+- Convert cmd, git, archive, mount states with manual review
+- Replace Salt mine/reactor/beacon patterns with Ansible equivalents
+- Implement Jinja2 template conversions
+- Convert Salt orchestration states to Ansible workflows
+- Implement notification/handler chains from watch/listen dependencies
+
+**Top Salt modules requiring attention:**
+{module_list}
+
+### Phase 4: Validation and Cutover (Weeks {timeline_weeks - phase4_weeks + 1}-{timeline_weeks})
+
+**Objectives:** Validate all conversions and execute production cutover.
+
+**Tasks:**
+- Run parallel execution: Salt highstate vs Ansible playbook on test nodes
+- Compare configuration drift between Salt and Ansible outputs
+- Performance benchmark: Salt highstate vs Ansible run time
+- Train operations team on Ansible/AAP workflows
+- Execute phased cutover by minion group
+- Decommission Salt master after validation period
+
+## Resource Requirements
+
+| Role | Responsibility |
+|------|----------------|
+| Ansible Engineer | Role conversion and testing |
+| DevOps Lead | Architecture decisions and AAP setup |
+| QA Engineer | Validation and drift testing |
+| Operations | Cutover coordination |
+
+## Risk Assessment
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Custom Salt modules without Ansible equivalents | {"High" if complexity_level == "high" else "Medium"} | High | Develop custom Ansible modules early |
+| Pillar data migration complexity | Medium | High | Map all pillar keys to Ansible vars first |
+| Targeting pattern translation | Low | Medium | Use `generate_salt_inventory` tool |
+| State ordering dependencies | {"High" if total_states > 100 else "Low"} | Medium | Review require/watch chains carefully |
+"""
+
+    return plan
+
+
+def _build_salt_migration_report_json(
+    salt_dir: str,
+    summary: dict[str, Any],
+    files: list[dict[str, Any]],
+    module_breakdown: dict[str, int],
+) -> str:
+    """Build the JSON Salt migration report payload."""
+    import json as _json
+
+    return _json.dumps(
+        {
+            "report_type": "salt_migration",
+            "directory": salt_dir,
+            "summary": summary,
+            "files": files,
+            "module_coverage": _get_module_coverage(module_breakdown),
+        },
+        indent=2,
+    )
+
+
+def _build_salt_migration_report_markdown(
+    salt_dir: str,
+    summary: dict[str, Any],
+    files: list[dict[str, Any]],
+) -> str:
+    """Build the markdown Salt migration report payload."""
+    complexity_level = summary.get("complexity_level", "unknown")
+    total_files = summary.get("total_files", 0)
+    total_states = summary.get("total_states", 0)
+    effort_days = summary.get("estimated_effort_days", 0)
+    effort_days_sc = summary.get("estimated_effort_days_with_souschef", 0)
+    effort_hours = summary.get("estimated_effort_hours", 0)
+    effort_weeks = summary.get("estimated_effort_weeks", "unknown")
+    high_files = summary.get("high_complexity_files", [])
+    module_breakdown = summary.get("module_breakdown", {})
+
+    by_level: dict[str, int] = {"low": 0, "medium": 0, "high": 0}
+    for file_report in files:
+        level = str(file_report.get("complexity_level", "low"))
+        by_level[level] = by_level.get(level, 0) + 1
+
+    module_coverage = _get_module_coverage(module_breakdown)
+    supported_count = sum(1 for v in module_coverage.values() if v["supported"])
+    total_module_types = len(module_coverage)
+
+    file_table_rows = "\n".join(
+        f"| `{f['file']}` | {f['state_count']} | {f['complexity_score']:.1f} | {f['complexity_level'].upper()} |"
+        for f in sorted(
+            files, key=lambda x: x.get("complexity_score", 0), reverse=True
+        )[:20]
+    )
+
+    module_table_rows = "\n".join(
+        f"| `{mod}` | {info['count']} | {'Yes' if info['supported'] else 'Manual'} | `{info.get('ansible_equiv', 'N/A')}` |"
+        for mod, info in sorted(
+            module_coverage.items(), key=lambda x: x[1]["count"], reverse=True
+        )
+    )
+
+    return f"""# SaltStack Migration Report
+
+**Generated by SousChef Salt Migration Analyser**
+
+---
+
+## Executive Summary
+
+This report analyses the SaltStack state directory `{salt_dir}` for migration
+to Ansible/AAP. The overall migration complexity is assessed as **{complexity_level.upper()}**.
+
+| Metric | Value |
+|--------|-------|
+| Total SLS Files | {total_files} |
+| Total States | {total_states} |
+| Overall Complexity | {complexity_level.upper()} |
+| Estimated Effort (manual) | {effort_days} days ({effort_hours:.0f} hours) |
+| Estimated Effort (with SousChef) | {effort_days_sc} days |
+| Estimated Timeline | {effort_weeks} |
+
+---
+
+## Complexity Analysis
+
+| Complexity Level | File Count | Percentage |
+|-----------------|-----------|-----------|
+| LOW | {by_level.get("low", 0)} | {by_level.get("low", 0) * 100 // total_files if total_files else 0}% |
+| MEDIUM | {by_level.get("medium", 0)} | {by_level.get("medium", 0) * 100 // total_files if total_files else 0}% |
+| HIGH | {by_level.get("high", 0)} | {by_level.get("high", 0) * 100 // total_files if total_files else 0}% |
+
+---
+
+## File Inventory (Top 20 by Complexity)
+
+| File | States | Score | Level |
+|------|--------|-------|-------|
+{file_table_rows}
+
+---
+
+## Module Coverage
+
+| Salt Module | State Count | Direct Ansible Equiv | Ansible Module |
+|------------|------------|---------------------|----------------|
+{module_table_rows}
+
+**Coverage: {supported_count}/{total_module_types} modules have direct Ansible equivalents ({supported_count * 100 // total_module_types if total_module_types else 0}% auto-convertible)**
+
+---
+
+## Effort Estimates
+
+| Approach | Days | Hours | Timeline |
+|----------|------|-------|---------|
+| Manual migration | {effort_days} | {effort_hours:.0f} | {effort_weeks} |
+| With SousChef | {effort_days_sc} | {effort_days_sc * 8:.0f} | ~{max(1, int(effort_days_sc / 5))} weeks |
+
+---
+
+## High-Complexity Files Requiring Manual Review
+
+{"".join(f"- `{f}`\\n" for f in high_files) if high_files else "- None identified - all files are LOW or MEDIUM complexity"}
+
+---
+
+## Recommended Migration Strategy
+
+{"**Big Bang Migration** - Low overall complexity allows for a single-phase conversion." if complexity_level == "low" else "**Phased Migration** - Given the " + complexity_level + " complexity, a phased approach is recommended."}
+
+1. Use `convert_salt_directory_to_ansible` for batch conversion of simple states
+2. Use `convert_salt_pillar_to_vars` to migrate pillar data to Ansible vars
+3. Use `generate_salt_inventory` to convert top.sls targeting to Ansible inventory
+4. Manually review HIGH complexity files: {len(high_files)} file(s) require attention
+5. Use `plan_salt_migration` for a detailed phased plan
+
+---
+
+## Risk Assessment
+
+| Risk | Level | Recommendation |
+|------|-------|---------------|
+| Custom execution modules | {"HIGH" if "cmd" in module_breakdown else "LOW"} | {"Review all cmd states for shell injection risks" if "cmd" in module_breakdown else "No cmd states detected"} |
+| Template complexity | MEDIUM | Test all Jinja2 template conversions thoroughly |
+| Pillar data sensitivity | HIGH | Encrypt sensitive pillar vars with Ansible Vault |
+| State ordering | {"HIGH" if total_states > 50 else "LOW"} | {"Review require/watch dependency chains" if total_states > 50 else "Low state count minimises ordering risk"} |
+"""
+
+
+@mcp.tool()
+def generate_salt_migration_report(
+    salt_dir: str,
+    report_format: str = "markdown",
+) -> str:
+    """
+    Generate a comprehensive Salt-to-Ansible migration report.
+
+    Produces an executive-level migration report covering complexity assessment,
+    file inventory, conversion coverage, effort estimates, and recommended
+    migration strategy for SaltStack to AAP/AWX migrations.
+
+    Args:
+        salt_dir: Path to the SaltStack states root directory.
+        report_format: Output format: ``"markdown"`` or ``"json"``.
+
+    Returns:
+        Migration report in the requested format.
+
+    """
+    try:
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
+    except ValueError as e:
+        return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
+
+    import json as _json
+
+    complexity_json = _assess_salt_complexity(salt_dir)
+    try:
+        data = _json.loads(complexity_json)
+    except Exception:  # noqa: BLE001
+        return complexity_json
+
+    if "error" in data:
+        return str(data["error"])
+
+    summary = data.get("summary", {})
+    files = data.get("files", [])
+    module_breakdown = summary.get("module_breakdown", {})
+
+    if report_format == "json":
+        return _build_salt_migration_report_json(
+            salt_dir=salt_dir,
+            summary=summary,
+            files=files,
+            module_breakdown=module_breakdown,
+        )
+
+    return _build_salt_migration_report_markdown(
+        salt_dir=salt_dir,
+        summary=summary,
+        files=files,
+    )
+
+
+def _get_module_coverage(module_breakdown: dict[str, int]) -> dict[str, Any]:
+    """
+    Build a module coverage report showing Ansible equivalents.
+
+    Args:
+        module_breakdown: Dict mapping Salt module names to state counts.
+
+    Returns:
+        Dict mapping module names to coverage info dicts.
+
+    """
+    # Salt modules with direct Ansible equivalents
+    direct_support = {
+        "pkg": ("ansible.builtin.package", True),
+        "service": ("ansible.builtin.service", True),
+        "file": ("ansible.builtin.file / template / copy", True),
+        "cmd": ("ansible.builtin.command / shell", True),
+        "user": ("ansible.builtin.user", True),
+        "group": ("ansible.builtin.group", True),
+        "git": ("ansible.builtin.git", True),
+        "pip": ("ansible.builtin.pip", True),
+        "cron": ("ansible.builtin.cron", True),
+        "mount": ("ansible.posix.mount", True),
+        "archive": ("ansible.builtin.unarchive", True),
+        "sysctl": ("ansible.posix.sysctl", True),
+        "host": ("ansible.builtin.lineinfile", True),
+        "npm": ("community.general.npm", True),
+        "gem": ("community.general.gem", True),
+    }
+
+    coverage: dict[str, Any] = {}
+    for mod, count in module_breakdown.items():
+        equiv, supported = direct_support.get(mod, ("Custom/Manual", False))
+        coverage[mod] = {
+            "count": count,
+            "supported": supported,
+            "ansible_equiv": equiv,
+        }
+    return coverage
+
+
+@mcp.tool()
+def generate_salt_inventory(top_path: str) -> str:
+    """
+    Generate an Ansible inventory from a SaltStack top.sls file.
+
+    Converts Salt minion targeting patterns (glob, grain, compound) from
+    top.sls into Ansible INI inventory groups suitable for AAP/AWX.
+
+    Args:
+        top_path: Path to the top.sls file.
+
+    Returns:
+        JSON string with ``"inventory"`` (INI text), ``"groups"``, ``"hosts"``.
+
+    """
+    import json as _json
+
+    try:
+        _validate_path_length(top_path, "top.sls path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating top.sls path", top_path)
+
+    top_json = _parse_salt_top(top_path)
+    try:
+        top_data = _json.loads(top_json)
+    except Exception:  # noqa: BLE001
+        return _json.dumps({"error": top_json})
+
+    if "Error" in top_json and "environments" not in top_data:
+        return _json.dumps({"error": top_json})
+
+    inventory = _top_to_ansible_inventory(top_data)
+
+    # Extract groups and hosts from inventory
+    groups: list[str] = []
+    hosts: list[str] = []
+    for line in inventory.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            groups.append(stripped[1:-1])
+        elif stripped and not stripped.startswith("#") and not stripped.startswith("["):
+            hosts.append(stripped)
+
+    return _json.dumps(
+        {
+            "inventory": inventory,
+            "groups": groups,
+            "hosts": hosts,
+        },
+        indent=2,
+    )
+
+
+@mcp.tool()
+def convert_salt_pillar_to_vars(pillar_path: str, output_format: str = "yaml") -> str:
+    """
+    Convert a SaltStack pillar file to Ansible variable definitions.
+
+    Transforms Salt pillar data into Ansible vars files suitable for use as
+    group_vars, host_vars, or Ansible Vault-encrypted variable files.
+
+    Args:
+        pillar_path: Path to the SaltStack pillar SLS file.
+        output_format: ``"yaml"`` for plain vars file, ``"vault"`` for
+            Vault-annotated format.
+
+    Returns:
+        JSON string with ``"vars_file"`` (YAML content), ``"variable_count"``,
+        and ``"format"``.
+
+    """
+    try:
+        _validate_path_length(pillar_path, "Pillar path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating pillar path", pillar_path)
+    return _convert_salt_pillar_to_vars(pillar_path, output_format)
+
+
+@mcp.tool()
+def convert_salt_directory_to_ansible(salt_dir: str, output_dir: str) -> str:
+    """
+    Convert an entire Salt states directory to Ansible roles structure.
+
+    Creates one Ansible role per top-level SLS module, generating tasks,
+    handlers, defaults, and meta files. Also produces a site.yml master
+    playbook and an inventory/hosts file from top.sls if present.
+
+    Args:
+        salt_dir: Path to the Salt states root directory.
+        output_dir: Path where Ansible roles should be written.
+
+    Returns:
+        JSON string with ``"roles_created"``, ``"files_written"``,
+        ``"warnings"``, and ``"structure"``.
+
+    """
+    try:
+        _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
+        _validate_path_length(output_dir, "Output directory path")
+    except ValueError as e:
+        return format_error_with_context(e, "validating paths", salt_dir)
+    return _convert_salt_directory_to_roles(salt_dir, output_dir)
+
+
+# ==================== End Salt Migration Tools ====================
+
+
+# ==================== PowerShell Migration Tools ====================
+
+
+@mcp.tool()
+def parse_powershell(script_path: str) -> str:
+    """
+    Parse a PowerShell provisioning script and extract structured actions.
+
+    Analyses the ``.ps1`` script using pattern matching to identify common
+    Windows provisioning operations: Windows features, services, registry
+    edits, file operations, MSI installs, and Chocolatey packages.
+
+    Addresses GitHub issues #204 and #205.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+
+    Returns:
+        JSON string with keys:
+
+        - ``source``: absolute path of the parsed file.
+        - ``actions``: list of structured action dicts (type, params,
+          confidence, source location, elevation requirement).
+        - ``warnings``: list of warnings for unrecognised lines.
+        - ``metrics``: summary counts per action category.
+
+    """
+    return _parse_powershell_script(script_path)
+
+
+@mcp.tool()
+def convert_powershell(
+    script_path: str,
+    playbook_name: str = "powershell_migration",
+    hosts: str = "windows",
+) -> str:
+    """
+    Convert a PowerShell provisioning script to an Ansible playbook.
+
+    Maps recognised PowerShell provisioning actions to their idiomatic
+    ``ansible.windows`` module equivalents.  Unrecognised commands fall
+    back to ``ansible.windows.win_shell`` with warnings.
+
+    Addresses GitHub issues #204, #205, and #206.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+        playbook_name: Name for the generated Ansible play.
+        hosts: Ansible inventory group / host pattern (default: ``windows``).
+
+    Returns:
+        JSON string with keys:
+
+        - ``status``: ``"success"`` or ``"error"``.
+        - ``playbook_yaml``: the generated Ansible playbook as YAML text.
+        - ``tasks_generated``: total number of tasks.
+        - ``win_shell_fallbacks``: count of low-confidence fallback tasks.
+        - ``warnings``: list of warning messages with source locations.
+        - ``source``: absolute path of the input file.
+
+    """
+    return _convert_powershell_to_ansible(script_path, playbook_name, hosts)
+
+
+@mcp.tool()
+def generate_windows_inventory_tool(
+    hosts: str = "",
+    winrm_port: int = 5986,
+    use_ssl: bool = True,
+    validate_certs: bool = False,
+) -> str:
+    """
+    Generate a WinRM-ready Ansible inventory file for Windows managed nodes.
+
+    Produces an INI-format inventory with a ``[windows]`` group and a
+    ``[windows:vars]`` section containing the WinRM connection settings
+    required by the ``ansible.windows`` collection.
+
+    Args:
+        hosts: Comma-separated list of Windows host names or IPs to include.
+            When empty, a placeholder host is used.
+        winrm_port: WinRM HTTPS listener port (default ``5986``).
+        use_ssl: Whether to use HTTPS (``ssl``) or HTTP (``basic``) transport.
+        validate_certs: Whether to validate the WinRM SSL certificate.
+
+    Returns:
+        INI-formatted inventory string ready to save as ``inventory/hosts``.
+
+    """
+    host_list = [h.strip() for h in hosts.split(",") if h.strip()] or None
+    return _generate_windows_inventory(
+        hosts=host_list,
+        winrm_port=winrm_port,
+        use_ssl=use_ssl,
+        validate_certs=validate_certs,
+    )
+
+
+@mcp.tool()
+def generate_windows_requirements(
+    script_path: str = "",
+) -> str:
+    """
+    Generate ``requirements.yml`` with required Ansible collections for Windows.
+
+    Examines the parsed PowerShell script to determine which collections are
+    actually needed (``ansible.windows``, ``community.windows``,
+    ``chocolatey.chocolatey``, etc.) and produces a ``requirements.yml`` file.
+
+    Args:
+        script_path: Optional path to a PowerShell script.  When provided the
+            output is tailored to the collections needed by that script.  When
+            omitted all Windows collections are included.
+
+    Returns:
+        YAML string for ``requirements.yml``.
+
+    """
+    parsed_ir: dict | None = None
+    if script_path.strip():
+        import json as _json
+
+        raw = _parse_powershell_script(script_path)
+        if not raw.startswith("Error"):
+            parsed_ir = _json.loads(raw)
+    return _generate_ansible_requirements(parsed_ir)
+
+
+@mcp.tool()
+def generate_powershell_role(
+    script_path: str,
+    role_name: str = "windows_provisioning",
+    playbook_name: str = "site",
+    hosts: str = "windows",
+) -> str:
+    """
+    Generate a complete Ansible Role structure from a PowerShell script.
+
+    Parses the script and produces all files for a production-ready Ansible
+    role: ``tasks/main.yml``, ``handlers/main.yml``, ``defaults/main.yml``,
+    ``vars/main.yml``, ``meta/main.yml``, ``README.md``, a top-level
+    playbook, WinRM inventory, ``group_vars/windows.yml``, and
+    ``requirements.yml``.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+        role_name: Name of the role directory.
+        playbook_name: Base name for the top-level playbook file.
+        hosts: Ansible inventory host / group pattern.
+
+    Returns:
+        JSON string mapping relative file path → file content for all
+        generated artefacts.
+
+    """
+    import json as _json
+
+    raw = _parse_powershell_script(script_path)
+    if raw.startswith("Error"):
+        return _json.dumps({"status": "error", "error": raw}, indent=2)
+
+    parsed_ir = _json.loads(raw)
+    files = _generate_powershell_role_structure(
+        parsed_ir,
+        role_name=role_name,
+        playbook_name=playbook_name,
+        hosts=hosts,
+    )
+    return _json.dumps(
+        {"status": "success", "files": files, "file_count": len(files)},
+        indent=2,
+    )
+
+
+@mcp.tool()
+def generate_powershell_job_template(
+    script_path: str,
+    job_template_name: str = "Windows PowerShell Migration",
+    playbook: str = "site.yml",
+    inventory: str = "windows-inventory",
+    project: str = "windows-migration-project",
+    credential_name: str = "windows-winrm-credential",
+    environment: str = "production",
+    include_survey: bool = True,
+) -> str:
+    """
+    Generate an AWX / AAP Windows job template from a PowerShell script.
+
+    Parses the script and produces a JSON configuration importable via
+    ``awx-cli`` or the AWX/AAP REST API pre-configured for WinRM Windows
+    automation with optional survey specs derived from script variables.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+        job_template_name: Display name for the AWX job template.
+        playbook: Playbook file name relative to the project root.
+        inventory: Inventory name or ID in AWX.
+        project: Project name or ID in AWX.
+        credential_name: Windows credential name in AWX (Machine credential).
+        environment: Target environment label.
+        include_survey: Whether to generate a survey spec.
+
+    Returns:
+        Formatted text block with job template JSON, CLI import command,
+        and an action summary.
+
+    """
+    import json as _json
+
+    raw = _parse_powershell_script(script_path)
+    if raw.startswith("Error"):
+        return raw
+
+    parsed_ir = _json.loads(raw)
+    return _generate_powershell_awx_job_template(
+        parsed_ir,
+        job_template_name=job_template_name,
+        playbook=playbook,
+        inventory=inventory,
+        project=project,
+        credential_name=credential_name,
+        environment=environment,
+        include_survey=include_survey,
+    )
+
+
+@mcp.tool()
+def analyze_powershell_fidelity(
+    script_path: str,
+) -> str:
+    """
+    Analyse migration fidelity for a PowerShell provisioning script.
+
+    Calculates the percentage of actions that can be automatically mapped to
+    idiomatic Ansible modules, lists actions needing manual review, and
+    provides actionable next steps.
+
+    Args:
+        script_path: Path to the PowerShell script (``.ps1`` file).
+
+    Returns:
+        JSON string with keys:
+
+        - ``fidelity_score``: Percentage (0-100) automated.
+        - ``total_actions``: Total action count.
+        - ``automated_actions``: High-confidence idiomatic mappings.
+        - ``fallback_actions``: ``win_shell`` fallbacks.
+        - ``review_required``: Actions needing manual completion.
+        - ``summary``: Human-readable summary.
+        - ``recommendations``: Actionable next steps.
+
+    """
+    import json as _json
+
+    raw = _parse_powershell_script(script_path)
+    if raw.startswith("Error"):
+        return _json.dumps({"status": "error", "error": raw}, indent=2)
+
+    parsed_ir = _json.loads(raw)
+    return _analyze_powershell_migration_fidelity(parsed_ir)
+
+
+# ==================== End PowerShell Migration Tools ====================
+
+
+# ==================== V2.2 Bash Script Migration Tools ====================
+
+
+@mcp.tool()
+def parse_bash_script(script_path: str) -> str:
+    """
+    Parse a Bash script and extract provisioning patterns.
+
+    Detects common provisioning operations including package installs
+    (apt, yum, dnf, zypper, apk), service control (systemctl, service),
+    file writes (heredocs, redirects), and downloads (curl, wget).
+    Emits results with confidence scores; low-confidence sections are
+    flagged as shell-fallbacks with idempotency warnings.
+
+    Args:
+        script_path: Path to the Bash script file.
+
+    Returns:
+        Formatted string describing detected patterns, warnings, and
+        idempotency hints.
+
+    """
+    return _parse_bash_script(script_path)
+
+
+@mcp.tool()
+def convert_bash_to_ansible(script_path: str) -> str:
+    """
+    Convert a Bash script to an Ansible playbook.
+
+    Reads the Bash script at *script_path*, maps common provisioning
+    patterns to the most appropriate Ansible modules
+    (``ansible.builtin.package``, ``ansible.builtin.service``,
+    ``ansible.builtin.copy``, ``ansible.builtin.get_url``), and falls
+    back to ``ansible.builtin.shell`` with idempotency hints
+    (``creates``, ``changed_when``, ``failed_when``) for sections that
+    cannot be mapped confidently.
+
+    Args:
+        script_path: Path to the Bash script file.
+
+    Returns:
+        JSON string with ``playbook_yaml``, ``tasks``, ``warnings``,
+        and ``idempotency_report`` keys.
+
+    """
+    return _convert_bash_to_ansible(script_path)
+
+
+@mcp.tool()
+def generate_ansible_role_from_bash(
+    script_path: str,
+    role_name: str = "bash_converted",
+) -> str:
+    """
+    Generate an Ansible role directory structure from a Bash script.
+
+    Reads the Bash script at *script_path*, parses it into an IR,
+    converts patterns to Ansible tasks split across role task files,
+    and returns a JSON envelope containing all role file contents.
+
+    Args:
+        script_path: Path to the Bash script file.
+        role_name: Name for the generated Ansible role.
+
+    Returns:
+        JSON string with ``status``, ``role_name``, ``files`` (dict of
+        relative path → content), ``quality_score``, and ``aap_hints``
+        keys.  Returns a JSON error object on failure.
+
+    """
+    return _generate_ansible_role_from_bash_file(script_path, role_name)
+
+
+# ==================== End V2.2 Bash Script Migration Tools ====================
+
+
+# ==================== Puppet Migration Tools ====================
+
+
+@mcp.tool()
+def parse_puppet_manifest(manifest_path: str) -> str:
+    """
+    Parse a Puppet manifest file and extract resources, classes, and variables.
+
+    Analyses a Puppet manifest (``.pp`` file) to identify resources (package,
+    file, service, user, group, exec, etc.), class definitions, variable
+    assignments, and constructs that cannot be automatically converted.
+
+    Args:
+        manifest_path: Path to the Puppet manifest (``.pp``) file.
+
+    Returns:
+        Formatted report listing all discovered resources, classes, variables,
+        and unsupported constructs with source locations and migration notes.
+
+    """
+    return _parse_puppet_manifest(manifest_path)
+
+
+@mcp.tool()
+def parse_puppet_module(module_path: str) -> str:
+    """
+    Parse a Puppet module directory and extract all resources from manifests.
+
+    Recursively processes all ``.pp`` files in the given module directory,
+    producing a combined report of resources, classes, variables, and
+    unsupported constructs across all manifests.
+
+    Args:
+        module_path: Path to the Puppet module directory.
+
+    Returns:
+        Combined report listing resources, classes, unsupported constructs,
+        and a summary suitable for migration planning.
+
+    """
+    return _parse_puppet_module(module_path)
+
+
+@mcp.tool()
+def convert_puppet_manifest_to_ansible(manifest_path: str) -> str:
+    """
+    Convert a Puppet manifest file to an Ansible playbook.
+
+    Parses the Puppet manifest and generates an Ansible playbook with tasks
+    mapped from Puppet resources. Unsupported constructs are included as
+    debug warning tasks requiring manual review.
+
+    Supported resource types:
+    - ``package`` → ``ansible.builtin.package``
+    - ``service`` → ``ansible.builtin.service``
+    - ``file`` → ``ansible.builtin.file`` / ``copy`` / ``template``
+    - ``user`` → ``ansible.builtin.user``
+    - ``group`` → ``ansible.builtin.group``
+    - ``exec`` → ``ansible.builtin.command``
+    - ``cron`` → ``ansible.builtin.cron``
+    - ``host`` → ``ansible.builtin.lineinfile``
+    - ``mount`` → ``ansible.posix.mount``
+    - ``ssh_authorized_key`` → ``ansible.posix.authorized_key``
+
+    Args:
+        manifest_path: Path to the Puppet manifest (``.pp``) file.
+
+    Returns:
+        Ansible playbook in YAML format as a string.
+
+    """
+    return _convert_puppet_manifest_to_ansible(manifest_path)
+
+
+@mcp.tool()
+def convert_puppet_module_to_ansible(module_path: str) -> str:
+    """
+    Convert a Puppet module directory to an Ansible playbook.
+
+    Recursively processes all ``.pp`` files in the module directory and
+    generates a combined Ansible playbook from all discovered resources.
+
+    Args:
+        module_path: Path to the Puppet module directory.
+
+    Returns:
+        Combined Ansible playbook in YAML format as a string.
+
+    """
+    return _convert_puppet_module_to_ansible(module_path)
+
+
+@mcp.tool()
+def convert_puppet_resource_to_task(
+    resource_type: str,
+    title: str,
+    attributes: str = "",
+) -> str:
+    """
+    Convert a single Puppet resource declaration to an Ansible task.
+
+    Useful for converting individual resources without a full manifest file,
+    for example when migrating manually or testing specific resource types.
+
+    Args:
+        resource_type: Puppet resource type (e.g. ``package``, ``service``).
+        title: Resource title / name (e.g. ``nginx``).
+        attributes: Resource attributes as a comma-separated key=value string
+            (e.g. ``"ensure=installed,version=1.20"``).
+
+    Returns:
+        Ansible task in YAML format as a string.
+
+    """
+    # Parse attributes string to dict
+    attrs: dict[str, str] = {}
+    if attributes:
+        for pair in attributes.split(","):
+            pair = pair.strip()
+            if "=" in pair:
+                key, _, val = pair.partition("=")
+                attrs[key.strip()] = val.strip()
+
+    task = _convert_puppet_resource_to_task(resource_type, title, attrs)
+    return str(yaml.dump(task, default_flow_style=False, sort_keys=False))
+
+
+@mcp.tool()
+def list_puppet_supported_resource_types() -> str:
+    """
+    List all Puppet resource types that can be automatically converted to Ansible.
+
+    Returns:
+        Formatted list of supported Puppet resource types and their
+        corresponding Ansible module equivalents.
+
+    """
+    module_map = get_puppet_ansible_module_map()
+    lines = ["Supported Puppet resource types and Ansible equivalents:", ""]
+    for puppet_type, ansible_module in sorted(module_map.items()):
+        lines.append(f"  {puppet_type:25s} → {ansible_module}")
+    lines.append("")
+    lines.append(f"Total: {len(module_map)} resource types supported")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def convert_puppet_manifest_to_ansible_with_ai(
+    manifest_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a Puppet manifest to an Ansible playbook using AI for unsupported constructs.
+
+    Uses an LLM to intelligently convert Puppet constructs that the deterministic
+    converter cannot handle automatically, such as Hiera lookups, create_resources
+    calls, exported/virtual resources, and inline templates.
+
+    Falls back to the standard deterministic conversion when no unsupported
+    constructs are detected.
+
+    Args:
+        manifest_path: Path to the Puppet manifest (.pp) file.
+        ai_provider: AI provider to use ('anthropic', 'openai', 'watson',
+            'lightspeed').
+        api_key: API key for the chosen provider.
+        model: Model identifier (e.g. 'claude-3-5-sonnet-20241022').
+        temperature: Sampling temperature (0.0 – 1.0). Lower values are more
+            deterministic; default is 0.3 for code-generation tasks.
+        max_tokens: Maximum tokens in the AI response.
+        project_id: Project ID (required for IBM Watsonx).
+        base_url: Custom base URL for the provider endpoint.
+
+    Returns:
+        Ansible playbook YAML string, or an error message if conversion fails.
+
+    """
+    return _convert_puppet_manifest_ai(
+        manifest_path,
+        ai_provider=ai_provider,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        project_id=project_id,
+        base_url=base_url,
+    )
+
+
+@mcp.tool()
+def convert_puppet_module_to_ansible_with_ai(
+    module_path: str,
+    ai_provider: str = "anthropic",
+    api_key: str = "",
+    model: str = "claude-3-5-sonnet-20241022",
+    temperature: float = 0.3,
+    max_tokens: int = 4000,
+    project_id: str = "",
+    base_url: str = "",
+) -> str:
+    """
+    Convert a Puppet module directory to an Ansible playbook using AI.
+
+    Combines all .pp files in the module directory and applies AI-assisted
+    conversion for unsupported constructs. Falls back to the deterministic
+    converter when no unsupported constructs are present.
+
+    Args:
+        module_path: Path to the Puppet module directory.
+        ai_provider: AI provider to use ('anthropic', 'openai', 'watson',
+            'lightspeed').
+        api_key: API key for the chosen provider.
+        model: Model identifier.
+        temperature: Sampling temperature; default is 0.3.
+        max_tokens: Maximum tokens in the AI response.
+        project_id: Project ID for IBM Watsonx.
+        base_url: Custom provider endpoint URL.
+
+    Returns:
+        Ansible playbook YAML string, or an error message if conversion fails.
+
+    """
+    return _convert_puppet_module_ai(
+        module_path,
+        ai_provider=ai_provider,
+        api_key=api_key,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        project_id=project_id,
+        base_url=base_url,
+    )
+
+
+# ==================== End Puppet Migration Tools ====================
 
 
 def main() -> None:

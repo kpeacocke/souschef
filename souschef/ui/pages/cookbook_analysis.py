@@ -1,6 +1,7 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
+import importlib
 import io
 import json
 import os
@@ -12,16 +13,30 @@ import tempfile
 import zipfile
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 # UI dependencies - required for this module to function
 # At runtime, gracefully handle missing dependencies; for type checking, assume present
 if TYPE_CHECKING:
-    import pandas as pd
+
+    class _PandasTimestampProtocol(Protocol):
+        """Typing-only protocol for pandas.Timestamp static constructor."""
+
+        @staticmethod
+        def now() -> Any:
+            """Return current timestamp-like object with ``isoformat()``."""
+
+    class _PandasModuleProtocol(Protocol):
+        """Typing-only protocol for the pandas API surface used in this module."""
+
+        Timestamp: _PandasTimestampProtocol
+        DataFrame: Any
+
+    pd: _PandasModuleProtocol
     import streamlit as st
 else:
     try:
-        import pandas as pd
+        pd = importlib.import_module("pandas")
     except ImportError:
         pd = None
 
@@ -89,6 +104,14 @@ from souschef.ui.pages.cookbook_analysis_utilities import (
     _get_secure_ai_config_path,
     _sanitize_filename,
 )
+
+# Star-import surface: defines which symbols are exported from this module when
+# callers use ``from ... import *``.  The import-line comments above already
+# suppress the unused-import (F401) warnings for these re-exports.
+__all__ = [
+    "_validate_tar_file_security",
+    "_validate_zip_file_security",
+]
 
 generate_playbook_from_recipe_with_ai = (
     orchestrate_generate_playbook_from_recipe_with_ai
@@ -437,23 +460,11 @@ METADATA_COLUMN_NAME = "Has Metadata"
 MIME_TYPE_ZIP = "application/zip"
 UNKNOWN_ERROR = "Unknown error"
 
-# Security limits for archive extraction
+# Security limits for archive extraction.
+# MAX_ARCHIVE_SIZE is used locally in extract_archive() below.
+# The per-file limits (MAX_FILE_SIZE, MAX_FILES, MAX_DEPTH, BLOCKED_EXTENSIONS)
+# are defined canonically in cookbook_analysis_security.py where they are used.
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024  # 100MB total
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB per file
-MAX_FILES = 1000  # Maximum number of files
-MAX_DEPTH = 10  # Maximum directory depth
-BLOCKED_EXTENSIONS = {
-    ".exe",
-    ".bat",
-    ".cmd",
-    ".com",
-    ".pif",
-    ".scr",
-    ".vbs",
-    ".js",
-    ".jar",
-    # Note: .sh files are allowed as they are common in Chef cookbooks
-}
 
 
 def extract_archive(uploaded_file) -> tuple[Path, Path, Path]:

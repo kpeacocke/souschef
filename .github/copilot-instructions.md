@@ -369,7 +369,7 @@ Before submitting code changes, verify:
 - [ ] Existing `# noqa: F401` markers respected
 
 **Architecture:**
-- [ ] Code placed in correct module using [decision tree](../docs/ARCHITECTURE.md#module-placement-rules)
+- [ ] Code placed in correct module using [decision tree](../docs/ARCHITECTURE.md)
 - [ ] Module responsibilities respected (see layer definitions)
 - [ ] Dependency rules followed (downward only, no upward imports)
 - [ ] SonarCloud enforcement rules not violated
@@ -542,8 +542,8 @@ For comprehensive contribution guidelines, see [**CONTRIBUTING.md**](../CONTRIBU
 - Branch strategy
 
 ## When in Doubt
-- **Architecture**: Use the [decision tree](../docs/ARCHITECTURE.md#module-placement-rules)
-- **Dependencies**: Check the [dependency matrix](../docs/ARCHITECTURE.md#dependency-matrix)
+- **Architecture**: Use the [decision tree](../docs/ARCHITECTURE.md)
+- **Dependencies**: Check the [dependency matrix](../docs/ARCHITECTURE.md)
 - **Security**: Review [SECURITY_ANTI_PATTERNS.md](../docs/SECURITY_ANTI_PATTERNS.md)
 - **Contributing**: Follow [CONTRIBUTING.md](../CONTRIBUTING.md)
 - **Agents**: Consult [AGENTS.md](AGENTS.md) for specialised help

@@ -42,22 +42,18 @@ def create_v2_group() -> click.Group:
         Click Group containing all v2 migration commands.
 
     """
-
-    @click.group("v2")
-    def v2() -> None:
-        """
-        SousChef v2 migration commands.
-
-        Provides the v2 migration orchestrator workflow and state tracking.
-        """
+    v2_group = click.Group(
+        name="v2",
+        help="SousChef v2 migration commands.",
+    )
 
     # Register v2 commands to the group
-    v2.add_command(v2_migrate)
-    v2.add_command(v2_status)
-    v2.add_command(v2_list)
-    v2.add_command(v2_rollback)
+    v2_group.add_command(v2_migrate)
+    v2_group.add_command(v2_status)
+    v2_group.add_command(v2_list)
+    v2_group.add_command(v2_rollback)
 
-    return v2
+    return v2_group
 
 
 def _validate_user_path(path_input: str | None) -> Path:
