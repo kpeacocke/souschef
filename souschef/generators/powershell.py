@@ -136,6 +136,7 @@ def generate_windows_inventory(
     winrm_port: int = 5986,
     use_ssl: bool = True,
     validate_certs: bool = False,
+    winrm_transport: str = "ntlm",
 ) -> str:
     """
     Generate a WinRM-ready Ansible inventory file for Windows targets.
@@ -147,18 +148,22 @@ def generate_windows_inventory(
     Args:
         hosts: Optional list of Windows host names or IPs to include in the
             inventory.  When omitted a placeholder host is added.
-        winrm_port: WinRM HTTPS listener port (default ``5986``).
+        winrm_port: WinRM listener port (5986 for HTTPS, 5985 for HTTP).
         use_ssl: Whether to use HTTPS (WinRM over SSL).  Set to ``False`` for
             HTTP (port ``5985``) in isolated lab environments.
         validate_certs: Whether Ansible should validate the WinRM SSL
             certificate.  Typically ``False`` for self-signed certs.
+        winrm_transport: WinRM authentication transport method.  Valid values
+            are ``ntlm`` (default), ``kerberos``, ``basic``, ``credssp``, or
+            ``certificate``.  ``ssl`` is not a valid transport—use ``use_ssl``
+            to control the connection scheme instead.
 
     Returns:
         INI-formatted inventory string ready to save as ``inventory/hosts``.
 
     """
     host_list = hosts or ["windows-host1.example.com"]
-    ssl_flag = "ssl" if use_ssl else "basic"
+    scheme = "https" if use_ssl else "http"
 
     lines = ["[windows]"]
     for h in host_list:
@@ -169,7 +174,8 @@ def generate_windows_inventory(
         "[windows:vars]",
         "ansible_connection=winrm",
         f"ansible_port={winrm_port}",
-        f"ansible_winrm_transport={ssl_flag}",
+        f"ansible_winrm_scheme={scheme}",
+        f"ansible_winrm_transport={winrm_transport}",
         "ansible_winrm_server_cert_validation="
         + ("validate" if validate_certs else "ignore"),
         "ansible_winrm_operation_timeout_sec=60",
@@ -186,6 +192,7 @@ def generate_windows_group_vars(
     winrm_port: int = 5986,
     use_ssl: bool = True,
     validate_certs: bool = False,
+    winrm_transport: str = "ntlm",
 ) -> str:
     """
     Generate ``group_vars/windows.yml`` for WinRM connection settings.
@@ -199,18 +206,23 @@ def generate_windows_group_vars(
         use_ssl: Whether to use HTTPS WinRM transport.
         validate_certs: Whether to validate the WinRM SSL certificate.
             Typically ``False`` for self-signed certs.
+        winrm_transport: WinRM authentication transport method.  Valid values
+            are ``ntlm`` (default), ``kerberos``, ``basic``, ``credssp``, or
+            ``certificate``.  ``ssl`` is not a valid transport—use ``use_ssl``
+            to control the connection scheme instead.
 
     Returns:
         YAML string for ``group_vars/windows.yml``.
 
     """
-    transport = "ssl" if use_ssl else "basic"
+    scheme = "https" if use_ssl else "http"
     group_vars: dict[str, Any] = {
         "ansible_connection": "winrm",
         "ansible_user": ansible_user,
         "ansible_password": "{{ vault_windows_password }}",
         "ansible_port": winrm_port,
-        "ansible_winrm_transport": transport,
+        "ansible_winrm_scheme": scheme,
+        "ansible_winrm_transport": winrm_transport,
         "ansible_winrm_server_cert_validation": (
             "validate" if validate_certs else "ignore"
         ),
@@ -665,7 +677,8 @@ def _extract_extra_vars(actions: list[dict[str, Any]]) -> dict[str, Any]:
         elif atype in {"chocolatey_install"}:
             pkg = params.get("package_name", "")
             if pkg:
-                extra[f"{pkg}_version"] = "latest"
+                var_name = re.sub(r"^\d+", "", re.sub(r"\W", "_", pkg).lower())
+                extra[f"{var_name}_version"] = "latest"
     return extra
 
 

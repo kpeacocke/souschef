@@ -104,18 +104,26 @@ class TestGenerateWindowsInventory:
         assert "5985" in result
 
     def test_ssl_transport_flag(self) -> None:
-        """use_ssl=True sets transport to ssl."""
+        """use_ssl=True sets winrm scheme to https and default transport to ntlm."""
         from souschef.generators.powershell import generate_windows_inventory
 
         result = generate_windows_inventory(use_ssl=True)
-        assert "ansible_winrm_transport=ssl" in result
+        assert "ansible_winrm_scheme=https" in result
+        assert "ansible_winrm_transport=ntlm" in result
 
     def test_non_ssl_transport_flag(self) -> None:
-        """use_ssl=False sets transport to basic."""
+        """use_ssl=False sets winrm scheme to http."""
         from souschef.generators.powershell import generate_windows_inventory
 
         result = generate_windows_inventory(use_ssl=False)
-        assert "ansible_winrm_transport=basic" in result
+        assert "ansible_winrm_scheme=http" in result
+
+    def test_custom_winrm_transport(self) -> None:
+        """Custom winrm_transport is reflected in inventory."""
+        from souschef.generators.powershell import generate_windows_inventory
+
+        result = generate_windows_inventory(winrm_transport="kerberos")
+        assert "ansible_winrm_transport=kerberos" in result
 
     def test_validate_certs_ignore(self) -> None:
         """validate_certs=False sets cert validation to ignore."""
@@ -192,18 +200,26 @@ class TestGenerateWindowsGroupVars:
         assert parsed["ansible_port"] == 5985
 
     def test_ssl_transport(self) -> None:
-        """use_ssl=True sets winrm transport to ssl."""
+        """use_ssl=True sets winrm scheme to https and default transport to ntlm."""
         from souschef.generators.powershell import generate_windows_group_vars
 
         parsed = yaml.safe_load(generate_windows_group_vars(use_ssl=True))
-        assert parsed["ansible_winrm_transport"] == "ssl"
+        assert parsed["ansible_winrm_scheme"] == "https"
+        assert parsed["ansible_winrm_transport"] == "ntlm"
 
     def test_non_ssl_transport(self) -> None:
-        """use_ssl=False sets winrm transport to basic."""
+        """use_ssl=False sets winrm scheme to http."""
         from souschef.generators.powershell import generate_windows_group_vars
 
         parsed = yaml.safe_load(generate_windows_group_vars(use_ssl=False))
-        assert parsed["ansible_winrm_transport"] == "basic"
+        assert parsed["ansible_winrm_scheme"] == "http"
+
+    def test_custom_winrm_transport(self) -> None:
+        """Custom winrm_transport is reflected in group_vars."""
+        from souschef.generators.powershell import generate_windows_group_vars
+
+        parsed = yaml.safe_load(generate_windows_group_vars(winrm_transport="kerberos"))
+        assert parsed["ansible_winrm_transport"] == "kerberos"
 
     def test_vault_password_placeholder(self) -> None:
         """Output references a vault placeholder for the password."""
@@ -647,3 +663,60 @@ class TestAnalyzePowershellMigrationFidelity:
         # automated actions + fallback + any unaccounted = total
         assert automated + fallback <= total
         assert automated + fallback + review_count >= automated
+
+
+# ---------------------------------------------------------------------------
+# Chocolatey package name normalisation (via generate_powershell_awx_job_template)
+# ---------------------------------------------------------------------------
+
+
+class TestChocolateyPackageNameNormalisation:
+    """Tests for Chocolatey package name normalisation in AWX job template extra_vars."""
+
+    def _extra_vars(self, package_name: str) -> dict:
+        """Return extra_vars dict produced for a single chocolatey_install action."""
+        from souschef.generators.powershell import generate_powershell_awx_job_template
+
+        ir = _minimal_ir([_action("chocolatey_install", {"package_name": package_name})])
+        result = generate_powershell_awx_job_template(ir, include_survey=False)
+        start = result.index("```json\n") + len("```json\n")
+        end = result.index("\n```", start)
+        parsed = json.loads(result[start:end])
+        return json.loads(parsed.get("extra_vars", "{}"))
+
+    def test_hyphens_replaced_with_underscores(self) -> None:
+        """Hyphens in package names are replaced with underscores."""
+        extra = self._extra_vars("my-package")
+        assert "my_package_version" in extra
+
+    def test_dots_replaced_with_underscores(self) -> None:
+        """Dots in package names are replaced with underscores."""
+        extra = self._extra_vars("pkg.name")
+        assert "pkg_name_version" in extra
+
+    def test_leading_digits_stripped(self) -> None:
+        """Leading digits are stripped so the variable name is valid."""
+        extra = self._extra_vars("7zip")
+        assert "zip_version" in extra
+        for key in extra:
+            assert not key[0].isdigit(), f"Variable key starts with digit: {key}"
+
+    def test_version_value_is_latest(self) -> None:
+        """Chocolatey extra_vars value defaults to 'latest'."""
+        extra = self._extra_vars("git")
+        assert extra.get("git_version") == "latest"
+
+    def test_environment_set_name_normalised(self) -> None:
+        """Environment variable names are normalised to lowercase with underscores."""
+        from souschef.generators.powershell import generate_powershell_awx_job_template
+
+        ir = _minimal_ir(
+            [_action("environment_set", {"name": "MY-VAR", "value": "hello"})]
+        )
+        result = generate_powershell_awx_job_template(ir, include_survey=False)
+        start = result.index("```json\n") + len("```json\n")
+        end = result.index("\n```", start)
+        parsed = json.loads(result[start:end])
+        extra = json.loads(parsed.get("extra_vars", "{}"))
+        assert "my_var" in extra
+        assert extra["my_var"] == "hello"

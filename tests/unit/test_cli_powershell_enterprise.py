@@ -73,10 +73,10 @@ class TestPowershellInventoryCli:
         assert "5985" in result.output
 
     def test_no_ssl_flag(self, runner: CliRunner, cli) -> None:
-        """Command uses basic transport with --no-ssl."""
+        """Command uses http scheme with --no-ssl."""
         result = runner.invoke(cli, ["powershell-inventory", "--no-ssl"])
         assert result.exit_code == 0
-        assert "basic" in result.output
+        assert "ansible_winrm_scheme=http" in result.output
 
     def test_multiple_hosts_in_output(
         self, runner: CliRunner, cli, tmp_path: Path

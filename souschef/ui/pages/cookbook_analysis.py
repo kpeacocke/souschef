@@ -105,7 +105,8 @@ from souschef.ui.pages.cookbook_analysis_utilities import (
     _sanitize_filename,
 )
 
-# Explicit re-exports so CodeQL and type-checkers recognise these as intentional
+# Explicit re-exports so star-imports expose these symbols; also silences
+# F401 warnings for the imports above that are unused in this module directly.
 __all__ = [
     "_validate_tar_file_security",
     "_validate_zip_file_security",
