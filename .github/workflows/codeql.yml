@@ -52,7 +52,7 @@ jobs:
 
       - name: Detect changed paths
         id: filter
-        uses: dorny/paths-filter@4512586833f72d7f73e8d6f8f30235b43b70cc7d # v3
+        uses: dorny/paths-filter@v3
         with:
           filters: |
             python:
