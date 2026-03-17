@@ -74,8 +74,8 @@ jobs:
     if: >-
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (matrix.language == 'python' && needs.changes.outputs.python == 'true') ||
-      (matrix.language == 'go' && needs.changes.outputs.go == 'true')
+      needs.changes.outputs.python == 'true' ||
+      needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
