@@ -485,6 +485,6 @@ If you're upgrading from SousChef v3.5 or earlier:
 ---
 
 For more information, see:
-- [Architecture Documentation](ARCHITECTURE.md)
-- [API Reference](../api-reference/)
-- [Docker Deployment Guide](docker-deployment.md)
+- [Architecture Documentation](../ARCHITECTURE.md)
+- [API Reference](../api-reference/server.md)
+- [Docker Deployment Guide](../docker-deployment.md)

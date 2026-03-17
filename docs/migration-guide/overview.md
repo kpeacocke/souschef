@@ -1,6 +1,6 @@
 # Migration Guide Overview
 
-This guide provides a comprehensive methodology for migrating from Chef to Ansible, leveraging SousChef's 44 MCP tools and proven enterprise practices.
+This guide provides a comprehensive methodology for migrating from Chef, SaltStack, Puppet, PowerShell, or Bash to Ansible, leveraging SousChef's MCP tools and proven enterprise practices.
 
 ## Migration Philosophy
 
@@ -14,6 +14,15 @@ This guide provides a comprehensive methodology for migrating from Chef to Ansib
 3. **Continuous Validation**: Test conversions at every step
 4. **Automation-Driven**: Leverage SousChef tools for consistency
 5. **Documentation**: Maintain clear records throughout the migration
+
+## Platform-Specific Guides
+
+This overview describes the shared migration lifecycle. Use the dedicated guide for platform-specific syntax, edge-cases, and tooling:
+
+- [SaltStack to Ansible](salt-migration.md)
+- [Bash to Ansible](bash-migration.md)
+- [PowerShell to Ansible](powershell-migration.md)
+- [Puppet to Ansible](puppet-migration.md)
 
 ---
 
@@ -603,7 +612,7 @@ Now that you understand the overall migration methodology:
 
 Or explore specific topics:
 
-- [MCP Tools Reference](../user-guide/mcp-tools.md) - All 38 available tools
+- [MCP Tools Reference](../user-guide/mcp-tools.md) - Full catalog of available tools
 - [CLI Usage](../user-guide/cli-usage.md) - Command-line workflow
 - [Examples](../user-guide/examples.md) - Real-world migration patterns
 
@@ -617,4 +626,4 @@ Or explore specific topics:
 - **InSpec Documentation**: [docs.chef.io/inspec/](https://docs.chef.io/inspec/)
 
 !!! success "Ready to Migrate?"
-    With SousChef's 44 tools and this methodology, you have everything needed for a successful Chef-to-Ansible migration. Start with assessment, follow the phases, and leverage automation throughout the process.
+    With SousChef's MCP tools and this methodology, you have everything needed for a successful Chef-to-Ansible, Bash, PowerShell, or Puppet migration. Start with assessment, follow the phases, and leverage automation throughout the process.

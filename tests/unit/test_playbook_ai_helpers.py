@@ -132,3 +132,133 @@ def test_find_recipe_position_in_migration_order() -> None:
         order, "recipes/web.rb"
     )
     assert result == order[0]
+
+
+# ---------------------------------------------------------------------------
+# Security tests: SSRF validation in _call_lightspeed_api
+# ---------------------------------------------------------------------------
+
+
+def test_call_lightspeed_api_invalid_url() -> None:
+    """Lightspeed API should reject an invalid base URL."""
+    result = playbook_module._call_lightspeed_api(
+        {"api_key": "key", "base_url": "not-a-url"},
+        "prompt",
+        "model",
+        0.3,
+        100,
+    )
+    assert result.startswith(ERROR_PREFIX)
+    assert "Invalid Lightspeed base URL" in result
+
+
+def test_call_lightspeed_api_disallowed_host() -> None:
+    """Lightspeed API should reject a URL pointing at a disallowed host."""
+    result = playbook_module._call_lightspeed_api(
+        {"api_key": "key", "base_url": "https://attacker.example.com"},
+        "prompt",
+        "model",
+        0.3,
+        100,
+    )
+    assert result.startswith(ERROR_PREFIX)
+    assert "Invalid Lightspeed base URL" in result
+
+
+def test_call_lightspeed_api_missing_base_url() -> None:
+    """Lightspeed API should handle missing base_url key gracefully."""
+    result = playbook_module._call_lightspeed_api(
+        {"api_key": "key"},
+        "prompt",
+        "model",
+        0.3,
+        100,
+    )
+    assert result.startswith(ERROR_PREFIX)
+    assert "Invalid Lightspeed base URL" in result
+
+
+def test_call_lightspeed_api_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Lightspeed API should succeed with a valid URL and 200 response."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"choices": [{"text": "output"}]}
+
+    mock_requests = MagicMock()
+    mock_requests.post.return_value = mock_response
+    monkeypatch.setattr(playbook_module, "requests", mock_requests)
+
+    result = playbook_module._call_lightspeed_api(
+        {"api_key": "key", "base_url": "https://api.redhat.com"},
+        "prompt",
+        "model",
+        0.3,
+        100,
+    )
+    assert result == "output"
+
+
+# ---------------------------------------------------------------------------
+# Security tests: SSRF validation in _call_github_copilot_api
+# ---------------------------------------------------------------------------
+
+
+def test_call_github_copilot_api_invalid_url() -> None:
+    """GitHub Copilot API should reject an invalid base URL."""
+    result = playbook_module._call_github_copilot_api(
+        {"api_key": "key", "base_url": "not-a-url"},
+        "prompt",
+        "model",
+        0.3,
+        100,
+    )
+    assert result.startswith(ERROR_PREFIX)
+    assert "Invalid GitHub Copilot base URL" in result
+
+
+def test_call_github_copilot_api_disallowed_host() -> None:
+    """GitHub Copilot API should reject a URL pointing at a disallowed host."""
+    result = playbook_module._call_github_copilot_api(
+        {"api_key": "key", "base_url": "https://attacker.example.com"},
+        "prompt",
+        "model",
+        0.3,
+        100,
+    )
+    assert result.startswith(ERROR_PREFIX)
+    assert "Invalid GitHub Copilot base URL" in result
+
+
+def test_call_github_copilot_api_missing_base_url() -> None:
+    """GitHub Copilot API should handle missing base_url key gracefully."""
+    result = playbook_module._call_github_copilot_api(
+        {"api_key": "key"},
+        "prompt",
+        "model",
+        0.3,
+        100,
+    )
+    assert result.startswith(ERROR_PREFIX)
+    assert "Invalid GitHub Copilot base URL" in result
+
+
+def test_call_github_copilot_api_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GitHub Copilot API should succeed with a valid URL and 200 response."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "generated"}}]
+    }
+
+    mock_requests = MagicMock()
+    mock_requests.post.return_value = mock_response
+    monkeypatch.setattr(playbook_module, "requests", mock_requests)
+
+    result = playbook_module._call_github_copilot_api(
+        {"api_key": "key", "base_url": "https://api.github.com"},
+        "prompt",
+        "model",
+        0.3,
+        100,
+    )
+    assert result == "generated"

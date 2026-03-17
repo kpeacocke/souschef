@@ -422,7 +422,7 @@ Check the `generate_upgrade_plan` output for version-specific breaking changes.
 - **Ansible Porting Guides**: Official migration guides between versions
 - **Collection Documentation**: Check individual collection changelogs
 - **SousChef Architecture**: See [ARCHITECTURE.md](../ARCHITECTURE.md) for implementation details
-- **API Reference**: See [ansible_upgrade.py API docs](../api-reference/) for technical details
+- **API Reference**: See [API docs](../api-reference/server.md) for technical details
 
 ## Getting Help
 
@@ -434,4 +434,4 @@ If you encounter issues:
 4. Open a [GitHub issue](https://github.com/kpeacocke/souschef/issues) with details
 5. Ask in [GitHub Discussions](https://github.com/kpeacocke/souschef/discussions)
 
-For security-related Ansible version issues, see [SECURITY.md](../../SECURITY.md).
+For security-related Ansible version issues, see [SECURITY.md](../SECURITY.md).

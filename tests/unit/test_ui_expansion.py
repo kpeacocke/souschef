@@ -633,7 +633,7 @@ class TestDisplayNavigationSection:
     @patch("souschef.ui.app.st")
     @patch("souschef.ui.app._render_buttons_for_features")
     def test_display_navigation_section_creates_tabs(self, mock_render, mock_st):
-        """Test that navigation section creates three tabs."""
+        """Test that navigation section creates four tabs."""
         from souschef.ui.app import _display_navigation_section
 
         # Mock tabs that support context manager protocol
@@ -643,17 +643,25 @@ class TestDisplayNavigationSection:
         mock_tab_ansible = MagicMock()
         mock_tab_ansible.__enter__ = Mock(return_value=mock_tab_ansible)
         mock_tab_ansible.__exit__ = Mock(return_value=None)
+        mock_tab_salt = MagicMock()
+        mock_tab_salt.__enter__ = Mock(return_value=mock_tab_salt)
+        mock_tab_salt.__exit__ = Mock(return_value=None)
         mock_tab_tools = MagicMock()
         mock_tab_tools.__enter__ = Mock(return_value=mock_tab_tools)
         mock_tab_tools.__exit__ = Mock(return_value=None)
 
-        mock_st.tabs.return_value = [mock_tab_chef, mock_tab_ansible, mock_tab_tools]
+        mock_st.tabs.return_value = [
+            mock_tab_chef,
+            mock_tab_ansible,
+            mock_tab_salt,
+            mock_tab_tools,
+        ]
 
         _display_navigation_section("Dashboard")
 
-        mock_st.tabs.assert_called_once_with(["Chef", "Ansible", "Tools"])
-        # Should render buttons for each tab (3 calls)
-        assert mock_render.call_count == 3
+        mock_st.tabs.assert_called_once_with(["Chef", "Ansible", "Salt", "Tools"])
+        # Should render buttons for each tab (4 calls)
+        assert mock_render.call_count == 4
 
 
 # Additional utility function tests

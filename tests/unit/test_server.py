@@ -2201,8 +2201,10 @@ def test_parse_template_not_found(monkeypatch):
             "souschef.parsers.template._ensure_within_base_path",
             return_value=mock_path,
         ),
-        patch("souschef.parsers.template.safe_exists", return_value=False),
-        patch("souschef.parsers.template.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.template.safe_read_text",
+            side_effect=FileNotFoundError,
+        ),
     ):
         result = parse_template("/nonexistent/template.erb")
 
@@ -2391,8 +2393,10 @@ def test_parse_custom_resource_not_found(monkeypatch):
             "souschef.parsers.resource._ensure_within_base_path",
             return_value=mock_path,
         ),
-        patch("souschef.parsers.resource.safe_exists", return_value=False),
-        patch("souschef.parsers.resource.safe_is_dir", return_value=False),
+        patch(
+            "souschef.parsers.resource.safe_read_text",
+            side_effect=FileNotFoundError,
+        ),
     ):
         result = parse_custom_resource("/nonexistent/resource.rb")
 
@@ -2963,9 +2967,13 @@ def test_parse_inspec_profile_not_found(monkeypatch):
     """Test parsing InSpec profile with non-existent path."""
     monkeypatch.setenv("SOUSCHEF_WORKSPACE_ROOT", "/")
     """Test parsing InSpec profile with non-existent path."""
-    with patch("souschef.parsers.inspec._normalize_path") as mock_path:
+    with (
+        patch("souschef.parsers.inspec._normalize_path") as mock_normalize,
+        patch("souschef.parsers.inspec._ensure_within_base_path") as mock_ensure,
+    ):
         mock_instance = MagicMock()
-        mock_path.return_value = mock_instance
+        mock_normalize.return_value = mock_instance
+        mock_ensure.return_value = mock_instance
         mock_instance.exists.return_value = False
 
         result = parse_inspec_profile("/nonexistent")
@@ -11696,7 +11704,7 @@ class TestErrorHandling:
     def test_normalize_path_with_os_error(self):
         """Test that OSError in path resolution raises ValueError."""
         with (
-            patch("os.path.realpath", side_effect=OSError("Invalid path")),
+            patch("os.path.normpath", side_effect=OSError("Invalid path")),
             pytest.raises(ValueError, match="Invalid path"),
         ):
             _normalize_path("/some/path")
@@ -11704,7 +11712,7 @@ class TestErrorHandling:
     def test_normalize_path_with_runtime_error(self):
         """Test that RuntimeError in path resolution raises ValueError."""
         with (
-            patch("os.path.realpath", side_effect=RuntimeError("Runtime issue")),
+            patch("os.path.normpath", side_effect=RuntimeError("Runtime issue")),
             pytest.raises(ValueError, match="Invalid path"),
         ):
             _normalize_path("/some/path")

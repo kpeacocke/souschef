@@ -11,7 +11,6 @@ This guide covers advanced patterns and workflows for complex Chef-to-Ansible mi
 - [CI/CD Integration](#cicd-integration)
 - [Custom Resource Handling](#custom-resource-handling)
 - [Advanced Guard Patterns](#advanced-guard-patterns)
-- [Handler Chains](#handler-chains)
 
 ## Multi-Cookbook Migration
 

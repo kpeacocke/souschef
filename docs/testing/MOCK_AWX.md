@@ -557,5 +557,5 @@ For testing with a real AWX instance, see:
 
 - **AWX API Documentation**: https://docs.ansible.com/ansible-tower/latest/html/towerapi/
 - **responses library**: https://github.com/getsentry/responses
-- **Mock tests**: [tests/integration/test_awx_mock.py](../../tests/integration/test_awx_mock.py)
+- **Mock tests**: `tests/integration/test_awx_mock.py` (repository source)
 - **Chef Server mocks**: [MOCK_CHEF_SERVER.md](MOCK_CHEF_SERVER.md)

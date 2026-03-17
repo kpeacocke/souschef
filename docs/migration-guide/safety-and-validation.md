@@ -604,9 +604,9 @@ smoke-test.sh
 
 ## Additional Resources
 
-- [SousChef Validation Tools](../user-guide/mcp-tools.md#validation-testing)
+- [SousChef Validation Tools](../user-guide/mcp-tools.md)
 - [Migration Guide: Advanced Workflows](advanced-workflows.md)
-- [SECURITY.md](../../SECURITY.md) - Security features and best practices
+- [SECURITY.md](../SECURITY.md) - Security features and best practices
 - [Ansible Testing Strategies](https://docs.ansible.com/ansible/latest/reference_appendices/test_strategies.html)
 - [InSpec Documentation](https://docs.chef.io/inspec/)
 
@@ -624,4 +624,4 @@ If you encounter migration issues:
    - Observed vs expected behaviour
    - Test environment details
 
-For security concerns, see [SECURITY.md](../../SECURITY.md).
+For security concerns, see [SECURITY.md](../SECURITY.md).

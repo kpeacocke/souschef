@@ -327,10 +327,10 @@ def test_config(test_key: str) -> ChefServerConfig:
 ## Combining Unit & Mock Tests
 
 **Use unit tests for:** Testing individual functions with mocked dependencies
-- [tests/unit/test_chef_server_client.py](../tests/unit/test_chef_server_client.py) - Auth helpers, URL normalization, secrets redaction
+- `tests/unit/test_chef_server_client.py` - Auth helpers, URL normalization, secrets redaction
 
 **Use mock integration tests for:** Testing full request/response flow
-- [tests/integration/test_chef_server_mock.py](../tests/integration/test_chef_server_mock.py) - End-to-end API calls with mocked HTTP
+- `tests/integration/test_chef_server_mock.py` - End-to-end API calls with mocked HTTP
 
 **Use real integration tests for:** Testing with actual Chef Server (optional)
 - [docs/testing/CHEF_SERVER_TESTING.md](CHEF_SERVER_TESTING.md) - Live Chef Server testing guide
@@ -455,7 +455,7 @@ poetry run pytest tests/unit/test_chef_server_client.py::TestChefServerAuthHelpe
 ## Further Reading
 
 - **responses documentation**: https://github.com/getsentry/responses
-- **Unit tests**: [tests/unit/test_chef_server_client.py](../tests/unit/test_chef_server_client.py)
-- **Mock integration tests**: [tests/integration/test_chef_server_mock.py](../tests/integration/test_chef_server_mock.py)
+- **Unit tests**: `tests/unit/test_chef_server_client.py`
+- **Mock integration tests**: `tests/integration/test_chef_server_mock.py`
 - **Live testing guide**: [CHEF_SERVER_TESTING.md](CHEF_SERVER_TESTING.md)
 - **Chef Server API docs**: https://docs.chef.io/server/api_chef_server/

@@ -1273,3 +1273,63 @@ def test_get_supported_versions_always_returns_list(dummy_input):
     assert isinstance(result, list)
     for item in result:
         assert isinstance(item, str)
+
+
+# ---------------------------------------------------------------------------
+# Bash migration property-based tests
+# ---------------------------------------------------------------------------
+
+
+@given(st.text())
+@settings(max_examples=50, deadline=2000)
+def test_parse_bash_script_content_never_raises(script: str) -> None:
+    """parse_bash_script_content handles any text input without raising."""
+    from souschef.parsers.bash import parse_bash_script_content
+
+    result = parse_bash_script_content(script)
+    assert isinstance(result, dict)
+    # All expected keys are present
+    for key in (
+        "packages",
+        "services",
+        "file_writes",
+        "downloads",
+        "idempotency_risks",
+        "shell_fallbacks",
+        "warnings",
+    ):
+        assert key in result
+
+
+@given(st.text())
+@settings(max_examples=50, deadline=2000)
+def test_convert_bash_content_to_ansible_never_raises(script: str) -> None:
+    """convert_bash_content_to_ansible handles any text input without raising."""
+    from souschef.converters.bash_to_ansible import convert_bash_content_to_ansible
+
+    result = convert_bash_content_to_ansible(script)
+    data = json.loads(result)
+    assert data["status"] == "success"
+    assert "playbook_yaml" in data
+
+
+@given(st.text(min_size=1, max_size=200))
+@settings(max_examples=50, deadline=2000)
+def test_parse_bash_script_path_never_raises(path_str: str) -> None:
+    """parse_bash_script handles any string path without raising."""
+    from souschef.server import parse_bash_script
+
+    result = parse_bash_script(path_str)
+    assert isinstance(result, str)
+
+
+@given(st.text(min_size=1, max_size=200))
+@settings(max_examples=50, deadline=2000)
+def test_convert_bash_to_ansible_path_never_raises(path_str: str) -> None:
+    """convert_bash_to_ansible handles any string path without raising."""
+    from souschef.server import convert_bash_to_ansible
+
+    result = convert_bash_to_ansible(path_str)
+    # Must always be valid JSON
+    data = json.loads(result)
+    assert "status" in data
