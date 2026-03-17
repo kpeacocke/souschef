@@ -952,9 +952,9 @@ poetry run pytest tests/integration/test_ir_chef_awx_workflow.py::TestEndToEndCh
 
 These IR workflow tests complement the existing mock infrastructure:
 
-- **Chef Server Mocks** ([test_chef_server_mock.py](../integration/test_chef_server_mock.py)): ~100 tests for Chef API
-- **AWX Mocks** ([test_awx_mock.py](../integration/test_awx_mock.py)): ~50 tests for AWX API
-- **IR Schema Tests** ([test_ir_integration.py](../integration/test_ir_integration.py)): ~20 tests for IR operations
+- **Chef Server Mocks** (`tests/integration/test_chef_server_mock.py`): ~100 tests for Chef API
+- **AWX Mocks** (`tests/integration/test_awx_mock.py`): ~50 tests for AWX API
+- **IR Schema Tests** (`tests/integration/test_ir_integration.py`): ~20 tests for IR operations
 
 **Total Mock Test Coverage**: 178+ tests validating API emulation
 
@@ -1042,10 +1042,10 @@ graph.metadata["awx_compatible"] = "true"
 
 ## Related Documentation
 
-- [Chef Server Mock Testing](MOCK_CHEF.md)
+- [Chef Server Mock Testing](MOCK_CHEF_SERVER.md)
 - [AWX Mock Testing](MOCK_AWX.md)
-- [IR Architecture](../ARCHITECTURE.md#ir-framework)
-- [Migration Workflows](../migration-guide/workflows.md)
+- [IR Architecture](../ARCHITECTURE.md)
+- [Migration Workflows](../migration-guide/overview.md)
 
 ## Contributing
 

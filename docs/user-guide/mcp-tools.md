@@ -26,8 +26,8 @@ SousChef provides **95 specialised MCP tools** for comprehensive Chef-to-Ansible
 | [Migration Assessment](#migration-assessment) | 5 tools | Assess complexity and plan migrations |
 | [Habitat](#habitat) | 1 tool | Parse Habitat plans |
 | [Performance](#performance) | 2 tools | Profile and optimise parsing operations |
-| [CI/CD Pipeline Generation](#ci-cd-pipeline-generation) | 3 tools | Generate Jenkins, GitLab CI, and GitHub Actions |
-| [AWX/AAP Integration](#awx-aap-integration) | 3 tools | Generate AWX job templates, workflows, and inventory |
+| [CI/CD Pipeline Generation](#cicd-pipeline-generation) | 3 tools | Generate Jenkins, GitLab CI, and GitHub Actions |
+| [AWX/AAP Integration](#awxaap-integration) | 3 tools | Generate AWX job templates, workflows, and inventory |
 | [Chef Server Integration](#chef-server-integration) | 3 tools | Validate Chef Server connections and query dynamic inventory |
 | [Ansible Upgrade Planning](#ansible-upgrade-planning) | 5 tools | Assess Ansible environments and plan version upgrades |
 | [SaltStack Migration](#saltstack-migration) | 12 tools | Parse, convert, assess, and plan SaltStack-to-Ansible migrations |

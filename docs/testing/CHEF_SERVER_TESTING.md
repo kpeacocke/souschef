@@ -7,8 +7,8 @@ This guide explains how to test the authenticated Chef Server integration with a
 ## Quick Links
 
 - **[Mock Testing Guide](MOCK_CHEF_SERVER.md)** - Test without a real Chef Server (recommended for development)
-- **[Unit Tests](../../tests/unit/test_chef_server_client.py)** - Auth helpers and utility functions
-- **[Mock Integration Tests](../../tests/integration/test_chef_server_mock.py)** - Full API flow with mocked responses
+- **Unit tests** - `tests/unit/test_chef_server_client.py` (repository source)
+- **Mock integration tests** - `tests/integration/test_chef_server_mock.py` (repository source)
 - **This Guide** - Testing with a live Chef Server instance
 
 ## Prerequisites

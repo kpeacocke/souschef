@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-Common issues and solutions for Chef-to-Ansible migrations.
+Common issues and solutions for migrations to Ansible.
 
 ## Table of Contents
 

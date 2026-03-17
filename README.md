@@ -48,7 +48,7 @@ pip install mcp-souschef
 cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
 
 # Restart your AI assistant and start using
-# Ask: "What Chef migration tools are available?"
+# Ask: "What migration tools are available?"
 ```
 
 **Other MCP clients:** See [config/CONFIGURATION.md](config/CONFIGURATION.md) for VS Code Copilot, custom setups, and Docker deployment.
@@ -164,6 +164,7 @@ souschef ui  # Launch interactive dashboard
 - **[User Guide](docs/user-guide/mcp-tools.md)** — All 95 tools explained with examples
 - **[Chef Migration Guide](docs/migration-guide/overview.md)** — Step-by-step Chef-to-Ansible migration process
 - **[Salt Migration Guide](docs/migration-guide/salt-migration.md)** — Step-by-step SaltStack-to-Ansible migration process
+- **[Bash Migration Guide](docs/migration-guide/bash-migration.md)** — Step-by-step Bash provisioning script migration process
 - **[Puppet Migration Guide](docs/migration-guide/puppet-migration.md)** — Puppet to Ansible conversion
 - **[PowerShell Migration Guide](docs/migration-guide/powershell-migration.md)** — PowerShell to Windows Ansible conversion
 - **[Ansible Upgrades](docs/user-guide/ansible-upgrades.md)** — Version upgrade planning workflows
@@ -177,6 +178,8 @@ souschef ui  # Launch interactive dashboard
 - **[Changelog](CHANGELOG.md)** — Complete release history
 
 ## Recent Updates
+
+**v7.0.0** — First-class multi-platform migration documentation for SaltStack, Bash, PowerShell, and Puppet
 
 **v6.0.0** — v2 core foundation with enhanced migration capabilities
 

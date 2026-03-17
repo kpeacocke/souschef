@@ -1,6 +1,6 @@
 # SousChef Documentation
 
-An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef-to-Ansible migration and Ansible upgrade planning capabilities for enterprise infrastructure and application transformation.
+An AI-powered MCP (Model Context Protocol) server that provides comprehensive Chef, SaltStack, Puppet, PowerShell, and Bash to Ansible migration and Ansible upgrade planning capabilities for enterprise infrastructure and application transformation.
 
 [![PyPI version](https://img.shields.io/pypi/v/mcp-souschef.svg)](https://pypi.org/project/mcp-souschef/)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
@@ -11,7 +11,7 @@ An AI-powered MCP (Model Context Protocol) server that provides comprehensive Ch
 
 SousChef is a complete enterprise-grade platform with six major capabilities:
 
-### 1. Chef to Ansible Migration (39 tools)
+### 1. Core Migration Capability (39 tools)
 
 Complete enterprise-grade migration platform organised across **11 major capability areas** to facilitate Chef-to-Ansible AWX/AAP migrations. From cookbook analysis to deployment pattern conversion, including Chef Habitat to containerised deployments and Chef Server integration, SousChef provides everything needed for a successful infrastructure automation migration.
 
@@ -70,7 +70,7 @@ Enterprise migration for Windows PowerShell provisioning scripts and Linux/Mac B
 
     As a user, you'll primarily interact with the documented tools. Your AI assistant may use additional tools automatically when needed, but you don't need to know about them for successful migrations.
 
-    See [api-reference/](api-reference/) and `souschef/server.py` for the complete authoritative list of all MCP tools.
+    See [API Reference](api-reference/server.md) and `souschef/server.py` for the complete authoritative list of all MCP tools.
 
 
 ## Model Agnostic - Works with Any AI Model
@@ -136,7 +136,7 @@ Comprehensive Ansible upgrade planning based on official compatibility matrices 
 [Learn more about Ansible upgrades →](user-guide/ansible-upgrades.md){ .md-button }
 
 ### :material-web: Visual Migration Planning Interface
-Interactive web-based interface for Chef-to-Ansible migration planning and visualisation.
+Interactive web-based interface for multi-platform-to-Ansible migration planning and visualisation.
 
 [Learn more about the UI →](user-guide/ui.md){ .md-button }
 
@@ -154,7 +154,7 @@ Get started with SousChef in minutes:
     cp config/claude-desktop.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
 
     # Restart Claude and start using
-    # Ask: "What Chef migration tools are available?"
+    # Ask: "What migration tools are available?"
     ```
 
 === "VS Code + Copilot"
@@ -236,7 +236,7 @@ Get started with SousChef in minutes:
 
     ---
 
-    Start migrating Chef cookbooks in minutes
+    Start migrating your automation assets in minutes
 
     [:octicons-arrow-right-24: Quick start](getting-started/quick-start.md)
 
@@ -252,7 +252,7 @@ Get started with SousChef in minutes:
 
     ---
 
-    Plan and execute your Chef-to-Ansible migration
+    Plan and execute your migration to Ansible
 
     [:octicons-arrow-right-24: Migration guide](migration-guide/overview.md)
 
@@ -295,6 +295,14 @@ Get started with SousChef in minutes:
     Convert Windows PowerShell scripts to Ansible Windows automation
 
     [:octicons-arrow-right-24: PowerShell migration guide](migration-guide/powershell-migration.md)
+
+-   :material-bash:{ .lg .middle } __Bash Migration__
+
+    ---
+
+    Convert Bash provisioning scripts to Ansible playbooks and roles
+
+    [:octicons-arrow-right-24: Bash migration guide](migration-guide/bash-migration.md)
 
 -   :material-help-circle:{ .lg .middle } __Troubleshooting__
 

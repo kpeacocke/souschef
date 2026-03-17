@@ -6,7 +6,7 @@ This document consolidates the complete architectural design, implementation roa
 
 **Purpose**: Enable users to assess current Ansible environments for upgrade readiness, generate detailed upgrade plans, check EOL status, and validate collection compatibility.
 
-**Architecture**: Follows SousChef's modular structure with new modules for Ansible version management, complementing existing Chef migration capabilities.
+**Architecture**: Follows SousChef's modular structure with new modules for Ansible version management, complementing existing migration capabilities.
 
 ---
 
@@ -25,7 +25,7 @@ This document consolidates the complete architectural design, implementation roa
 
 ### Feature Scope
 
-SousChef now includes **Ansible upgrade assessment and planning** capabilities based on the official Ansible-Python compatibility matrix. This complements existing Chef→Ansible migration features.
+SousChef now includes **Ansible upgrade assessment and planning** capabilities based on the official Ansible-Python compatibility matrix. This complements existing migration features across supported source platforms.
 
 ### Key Capabilities
 
@@ -204,7 +204,7 @@ def assess_python_upgrade_impact(current: str, target: str, ansible: str) -> dic
 
 ### MCP Tools (server.py)
 
-Five new tools registered in [server.py](../../souschef/server.py):
+Five new tools registered in `server.py`:
 
 ```python
 @mcp.tool()
@@ -230,7 +230,7 @@ def generate_ansible_upgrade_test_plan(environment_path: str) -> str:
 
 ### CLI Commands (cli.py)
 
-New `ansible` command group in [cli.py](../../souschef/cli.py):
+New `ansible` command group in `cli.py`:
 
 ```bash
 souschef ansible assess <environment_path> [--format json|text]

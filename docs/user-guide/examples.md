@@ -1,12 +1,12 @@
 # Real-World Migration Examples
 
-Practical examples demonstrating Chef-to-Ansible migrations using SousChef tools, from simple packages to complex enterprise patterns.
+Practical examples demonstrating migrations to Ansible using SousChef tools, from simple packages to complex enterprise patterns.
 
 ## Example Structure
 
 Each example follows this pattern:
 
-1. **Chef Code** - Original Chef implementation
+1. **Source Code** - Original implementation
 2. **Analysis** - SousChef tool usage to understand the code
 3. **Conversion** - Automated conversion to Ansible
 4. **Validation** - Testing and verification

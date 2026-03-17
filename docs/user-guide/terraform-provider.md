@@ -1,6 +1,6 @@
 # Terraform Provider
 
-SousChef includes a Terraform provider that enables infrastructure-as-code management of Chef to Ansible migrations, Habitat to Docker conversions, and InSpec profile transformations.
+SousChef includes a Terraform provider that enables infrastructure-as-code management of migrations to Ansible, Habitat to Docker conversions, and InSpec profile transformations.
 
 ## Overview
 
@@ -870,7 +870,7 @@ resource "souschef_batch_migration" "batch_2" {
 
 ## Next Steps
 
-- Review the [Migration Guide](../migration-guide/planning-migration.md) for best practices
+- Review the [Migration Guide](../migration-guide/overview.md) for best practices
 - See [CLI Usage](cli-usage.md) for direct SousChef CLI commands
 - Check [API Reference](../api-reference/converters.md) for programmatic usage
 

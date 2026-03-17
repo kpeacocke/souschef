@@ -104,8 +104,7 @@ Each with dependencies defined per the full matrix in `docs/ARCHITECTURE.md`.
 ---
 
 **Reference Documentation:**
-- Full dependency matrix: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) (lines 335-365)
-- Compliance validation: [ARCHITECTURE_COMPLIANCE.md](../ARCHITECTURE_COMPLIANCE.md)
-- Growth guidelines: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) (lines 550-612)
+- Full dependency matrix: [ARCHITECTURE.md](ARCHITECTURE.md) (lines 335-365)
+- Growth guidelines: [ARCHITECTURE.md](ARCHITECTURE.md) (lines 550-612)
 
 **Questions?** All rules are defined in the architectural declaration - zero ambiguity!

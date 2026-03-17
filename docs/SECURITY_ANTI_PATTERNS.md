@@ -420,9 +420,8 @@ For each anti-pattern, tests should verify:
 - [InSpec Security Testing](https://www.inspec.io/docs/)
 
 ### Related SousChef Documentation
-- [SECURITY.md](../SECURITY.md) - Security policy and features
-- [SECURITY_REVIEW.md](../SECURITY_REVIEW.md) - Comprehensive security assessment
-- [docs/migration-guide/security-considerations.md](migration-guide/security-considerations.md) - Migration security
+- [SECURITY.md](SECURITY.md) - Security policy and features
+- [Migration Safety and Validation](migration-guide/safety-and-validation.md) - Migration security practices
 
 ---
 
@@ -436,4 +435,4 @@ When adding new test fixtures with security anti-patterns:
 4. Include test cases that verify security warnings
 5. Never use real credentials or sensitive data
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for full guidelines.
+See [Contributing](contributing.md) for full guidelines.

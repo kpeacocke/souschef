@@ -26,7 +26,7 @@ SousChef implements comprehensive path containment validation to prevent directo
 
 **Test Coverage:**
 
-Comprehensive security tests in [tests/unit/test_security.py](../tests/unit/test_security.py):
+Comprehensive security tests in the repository (`tests/unit/test_security.py`):
 - 42+ security-focused tests
 - Path traversal attack scenarios
 - Symlink attack prevention
@@ -253,4 +253,4 @@ SousChef is provided "as-is" under the MIT License. Users are responsible for:
 - Maintaining secure deployment environments
 - Testing in non-production environments first
 
-For the full license text, see [LICENSE](../LICENSE).
+For the full license text, see: https://github.com/kpeacocke/souschef/blob/main/LICENSE

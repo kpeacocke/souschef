@@ -1,6 +1,6 @@
 # Migration Guide Overview
 
-This guide provides a comprehensive methodology for migrating from Chef to Ansible, leveraging SousChef's MCP tools and proven enterprise practices.
+This guide provides a comprehensive methodology for migrating from Chef, SaltStack, Puppet, PowerShell, or Bash to Ansible, leveraging SousChef's MCP tools and proven enterprise practices.
 
 ## Migration Philosophy
 
@@ -14,6 +14,15 @@ This guide provides a comprehensive methodology for migrating from Chef to Ansib
 3. **Continuous Validation**: Test conversions at every step
 4. **Automation-Driven**: Leverage SousChef tools for consistency
 5. **Documentation**: Maintain clear records throughout the migration
+
+## Platform-Specific Guides
+
+This overview describes the shared migration lifecycle. Use the dedicated guide for platform-specific syntax, edge-cases, and tooling:
+
+- [SaltStack to Ansible](salt-migration.md)
+- [Bash to Ansible](bash-migration.md)
+- [PowerShell to Ansible](powershell-migration.md)
+- [Puppet to Ansible](puppet-migration.md)
 
 ---
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* **release:** Bump major version to `7.0.0`
+* **documentation:** Promote SaltStack, Puppet, PowerShell, and Bash migration support to first-class docs coverage
+  - Unified product positioning as multi-platform migration (not Chef-only)
+  - Added dedicated Bash migration guide and linked it from navigation and quick-start docs
+  - Expanded migration navigation to include Salt, Puppet, PowerShell, and Bash guides
+  - Refreshed MCP server README to reflect multi-platform capabilities and current tooling scope
+
 ### Added
 
 * **SaltStack Migration:** Enterprise-grade SaltStack to AAP/Ansible migration (12 MCP tools)

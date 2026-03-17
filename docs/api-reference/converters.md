@@ -1,10 +1,10 @@
 # Converters API
 
-Chef-to-Ansible conversion modules for playbooks, resources, and templates.
+Multi-platform-to-Ansible conversion modules for playbooks, resources, scripts, and templates.
 
 ## Overview
 
-The `souschef.converters` package transforms parsed Chef artifacts into Ansible equivalents. Converters maintain logic and intent while adapting to Ansible idioms.
+The `souschef.converters` package transforms parsed source artefacts into Ansible equivalents. Converters maintain logic and intent while adapting to Ansible idioms.
 
 ---
 

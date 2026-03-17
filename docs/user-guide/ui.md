@@ -1,6 +1,6 @@
 # Visual Migration Planning Interface
 
-SousChef provides a modern web-based interface for interactive Chef-to-Ansible migration planning and visualisation. The UI complements the MCP tools and CLI with visual workflows, real-time analysis, and interactive dependency mapping.
+SousChef provides a modern web-based interface for interactive multi-platform-to-Ansible migration planning and visualisation. The UI complements the MCP tools and CLI with visual workflows, real-time analysis, and interactive dependency mapping.
 
 ## Overview
 
@@ -58,7 +58,7 @@ services:
 
 ### Unified Cookbook Migration Interface
 
-The **Migrate Cookbook** page provides a comprehensive interface for end-to-end Chef-to-Ansible migrations with analysis, conversion, and deployment capabilities:
+The **Migrate Cookbook** page provides a comprehensive interface for end-to-end migrations with analysis, conversion, and deployment capabilities:
 
 #### Analysis & Conversion
 - **Archive Upload**: Secure handling of ZIP and TAR archives with size limits and security validation
@@ -178,6 +178,34 @@ When you click **Convert to Ansible** or **Generate Ansible Role**, the page add
 - **Quality score panel** — letter grade (A–F), structured coverage percentage, shell fallback count, and ranked improvement list
 - **AAP hints panel** — recommended Execution Environment image, credential types, survey variables derived from `export VAR=val` statements, and actionable notes
 - **Playbook YAML** or **Role files** — syntax-highlighted output with a **Download** button
+
+## SaltStack Migration
+
+The **Salt Migration** page provides an interactive workflow for analysing and converting Salt states, pillars, and targeting definitions.
+
+### Location
+
+Navigate to: **Ansible** tab → **Salt Migration**
+
+### Core Tabs and Actions
+
+| Tab | Primary action |
+|-----|----------------|
+| Parse SLS | Parse a single `.sls` state file and inspect extracted states, modules, and dependencies |
+| Convert to Ansible | Convert SLS content to Ansible playbook YAML |
+| Pillar Files | Parse pillar files and convert to Ansible variable structures |
+| Directory Scan | Discover states and top files across a Salt tree |
+| Assessment | Compute migration complexity and effort indicators |
+| Migration Plan | Generate phased migration plans for AWX/AAP/Core targets |
+| Batch Convert | Convert a full Salt state tree into role-oriented output |
+| Inventory | Convert `top.sls` targeting into Ansible inventory output |
+
+### What the UI Highlights
+
+- State module coverage and unsupported patterns requiring review
+- Pillar variable extraction and vault-suitable secret candidates
+- Dependency visibility for safer migration sequencing
+- Structured conversion output and downloadable artefacts
 
 ## Archive Upload Security
 
@@ -561,7 +589,7 @@ Full directory-to-roles conversion for large-scale migrations.
 
 - **[MCP Tools Reference](mcp-tools.md)** - All available MCP tools
 - **[CLI Usage Guide](cli-usage.md)** - Command-line interface
-- **[Migration Guide](../migration-guide/overview.md)** - Complete Chef migration methodology
+- **[Migration Guide](../migration-guide/overview.md)** - Complete migration methodology
 - **[Salt Migration Guide](../migration-guide/salt-migration.md)** - Complete Salt migration methodology
-- **[Security Documentation](../security.md)** - Security features and best practices</content>
+- **[Security Documentation](../SECURITY.md)** - Security features and best practices</content>
 <parameter name="filePath">/workspaces/souschef/docs/user-guide/ui.md

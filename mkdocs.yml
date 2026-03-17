@@ -1,5 +1,5 @@
 site_name: SousChef Documentation
-site_description: AI-powered MCP server for Chef to Ansible conversion
+site_description: AI-powered MCP server for multi-platform to Ansible migration and Ansible upgrade planning
 site_author: SousChef Contributors
 # site_url: https://kpeacocke.github.io/souschef/  # Commented out for local dev
 
@@ -45,7 +45,9 @@ plugins:
   - search:
       lang: en
   - git-revision-date-localized:
-      enable_creation_date: true
+      enable_creation_date: false
+      enable_git_follow: false
+      fallback_to_build_date: true
       type: timeago
   - mkdocstrings:
       handlers:
@@ -97,13 +99,23 @@ nav:
   - User Guide:
       - MCP Tools: user-guide/mcp-tools.md
       - CLI Usage: user-guide/cli-usage.md
+      - UI: user-guide/ui.md
+      - Ansible Upgrades: user-guide/ansible-upgrades.md
+      - Performance: user-guide/performance.md
+      - Terraform Provider: user-guide/terraform-provider.md
       - Examples: user-guide/examples.md
       - Data Persistence: user-guide/data-persistence.md
       - Troubleshooting: user-guide/troubleshooting.md
   - Migration Guide:
       - Overview: migration-guide/overview.md
+      - SaltStack Migration: migration-guide/salt-migration.md
+      - Bash Migration: migration-guide/bash-migration.md
+      - PowerShell Migration: migration-guide/powershell-migration.md
+      - Puppet Migration: migration-guide/puppet-migration.md
       - Assessment: migration-guide/assessment.md
       - Conversion: migration-guide/conversion.md
+      - Safety and Validation: migration-guide/safety-and-validation.md
+      - Detailed Planning: migration-guide/detailed-planning.md
       - Deployment: migration-guide/deployment.md
       - Advanced Workflows: migration-guide/advanced-workflows.md
   - API Reference:
@@ -113,6 +125,21 @@ nav:
       - Converters: api-reference/converters.md
       - Core Utilities: api-reference/core.md
       - Migration v2.0: api-reference/migration-v2.md
+      - Ansible Upgrade Design: reference/ansible-upgrade-design.md
+  - Security:
+      - Security Overview: SECURITY.md
+      - Security Anti-Patterns: SECURITY_ANTI_PATTERNS.md
+      - Security Headers Deployment: SECURITY_HEADERS_DEPLOYMENT.md
+  - Testing:
+      - Chef Server Testing: testing/CHEF_SERVER_TESTING.md
+      - Mock AWX: testing/MOCK_AWX.md
+      - Mock Chef Server: testing/MOCK_CHEF_SERVER.md
+      - Mock IR Workflow: testing/MOCK_IR_WORKFLOW.md
+  - Operations:
+      - Docker Deployment: docker-deployment.md
+      - Docker Setup: docker-setup.md
+      - IR Reference: IR.md
+      - SonarCloud Phase 1 Extension: SONARCLOUD_PHASE1_EXTENSION.md
   - Contributing:
       - Contributing Guide: contributing.md
       - Architecture Guide: ARCHITECTURE.md
