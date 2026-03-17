@@ -677,7 +677,9 @@ class TestChocolateyPackageNameNormalisation:
         """Return extra_vars dict produced for a single chocolatey_install action."""
         from souschef.generators.powershell import generate_powershell_awx_job_template
 
-        ir = _minimal_ir([_action("chocolatey_install", {"package_name": package_name})])
+        ir = _minimal_ir(
+            [_action("chocolatey_install", {"package_name": package_name})]
+        )
         result = generate_powershell_awx_job_template(ir, include_survey=False)
         start = result.index("```json\n") + len("```json\n")
         end = result.index("\n```", start)

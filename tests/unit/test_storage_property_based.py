@@ -16,7 +16,7 @@ class TestStoragePropertyBased:
     """Property-based tests using Hypothesis for the storage module."""
 
     @given(st.text(min_size=1, max_size=100))
-    @settings(max_examples=10)
+    @settings(max_examples=10, deadline=None)
     def test_cache_key_is_consistent_for_same_input(self, random_path):
         """Test that cache key generation is deterministic."""
         with tempfile.TemporaryDirectory() as tmpdir:

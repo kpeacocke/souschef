@@ -105,8 +105,9 @@ from souschef.ui.pages.cookbook_analysis_utilities import (
     _sanitize_filename,
 )
 
-# Explicit re-exports so star-imports expose these symbols; also silences
-# F401 warnings for the imports above that are unused in this module directly.
+# Star-import surface: defines which symbols are exported from this module when
+# callers use ``from ... import *``.  The import-line comments above already
+# suppress the unused-import (F401) warnings for these re-exports.
 __all__ = [
     "_validate_tar_file_security",
     "_validate_zip_file_security",
