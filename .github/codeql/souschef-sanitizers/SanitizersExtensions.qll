@@ -19,7 +19,22 @@ class SousChefPathSanitizer extends PathInjection::Sanitizer {
   SousChefPathSanitizer() {
     this =
       API::moduleImport("souschef.core.path_utils")
-          .getMember(["_safe_join", "_validated_candidate", "_ensure_within_base_path"])
+          .getMember([
+            "_safe_join",
+            "_validated_candidate",
+            "_ensure_within_base_path",
+            "_resolve_path_under_base"
+          ])
           .getACall()
+      or
+      this =
+        API::moduleImport("souschef.server")
+            .getMember(["_normalise_workspace_path", "_validate_conversion_paths"])
+            .getACall()
+      or
+      this =
+        API::moduleImport("souschef.assessment")
+            .getMember(["_normalize_cookbook_root"])
+            .getACall()
   }
 }

@@ -12,7 +12,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from souschef.core.path_utils import _check_symlink_safety, _normalize_path
+from souschef.core.path_utils import (
+    _check_symlink_safety,
+    _get_workspace_root,
+    _normalize_path,
+    _validated_candidate,
+)
 
 # Constants
 HOSTS_FILE = "hosts.yml"
@@ -702,7 +707,10 @@ def generate_ansible_repository(
         _check_symlink_safety(_normalize_path(output_path), Path(output_path))
 
         # Validate and normalise the output path
-        repo_path = _normalize_path(output_path)
+        repo_path = _validated_candidate(
+            _normalize_path(output_path),
+            _get_workspace_root(),
+        )
     except ValueError as e:
         return {
             "success": False,
@@ -780,7 +788,10 @@ def create_ansible_repository_from_roles(
     """
     try:
         _check_symlink_safety(_normalize_path(roles_path), Path(roles_path))
-        roles_dir = _normalize_path(roles_path)
+        roles_dir = _validated_candidate(
+            _normalize_path(roles_path),
+            _get_workspace_root(),
+        )
 
         if not roles_dir.exists():  # NOSONAR
             return {

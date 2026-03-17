@@ -4309,11 +4309,7 @@ def _convert_recipes(
     cookbook_dir: Path, role_dir: Path, conversion_summary: dict
 ) -> None:
     """Convert Chef recipes to Ansible tasks."""
-    cookbook_base = os.path.realpath(str(cookbook_dir))
-    recipes_dir_str = os.path.realpath(os.path.join(cookbook_base, "recipes"))  # noqa: PTH111, PTH118
-    if os.path.commonpath([cookbook_base, recipes_dir_str]) != cookbook_base:
-        raise RuntimeError("Unsafe recipes path outside cookbook directory")
-    recipes_dir = Path(recipes_dir_str)
+    recipes_dir = _safe_join(cookbook_dir, "recipes")
     if not recipes_dir.exists():  # NOSONAR
         conversion_summary["warnings"].append(
             f"No recipes directory found in {cookbook_dir.name}. "

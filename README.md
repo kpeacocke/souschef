@@ -196,6 +196,10 @@ poetry install
 poetry run pytest           # Run tests
 poetry run ruff check .     # Lint
 poetry run mypy souschef    # Type check
+
+# If you change terraform-provider/
+cd terraform-provider
+go test ./...               # Run Go tests
 ```
 
 **Standards:** Zero warnings policy, type hints required, 90%+ test coverage, Australian English spelling.
