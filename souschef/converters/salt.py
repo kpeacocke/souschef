@@ -25,22 +25,30 @@ from souschef.parsers.salt import (
     _parse_sls_states,
 )
 
+# Module name constants to avoid duplicate literals (S1192)
+_MOD_PACKAGE = "ansible.builtin.package"
+_MOD_FILE = "ansible.builtin.file"
+_MOD_LINEINFILE = "ansible.builtin.lineinfile"
+_MOD_BLOCKINFILE = "ansible.builtin.blockinfile"
+_MOD_SERVICE = "ansible.builtin.service"
+_MAIN_YML = "main.yml"
+
 # Ansible module mappings for Salt state categories
 _ANSIBLE_MODULE_MAP: dict[str, str] = {
-    "package": "ansible.builtin.package",
+    "package": _MOD_PACKAGE,
     "file_managed": "ansible.builtin.template",
-    "file_directory": "ansible.builtin.file",
-    "file_absent": "ansible.builtin.file",
-    "file_symlink": "ansible.builtin.file",
+    "file_directory": _MOD_FILE,
+    "file_absent": _MOD_FILE,
+    "file_symlink": _MOD_FILE,
     "file_recurse": "ansible.builtin.copy",
-    "file_touch": "ansible.builtin.file",
-    "file_replace": "ansible.builtin.lineinfile",
-    "file_line": "ansible.builtin.lineinfile",
+    "file_touch": _MOD_FILE,
+    "file_replace": _MOD_LINEINFILE,
+    "file_line": _MOD_LINEINFILE,
     "file_copy": "ansible.builtin.copy",
-    "file_append": "ansible.builtin.blockinfile",
-    "file_prepend": "ansible.builtin.blockinfile",
+    "file_append": _MOD_BLOCKINFILE,
+    "file_prepend": _MOD_BLOCKINFILE,
     "file_patch": "ansible.builtin.patch",
-    "service": "ansible.builtin.service",
+    "service": _MOD_SERVICE,
     "command": "ansible.builtin.command",
     "user": "ansible.builtin.user",
     "group": "ansible.builtin.group",
@@ -50,7 +58,7 @@ _ANSIBLE_MODULE_MAP: dict[str, str] = {
     "mount": "ansible.posix.mount",
     "archive": "ansible.builtin.unarchive",
     "sysctl": "ansible.posix.sysctl",
-    "host": "ansible.builtin.lineinfile",
+    "host": _MOD_LINEINFILE,
 }
 
 
@@ -531,6 +539,27 @@ def convert_salt_sls_to_ansible(sls_path: str, playbook_name: str = "") -> str:
     return json.dumps(result, indent=2)
 
 
+def _render_var_line(var_name: str, var_value: Any) -> str:
+    """
+    Render a single Ansible variable definition as a YAML line.
+
+    Args:
+        var_name: Variable name.
+        var_value: Variable value.
+
+    Returns:
+        YAML line string.
+
+    """
+    if var_value is None:
+        return f"    {var_name}: null"
+    if isinstance(var_value, str) and "{{" in var_value:
+        return f"    {var_name}: {var_value}"
+    if isinstance(var_value, str):
+        return f"    {var_name}: '{var_value}'"
+    return f"    {var_name}: {var_value}"
+
+
 def _render_playbook_yaml(
     name: str,
     tasks: list[dict[str, Any]],
@@ -557,14 +586,7 @@ def _render_playbook_yaml(
     if ansible_vars:
         lines.append("  vars:")
         for var_name, var_value in ansible_vars.items():
-            if var_value is None:
-                lines.append(f"    {var_name}: null")
-            elif isinstance(var_value, str) and "{{" in var_value:
-                lines.append(f"    {var_name}: {var_value}")
-            elif isinstance(var_value, str):
-                lines.append(f"    {var_name}: '{var_value}'")
-            else:
-                lines.append(f"    {var_name}: {var_value}")
+            lines.append(_render_var_line(var_name, var_value))
 
     if tasks:
         lines.append("  tasks:")
@@ -584,18 +606,19 @@ def _render_param_value(lines: list[str], pk: str, pv: Any) -> None:
         pv: Parameter value.
 
     """
-    if isinstance(pv, list):
-        lines.append(f"        {pk}:")
-        for item in pv:
-            lines.append(f"          - {item}")
-    elif pv is None:
-        lines.append(f"        {pk}:")
-    elif isinstance(pv, bool):
-        lines.append(f"        {pk}: {str(pv).lower()}")
-    elif isinstance(pv, (int, float)):
-        lines.append(f"        {pk}: {pv}")
-    else:
-        lines.append(f"        {pk}: {pv}")
+    match pv:
+        case list():
+            lines.append(f"        {pk}:")
+            for item in pv:
+                lines.append(f"          - {item}")
+        case None:
+            lines.append(f"        {pk}:")
+        case bool():
+            lines.append(f"        {pk}: {str(pv).lower()}")
+        case int() | float():
+            lines.append(f"        {pk}: {pv}")
+        case _:
+            lines.append(f"        {pk}: {pv}")
 
 
 def _render_task_lines(lines: list[str], task: dict[str, Any]) -> None:
@@ -730,6 +753,68 @@ def _top_to_ansible_inventory(top_data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_nested_yaml_value(val: Any, indent: int) -> list[str]:
+    """
+    Render a nested dict value as YAML lines with given indentation.
+
+    Args:
+        val: Value to render (expected to be a dict).
+        indent: Indentation level in spaces.
+
+    Returns:
+        List of YAML lines.
+
+    """
+    pad = " " * indent
+    rendered: list[str] = []
+    if not isinstance(val, dict):
+        return rendered
+    for k, v in val.items():
+        if isinstance(v, dict):
+            rendered.append(f"{pad}{k}:")
+            rendered.extend(_render_nested_yaml_value(v, indent + 2))
+        elif isinstance(v, list):
+            rendered.append(f"{pad}{k}:")
+            for item in v:
+                rendered.append(f"{pad}  - {item}")
+        elif isinstance(v, bool):
+            rendered.append(f"{pad}{k}: {str(v).lower()}")
+        elif v is None:
+            rendered.append(f"{pad}{k}:")
+        elif isinstance(v, (int, float)):
+            rendered.append(f"{pad}{k}: {v}")
+        else:
+            rendered.append(f"{pad}{k}: '{v}'")
+    return rendered
+
+
+def _render_pillar_var_line(var_name: str, value: Any, lines: list[str]) -> None:
+    """
+    Append the YAML representation of a pillar variable to ``lines``.
+
+    Args:
+        var_name: Ansible variable name (may include a prefix).
+        value: Pillar value to render.
+        lines: Output line list to append to.
+
+    """
+    if isinstance(value, dict):
+        lines.append(f"{var_name}:")
+        lines.extend(_render_nested_yaml_value(value, 2))
+    elif isinstance(value, list):
+        lines.append(f"{var_name}:")
+        for item in value:
+            lines.append(f"  - {item}")
+    elif isinstance(value, bool):
+        lines.append(f"{var_name}: {str(value).lower()}")
+    elif value is None:
+        lines.append(f"{var_name}:")
+    elif isinstance(value, (int, float)):
+        lines.append(f"{var_name}: {value}")
+    else:
+        lines.append(f"{var_name}: '{value}'")
+
+
 def _pillar_to_vault_vars(pillar_vars: dict[str, Any], prefix: str = "") -> str:
     """
     Convert pillar variable dict to Ansible vars file YAML.
@@ -753,46 +838,9 @@ def _pillar_to_vault_vars(pillar_vars: dict[str, Any], prefix: str = "") -> str:
         "",
     ]
 
-    def _render_value(val: Any, indent: int) -> list[str]:
-        """Render a value as YAML lines with given indentation."""
-        pad = " " * indent
-        rendered: list[str] = []
-        if isinstance(val, dict):
-            for k, v in val.items():
-                if isinstance(v, dict):
-                    rendered.append(f"{pad}{k}:")
-                    rendered.extend(_render_value(v, indent + 2))
-                elif isinstance(v, list):
-                    rendered.append(f"{pad}{k}:")
-                    for item in v:
-                        rendered.append(f"{pad}  - {item}")
-                elif isinstance(v, bool):
-                    rendered.append(f"{pad}{k}: {str(v).lower()}")
-                elif v is None:
-                    rendered.append(f"{pad}{k}:")
-                elif isinstance(v, (int, float)):
-                    rendered.append(f"{pad}{k}: {v}")
-                else:
-                    rendered.append(f"{pad}{k}: '{v}'")
-        return rendered
-
     for key, value in pillar_vars.items():
         var_name = f"{prefix}_{key}" if prefix else key
-        if isinstance(value, dict):
-            lines.append(f"{var_name}:")
-            lines.extend(_render_value(value, 2))
-        elif isinstance(value, list):
-            lines.append(f"{var_name}:")
-            for item in value:
-                lines.append(f"  - {item}")
-        elif isinstance(value, bool):
-            lines.append(f"{var_name}: {str(value).lower()}")
-        elif value is None:
-            lines.append(f"{var_name}:")
-        elif isinstance(value, (int, float)):
-            lines.append(f"{var_name}: {value}")
-        else:
-            lines.append(f"{var_name}: '{value}'")
+        _render_pillar_var_line(var_name, value, lines)
 
     return "\n".join(lines) + "\n"
 
@@ -855,6 +903,237 @@ def convert_salt_pillar_to_vars(pillar_path: str, output_format: str = "yaml") -
         "format": output_format,
     }
     return json.dumps(result, indent=2)
+
+
+def _collect_role_data(
+    role_name: str,
+    rel_paths: list[str],
+    safe_salt: Any,
+    workspace_root: Any,
+    warnings: list[str],
+    parse_sls_states: Any,
+    extract_pillars: Any,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """
+    Collect all tasks, handlers and defaults for a single Ansible role.
+
+    Reads each SLS file belonging to the role, converts states to tasks,
+    extracts handlers, and accumulates pillar-derived defaults.
+
+    Args:
+        role_name: Name of the role being built.
+        rel_paths: List of SLS file paths relative to ``safe_salt``.
+        safe_salt: Validated, absolute Path to the Salt states root.
+        workspace_root: Workspace root Path for path-safety checks.
+        warnings: Mutable list to append warning messages to.
+        parse_sls_states: Callable that parses SLS content into state dicts.
+        extract_pillars: Callable that extracts pillar references from content.
+
+    Returns:
+        Tuple of ``(all_tasks, all_handlers, all_defaults)``.
+
+    """
+    all_tasks: list[dict[str, Any]] = []
+    all_handlers: list[dict[str, Any]] = []
+    all_defaults: dict[str, Any] = {}
+
+    for rel_path in rel_paths:
+        file_path = safe_salt / rel_path
+        try:
+            content = safe_read_text(file_path, workspace_root, encoding="utf-8")
+        except (PermissionError, OSError) as exc:
+            warnings.append(f"Could not read {rel_path}: {exc}")
+            continue
+
+        states = parse_sls_states(content)
+        handlers = _extract_watch_handlers(states)
+        pillars = extract_pillars(content)
+
+        for state in states:
+            all_tasks.append(_convert_state_to_task(state))
+
+        all_handlers.extend(handlers)
+
+        for key in pillars:
+            var_name = key.replace(".", "_").replace("-", "_").replace(":", "_")
+            if var_name not in all_defaults:
+                all_defaults[var_name] = f"{{{{ {var_name} | default('') }}}}"
+
+    return all_tasks, all_handlers, all_defaults
+
+
+def _write_role_files(
+    role_name: str,
+    role_dir: Any,
+    safe_out: Any,
+    workspace_root: Any,
+    all_tasks: list[dict[str, Any]],
+    all_handlers: list[dict[str, Any]],
+    all_defaults: dict[str, Any],
+    files_written: list[str],
+    warnings: list[str],
+) -> list[str] | None:
+    """
+    Write all files for a single Ansible role to the output directory.
+
+    Creates the ``tasks/``, ``handlers/``, ``defaults/``, and ``meta/``
+    subdirectories and their ``main.yml`` files.
+
+    Args:
+        role_name: Name of the role.
+        role_dir: Absolute Path to the role directory.
+        safe_out: Absolute Path to the output root.
+        workspace_root: Workspace root Path for path-safety checks.
+        all_tasks: List of Ansible task dicts.
+        all_handlers: List of Ansible handler dicts.
+        all_defaults: Dict of default variable definitions.
+        files_written: Mutable list to append written file paths to.
+        warnings: Mutable list to append warning messages to.
+
+    Returns:
+        List of four relative path strings (tasks, handlers, defaults, meta)
+        if successful, or ``None`` if the role directories could not be created.
+
+    """
+    try:
+        role_tasks_dir = role_dir / "tasks"
+        safe_mkdir(role_tasks_dir, workspace_root, parents=True, exist_ok=True)
+        role_handlers_dir = role_dir / "handlers"
+        safe_mkdir(role_handlers_dir, workspace_root, parents=True, exist_ok=True)
+        role_defaults_dir = role_dir / "defaults"
+        safe_mkdir(role_defaults_dir, workspace_root, parents=True, exist_ok=True)
+        role_meta_dir = role_dir / "meta"
+        safe_mkdir(role_meta_dir, workspace_root, parents=True, exist_ok=True)
+    except PermissionError as exc:
+        warnings.append(f"Cannot create role directory for {role_name}: {exc}")
+        return None
+
+    tasks_file = role_tasks_dir / _MAIN_YML
+    safe_write_text(
+        tasks_file,
+        workspace_root,
+        _render_playbook_yaml(role_name, all_tasks, {}),
+        encoding="utf-8",
+    )
+    tasks_rel = str(tasks_file.relative_to(safe_out))
+    files_written.append(tasks_rel)
+
+    handlers_file = role_handlers_dir / _MAIN_YML
+    handlers_yaml = (
+        _render_playbook_yaml(f"{role_name}_handlers", all_handlers, {})
+        if all_handlers
+        else "---\n# No handlers\n"
+    )
+    safe_write_text(handlers_file, workspace_root, handlers_yaml, encoding="utf-8")
+    handlers_rel = str(handlers_file.relative_to(safe_out))
+    files_written.append(handlers_rel)
+
+    defaults_file = role_defaults_dir / _MAIN_YML
+    safe_write_text(
+        defaults_file,
+        workspace_root,
+        _pillar_to_vault_vars(all_defaults),
+        encoding="utf-8",
+    )
+    defaults_rel = str(defaults_file.relative_to(safe_out))
+    files_written.append(defaults_rel)
+
+    meta_file = role_meta_dir / _MAIN_YML
+    meta_content = (
+        "---\ngalaxy_info:\n"
+        f"  role_name: {role_name}\n"
+        "  author: souschef\n"
+        "  description: Converted from SaltStack\n"
+        "  min_ansible_version: '2.9'\n"
+        "dependencies: []\n"
+    )
+    safe_write_text(meta_file, workspace_root, meta_content, encoding="utf-8")
+    meta_rel = str(meta_file.relative_to(safe_out))
+    files_written.append(meta_rel)
+
+    return [tasks_rel, handlers_rel, defaults_rel, meta_rel]
+
+
+def _write_site_yml(
+    safe_out: Any,
+    workspace_root: Any,
+    roles_created: list[str],
+    files_written: list[str],
+    warnings: list[str],
+) -> None:
+    """
+    Write the ``site.yml`` master playbook for all converted roles.
+
+    Args:
+        safe_out: Absolute Path to the output root.
+        workspace_root: Workspace root Path for path-safety checks.
+        roles_created: List of role names to include in the playbook.
+        files_written: Mutable list to append written file paths to.
+        warnings: Mutable list to append warning messages to.
+
+    """
+    site_lines = ["---"]
+    for role_name in roles_created:
+        site_lines.extend(
+            [
+                f"- name: Apply {role_name} role",
+                "  hosts: all",
+                "  become: true",
+                "  roles:",
+                f"    - {role_name}",
+            ]
+        )
+    try:
+        safe_mkdir(safe_out, workspace_root, parents=True, exist_ok=True)
+        safe_write_text(
+            safe_out / "site.yml",
+            workspace_root,
+            "\n".join(site_lines) + "\n",
+            encoding="utf-8",
+        )
+        files_written.append("site.yml")
+    except PermissionError as exc:
+        warnings.append(f"Could not write site.yml: {exc}")
+
+
+def _write_inventory_from_top(
+    safe_salt: Any,
+    safe_out: Any,
+    workspace_root: Any,
+    files_written: list[str],
+    warnings: list[str],
+    parse_sls_yaml: Any,
+    parse_top_environments: Any,
+) -> None:
+    """
+    Generate ``inventory/hosts`` from ``top.sls`` if it exists.
+
+    Args:
+        safe_salt: Absolute Path to the Salt states root.
+        safe_out: Absolute Path to the output root.
+        workspace_root: Workspace root Path for path-safety checks.
+        files_written: Mutable list to append written file paths to.
+        warnings: Mutable list to append warning messages to.
+        parse_sls_yaml: Callable that parses SLS YAML content.
+        parse_top_environments: Callable that extracts environments from top data.
+
+    """
+    candidate = safe_salt / "top.sls"
+    if not safe_exists(candidate, workspace_root):
+        return
+    try:
+        top_content = safe_read_text(candidate, workspace_root, encoding="utf-8")
+        top_data = parse_sls_yaml(top_content)
+        environments = parse_top_environments(top_data)
+        inventory_str = _top_to_ansible_inventory({"environments": environments})
+        inv_dir = safe_out / "inventory"
+        safe_mkdir(inv_dir, workspace_root, parents=True, exist_ok=True)
+        safe_write_text(
+            inv_dir / "hosts", workspace_root, inventory_str, encoding="utf-8"
+        )
+        files_written.append("inventory/hosts")
+    except (PermissionError, OSError) as exc:
+        warnings.append(f"Could not generate inventory: {exc}")
 
 
 def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
@@ -924,146 +1203,41 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
         role_files.setdefault(role_name, []).append(rel_path)
 
     for role_name, rel_paths in role_files.items():
-        role_dir = safe_out / "roles" / role_name
-        all_tasks: list[dict[str, Any]] = []
-        all_handlers: list[dict[str, Any]] = []
-        all_defaults: dict[str, Any] = {}
-
-        for rel_path in rel_paths:
-            file_path = safe_salt / rel_path
-            try:
-                content = safe_read_text(file_path, workspace_root, encoding="utf-8")
-            except (PermissionError, OSError) as exc:
-                warnings.append(f"Could not read {rel_path}: {exc}")
-                continue
-
-            states = _parse_sls_states(content)
-            handlers = _extract_watch_handlers(states)
-            pillars = _extract_pillars(content)
-
-            for state in states:
-                task = _convert_state_to_task(state)
-                all_tasks.append(task)
-
-            all_handlers.extend(handlers)
-
-            # Pillar keys become defaults
-            for key in pillars:
-                var_name = key.replace(".", "_").replace("-", "_").replace(":", "_")
-                if var_name not in all_defaults:
-                    all_defaults[var_name] = f"{{{{ {var_name} | default('') }}}}"
-
-        # Write role files
-        try:
-            role_tasks_dir = role_dir / "tasks"
-            safe_mkdir(role_tasks_dir, workspace_root, parents=True, exist_ok=True)
-
-            role_handlers_dir = role_dir / "handlers"
-            safe_mkdir(role_handlers_dir, workspace_root, parents=True, exist_ok=True)
-
-            role_defaults_dir = role_dir / "defaults"
-            safe_mkdir(role_defaults_dir, workspace_root, parents=True, exist_ok=True)
-
-            role_meta_dir = role_dir / "meta"
-            safe_mkdir(role_meta_dir, workspace_root, parents=True, exist_ok=True)
-
-        except PermissionError as exc:
-            warnings.append(f"Cannot create role directory for {role_name}: {exc}")
-            continue
-
-        # tasks/main.yml
-        tasks_file = role_tasks_dir / "main.yml"
-        tasks_content = _render_playbook_yaml(role_name, all_tasks, {})
-        safe_write_text(tasks_file, workspace_root, tasks_content, encoding="utf-8")
-        tasks_rel = str(tasks_file.relative_to(safe_out))
-        files_written.append(tasks_rel)
-
-        # handlers/main.yml
-        handlers_file = role_handlers_dir / "main.yml"
-        if all_handlers:
-            handlers_yaml = _render_playbook_yaml(
-                f"{role_name}_handlers", all_handlers, {}
-            )
-        else:
-            handlers_yaml = "---\n# No handlers\n"
-        safe_write_text(handlers_file, workspace_root, handlers_yaml, encoding="utf-8")
-        handlers_rel = str(handlers_file.relative_to(safe_out))
-        files_written.append(handlers_rel)
-
-        # defaults/main.yml
-        defaults_file = role_defaults_dir / "main.yml"
-        defaults_content = _pillar_to_vault_vars(all_defaults)
-        safe_write_text(
-            defaults_file, workspace_root, defaults_content, encoding="utf-8"
-        )
-        defaults_rel = str(defaults_file.relative_to(safe_out))
-        files_written.append(defaults_rel)
-
-        # meta/main.yml
-        meta_file = role_meta_dir / "main.yml"
-        meta_content = (
-            "---\ngalaxy_info:\n"
-            f"  role_name: {role_name}\n"
-            "  author: souschef\n"
-            "  description: Converted from SaltStack\n"
-            "  min_ansible_version: '2.9'\n"
-            "dependencies: []\n"
-        )
-        safe_write_text(meta_file, workspace_root, meta_content, encoding="utf-8")
-        meta_rel = str(meta_file.relative_to(safe_out))
-        files_written.append(meta_rel)
-
-        roles_created.append(role_name)
-        structure[role_name] = [tasks_rel, handlers_rel, defaults_rel, meta_rel]
-
-    # Generate site.yml
-    site_lines = ["---"]
-    for role_name in roles_created:
-        site_lines.extend(
-            [
-                f"- name: Apply {role_name} role",
-                "  hosts: all",
-                "  become: true",
-                "  roles:",
-                f"    - {role_name}",
-            ]
-        )
-    site_file = safe_out / "site.yml"
-    try:
-        safe_mkdir(safe_out, workspace_root, parents=True, exist_ok=True)
-        safe_write_text(
-            site_file,
+        all_tasks, all_handlers, all_defaults = _collect_role_data(
+            role_name,
+            rel_paths,
+            safe_salt,
             workspace_root,
-            "\n".join(site_lines) + "\n",
-            encoding="utf-8",
+            warnings,
+            _parse_sls_states,
+            _extract_pillars,
         )
-        files_written.append("site.yml")
-    except PermissionError as exc:
-        warnings.append(f"Could not write site.yml: {exc}")
+        role_dir = safe_out / "roles" / role_name
+        file_rels = _write_role_files(
+            role_name,
+            role_dir,
+            safe_out,
+            workspace_root,
+            all_tasks,
+            all_handlers,
+            all_defaults,
+            files_written,
+            warnings,
+        )
+        if file_rels is not None:
+            roles_created.append(role_name)
+            structure[role_name] = file_rels
 
-    # Generate inventory/hosts from top.sls if present
-    top_candidates = [safe_salt / "top.sls"]
-    for candidate in top_candidates:
-        if safe_exists(candidate, workspace_root):
-            try:
-                top_content = safe_read_text(
-                    candidate, workspace_root, encoding="utf-8"
-                )
-                top_data = _parse_sls_yaml(top_content)
-                environments = _parse_top_environments(top_data)
-                inventory_str = _top_to_ansible_inventory(
-                    {"environments": environments}
-                )
-                inv_dir = safe_out / "inventory"
-                safe_mkdir(inv_dir, workspace_root, parents=True, exist_ok=True)
-                inv_file = inv_dir / "hosts"
-                safe_write_text(
-                    inv_file, workspace_root, inventory_str, encoding="utf-8"
-                )
-                files_written.append("inventory/hosts")
-            except (PermissionError, OSError) as exc:
-                warnings.append(f"Could not generate inventory: {exc}")
-            break
+    _write_site_yml(safe_out, workspace_root, roles_created, files_written, warnings)
+    _write_inventory_from_top(
+        safe_salt,
+        safe_out,
+        workspace_root,
+        files_written,
+        warnings,
+        _parse_sls_yaml,
+        _parse_top_environments,
+    )
 
     return json.dumps(
         {

@@ -31,19 +31,26 @@ from souschef.parsers.powershell import (
 # Windows module mappings
 # ---------------------------------------------------------------------------
 
+# Module name constants to avoid duplicate literals (S1192)
+_MOD_WIN_SERVICE = "ansible.windows.win_service"
+_MOD_WIN_REGEDIT = "ansible.windows.win_regedit"
+_MOD_WIN_SHELL = "ansible.windows.win_shell"
+_MOD_WIN_USER = "ansible.windows.win_user"
+_MOD_WIN_FIREWALL_RULE = "ansible.windows.win_firewall_rule"
+
 #: Maps parsed action types to ansible.windows module names
 _MODULE_MAP: dict[str, str] = {
     "windows_feature_install": "ansible.windows.win_feature",
     "windows_feature_remove": "ansible.windows.win_feature",
     "windows_optional_feature_enable": "ansible.windows.win_optional_feature",
     "windows_optional_feature_disable": "ansible.windows.win_optional_feature",
-    "windows_service_start": "ansible.windows.win_service",
-    "windows_service_stop": "ansible.windows.win_service",
-    "windows_service_configure": "ansible.windows.win_service",
-    "windows_service_create": "ansible.windows.win_service",
-    "registry_set": "ansible.windows.win_regedit",
-    "registry_create_key": "ansible.windows.win_regedit",
-    "registry_remove_key": "ansible.windows.win_regedit",
+    "windows_service_start": _MOD_WIN_SERVICE,
+    "windows_service_stop": _MOD_WIN_SERVICE,
+    "windows_service_configure": _MOD_WIN_SERVICE,
+    "windows_service_create": _MOD_WIN_SERVICE,
+    "registry_set": _MOD_WIN_REGEDIT,
+    "registry_create_key": _MOD_WIN_REGEDIT,
+    "registry_remove_key": _MOD_WIN_REGEDIT,
     "file_copy": "ansible.windows.win_copy",
     "directory_create": "ansible.windows.win_file",
     "file_remove": "ansible.windows.win_file",
@@ -51,18 +58,18 @@ _MODULE_MAP: dict[str, str] = {
     "msi_install": "ansible.windows.win_package",
     "chocolatey_install": "chocolatey.chocolatey.win_chocolatey",
     "chocolatey_uninstall": "chocolatey.chocolatey.win_chocolatey",
-    "win_shell": "ansible.windows.win_shell",
+    "win_shell": _MOD_WIN_SHELL,
     # User management
-    "user_create": "ansible.windows.win_user",
-    "user_modify": "ansible.windows.win_user",
-    "user_remove": "ansible.windows.win_user",
+    "user_create": _MOD_WIN_USER,
+    "user_modify": _MOD_WIN_USER,
+    "user_remove": _MOD_WIN_USER,
     "group_member_add": "ansible.windows.win_group_membership",
     "group_member_remove": "ansible.windows.win_group_membership",
     # Firewall
-    "firewall_rule_create": "ansible.windows.win_firewall_rule",
-    "firewall_rule_enable": "ansible.windows.win_firewall_rule",
-    "firewall_rule_disable": "ansible.windows.win_firewall_rule",
-    "firewall_rule_remove": "ansible.windows.win_firewall_rule",
+    "firewall_rule_create": _MOD_WIN_FIREWALL_RULE,
+    "firewall_rule_enable": _MOD_WIN_FIREWALL_RULE,
+    "firewall_rule_disable": _MOD_WIN_FIREWALL_RULE,
+    "firewall_rule_remove": _MOD_WIN_FIREWALL_RULE,
     # Scheduled tasks
     "scheduled_task_register": "community.windows.win_scheduled_task",
     "scheduled_task_unregister": "community.windows.win_scheduled_task",

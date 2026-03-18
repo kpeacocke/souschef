@@ -25,6 +25,12 @@ from souschef.parsers.salt import (
     parse_salt_sls,
 )
 
+# Constants to avoid duplicate literals (S1192)
+_ERR_INVALID_PATH = "Invalid or unsafe path. Path must be within the workspace."
+_MIME_TEXT_PLAIN = "text/plain"
+_LABEL_SALT_STATES_DIR = "Salt States Directory"
+_PLACEHOLDER_SALT_DIR = "/srv/salt"
+
 
 def _validate_ui_path(path_str: str) -> str | None:
     """
@@ -131,7 +137,7 @@ def _render_sls_parse_section() -> None:
 
         safe_path = _validate_ui_path(sls_path)
         if safe_path is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Parsing SLS file..."):
@@ -239,7 +245,7 @@ def _render_convert_section() -> None:
 
         safe_path = _validate_ui_path(sls_path)
         if safe_path is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Converting SLS to Ansible..."):
@@ -301,7 +307,7 @@ def _display_conversion_results(result: dict[str, Any]) -> None:
             "Download Playbook",
             data=playbook,
             file_name="playbook.yml",
-            mime="text/plain",
+            mime=_MIME_TEXT_PLAIN,
             key="salt_download_playbook",
         )
 
@@ -333,7 +339,7 @@ def _render_pillar_section() -> None:
 
         safe_path = _validate_ui_path(pillar_path)
         if safe_path is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Parsing pillar file..."):
@@ -372,9 +378,9 @@ def _render_directory_section() -> None:
 
     with col1:
         salt_dir = st.text_input(
-            "Salt States Directory",
+            _LABEL_SALT_STATES_DIR,
             value="",
-            placeholder="/srv/salt",
+            placeholder=_PLACEHOLDER_SALT_DIR,
             help="Path to the root Salt states directory.",
             key="salt_dir_path",
         )
@@ -391,7 +397,7 @@ def _render_directory_section() -> None:
 
         safe_dir = _validate_ui_path(salt_dir)
         if safe_dir is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Scanning directory..."):
@@ -467,9 +473,9 @@ def _render_assessment_section() -> None:
 
     with col1:
         salt_dir = st.text_input(
-            "Salt States Directory",
+            _LABEL_SALT_STATES_DIR,
             value="",
-            placeholder="/srv/salt",
+            placeholder=_PLACEHOLDER_SALT_DIR,
             help="Path to the Salt states root directory to assess.",
             key="salt_assess_dir",
         )
@@ -486,7 +492,7 @@ def _render_assessment_section() -> None:
 
         safe_dir = _validate_ui_path(salt_dir)
         if safe_dir is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Assessing Salt migration complexity..."):
@@ -577,9 +583,9 @@ def _render_migration_plan_section() -> None:
 
     with col1:
         salt_dir = st.text_input(
-            "Salt States Directory",
+            _LABEL_SALT_STATES_DIR,
             value="",
-            placeholder="/srv/salt",
+            placeholder=_PLACEHOLDER_SALT_DIR,
             help="Path to the Salt states root directory.",
             key="salt_plan_dir",
         )
@@ -609,7 +615,7 @@ def _render_migration_plan_section() -> None:
 
         safe_dir = _validate_ui_path(salt_dir)
         if safe_dir is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Generating migration plan..."):
@@ -627,7 +633,7 @@ def _render_migration_plan_section() -> None:
             "Download Plan",
             data=plan_text,
             file_name="salt_migration_plan.md",
-            mime="text/plain",
+            mime=_MIME_TEXT_PLAIN,
             key="salt_download_plan",
         )
 
@@ -640,9 +646,9 @@ def _render_batch_convert_section() -> None:
 
     with col1:
         salt_dir = st.text_input(
-            "Salt States Directory",
+            _LABEL_SALT_STATES_DIR,
             value="",
-            placeholder="/srv/salt",
+            placeholder=_PLACEHOLDER_SALT_DIR,
             help="Path to the Salt states root directory.",
             key="salt_batch_dir",
         )
@@ -752,7 +758,7 @@ def _render_inventory_section() -> None:
 
         safe_path = _validate_ui_path(top_path)
         if safe_path is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Generating Ansible inventory..."):
@@ -788,7 +794,7 @@ def _render_inventory_section() -> None:
                 "Download Inventory",
                 data=inventory,
                 file_name="hosts",
-                mime="text/plain",
+                mime=_MIME_TEXT_PLAIN,
                 key="salt_download_inventory",
             )
 
