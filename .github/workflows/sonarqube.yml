@@ -15,6 +15,7 @@ permissions:
   contents: read
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   PYTHON_VERSION: "3.13"
 
 jobs:
@@ -52,6 +53,13 @@ jobs:
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
       with:
         python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Set up Go
+      if: steps.check-token.outputs.has_token == 'true'
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v5
+      with:
+        go-version-file: 'go.work'
+        cache-dependency-path: terraform-provider/go.sum
 
     - name: Install Poetry
       if: steps.check-token.outputs.has_token == 'true'
