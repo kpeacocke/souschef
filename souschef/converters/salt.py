@@ -83,15 +83,15 @@ def _build_pkg_task(state: dict[str, Any]) -> dict[str, Any]:
 
     task: dict[str, Any] = {
         "name": f"Manage package: {state_id}",
-        "ansible.builtin.package": {"state": pkg_state},
+        _MOD_PACKAGE: {"state": pkg_state},
     }
 
     if pkgs and isinstance(pkgs, list):
-        task["ansible.builtin.package"]["name"] = pkgs
+        task[_MOD_PACKAGE]["name"] = pkgs
     elif isinstance(name, list):
-        task["ansible.builtin.package"]["name"] = name
+        task[_MOD_PACKAGE]["name"] = name
     else:
-        task["ansible.builtin.package"]["name"] = str(name)
+        task[_MOD_PACKAGE]["name"] = str(name)
 
     return task
 
@@ -132,7 +132,7 @@ def _build_file_task(state: dict[str, Any]) -> dict[str, Any]:
     state_id = state.get("id", "file")
 
     module_key = f"file_{func}"
-    ansible_module = _ANSIBLE_MODULE_MAP.get(module_key, "ansible.builtin.file")
+    ansible_module = _ANSIBLE_MODULE_MAP.get(module_key, _MOD_FILE)
 
     task: dict[str, Any] = {"name": f"Manage file: {state_id}"}
     params: dict[str, Any] = {}
@@ -155,16 +155,16 @@ def _build_file_task(state: dict[str, Any]) -> dict[str, Any]:
         params["path"] = params.pop("dest")
         params["state"] = "directory"
         _apply_file_ownership(params, args)
-        ansible_module = "ansible.builtin.file"
+        ansible_module = _MOD_FILE
     elif func == "absent":
         params["path"] = params.pop("dest")
         params["state"] = "absent"
-        ansible_module = "ansible.builtin.file"
+        ansible_module = _MOD_FILE
     elif func == "symlink":
         params["path"] = params.pop("dest")
         params["src"] = str(args.get("target", ""))
         params["state"] = "link"
-        ansible_module = "ansible.builtin.file"
+        ansible_module = _MOD_FILE
     elif func in ("replace", "line"):
         params.pop("dest", None)
         params["path"] = str(dest)
@@ -211,7 +211,7 @@ def _build_service_task(state: dict[str, Any]) -> dict[str, Any]:
 
     task: dict[str, Any] = {
         "name": f"Manage service: {state_id}",
-        "ansible.builtin.service": params,
+        _MOD_SERVICE: params,
     }
     return task
 
@@ -621,6 +621,36 @@ def _render_param_value(lines: list[str], pk: str, pv: Any) -> None:
             lines.append(f"        {pk}: {pv}")
 
 
+def _render_task_body(lines: list[str], task: dict[str, Any]) -> None:
+    """Render task module body lines excluding task metadata keys."""
+    for key, val in task.items():
+        if key in ("name", "when", "tags"):
+            continue
+        if isinstance(val, dict):
+            lines.append(f"      {key}:")
+            for pk, pv in val.items():
+                _render_param_value(lines, pk, pv)
+        else:
+            lines.append(f"      {key}: {val}")
+
+
+def _render_task_metadata(lines: list[str], task: dict[str, Any]) -> None:
+    """Render optional task metadata fields such as when/tags."""
+    when = task.get("when")
+    if when:
+        lines.append(f"      when: {when}")
+
+    tags = task.get("tags")
+    if not tags:
+        return
+    if isinstance(tags, list):
+        lines.append("      tags:")
+        for tag in tags:
+            lines.append(f"        - {tag}")
+        return
+    lines.append(f"      tags: [{tags}]")
+
+
 def _render_task_lines(lines: list[str], task: dict[str, Any]) -> None:
     """
     Render a single Ansible task as YAML lines.
@@ -632,29 +662,47 @@ def _render_task_lines(lines: list[str], task: dict[str, Any]) -> None:
     """
     task_name = task.get("name", "Unnamed task")
     lines.append(f"    - name: {task_name}")
+    _render_task_body(lines, task)
+    _render_task_metadata(lines, task)
 
-    for key, val in task.items():
-        if key in ("name", "when", "tags"):
+
+def _extract_group_name_from_grain(target: str) -> str | None:
+    """Extract normalised group name from a grain target expression."""
+    if not target.startswith("G@"):
+        return None
+    grain_expr = target[2:]
+    if ":" not in grain_expr:
+        return None
+    key, val = grain_expr.split(":", 1)
+    return f"{key}_{val}".replace("-", "_").replace(".", "_")
+
+
+def _append_inventory_target_lines(lines: list[str], targets: dict[str, Any]) -> None:
+    """Append inventory target lines for a single top.sls environment."""
+    for target in targets:
+        group_name = _extract_group_name_from_grain(target)
+        if group_name is not None:
+            lines.append(f"# grain target: {target}")
+            lines.append(f"# group: [{group_name}]")
             continue
-        if isinstance(val, dict):
-            lines.append(f"      {key}:")
-            for pk, pv in val.items():
-                _render_param_value(lines, pk, pv)
-        else:
-            lines.append(f"      {key}: {val}")
+        if target.startswith("G@"):
+            lines.append(f"# grain target: {target}")
+            continue
+        if "*" in target or "?" in target:
+            lines.append(f"# glob target: {target}")
+            continue
+        lines.append(target)
 
-    when = task.get("when")
-    if when:
-        lines.append(f"      when: {when}")
 
-    tags = task.get("tags")
-    if tags:
-        if isinstance(tags, list):
-            lines.append("      tags:")
-            for tag in tags:
-                lines.append(f"        - {tag}")
-        else:
-            lines.append(f"      tags: [{tags}]")
+def _append_inventory_grain_groups(lines: list[str], targets: dict[str, Any]) -> None:
+    """Append inventory group stubs derived from grain target expressions."""
+    for target in targets:
+        group_name = _extract_group_name_from_grain(target)
+        if group_name is None:
+            continue
+        lines.append(f"[{group_name}]")
+        lines.append(f"# Add hosts matching grain {target} here")
+        lines.append("")
 
 
 def _extract_watch_handlers(states: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -687,7 +735,7 @@ def _extract_watch_handlers(states: list[dict[str, Any]]) -> list[dict[str, Any]
         handlers.append(
             {
                 "name": handler_name,
-                "ansible.builtin.service": {
+                _MOD_SERVICE: {
                     "name": str(service_name),
                     "state": "restarted",
                 },
@@ -720,35 +768,9 @@ def _top_to_ansible_inventory(top_data: dict[str, Any]) -> str:
         if not isinstance(targets, dict):
             continue
         lines.append(f"[env_{env_name}]")
-        for target in targets:
-            # Grain target: G@key:value
-            if target.startswith("G@"):
-                grain_expr = target[2:]
-                if ":" in grain_expr:
-                    key, val = grain_expr.split(":", 1)
-                    # Add a group reference comment
-                    lines.append(f"# grain target: {target}")
-                    group_name = f"{key}_{val}".replace("-", "_").replace(".", "_")
-                    lines.append(f"# group: [{group_name}]")
-                else:
-                    lines.append(f"# grain target: {target}")
-            elif "*" in target or "?" in target:
-                # Glob target - add as comment
-                lines.append(f"# glob target: {target}")
-            else:
-                lines.append(target)
+        _append_inventory_target_lines(lines, targets)
         lines.append("")
-
-        # Add grain groups
-        for target in targets:
-            if target.startswith("G@"):
-                grain_expr = target[2:]
-                if ":" in grain_expr:
-                    key, val = grain_expr.split(":", 1)
-                    group_name = f"{key}_{val}".replace("-", "_").replace(".", "_")
-                    lines.append(f"[{group_name}]")
-                    lines.append(f"# Add hosts matching grain {target} here")
-                    lines.append("")
+        _append_inventory_grain_groups(lines, targets)
 
     return "\n".join(lines)
 
@@ -906,7 +928,6 @@ def convert_salt_pillar_to_vars(pillar_path: str, output_format: str = "yaml") -
 
 
 def _collect_role_data(
-    role_name: str,
     rel_paths: list[str],
     safe_salt: Any,
     workspace_root: Any,
@@ -921,7 +942,6 @@ def _collect_role_data(
     extracts handlers, and accumulates pillar-derived defaults.
 
     Args:
-        role_name: Name of the role being built.
         rel_paths: List of SLS file paths relative to ``safe_salt``.
         safe_salt: Validated, absolute Path to the Salt states root.
         workspace_root: Workspace root Path for path-safety checks.
@@ -941,7 +961,7 @@ def _collect_role_data(
         file_path = safe_salt / rel_path
         try:
             content = safe_read_text(file_path, workspace_root, encoding="utf-8")
-        except (PermissionError, OSError) as exc:
+        except OSError as exc:
             warnings.append(f"Could not read {rel_path}: {exc}")
             continue
 
@@ -1132,7 +1152,7 @@ def _write_inventory_from_top(
             inv_dir / "hosts", workspace_root, inventory_str, encoding="utf-8"
         )
         files_written.append("inventory/hosts")
-    except (PermissionError, OSError) as exc:
+    except OSError as exc:
         warnings.append(f"Could not generate inventory: {exc}")
 
 
@@ -1204,7 +1224,6 @@ def convert_salt_directory_to_roles(salt_dir: str, output_dir: str) -> str:
 
     for role_name, rel_paths in role_files.items():
         all_tasks, all_handlers, all_defaults = _collect_role_data(
-            role_name,
             rel_paths,
             safe_salt,
             workspace_root,

@@ -80,7 +80,7 @@ _MODULE_MAP: dict[str, str] = {
     # Certificates
     "certificate_import": "community.windows.win_certificate_store",
     # WinRM
-    "winrm_enable": "ansible.windows.win_shell",
+    "winrm_enable": _MOD_WIN_SHELL,
     # IIS
     "iis_website_create": "community.windows.win_iis_website",
     # DNS client
@@ -253,7 +253,7 @@ def _action_to_task(
     src_line: int = action.get("source_line", 0)
     raw: str = action.get("raw", "")
 
-    module = _MODULE_MAP.get(action_type, "ansible.windows.win_shell")
+    module = _MODULE_MAP.get(action_type, _MOD_WIN_SHELL)
     warning = ""
 
     converter = _TASK_CONVERTERS.get(action_type)
