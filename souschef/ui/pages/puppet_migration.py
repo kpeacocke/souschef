@@ -22,17 +22,15 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # type: ignore[assignment]  # pragma: no cover
 
-from souschef.converters.puppet_to_ansible import (
+from souschef.core.path_utils import (
+    _get_workspace_root,
+)
+from souschef.orchestrators.puppet import (
     convert_puppet_manifest_to_ansible,
     convert_puppet_manifest_to_ansible_with_ai,
     convert_puppet_module_to_ansible,
     convert_puppet_module_to_ansible_with_ai,
     get_puppet_ansible_module_map,
-)
-from souschef.core.path_utils import (
-    _get_workspace_root,
-)
-from souschef.parsers.puppet import (
     parse_puppet_manifest,
     parse_puppet_module,
 )

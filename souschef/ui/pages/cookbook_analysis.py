@@ -1,7 +1,6 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
-import importlib
 import io
 import json
 import os
@@ -36,7 +35,7 @@ if TYPE_CHECKING:
     import streamlit as st
 else:
     try:
-        pd = importlib.import_module("pandas")
+        import pandas as pd
     except ImportError:
         pd = None
 
@@ -48,10 +47,6 @@ else:
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from souschef.assessment import (
-    analyse_cookbook_dependencies,
-    assess_single_cookbook_with_ai,
-)
 from souschef.core.constants import METADATA_FILENAME
 from souschef.core.metrics import (
     EffortMetrics,
@@ -62,33 +57,34 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
 )
-
-# Import from orchestration layer (Layer 6) instead of domain logic (Layer 3)
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
+    analyse_cookbook_dependencies,
+    assess_single_cookbook_with_ai,
+    orchestrate_generate_playbook_from_recipe_with_ai,
+    parse_chef_migration_assessment,
+)
+from souschef.orchestrators.chef import (
     orchestrate_calculate_file_fingerprint as _calculate_file_fingerprint,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_conversion_analysis as analyse_conversion_output,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_cookbook_metadata_parsing as parse_cookbook_metadata,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_generate_playbook_from_recipe as generate_playbook_from_recipe,
 )
-from souschef.orchestration import (
-    orchestrate_generate_playbook_from_recipe_with_ai,
-)
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_get_blob_storage as get_blob_storage,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_get_storage_manager as get_storage_manager,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_repository_generation as generate_ansible_repository,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_template_conversion as _convert_templates_impl,
 )
 from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
@@ -1533,8 +1529,6 @@ def _analyze_with_ai(
         List of analysis results.
 
     """
-    from souschef.assessment import assess_single_cookbook_with_ai
-
     ai_config = load_ai_settings()
     provider_mapping = {
         ANTHROPIC_CLAUDE_DISPLAY: "anthropic",
@@ -1645,8 +1639,6 @@ def _analyze_rule_based(
         Tuple of (results list, assessment_result dict).
 
     """
-    from souschef.assessment import parse_chef_migration_assessment
-
     cookbook_paths_list = [cb["Path"] for cb in cookbook_data]
     cookbook_paths_str = ",".join(cookbook_paths_list)
 
@@ -3189,8 +3181,6 @@ def _run_rule_based_analysis(cookbook_dir: Path) -> dict:
         Assessment dictionary.
 
     """
-    from souschef.assessment import parse_chef_migration_assessment
-
     assessment = parse_chef_migration_assessment(str(cookbook_dir))
 
     # Extract single cookbook assessment if multi-cookbook structure returned

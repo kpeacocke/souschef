@@ -13,16 +13,16 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
-from souschef.converters.salt import (
+from souschef.core.path_utils import _get_workspace_root
+from souschef.orchestrators.salt import (
+    assess_salt_complexity,
     convert_salt_directory_to_roles,
     convert_salt_sls_to_ansible,
-)
-from souschef.core.path_utils import _get_workspace_root
-from souschef.parsers.salt import (
-    assess_salt_complexity,
+    generate_salt_inventory,
     parse_salt_directory,
     parse_salt_pillar,
     parse_salt_sls,
+    plan_salt_migration,
 )
 
 # Constants to avoid duplicate literals (S1192)
@@ -620,8 +620,6 @@ def _render_migration_plan_section() -> None:
             return
 
         with st.spinner("Generating migration plan..."):
-            from souschef.server import plan_salt_migration
-
             result_str = plan_salt_migration(safe_dir, int(timeline), str(platform))
 
         st.session_state["salt_plan_result"] = result_str
@@ -718,8 +716,6 @@ def _run_inventory_generation(top_path: str) -> dict[str, Any] | None:
         return None
 
     with st.spinner("Generating Ansible inventory..."):
-        from souschef.server import generate_salt_inventory
-
         result_str = generate_salt_inventory(safe_path)
 
     try:

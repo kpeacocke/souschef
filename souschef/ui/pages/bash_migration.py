@@ -18,11 +18,11 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
-from souschef.converters.bash_to_ansible import (
+from souschef.orchestrators.bash import (
     convert_bash_content_to_ansible,
     generate_ansible_role_from_bash,
+    parse_bash_script_content,
 )
-from souschef.parsers.bash import parse_bash_script_content
 
 SHELL_FALLBACKS_LABEL = "Shell Fallbacks"
 
