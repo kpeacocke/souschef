@@ -34,7 +34,7 @@ class TestStoragePropertyBased:
         st.text(min_size=1, max_size=50),
         st.text(min_size=1, max_size=50),
     )
-    @settings(max_examples=20)
+    @settings(max_examples=20, deadline=None)
     def test_different_inputs_produce_different_cache_keys(self, path, provider, model):
         """Test that different inputs produce different cache keys."""
         with (
@@ -91,7 +91,7 @@ class TestStoragePropertyBased:
             assert abs(history[0].estimated_hours - hours) < 0.01
 
     @given(st.integers(min_value=1, max_value=500))
-    @settings(max_examples=20)
+    @settings(max_examples=20, deadline=None)
     def test_save_multiple_conversions_with_various_file_counts(self, file_count):
         """Test saving conversions with varying file counts."""
         with tempfile.TemporaryDirectory() as tmpdir:

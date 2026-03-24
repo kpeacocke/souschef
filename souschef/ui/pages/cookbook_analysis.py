@@ -14,6 +14,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
+import yaml
+
 # UI dependencies - required for this module to function
 # At runtime, gracefully handle missing dependencies; for type checking, assume present
 if TYPE_CHECKING:
@@ -4856,7 +4858,10 @@ def _parse_preview_mapping_input(mapping_input: str) -> dict[str, str]:
     try:
         parsed = json.loads(mapping_input)
     except json.JSONDecodeError:
-        return {}
+        try:
+            parsed = yaml.safe_load(mapping_input)
+        except yaml.YAMLError:
+            return {}
     if not isinstance(parsed, dict):
         return {}
     return {str(key): str(value) for key, value in parsed.items()}
@@ -4871,6 +4876,7 @@ def _apply_preview_tweaks(
 ) -> str:
     """Apply live-preview mapping and normalisation tweaks to playbook text."""
     updated_content = content
+    preserve_trailing_newline = updated_content.endswith("\n")
     for source, target in mapping_overrides.items():
         updated_content = updated_content.replace(source, target)
 
@@ -4892,6 +4898,9 @@ def _apply_preview_tweaks(
             else:
                 updated_lines.append(line)
         updated_content = "\n".join(updated_lines)
+
+    if preserve_trailing_newline and not updated_content.endswith("\n"):
+        updated_content += "\n"
 
     return updated_content
 

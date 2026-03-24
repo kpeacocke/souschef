@@ -245,10 +245,12 @@ def import_puppet_catalog_to_ir(
 
     edges = [edge for edge in catalog.get("edges", []) if isinstance(edge, dict)]
     _add_catalog_edges(graph, edges)
+    ir_payload = graph.to_dict()
+    ir_payload["edges"] = edges
     return {
         "status": "success",
         "node": node_name,
         "environment": environment,
-        "ir": graph.to_dict(),
+        "ir": ir_payload,
         "fidelity_report": _build_catalog_fidelity_report(resources),
     }

@@ -84,8 +84,10 @@ def test_generate_powershell_role_structure_with_warning_action() -> None:
         "metrics": {},
     }
     result = generate_powershell_role_structure(ir)
-    # Result is a text block — should contain task key info
-    assert "tasks" in result or "roles" in result or "playbook" in result
+    # Result is a dict of generated files keyed by relative paths.
+    assert isinstance(result, dict)
+    assert "roles/windows_provisioning/tasks/main.yml" in result
+    assert "site.yml" in result
 
 
 # ---------------------------------------------------------------------------

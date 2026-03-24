@@ -143,8 +143,8 @@ def orchestrate_validate_conversion(
 ) -> str:
     """Validate converted content through the assessment layer."""
     return assessment.validate_conversion(
-        conversion_type=conversion_type,
-        result_content=result_content,
+        conversion_type,
+        result_content,
         output_format=output_format,
     )
 
