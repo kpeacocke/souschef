@@ -333,6 +333,12 @@ from souschef.migration_v2 import (
     CookbookIngestionOptions,
     MigrationOrchestrator,
 )
+from souschef.orchestrators.puppet import (
+    import_puppet_catalog_to_ir as _import_puppet_catalog_to_ir,
+)
+from souschef.orchestrators.puppet import (
+    list_puppet_server_nodes as _list_puppet_server_nodes,
+)
 from souschef.parsers.attributes import (  # noqa: F401, codeql[py/unused-import]
     _extract_attributes,
     _format_attributes,
@@ -7237,6 +7243,58 @@ def generate_ansible_role_from_bash(
 
 
 # ==================== Puppet Migration Tools ====================
+
+
+@mcp.tool()
+def list_puppet_server_nodes(
+    server_url: str,
+    cert_path: str,
+    key_path: str,
+    environment: str = "",
+    ca_path: str = "",
+) -> str:
+    """List Puppet nodes available from a certificate-authenticated connector."""
+    try:
+        safe_cert = str(_normalise_workspace_path(cert_path, "Certificate path"))
+        safe_key = str(_normalise_workspace_path(key_path, "Key path"))
+        safe_ca = str(_normalise_workspace_path(ca_path, "CA path")) if ca_path else ""
+        result = _list_puppet_server_nodes(
+            server_url=server_url,
+            cert_path=safe_cert,
+            key_path=safe_key,
+            environment=environment,
+            ca_path=safe_ca,
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+def import_puppet_catalog_to_ir(
+    server_url: str,
+    cert_path: str,
+    key_path: str,
+    node_name: str,
+    environment: str = "",
+    ca_path: str = "",
+) -> str:
+    """Import a compiled Puppet catalog for a selected node into the IR."""
+    try:
+        safe_cert = str(_normalise_workspace_path(cert_path, "Certificate path"))
+        safe_key = str(_normalise_workspace_path(key_path, "Key path"))
+        safe_ca = str(_normalise_workspace_path(ca_path, "CA path")) if ca_path else ""
+        result = _import_puppet_catalog_to_ir(
+            server_url=server_url,
+            cert_path=safe_cert,
+            key_path=safe_key,
+            node_name=node_name,
+            environment=environment,
+            ca_path=safe_ca,
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
 
 
 @mcp.tool()

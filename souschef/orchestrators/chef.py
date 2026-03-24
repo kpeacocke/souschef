@@ -136,6 +136,19 @@ def orchestrate_conversion_analysis(
     )
 
 
+def orchestrate_validate_conversion(
+    conversion_type: str,
+    result_content: str,
+    output_format: str = "text",
+) -> str:
+    """Validate converted content through the assessment layer."""
+    return assessment.validate_conversion(
+        conversion_type=conversion_type,
+        result_content=result_content,
+        output_format=output_format,
+    )
+
+
 def orchestrate_cookbook_metadata_parsing(
     cookbook_path: str,
 ) -> dict[str, str | list[str]]:

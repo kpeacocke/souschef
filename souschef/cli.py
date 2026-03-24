@@ -42,6 +42,7 @@ from souschef.profiling import (
     generate_cookbook_performance_report,
     profile_function,
 )
+from souschef.rest_api import run_api_server
 from souschef.server import (
     convert_bash_to_ansible,
     convert_inspec_to_test,
@@ -62,6 +63,7 @@ from souschef.server import (
     read_cookbook_metadata,
     read_file,
 )
+from souschef.webhooks import send_webhook_notification
 
 
 def _validate_user_path(path_input: str | None) -> Path:
@@ -888,6 +890,42 @@ def _output_result(result: str, output_format: str) -> None:
         _output_json_format(result)
     else:
         _output_text_format(result)
+
+
+@cli.group(name="api")
+def api_group() -> None:
+    """REST API and webhook companion commands."""
+
+
+@api_group.command("serve")
+@click.option("--host", default="127.0.0.1", help="Host interface to bind")
+@click.option("--port", default=8081, type=int, help="TCP port to listen on")
+def api_serve(host: str, port: int) -> None:
+    """Run the lightweight SousChef REST API."""
+    run_api_server(host=host, port=port)
+
+
+@api_group.command("webhook")
+@click.option("--url", required=True, help="Webhook endpoint URL")
+@click.option("--event", required=True, help="Webhook event name")
+@click.option("--payload", default="{}", help="Webhook payload as JSON")
+@click.option("--secret", default="", help="Optional webhook signing secret")
+def api_webhook(url: str, event: str, payload: str, secret: str) -> None:
+    """Send a webhook payload for automation testing."""
+    try:
+        parsed_payload = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        click.echo(f"Invalid payload JSON: {exc}", err=True)
+        sys.exit(1)
+
+    if not isinstance(parsed_payload, dict):
+        click.echo("Webhook payload must decode to a JSON object", err=True)
+        sys.exit(1)
+
+    result = send_webhook_notification(url, event, parsed_payload, secret=secret)
+    click.echo(json.dumps(result, indent=2))
+    if result["status"] != "success":
+        sys.exit(1)
 
 
 @cli.command()

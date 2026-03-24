@@ -87,6 +87,9 @@ from souschef.orchestrators.chef import (
 from souschef.orchestrators.chef import (
     orchestrate_template_conversion as _convert_templates_impl,
 )
+from souschef.orchestrators.chef import (
+    orchestrate_validate_conversion as validate_conversion_output,
+)
 from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
 
 # Import refactored modules for backward compatibility and tests
@@ -4824,7 +4827,7 @@ def _display_download_button(
 def _display_playbook_previews(playbooks: list) -> None:
     """Display preview of generated playbooks."""
     with st.expander("Preview Generated Playbooks", expanded=True):
-        for playbook in playbooks:
+        for index, playbook in enumerate(playbooks):
             conversion_badge = (
                 "AI-Enhanced"
                 if playbook.get("conversion_method") == "AI-enhanced"
@@ -4834,10 +4837,124 @@ def _display_playbook_previews(playbooks: list) -> None:
                 f"{playbook['cookbook_name']} ({conversion_badge}) - "
                 f"from {playbook['recipe_file']}"
             )
-            content = playbook["playbook_content"]
-            preview = content[:1000] + "..." if len(content) > 1000 else content
+            tweaked_content = _build_live_preview_content(playbook, index)
+            _display_inline_validation_feedback(tweaked_content)
+            preview = (
+                tweaked_content[:1000] + "..."
+                if len(tweaked_content) > 1000
+                else tweaked_content
+            )
             st.code(preview, language="yaml")
             st.divider()
+
+
+def _parse_preview_mapping_input(mapping_input: str) -> dict[str, str]:
+    """Parse preview mapping overrides from JSON input."""
+    if not isinstance(mapping_input, str) or not mapping_input.strip():
+        return {}
+
+    try:
+        parsed = json.loads(mapping_input)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(key): str(value) for key, value in parsed.items()}
+
+
+def _apply_preview_tweaks(
+    content: str,
+    mapping_overrides: dict[str, str],
+    *,
+    normalise_package_state: bool,
+    task_name_prefix: str,
+) -> str:
+    """Apply live-preview mapping and normalisation tweaks to playbook text."""
+    updated_content = content
+    for source, target in mapping_overrides.items():
+        updated_content = updated_content.replace(source, target)
+
+    if normalise_package_state:
+        updated_content = updated_content.replace(
+            "state: installed",
+            "state: present",
+        )
+
+    if task_name_prefix:
+        updated_lines: list[str] = []
+        for line in updated_content.splitlines():
+            if line.lstrip().startswith("- name:"):
+                indentation = line[: len(line) - len(line.lstrip())]
+                name_value = line.split(":", 1)[1].strip()
+                updated_lines.append(
+                    f"{indentation}- name: {task_name_prefix}{name_value}"
+                )
+            else:
+                updated_lines.append(line)
+        updated_content = "\n".join(updated_lines)
+
+    return updated_content
+
+
+def _summarise_inline_validation(result: str) -> dict[str, int]:
+    """Summarise validation JSON for inline preview feedback."""
+    try:
+        parsed = json.loads(result)
+    except json.JSONDecodeError:
+        return {"errors": 1, "warnings": 0}
+
+    summary = parsed.get("summary", {}) if isinstance(parsed, dict) else {}
+    if not isinstance(summary, dict):
+        return {"errors": 1, "warnings": 0}
+    return {
+        "errors": int(summary.get("errors", 0) or 0),
+        "warnings": int(summary.get("warnings", 0) or 0),
+    }
+
+
+def _display_inline_validation_feedback(content: str) -> None:
+    """Display inline validation feedback for a preview playbook."""
+    validation_result = validate_conversion_output("recipe", content, "json")
+    summary = _summarise_inline_validation(validation_result)
+    if summary["errors"] > 0:
+        st.error(
+            f"Inline validation found {summary['errors']} error(s) and "
+            f"{summary['warnings']} warning(s)."
+        )
+    elif summary["warnings"] > 0:
+        st.warning(f"Inline validation found {summary['warnings']} warning(s).")
+    else:
+        st.success("Inline validation passed.")
+
+
+def _build_live_preview_content(playbook: dict[str, Any], index: int) -> str:
+    """Build tweakable live-preview content for a generated playbook."""
+    mapping_input = st.text_area(
+        "Mapping overrides (JSON)",
+        value="{}",
+        key=f"preview_mapping_{index}",
+        help=(
+            "Apply string replacements in the preview, for example "
+            '{"apt:": "package:"}.'
+        ),
+    )
+    normalise_package_state = st.checkbox(
+        "Normalise package state to present",
+        value=True,
+        key=f"preview_normalise_{index}",
+    )
+    task_name_prefix = st.text_input(
+        "Task name prefix",
+        value="",
+        key=f"preview_task_prefix_{index}",
+        help="Prefix generated task names to test naming conventions.",
+    )
+    return _apply_preview_tweaks(
+        playbook["playbook_content"],
+        _parse_preview_mapping_input(mapping_input),
+        normalise_package_state=normalise_package_state,
+        task_name_prefix=task_name_prefix,
+    )
 
 
 def _display_template_previews(templates: list) -> None:

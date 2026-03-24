@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mcp-souschef"
-version = "7.1.0"
+version = "7.2.0"
 description = "AI-powered MCP server for Chef, SaltStack, Puppet, PowerShell, and Bash to Ansible migration, plus Ansible upgrade planning"
 readme = "README.md"
 homepage = "https://github.com/kpeacocke/souschef"

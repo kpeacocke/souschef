@@ -7,6 +7,7 @@ Supports all version-specific API differences.
 
 import logging
 from typing import Any, cast
+from urllib.parse import quote
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -141,6 +142,71 @@ class ChefServerClient:
         except Exception as e:
             logger.error(f"Failed to get cookbook {cookbook_name}: {e}")
             raise
+
+
+class PuppetServerClient:
+    """Client for Puppet Server node and compiled catalog endpoints."""
+
+    def __init__(
+        self,
+        server_url: str,
+        cert_path: str,
+        key_path: str,
+        ca_path: str | None = None,
+        timeout: int = 30,
+    ):
+        """Initialise the Puppet Server client using certificate authentication."""
+        self.server_url = server_url.rstrip("/")
+        self.timeout = timeout
+        self.session = requests.Session()
+        self.session.cert = (cert_path, key_path)
+        self.session.verify = ca_path if ca_path else True
+
+    def _request_json(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | list[Any]:
+        """Perform a GET request and decode a JSON object or list."""
+        url = f"{self.server_url}{path}"
+        try:
+            response = self.session.get(url, params=params, timeout=self.timeout)
+            response.raise_for_status()
+            data = response.json()
+        except requests.RequestException as exc:
+            logger.error("Failed Puppet Server request to %s: %s", url, exc)
+            raise RuntimeError(f"Puppet Server request failed: {exc}") from exc
+        except ValueError as exc:
+            logger.error("Invalid Puppet Server JSON from %s: %s", url, exc)
+            raise RuntimeError("Puppet Server returned invalid JSON") from exc
+
+        if isinstance(data, (dict, list)):
+            return data
+        raise RuntimeError("Puppet Server returned unsupported JSON payload")
+
+    def list_nodes(self, environment: str = "") -> list[dict[str, Any]]:
+        """List Puppet nodes, optionally filtered by environment."""
+        params = {"environment": environment} if environment else None
+        data = self._request_json("/puppet/v3/nodes", params=params)
+        if not isinstance(data, list):
+            raise RuntimeError("Puppet Server nodes response must be a list")
+        return [cast(dict[str, Any], item) for item in data if isinstance(item, dict)]
+
+    def get_catalog(
+        self,
+        node_name: str,
+        environment: str = "",
+    ) -> dict[str, Any]:
+        """Fetch a compiled catalog for the requested node."""
+        params = {"environment": environment} if environment else None
+        data = self._request_json(
+            f"/puppet/v3/catalog/{quote(node_name, safe='')}",
+            params=params,
+        )
+        if not isinstance(data, dict):
+            raise RuntimeError("Puppet catalog response must be a JSON object")
+        return cast(dict[str, Any], data)
 
 
 class AnsiblePlatformClient:
