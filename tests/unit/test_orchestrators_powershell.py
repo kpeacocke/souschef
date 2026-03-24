@@ -91,7 +91,7 @@ class TestAnalyzePowershellMigrationFidelity:
         mock_generators.analyze_powershell_migration_fidelity.return_value = (
             "fidelity report"
         )
-        parsed_ir = {"actions": []}
+        parsed_ir: dict[str, object] = {"actions": []}
 
         from souschef.orchestrators.powershell import (
             analyze_powershell_migration_fidelity,
@@ -213,7 +213,7 @@ class TestGenerateAnsibleRequirements:
     def test_passes_parsed_ir(self, mock_generators: MagicMock) -> None:
         """Test that parsed_ir is forwarded."""
         mock_generators.generate_ansible_requirements.return_value = ""
-        parsed_ir = {"collections": ["ansible.windows"]}
+        parsed_ir: dict[str, object] = {"collections": ["ansible.windows"]}
 
         from souschef.orchestrators.powershell import generate_ansible_requirements
 

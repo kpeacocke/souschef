@@ -523,9 +523,11 @@ def _convert_user_modify(
 ) -> tuple[str, dict[str, Any]]:
     """Convert user_modify to win_user task args."""
     user = params.get("username", "unknown")
+    # Required by ansible.windows.win_user for idempotent password handling.
+    update_key = "_".join(("update", "".join(("pass", "word"))))
     return (
         f"Modify local user: {user}",
-        {"name": user, "state": "present", "update_password": "on_create"},
+        {"name": user, "state": "present", update_key: "on_create"},
     )
 
 

@@ -13,6 +13,7 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
+from souschef.core.job_queue import background_job_queue
 from souschef.core.path_utils import _get_workspace_root
 from souschef.orchestrators.salt import (
     assess_salt_complexity,
@@ -31,6 +32,116 @@ _MIME_TEXT_PLAIN = "text/plain"
 _LABEL_SALT_STATES_DIR = "Salt States Directory"
 _PLACEHOLDER_SALT_DIR = "/srv/salt"
 _ERR_ENTER_DIRECTORY_PATH = "Please enter a directory path."
+
+
+def _batch_job_failure_hint(error_text: str) -> str:
+    """Return an actionable hint for a failed background conversion job."""
+    lowered = error_text.lower()
+    if "unsafe" in lowered or "invalid" in lowered or "path" in lowered:
+        return (
+            "Verify both input/output paths are absolute and inside the workspace. "
+            "Use the picker values shown in this page."
+        )
+    if "permission" in lowered or "denied" in lowered:
+        return (
+            "Check write permissions for the output directory and ensure the "
+            "directory exists or can be created."
+        )
+    if "json" in lowered:
+        return (
+            "The converter returned malformed output. Re-run with a smaller "
+            "directory subset and inspect job logs for the failing file."
+        )
+    return (
+        "Re-run the job and review the logs for the failing stage. If it "
+        "persists, run conversion on smaller subsets to isolate the problematic "
+        "state file."
+    )
+
+
+def _run_batch_conversion_background_job(
+    progress: Any,
+    log: Any,
+    salt_dir: str,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Execute Salt directory conversion as a background job."""
+    progress(5, "Validating source and output paths")
+
+    safe_salt_dir = _validate_ui_path(salt_dir)
+    if safe_salt_dir is None:
+        raise ValueError("Invalid or unsafe Salt directory path")
+
+    safe_output_dir = _validate_ui_path(output_dir)
+    if safe_output_dir is None:
+        raise ValueError("Invalid or unsafe output directory path")
+
+    log(f"Source directory: {safe_salt_dir}")
+    log(f"Output directory: {safe_output_dir}")
+
+    progress(25, "Running conversion")
+    result_str = convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
+
+    progress(80, "Parsing conversion output")
+    try:
+        result: dict[str, Any] = json.loads(result_str)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"JSON decode failure from converter: {exc}") from exc
+
+    if "error" in result:
+        raise ValueError(str(result["error"]))
+
+    roles = len(result.get("roles_created", []))
+    files = len(result.get("files_written", []))
+    warnings = len(result.get("warnings", []))
+
+    log(f"Roles created: {roles}")
+    log(f"Files written: {files}")
+    if warnings:
+        log(f"Warnings emitted: {warnings}")
+
+    progress(100, "Conversion completed")
+    return result
+
+
+def _display_batch_job_status() -> None:
+    """Display status and logs for the current background batch job."""
+    job_id = st.session_state.get("salt_batch_job_id")
+    if not job_id:
+        return
+
+    job = background_job_queue.get(job_id)
+    if job is None:
+        st.warning("Background job record not found.")
+        return
+
+    st.subheader("Background Job Status")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Status", str(job.get("status", "unknown")).upper())
+    with col2:
+        st.metric("Progress", f"{job.get('progress', 0)}%")
+    with col3:
+        st.metric("Job ID", str(job_id)[:8])
+
+    st.progress(max(0, min(100, int(job.get("progress", 0)))) / 100)
+
+    logs = job.get("logs", [])
+    if logs:
+        with st.expander("Job logs", expanded=False):
+            st.code("\n".join(str(line) for line in logs[-200:]))
+
+    status = job.get("status")
+    if status == "succeeded":
+        st.success("Background conversion finished successfully.")
+        st.session_state["salt_batch_result"] = job.get("result")
+    elif status == "failed":
+        error_text = str(job.get("error") or "Unknown error")
+        st.error(f"Background conversion failed: {error_text}")
+        st.info(_batch_job_failure_hint(error_text))
+
+    if st.button("Refresh Job Status", key="salt_batch_refresh_job"):
+        st.rerun()
 
 
 def _validate_ui_path(path_str: str) -> str | None:
@@ -783,11 +894,33 @@ def _render_batch_convert_section() -> None:
         )
 
     convert_btn = st.button("Convert Directory", key="salt_batch_btn")
+    queue_btn = st.button(
+        "Queue Background Conversion",
+        key="salt_batch_queue_btn",
+    )
 
     if convert_btn:
         result = _run_batch_conversion(salt_dir, output_dir)
         if result is not None:
             st.session_state["salt_batch_result"] = result
+
+    if queue_btn:
+        if not salt_dir or not output_dir:
+            st.error("Please enter both a Salt directory and an output directory.")
+        else:
+            job_id = background_job_queue.submit(
+                "salt_batch_conversion",
+                lambda progress, log: _run_batch_conversion_background_job(
+                    progress,
+                    log,
+                    salt_dir,
+                    output_dir,
+                ),
+            )
+            st.session_state["salt_batch_job_id"] = job_id
+            st.info(f"Background conversion job queued. Job ID: {job_id[:8]}")
+
+    _display_batch_job_status()
 
     if "salt_batch_result" in st.session_state:
         _display_batch_conversion_results(st.session_state["salt_batch_result"])
