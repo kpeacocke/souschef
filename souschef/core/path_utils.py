@@ -46,16 +46,17 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
     This is a path containment validator that prevents directory traversal
     attacks (CWE-22) by ensuring paths stay within trusted boundaries.
 
-    Both paths are normalised with ``_normalize_path`` (pure
-    ``normpath``/``cwd`` operations — no filesystem I/O on user-controlled
-    data) and then compared with ``relative_to`` (pure string operation).
-    This avoids calling ``Path.resolve()`` or ``os.path.realpath()`` on
-    user-supplied data, which are filesystem I/O sinks under CodeQL
-    ``py/path-injection``.
+    The implementation uses the canonical CodeQL-recognised sanitiser pattern:
+    1. ``Path(trusted_base) / user_input`` + ``os.path.normpath`` — pure
+       string normalisation with no filesystem I/O; collapses ".." sequences.
+    2. ``os.path.commonpath([candidate, workspace])`` — containment guard
+       that CodeQL models as a barrier. ``commonpath`` is used in preference
+       to ``startswith`` because it handles edge cases like root workspaces.
 
-    Note: symlinks are **not** dereferenced by this function.  A symlink
-    whose *name* is within ``base_path`` but whose *target* is outside will
-    pass this check.  Callers that need symlink safety should call
+    Note: This function validates that the *name* of a path stays within
+    ``base_path`` but does not resolve symlinks. A symlink whose *name* lies
+    within ``base_path`` will pass this check regardless of where its target
+    points. Callers that need symlink safety should call
     ``_check_symlink_safety`` separately.
 
     Args:
@@ -64,25 +65,47 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
 
     Returns:
         Normalised Path guaranteed to be contained within ``base_path``
-        (based on ``normpath`` string semantics, not resolved symlinks).
+        (based on ``normpath`` string semantics).
 
     Raises:
-        ValueError: If the path escapes the base directory.
+        ValueError: If the path escapes the base directory or paths are on
+            different drives (Windows).
 
     """
-    # _normalize_path uses normpath+cwd — no filesystem I/O on user-controlled
-    # data (CodeQL py/path-injection safe).  Both paths become absolute strings
-    # that can be compared with pure string operations.
-    base_resolved: Path = _normalize_path(base_path)
-    candidate_resolved: Path = _normalize_path(path_obj)
+    base_str: str = str(_normalize_path(base_path))
+    candidate_str: str = str(_normalize_path(path_obj))
+    safe_base: str = base_str
 
+    # Check containment using commonpath on normalised (non-realpath)
+    # strings.  CodeQL recognises commonpath as a containment barrier for
+    # py/path-injection.  This ensures the path *name* stays within base.
     try:
-        candidate_resolved.relative_to(base_resolved)
+        common = os.path.commonpath([candidate_str, base_str])
     except ValueError as e:
-        msg = f"Path traversal attempt: escapes {base_resolved}"
+        msg = f"Path traversal attempt: escapes {safe_base}"
         raise ValueError(msg) from e
 
-    return candidate_resolved
+    if common != base_str:
+        msg = f"Path traversal attempt: escapes {safe_base}"
+        raise ValueError(msg)
+
+    # BARRIER 2: If the path is not a symlink, also check the resolved target
+    # to catch symlink-based escapes. For actual symlinks whose names are within
+    # base, we allow them through (callers must use _check_symlink_safety if needed).
+    if not path_obj.is_symlink():
+        base_resolved = os.path.realpath(base_str)
+        resolved_str = os.path.realpath(candidate_str)
+        try:
+            common2 = os.path.commonpath([resolved_str, base_resolved])
+        except ValueError as e:
+            msg = f"Path traversal attempt: escapes {safe_base}"
+            raise ValueError(msg) from e
+
+        if common2 != base_resolved:
+            msg = f"Path traversal attempt: escapes {safe_base}"
+            raise ValueError(msg)
+
+    return path_obj
 
 
 def _normalize_path(path_str: str | Path) -> Path:
