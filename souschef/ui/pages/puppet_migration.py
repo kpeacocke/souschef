@@ -22,29 +22,33 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # type: ignore[assignment]  # pragma: no cover
 
-from souschef.converters.puppet_to_ansible import (
+from souschef.core.path_utils import (
+    _get_workspace_root,
+)
+from souschef.orchestrators.puppet import (
     convert_puppet_manifest_to_ansible,
     convert_puppet_manifest_to_ansible_with_ai,
     convert_puppet_module_to_ansible,
     convert_puppet_module_to_ansible_with_ai,
     get_puppet_ansible_module_map,
-)
-from souschef.core.path_utils import (
-    _get_workspace_root,
-)
-from souschef.parsers.puppet import (
+    import_puppet_catalog_to_ir,
+    list_puppet_server_nodes,
     parse_puppet_manifest,
     parse_puppet_module,
 )
 
 INPUT_METHOD_FILE_PATH = "Manifest File Path"
 INPUT_METHOD_MODULE_PATH = "Module Directory Path"
-INPUT_METHODS = [INPUT_METHOD_FILE_PATH, INPUT_METHOD_MODULE_PATH]
+INPUT_METHOD_PUPPET_SERVER = "Puppet Server Catalog"
+INPUT_METHODS = [
+    INPUT_METHOD_FILE_PATH,
+    INPUT_METHOD_MODULE_PATH,
+    INPUT_METHOD_PUPPET_SERVER,
+]
 
 MIME_TEXT_YAML = "text/yaml"
 MIME_TEXT_PLAIN = "text/plain"
 
-# AI provider display names
 _AI_PROVIDERS = ["anthropic", "openai", "watson", "lightspeed"]
 _DEFAULT_PROVIDER = "anthropic"
 _DEFAULT_MODEL = "claude-3-5-sonnet-20241022"
@@ -134,8 +138,10 @@ def show_puppet_migration_page() -> None:
 
     if input_method == INPUT_METHOD_FILE_PATH:
         _show_manifest_file_section()
-    else:
+    elif input_method == INPUT_METHOD_MODULE_PATH:
         _show_module_directory_section()
+    else:
+        _show_puppet_server_section()
 
     st.divider()
     _show_resource_type_reference()
@@ -265,6 +271,148 @@ def _show_manifest_file_section() -> None:
 
     if ai_clicked:
         _run_manifest_ai_conversion(manifest_path, ai_cfg)
+
+
+def _show_puppet_server_section() -> None:
+    """Render the Puppet Server catalog import section."""
+    if st is None:
+        return  # pragma: no cover
+
+    st.subheader("Import Puppet Server Catalog")
+    server_url = st.text_input(
+        "Puppet Server URL",
+        key="puppet_server_url",
+        placeholder="https://puppet.example.com:8140",
+    )
+    cert_path = st.text_input(
+        "Client certificate path",
+        key="puppet_server_cert_path",
+        placeholder="certs/client.pem",
+    )
+    key_path = st.text_input(
+        "Client key path",
+        key="puppet_server_key_path",
+        placeholder="certs/client.key",
+    )
+    ca_path = st.text_input(
+        "CA certificate path (optional)",
+        key="puppet_server_ca_path",
+        placeholder="certs/ca.pem",
+    )
+    environment = st.text_input(
+        "Environment (optional)",
+        key="puppet_server_environment",
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        list_clicked = st.button("List Nodes", key="puppet_server_list_nodes")
+    with col2:
+        import_clicked = st.button(
+            "Import Catalog",
+            type="primary",
+            key="puppet_server_import_catalog",
+        )
+
+    required = [server_url, cert_path, key_path]
+    if (list_clicked or import_clicked) and not all(required):
+        st.warning("Please provide the server URL, certificate path, and key path.")
+        return
+
+    if list_clicked:
+        _run_puppet_server_node_listing(
+            server_url,
+            cert_path,
+            key_path,
+            environment,
+            ca_path,
+        )
+
+    nodes = st.session_state.get("puppet_server_nodes", [])
+    if nodes:
+        node_name = st.selectbox(
+            "Puppet Node",
+            options=nodes,
+            key="puppet_server_node_name",
+        )
+    else:
+        node_name = st.text_input(
+            "Puppet Node Name",
+            key="puppet_server_node_name_input",
+            placeholder="web01.example.com",
+        )
+
+    if import_clicked:
+        if not node_name:
+            st.warning("Please select or enter a Puppet node name.")
+            return
+        _run_puppet_server_catalog_import(
+            server_url,
+            cert_path,
+            key_path,
+            node_name,
+            environment,
+            ca_path,
+        )
+
+
+def _run_puppet_server_node_listing(
+    server_url: str,
+    cert_path: str,
+    key_path: str,
+    environment: str,
+    ca_path: str,
+) -> None:
+    """Retrieve Puppet nodes and store them for selection."""
+    if st is None:
+        return  # pragma: no cover
+
+    with st.spinner("Loading Puppet nodes..."):
+        result = list_puppet_server_nodes(
+            server_url=server_url,
+            cert_path=cert_path,
+            key_path=key_path,
+            environment=environment,
+            ca_path=ca_path,
+        )
+
+    if result.get("status") != "success":
+        st.error(result.get("error", "Failed to list Puppet nodes"))
+        return
+
+    st.session_state["puppet_server_nodes"] = result.get("nodes", [])
+    st.success(f"Loaded {result.get('count', 0)} Puppet node(s).")
+
+
+def _run_puppet_server_catalog_import(
+    server_url: str,
+    cert_path: str,
+    key_path: str,
+    node_name: str,
+    environment: str,
+    ca_path: str,
+) -> None:
+    """Import a compiled Puppet catalog and display the IR + fidelity report."""
+    if st is None:
+        return  # pragma: no cover
+
+    with st.spinner("Importing Puppet catalog..."):
+        result = import_puppet_catalog_to_ir(
+            server_url=server_url,
+            cert_path=cert_path,
+            key_path=key_path,
+            node_name=node_name,
+            environment=environment,
+            ca_path=ca_path,
+        )
+
+    if result.get("status") != "success":
+        st.error(result.get("error", "Failed to import Puppet catalog"))
+        return
+
+    st.success("Puppet catalog imported successfully.")
+    st.json(result.get("fidelity_report", {}))
+    st.json(result.get("ir", {}))
 
 
 def _show_module_directory_section() -> None:

@@ -19,7 +19,9 @@ from souschef.parsers.puppet import (
     _build_line_index,
     _detect_unsupported_constructs,
     _extract_puppet_classes,
+    _extract_puppet_facts,
     _extract_puppet_resources,
+    _extract_puppet_templates,
     _extract_puppet_variables,
     _format_manifest_results,
     _get_line_number,
@@ -127,6 +129,15 @@ EMPTY_MANIFEST = "# Just a comment, no resources\n"
 CLASS_NO_PARAMS = """\
 class simple {
   package { 'vim': ensure => installed }
+}
+"""
+
+FACTS_TEMPLATES_MANIFEST = """\
+class app {
+    $osfamily = $::osfamily
+    $platform = $facts['os']['family']
+    $cfg = template('myapp/config.erb')
+    $svc = epp('myapp/service.epp')
 }
 """
 
@@ -494,6 +505,22 @@ def test_extract_puppet_variables_values() -> None:
     assert "80" in port_var["value"]
 
 
+def test_extract_puppet_facts_legacy_and_hash() -> None:
+    """Test extraction of both legacy and facts-hash fact references."""
+    facts = _extract_puppet_facts(FACTS_TEMPLATES_MANIFEST, "test.pp")
+    fact_names = {f["name"] for f in facts}
+    assert "osfamily" in fact_names
+    assert "os.family" in fact_names
+
+
+def test_extract_puppet_templates_template_and_epp() -> None:
+    """Test extraction of template and epp references with source locations."""
+    templates = _extract_puppet_templates(FACTS_TEMPLATES_MANIFEST, "test.pp")
+    assert any(t["path"] == "myapp/config.erb" for t in templates)
+    assert any(t["path"] == "myapp/service.epp" for t in templates)
+    assert all(t["line"] >= 1 for t in templates)
+
+
 # ---------------------------------------------------------------------------
 # Tests: _detect_unsupported_constructs
 # ---------------------------------------------------------------------------
@@ -727,4 +754,18 @@ def test_parse_manifest_content_structure() -> None:
     assert "resources" in result
     assert "classes" in result
     assert "variables" in result
+    assert "facts" in result
+    assert "templates" in result
     assert "unsupported" in result
+
+
+def test_parse_puppet_manifest_reports_facts_and_templates(tmp_path: Path) -> None:
+    """Formatted report includes extracted facts and template references."""
+    manifest = tmp_path / "facts_templates.pp"
+    manifest.write_text(FACTS_TEMPLATES_MANIFEST, encoding="utf-8")
+
+    output = parse_puppet_manifest(str(manifest))
+
+    assert "Facts Referenced" in output
+    assert "Templates Referenced" in output
+    assert "myapp/config.erb" in output

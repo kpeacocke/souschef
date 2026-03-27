@@ -115,6 +115,35 @@ class TestParsePowershellContent:
         assert len(result["warnings"]) > 0
         assert result["metrics"]["win_shell_fallback"] == 1
 
+    def test_ast_backend_is_used_when_available(self) -> None:
+        """AST command extraction path is used when AST commands are available."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        with patch(
+            "souschef.parsers.powershell._extract_commands_with_ast",
+            return_value=[("Install-WindowsFeature -Name Web-Server", 3)],
+        ):
+            result = json.loads(parse_powershell_content("Write-Host 'ignored'"))
+
+        assert result["parser_backend"] == "ast"
+        assert result["actions"][0]["action_type"] == "windows_feature_install"
+        assert result["actions"][0]["source_line"] == 3
+
+    def test_regex_backend_is_used_when_ast_unavailable(self) -> None:
+        """Parser falls back to regex mode when AST extraction is unavailable."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        with patch(
+            "souschef.parsers.powershell._extract_commands_with_ast",
+            return_value=None,
+        ):
+            result = json.loads(
+                parse_powershell_content("Install-WindowsFeature -Name Web-Server")
+            )
+
+        assert result["parser_backend"] == "regex"
+        assert result["actions"][0]["action_type"] == "windows_feature_install"
+
 
 class TestWindowsFeatureClassifier:
     """Tests for Windows feature install/remove patterns."""

@@ -16,15 +16,13 @@ else:
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from souschef.assessment import (
-    calculate_activity_breakdown,
-)
 from souschef.migration_config import (
     DeploymentTarget,
     MigrationConfig,
     MigrationStandard,
     ValidationTool,
 )
+from souschef.orchestrators.chef import calculate_activity_breakdown
 
 
 def show_migration_config_page() -> None:

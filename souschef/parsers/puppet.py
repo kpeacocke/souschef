@@ -127,6 +127,8 @@ def _accumulate_manifests(
     all_resources: list[dict[str, Any]] = []
     all_classes: list[dict[str, Any]] = []
     all_variables: list[dict[str, Any]] = []
+    all_facts: list[dict[str, Any]] = []
+    all_templates: list[dict[str, Any]] = []
     all_unsupported: list[dict[str, Any]] = []
     skipped_files: list[str] = []
 
@@ -138,6 +140,8 @@ def _accumulate_manifests(
             all_resources.extend(parsed.get("resources", []))
             all_classes.extend(parsed.get("classes", []))
             all_variables.extend(parsed.get("variables", []))
+            all_facts.extend(parsed.get("facts", []))
+            all_templates.extend(parsed.get("templates", []))
             all_unsupported.extend(parsed.get("unsupported", []))
         except (OSError, ValueError) as exc:
             skipped_files.append(f"{manifest_path.name}: {exc}")
@@ -146,6 +150,8 @@ def _accumulate_manifests(
         "resources": all_resources,
         "classes": all_classes,
         "variables": all_variables,
+        "facts": all_facts,
+        "templates": all_templates,
         "unsupported": all_unsupported,
     }
     return combined, skipped_files
@@ -214,11 +220,15 @@ def _parse_manifest_content(content: str, source_path: str) -> dict[str, Any]:
     resources = _extract_puppet_resources(content, source_path)
     classes = _extract_puppet_classes(content, source_path)
     variables = _extract_puppet_variables(content, source_path)
+    facts = _extract_puppet_facts(content, source_path)
+    templates = _extract_puppet_templates(content, source_path)
     unsupported = _detect_unsupported_constructs(content, source_path)
     return {
         "resources": resources,
         "classes": classes,
         "variables": variables,
+        "facts": facts,
+        "templates": templates,
         "unsupported": unsupported,
     }
 
@@ -353,6 +363,80 @@ def _extract_puppet_variables(content: str, source_path: str) -> list[dict[str, 
             }
         )
     return variables
+
+
+def _extract_puppet_facts(content: str, source_path: str) -> list[dict[str, Any]]:
+    """Extract Puppet fact references from manifest content."""
+    facts: list[dict[str, Any]] = []
+    line_starts = _build_line_index(content)
+
+    legacy_pattern = re.compile(r"\$::([a-zA-Z_][\w]*)")
+    modern_pattern = re.compile(
+        r"\$facts\s*\[\s*['\"](?P<first>[\w\-]+)['\"]\s*\]"
+        r"(?:\s*\[\s*['\"](?P<second>[\w\-]+)['\"]\s*\])?"
+    )
+
+    seen: set[tuple[str, int]] = set()
+
+    for match in legacy_pattern.finditer(content):
+        name = match.group(1)
+        line_num = _get_line_number(match.start(), line_starts)
+        dedupe_key = (name, line_num)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        facts.append(
+            {
+                "name": name,
+                "notation": "legacy",
+                "source_file": source_path,
+                "line": line_num,
+            }
+        )
+
+    for match in modern_pattern.finditer(content):
+        first = match.group("first")
+        second = match.group("second")
+        name = f"{first}.{second}" if second else first
+        line_num = _get_line_number(match.start(), line_starts)
+        dedupe_key = (name, line_num)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        facts.append(
+            {
+                "name": name,
+                "notation": "facts_hash",
+                "source_file": source_path,
+                "line": line_num,
+            }
+        )
+
+    return facts
+
+
+def _extract_puppet_templates(content: str, source_path: str) -> list[dict[str, Any]]:
+    """Extract Puppet template references from manifest content."""
+    templates: list[dict[str, Any]] = []
+    line_starts = _build_line_index(content)
+
+    pattern = re.compile(
+        r"\b(?P<func>template|epp|inline_template|inline_epp)\s*\(\s*"
+        r"['\"](?P<path>[^'\"]+)['\"]"
+    )
+
+    for match in pattern.finditer(content):
+        line_num = _get_line_number(match.start(), line_starts)
+        templates.append(
+            {
+                "function": match.group("func"),
+                "path": match.group("path"),
+                "source_file": source_path,
+                "line": line_num,
+            }
+        )
+
+    return templates
 
 
 def _detect_unsupported_constructs(
@@ -564,6 +648,31 @@ def _format_variables_section(
         parts.append("")
 
 
+def _format_facts_section(parts: list[str], facts: list[dict[str, Any]]) -> None:
+    """Append the facts section to the report parts list."""
+    if facts:
+        parts.append(f"Facts Referenced ({len(facts)}):")
+        for fact in facts[:20]:
+            parts.append(f"  {fact['name']} ({fact['notation']}) [line {fact['line']}]")
+        if len(facts) > 20:
+            parts.append(f"  ... and {len(facts) - 20} more")
+        parts.append("")
+
+
+def _format_templates_section(
+    parts: list[str], templates: list[dict[str, Any]]
+) -> None:
+    """Append the template references section to the report parts list."""
+    if templates:
+        parts.append(f"Templates Referenced ({len(templates)}):")
+        for template in templates:
+            parts.append(
+                f"  {template['function']}('{template['path']}')"
+                f" [line {template['line']}]"
+            )
+        parts.append("")
+
+
 def _format_unsupported_section(
     parts: list[str], unsupported: list[dict[str, Any]]
 ) -> None:
@@ -600,11 +709,15 @@ def _format_manifest_results(results: dict[str, Any], source: str) -> str:
     resources = results.get("resources", [])
     classes = results.get("classes", [])
     variables = results.get("variables", [])
+    facts = results.get("facts", [])
+    templates = results.get("templates", [])
     unsupported = results.get("unsupported", [])
 
     _format_resources_section(parts, resources)
     _format_classes_section(parts, classes)
     _format_variables_section(parts, variables)
+    _format_facts_section(parts, facts)
+    _format_templates_section(parts, templates)
     _format_unsupported_section(parts, unsupported)
 
     # Summary
@@ -612,6 +725,8 @@ def _format_manifest_results(results: dict[str, Any], source: str) -> str:
     parts.append(f"  Total resources: {len(resources)}")
     parts.append(f"  Total classes: {len(classes)}")
     parts.append(f"  Total variables: {len(variables)}")
+    parts.append(f"  Total facts referenced: {len(facts)}")
+    parts.append(f"  Total templates referenced: {len(templates)}")
     parts.append(f"  Unsupported constructs: {len(unsupported)}")
     if unsupported:
         parts.append("  NOTE: Review unsupported constructs before migration.")

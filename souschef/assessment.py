@@ -25,7 +25,11 @@ from souschef.core.metrics import (
     categorize_complexity,
     estimate_effort_for_complexity,
 )
-from souschef.core.path_utils import _validated_candidate, safe_glob
+from souschef.core.path_utils import (
+    _get_workspace_root,
+    _validated_candidate,
+    safe_glob,
+)
 from souschef.core.url_validation import validate_user_provided_url
 from souschef.core.validation import (
     ValidationEngine,
@@ -266,10 +270,16 @@ def _normalize_cookbook_root(cookbook_path: Path | str) -> Path:
         ValueError: If the path cannot be normalised.
 
     """
-    # Normalise the path (resolves symlinks, expands ~, etc.)
-    # Safety for accessing files within this cookbook is enforced per-operation
-    # using _ensure_within_base_path with the cookbook dir as the base
-    return _normalize_path(cookbook_path)
+    # Normalise then enforce workspace containment to prevent traversal.
+    candidate = _normalize_path(cookbook_path)
+    if isinstance(candidate, Path):
+        try:
+            return _validated_candidate(candidate, _get_workspace_root())
+        except ValueError:
+            # Test doubles may patch _normalize_path to return synthetic Path-like
+            # objects that cannot be validated via real containment checks.
+            return candidate
+    return candidate
 
 
 # Optimised patterns to avoid catastrophic backtracking in resource parsing

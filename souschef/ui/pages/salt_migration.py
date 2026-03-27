@@ -13,17 +13,135 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
-from souschef.converters.salt import (
+from souschef.core.job_queue import background_job_queue
+from souschef.core.path_utils import _get_workspace_root
+from souschef.orchestrators.salt import (
+    assess_salt_complexity,
     convert_salt_directory_to_roles,
     convert_salt_sls_to_ansible,
-)
-from souschef.core.path_utils import _get_workspace_root
-from souschef.parsers.salt import (
-    assess_salt_complexity,
+    generate_salt_inventory,
     parse_salt_directory,
     parse_salt_pillar,
     parse_salt_sls,
+    plan_salt_migration,
 )
+
+# Constants to avoid duplicate literals (S1192)
+_ERR_INVALID_PATH = "Invalid or unsafe path. Path must be within the workspace."
+_MIME_TEXT_PLAIN = "text/plain"
+_LABEL_SALT_STATES_DIR = "Salt States Directory"
+_PLACEHOLDER_SALT_DIR = "/srv/salt"
+_ERR_ENTER_DIRECTORY_PATH = "Please enter a directory path."
+
+
+def _batch_job_failure_hint(error_text: str) -> str:
+    """Return an actionable hint for a failed background conversion job."""
+    lowered = error_text.lower()
+    if "unsafe" in lowered or "invalid" in lowered or "path" in lowered:
+        return (
+            "Verify both input/output paths are absolute and inside the workspace. "
+            "Use the picker values shown in this page."
+        )
+    if "permission" in lowered or "denied" in lowered:
+        return (
+            "Check write permissions for the output directory and ensure the "
+            "directory exists or can be created."
+        )
+    if "json" in lowered:
+        return (
+            "The converter returned malformed output. Re-run with a smaller "
+            "directory subset and inspect job logs for the failing file."
+        )
+    return (
+        "Re-run the job and review the logs for the failing stage. If it "
+        "persists, run conversion on smaller subsets to isolate the problematic "
+        "state file."
+    )
+
+
+def _run_batch_conversion_background_job(
+    progress: Any,
+    log: Any,
+    salt_dir: str,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Execute Salt directory conversion as a background job."""
+    progress(5, "Validating source and output paths")
+
+    safe_salt_dir = _validate_ui_path(salt_dir)
+    if safe_salt_dir is None:
+        raise ValueError("Invalid or unsafe Salt directory path")
+
+    safe_output_dir = _validate_ui_path(output_dir)
+    if safe_output_dir is None:
+        raise ValueError("Invalid or unsafe output directory path")
+
+    log(f"Source directory: {safe_salt_dir}")
+    log(f"Output directory: {safe_output_dir}")
+
+    progress(25, "Running conversion")
+    result_str = convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
+
+    progress(80, "Parsing conversion output")
+    try:
+        result: dict[str, Any] = json.loads(result_str)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"JSON decode failure from converter: {exc}") from exc
+
+    if "error" in result:
+        raise ValueError(str(result["error"]))
+
+    roles = len(result.get("roles_created", []))
+    files = len(result.get("files_written", []))
+    warnings = len(result.get("warnings", []))
+
+    log(f"Roles created: {roles}")
+    log(f"Files written: {files}")
+    if warnings:
+        log(f"Warnings emitted: {warnings}")
+
+    progress(100, "Conversion completed")
+    return result
+
+
+def _display_batch_job_status() -> None:
+    """Display status and logs for the current background batch job."""
+    job_id = st.session_state.get("salt_batch_job_id")
+    if not job_id:
+        return
+
+    job = background_job_queue.get(job_id)
+    if job is None:
+        st.warning("Background job record not found.")
+        return
+
+    st.subheader("Background Job Status")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Status", str(job.get("status", "unknown")).upper())
+    with col2:
+        st.metric("Progress", f"{job.get('progress', 0)}%")
+    with col3:
+        st.metric("Job ID", str(job_id)[:8])
+
+    st.progress(max(0, min(100, int(job.get("progress", 0)))) / 100)
+
+    logs = job.get("logs", [])
+    if logs:
+        with st.expander("Job logs", expanded=False):
+            st.code("\n".join(str(line) for line in logs[-200:]))
+
+    status = job.get("status")
+    if status == "succeeded":
+        st.success("Background conversion finished successfully.")
+        st.session_state["salt_batch_result"] = job.get("result")
+    elif status == "failed":
+        error_text = str(job.get("error") or "Unknown error")
+        st.error(f"Background conversion failed: {error_text}")
+        st.info(_batch_job_failure_hint(error_text))
+
+    if st.button("Refresh Job Status", key="salt_batch_refresh_job"):
+        st.rerun()
 
 
 def _validate_ui_path(path_str: str) -> str | None:
@@ -131,7 +249,7 @@ def _render_sls_parse_section() -> None:
 
         safe_path = _validate_ui_path(sls_path)
         if safe_path is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Parsing SLS file..."):
@@ -239,7 +357,7 @@ def _render_convert_section() -> None:
 
         safe_path = _validate_ui_path(sls_path)
         if safe_path is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Converting SLS to Ansible..."):
@@ -301,7 +419,7 @@ def _display_conversion_results(result: dict[str, Any]) -> None:
             "Download Playbook",
             data=playbook,
             file_name="playbook.yml",
-            mime="text/plain",
+            mime=_MIME_TEXT_PLAIN,
             key="salt_download_playbook",
         )
 
@@ -333,7 +451,7 @@ def _render_pillar_section() -> None:
 
         safe_path = _validate_ui_path(pillar_path)
         if safe_path is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Parsing pillar file..."):
@@ -372,9 +490,9 @@ def _render_directory_section() -> None:
 
     with col1:
         salt_dir = st.text_input(
-            "Salt States Directory",
+            _LABEL_SALT_STATES_DIR,
             value="",
-            placeholder="/srv/salt",
+            placeholder=_PLACEHOLDER_SALT_DIR,
             help="Path to the root Salt states directory.",
             key="salt_dir_path",
         )
@@ -386,12 +504,12 @@ def _render_directory_section() -> None:
 
     if scan_btn:
         if not salt_dir:
-            st.error("Please enter a directory path.")
+            st.error(_ERR_ENTER_DIRECTORY_PATH)
             return
 
         safe_dir = _validate_ui_path(salt_dir)
         if safe_dir is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Scanning directory..."):
@@ -467,9 +585,9 @@ def _render_assessment_section() -> None:
 
     with col1:
         salt_dir = st.text_input(
-            "Salt States Directory",
+            _LABEL_SALT_STATES_DIR,
             value="",
-            placeholder="/srv/salt",
+            placeholder=_PLACEHOLDER_SALT_DIR,
             help="Path to the Salt states root directory to assess.",
             key="salt_assess_dir",
         )
@@ -481,12 +599,12 @@ def _render_assessment_section() -> None:
 
     if assess_btn:
         if not salt_dir:
-            st.error("Please enter a directory path.")
+            st.error(_ERR_ENTER_DIRECTORY_PATH)
             return
 
         safe_dir = _validate_ui_path(salt_dir)
         if safe_dir is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Assessing Salt migration complexity..."):
@@ -577,9 +695,9 @@ def _render_migration_plan_section() -> None:
 
     with col1:
         salt_dir = st.text_input(
-            "Salt States Directory",
+            _LABEL_SALT_STATES_DIR,
             value="",
-            placeholder="/srv/salt",
+            placeholder=_PLACEHOLDER_SALT_DIR,
             help="Path to the Salt states root directory.",
             key="salt_plan_dir",
         )
@@ -604,17 +722,15 @@ def _render_migration_plan_section() -> None:
 
     if plan_btn:
         if not salt_dir:
-            st.error("Please enter a directory path.")
+            st.error(_ERR_ENTER_DIRECTORY_PATH)
             return
 
         safe_dir = _validate_ui_path(salt_dir)
         if safe_dir is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
+            st.error(_ERR_INVALID_PATH)
             return
 
         with st.spinner("Generating migration plan..."):
-            from souschef.server import plan_salt_migration
-
             result_str = plan_salt_migration(safe_dir, int(timeline), str(platform))
 
         st.session_state["salt_plan_result"] = result_str
@@ -627,9 +743,130 @@ def _render_migration_plan_section() -> None:
             "Download Plan",
             data=plan_text,
             file_name="salt_migration_plan.md",
-            mime="text/plain",
+            mime=_MIME_TEXT_PLAIN,
             key="salt_download_plan",
         )
+
+
+def _run_batch_conversion(salt_dir: str, output_dir: str) -> dict[str, Any] | None:
+    """Run batch conversion and return parsed result or ``None`` on failure."""
+    if not salt_dir or not output_dir:
+        st.error("Please enter both a Salt directory and an output directory.")
+        return None
+
+    safe_salt_dir = _validate_ui_path(salt_dir)
+    if safe_salt_dir is None:
+        st.error("Invalid or unsafe Salt directory path. Must be within the workspace.")
+        return None
+
+    safe_output_dir = _validate_ui_path(output_dir)
+    if safe_output_dir is None:
+        st.error(
+            "Invalid or unsafe output directory path. Must be within the workspace."
+        )
+        return None
+
+    with st.spinner("Converting Salt directory to Ansible roles..."):
+        result_str = convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
+
+    try:
+        result: dict[str, Any] = json.loads(result_str)
+    except json.JSONDecodeError:
+        st.error(f"Conversion error: {result_str}")
+        return None
+
+    if "error" in result:
+        st.error(result["error"])
+        return None
+
+    st.success(
+        "Converted "
+        f"{len(result.get('roles_created', []))} role(s), wrote "
+        f"{len(result.get('files_written', []))} file(s) to {output_dir}"
+    )
+    return result
+
+
+def _display_batch_conversion_results(result: dict[str, Any]) -> None:
+    """Display previously generated batch conversion results."""
+    roles = result.get("roles_created", [])
+    files = result.get("files_written", [])
+    warnings = result.get("warnings", [])
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Roles Created", len(roles))
+    with col2:
+        st.metric("Files Written", len(files))
+
+    if warnings:
+        st.warning(f"{len(warnings)} warning(s):")
+        for warning in warnings:
+            st.markdown(f"- {warning}")
+
+    if roles:
+        with st.expander(f"Roles ({len(roles)})", expanded=True):
+            for role in roles:
+                st.code(role)
+
+    if files:
+        with st.expander(f"Files written ({len(files)})", expanded=False):
+            for file_path in files:
+                st.code(file_path)
+
+
+def _run_inventory_generation(top_path: str) -> dict[str, Any] | None:
+    """Run inventory generation and return parsed result or ``None`` on failure."""
+    if not top_path:
+        st.error("Please enter a path to the top.sls file.")
+        return None
+
+    safe_path = _validate_ui_path(top_path)
+    if safe_path is None:
+        st.error(_ERR_INVALID_PATH)
+        return None
+
+    with st.spinner("Generating Ansible inventory..."):
+        result_str = generate_salt_inventory(safe_path)
+
+    try:
+        result: dict[str, Any] = json.loads(result_str)
+    except json.JSONDecodeError:
+        st.error(f"Generation error: {result_str}")
+        return None
+
+    if "error" in result:
+        st.error(result["error"])
+        return None
+
+    st.success(
+        "Generated inventory with "
+        f"{len(result.get('groups', []))} group(s) and "
+        f"{len(result.get('hosts', []))} host(s)."
+    )
+    return result
+
+
+def _display_inventory_results(result: dict[str, Any]) -> None:
+    """Display inventory generation result payload."""
+    inventory = result.get("inventory", "")
+
+    if inventory:
+        st.subheader("Generated Ansible Inventory")
+        st.code(inventory, language="ini")
+        st.download_button(
+            "Download Inventory",
+            data=inventory,
+            file_name="hosts",
+            mime=_MIME_TEXT_PLAIN,
+            key="salt_download_inventory",
+        )
+
+    groups = result.get("groups", [])
+    if groups:
+        with st.expander(f"Groups ({len(groups)})", expanded=False):
+            for group in groups:
+                st.code(group)
 
 
 def _render_batch_convert_section() -> None:
@@ -640,9 +877,9 @@ def _render_batch_convert_section() -> None:
 
     with col1:
         salt_dir = st.text_input(
-            "Salt States Directory",
+            _LABEL_SALT_STATES_DIR,
             value="",
-            placeholder="/srv/salt",
+            placeholder=_PLACEHOLDER_SALT_DIR,
             help="Path to the Salt states root directory.",
             key="salt_batch_dir",
         )
@@ -657,72 +894,36 @@ def _render_batch_convert_section() -> None:
         )
 
     convert_btn = st.button("Convert Directory", key="salt_batch_btn")
+    queue_btn = st.button(
+        "Queue Background Conversion",
+        key="salt_batch_queue_btn",
+    )
 
     if convert_btn:
+        result = _run_batch_conversion(salt_dir, output_dir)
+        if result is not None:
+            st.session_state["salt_batch_result"] = result
+
+    if queue_btn:
         if not salt_dir or not output_dir:
             st.error("Please enter both a Salt directory and an output directory.")
-            return
-
-        safe_salt_dir = _validate_ui_path(salt_dir)
-        if safe_salt_dir is None:
-            st.error(
-                "Invalid or unsafe Salt directory path. Must be within the workspace."
+        else:
+            job_id = background_job_queue.submit(
+                "salt_batch_conversion",
+                lambda progress, log: _run_batch_conversion_background_job(
+                    progress,
+                    log,
+                    salt_dir,
+                    output_dir,
+                ),
             )
-            return
+            st.session_state["salt_batch_job_id"] = job_id
+            st.info(f"Background conversion job queued. Job ID: {job_id[:8]}")
 
-        safe_output_dir = _validate_ui_path(output_dir)
-        if safe_output_dir is None:
-            st.error(
-                "Invalid or unsafe output directory path. Must be within the workspace."
-            )
-            return
-
-        with st.spinner("Converting Salt directory to Ansible roles..."):
-            result_str = convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
-
-        try:
-            result: dict[str, Any] = json.loads(result_str)
-        except json.JSONDecodeError:
-            st.error(f"Conversion error: {result_str}")
-            return
-
-        if "error" in result:
-            st.error(result["error"])
-            return
-
-        st.session_state["salt_batch_result"] = result
-        roles = result.get("roles_created", [])
-        files = result.get("files_written", [])
-        st.success(
-            f"Converted {len(roles)} role(s), wrote {len(files)} file(s) to {output_dir}"
-        )
+    _display_batch_job_status()
 
     if "salt_batch_result" in st.session_state:
-        result = st.session_state["salt_batch_result"]
-        roles = result.get("roles_created", [])
-        files = result.get("files_written", [])
-        warnings = result.get("warnings", [])
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Roles Created", len(roles))
-        with col2:
-            st.metric("Files Written", len(files))
-
-        if warnings:
-            st.warning(f"{len(warnings)} warning(s):")
-            for w in warnings:
-                st.markdown(f"- {w}")
-
-        if roles:
-            with st.expander(f"Roles ({len(roles)})", expanded=True):
-                for r in roles:
-                    st.code(r)
-
-        if files:
-            with st.expander(f"Files written ({len(files)})", expanded=False):
-                for f in files:
-                    st.code(f)
+        _display_batch_conversion_results(st.session_state["salt_batch_result"])
 
 
 def _render_inventory_section() -> None:
@@ -746,57 +947,12 @@ def _render_inventory_section() -> None:
         )
 
     if inv_btn:
-        if not top_path:
-            st.error("Please enter a path to the top.sls file.")
-            return
-
-        safe_path = _validate_ui_path(top_path)
-        if safe_path is None:
-            st.error("Invalid or unsafe path. Path must be within the workspace.")
-            return
-
-        with st.spinner("Generating Ansible inventory..."):
-            from souschef.server import generate_salt_inventory
-
-            result_str = generate_salt_inventory(safe_path)
-
-        try:
-            result: dict[str, Any] = json.loads(result_str)
-        except json.JSONDecodeError:
-            st.error(f"Generation error: {result_str}")
-            return
-
-        if "error" in result:
-            st.error(result["error"])
-            return
-
-        st.session_state["salt_inv_result"] = result
-        groups = result.get("groups", [])
-        hosts = result.get("hosts", [])
-        st.success(
-            f"Generated inventory with {len(groups)} group(s) and {len(hosts)} host(s)."
-        )
+        result = _run_inventory_generation(top_path)
+        if result is not None:
+            st.session_state["salt_inv_result"] = result
 
     if "salt_inv_result" in st.session_state:
-        result = st.session_state["salt_inv_result"]
-        inventory = result.get("inventory", "")
-
-        if inventory:
-            st.subheader("Generated Ansible Inventory")
-            st.code(inventory, language="ini")
-            st.download_button(
-                "Download Inventory",
-                data=inventory,
-                file_name="hosts",
-                mime="text/plain",
-                key="salt_download_inventory",
-            )
-
-        groups = result.get("groups", [])
-        if groups:
-            with st.expander(f"Groups ({len(groups)})", expanded=False):
-                for g in groups:
-                    st.code(g)
+        _display_inventory_results(st.session_state["salt_inv_result"])
 
 
 def show_salt_migration_page() -> None:

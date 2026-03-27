@@ -21,8 +21,6 @@ else:
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from souschef.assessment import assess_single_cookbook_with_ai
-
 # Import Chef Server validation functions from core module
 from souschef.core.chef_server import _validate_chef_server_connection
 from souschef.core.path_utils import (
@@ -30,9 +28,11 @@ from souschef.core.path_utils import (
     _normalize_path,
     _safe_join,
 )
-
-# Import from orchestration layer instead of storage directly
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
+    assess_single_cookbook_with_ai,
+    parse_chef_migration_assessment,
+)
+from souschef.orchestrators.chef import (
     orchestrate_get_storage_manager as get_storage_manager,
 )
 
@@ -450,8 +450,6 @@ def _assess_single_cookbook(
         )
     else:
         # Rule-based assessment fallback
-        from souschef.assessment import parse_chef_migration_assessment
-
         assessment = parse_chef_migration_assessment(str(cookbook_dir))
 
     # Save to storage
@@ -475,7 +473,7 @@ def _confirm_bulk_operation(estimated_time: float, operation: str) -> bool:
     if estimated_time <= 60:
         return True
 
-    confirm = st.checkbox(
+    confirm: bool = st.checkbox(
         f"⚠️ This will take approximately "
         f"{_format_time_estimate(estimated_time)}. Continue?",
         key=f"confirm_{operation}_all",

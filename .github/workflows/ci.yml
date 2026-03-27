@@ -84,7 +84,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v5
       with:
-        go-version: '1.24.x'
+        go-version-file: 'go.work'
         cache-dependency-path: terraform-provider/go.sum
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -118,7 +118,7 @@ jobs:
       run: go test ./... -v -timeout 5m -coverprofile=coverage.out -covermode=atomic
 
     - name: Install Terraform CLI for acceptance tests
-      uses: hashicorp/setup-terraform@v3
+      uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 # v4
       with:
         terraform_wrapper: false
 

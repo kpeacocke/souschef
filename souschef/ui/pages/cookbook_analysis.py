@@ -1,7 +1,6 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
-import importlib
 import io
 import json
 import os
@@ -14,6 +13,8 @@ import zipfile
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
+
+import yaml
 
 # UI dependencies - required for this module to function
 # At runtime, gracefully handle missing dependencies; for type checking, assume present
@@ -36,7 +37,7 @@ if TYPE_CHECKING:
     import streamlit as st
 else:
     try:
-        pd = importlib.import_module("pandas")
+        import pandas as pd
     except ImportError:
         pd = None
 
@@ -48,10 +49,6 @@ else:
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from souschef.assessment import (
-    analyse_cookbook_dependencies,
-    assess_single_cookbook_with_ai,
-)
 from souschef.core.constants import METADATA_FILENAME
 from souschef.core.metrics import (
     EffortMetrics,
@@ -62,34 +59,38 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
 )
-
-# Import from orchestration layer (Layer 6) instead of domain logic (Layer 3)
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
+    analyse_cookbook_dependencies,
+    assess_single_cookbook_with_ai,
+    orchestrate_generate_playbook_from_recipe_with_ai,
+    parse_chef_migration_assessment,
+)
+from souschef.orchestrators.chef import (
     orchestrate_calculate_file_fingerprint as _calculate_file_fingerprint,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_conversion_analysis as analyse_conversion_output,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_cookbook_metadata_parsing as parse_cookbook_metadata,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_generate_playbook_from_recipe as generate_playbook_from_recipe,
 )
-from souschef.orchestration import (
-    orchestrate_generate_playbook_from_recipe_with_ai,
-)
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_get_blob_storage as get_blob_storage,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_get_storage_manager as get_storage_manager,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_repository_generation as generate_ansible_repository,
 )
-from souschef.orchestration import (
+from souschef.orchestrators.chef import (
     orchestrate_template_conversion as _convert_templates_impl,
+)
+from souschef.orchestrators.chef import (
+    orchestrate_validate_conversion as validate_conversion_output,
 )
 from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
 
@@ -905,13 +906,14 @@ def _setup_cookbook_analysis_ui() -> None:
 
 def _get_cookbook_path_input() -> str:
     """Get the cookbook path input from the user."""
-    return st.text_input(
+    result: str = st.text_input(
         "Cookbook Directory Path",
         placeholder="cookbooks/ or ../shared/cookbooks/",
         help="Enter a path to your Chef cookbooks directory. "
         "Relative paths (e.g., 'cookbooks/') and absolute paths inside the workspace "
         "(e.g., '/workspaces/souschef/cookbooks/') are allowed.",
     )
+    return result
 
 
 def _get_archive_upload_input() -> Any:
@@ -1532,8 +1534,6 @@ def _analyze_with_ai(
         List of analysis results.
 
     """
-    from souschef.assessment import assess_single_cookbook_with_ai
-
     ai_config = load_ai_settings()
     provider_mapping = {
         ANTHROPIC_CLAUDE_DISPLAY: "anthropic",
@@ -1644,8 +1644,6 @@ def _analyze_rule_based(
         Tuple of (results list, assessment_result dict).
 
     """
-    from souschef.assessment import parse_chef_migration_assessment
-
     cookbook_paths_list = [cb["Path"] for cb in cookbook_data]
     cookbook_paths_str = ",".join(cookbook_paths_list)
 
@@ -3188,8 +3186,6 @@ def _run_rule_based_analysis(cookbook_dir: Path) -> dict:
         Assessment dictionary.
 
     """
-    from souschef.assessment import parse_chef_migration_assessment
-
     assessment = parse_chef_migration_assessment(str(cookbook_dir))
 
     # Extract single cookbook assessment if multi-cookbook structure returned
@@ -4833,7 +4829,7 @@ def _display_download_button(
 def _display_playbook_previews(playbooks: list) -> None:
     """Display preview of generated playbooks."""
     with st.expander("Preview Generated Playbooks", expanded=True):
-        for playbook in playbooks:
+        for index, playbook in enumerate(playbooks):
             conversion_badge = (
                 "AI-Enhanced"
                 if playbook.get("conversion_method") == "AI-enhanced"
@@ -4843,10 +4839,131 @@ def _display_playbook_previews(playbooks: list) -> None:
                 f"{playbook['cookbook_name']} ({conversion_badge}) - "
                 f"from {playbook['recipe_file']}"
             )
-            content = playbook["playbook_content"]
-            preview = content[:1000] + "..." if len(content) > 1000 else content
+            tweaked_content = _build_live_preview_content(playbook, index)
+            _display_inline_validation_feedback(tweaked_content)
+            preview = (
+                tweaked_content[:1000] + "..."
+                if len(tweaked_content) > 1000
+                else tweaked_content
+            )
             st.code(preview, language="yaml")
             st.divider()
+
+
+def _parse_preview_mapping_input(mapping_input: str) -> dict[str, str]:
+    """Parse preview mapping overrides from JSON input."""
+    if not isinstance(mapping_input, str) or not mapping_input.strip():
+        return {}
+
+    try:
+        parsed = json.loads(mapping_input)
+    except json.JSONDecodeError:
+        try:
+            parsed = yaml.safe_load(mapping_input)
+        except yaml.YAMLError:
+            return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(key): str(value) for key, value in parsed.items()}
+
+
+def _apply_preview_tweaks(
+    content: str,
+    mapping_overrides: dict[str, str],
+    *,
+    normalise_package_state: bool,
+    task_name_prefix: str,
+) -> str:
+    """Apply live-preview mapping and normalisation tweaks to playbook text."""
+    updated_content = content
+    preserve_trailing_newline = updated_content.endswith("\n")
+    for source, target in mapping_overrides.items():
+        updated_content = updated_content.replace(source, target)
+
+    if normalise_package_state:
+        updated_content = updated_content.replace(
+            "state: installed",
+            "state: present",
+        )
+
+    if task_name_prefix:
+        updated_lines: list[str] = []
+        for line in updated_content.splitlines():
+            if line.lstrip().startswith("- name:"):
+                indentation = line[: len(line) - len(line.lstrip())]
+                name_value = line.split(":", 1)[1].strip()
+                updated_lines.append(
+                    f"{indentation}- name: {task_name_prefix}{name_value}"
+                )
+            else:
+                updated_lines.append(line)
+        updated_content = "\n".join(updated_lines)
+
+    if preserve_trailing_newline and not updated_content.endswith("\n"):
+        updated_content += "\n"
+
+    return updated_content
+
+
+def _summarise_inline_validation(result: str) -> dict[str, int]:
+    """Summarise validation JSON for inline preview feedback."""
+    try:
+        parsed = json.loads(result)
+    except json.JSONDecodeError:
+        return {"errors": 1, "warnings": 0}
+
+    summary = parsed.get("summary", {}) if isinstance(parsed, dict) else {}
+    if not isinstance(summary, dict):
+        return {"errors": 1, "warnings": 0}
+    return {
+        "errors": int(summary.get("errors", 0) or 0),
+        "warnings": int(summary.get("warnings", 0) or 0),
+    }
+
+
+def _display_inline_validation_feedback(content: str) -> None:
+    """Display inline validation feedback for a preview playbook."""
+    validation_result = validate_conversion_output("recipe", content, "json")
+    summary = _summarise_inline_validation(validation_result)
+    if summary["errors"] > 0:
+        st.error(
+            f"Inline validation found {summary['errors']} error(s) and "
+            f"{summary['warnings']} warning(s)."
+        )
+    elif summary["warnings"] > 0:
+        st.warning(f"Inline validation found {summary['warnings']} warning(s).")
+    else:
+        st.success("Inline validation passed.")
+
+
+def _build_live_preview_content(playbook: dict[str, Any], index: int) -> str:
+    """Build tweakable live-preview content for a generated playbook."""
+    mapping_input = st.text_area(
+        "Mapping overrides (JSON)",
+        value="{}",
+        key=f"preview_mapping_{index}",
+        help=(
+            "Apply string replacements in the preview, for example "
+            '{"apt:": "package:"}.'
+        ),
+    )
+    normalise_package_state = st.checkbox(
+        "Normalise package state to present",
+        value=True,
+        key=f"preview_normalise_{index}",
+    )
+    task_name_prefix = st.text_input(
+        "Task name prefix",
+        value="",
+        key=f"preview_task_prefix_{index}",
+        help="Prefix generated task names to test naming conventions.",
+    )
+    return _apply_preview_tweaks(
+        playbook["playbook_content"],
+        _parse_preview_mapping_input(mapping_input),
+        normalise_package_state=normalise_package_state,
+        task_name_prefix=task_name_prefix,
+    )
 
 
 def _display_template_previews(templates: list) -> None:

@@ -37,49 +37,104 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  security-events: write
-  actions: read
-
 jobs:
-  analyze:
-    name: Analyze Python Code
+  changes:
+    name: Detect language changes
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      go: ${{ steps.filter.outputs.go }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        with:
+          filters: |
+            python:
+              - 'souschef/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'poetry.lock'
+              - '.github/codeql-config.yml'
+              - '.github/workflows/codeql.yml'
+            go:
+              - 'terraform-provider/**'
+              - 'go.work'
+              - '.github/codeql-config.yml'
+              - '.github/workflows/codeql.yml'
+
+  analyze:
+    name: Analyze ${{ matrix.language }} Code
+    needs: changes
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.python == 'true' ||
+      needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, go]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v5
         with:
-          languages: python
+          go-version-file: 'go.work'
+          cache-dependency-path: terraform-provider/go.sum
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@b1bff81932f5cdfc8695c7752dcee935dcd061c8 # v4
+        with:
+          languages: ${{ matrix.language }}
           # Use default queries plus security-extended for more comprehensive scanning
           queries: +security-extended,security-and-quality
           # Config file includes custom model extensions
           config-file: ./.github/codeql-config.yml
 
       - name: Set up Python
+        if: matrix.language == 'python'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.13"
           cache: 'pip'
 
       - name: Install Poetry
+        if: matrix.language == 'python'
         run: |
           pipx install poetry
           poetry config virtualenvs.in-project true
 
       - name: Install dependencies
+        if: matrix.language == 'python'
         run: |
           poetry install --no-interaction --no-root
 
+      - name: Build Go
+        if: matrix.language == 'go'
+        working-directory: terraform-provider
+        run: go build ./...
+
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
+        uses: github/codeql-action/analyze@b1bff81932f5cdfc8695c7752dcee935dcd061c8 # v4
         with:
-          category: "/language:python"
+          category: "/language:${{ matrix.language }}"
           # Upload results even if there are findings
           upload: always
           # Output SARIF file for artifact upload
@@ -89,7 +144,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: codeql-sarif-results
+          name: codeql-sarif-results-${{ matrix.language }}
           path: sarif-results
           retention-days: 30
 

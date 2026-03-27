@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -308,6 +310,93 @@ def parse_powershell_content(content: str, source: str = "<inline>") -> str:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+_POWERSHELL_AST_QUERY = (
+    "$content=[Console]::In.ReadToEnd();"
+    "$tokens=$null;"
+    "$errors=$null;"
+    "$ast=[System.Management.Automation.Language.Parser]::ParseInput("
+    "$content,[ref]$tokens,[ref]$errors);"
+    "$commands=$ast.FindAll({param($n)"
+    "$n -is [System.Management.Automation.Language.CommandAst]},$true)"
+    "| ForEach-Object {"
+    "[pscustomobject]@{"
+    "text=$_.Extent.Text;"
+    "line=[int]$_.Extent.StartLineNumber"
+    "}"
+    "};"
+    "$commands | ConvertTo-Json -Compress -Depth 5"
+)
+
+
+def _extract_commands_with_ast(content: str) -> list[tuple[str, int]] | None:
+    """Extract PowerShell command texts and source lines using PowerShell AST."""
+    pwsh_path = shutil.which("pwsh")
+    if not pwsh_path:
+        return None
+
+    result = subprocess.run(
+        [
+            pwsh_path,
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            _POWERSHELL_AST_QUERY,
+        ],
+        input=content,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    if isinstance(payload, dict):
+        payload = [payload]
+    if not isinstance(payload, list):
+        return None
+
+    commands: list[tuple[str, int]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        text = item.get("text")
+        line = item.get("line")
+        if isinstance(text, str) and isinstance(line, int):
+            normalised = " ".join(text.splitlines()).strip()
+            if normalised:
+                commands.append((normalised, line))
+    return commands
+
+
+def _append_classified_or_fallback_action(
+    actions: list[dict[str, Any]],
+    warnings: list[str],
+    metrics: dict[str, int],
+    line: str,
+    lineno: int,
+) -> None:
+    """Append a classified action or a win_shell fallback for one command."""
+    action = _classify_line(line, lineno)
+    if action is None:
+        msg = (
+            f"Line {lineno}: Unrecognised pattern – falling back to"
+            f" win_shell: {line[:80]}"
+        )
+        warnings.append(msg)
+        actions.append(_make_win_shell_fallback(line, lineno))
+        metrics["win_shell_fallback"] += 1
+        return
+
+    actions.append(action)
+    _increment_metric(metrics, action["action_type"])
+
 
 def _parse_powershell_content(content: str, source: str) -> dict[str, Any]:
     """Parse PowerShell content and return the IR dict."""
@@ -333,33 +422,41 @@ def _parse_powershell_content(content: str, source: str) -> dict[str, Any]:
     lines = content.splitlines()
     metrics["total_lines"] = len(lines)
 
-    for lineno, raw_line in enumerate(lines, start=1):
-        line = raw_line.strip()
-
-        # Skip blank lines and comments
-        if _RE_BLANK.match(line) or _RE_COMMENT.match(line):
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if _RE_BLANK.match(stripped) or _RE_COMMENT.match(stripped):
             metrics["skipped_lines"] += 1
-            continue
 
-        action = _classify_line(line, lineno)
-        if action is not None:
-            actions.append(action)
-            _increment_metric(metrics, action["action_type"])
-        else:
-            # Unrecognised line – emit as win_shell fallback
-            msg = (
-                f"Line {lineno}: Unrecognised pattern – falling back to"
-                f" win_shell: {line[:80]}"
-            )
-            warnings.append(msg)
-            actions.append(_make_win_shell_fallback(line, lineno))
-            metrics["win_shell_fallback"] += 1
+    parsed_with_ast = False
+    ast_commands = _extract_commands_with_ast(content)
+
+    command_stream: list[tuple[str, int]]
+    if ast_commands is not None:
+        parsed_with_ast = True
+        command_stream = ast_commands
+    else:
+        command_stream = []
+        for lineno, raw_line in enumerate(lines, start=1):
+            line = raw_line.strip()
+            if _RE_BLANK.match(line) or _RE_COMMENT.match(line):
+                continue
+            command_stream.append((line, lineno))
+
+    for line, lineno in command_stream:
+        _append_classified_or_fallback_action(
+            actions,
+            warnings,
+            metrics,
+            line,
+            lineno,
+        )
 
     return {
         "source": source,
         "actions": actions,
         "warnings": warnings,
         "metrics": metrics,
+        "parser_backend": "ast" if parsed_with_ast else "regex",
     }
 
 

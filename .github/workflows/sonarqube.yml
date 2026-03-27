@@ -15,6 +15,7 @@ permissions:
   contents: read
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   PYTHON_VERSION: "3.13"
 
 jobs:
@@ -53,6 +54,13 @@ jobs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
+    - name: Set up Go
+      if: steps.check-token.outputs.has_token == 'true'
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v5
+      with:
+        go-version-file: 'go.work'
+        cache-dependency-path: terraform-provider/go.sum
+
     - name: Install Poetry
       if: steps.check-token.outputs.has_token == 'true'
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a # v1
@@ -83,7 +91,7 @@ jobs:
 
     - name: Download coverage artifacts from CI workflow
       if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_run'
-      uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         run-id: ${{ github.event.workflow_run.id }}
