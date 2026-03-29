@@ -775,6 +775,11 @@ def _top_to_ansible_inventory(top_data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def top_to_ansible_inventory(top_data: dict[str, Any]) -> str:
+    """Public wrapper to convert Salt top data to an Ansible inventory."""
+    return _top_to_ansible_inventory(top_data)
+
+
 def _render_nested_yaml_value(val: Any, indent: int) -> list[str]:
     """
     Render a nested dict value as YAML lines with given indentation.

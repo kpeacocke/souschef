@@ -535,8 +535,11 @@ def _call_ai_api(
             client, prompt, model, temperature, max_tokens, response_format
         )
     elif provider == "github_copilot":
-        return _call_github_copilot_api(
-            client, prompt, model, temperature, max_tokens, response_format
+        return (
+            f"{ERROR_PREFIX} GitHub Copilot does not have a public REST API. "
+            "GitHub Copilot is only available through IDE integrations and "
+            "cannot be used for programmatic API calls. Please use Anthropic Claude, "
+            "OpenAI, or IBM Watsonx instead."
         )
     else:  # OpenAI
         return _call_openai_api(

@@ -212,7 +212,7 @@ def generate_salt_inventory(top_path: str) -> str:
     if "Error" in top_json and "environments" not in top_data:
         return json.dumps({"error": top_json})
 
-    inventory = salt_converter._top_to_ansible_inventory(top_data)
+    inventory = salt_converter.top_to_ansible_inventory(top_data)
     groups: list[str] = []
     hosts: list[str] = []
     for line in inventory.splitlines():

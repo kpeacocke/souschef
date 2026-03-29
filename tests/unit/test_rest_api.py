@@ -129,6 +129,66 @@ def test_handle_rest_request_run_unknown_operation() -> None:
     assert payload == {"error": "Unknown operation: missing"}
 
 
+def test_handle_rest_request_run_invalid_arguments_error_mapping() -> None:
+    """Argument errors from operations map to bad request responses."""
+    request_body = b'{"operation": "demo", "arguments": {"count": "x"}}'
+
+    def _raise_value_error(**_: object) -> str:
+        raise ValueError("count must be an integer")
+
+    with patch(
+        "souschef.rest_api._supported_operations",
+        return_value={"demo": _raise_value_error},
+    ):
+        status, payload = handle_rest_request("POST", "/api/v1/run", request_body)
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "Invalid arguments: count must be an integer"}
+
+
+def test_handle_rest_request_run_runtime_error_mapping() -> None:
+    """Runtime operation failures map to bad gateway responses."""
+    request_body = b'{"operation": "demo", "arguments": {}}'
+
+    def _raise_runtime_error(**_: object) -> str:
+        raise RuntimeError("upstream service unavailable")
+
+    with patch(
+        "souschef.rest_api._supported_operations",
+        return_value={"demo": _raise_runtime_error},
+    ):
+        status, payload = handle_rest_request("POST", "/api/v1/run", request_body)
+
+    assert status == HTTPStatus.BAD_GATEWAY
+    assert payload == {"error": "upstream service unavailable"}
+
+
+def test_handle_rest_request_run_rejects_invalid_webhook_url() -> None:
+    """Run route rejects invalid webhook URLs before delivery attempts."""
+    request_body = json.dumps(
+        {
+            "operation": "demo",
+            "arguments": {},
+            "webhook_url": "http://127.0.0.1/internal",
+        }
+    ).encode("utf-8")
+
+    with (
+        patch(
+            "souschef.rest_api._supported_operations",
+            return_value={"demo": lambda: json.dumps({"ok": True})},
+        ),
+        patch(
+            "souschef.rest_api.validate_user_provided_url",
+            side_effect=ValueError("Host is not allowed"),
+        ),
+    ):
+        status, payload = handle_rest_request("POST", "/api/v1/run", request_body)
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "Invalid webhook URL: Host is not allowed"}
+
+
 def test_handle_rest_request_webhook_notify_success() -> None:
     """Webhook notify route returns a success payload."""
     request_body = json.dumps(
@@ -182,6 +242,30 @@ def test_handle_rest_request_webhook_notify_failure() -> None:
 
     assert status == HTTPStatus.BAD_GATEWAY
     assert payload == {"status": "error", "error": "boom"}
+
+
+def test_handle_rest_request_webhook_notify_rejects_invalid_url() -> None:
+    """Webhook notify route validates URL and rejects unsafe values."""
+    request_body = json.dumps(
+        {
+            "url": "http://169.254.169.254/latest/meta-data",
+            "event": "migration.completed",
+            "payload": {"status": "ok"},
+        }
+    ).encode("utf-8")
+
+    with patch(
+        "souschef.rest_api.validate_user_provided_url",
+        side_effect=ValueError("Host is not allowed"),
+    ):
+        status, payload = handle_rest_request(
+            "POST",
+            "/api/v1/webhooks/notify",
+            request_body,
+        )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "Invalid webhook URL: Host is not allowed"}
 
 
 def test_handle_rest_request_invalid_json() -> None:

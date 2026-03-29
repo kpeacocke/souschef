@@ -8,6 +8,7 @@ from http import HTTPStatus
 from typing import Any
 from wsgiref.simple_server import make_server
 
+from souschef.core.url_validation import validate_user_provided_url
 from souschef.server import (
     convert_puppet_manifest_to_ansible,
     import_puppet_catalog_to_ir,
@@ -79,7 +80,18 @@ def _route_run(request: JsonObject) -> RouteResponse:
     if operation not in operations:
         return HTTPStatus.NOT_FOUND, {"error": f"Unknown operation: {operation}"}
 
-    result = operations[operation](**arguments)
+    try:
+        result = operations[operation](**arguments)
+    except (TypeError, ValueError) as exc:
+        LOGGER.warning("Invalid operation arguments for %s: %s", operation, exc)
+        return HTTPStatus.BAD_REQUEST, {"error": f"Invalid arguments: {exc}"}
+    except RuntimeError as exc:
+        LOGGER.warning("Upstream failure for operation %s: %s", operation, exc)
+        return HTTPStatus.BAD_GATEWAY, {"error": str(exc)}
+    except Exception as exc:  # pragma: no cover
+        LOGGER.exception("Unexpected operation failure for %s", operation)
+        return HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Internal error: {exc}"}
+
     response: JsonObject = {
         "status": "success",
         "operation": operation,
@@ -89,8 +101,13 @@ def _route_run(request: JsonObject) -> RouteResponse:
     webhook_url = request.get("webhook_url", "")
     webhook_secret = request.get("webhook_secret", "")
     if isinstance(webhook_url, str) and webhook_url:
+        try:
+            safe_webhook_url = validate_user_provided_url(webhook_url, strip_path=False)
+        except ValueError as exc:
+            return HTTPStatus.BAD_REQUEST, {"error": f"Invalid webhook URL: {exc}"}
+
         webhook_result = send_webhook_notification(
-            webhook_url,
+            safe_webhook_url,
             "operation.completed",
             response,
             secret=webhook_secret if isinstance(webhook_secret, str) else "",
@@ -116,8 +133,13 @@ def _route_webhook_notify(request: JsonObject) -> RouteResponse:
             "error": "Webhook payload must be a JSON object"
         }
 
+    try:
+        safe_url = validate_user_provided_url(url, strip_path=False)
+    except ValueError as exc:
+        return HTTPStatus.BAD_REQUEST, {"error": f"Invalid webhook URL: {exc}"}
+
     result = send_webhook_notification(
-        url,
+        safe_url,
         event,
         payload,
         secret=secret if isinstance(secret, str) else "",

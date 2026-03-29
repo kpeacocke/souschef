@@ -76,7 +76,9 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
 
     """
     base_str: str = str(_normalize_path(base_path))
-    candidate_str: str = str(_normalize_path(path_obj))
+    normalized_candidate: Path = _normalize_path(path_obj)
+    candidate_str: str = str(normalized_candidate)
+    path_obj = normalized_candidate
     safe_base: str = base_str
 
     # Check containment using commonpath on normalised (non-realpath)
@@ -108,7 +110,7 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
             msg = f"Path traversal attempt: escapes {safe_base}"
             raise ValueError(msg)
 
-    return path_obj
+    return normalized_candidate
 
 
 def _normalize_path(path_str: str | Path) -> Path:

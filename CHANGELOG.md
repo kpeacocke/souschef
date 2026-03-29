@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* **release:** Bump major version to `7.0.0`
+* **release:** Bump major version to `7.2.0`
 * **documentation:** Promote SaltStack, Puppet, PowerShell, and Bash migration support to first-class docs coverage
   - Unified product positioning as multi-platform migration (not Chef-only)
   - Added dedicated Bash migration guide and linked it from navigation and quick-start docs

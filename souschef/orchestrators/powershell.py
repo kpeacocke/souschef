@@ -32,14 +32,20 @@ def analyze_powershell_migration_fidelity(parsed_ir: dict[str, object]) -> str:
     return powershell_generators.analyze_powershell_migration_fidelity(parsed_ir)
 
 
-def generate_windows_inventory(*args: object, **kwargs: object) -> str:
+def generate_windows_inventory(
+    hosts: list[str] | None = None,
+    winrm_port: int = 5986,
+    use_ssl: bool = True,
+    validate_certs: bool = False,
+    winrm_transport: str = "ntlm",
+) -> str:
     """Generate Windows inventory content for enterprise artefacts."""
     return powershell_generators.generate_windows_inventory(
-        hosts=None,
-        winrm_port=5986,
-        use_ssl=True,
-        validate_certs=False,
-        winrm_transport="ntlm",
+        hosts=hosts,
+        winrm_port=winrm_port,
+        use_ssl=use_ssl,
+        validate_certs=validate_certs,
+        winrm_transport=winrm_transport,
     )
 
 
