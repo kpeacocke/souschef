@@ -130,17 +130,17 @@ class TestGenerateWindowsInventory:
 
     @patch("souschef.orchestrators.powershell.powershell_generators")
     def test_ignores_passed_args(self, mock_generators: MagicMock) -> None:
-        """Test that args are ignored in favour of hardcoded defaults."""
+        """Test that explicit params are passed through correctly."""
         mock_generators.generate_windows_inventory.return_value = ""
 
         from souschef.orchestrators.powershell import generate_windows_inventory
 
-        # Even when args are passed, the function uses hardcoded defaults
-        generate_windows_inventory("ignored_arg", key="ignored_kwarg")
+        # Explicit parameters are passed through to the underlying generator
+        generate_windows_inventory(hosts=["win1"], winrm_port=5985)
 
         mock_generators.generate_windows_inventory.assert_called_once_with(
-            hosts=None,
-            winrm_port=5986,
+            hosts=["win1"],
+            winrm_port=5985,
             use_ssl=True,
             validate_certs=False,
             winrm_transport="ntlm",

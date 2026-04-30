@@ -84,10 +84,7 @@ def test_call_github_copilot_api_error_status(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_call_ai_api_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AI API dispatcher should call provider-specific function."""
-    monkeypatch.setattr(
-        playbook_module, "_call_github_copilot_api", lambda *args, **kwargs: "ok"
-    )
+    """AI API dispatcher returns an error message for github_copilot provider."""
     result = playbook_module._call_ai_api(
         {"api_key": "key", "base_url": "https://api.github.com"},
         "github_copilot",
@@ -96,7 +93,7 @@ def test_call_ai_api_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         0.2,
         100,
     )
-    assert result == "ok"
+    assert "GitHub Copilot does not have a public REST API" in result
 
 
 def test_create_ai_conversion_prompt_with_context() -> None:

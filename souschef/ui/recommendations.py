@@ -477,7 +477,7 @@ def show_dependency_map(dependency_graph: dict[str, list[str]]) -> None:
 
     """
     try:
-        import networkx as nx  # type: ignore[import-not-found]
+        import networkx as nx
     except ImportError:
         st.warning("Install 'networkx' to view dependency graphs")
         return

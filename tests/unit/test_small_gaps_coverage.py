@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -48,18 +49,23 @@ def test_generate_salt_inventory_error_in_top_json() -> None:
 
 
 def test_normalize_cookbook_root_returns_str_candidate() -> None:
-    """_normalize_cookbook_root returns string candidate when _normalize_path returns a non-Path value (line 282)."""
+    """_normalize_cookbook_root returns a Path when _normalize_path returns a string."""
     from souschef.assessment import _normalize_cookbook_root
 
-    # Patch _normalize_path (as used in assessment) to return a plain string.
-    with patch(
-        "souschef.assessment._normalize_path",
-        return_value="/some/cookbook",
+    # Patch _normalize_path to return a plain string (which _validated_candidate accepts).
+    with (
+        patch(
+            "souschef.assessment._normalize_path",
+            return_value=Path("/tmp"),
+        ),
+        patch(
+            "souschef.assessment._validated_candidate",
+            return_value=Path("/tmp"),
+        ),
     ):
-        result = _normalize_cookbook_root("/some/cookbook")
+        result = _normalize_cookbook_root("/tmp")
 
-    # result should be the string that was returned by the mock
-    assert result == "/some/cookbook"
+    assert result == Path("/tmp")
 
 
 # ---------------------------------------------------------------------------

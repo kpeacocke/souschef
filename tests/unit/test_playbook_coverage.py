@@ -463,20 +463,11 @@ def test_call_ai_api_routes_lightspeed() -> None:
 
 
 def test_call_ai_api_routes_github_copilot() -> None:
-    """Test _call_ai_api routes to GitHub Copilot."""
-    mock_requests = MagicMock()
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = {
-        "choices": [{"message": {"content": "copilot result"}}]
-    }
-    mock_requests.post.return_value = mock_resp
-
+    """Test _call_ai_api returns an error for GitHub Copilot (no public REST API)."""
     client = {"api_key": "key", "base_url": "https://api.github.com"}
-    with patch("souschef.converters.playbook.requests", mock_requests):
-        result = _call_ai_api(client, "github_copilot", "prompt", "gpt-4", 0.5, 100)
+    result = _call_ai_api(client, "github_copilot", "prompt", "gpt-4", 0.5, 100)
 
-    assert result == "copilot result"
+    assert "GitHub Copilot does not have a public REST API" in result
 
 
 # ---------------------------------------------------------------------------

@@ -175,10 +175,10 @@ class PuppetServerClient:
             response.raise_for_status()
             data = response.json()
         except requests.RequestException as exc:
-            logger.error("Failed Puppet Server request to %s: %s", url, exc)
+            logger.error("Failed Puppet Server request: %s", exc)
             raise RuntimeError(f"Puppet Server request failed: {exc}") from exc
         except ValueError as exc:
-            logger.error("Invalid Puppet Server JSON from %s: %s", url, exc)
+            logger.error("Invalid Puppet Server JSON response: %s", exc)
             raise RuntimeError("Puppet Server returned invalid JSON") from exc
 
         if isinstance(data, (dict, list)):
@@ -206,7 +206,7 @@ class PuppetServerClient:
         )
         if not isinstance(data, dict):
             raise RuntimeError("Puppet catalog response must be a JSON object")
-        return cast(dict[str, Any], data)
+        return data
 
 
 class AnsiblePlatformClient:
