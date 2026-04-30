@@ -244,6 +244,30 @@ def test_handle_rest_request_webhook_notify_failure() -> None:
     assert payload == {"status": "error", "error": "boom"}
 
 
+def test_handle_rest_request_webhook_notify_rejects_invalid_url() -> None:
+    """Webhook notify route validates URL and rejects unsafe values."""
+    request_body = json.dumps(
+        {
+            "url": "http://169.254.169.254/latest/meta-data",
+            "event": "migration.completed",
+            "payload": {"status": "ok"},
+        }
+    ).encode("utf-8")
+
+    with patch(
+        "souschef.rest_api.validate_user_provided_url",
+        side_effect=ValueError("Host is not allowed"),
+    ):
+        status, payload = handle_rest_request(
+            "POST",
+            "/api/v1/webhooks/notify",
+            request_body,
+        )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "Invalid webhook URL: Host is not allowed"}
+
+
 def test_handle_rest_request_invalid_json() -> None:
     """Invalid JSON request bodies are rejected."""
     status, payload = handle_rest_request("POST", "/api/v1/run", b"{")

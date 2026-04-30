@@ -59,6 +59,9 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
     points. Callers that need symlink safety should call
     ``_check_symlink_safety`` separately.
 
+    SECURITY: This function is registered as a standard path-injection
+    sanitiser in .github/codeql/ for CodeQL static analysis.
+
     Args:
         path_obj: Path to validate.
         base_path: Trusted base directory.
@@ -234,6 +237,11 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
     this function.  ``expanduser()`` on user-controlled data is a CodeQL
     ``py/path-injection`` filesystem sink (reads ``/etc/passwd`` for
     ``~user`` form).
+
+    SECURITY: This function implements the full two-barrier path-injection
+    protection model and is registered as a standard sanitiser in
+    .github/codeql/ for CodeQL static analysis. Every path returned from this
+    function is guaranteed to remain within the base directory.
     """
     safe_base = _normalize_trusted_base(base_path)
     # Use normpath-based absolute string — no filesystem I/O on base_path which
