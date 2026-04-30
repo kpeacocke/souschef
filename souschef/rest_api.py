@@ -82,16 +82,12 @@ def _route_run(request: JsonObject) -> RouteResponse:
 
     try:
         result = operations[operation](**arguments)
-    except (TypeError, ValueError) as exc:
-        LOGGER.warning("Invalid operation arguments for %s: %s", operation, exc)
+    except TypeError as exc:
         return HTTPStatus.BAD_REQUEST, {"error": f"Invalid arguments: {exc}"}
     except RuntimeError as exc:
-        LOGGER.warning("Upstream failure for operation %s: %s", operation, exc)
         return HTTPStatus.BAD_GATEWAY, {"error": str(exc)}
-    except Exception as exc:  # pragma: no cover
-        LOGGER.exception("Unexpected operation failure for %s", operation)
-        return HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Internal error: {exc}"}
-
+    except ValueError as exc:
+        return HTTPStatus.BAD_REQUEST, {"error": f"Invalid arguments: {exc}"}
     response: JsonObject = {
         "status": "success",
         "operation": operation,
@@ -102,10 +98,9 @@ def _route_run(request: JsonObject) -> RouteResponse:
     webhook_secret = request.get("webhook_secret", "")
     if isinstance(webhook_url, str) and webhook_url:
         try:
-            safe_webhook_url = validate_user_provided_url(webhook_url, strip_path=False)
+            webhook_url = validate_user_provided_url(webhook_url)
         except ValueError as exc:
             return HTTPStatus.BAD_REQUEST, {"error": f"Invalid webhook URL: {exc}"}
-
         webhook_result = send_webhook_notification(
             safe_webhook_url,
             "operation.completed",

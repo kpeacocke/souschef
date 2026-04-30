@@ -275,7 +275,7 @@ class TestGenerateSaltInventory:
         """Test inventory generation with valid top.sls data."""
         top_data = {"environments": {"base": {"*": ["webserver", "common"]}}}
         mock_parser.parse_salt_top.return_value = json.dumps(top_data)
-        mock_converter._top_to_ansible_inventory.return_value = (
+        mock_converter.top_to_ansible_inventory.return_value = (
             "[base]\nwebserver1\nwebserver2\n"
         )
 
