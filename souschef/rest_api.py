@@ -102,7 +102,7 @@ def _route_run(request: JsonObject) -> RouteResponse:
         except ValueError as exc:
             return HTTPStatus.BAD_REQUEST, {"error": f"Invalid webhook URL: {exc}"}
         webhook_result = send_webhook_notification(
-            safe_webhook_url,
+            webhook_url,
             "operation.completed",
             response,
             secret=webhook_secret if isinstance(webhook_secret, str) else "",
