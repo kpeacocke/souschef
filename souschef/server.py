@@ -930,6 +930,8 @@ def parse_template(path: str) -> str:
         safe_path = _normalise_workspace_path(path, "Template path")
     except ValueError as e:
         return format_error_with_context(e, "validating template path", path)
+    except PermissionError as e:
+        return format_error_with_context(e, "validating template path", path)
     return _parse_template(str(safe_path))
 
 
@@ -949,6 +951,8 @@ def parse_custom_resource(path: str) -> str:
         safe_path = _normalise_workspace_path(path, "Resource path")
     except ValueError as e:
         return format_error_with_context(e, "validating resource path", path)
+    except PermissionError as e:
+        return format_error_with_context(e, "validating resource path", path)
     return _parse_custom_resource(str(safe_path))
 
 
@@ -967,6 +971,8 @@ def list_directory(path: str) -> list[str] | str:
     try:
         safe_path = _normalise_workspace_path(path, "Directory path")
     except ValueError as e:
+        return format_error_with_context(e, "validating directory path", path)
+    except PermissionError as e:
         return format_error_with_context(e, "validating directory path", path)
     result: list[str] | str = _list_directory(str(safe_path))
     return result
@@ -1037,6 +1043,8 @@ def read_cookbook_metadata(path: str) -> str:
     try:
         safe_path = _normalise_workspace_path(path, "Metadata path")
     except ValueError as e:
+        return format_error_with_context(e, "validating metadata path", path)
+    except PermissionError as e:
         return format_error_with_context(e, "validating metadata path", path)
     return _read_cookbook_metadata(str(safe_path))
 
@@ -1111,6 +1119,8 @@ def parse_attributes(path: str, resolve_precedence: bool = True) -> str:
         safe_path = _normalise_workspace_path(path, "Attributes path")
     except ValueError as e:
         return format_error_with_context(e, "validating attributes path", path)
+    except PermissionError as e:
+        return format_error_with_context(e, "validating attributes path", path)
     return _parse_attributes(str(safe_path), resolve_precedence)
 
 
@@ -1129,6 +1139,8 @@ def list_cookbook_structure(path: str) -> str:
     try:
         safe_path = _normalise_workspace_path(path, _COOKBOOK_PATH_LABEL)
     except ValueError as e:
+        return format_error_with_context(e, "validating cookbook path", path)
+    except PermissionError as e:
         return format_error_with_context(e, "validating cookbook path", path)
     return _list_cookbook_structure(str(safe_path))
 
