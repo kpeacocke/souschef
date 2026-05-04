@@ -1076,6 +1076,8 @@ def parse_recipe(path: str) -> str:
         safe_path = _normalise_workspace_path(path, "Recipe path")
     except ValueError as e:
         return format_error_with_context(e, "validating recipe path", path)
+    except PermissionError as e:
+        return format_error_with_context(e, "validating recipe path", path)
     return _parse_recipe(str(safe_path))
 
 
