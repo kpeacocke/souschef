@@ -988,6 +988,8 @@ def read_file(path: str) -> str:
         safe_path = _normalise_workspace_path(path, "File path")
     except ValueError as e:
         return format_error_with_context(e, "validating file path", path)
+    except PermissionError as e:
+        return format_error_with_context(e, "validating file path", path)
     result: str = _read_file(str(safe_path))
     return result
 

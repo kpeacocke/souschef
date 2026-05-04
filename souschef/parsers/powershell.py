@@ -433,7 +433,19 @@ def _parse_powershell_content(content: str, source: str) -> dict[str, Any]:
     command_stream: list[tuple[str, int]]
     if ast_commands is not None:
         parsed_with_ast = True
-        command_stream = ast_commands
+        command_stream = list(ast_commands)
+
+        # AST command extraction can miss expression-style statements (for example,
+        # static method calls such as [System.Environment]::SetEnvironmentVariable()).
+        # Add unmatched non-comment lines as a safety net without duplicating
+        # commands already represented by AST line numbers.
+        ast_line_numbers = {lineno for _, lineno in ast_commands}
+        for lineno, raw_line in enumerate(lines, start=1):
+            line = raw_line.strip()
+            if _RE_BLANK.match(line) or _RE_COMMENT.match(line):
+                continue
+            if lineno not in ast_line_numbers:
+                command_stream.append((line, lineno))
     else:
         command_stream = []
         for lineno, raw_line in enumerate(lines, start=1):
