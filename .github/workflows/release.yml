@@ -320,8 +320,7 @@ jobs:
   build-and-push-docker-ui:
     runs-on: ubuntu-latest
     needs: [validate, publish-pypi, create-release]
-    # Only skip if Docker image already exists
-    if: needs.validate.outputs.docker-exists != 'true'
+    # Always rebuild on successful release runs to pick up base image security updates.
     timeout-minutes: 30
     permissions:
       contents: read
@@ -398,7 +397,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=ui
           build-args: |
             PYTHON_VERSION=3.14.3
-            POETRY_VERSION=2.3.2
+            POETRY_VERSION=2.3.4
           provenance: true
           sbom: true
 
@@ -435,8 +434,7 @@ jobs:
   build-and-push-docker-mcp:
     runs-on: ubuntu-latest
     needs: [validate, publish-pypi, create-release]
-    # Only skip if Docker MCP image already exists
-    if: needs.validate.outputs.docker-mcp-exists != 'true'
+    # Always rebuild on successful release runs to pick up base image security updates.
     timeout-minutes: 30
     permissions:
       contents: read
@@ -513,7 +511,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=mcp
           build-args: |
             PYTHON_VERSION=3.14.3
-            POETRY_VERSION=2.3.2
+            POETRY_VERSION=2.3.4
           provenance: true
           sbom: true
 
