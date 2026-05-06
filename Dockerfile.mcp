@@ -7,7 +7,7 @@ ARG POETRY_VERSION=2.3.4
 # ============================================================================
 # Base Stage - Runtime dependencies only
 # ============================================================================
-FROM python:${PYTHON_VERSION}-alpine AS base
+FROM python:${PYTHON_VERSION}-alpine3.22 AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -76,6 +76,10 @@ RUN PYTHON_MAJOR_MINOR=$(echo "${PYTHON_VERSION}" | cut -d. -f1-2) && \
     mv /tmp/site-packages "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
         -type d -name "tests" -exec rm -rf {} + && \
+    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
+        -maxdepth 1 -type d -name "poetry*" -exec rm -rf {} + && \
+    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
+        -maxdepth 1 -type d -name "poetry-*.dist-info" -exec rm -rf {} + && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
         -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
 

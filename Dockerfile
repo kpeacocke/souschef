@@ -7,7 +7,7 @@ ARG POETRY_VERSION=2.3.4
 # ============================================================================
 # Base Stage - Common configuration for all stages
 # ============================================================================
-FROM python:${PYTHON_VERSION}-alpine AS base
+FROM python:${PYTHON_VERSION}-alpine3.22 AS base
 
 ARG PYTHON_VERSION
 
@@ -20,7 +20,7 @@ LABEL org.opencontainers.image.title="SousChef" \
       org.opencontainers.image.url="https://github.com/kpeacocke/souschef" \
       org.opencontainers.image.documentation="https://kpeacocke.github.io/souschef/" \
       org.opencontainers.image.source="https://github.com/kpeacocke/souschef" \
-      org.opencontainers.image.base.name="python:${PYTHON_VERSION}-alpine"
+    org.opencontainers.image.base.name="python:${PYTHON_VERSION}-alpine3.22"
 
 # Set environment variables for Python and Streamlit
 ENV PYTHONUNBUFFERED=1 \
@@ -120,7 +120,11 @@ RUN PYTHON_MAJOR_MINOR=$(echo "${PYTHON_VERSION}" | cut -d. -f1-2) && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
         -type d -name "tests" -exec rm -rf {} + && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
+        -maxdepth 1 -type d -name "poetry*" -exec rm -rf {} + && \
+    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
         -type d -name "*.egg-info" -exec rm -rf {} + && \
+    find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
+        -maxdepth 1 -type d -name "poetry-*.dist-info" -exec rm -rf {} + && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
         -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.dist-info/RECORD" \) -delete
 
