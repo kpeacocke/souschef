@@ -59,7 +59,9 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
     safe_exists,
+    safe_is_dir,
     safe_is_file,
+    safe_read_bytes,
 )
 from souschef.orchestrators.chef import (
     analyse_cookbook_dependencies,
@@ -935,9 +937,10 @@ def _validate_and_list_cookbooks(cookbook_path: str) -> None:
         return
 
     # Validate the safe directory before use
-    dir_exists: bool = safe_dir.exists()
+    dir_base = safe_dir.parent if safe_dir.parent != safe_dir else safe_dir
+    dir_exists: bool = safe_exists(safe_dir, dir_base)
     if dir_exists:
-        dir_is_dir: bool = safe_dir.is_dir()
+        dir_is_dir: bool = safe_is_dir(safe_dir, dir_base)
         if dir_is_dir:
             _list_and_display_cookbooks(safe_dir)
         else:
@@ -2298,28 +2301,30 @@ def _display_simulation_results(simulation_result: dict) -> None:
                 roles_path, roles_path.parent
             )
             if safe_is_file(validated_roles_path, validated_roles_path.parent):
-                with validated_roles_path.open("rb") as file_handle:
-                    st.download_button(
-                        label="Download Roles Archive",
-                        data=file_handle.read(),
-                        file_name=validated_roles_path.name,
-                        mime="application/gzip",
-                        key="download_simulation_roles",
-                    )
+                st.download_button(
+                    label="Download Roles Archive",
+                    data=safe_read_bytes(
+                        validated_roles_path, validated_roles_path.parent
+                    ),
+                    file_name=validated_roles_path.name,
+                    mime="application/gzip",
+                    key="download_simulation_roles",
+                )
 
     if repo_tar:
         repo_path = _validate_output_path(repo_tar)
         if repo_path:
             validated_repo_path = _ensure_within_base_path(repo_path, repo_path.parent)
             if safe_is_file(validated_repo_path, validated_repo_path.parent):
-                with validated_repo_path.open("rb") as file_handle:
-                    st.download_button(
-                        label="Download Repository Archive",
-                        data=file_handle.read(),
-                        file_name=validated_repo_path.name,
-                        mime="application/gzip",
-                        key="download_simulation_repo",
-                    )
+                st.download_button(
+                    label="Download Repository Archive",
+                    data=safe_read_bytes(
+                        validated_repo_path, validated_repo_path.parent
+                    ),
+                    file_name=validated_repo_path.name,
+                    mime="application/gzip",
+                    key="download_simulation_repo",
+                )
 
 
 def _validate_output_path(output_path: str) -> Path | None:
@@ -2615,7 +2620,7 @@ def _display_conversion_download_options(conversion_result: dict):
         st.error("Invalid output path")
         return
 
-    if safe_output_path.exists():  # NOSONAR
+    if safe_exists(safe_output_path, safe_output_path.parent):  # NOSONAR
         _display_role_download_buttons(safe_output_path)
         repo_placeholder = st.container()
         _display_generated_repo_section(repo_placeholder)

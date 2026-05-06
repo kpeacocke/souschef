@@ -715,7 +715,8 @@ def _copy_roles_into_destination(
         source_dir = _validated_candidate(role_dir, roles_dir)
         dest_dir = _validated_candidate(roles_dest / role_dir.name, roles_dest)
         if safe_exists(dest_dir, roles_dest):
-            shutil.rmtree(dest_dir)
+            validated_dest_dir = _ensure_within_base_path(dest_dir, roles_dest)
+            shutil.rmtree(validated_dest_dir)
         safe_mkdir(dest_dir, roles_dest, parents=True, exist_ok=True)
         for source_item in safe_glob(source_dir, "**/*", source_dir):
             relative_item = source_item.relative_to(source_dir)
@@ -730,7 +731,10 @@ def _copy_roles_into_destination(
                     parents=True,
                     exist_ok=True,
                 )
-                shutil.copy2(validated_source_item, destination_item)
+                validated_destination_item = _ensure_within_base_path(
+                    destination_item, dest_dir
+                )
+                shutil.copy2(validated_source_item, validated_destination_item)
         copied_roles.append(source_dir.name)
 
     return copied_roles

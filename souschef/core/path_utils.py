@@ -413,6 +413,25 @@ def safe_read_text(
     return validated.read_text(encoding=encoding, errors=errors)
 
 
+def safe_read_bytes(path_obj: Path, base_path: Path) -> bytes:
+    """
+    Read bytes from file after enforcing base containment.
+
+    Args:
+        path_obj: Path to the file to read.
+        base_path: Trusted base directory for containment check.
+
+    Returns:
+        File contents as bytes.
+
+    Raises:
+        ValueError: If the path escapes the base directory.
+
+    """
+    validated = _resolve_path_under_base(path_obj, base_path)
+    return validated.read_bytes()
+
+
 def safe_write_text(
     path_obj: Path, base_path: Path, text: str, encoding: str = "utf-8"
 ) -> None:
