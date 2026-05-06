@@ -27,6 +27,7 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
     _safe_join,
+    safe_mkdir,
 )
 from souschef.orchestrators.chef import (
     assess_single_cookbook_with_ai,
@@ -624,7 +625,7 @@ def _run_bulk_conversion(
 
     workspace_root = Path.cwd()
     output_path = _ensure_within_base_path(_normalize_path(output_dir), workspace_root)
-    output_path.mkdir(parents=True, exist_ok=True)
+    safe_mkdir(output_path, workspace_root, parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -665,7 +666,12 @@ def _run_bulk_conversion(
                 cookbook_output_dir = _ensure_within_base_path(
                     output_path / cookbook_name, output_path
                 )
-                cookbook_output_dir.mkdir(parents=True, exist_ok=True)
+                safe_mkdir(
+                    cookbook_output_dir,
+                    output_path,
+                    parents=True,
+                    exist_ok=True,
+                )
 
                 # Save conversion result
                 storage.save_conversion(

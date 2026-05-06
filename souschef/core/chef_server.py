@@ -18,7 +18,12 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
-from souschef.core.path_utils import _normalize_path
+from souschef.core.path_utils import (
+    _normalize_path,
+    safe_exists,
+    safe_is_file,
+    safe_read_text,
+)
 from souschef.core.url_validation import validate_user_provided_url
 
 if TYPE_CHECKING:
@@ -125,12 +130,12 @@ def _load_client_key(client_key_path: str | None, client_key: str | None) -> str
         raise ValueError("Client key is required for Chef Server authentication")
 
     key_path = _normalize_path(client_key_path)
-    if not key_path.exists():
+    if not safe_exists(key_path, key_path.parent):
         raise ValueError("Client key path does not exist")
-    if not key_path.is_file():
+    if not safe_is_file(key_path, key_path.parent):
         raise ValueError("Client key path must be a file")
 
-    return key_path.read_text(encoding="utf-8").strip()
+    return safe_read_text(key_path, key_path.parent).strip()
 
 
 def _utc_timestamp() -> str:

@@ -596,7 +596,7 @@ def analyse_cookbook_dependencies(
         except (ValueError, OSError) as e:
             return f"Error: Invalid cookbook path '{cookbook_path}': {e}"
 
-        if not normalized_input.exists():  # NOSONAR
+        if not safe_exists(normalized_input, normalized_input):
             return (
                 f"Error: Cookbook path not found: {cookbook_path}\n\n"
                 "Suggestion: Check that the path exists and points to a cookbook directory"
@@ -1187,11 +1187,11 @@ def _parse_berksfile(cookbook_path: Path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     berksfile_path = _safe_join(base, "Berksfile")
 
-    if not berksfile_path.exists():  # NOSONAR
+    if not safe_exists(berksfile_path, base):
         return {"dependencies": [], "external_cookbooks": [], "complexity": 0}
 
     try:
-        content = berksfile_path.read_text(encoding="utf-8", errors="ignore")
+        content = safe_read_text(berksfile_path, base, errors="ignore")
 
         cookbook_deps = re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
         external_deps = re.findall(
@@ -1218,11 +1218,11 @@ def _parse_chefignore(cookbook_path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     chefignore_path = _ensure_within_base_path(_safe_join(base, "chefignore"), base)
 
-    if not chefignore_path.exists():  # NOSONAR
+    if not safe_exists(chefignore_path, base):
         return {"patterns": [], "complexity": 0}
 
     try:
-        content = chefignore_path.read_text(encoding="utf-8", errors="ignore")
+        content = safe_read_text(chefignore_path, base, errors="ignore")
         lines = [
             line.strip()
             for line in content.split("\n")
@@ -1247,11 +1247,11 @@ def _parse_thorfile(cookbook_path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     thorfile_path = _ensure_within_base_path(_safe_join(base, "Thorfile"), base)
 
-    if not thorfile_path.exists():  # NOSONAR
+    if not safe_exists(thorfile_path, base):
         return {"tasks": [], "complexity": 0}
 
     try:
-        content = thorfile_path.read_text(encoding="utf-8", errors="ignore")
+        content = safe_read_text(thorfile_path, base, errors="ignore")
 
         tasks = len(re.findall(r'desc\s+[\'"]([^\'"]+)[\'"]', content))
         methods = len(re.findall(r"def\s+\w+", content))
@@ -1271,7 +1271,7 @@ def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
     base = _normalize_cookbook_root(cookbook_path)
     metadata_path = _ensure_within_base_path(_safe_join(base, "metadata.rb"), base)
 
-    if not metadata_path.exists():  # NOSONAR
+    if not safe_exists(metadata_path, base):
         return {
             "name": "",
             "version": "",
@@ -1281,7 +1281,7 @@ def _parse_metadata_file(cookbook_path) -> dict[str, Any]:
         }
 
     try:
-        content = metadata_path.read_text(encoding="utf-8", errors="ignore")
+        content = safe_read_text(metadata_path, base, errors="ignore")
 
         name_match = re.search(r'name\s+[\'"]([^\'"]+)[\'"]', content)
         version_match = re.search(r'version\s+[\'"]([^\'"]+)[\'"]', content)

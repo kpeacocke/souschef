@@ -3,6 +3,13 @@
 import os
 from pathlib import Path
 
+from souschef.core.path_utils import (
+    _normalize_path,
+    safe_exists,
+    safe_is_dir,
+    safe_iterdir,
+)
+
 
 def _is_debug_mode() -> bool:
     """
@@ -260,10 +267,11 @@ def validate_directory_exists(path: str, dir_type: str = "directory") -> Path:
         FileNotFoundError: If directory doesn't exist or isn't readable.
 
     """
-    dir_path = Path(path)
-    if not dir_path.exists():  # NOSONAR
+    dir_path = _normalize_path(path)
+    base_path = dir_path.parent if dir_path.parent != dir_path else dir_path
+    if not safe_exists(dir_path, base_path):
         raise ChefFileNotFoundError(path, dir_type)
-    if not dir_path.is_dir():
+    if not safe_is_dir(dir_path, base_path):
         raise SousChefError(
             f"Path is not a {dir_type}: {_sanitize_path(path)}",
             f"Expected a directory but found a file. Check that you're "
@@ -272,7 +280,7 @@ def validate_directory_exists(path: str, dir_type: str = "directory") -> Path:
         )
     try:
         # Test readability
-        list(dir_path.iterdir())
+        safe_iterdir(dir_path, base_path)
     except PermissionError as e:
         raise SousChefError(
             f"Permission denied reading {dir_type}: {_sanitize_path(path)}",

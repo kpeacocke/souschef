@@ -58,6 +58,8 @@ from souschef.core.metrics import (
 from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
+    safe_exists,
+    safe_is_file,
 )
 from souschef.orchestrators.chef import (
     analyse_cookbook_dependencies,
@@ -2291,27 +2293,33 @@ def _display_simulation_results(simulation_result: dict) -> None:
 
     if roles_tar:
         roles_path = _validate_output_path(roles_tar)
-        if roles_path and roles_path.is_file():
-            with roles_path.open("rb") as file_handle:
-                st.download_button(
-                    label="Download Roles Archive",
-                    data=file_handle.read(),
-                    file_name=roles_path.name,
-                    mime="application/gzip",
-                    key="download_simulation_roles",
-                )
+        if roles_path:
+            validated_roles_path = _ensure_within_base_path(
+                roles_path, roles_path.parent
+            )
+            if safe_is_file(validated_roles_path, validated_roles_path.parent):
+                with validated_roles_path.open("rb") as file_handle:
+                    st.download_button(
+                        label="Download Roles Archive",
+                        data=file_handle.read(),
+                        file_name=validated_roles_path.name,
+                        mime="application/gzip",
+                        key="download_simulation_roles",
+                    )
 
     if repo_tar:
         repo_path = _validate_output_path(repo_tar)
-        if repo_path and repo_path.is_file():
-            with repo_path.open("rb") as file_handle:
-                st.download_button(
-                    label="Download Repository Archive",
-                    data=file_handle.read(),
-                    file_name=repo_path.name,
-                    mime="application/gzip",
-                    key="download_simulation_repo",
-                )
+        if repo_path:
+            validated_repo_path = _ensure_within_base_path(repo_path, repo_path.parent)
+            if safe_is_file(validated_repo_path, validated_repo_path.parent):
+                with validated_repo_path.open("rb") as file_handle:
+                    st.download_button(
+                        label="Download Repository Archive",
+                        data=file_handle.read(),
+                        file_name=validated_repo_path.name,
+                        mime="application/gzip",
+                        key="download_simulation_repo",
+                    )
 
 
 def _validate_output_path(output_path: str) -> Path | None:
@@ -2327,10 +2335,10 @@ def _validate_output_path(output_path: str) -> Path | None:
     """
     try:
         safe_output_path = _normalize_path(str(output_path))
-        base_dir = Path.cwd().resolve()
+        base_dir = _normalize_path(Path.cwd())
         # Use centralised containment validation
         validated = _ensure_within_base_path(safe_output_path, base_dir)
-        return validated if validated.exists() else None
+        return validated if safe_exists(validated, base_dir) else None
     except ValueError:
         return None
 

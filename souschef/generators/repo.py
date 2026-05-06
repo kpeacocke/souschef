@@ -20,6 +20,7 @@ from souschef.core.path_utils import (
     _validated_candidate,
     safe_exists,
     safe_glob,
+    safe_is_dir,
     safe_iterdir,
     safe_mkdir,
     safe_write_text,
@@ -718,8 +719,9 @@ def _copy_roles_into_destination(
         safe_mkdir(dest_dir, roles_dest, parents=True, exist_ok=True)
         for source_item in safe_glob(source_dir, "**/*", source_dir):
             relative_item = source_item.relative_to(source_dir)
+            validated_source_item = _validated_candidate(source_item, source_dir)
             destination_item = _validated_candidate(dest_dir / relative_item, dest_dir)
-            if source_item.is_dir():
+            if safe_is_dir(validated_source_item, source_dir):
                 safe_mkdir(destination_item, dest_dir, parents=True, exist_ok=True)
             else:
                 safe_mkdir(
@@ -728,7 +730,7 @@ def _copy_roles_into_destination(
                     parents=True,
                     exist_ok=True,
                 )
-                shutil.copy2(source_item, destination_item)
+                shutil.copy2(validated_source_item, destination_item)
         copied_roles.append(source_dir.name)
 
     return copied_roles
