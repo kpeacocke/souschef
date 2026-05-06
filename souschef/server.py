@@ -237,7 +237,9 @@ from souschef.core.path_utils import (  # noqa: F401, codeql[py/unused-import]
     _normalize_path,
     _safe_join,
     _validated_candidate,
+    safe_exists,
     safe_glob,
+    safe_mkdir,
     safe_read_text,
     safe_write_text,
 )
@@ -4371,7 +4373,7 @@ def _convert_recipes(
             # Write as task file; _safe_join already enforces containment within role_dir
             task_file = _safe_join(role_dir, "tasks", f"{recipe_name}.yml")
             try:
-                task_file.parent.mkdir(parents=True, exist_ok=True)  # nosonar
+                safe_mkdir(task_file.parent, role_dir, parents=True, exist_ok=True)
                 safe_write_text(task_file, role_dir, playbook_yaml)
             except OSError as write_err:
                 conversion_summary["errors"].append(
@@ -4427,7 +4429,7 @@ def _convert_templates(
                 target_file = _safe_join(
                     role_dir, "templates", str(rel_path.with_suffix(""))
                 )
-                target_file.parent.mkdir(parents=True, exist_ok=True)
+                safe_mkdir(target_file.parent, role_dir, parents=True, exist_ok=True)
                 safe_write_text(target_file, role_dir, jinja2_content)
 
                 conversion_summary["converted_files"].append(
@@ -4491,7 +4493,7 @@ def _convert_attributes(
             defaults_filename: str = f"{validated_attr.stem}.yml"
             defaults_file: Path = _safe_join(role_defaults_dir, defaults_filename)
             defaults_yaml = yaml.dump(ansible_vars, default_flow_style=False, indent=2)
-            defaults_file.parent.mkdir(parents=True, exist_ok=True)
+            safe_mkdir(defaults_file.parent, role_dir, parents=True, exist_ok=True)
             safe_write_text(defaults_file, role_dir, defaults_yaml)
 
             conversion_summary["converted_files"].append(
@@ -4519,20 +4521,20 @@ def _create_main_task_file(
     tasks_dir: Path = _safe_join(role_dir, "tasks")
     # Build path to main.yml within tasks directory
     default_task_file: Path = _safe_join(tasks_dir, "main.yml")
-    if default_task_file.exists():  # NOSONAR
+    if safe_exists(default_task_file, role_dir):
         return  # Already exists
 
     # Build path to default recipe safely
     recipes_dir: Path = _safe_join(cookbook_dir, "recipes")
     default_recipe: Path = _safe_join(recipes_dir, "default.rb")
-    if not default_recipe.exists():  # NOSONAR
+    if not safe_exists(default_recipe, cookbook_dir):
         return
 
     try:
         from souschef.converters.playbook import generate_playbook_from_recipe
 
         playbook_yaml = generate_playbook_from_recipe(str(default_recipe))
-        default_task_file.parent.mkdir(parents=True, exist_ok=True)
+        safe_mkdir(default_task_file.parent, role_dir, parents=True, exist_ok=True)
         safe_write_text(default_task_file, role_dir, playbook_yaml)
         conversion_summary["converted_files"].append(
             {
@@ -4558,7 +4560,7 @@ def _create_role_metadata(
     # Use _safe_join to construct metadata file path
 
     meta_dir = _safe_join(role_dir, "meta")
-    meta_dir.mkdir(parents=True, exist_ok=True)
+    safe_mkdir(meta_dir, role_dir, parents=True, exist_ok=True)
     meta_file = _safe_join(meta_dir, "main.yml")
 
     meta_content: dict[str, Any] = {
@@ -4697,8 +4699,6 @@ def _validate_conversion_paths(
         cookbooks_dir = _ensure_within_base_path(cookbooks_candidate, base_dir)
     except ValueError as e:
         raise ValueError(f"Cookbooks path is invalid or outside workspace: {e}") from e
-
-    from souschef.core.path_utils import safe_exists
 
     if not safe_exists(cookbooks_dir, base_dir):
         raise ValueError(f"Cookbooks path does not exist: {cookbooks_path}")
@@ -4970,10 +4970,10 @@ def simulate_chef_to_awx_migration(
         cookbooks_dir, output_dir = _validate_conversion_paths(
             cookbooks_path, output_path
         )
-        output_dir.mkdir(parents=True, exist_ok=True)
+        safe_mkdir(output_dir, _get_workspace_root(), parents=True, exist_ok=True)
 
         roles_dir = _safe_join(output_dir, "roles")
-        roles_dir.mkdir(parents=True, exist_ok=True)
+        safe_mkdir(roles_dir, output_dir, parents=True, exist_ok=True)
 
         cookbook_dirs = _find_cookbook_directories(cookbooks_dir)
         if not cookbook_dirs:

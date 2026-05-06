@@ -94,21 +94,19 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
         msg = f"Path traversal attempt: escapes {safe_base}"
         raise ValueError(msg)
 
-    # BARRIER 2: If the path is not a symlink, also check the resolved target
-    # to catch symlink-based escapes. For actual symlinks whose names are within
-    # base, we allow them through (callers must use _check_symlink_safety if needed).
-    if not path_obj.is_symlink():
-        base_resolved = os.path.realpath(base_str)
-        resolved_str = os.path.realpath(candidate_str)
-        try:
-            common2 = os.path.commonpath([resolved_str, base_resolved])
-        except ValueError as e:
-            msg = f"Path traversal attempt: escapes {safe_base}"
-            raise ValueError(msg) from e
+    # BARRIER 2: Follow symlinks and validate true target containment.
+    # This avoids any filesystem call on unsanitised input.
+    base_resolved = os.path.realpath(base_str)
+    resolved_str = os.path.realpath(candidate_str)
+    try:
+        common2 = os.path.commonpath([resolved_str, base_resolved])
+    except ValueError as e:
+        msg = f"Path traversal attempt: escapes {safe_base}"
+        raise ValueError(msg) from e
 
-        if common2 != base_resolved:
-            msg = f"Path traversal attempt: escapes {safe_base}"
-            raise ValueError(msg)
+    if common2 != base_resolved:
+        msg = f"Path traversal attempt: escapes {safe_base}"
+        raise ValueError(msg)
 
     return normalized_candidate
 

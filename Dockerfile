@@ -2,7 +2,7 @@
 # Optimised for security, robustness, and Docker registry publishing
 
 ARG PYTHON_VERSION=3.14
-ARG POETRY_VERSION=2.3.2
+ARG POETRY_VERSION=2.3.4
 
 # ============================================================================
 # Base Stage - Common configuration for all stages
@@ -44,6 +44,7 @@ RUN apk update && apk add --no-cache \
     # Runtime libraries (not -dev packages)
     libffi \
     libpq>=18.2 \
+    && apk upgrade --no-cache \
     && addgroup -g 1001 -S app \
     && adduser -u 1001 -S app -G app \
     && mkdir -p /app \
