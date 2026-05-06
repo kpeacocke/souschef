@@ -3,7 +3,6 @@
 import contextlib
 import io
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -59,6 +58,7 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
     safe_exists,
+    safe_glob,
     safe_is_dir,
     safe_is_file,
     safe_read_bytes,
@@ -2363,18 +2363,17 @@ def _collect_role_files(safe_output_path: Path) -> list[tuple[Path, Path]]:
     # Path is already normalized; validate files within the output path are contained
     base_path = safe_output_path
 
-    for root, _dirs, files in os.walk(base_path):
-        root_path = _ensure_within_base_path(Path(root), base_path)
+    for candidate_path in safe_glob(base_path, "**/*", base_path):
+        if not safe_is_file(candidate_path, base_path):
+            continue
 
-        for file in files:
-            safe_name = _sanitize_filename(file)
-            candidate_path = _ensure_within_base_path(root_path / safe_name, base_path)
-            try:
-                # Ensure each file is contained within base
-                arcname = candidate_path.relative_to(base_path)
-                files_to_archive.append((candidate_path, arcname))
-            except ValueError:
-                continue
+        try:
+            candidate_path = _ensure_within_base_path(candidate_path, base_path)
+            # Ensure each file is contained within base
+            arcname = candidate_path.relative_to(base_path)
+            files_to_archive.append((candidate_path, arcname))
+        except ValueError:
+            continue
 
     return files_to_archive
 
