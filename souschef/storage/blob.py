@@ -145,12 +145,13 @@ class LocalBlobStorage(BlobStorage):
         local_path = _normalize_path(str(local_path))
 
         if source_path.suffix == ".zip":
-            # Extract ZIP archive
+            # Extract ZIP archive, validating each member to prevent ZipSlip (CWE-22)
             local_path.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(source_path, "r") as zipf:
-                zipf.extractall(
-                    local_path
-                )  # NOSONAR - local file from verified storage
+                for member in zipf.infolist():
+                    member_path = (local_path / member.filename).resolve()
+                    _ensure_within_base_path(member_path, local_path.resolve())
+                    zipf.extract(member, local_path)
         else:
             # Copy single file
             local_path.parent.mkdir(parents=True, exist_ok=True)
@@ -273,9 +274,10 @@ class S3BlobStorage(BlobStorage):
 
             local_path.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(zip_buffer, "r") as zipf:
-                zipf.extractall(
-                    local_path
-                )  # NOSONAR - S3 bucket is internally controlled
+                for member in zipf.infolist():
+                    member_path = (local_path / member.filename).resolve()
+                    _ensure_within_base_path(member_path, local_path.resolve())
+                    zipf.extract(member, local_path)
         else:
             # Download single file
             local_path.parent.mkdir(parents=True, exist_ok=True)
