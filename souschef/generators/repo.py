@@ -181,7 +181,6 @@ def _analyse_with_ai(
 def _create_ansible_cfg(repo_path: Path, repo_type: RepoType) -> None:
     """Create ansible.cfg with appropriate settings."""
     repo_path = _ensure_within_base_path(repo_path, _get_workspace_root())
-    repo_path = _ensure_within_base_path(repo_path, _get_workspace_root())
     inventory_path = (
         "./inventory" if repo_type == RepoType.PLAYBOOKS_ROLES else "./inventories/prod"
     )
@@ -704,6 +703,37 @@ def _commit_repo_changes(repo_path: Path, message: str) -> str:
         return "Git not found - skipped repository commit"
 
 
+def _copy_roles_into_destination(
+    role_dirs: list[Path],
+    roles_dir: Path,
+    roles_dest: Path,
+) -> list[str]:
+    """Copy role directories into destination with containment checks."""
+    copied_roles: list[str] = []
+    for role_dir in role_dirs:
+        source_dir = _validated_candidate(role_dir, roles_dir)
+        dest_dir = _validated_candidate(roles_dest / role_dir.name, roles_dest)
+        if safe_exists(dest_dir, roles_dest):
+            shutil.rmtree(dest_dir)
+        safe_mkdir(dest_dir, roles_dest, parents=True, exist_ok=True)
+        for source_item in safe_glob(source_dir, "**/*", source_dir):
+            relative_item = source_item.relative_to(source_dir)
+            destination_item = _validated_candidate(dest_dir / relative_item, dest_dir)
+            if source_item.is_dir():
+                safe_mkdir(destination_item, dest_dir, parents=True, exist_ok=True)
+            else:
+                safe_mkdir(
+                    destination_item.parent,
+                    dest_dir,
+                    parents=True,
+                    exist_ok=True,
+                )
+                shutil.copy2(source_item, destination_item)
+        copied_roles.append(source_dir.name)
+
+    return copied_roles
+
+
 def generate_ansible_repository(
     output_path: str,
     repo_type: RepoType | str,
@@ -880,14 +910,7 @@ def create_ansible_repository_from_roles(
         roles_dest = _get_roles_destination(repo_path, repo_type, org_name)
         safe_mkdir(roles_dest, repo_path, parents=True, exist_ok=True)
 
-        copied_roles = []
-        for role_dir in role_dirs:
-            source_dir = _validated_candidate(role_dir, roles_dir)
-            dest_dir = _validated_candidate(roles_dest / role_dir.name, roles_dest)
-            if safe_exists(dest_dir, roles_dest):
-                shutil.rmtree(dest_dir)
-            shutil.copytree(source_dir, dest_dir)
-            copied_roles.append(source_dir.name)
+        copied_roles = _copy_roles_into_destination(role_dirs, roles_dir, roles_dest)
 
         repo_result["roles_copied"] = copied_roles
         repo_result["roles_destination"] = str(roles_dest)

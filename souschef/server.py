@@ -4700,6 +4700,8 @@ def _validate_conversion_paths(
     except ValueError as e:
         raise ValueError(f"Cookbooks path is invalid or outside workspace: {e}") from e
 
+    from souschef.core.path_utils import safe_exists
+
     if not safe_exists(cookbooks_dir, base_dir):
         raise ValueError(f"Cookbooks path does not exist: {cookbooks_path}")
 

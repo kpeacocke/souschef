@@ -1089,7 +1089,7 @@ def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> No
 
         # Write output
         output_file = output_dir / f"{recipe_name}.yml"
-        output_file.write_text(playbook_yaml)
+        safe_write_text(output_file, output_dir, playbook_yaml)
 
         click.echo(f"✓ Playbook written to: {output_file}")
         click.echo(f"  Size: {len(playbook_yaml)} bytes")
@@ -1259,7 +1259,7 @@ def convert_habitat(plan_path: str, output_path: str, base_image: str) -> None:
 
         # Write Dockerfile
         dockerfile_path = output_dir / "Dockerfile"
-        dockerfile_path.write_text(dockerfile_content)
+        safe_write_text(dockerfile_path, output_dir, dockerfile_content)
 
         click.echo(f"Successfully converted Habitat plan to {dockerfile_path}")
         click.echo(f"Dockerfile size: {len(dockerfile_content)} bytes")
@@ -1336,7 +1336,7 @@ def convert_inspec(profile_path: str, output_path: str, output_format: str) -> N
 
         # Write test file
         test_file_path = output_dir / output_filename
-        test_file_path.write_text(test_content)
+        safe_write_text(test_file_path, output_dir, test_content)
 
         click.echo(f"Successfully converted InSpec profile to {output_format} format")
         click.echo(f"Test file: {test_file_path}")

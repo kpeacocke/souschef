@@ -13,6 +13,7 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _get_workspace_root,
     _normalize_path,
+    safe_write_text,
 )
 
 
@@ -67,9 +68,7 @@ def _safe_write_file(content: str, output: str | None, default_path: Path) -> Pa
     """
     validated_path = _resolve_output_path(output, default_path)
     try:
-        # Separate validation from write to satisfy SonarQube path construction rules
-        with validated_path.open("w", encoding="utf-8") as f:
-            f.write(content)
+        safe_write_text(validated_path, _get_workspace_root(), content)
     except OSError as e:
         click.echo(f"Error writing file: {e}", err=True)
         raise click.Abort() from e

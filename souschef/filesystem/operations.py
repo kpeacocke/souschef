@@ -14,6 +14,7 @@ from souschef.core.path_utils import (
     _get_workspace_root,
     _normalize_path,
     safe_glob,
+    safe_is_dir,
     safe_mkdir,
 )
 
@@ -99,7 +100,7 @@ def create_tar_gz_archive(source_dir: str, output_path: str) -> str:
 
     workspace_root = _get_workspace_root()
     source_path = _ensure_within_base_path(_normalize_path(source_dir), workspace_root)
-    if not source_path.is_dir():
+    if not safe_is_dir(source_path, workspace_root):
         raise ValueError(f"Source directory does not exist: {source_dir}")
 
     output_file = _ensure_within_base_path(_normalize_path(output_path), workspace_root)
