@@ -28,7 +28,11 @@ from souschef.core.metrics import (
 from souschef.core.path_utils import (
     _get_workspace_root,
     _validated_candidate,
+    safe_exists,
     safe_glob,
+    safe_is_dir,
+    safe_is_file,
+    safe_read_text,
 )
 from souschef.core.url_validation import validate_user_provided_url
 from souschef.core.validation import (
@@ -915,10 +919,10 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
     # Helper function to safely glob within a directory
     def _glob_safe(directory: Path, pattern: str) -> int:
         """Count files matching a glob pattern within a directory."""
-        if not directory.exists() or not directory.is_dir():
+        if not safe_exists(directory, base) or not safe_is_dir(directory, base):
             return 0
         try:
-            return len(list(directory.glob(pattern)))
+            return len(safe_glob(directory, pattern, base))
         except (OSError, ValueError):
             return 0
 
@@ -926,7 +930,7 @@ def _count_cookbook_artifacts(cookbook_path: Path) -> dict[str, int]:  # noqa: C
     def _exists_safe(path: Path) -> bool:
         """Check if a path exists."""
         try:
-            return path.exists()
+            return safe_exists(path, base)
         except (OSError, ValueError):  # pragma: no cover
             return False
 
@@ -1031,7 +1035,9 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
     recipes_dir: Path = _safe_join(cookbook_path, "recipes")
     try:
         recipe_files: list[Path] = (
-            list(recipes_dir.glob("*.rb")) if recipes_dir.exists() else []
+            safe_glob(recipes_dir, "*.rb", cookbook_path)
+            if safe_exists(recipes_dir, cookbook_path)
+            else []
         )
     except (OSError, ValueError):
         recipe_files = []
@@ -1043,7 +1049,7 @@ def _analyze_recipes(cookbook_path: Path) -> tuple[int, int, int]:
         except ValueError:
             continue
         try:
-            content = validated_file.read_text(encoding="utf-8", errors="ignore")
+            content = safe_read_text(validated_file, cookbook_path, errors="ignore")
             resources = len(RESOURCE_BLOCK_PATTERN.findall(content))
             ruby_blocks += len(
                 re.findall(r"ruby_block|execute|bash|script", content, re.IGNORECASE)
@@ -1069,7 +1075,9 @@ def _analyze_attributes(cookbook_path: Path) -> int:
     attributes_dir: Path = _safe_join(cookbook_path, "attributes")
     try:
         attr_files: list[Path] = (
-            list(attributes_dir.glob("*.rb")) if attributes_dir.exists() else []
+            safe_glob(attributes_dir, "*.rb", cookbook_path)
+            if safe_exists(attributes_dir, cookbook_path)
+            else []
         )
     except (OSError, ValueError):
         attr_files = []
@@ -1081,7 +1089,7 @@ def _analyze_attributes(cookbook_path: Path) -> int:
         except ValueError:
             continue
         try:
-            content = validated_file.read_text(encoding="utf-8", errors="ignore")
+            content = safe_read_text(validated_file, cookbook_path, errors="ignore")
             assignments = len(
                 re.findall(
                     r"^[ \t]{0,20}\w+[ \t]{0,10}(?:\[\w*\])?[ \t]{0,10}=",
@@ -1107,7 +1115,9 @@ def _analyze_templates(cookbook_path: Path) -> int:
     templates_dir: Path = _safe_join(cookbook_path, "templates")
     try:
         template_files: list[Path] = (
-            list(templates_dir.glob("**/*.erb")) if templates_dir.exists() else []
+            safe_glob(templates_dir, "**/*.erb", cookbook_path)
+            if safe_exists(templates_dir, cookbook_path)
+            else []
         )
     except (OSError, ValueError):
         template_files = []
@@ -1120,7 +1130,7 @@ def _analyze_templates(cookbook_path: Path) -> int:
             continue
 
         try:
-            content = validated_file.read_text(encoding="utf-8", errors="ignore")
+            content = safe_read_text(validated_file, cookbook_path, errors="ignore")
             erb_expressions = len(re.findall(r"<%.*?%>", content))
             erb_templates += erb_expressions
         except Exception:
@@ -1138,7 +1148,7 @@ def _analyze_libraries(cookbook_path: Path) -> int:
     try:
         lib_files: list[Path] = (
             safe_glob(libraries_dir, "*.rb", cookbook_path)
-            if libraries_dir.exists()
+            if safe_exists(libraries_dir, cookbook_path)
             else []
         )
     except (OSError, ValueError):
@@ -1147,7 +1157,7 @@ def _analyze_libraries(cookbook_path: Path) -> int:
     for lib_file in lib_files:
         try:
             # lib_file is already validated by safe_glob
-            content = lib_file.read_text(encoding="utf-8", errors="ignore")
+            content = safe_read_text(lib_file, cookbook_path, errors="ignore")
             classes = len(re.findall(r"class\s+\w+", content))
             methods = len(re.findall(r"def\s+\w+", content))
             library_complexity += classes * 2 + methods
@@ -1164,7 +1174,7 @@ def _count_definitions(cookbook_path: Path) -> int:
     try:
         def_files: list[Path] = (
             safe_glob(definitions_dir, "*.rb", cookbook_path)
-            if definitions_dir.exists()
+            if safe_exists(definitions_dir, cookbook_path)
             else []
         )
     except (OSError, ValueError):
@@ -1781,10 +1791,10 @@ def _analyse_cookbook_dependencies_detailed(cookbook_path: Path | str) -> dict:
     base_path: Path = _normalize_path(cookbook_path)
 
     # Validate basic accessibility
-    if not base_path.exists():  # NOSONAR
+    if not safe_exists(base_path, base_path):
         msg = f"Cookbook path does not exist: {cookbook_path}"
         raise ValueError(msg)
-    if not base_path.is_dir():
+    if not safe_is_dir(base_path, base_path):
         msg = f"Cookbook path is not a directory: {cookbook_path}"
         raise ValueError(msg)
 
@@ -1810,7 +1820,7 @@ def _collect_metadata_dependencies(base_path: Path) -> list[str]:
     # Build metadata path safely within the cookbook
     metadata_path: Path = _safe_join(base_path, METADATA_FILENAME)
 
-    if not metadata_path.is_file():
+    if not safe_is_file(metadata_path, base_path):
         return []
 
     try:
@@ -1820,8 +1830,7 @@ def _collect_metadata_dependencies(base_path: Path) -> list[str]:
         # metadata.rb is outside cookbook root
         return []
 
-    with metadata_path.open(encoding="utf-8", errors="ignore") as f:
-        content = f.read()
+    content = safe_read_text(metadata_path, base_path, errors="ignore")
 
     return re.findall(r'depends\s+[\'"]([^\'"]+)[\'"]', content)
 
@@ -1831,7 +1840,7 @@ def _collect_berks_dependencies(base_path: Path) -> list[str]:
     # Build Berksfile path safely within the cookbook
     berksfile_path: Path = _safe_join(base_path, "Berksfile")
 
-    if not berksfile_path.is_file():
+    if not safe_is_file(berksfile_path, base_path):
         return []
 
     try:
@@ -1841,8 +1850,7 @@ def _collect_berks_dependencies(base_path: Path) -> list[str]:
         # Berksfile is outside cookbook root
         return []
 
-    with berksfile_path.open(encoding="utf-8", errors="ignore") as f:
-        content = f.read()
+    content = safe_read_text(berksfile_path, base_path, errors="ignore")
 
     return re.findall(r'cookbook\s+[\'"]([^\'"]+)[\'"]', content)
 
@@ -2376,7 +2384,7 @@ def assess_single_cookbook_with_ai(
     """
     try:
         cookbook_path_obj = _normalize_path(cookbook_path)
-        if not cookbook_path_obj.exists():  # Read-only check on normalized path
+        if not safe_exists(cookbook_path_obj, cookbook_path_obj):
             return {"error": f"Cookbook path not found: {cookbook_path}"}
 
         # Check if AI is available
@@ -2779,16 +2787,17 @@ Provide your analysis in JSON format with keys: complexity_score, estimated_effo
 
 def _get_recipe_content_sample(cookbook_path: Path) -> str:
     """Get a sample of ALL recipe content for AI analysis."""
-    # Inline guard directly adjacent to sink
-    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
-    recipes_dir_str = os.path.realpath(os.path.join(base, "recipes"))  # noqa: PTH111, PTH118
-    if os.path.commonpath([base, recipes_dir_str]) != base:
+    base = _normalize_path(cookbook_path)
+    try:
+        recipes_dir = _safe_join(base, "recipes")
+    except ValueError as exc:
+        raise RuntimeError("Path traversal") from exc
+    if os.path.commonpath([str(base), str(recipes_dir)]) != str(base):
         raise RuntimeError("Path traversal")
-    if not os.path.exists(recipes_dir_str):  # noqa: PTH110
+    if not safe_exists(recipes_dir, base):
         return "No recipes directory found"
 
-    recipes_dir = Path(recipes_dir_str)
-    recipe_files = list(recipes_dir.glob("*.rb"))
+    recipe_files = safe_glob(recipes_dir, "*.rb", base)
     if not recipe_files:
         return "No recipe files found"
 
@@ -2799,7 +2808,7 @@ def _get_recipe_content_sample(cookbook_path: Path) -> str:
 
     for recipe_file in recipe_files:
         try:
-            content = recipe_file.read_text(encoding="utf-8", errors="ignore")
+            content = safe_read_text(recipe_file, base, errors="ignore")
             recipe_header = f"\n=== {recipe_file.name} ===\n"
 
             # Add this recipe if we have room
@@ -2825,16 +2834,18 @@ def _get_recipe_content_sample(cookbook_path: Path) -> str:
 
 def _get_metadata_content(cookbook_path: Path) -> str:
     """Get metadata content for AI analysis."""
-    # Inline guard directly adjacent to sink
-    base = os.path.realpath(str(cookbook_path))  # noqa: PTH111
-    metadata_file_str = os.path.realpath(os.path.join(base, METADATA_FILENAME))  # noqa: PTH111, PTH118
-    if os.path.commonpath([base, metadata_file_str]) != base:
+    base = _normalize_path(cookbook_path)
+    try:
+        metadata_file = _safe_join(base, METADATA_FILENAME)
+    except ValueError as exc:
+        raise RuntimeError("Path traversal") from exc
+    if os.path.commonpath([str(base), str(metadata_file)]) != str(base):
         raise RuntimeError("Path traversal")
-    if not os.path.exists(metadata_file_str):  # noqa: PTH110
+    if not safe_exists(metadata_file, base):
         return "No metadata.rb found"
 
     try:
-        return Path(metadata_file_str).read_text(encoding="utf-8", errors="ignore")
+        return safe_read_text(metadata_file, base, errors="ignore")
     except Exception:
         return "Could not read metadata"
 
@@ -3265,7 +3276,7 @@ def calculate_activity_breakdown(
         cookbook = _normalize_path(cookbook_path)
 
         # If it's a directory, assess it
-        if cookbook.is_dir():
+        if safe_is_dir(cookbook, cookbook):
             assessment = _assess_single_cookbook(cookbook)
         else:
             return {"error": f"Invalid cookbook path: {cookbook_path}"}

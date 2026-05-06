@@ -387,7 +387,12 @@ def safe_mkdir(
     validated.mkdir(parents=parents, exist_ok=exist_ok)
 
 
-def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> str:
+def safe_read_text(
+    path_obj: Path,
+    base_path: Path,
+    encoding: str = "utf-8",
+    errors: str = "strict",
+) -> str:
     """
     Read text from file after enforcing base containment.
 
@@ -395,6 +400,7 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
         path_obj: Path to the file to read.
         base_path: Trusted base directory for containment check.
         encoding: Text encoding (default: 'utf-8').
+        errors: Error handling mode for decoding.
 
     Returns:
         File contents as string.
@@ -404,7 +410,7 @@ def safe_read_text(path_obj: Path, base_path: Path, encoding: str = "utf-8") -> 
 
     """
     validated = _resolve_path_under_base(path_obj, base_path)
-    return validated.read_text(encoding=encoding)
+    return validated.read_text(encoding=encoding, errors=errors)
 
 
 def safe_write_text(
