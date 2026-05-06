@@ -75,40 +75,7 @@ def _ensure_within_base_path(path_obj: Path, base_path: Path) -> Path:
             different drives (Windows).
 
     """
-    base_str: str = str(_normalize_path(base_path))
-    normalized_candidate: Path = _normalize_path(path_obj)
-    candidate_str: str = str(normalized_candidate)
-    path_obj = normalized_candidate
-    safe_base: str = base_str
-
-    # Check containment using commonpath on normalised (non-realpath)
-    # strings.  CodeQL recognises commonpath as a containment barrier for
-    # py/path-injection.  This ensures the path *name* stays within base.
-    try:
-        common = os.path.commonpath([candidate_str, base_str])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg) from e
-
-    if common != base_str:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg)
-
-    # BARRIER 2: Follow symlinks and validate true target containment.
-    # This avoids any filesystem call on unsanitised input.
-    base_resolved = os.path.realpath(base_str)
-    resolved_str = os.path.realpath(candidate_str)
-    try:
-        common2 = os.path.commonpath([resolved_str, base_resolved])
-    except ValueError as e:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg) from e
-
-    if common2 != base_resolved:
-        msg = f"Path traversal attempt: escapes {safe_base}"
-        raise ValueError(msg)
-
-    return normalized_candidate
+    return _resolve_path_under_base(path_obj, base_path)
 
 
 def _normalize_path(path_str: str | Path) -> Path:
@@ -298,7 +265,7 @@ def _resolve_path_under_base(path_obj: Path | str, base_path: Path | str) -> Pat
         msg = f"Path traversal attempt: escapes {safe_base}"
         raise ValueError(msg)
 
-    return _ensure_within_base_path(Path(resolved_str), Path(base_resolved))
+    return Path(resolved_str)
 
 
 def _safe_join(base_path: Path, *parts: str) -> Path:
@@ -478,10 +445,7 @@ def _check_symlink_safety(path_obj: Path, base_path: Path | None = None) -> None
         current = target
         while current != current.parent:
             if current.is_symlink():
-                msg = (
-                    f"Symlink detected in path {target}: {current} -> "
-                    f"{current.resolve()}"
-                )
+                msg = f"Symlink detected in path {target}: {current}"
                 raise ValueError(msg)
             current = current.parent
     except OSError:

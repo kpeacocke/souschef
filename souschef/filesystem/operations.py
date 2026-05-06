@@ -13,6 +13,8 @@ from souschef.core.path_utils import (
     _ensure_within_base_path,
     _get_workspace_root,
     _normalize_path,
+    safe_glob,
+    safe_mkdir,
 )
 
 
@@ -101,12 +103,12 @@ def create_tar_gz_archive(source_dir: str, output_path: str) -> str:
         raise ValueError(f"Source directory does not exist: {source_dir}")
 
     output_file = _ensure_within_base_path(_normalize_path(output_path), workspace_root)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+    safe_mkdir(output_file.parent, workspace_root, parents=True, exist_ok=True)
 
     with tarfile.open(  # NOSONAR - S5042: creating archive, not expanding/extracting
         output_file, "w:gz"
     ) as tar:
-        for file_path in source_path.rglob("*"):
+        for file_path in safe_glob(source_path, "**/*", source_path):
             if file_path.is_file():
                 arcname = file_path.relative_to(source_path)
                 tar.add(file_path, arcname=arcname)
@@ -138,7 +140,7 @@ def extract_tar_gz_archive(archive_path: str, output_dir: str) -> str:
     if not archive_file.is_file():
         raise ValueError(f"Archive does not exist: {archive_path}")
 
-    target_dir.mkdir(parents=True, exist_ok=True)
+    safe_mkdir(target_dir, workspace_root, parents=True, exist_ok=True)
 
     with tarfile.open(archive_file, "r:gz") as tar:  # NOSONAR
         for member in tar.getmembers():
