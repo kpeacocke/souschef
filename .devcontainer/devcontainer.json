@@ -12,15 +12,17 @@
     "workspaceFolder": "/workspaces/souschef",
     "shutdownAction": "stopContainer",
     "remoteEnv": {
-        "DOCKER_MCP_IN_CONTAINER": "1"
+        "DOCKER_MCP_IN_CONTAINER": "1",
+        "JAVA_HOME": "/usr/local/sdkman/candidates/java/current",
+        "PATH": "${containerEnv:PATH}:/usr/local/sdkman/candidates/java/current/bin"
     },
     "runArgs": [
         "--env-file=${localWorkspaceFolder}/.env.devcontainer"
     ],
     "features": {
         "ghcr.io/devcontainers/features/common-utils:2": {
-            "installZsh": true,
-            "installOhMyZsh": true,
+            "installZsh": false,
+            "installOhMyZsh": false,
             "upgradePackages": false,
             "username": "vscode",
             "userUid": "automatic",
@@ -28,7 +30,7 @@
         },
         "ghcr.io/devcontainers/features/git:1": {
             "version": "latest",
-            "ppa": true
+            "ppa": false
         },
         "ghcr.io/devcontainers/features/github-cli:1": {
             "version": "latest"
@@ -38,7 +40,7 @@
             "installGems": "chef"
         },
         "ghcr.io/devcontainers/features/java:1": {
-            "version": "17",
+            "version": "21",
             "installMaven": false,
             "installGradle": false
         },
