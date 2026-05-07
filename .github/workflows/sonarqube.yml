@@ -9,7 +9,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Do NOT cancel in-progress runs: cancelling a mid-flight SonarCloud analysis
+  # leaves the quality gate in a permanent 'pending' state for the triggering CI run.
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -82,8 +84,10 @@ jobs:
       if: steps.check-token.outputs.has_token == 'true'
       run: poetry install --no-interaction --all-extras
 
-    - name: Generate coverage for SonarCloud
-      if: steps.check-token.outputs.has_token == 'true'
+    - name: Generate coverage for SonarCloud (workflow_dispatch only)
+      # On workflow_run, coverage is taken from the CI run's uploaded artifact to
+      # ensure SonarCloud reports the same numbers that CI measured.
+      if: steps.check-token.outputs.has_token == 'true' && github.event_name == 'workflow_dispatch'
       run: |
         poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
         echo "Python coverage generated:"
@@ -104,34 +108,36 @@ jobs:
         echo "Checking for coverage artifacts..."
         ls -lh coverage-artifacts/ 2>/dev/null || echo "No coverage-artifacts directory found"
 
-        # Find and copy Go coverage profile. Artifact download can preserve
-        # directory structure, so coverage.out may be nested.
-        GO_COVERAGE_SOURCE=$(find coverage-artifacts -type f -name "coverage.out" | head -n 1 || true)
-        if [ -n "$GO_COVERAGE_SOURCE" ] && [ -f "$GO_COVERAGE_SOURCE" ]; then
-          echo "Found Go coverage at $GO_COVERAGE_SOURCE"
+        # Python coverage: reuse what CI measured (artifact name: python-coverage).
+        PYTHON_COV=$(find coverage-artifacts -type f -name "coverage.xml" | head -n 1 || true)
+        if [ -n "$PYTHON_COV" ] && [ -f "$PYTHON_COV" ]; then
+          echo "Found Python coverage at $PYTHON_COV"
+          cp "$PYTHON_COV" coverage.xml
+          echo "✓ Python coverage copied to coverage.xml"
+          ls -lh coverage.xml
+        else
+          echo "⚠ Python coverage not found in artifacts — regenerating"
+          poetry run pytest --cov=souschef --cov-report=xml --cov-report=term-missing
+        fi
+
+        # Go coverage: artifact name is go-coverage.
+        GO_COV=$(find coverage-artifacts -type f -name "coverage.out" | head -n 1 || true)
+        if [ -n "$GO_COV" ] && [ -f "$GO_COV" ]; then
+          echo "Found Go coverage at $GO_COV"
           mkdir -p terraform-provider
-          cp "$GO_COVERAGE_SOURCE" terraform-provider/coverage.out
+          cp "$GO_COV" terraform-provider/coverage.out
           echo "✓ Go coverage copied to terraform-provider/coverage.out"
           ls -lh terraform-provider/coverage.out
         else
           echo "⚠ Go coverage not found in downloaded artifacts"
-          find coverage-artifacts -name "coverage.out" 2>/dev/null || echo "No coverage.out files found"
           find coverage-artifacts -type f 2>/dev/null || echo "No files in coverage-artifacts"
-        fi
-
-        # Verify Python coverage
-        if [ -f coverage.xml ]; then
-          echo "✓ Python coverage found at coverage.xml"
-          ls -lh coverage.xml
-        else
-          echo "⚠ Python coverage (coverage.xml) not found"
         fi
 
         # Final verification
         echo ""
         echo "Coverage files ready for SonarCloud:"
-        ls -lh terraform-provider/coverage.out 2>/dev/null || echo "  - Go coverage: MISSING"
         ls -lh coverage.xml 2>/dev/null || echo "  - Python coverage: MISSING"
+        ls -lh terraform-provider/coverage.out 2>/dev/null || echo "  - Go coverage: MISSING"
 
     - name: Run SonarCloud analysis
       if: steps.check-token.outputs.has_token == 'true'
