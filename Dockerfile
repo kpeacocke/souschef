@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for SousChef UI - Production Ready
 # Optimised for security, robustness, and Docker registry publishing
 
-ARG PYTHON_VERSION=3.14
+ARG PYTHON_VERSION=3.13
 ARG POETRY_VERSION=2.3.4
 
 # ============================================================================
@@ -39,11 +39,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Install runtime dependencies only (Alpine)
 RUN apk update && apk add --no-cache \
-    ca-certificates \
-    curl \
+    ca-certificates=20260413-r0 \
+    curl=8.14.1-r2 \
     # Runtime libraries (not -dev packages)
-    libffi \
-    libpq>=18.2 \
+    libffi=3.4.8-r0 \
+    libpq=17.9-r0 \
     && apk upgrade --no-cache \
     && addgroup -g 1001 -S app \
     && adduser -u 1001 -S app -G app \
@@ -63,22 +63,20 @@ ARG PYTHON_VERSION
 
 # Install build-time dependencies (not needed in runtime image)
 RUN apk add --no-cache \
-    gcc \
-    git \
-    libffi-dev \
-    musl-dev \
-    postgresql-dev
+    gcc=14.2.0-r6 \
+    git=2.49.1-r0 \
+    libffi-dev=3.4.8-r0 \
+    musl-dev=1.2.5-r12 \
+    postgresql17-dev=17.9-r0
 
 # Copy dependency files first (for better layer caching)
 COPY pyproject.toml poetry.lock ./
 
-# Upgrade pip to pick up security fixes (pip >= 26.0 for CVE-2026-1703 fix)
-RUN python -m pip install --no-cache-dir --upgrade "pip>=26.0"
+# Upgrade pip to pick up security fixes (pinned for reproducibility)
+RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1"
 
 # Install Poetry with pinned version for reproducibility
-RUN pip install --no-cache-dir --require-hashes \
-    poetry=="$POETRY_VERSION" || \
-    pip install --no-cache-dir poetry=="$POETRY_VERSION"
+RUN pip install --no-cache-dir --only-binary :all: "poetry==$POETRY_VERSION"
 
 # Configure poetry to not create virtual environment (install globally)
 RUN poetry config virtualenvs.create false
@@ -105,14 +103,14 @@ FROM base AS production
 
 ARG PYTHON_VERSION
 
-# Upgrade pip to pick up security fixes (pip >= 26.0 for CVE-2026-1703 fix)
-RUN python -m pip install --no-cache-dir --upgrade "pip>=26.0"
+# Upgrade pip to pick up security fixes (pinned for reproducibility)
+RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1"
 
 # Copy site-packages from builder (at predictable location, no glob expansion)
 COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
 
 # Install to final location
-RUN PYTHON_MAJOR_MINOR=$(echo "${PYTHON_VERSION}" | cut -d. -f1-2) && \
+RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
     rm -rf "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
     mv /tmp/site-packages "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" && \
     \

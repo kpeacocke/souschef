@@ -53,7 +53,9 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      # --no-root: skip building/installing the project root to prevent execution
+      # of setup scripts on source builds (SonarLint S8541).
+      run: poetry install --no-interaction --no-root
 
     - name: Export requirements.txt for Snyk
       run: poetry export -f requirements.txt --output requirements.txt --without-hashes
@@ -325,7 +327,9 @@ jobs:
           ${{ runner.os }}-poetry-
 
     - name: Install dependencies
-      run: poetry install --no-interaction
+      # --no-root: skip building/installing the project root to prevent execution
+      # of setup scripts on source builds (SonarLint S8541).
+      run: poetry install --no-interaction --no-root
 
     - name: Export requirements.txt for Snyk
       run: poetry export -f requirements.txt --output requirements.txt --without-hashes

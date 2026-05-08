@@ -82,7 +82,9 @@ jobs:
 
     - name: Install dependencies
       if: steps.check-token.outputs.has_token == 'true'
-      run: poetry install --no-interaction --all-extras
+      # --no-root: skip building/installing the project root to prevent execution
+      # of setup scripts on source builds (SonarLint S8541).
+      run: poetry install --no-interaction --no-root --all-extras
 
     - name: Generate coverage for SonarCloud (workflow_dispatch only)
       # On workflow_run, coverage is taken from the CI run's uploaded artifact to
