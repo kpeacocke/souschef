@@ -39,32 +39,19 @@ codeql database analyze /tmp/souschef-db github/python-queries --format=sarif-la
 cat /tmp/results.sarif
 ```
 
-### Option 3: Using Snyk (Alternative Tool)
-
-```bash
-# Install Snyk CLI
-npm install -g snyk
-
-# Authenticate
-snyk auth
-
-# Scan
-snyk code test /workspaces/souschef
-```
-
 ## Why We Recommend Option 1 (Local Validator)
 
 The `tools/check_codeql_suppressions.py` script is optimized for SousChef development:
 
-| Feature | Local Validator | CodeQL CLI | Snyk |
-| --------- | --------- | --------- | ------ |
-| Setup time | < 1 second | 2-5 minutes | 1-2 minutes |
-| Identifies missing suppressions | Yes | Yes | Limited |
-| Catches code before GitHub | Yes | Yes | Yes |
-| Full SARIF report | No | Yes | Yes |
-| IDE integration | Easy | Yes | Yes |
-| Cost | Free | Free | Free tier |
-| Maintenance | SousChef team | GitHub | Snyk |
+| Feature | Local Validator | CodeQL CLI |
+| --------- | --------- | --------- |
+| Setup time | < 1 second | 2-5 minutes |
+| Identifies missing suppressions | Yes | Yes |
+| Catches code before GitHub | Yes | Yes |
+| Full SARIF report | No | Yes |
+| IDE integration | Easy | Yes |
+| Cost | Free | Free |
+| Maintenance | SousChef team | GitHub |
 
 ## Workflow: Before Each Commit
 

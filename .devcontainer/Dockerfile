@@ -18,7 +18,6 @@ RUN for i in 1 2 3; do \
 FROM mcr.microsoft.com/devcontainers/python:3.14
 
 # Build arguments
-ARG SNYK_VERSION=latest
 ARG CODEQL_VERSION=latest
 ARG SONAR_SCANNER_VERSION=latest
 

@@ -28,17 +28,6 @@ This document tracks the SHA hashes used to pin GitHub Actions dependencies in o
 | actions/download-artifact | v4 | `fa0a91b85d4f404e444e00e005971372dc801d16` | Download coverage from CI |
 | SonarSource/sonarqube-scan-action | v7.0.0 | `a31c9398be7ace6bbfaf30c0bd5d415f843d45e9` | SonarCloud static analysis |
 
-### Snyk Workflow (.github/workflows/snyk.yml) - PARTIALLY PINNED (WARNING)
-
-| Action | Version Tag | Commit SHA | Notes |
-|--------|-------------|------------|-------|
-| actions/checkout | v6 | **Not pinned** | Repository checkout |
-| actions/setup-python | v6 | **Not pinned** | Python setup |
-| snok/install-poetry | v1 | `76e04a911780d5b312d89783f7b1cd627778900a` | Poetry installation |
-| actions/cache | v5 | **Not pinned** | Dependency caching |
-| snyk/actions/setup | v1.0.0 | `9adf32b1121593767fc3c057af55b55db032dc04` | Snyk setup |
-| github/codeql-action/upload-sarif | v4 | **Not pinned** | SARIF upload |
-
 ### Release Workflow (.github/workflows/release.yml) - NOT PINNED (WARNING)
 
 | Action | Version Tag | Commit SHA | Notes |

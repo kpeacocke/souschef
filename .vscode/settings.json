@@ -548,10 +548,9 @@
     "go.lintTool": "golangci-lint",
     "go.useLanguageServer": true,
     "go.lintOnSave": "package",
-    "snyk.advanced.autoSelectOrganization": false,
     "codeQL.createQuery.qlPackLocation": "/Users/kpeacocke/code/souschef",
     "python-envs.defaultEnvManager": "ms-python.python:system",
     "python-envs.defaultPackageManager": "ms-python.python:pip",
-    "snyk.advanced.organization": "16296024-d80b-4481-bbf6-92e2a42b462e",
-    "trivy.offlineScan": true
+    "trivy.offlineScan": true,
+    "snyk.advanced.autoSelectOrganization": true
 }

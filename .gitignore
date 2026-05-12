@@ -53,9 +53,7 @@ mutants/
 # Security Scanning
 # ──────────────────────────────────────────────
 
-# Snyk
 requirements.txt
-.github/instructions/snyk_rules.instructions.md
 
 # CodeQL — ignore databases and build artefacts, but commit config and reports
 .codeql/databases/

@@ -47,7 +47,6 @@ SousChef uses several tools to maintain secure dependencies:
 
 - **Poetry**: Dependency version pinning and resolution
 - **pip-audit**: Automated vulnerability scanning in CI/CD
-- **Snyk**: Continuous security monitoring (if configured)
 - **Dependabot**: Automated dependency updates (GitHub)
 
 **Checking Dependencies:**

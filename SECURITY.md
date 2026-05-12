@@ -132,7 +132,7 @@ SousChef implements multiple layers of security protection:
 ### Dependency Management
 
 - **Regular Security Updates**: All dependencies are regularly audited and updated
-- **Vulnerability Scanning**: Automated security scanning with Snyk and CodeQL
+- **Vulnerability Scanning**: Automated security scanning with CodeQL
 - **Dependency Pinning**: Lock files ensure reproducible builds with known-good versions
 
 ### Automated Vulnerability Scanning

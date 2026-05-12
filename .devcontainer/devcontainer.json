@@ -4,7 +4,6 @@
         "dockerfile": "Dockerfile",
         "context": "..",
         "args": {
-            "SNYK_VERSION": "latest",
             "CODEQL_VERSION": "latest",
             "SONAR_SCANNER_VERSION": "latest"
         }
@@ -117,7 +116,6 @@
                 "editorconfig.editorconfig",
                 "redhat.vscode-yaml",
                 "Shopify.ruby-lsp",
-                "snyk-security.snyk-vulnerability-scanner",
                 "SonarSource.sonarlint-vscode",
                 "aquasecurityofficial.trivy-vulnerability-scanner",
                 "Progress.chef",
