@@ -176,18 +176,18 @@ Get started with SousChef in minutes:
 
 === "CLI (v2 Orchestrator)"
 
-        ```bash
-        # Run an end-to-end v2 migration
-        souschef-cli v2 migrate \
-            --cookbook-path /path/to/cookbook \
-            --chef-version 15.10.91 \
-            --target-platform aap \
-            --target-version 2.4.0 \
-            --save-state
+    ```bash
+    # Run an end-to-end v2 migration
+    souschef-cli v2 migrate \
+        --cookbook-path /path/to/cookbook \
+        --chef-version 15.10.91 \
+        --target-platform aap \
+        --target-version 2.4.0 \
+        --save-state
 
-        # Load the stored migration state later
-        souschef-cli v2 status --migration-id mig-abc123
-        ```
+    # Load the stored migration state later
+    souschef-cli v2 status --migration-id mig-abc123
+    ```
 
 === "Web UI"
 

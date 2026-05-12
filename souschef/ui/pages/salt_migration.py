@@ -888,7 +888,7 @@ def _render_batch_convert_section() -> None:
         output_dir = st.text_input(
             "Output Directory",
             value="",
-            placeholder="/tmp/ansible-roles",
+            placeholder="./ansible-roles",
             help="Path where Ansible roles structure should be written.",
             key="salt_batch_output",
         )

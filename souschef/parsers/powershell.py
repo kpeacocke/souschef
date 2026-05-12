@@ -112,7 +112,11 @@ _RE_SET_CONTENT = re.compile(
 
 # MSI installs via Start-Process / msiexec
 _RE_MSI_INSTALL = re.compile(
-    r"(?:Start-Process\s+msiexec|msiexec\.exe?)\s+.*?(?:/i|/package)\s+[\"']?(?P<path>[^\"'\s;]+)[\"']?",
+    r"(?:Start-Process\s+msiexec|msiexec\.exe?)\b",
+    re.IGNORECASE,
+)
+_RE_MSI_PATH = re.compile(
+    r"(?:/i|/package)\s+[\"']?(?P<path>[^\"'\s;]+)",
     re.IGNORECASE,
 )
 
@@ -197,7 +201,11 @@ _RE_INSTALL_MODULE = re.compile(
 
 # Certificates
 _RE_IMPORT_CERTIFICATE = re.compile(
-    r"(?:Import-Certificate|Import-PfxCertificate)\s+.*?(?:-FilePath\s+)?[\"']?(?P<path>[^\"'\s;,]+\.(?:cer|pfx|p12|crt))[\"']?",
+    r"(?:Import-Certificate|Import-PfxCertificate)\b",
+    re.IGNORECASE,
+)
+_RE_IMPORT_CERTIFICATE_PATH = re.compile(
+    r"(?:-FilePath\s+)?[\"']?(?P<path>[^\"'\s;,]+\.(?:cer|pfx|p12|crt))[\"']?",
     re.IGNORECASE,
 )
 
@@ -215,7 +223,7 @@ _RE_NEW_WEBSITE = re.compile(
 
 # DNS client
 _RE_SET_DNS_CLIENT = re.compile(
-    r"Set-DnsClientServerAddress\s+.*?-ServerAddresses\s+[\"']?(?P<addresses>[0-9a-f\.:,\s\[\]]+)(?=\s*(?:-|$))",
+    r"Set-DnsClientServerAddress\b[^\n]*\b-ServerAddresses\s+[\"']?(?P<addresses>[0-9a-f\.:,\s\[\]]+)(?=\s*(?:-|$))",
     re.IGNORECASE,
 )
 
@@ -713,11 +721,13 @@ def _classify_file_line(line: str, lineno: int) -> dict[str, Any] | None:
 
 def _classify_package_line(line: str, lineno: int) -> dict[str, Any] | None:
     """Classify package installation/removal lines (MSI, Chocolatey)."""
-    m = _RE_MSI_INSTALL.search(line)
-    if m:
+    if _RE_MSI_INSTALL.search(line):
+        msi_path_match = _RE_MSI_PATH.search(line)
+        if msi_path_match is None:
+            return None
         return _make_action(
             "msi_install",
-            {"package_path": m.group("path")},
+            {"package_path": msi_path_match.group("path")},
             line,
             lineno,
         )
@@ -892,11 +902,13 @@ def _classify_task_env_line(line: str, lineno: int) -> dict[str, Any] | None:
 
 def _classify_infra_line(line: str, lineno: int) -> dict[str, Any] | None:
     """Classify certificate, WinRM, IIS, DNS, and ACL lines."""
-    m = _RE_IMPORT_CERTIFICATE.search(line)
-    if m:
+    if _RE_IMPORT_CERTIFICATE.search(line):
+        cert_path_match = _RE_IMPORT_CERTIFICATE_PATH.search(line)
+        if cert_path_match is None:
+            return None
         return _make_action(
             "certificate_import",
-            {"certificate_path": m.group("path")},
+            {"certificate_path": cert_path_match.group("path")},
             line,
             lineno,
         )

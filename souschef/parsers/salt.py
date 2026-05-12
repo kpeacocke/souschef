@@ -86,6 +86,37 @@ SALT_FILE_FUNCTIONS = {
 }
 
 
+def _strip_jinja_markup(content: str) -> str:
+    """Strip Jinja2 blocks and replace expressions with placeholders."""
+    cleaned: list[str] = []
+    i = 0
+    length = len(content)
+
+    while i < length:
+        if content.startswith("{%", i):
+            end = content.find("%}", i + 2)
+            if end == -1:
+                break
+            i = end + 2
+            continue
+
+        if content.startswith("{{", i):
+            end = content.find("}}", i + 2)
+            if end == -1:
+                break
+            cleaned.append("'__JINJA2__'")
+            i = end + 2
+            continue
+
+        cleaned.append(content[i])
+        i += 1
+
+    if i < length and not (content.startswith("{%", i) or content.startswith("{{", i)):
+        cleaned.append(content[i:])
+
+    return "".join(cleaned)
+
+
 def _parse_sls_yaml(content: str) -> dict[str, Any]:
     """
     Parse SLS file content as YAML.
@@ -103,11 +134,9 @@ def _parse_sls_yaml(content: str) -> dict[str, Any]:
     try:
         yaml_module = importlib.import_module("yaml")
 
-        # Strip Jinja2 blocks and expressions for basic parsing
-        # Replace {%...%} blocks with comments
-        clean = re.sub(r"\{%-?\s*.*?-?%\}", "", content, flags=re.DOTALL)
-        # Replace {{...}} expressions with placeholder string
-        clean = re.sub(r"\{\{.*?\}\}", "'__JINJA2__'", clean)
+        # Strip Jinja2 syntax with a deterministic parser to avoid regex
+        # backtracking on adversarial inputs (CWE-1333).
+        clean = _strip_jinja_markup(content)
         result = yaml_module.safe_load(clean)
         if isinstance(result, dict):
             return result
@@ -242,20 +271,30 @@ def _extract_pillars(content: str) -> dict[str, Any]:
 
     # Pattern: pillar.get('key') or pillar.get('key', 'default')
     for m in re.finditer(
-        r"pillar\.get\(\s*(['\"])(\w[\w.:-]*)\1(?:\s*,\s*([^)]+))?\s*\)",
+        r"pillar\.get\(\s*(['\"])(\w[\w.:-]*)\1",
         content,
     ):
         key = m.group(2)
-        default = m.group(3).strip().strip("'\"") if m.group(3) else None
+        default = None
+        end_paren = content.find(")", m.end())
+        if end_paren != -1:
+            args_tail = content[m.end() : end_paren]
+            if "," in args_tail:
+                default = args_tail.split(",", 1)[1].strip().strip("'\"")
         pillars[key] = {"source": "pillar", "access": "get", "default": default}
 
     # Pattern: salt['pillar.get']('key') or salt['pillar.get']('key', 'default')
     for m in re.finditer(
-        r"salt\[['\"]pillar\.get['\"]\]\(\s*(['\"])(\w[\w.:-]*)\1(?:\s*,\s*([^)]+))?\s*\)",
+        r"salt\[['\"]pillar\.get['\"]\]\(\s*(['\"])(\w[\w.:-]*)\1",
         content,
     ):
         key = m.group(2)
-        default = m.group(3).strip().strip("'\"") if m.group(3) else None
+        default = None
+        end_paren = content.find(")", m.end())
+        if end_paren != -1:
+            args_tail = content[m.end() : end_paren]
+            if "," in args_tail:
+                default = args_tail.split(",", 1)[1].strip().strip("'\"")
         pillars[key] = {
             "source": "salt_pillar_get",
             "access": "salt_call",

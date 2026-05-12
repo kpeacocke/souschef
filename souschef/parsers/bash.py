@@ -94,7 +94,7 @@ _SED_INPLACE_PATTERN = re.compile(
 _CRON_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\bcrontab\b[^\n]*", re.IGNORECASE),
     re.compile(
-        r'(?:echo|printf)\s+["\'][^"\']*\*[^"\']*["\'].*(?:>+\s*/etc/cron|\|\s*crontab)',
+        r"(?:echo|printf)\s+[^\n]*(?:>+\s*/etc/cron|\|\s*crontab)",
         re.IGNORECASE,
     ),
 ]
@@ -251,7 +251,7 @@ _DOWNLOAD_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "wget",
         re.compile(
-            r"\bwget\s+(?:[^\n]*\s+)?(?:-O\s*(\S+)\s+)?(\S+)",
+            r"\bwget\b[^\n]*",
             re.IGNORECASE,
         ),
     ),
@@ -988,9 +988,12 @@ def _extract_cron_jobs(content: str, result: dict[str, Any]) -> None:
     """
     for pattern in _CRON_PATTERNS:
         for match in pattern.finditer(content):
+            raw = match.group(0).strip()
+            if "*" not in raw:
+                continue
             result["cron_jobs"].append(
                 {
-                    "raw": match.group(0).strip(),
+                    "raw": raw,
                     "line": _line_number(content, match.start()),
                     "confidence": 0.7,
                 }
