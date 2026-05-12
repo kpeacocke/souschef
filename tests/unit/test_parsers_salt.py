@@ -11,6 +11,7 @@ from souschef.parsers.salt import (
     _list_sls_files,
     _parse_sls_states,
     _parse_sls_yaml,
+    _strip_jinja_markup,
     _summarise_states,
     parse_salt_directory,
     parse_salt_pillar,
@@ -57,6 +58,21 @@ def test_parse_sls_yaml_non_dict_returns_empty() -> None:
     content = "- item1\n- item2\n"
     result = _parse_sls_yaml(content)
     assert result == {}
+
+
+def test_strip_jinja_markup_handles_unterminated_expression() -> None:
+    """Unterminated Jinja expression should not crash stripping logic."""
+    stripped = _strip_jinja_markup("name: {{ pillar['x']")
+    assert "name:" in stripped
+
+
+def test_parse_sls_yaml_when_yaml_import_fails_returns_empty() -> None:
+    """Import errors while parsing should return an empty dictionary."""
+    with patch(
+        "souschef.parsers.salt.importlib.import_module",
+        side_effect=RuntimeError("boom"),
+    ):
+        assert _parse_sls_yaml("key: value") == {}
 
 
 # ---------------------------------------------------------------------------

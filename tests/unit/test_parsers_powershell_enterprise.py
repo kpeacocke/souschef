@@ -77,6 +77,27 @@ class TestUserCreate:
         assert action["source_line"] == 1
 
 
+def test_msi_install_without_package_path_falls_back_to_shell() -> None:
+    """Msiexec install command without path is treated as generic shell."""
+    action = _single("msiexec /i\n")
+    assert action["action_type"] == "win_shell"
+
+
+def test_import_certificate_without_path_falls_back_to_shell() -> None:
+    """Import-Certificate command without a file path falls back to shell."""
+    action = _single("Import-Certificate -CertStoreLocation Cert:\\LocalMachine\\My\n")
+    assert action["action_type"] == "win_shell"
+
+
+def test_set_dns_client_server_address_classified() -> None:
+    """Set-DnsClientServerAddress should produce dns_client_set action."""
+    action = _single(
+        "Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 8.8.8.8,1.1.1.1\n"
+    )
+    assert action["action_type"] == "dns_client_set"
+    assert "8.8.8.8" in action["params"]["server_addresses"]
+
+
 class TestUserModify:
     """Tests for the user_modify action type (Set-LocalUser)."""
 

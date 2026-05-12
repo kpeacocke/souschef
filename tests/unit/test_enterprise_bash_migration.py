@@ -113,6 +113,13 @@ def test_extract_users_line_number() -> None:
     assert result["users"][0]["line"] == 2
 
 
+def test_extract_cron_jobs_skips_non_cron_matches() -> None:
+    """Non-crontab content without cron syntax should be ignored."""
+    result = _make_result()
+    _extract_cron_jobs("random text with /etc/cron but no schedule", result)
+    assert result["cron_jobs"] == []
+
+
 # ---------------------------------------------------------------------------
 # _extract_groups
 # ---------------------------------------------------------------------------
