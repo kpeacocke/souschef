@@ -223,7 +223,7 @@ _RE_NEW_WEBSITE = re.compile(
 
 # DNS client
 _RE_SET_DNS_CLIENT = re.compile(
-    r"Set-DnsClientServerAddress\b[^\n]*\b-ServerAddresses\s+[\"']?(?P<addresses>[0-9a-f\.:,\s\[\]]+)(?=\s*(?:-|$))",
+    r"Set-DnsClientServerAddress\b[^\n]*-ServerAddresses\s+[\"']?(?P<addresses>[0-9a-f\.:,\s\[\]]+)(?=\s*(?:-|$))",
     re.IGNORECASE,
 )
 

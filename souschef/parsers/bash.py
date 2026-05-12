@@ -989,7 +989,7 @@ def _extract_cron_jobs(content: str, result: dict[str, Any]) -> None:
     for pattern in _CRON_PATTERNS:
         for match in pattern.finditer(content):
             raw = match.group(0).strip()
-            if "*" not in raw:
+            if "crontab" not in raw and "*" not in raw:
                 continue
             result["cron_jobs"].append(
                 {
