@@ -212,6 +212,16 @@ def test_top_to_ansible_inventory_empty() -> None:
     assert "Ansible inventory" in result
 
 
+def test_top_to_ansible_inventory_public_wrapper() -> None:
+    """Public wrapper should delegate to the internal top-to-inventory converter."""
+    from souschef.converters.salt import top_to_ansible_inventory
+
+    data = {"environments": {"base": {"web01": ["common"]}}}
+    rendered = top_to_ansible_inventory(data)
+
+    assert "[env_base]" in rendered
+
+
 # ---------------------------------------------------------------------------
 # _render_nested_yaml_value
 # ---------------------------------------------------------------------------

@@ -66,6 +66,35 @@ def test_strip_jinja_markup_handles_unterminated_expression() -> None:
     assert "name:" in stripped
 
 
+def test_strip_jinja_markup_handles_unterminated_block() -> None:
+    """Unterminated Jinja block should exit safely without raising."""
+    stripped = _strip_jinja_markup("{% if grains['os'] == 'Ubuntu'")
+    assert stripped == ""
+
+
+def test_strip_jinja_markup_appends_tail_after_break() -> None:
+    """Tail appending branch is preserved for custom string-like inputs."""
+
+    class _PseudoContent(str):
+        def __new__(cls) -> "_PseudoContent":
+            obj = str.__new__(cls, "{% broken")
+            obj._startswith_calls = 0
+            return obj
+
+        def startswith(
+            self, prefix: str, start: int = 0, end: int | None = None
+        ) -> bool:  # type: ignore[override]
+            self._startswith_calls += 1
+            if self._startswith_calls == 1:
+                if end is None:
+                    return str.startswith(self, prefix, start)
+                return str.startswith(self, prefix, start, end)
+            return False
+
+    stripped = _strip_jinja_markup(_PseudoContent())
+    assert stripped == "{% broken"
+
+
 def test_parse_sls_yaml_when_yaml_import_fails_returns_empty() -> None:
     """Import errors while parsing should return an empty dictionary."""
     with patch(

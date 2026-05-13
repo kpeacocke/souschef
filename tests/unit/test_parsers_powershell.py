@@ -730,3 +730,130 @@ Invoke-WebRequest -Uri https://example.com -OutFile C:\\temp\\file.zip
         )
         # Should be a win_shell fallback as it doesn't match directory or registry
         assert result["actions"][0]["action_type"] == "win_shell"
+
+
+class TestAstExtractionAndFallbackPaths:
+    """Tests for AST extraction helper and hybrid fallback branches."""
+
+    def test_extract_commands_with_ast_handles_json_payload_shapes(self) -> None:
+        """AST extraction should normalise dict payload and skip invalid entries."""
+        from souschef.parsers.powershell import _extract_commands_with_ast
+
+        class _Result:
+            def __init__(self, returncode: int, stdout: str) -> None:
+                self.returncode = returncode
+                self.stdout = stdout
+
+        with (
+            patch(
+                "souschef.parsers.powershell.shutil.which", return_value="/usr/bin/pwsh"
+            ),
+            patch(
+                "souschef.parsers.powershell.subprocess.run",
+                return_value=_Result(
+                    0,
+                    json.dumps(
+                        {
+                            "text": "Install-WindowsFeature -Name Web-Server",
+                            "line": 7,
+                        }
+                    ),
+                ),
+            ),
+        ):
+            commands = _extract_commands_with_ast(
+                "Install-WindowsFeature -Name Web-Server"
+            )
+
+        assert commands == [("Install-WindowsFeature -Name Web-Server", 7)]
+
+    def test_extract_commands_with_ast_invalid_process_results(self) -> None:
+        """AST extraction returns None for command failure or non-list payload."""
+        from souschef.parsers.powershell import _extract_commands_with_ast
+
+        class _Result:
+            def __init__(self, returncode: int, stdout: str) -> None:
+                self.returncode = returncode
+                self.stdout = stdout
+
+        with (
+            patch(
+                "souschef.parsers.powershell.shutil.which", return_value="/usr/bin/pwsh"
+            ),
+            patch(
+                "souschef.parsers.powershell.subprocess.run",
+                return_value=_Result(1, ""),
+            ),
+        ):
+            assert _extract_commands_with_ast("x") is None
+
+        with (
+            patch(
+                "souschef.parsers.powershell.shutil.which", return_value="/usr/bin/pwsh"
+            ),
+            patch(
+                "souschef.parsers.powershell.subprocess.run",
+                return_value=_Result(0, "123"),
+            ),
+        ):
+            assert _extract_commands_with_ast("x") is None
+
+        with (
+            patch(
+                "souschef.parsers.powershell.shutil.which", return_value="/usr/bin/pwsh"
+            ),
+            patch(
+                "souschef.parsers.powershell.subprocess.run",
+                return_value=_Result(0, "{invalid json"),
+            ),
+        ):
+            assert _extract_commands_with_ast("x") is None
+
+    def test_extract_commands_with_ast_skips_non_dict_items(self) -> None:
+        """AST extraction should ignore non-dict items while keeping valid commands."""
+        from souschef.parsers.powershell import _extract_commands_with_ast
+
+        class _Result:
+            def __init__(self, returncode: int, stdout: str) -> None:
+                self.returncode = returncode
+                self.stdout = stdout
+
+        payload = [
+            1,
+            {"text": "Start-Service -Name W3SVC", "line": 4},
+        ]
+        with (
+            patch(
+                "souschef.parsers.powershell.shutil.which", return_value="/usr/bin/pwsh"
+            ),
+            patch(
+                "souschef.parsers.powershell.subprocess.run",
+                return_value=_Result(0, json.dumps(payload)),
+            ),
+        ):
+            commands = _extract_commands_with_ast("x")
+
+        assert commands == [("Start-Service -Name W3SVC", 4)]
+
+    def test_parse_content_ast_mode_includes_unmatched_non_comment_lines(self) -> None:
+        """AST mode should append unmatched command lines and skip comments/blanks."""
+        from souschef.parsers.powershell import parse_powershell_content
+
+        content = (
+            "\n# comment\nInstall-WindowsFeature -Name Web-Server\nWrite-Host hi\n"
+        )
+        with patch(
+            "souschef.parsers.powershell._extract_commands_with_ast",
+            return_value=[("Install-WindowsFeature -Name Web-Server", 3)],
+        ):
+            result = json.loads(parse_powershell_content(content))
+
+        action_types = [a["action_type"] for a in result["actions"]]
+        assert "windows_feature_install" in action_types
+        assert "win_shell" in action_types
+
+    def test_classify_package_line_msi_without_path_returns_none(self) -> None:
+        """Msiexec invocation without package path should not create MSI action."""
+        from souschef.parsers.powershell import _classify_package_line
+
+        assert _classify_package_line("msiexec.exe /i", 1) is None

@@ -51,6 +51,7 @@ from souschef.ui.pages.puppet_migration import (  # noqa: E402
     _run_module_conversion,
     _show_manifest_file_section,
     _show_module_directory_section,
+    _show_puppet_server_section,
     _show_resource_type_reference,
     show_puppet_migration_page,
 )
@@ -657,3 +658,57 @@ def test_run_module_analysis_invalid_path(mock_streamlit: MagicMock, tmp_path) -
             os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
         else:
             os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+
+
+def test_validate_ui_path_rejects_null_byte() -> None:
+    """_validate_ui_path should reject null-byte payloads."""
+    from souschef.ui.pages.puppet_migration import _validate_ui_path
+
+    assert _validate_ui_path("/tmp/evil\x00.pp") is None
+
+
+def test_validate_ui_path_handles_commonpath_error(mock_streamlit: MagicMock) -> None:
+    """_validate_ui_path should handle ValueError/OSError during path checks."""
+    from souschef.ui.pages.puppet_migration import _validate_ui_path
+
+    with patch(
+        "souschef.ui.pages.puppet_migration.os.path.commonpath", side_effect=ValueError
+    ):
+        assert _validate_ui_path("/tmp/test.pp") is None
+
+
+def test_show_puppet_server_section_warns_when_import_missing_node(
+    mock_streamlit: MagicMock,
+) -> None:
+    """Import action should warn if node name is missing."""
+    mock_streamlit.text_input.side_effect = [
+        "https://puppet.example.test",
+        "cert.pem",
+        "key.pem",
+        "",
+        "",
+        "",
+    ]
+    mock_streamlit.button.side_effect = [False, True]
+    mock_streamlit.session_state = {"puppet_server_nodes": []}
+
+    _show_puppet_server_section()
+
+    mock_streamlit.warning.assert_called_with(
+        "Please select or enter a Puppet node name."
+    )
+
+
+def test_run_conversion_helpers_show_error_for_invalid_path(
+    mock_streamlit: MagicMock,
+) -> None:
+    """Conversion helpers should show invalid path errors when validation fails."""
+    with patch(
+        "souschef.ui.pages.puppet_migration._validate_ui_path", return_value=None
+    ):
+        _run_manifest_conversion("/etc/passwd")
+        _run_module_conversion("/etc")
+        _run_manifest_ai_conversion("/etc/passwd", {"api_key": "key"})
+        _run_module_ai_conversion("/etc", {"api_key": "key"})
+
+    assert mock_streamlit.error.call_count >= 4

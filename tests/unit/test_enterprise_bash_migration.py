@@ -8,6 +8,7 @@ hints, and role generation added in the enterprise enhancement.
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import pytest
 
@@ -21,9 +22,11 @@ from souschef.converters.bash_to_ansible import (
     _git_tasks,
     _group_tasks,
     _hostname_tasks,
+    _render_role_defaults,
     _sed_tasks,
     _user_tasks,
     generate_ansible_role_from_bash,
+    generate_ansible_role_from_bash_file,
 )
 from souschef.parsers.bash import (
     _extract_archives,
@@ -37,8 +40,12 @@ from souschef.parsers.bash import (
     _extract_hostname_ops,
     _extract_sed_ops,
     _extract_sensitive_data,
+    _extract_tar_source,
+    _extract_unzip_source,
     _extract_users,
+    _is_tar_extract_flag,
     _parse_bash_content,
+    _parse_env_assignment_line,
 )
 
 # ---------------------------------------------------------------------------
@@ -118,6 +125,145 @@ def test_extract_cron_jobs_skips_non_cron_matches() -> None:
     result = _make_result()
     _extract_cron_jobs("random text with /etc/cron but no schedule", result)
     assert result["cron_jobs"] == []
+
+
+def test_extract_unzip_source_skips_flags() -> None:
+    """Unzip source extraction should ignore option flags and return zip token."""
+    assert (
+        _extract_unzip_source("unzip -o -q /tmp/archive.zip -d /tmp/out")
+        == "/tmp/archive.zip"
+    )
+
+
+def test_extract_tar_source_empty_and_non_extract_command() -> None:
+    """Tar source extraction should return None for empty/non-extract commands."""
+    assert _extract_tar_source("") is None
+    assert _extract_tar_source("tar -tf archive.tar.gz") is None
+
+
+def test_is_tar_extract_flag_variants() -> None:
+    """Tar extract flag helper should detect long, short and word styles."""
+    assert _is_tar_extract_flag("--extract") is True
+    assert _is_tar_extract_flag("-xzf") is True
+    assert _is_tar_extract_flag("xvf") is True
+    assert _is_tar_extract_flag("-tf") is False
+
+
+def test_parse_env_assignment_line_invalid_cases() -> None:
+    """Env assignment parser should reject unsupported export/name formats."""
+    assert _parse_env_assignment_line("exportAPP=1") is None
+    assert _parse_env_assignment_line("export") is None
+    assert _parse_env_assignment_line("NO_EQUALS") is None
+    assert _parse_env_assignment_line("=value") is None
+    assert _parse_env_assignment_line("lower=value") is None
+    assert _parse_env_assignment_line("BAD-NAME=value") is None
+    with patch("builtins.all", return_value=True):
+        assert _parse_env_assignment_line("MIXED_Name=value") is None
+
+
+def test_extract_unzip_source_returns_none_without_zip_token() -> None:
+    """Unzip source extraction should return None when no .zip token is present."""
+    assert _extract_unzip_source("unzip -o -q -d /tmp/out") is None
+
+
+def test_extract_archives_skips_unzip_without_source() -> None:
+    """Archive extraction should skip unzip commands that have no source archive."""
+    result = _make_result()
+    _extract_archives("unzip -o -q -d /tmp/out", result)
+    assert result["archives"] == []
+
+
+def test_extract_cron_jobs_skips_match_without_crontab_or_schedule() -> None:
+    """Cron extractor should skip broad cron-path matches without schedule entries."""
+    result = _make_result()
+    _extract_cron_jobs("echo hello > /etc/cron.daily/cleanup", result)
+    assert result["cron_jobs"] == []
+
+
+def test_generate_ansible_role_from_bash_file_error_branches(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """File-wrapper conversion should return structured errors for I/O failures."""
+    script_path = tmp_path / "deploy.sh"
+
+    with patch(
+        "souschef.converters.bash_to_ansible.safe_read_text",
+        side_effect=FileNotFoundError,
+    ):
+        out = json.loads(generate_ansible_role_from_bash_file(str(script_path)))
+    assert out["status"] == "error"
+
+    with patch(
+        "souschef.converters.bash_to_ansible.safe_read_text",
+        side_effect=IsADirectoryError,
+    ):
+        out = json.loads(generate_ansible_role_from_bash_file(str(script_path)))
+    assert out["status"] == "error"
+
+    with patch(
+        "souschef.converters.bash_to_ansible.safe_read_text",
+        side_effect=PermissionError,
+    ):
+        out = json.loads(generate_ansible_role_from_bash_file(str(script_path)))
+    assert out["status"] == "error"
+
+    with patch(
+        "souschef.converters.bash_to_ansible.safe_read_text",
+        side_effect=ValueError("invalid path"),
+    ):
+        out = json.loads(generate_ansible_role_from_bash_file(str(script_path)))
+    assert out["status"] == "error"
+
+
+def test_generate_ansible_role_from_bash_file_success(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """File-wrapper conversion should delegate to role generator on success."""
+    script_path = tmp_path / "deploy.sh"
+
+    with (
+        patch(
+            "souschef.converters.bash_to_ansible.safe_read_text", return_value="echo hi"
+        ),
+        patch(
+            "souschef.converters.bash_to_ansible.generate_ansible_role_from_bash",
+            return_value='{"status":"success"}',
+        ) as mock_generate,
+    ):
+        out = generate_ansible_role_from_bash_file(str(script_path), role_name="myrole")
+
+    assert out == '{"status":"success"}'
+    mock_generate.assert_called_once_with(
+        "echo hi",
+        role_name="myrole",
+        script_path=str(script_path),
+    )
+
+
+def test_archive_and_firewall_task_fallback_hints() -> None:
+    """Task builders should use documented default hints in fallback cases."""
+    archive_tasks = _archive_tasks(
+        [{"source": "archive.zip", "line": 1, "confidence": 0.8}]
+    )
+    assert archive_tasks[0]["ansible.builtin.unarchive"]["dest"].startswith(
+        "{{ archive_dest_dir"
+    )
+
+    firewall_tasks = _firewall_tasks(
+        [{"raw": "iptables -A INPUT -j ACCEPT", "line": 1, "confidence": 0.7}]
+    )
+    hint = firewall_tasks[0]["_metadata"]["idempotency_hint"]
+    assert "dedicated firewall module" in hint
+
+
+def test_render_role_defaults_sensitive_env_var_comment() -> None:
+    """Sensitive environment variables should render as commented vault placeholders."""
+    rendered = _render_role_defaults(
+        {
+            "env_vars": [
+                {"name": "DB_PASSWORD", "value": "secret", "is_sensitive": True},
+                {"name": "APP_ENV", "value": "prod", "is_sensitive": False},
+            ]
+        }
+    )
+    assert "# DB_PASSWORD: ''" in rendered
+    assert "APP_ENV:" in rendered
 
 
 # ---------------------------------------------------------------------------

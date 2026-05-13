@@ -582,6 +582,29 @@ def test_get_metadata_content_read_error(tmp_path: Path) -> None:
     assert result == "Could not read metadata"
 
 
+def test_get_recipe_content_sample_commonpath_guard(tmp_path: Path) -> None:
+    """Recipe content loader should enforce commonpath containment guard."""
+    with (
+        patch("souschef.assessment._safe_join", return_value=tmp_path / "recipes"),
+        patch("souschef.assessment.os.path.commonpath", return_value="/outside"),
+        pytest.raises(RuntimeError, match="Path traversal"),
+    ):
+        assessment._get_recipe_content_sample(tmp_path)
+
+
+def test_get_metadata_content_commonpath_guard(tmp_path: Path) -> None:
+    """Metadata loader should enforce commonpath containment guard."""
+    with (
+        patch(
+            "souschef.assessment._safe_join",
+            return_value=tmp_path / assessment.METADATA_FILENAME,
+        ),
+        patch("souschef.assessment.os.path.commonpath", return_value="/outside"),
+        pytest.raises(RuntimeError, match="Path traversal"),
+    ):
+        assessment._get_metadata_content(tmp_path)
+
+
 def test_call_ai_api_watson_invalid_url(monkeypatch: pytest.MonkeyPatch) -> None:
     """Invalid watson base URL should return None."""
     monkeypatch.setattr(

@@ -263,6 +263,17 @@ def test_convert_manifest_file_with_content(tmp_path: Path) -> None:
     assert len(copy_tasks) >= 1
 
 
+def test_convert_manifest_to_ansible_with_ai_value_error() -> None:
+    """ValueError should be returned as an Error-prefixed message."""
+    with patch(
+        "souschef.converters.puppet_to_ansible._normalize_path",
+        side_effect=ValueError("invalid manifest path"),
+    ):
+        result = convert_puppet_manifest_to_ansible_with_ai("bad.pp", api_key="k")
+
+    assert result == "Error: invalid manifest path"
+
+
 def test_convert_manifest_file_with_erb_content(tmp_path: Path) -> None:
     """Test that file resources with ERB content produce template tasks."""
     manifest = tmp_path / "f.pp"

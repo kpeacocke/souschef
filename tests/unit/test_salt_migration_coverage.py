@@ -978,3 +978,165 @@ class TestRenderInventorySection:
             _render_inventory_section()
         mock_st.subheader.assert_called()
         mock_st.download_button.assert_called()
+
+
+class TestBatchJobHelpers:
+    """Tests for background batch conversion helper branches."""
+
+    def test_batch_job_failure_hint_variants(self, mock_st: MagicMock) -> None:
+        """Failure hint helper should return contextual guidance."""
+        with patch("souschef.ui.pages.salt_migration.st", mock_st):
+            from souschef.ui.pages.salt_migration import _batch_job_failure_hint
+
+            assert "inside the workspace" in _batch_job_failure_hint("Invalid path")
+            assert "write permissions" in _batch_job_failure_hint("Permission denied")
+            assert "malformed output" in _batch_job_failure_hint("JSON parser failed")
+            assert "review the logs" in _batch_job_failure_hint("unexpected failure")
+
+    def test_run_batch_conversion_background_job_error_branches(
+        self, mock_st: MagicMock
+    ) -> None:
+        """Background conversion should raise on invalid paths and malformed JSON."""
+        with (
+            patch("souschef.ui.pages.salt_migration.st", mock_st),
+            patch(
+                "souschef.ui.pages.salt_migration._validate_ui_path", return_value=None
+            ),
+        ):
+            from souschef.ui.pages.salt_migration import (
+                _run_batch_conversion_background_job,
+            )
+
+            with pytest.raises(ValueError, match="Salt directory path"):
+                _run_batch_conversion_background_job(
+                    lambda *_: None, lambda *_: None, "x", "y"
+                )
+
+        with (
+            patch("souschef.ui.pages.salt_migration.st", mock_st),
+            patch(
+                "souschef.ui.pages.salt_migration._validate_ui_path",
+                side_effect=["/srv/salt", None],
+            ),
+        ):
+            from souschef.ui.pages.salt_migration import (
+                _run_batch_conversion_background_job,
+            )
+
+            with pytest.raises(ValueError, match="output directory path"):
+                _run_batch_conversion_background_job(
+                    lambda *_: None, lambda *_: None, "x", "y"
+                )
+
+        with (
+            patch("souschef.ui.pages.salt_migration.st", mock_st),
+            patch(
+                "souschef.ui.pages.salt_migration._validate_ui_path",
+                side_effect=["/srv/salt", "/out"],
+            ),
+            patch(
+                "souschef.ui.pages.salt_migration.convert_salt_directory_to_roles",
+                return_value="not-json",
+            ),
+        ):
+            from souschef.ui.pages.salt_migration import (
+                _run_batch_conversion_background_job,
+            )
+
+            with pytest.raises(ValueError, match="JSON decode failure"):
+                _run_batch_conversion_background_job(
+                    lambda *_: None, lambda *_: None, "x", "y"
+                )
+
+    def test_run_batch_conversion_background_job_logs_warnings(
+        self, mock_st: MagicMock
+    ) -> None:
+        """Background conversion should log warning counts when present."""
+        logs: list[str] = []
+        with (
+            patch("souschef.ui.pages.salt_migration.st", mock_st),
+            patch(
+                "souschef.ui.pages.salt_migration._validate_ui_path",
+                side_effect=["/srv/salt", "/out"],
+            ),
+            patch(
+                "souschef.ui.pages.salt_migration.convert_salt_directory_to_roles",
+                return_value=json.dumps(
+                    {
+                        "roles_created": ["role1"],
+                        "files_written": ["/out/role1/tasks/main.yml"],
+                        "warnings": ["w1"],
+                    }
+                ),
+            ),
+        ):
+            from souschef.ui.pages.salt_migration import (
+                _run_batch_conversion_background_job,
+            )
+
+            _run_batch_conversion_background_job(
+                lambda *_: None,
+                lambda msg: logs.append(msg),
+                "/srv/salt",
+                "/out",
+            )
+
+        assert any("Warnings emitted" in entry for entry in logs)
+
+    def test_display_batch_job_status_missing_and_failed_paths(
+        self, mock_st: MagicMock
+    ) -> None:
+        """Batch job status should handle missing records and failed jobs."""
+        mock_st.session_state = {"salt_batch_job_id": "job-1"}
+
+        with (
+            patch("souschef.ui.pages.salt_migration.st", mock_st),
+            patch(
+                "souschef.ui.pages.salt_migration.background_job_queue.get",
+                return_value=None,
+            ),
+        ):
+            from souschef.ui.pages.salt_migration import _display_batch_job_status
+
+            _display_batch_job_status()
+        mock_st.warning.assert_called_with("Background job record not found.")
+
+        mock_st.warning.reset_mock()
+        mock_st.error.reset_mock()
+        mock_st.info.reset_mock()
+        mock_st.session_state = {"salt_batch_job_id": "job-2"}
+        failed_job = {
+            "status": "failed",
+            "progress": 55,
+            "logs": ["step 1", "step 2"],
+            "error": "Permission denied",
+        }
+        with (
+            patch("souschef.ui.pages.salt_migration.st", mock_st),
+            patch(
+                "souschef.ui.pages.salt_migration.background_job_queue.get",
+                return_value=failed_job,
+            ),
+        ):
+            from souschef.ui.pages.salt_migration import _display_batch_job_status
+
+            _display_batch_job_status()
+        mock_st.error.assert_called()
+        mock_st.info.assert_called()
+
+    def test_render_batch_convert_section_queue_requires_paths(
+        self, mock_st: MagicMock
+    ) -> None:
+        """Queue button should require both source and output directory values."""
+        mock_st.text_input.side_effect = ["", ""]
+        mock_st.button.side_effect = [False, True]
+        mock_st.session_state = {}
+
+        with patch("souschef.ui.pages.salt_migration.st", mock_st):
+            from souschef.ui.pages.salt_migration import _render_batch_convert_section
+
+            _render_batch_convert_section()
+
+        mock_st.error.assert_called_with(
+            "Please enter both a Salt directory and an output directory."
+        )

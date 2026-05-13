@@ -513,6 +513,17 @@ def test_extract_puppet_facts_legacy_and_hash() -> None:
     assert "os.family" in fact_names
 
 
+def test_extract_puppet_facts_deduplicates_same_line_entries() -> None:
+    """Duplicate fact references on the same line should be deduplicated."""
+    content = "$::osfamily $::osfamily\n$facts['os']['family'] $facts['os']['family']"
+
+    facts = _extract_puppet_facts(content, "test.pp")
+    names = [f["name"] for f in facts]
+
+    assert names.count("osfamily") == 1
+    assert names.count("os.family") == 1
+
+
 def test_extract_puppet_templates_template_and_epp() -> None:
     """Test extraction of template and epp references with source locations."""
     templates = _extract_puppet_templates(FACTS_TEMPLATES_MANIFEST, "test.pp")
@@ -726,6 +737,25 @@ def test_format_manifest_results_many_variables() -> None:
     }
     output = _format_manifest_results(results, "x.pp")
     assert "and" in output and "more" in output
+
+
+def test_format_manifest_results_many_facts() -> None:
+    """Formatting with many facts should include truncation note for overflow."""
+    facts = [
+        {"name": f"fact{i}", "notation": "legacy", "source_file": "x.pp", "line": i + 1}
+        for i in range(25)
+    ]
+    results = {
+        "resources": [],
+        "classes": [],
+        "variables": [],
+        "facts": facts,
+        "unsupported": [],
+    }
+
+    output = _format_manifest_results(results, "x.pp")
+    assert "Facts Referenced" in output
+    assert "and 5 more" in output
 
 
 def test_format_manifest_results_no_resources() -> None:

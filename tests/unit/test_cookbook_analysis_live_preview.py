@@ -73,6 +73,13 @@ def test_summarise_inline_validation_reads_summary() -> None:
     assert _summarise_inline_validation(payload) == {"errors": 2, "warnings": 3}
 
 
+def test_summarise_inline_validation_handles_non_dict_summary() -> None:
+    """Non-dict summary payloads should return synthetic error counts."""
+    payload = json.dumps({"summary": ["not", "a", "dict"]})
+
+    assert _summarise_inline_validation(payload) == {"errors": 1, "warnings": 0}
+
+
 def test_display_inline_validation_feedback_shows_error(
     mock_streamlit: MagicMock,
 ) -> None:
