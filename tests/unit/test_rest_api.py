@@ -41,6 +41,12 @@ def test_coerce_result_preserves_plain_text() -> None:
     assert _coerce_result("plain text") == "plain text"
 
 
+def test_coerce_result_non_string_passthrough() -> None:
+    """Non-string results should be returned as-is."""
+    payload = {"hello": "world"}
+    assert _coerce_result(payload) is payload
+
+
 def test_handle_rest_request_health_route() -> None:
     """Health route returns an OK payload."""
     status, payload = handle_rest_request("GET", "/health")
@@ -163,6 +169,24 @@ def test_handle_rest_request_run_runtime_error_mapping() -> None:
     assert payload == {"error": "upstream service unavailable"}
 
 
+def test_handle_rest_request_run_type_error_mapping() -> None:
+    """Type errors from operation invocation map to bad request responses."""
+    request_body = b'{"operation": "demo", "arguments": {}}'
+
+    def _requires_positional(required: object) -> str:
+        del required
+        return "ok"
+
+    with patch(
+        "souschef.rest_api._supported_operations",
+        return_value={"demo": _requires_positional},
+    ):
+        status, payload = handle_rest_request("POST", "/api/v1/run", request_body)
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload["error"].startswith("Invalid arguments:")
+
+
 def test_handle_rest_request_run_rejects_invalid_webhook_url() -> None:
     """Run route rejects invalid webhook URLs before delivery attempts."""
     request_body = json.dumps(
@@ -266,6 +290,39 @@ def test_handle_rest_request_webhook_notify_rejects_invalid_url() -> None:
 
     assert status == HTTPStatus.BAD_REQUEST
     assert payload == {"error": "Invalid webhook URL: Host is not allowed"}
+
+
+def test_handle_rest_request_webhook_notify_requires_url() -> None:
+    """Webhook notify rejects missing URL values."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/webhooks/notify",
+        b'{"event": "migration.completed", "payload": {}}',
+    )
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "Webhook URL is required"}
+
+
+def test_handle_rest_request_webhook_notify_requires_event() -> None:
+    """Webhook notify rejects missing event values."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/webhooks/notify",
+        b'{"url": "https://hooks.example.test", "payload": {}}',
+    )
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "Webhook event is required"}
+
+
+def test_handle_rest_request_webhook_notify_requires_object_payload() -> None:
+    """Webhook notify rejects non-object payload values."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/webhooks/notify",
+        b'{"url": "https://hooks.example.test", "event": "x", "payload": []}',
+    )
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "Webhook payload must be a JSON object"}
 
 
 def test_handle_rest_request_invalid_json() -> None:

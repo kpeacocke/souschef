@@ -73,3 +73,9 @@ def test_background_job_queue_progress_is_clamped() -> None:
 
     assert snapshot["status"] == "succeeded"
     assert snapshot["progress"] == 100
+
+
+def test_background_job_queue_get_unknown_job_returns_none() -> None:
+    """Querying an unknown job ID should return None."""
+    queue = BackgroundJobQueue(max_workers=1)
+    assert queue.get("missing-job-id") is None

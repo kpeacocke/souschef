@@ -325,3 +325,72 @@ def test_pages_lazy_import_when_not_in_sys_modules() -> None:
             sys.modules[full_name] = saved
         elif full_name in sys.modules:
             sys.modules.pop(full_name)
+
+
+# ---------------------------------------------------------------------------
+# core/path_utils.py — line 508 (null byte check in _check_symlink_safety)
+# ---------------------------------------------------------------------------
+
+
+def test_check_symlink_safety_rejects_null_byte_path() -> None:
+    """_check_symlink_safety raises ValueError on null-byte paths."""
+    import pytest
+
+    from souschef.core.path_utils import _check_symlink_safety
+
+    with pytest.raises(ValueError, match="null bytes"):
+        _check_symlink_safety(Path("safe"), base_path=Path("bad\x00path"))
+
+
+def test_ensure_within_base_path_second_commonpath_mismatch(tmp_path: Any) -> None:
+    """_ensure_within_base_path rejects when resolved containment check mismatches."""
+    import pytest
+
+    from souschef.core.path_utils import _ensure_within_base_path
+
+    safe_file = tmp_path / "safe.txt"
+    safe_file.write_text("content")
+
+    original_commonpath = os.path.commonpath
+    call_count = 0
+
+    def mismatch_on_second(paths: list[str]) -> str:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            return "/not-the-base"
+        return original_commonpath(paths)
+
+    with (
+        patch(
+            "souschef.core.path_utils.os.path.commonpath",
+            side_effect=mismatch_on_second,
+        ),
+        pytest.raises(ValueError, match="Path traversal attempt"),
+    ):
+        _ensure_within_base_path(safe_file, tmp_path)
+
+
+def test_resolve_path_under_base_second_commonpath_value_error(tmp_path: Any) -> None:
+    """_resolve_path_under_base raises when second commonpath call errors."""
+    import pytest
+
+    from souschef.core.path_utils import _resolve_path_under_base
+
+    original_commonpath = os.path.commonpath
+    call_count = 0
+
+    def raise_on_second(paths: list[str]) -> str:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 2:
+            raise ValueError("different drives (mocked)")
+        return original_commonpath(paths)
+
+    with (
+        patch(
+            "souschef.core.path_utils.os.path.commonpath", side_effect=raise_on_second
+        ),
+        pytest.raises(ValueError, match="Path traversal attempt"),
+    ):
+        _resolve_path_under_base("safe.txt", tmp_path)

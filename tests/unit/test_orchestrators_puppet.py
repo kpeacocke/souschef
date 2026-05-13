@@ -211,3 +211,85 @@ class TestGetPuppetAnsibleModuleMap:
 
         mock_converter.get_puppet_ansible_module_map.assert_called_once_with()
         assert result == expected
+
+
+def test_add_catalog_edges_adds_dependency_when_nodes_exist() -> None:
+    """Catalog edges should create dependencies when both nodes are present."""
+    from souschef.ir import (
+        IRGraph,
+        IRMetadata,
+        IRNode,
+        IRNodeType,
+        SourceType,
+        TargetType,
+    )
+    from souschef.orchestrators.puppet import _add_catalog_edges
+
+    graph = IRGraph(
+        graph_id="g",
+        source_type=SourceType.PUPPET,
+        target_type=TargetType.ANSIBLE,
+    )
+    source = IRNode(
+        node_id="package::nginx",
+        node_type=IRNodeType.PACKAGE,
+        name="nginx",
+        source_type=SourceType.PUPPET,
+        metadata=IRMetadata(
+            source_type=SourceType.PUPPET,
+            source_file="catalog",
+            source_line=1,
+        ),
+    )
+    target = IRNode(
+        node_id="service::nginx",
+        node_type=IRNodeType.SERVICE,
+        name="nginx",
+        source_type=SourceType.PUPPET,
+        metadata=IRMetadata(
+            source_type=SourceType.PUPPET,
+            source_file="catalog",
+            source_line=2,
+        ),
+    )
+    graph.add_node(source)
+    graph.add_node(target)
+
+    _add_catalog_edges(
+        graph,
+        [
+            {
+                "source": {"type": "Package", "title": "nginx"},
+                "target": {"type": "Service", "title": "nginx"},
+            }
+        ],
+    )
+
+    updated_target = graph.get_node("service::nginx")
+    assert updated_target is not None
+    assert "package::nginx" in updated_target.dependencies
+
+
+def test_add_catalog_edges_ignores_invalid_or_missing_nodes() -> None:
+    """Invalid edges and missing nodes should be skipped safely."""
+    from souschef.ir import IRGraph, SourceType, TargetType
+    from souschef.orchestrators.puppet import _add_catalog_edges
+
+    graph = IRGraph(
+        graph_id="g",
+        source_type=SourceType.PUPPET,
+        target_type=TargetType.ANSIBLE,
+    )
+
+    _add_catalog_edges(
+        graph,
+        [
+            {"source": "bad", "target": {"type": "Service", "title": "x"}},
+            {
+                "source": {"type": "Package", "title": "x"},
+                "target": {"type": "Service", "title": "x"},
+            },
+        ],
+    )
+
+    assert graph.nodes == {}

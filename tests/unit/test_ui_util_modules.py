@@ -122,6 +122,65 @@ def test_analytics_error_paths_and_risk_levels(tmp_path) -> None:
     )
 
 
+def test_analytics_tool_filter_and_count_pattern_branches(tmp_path) -> None:
+    """Analytics should cover tool filtering and pattern counting edge branches."""
+    from souschef.ui import analytics
+
+    analytics.ANALYTICS_DIR = tmp_path / "analytics"
+    analytics.ANALYTICS_EVENTS_FILE = analytics.ANALYTICS_DIR / "events.jsonl"
+    analytics.ANALYTICS_PATTERNS_FILE = analytics.ANALYTICS_DIR / "patterns.json"
+    analytics.ANALYTICS_DIR.mkdir(parents=True)
+
+    analytics.ANALYTICS_EVENTS_FILE.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event_type": "conversion",
+                        "tool": "Chef",
+                        "status": "success",
+                        "pattern": "pkg.installed",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event_type": "conversion",
+                        "tool": "Salt",
+                        "status": "failure",
+                        "pattern": "pkg.installed",
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    filtered_stats = analytics.get_conversion_stats("Chef")
+    assert filtered_stats["total_conversions"] == 1
+
+    # Missing analytics file branch in _count_pattern_outcomes.
+    analytics.ANALYTICS_EVENTS_FILE.unlink()
+    assert analytics._count_pattern_outcomes("Chef", "pkg.installed") == {
+        "success": 0,
+        "failure": 0,
+    }
+
+    analytics.ANALYTICS_EVENTS_FILE.write_text("{bad-json}\n", encoding="utf-8")
+    assert analytics._count_pattern_outcomes("Chef", "pkg.installed") == {
+        "success": 0,
+        "failure": 0,
+    }
+
+    with patch("souschef.ui.analytics.Path.open", side_effect=OSError("denied")):
+        analytics.get_conversion_stats()
+        analytics._count_pattern_outcomes("Chef", "pkg.installed")
+
+    # Explicitly cover the patterns file unlink path.
+    analytics.ANALYTICS_PATTERNS_FILE.write_text("{}", encoding="utf-8")
+    analytics.clear_analytics()
+
+
 def test_filtering_save_load_apply_and_delete(tmp_path) -> None:
     """Filtering helpers should persist searches and apply all filter criteria."""
     from souschef.ui import filtering

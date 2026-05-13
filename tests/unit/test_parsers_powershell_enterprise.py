@@ -92,10 +92,10 @@ def test_import_certificate_without_path_falls_back_to_shell() -> None:
 def test_set_dns_client_server_address_classified() -> None:
     """Set-DnsClientServerAddress should produce dns_client_set action."""
     action = _single(
-        "Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 8.8.8.8,1.1.1.1\n"
+        "Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 10.0.0.2,10.0.0.3\n"
     )
     assert action["action_type"] == "dns_client_set"
-    assert "8.8.8.8" in action["params"]["server_addresses"]
+    assert "10.0.0.2" in action["params"]["server_addresses"]
 
 
 class TestUserModify:
@@ -510,15 +510,15 @@ class TestDnsClientSet:
     def test_basic_set_dns_client_server_address(self) -> None:
         """Set-DnsClientServerAddress produces a dns_client_set action."""
         action = _single(
-            "Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 8.8.8.8\n"
+            "Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 10.0.0.2\n"
         )
         assert action["action_type"] == "dns_client_set"
-        assert "8.8.8.8" in action["params"]["server_addresses"]
+        assert "10.0.0.2" in action["params"]["server_addresses"]
 
     def test_set_dns_client_multiple_addresses(self) -> None:
         """Set-DnsClientServerAddress with multiple IPs is parsed."""
         action = _single(
-            "Set-DnsClientServerAddress -InterfaceIndex 5 -ServerAddresses 1.1.1.1,8.8.8.8\n"
+            "Set-DnsClientServerAddress -InterfaceIndex 5 -ServerAddresses 10.0.0.3,10.0.0.2\n"
         )
         assert action["action_type"] == "dns_client_set"
 
