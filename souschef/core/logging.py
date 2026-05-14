@@ -332,10 +332,9 @@ def log_operation(operation_name: str):
                     )
                     return result
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         f"Failed {operation_name}: {e}",
                         extra={"function": func.__name__},
-                        exc_info=True,
                     )
                     raise
 

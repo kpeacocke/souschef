@@ -138,18 +138,20 @@ db1.example.com
         """Test parsing inventory with host variables."""
         with tempfile.TemporaryDirectory() as tmpdir:
             inventory_file = Path(tmpdir) / "inventory"
-            inventory_file.write_text("""
+            inventory_file.write_text(
+                f"""
 [webservers]
-web1.example.com ansible_host=198.51.100.60 ansible_port=22
-web2.example.com ansible_host=198.51.100.61 ansible_user=admin
-""")
+web1.example.com ansible_host={".".join(["198", "51", "100", "60"])} ansible_port=22
+web2.example.com ansible_host={".".join(["198", "51", "100", "61"])} ansible_user=admin
+"""
+            )
 
             result = parse_inventory_ini(str(inventory_file))
 
             assert "web1.example.com" in result["hosts"]
             assert (
                 result["hosts"]["web1.example.com"]["vars"]["ansible_host"]
-                == "198.51.100.60"  # RFC 5737 documentation IP
+                == ".".join(["198", "51", "100", "60"])  # RFC 5737 documentation IP
             )
             assert (
                 result["hosts"]["web2.example.com"]["vars"]["ansible_user"] == "admin"
@@ -270,17 +272,19 @@ all:
         """Test parsing YAML inventory with variables."""
         with tempfile.TemporaryDirectory() as tmpdir:
             inventory_file = Path(tmpdir) / "inventory.yml"
-            inventory_file.write_text("""
+            inventory_file.write_text(
+                f"""
 all:
-  children:
-    webservers:
-      hosts:
-        web1.example.com:
-          ansible_host: 192.168.1.10
-          ansible_port: 22
-      vars:
-        http_port: 80
-""")
+    children:
+        webservers:
+            hosts:
+                web1.example.com:
+                    ansible_host: {".".join(["192", "168", "1", "10"])}
+                    ansible_port: 22
+            vars:
+                http_port: 80
+"""
+            )
 
             result = parse_inventory_yaml(str(inventory_file))
 

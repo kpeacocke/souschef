@@ -22,6 +22,33 @@ ANALYTICS_EVENTS_FILE = ANALYTICS_DIR / "events.jsonl"
 ANALYTICS_PATTERNS_FILE = ANALYTICS_DIR / "patterns.json"
 
 
+def _accumulate_conversion_event(
+    event: dict[str, Any],
+    tool: str | None,
+    conversions: dict[str, int],
+    durations: list[float],
+    patterns: dict[str, int],
+) -> None:
+    """Accumulate conversion metrics from a single analytics event."""
+    if event.get("event_type") != "conversion":
+        return
+    if tool and event.get("tool") != tool:
+        return
+
+    conversions["total"] += 1
+    status = event.get("status", "unknown")
+    if status in conversions:
+        conversions[status] += 1
+
+    duration_seconds = event.get("duration_seconds")
+    if isinstance(duration_seconds, (int, float)):
+        durations.append(float(duration_seconds))
+
+    pattern_key = event.get("pattern")
+    if isinstance(pattern_key, str) and pattern_key:
+        patterns[pattern_key] = patterns.get(pattern_key, 0) + 1
+
+
 def _ensure_analytics_dir() -> None:
     """Ensure analytics directory exists."""
     ANALYTICS_DIR.mkdir(parents=True, exist_ok=True)
@@ -102,22 +129,15 @@ def get_conversion_stats(tool: str | None = None) -> dict[str, Any]:
             for line in f:
                 try:
                     event = json.loads(line)
-                    if event.get("event_type") != "conversion":
+                    if not isinstance(event, dict):
                         continue
-                    if tool and event.get("tool") != tool:
-                        continue
-
-                    conversions["total"] += 1
-                    status = event.get("status", "unknown")
-                    if status in conversions:
-                        conversions[status] += 1
-
-                    if event.get("duration_seconds"):
-                        durations.append(event["duration_seconds"])
-
-                    if event.get("pattern"):
-                        pattern_key = event["pattern"]
-                        patterns[pattern_key] = patterns.get(pattern_key, 0) + 1
+                    _accumulate_conversion_event(
+                        event,
+                        tool,
+                        conversions,
+                        durations,
+                        patterns,
+                    )
                 except json.JSONDecodeError:
                     continue
     except OSError as e:

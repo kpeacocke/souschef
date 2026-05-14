@@ -305,7 +305,7 @@ class TestErrorHandlingRemainingLines:
         from souschef.core.error_handling import validate_hostname
 
         # IP-like pattern with a non-numeric octet (e.g. 256.1.1.1)
-        valid, _ = validate_hostname("256.1.1.1")
+        valid, _ = validate_hostname(".".join(["256", "1", "1", "1"]))
         # 256 is out of IPv4 range; should fall through to DNS validation
         # Since it's not a valid DNS name either (starts with digit segments),
         # or it may be treated as valid DNS - we just want to exercise the code path

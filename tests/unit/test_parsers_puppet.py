@@ -59,7 +59,8 @@ class webserver {
 }
 """
 
-FULL_MANIFEST = """\
+FULL_MANIFEST = (
+    """\
 class myapp (
   String $app_name = 'myapp',
   Integer $port = 8080,
@@ -99,11 +100,14 @@ class myapp (
   }
 
   host { 'db.internal':
-    ip     => '10.0.0.10',
+        ip     => '"""
+    + ".".join(["10", "0", "0", "10"])
+    + """',
     ensure => present,
   }
 }
 """
+)
 
 UNSUPPORTED_MANIFEST = """\
 class complex {

@@ -27,7 +27,7 @@ def test_optional_requests_import_error_sets_none() -> None:
     importlib.reload(assessment)
 
 
-def test_assess_chef_migration_complexity_exception() -> None:
+def test_assess_chef_migration_complexity_exception(tmp_path: Path) -> None:
     """Unexpected errors should return formatted error output."""
     with (
         patch("souschef.assessment._validate_assessment_inputs", return_value=None),
@@ -36,37 +36,37 @@ def test_assess_chef_migration_complexity_exception() -> None:
             side_effect=RuntimeError("boom"),
         ),
     ):
-        result = assessment.assess_chef_migration_complexity("/tmp")
+        result = assessment.assess_chef_migration_complexity(str(tmp_path))
 
     assert "Error during" in result
 
 
-def test_parse_assessment_exception_returns_error_dict() -> None:
+def test_parse_assessment_exception_returns_error_dict(tmp_path: Path) -> None:
     """parse_chef_migration_assessment should return error dict on exception."""
     with patch(
         "souschef.assessment._validate_assessment_inputs",
         side_effect=RuntimeError("bad"),
     ):
-        result = assessment.parse_chef_migration_assessment("/tmp")
+        result = assessment.parse_chef_migration_assessment(str(tmp_path))
 
     assert "error" in result
 
 
-def test_generate_migration_plan_exception_returns_error() -> None:
+def test_generate_migration_plan_exception_returns_error(tmp_path: Path) -> None:
     """generate_migration_plan should return formatted error on exceptions."""
     with patch(
         "souschef.assessment._parse_and_assess_cookbooks",
         side_effect=RuntimeError("bad"),
     ):
-        result = assessment.generate_migration_plan("/tmp", "phased", 4)
+        result = assessment.generate_migration_plan(str(tmp_path), "phased", 4)
 
     assert "Error during" in result
 
 
-def test_analyse_cookbook_dependencies_invalid_path() -> None:
+def test_analyse_cookbook_dependencies_invalid_path(tmp_path: Path) -> None:
     """analyse_cookbook_dependencies should report invalid path errors."""
     with patch("souschef.assessment._normalize_path", side_effect=ValueError("bad")):
-        result = assessment.analyse_cookbook_dependencies("/tmp")
+        result = assessment.analyse_cookbook_dependencies(str(tmp_path))
 
     assert "Invalid cookbook path" in result
 
@@ -422,7 +422,9 @@ def test_is_ai_available_with_requests_none(monkeypatch: pytest.MonkeyPatch) -> 
     assert assessment._is_ai_available("anthropic", "key") is False
 
 
-def test_assess_single_cookbook_ai_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assess_single_cookbook_ai_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """AI fallback should return rule-based assessment."""
     monkeypatch.setattr(assessment, "_is_ai_available", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
@@ -431,7 +433,7 @@ def test_assess_single_cookbook_ai_fallback(monkeypatch: pytest.MonkeyPatch) -> 
         lambda *_args, **_kwargs: {"fallback": True},
     )
 
-    result = assessment.assess_single_cookbook_with_ai("/tmp")
+    result = assessment.assess_single_cookbook_with_ai(str(tmp_path))
 
     assert result.get("fallback") is True
 
@@ -459,16 +461,17 @@ def test_assess_single_cookbook_ai_high_complexity(
     assert result["complexity"] == "High"
 
 
-def test_assess_single_cookbook_ai_exception() -> None:
+def test_assess_single_cookbook_ai_exception(tmp_path: Path) -> None:
     """Exceptions should be formatted in AI assessment."""
     with patch("souschef.assessment._normalize_path", side_effect=ValueError("bad")):
-        result = assessment.assess_single_cookbook_with_ai("/tmp")
+        result = assessment.assess_single_cookbook_with_ai(str(tmp_path))
 
     assert "error" in result
 
 
 def test_assess_complexity_with_ai_invalid_inputs(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Invalid inputs should return validation error."""
     monkeypatch.setattr(
@@ -477,12 +480,14 @@ def test_assess_complexity_with_ai_invalid_inputs(
         lambda *_args, **_kwargs: "Error: bad",
     )
 
-    result = assessment.assess_chef_migration_complexity_with_ai("/tmp")
+    result = assessment.assess_chef_migration_complexity_with_ai(str(tmp_path))
 
     assert result.startswith("Error:")
 
 
-def test_assess_complexity_with_ai_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assess_complexity_with_ai_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """AI unavailability should fall back to rule-based assessment."""
     monkeypatch.setattr(assessment, "_is_ai_available", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
@@ -491,7 +496,7 @@ def test_assess_complexity_with_ai_fallback(monkeypatch: pytest.MonkeyPatch) -> 
         lambda *_args, **_kwargs: "fallback",
     )
 
-    result = assessment.assess_chef_migration_complexity_with_ai("/tmp")
+    result = assessment.assess_chef_migration_complexity_with_ai(str(tmp_path))
 
     assert result == "fallback"
 
@@ -832,6 +837,7 @@ def test_format_ai_complexity_analysis_with_insights() -> None:
 
 def test_calculate_activity_breakdown_exception(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Errors should be returned as error dict in activity breakdown."""
     monkeypatch.setattr(
@@ -839,7 +845,7 @@ def test_calculate_activity_breakdown_exception(
         "_normalize_path",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad")),  # noqa: S7500
     )
-    result = assessment.calculate_activity_breakdown("/tmp")
+    result = assessment.calculate_activity_breakdown(str(tmp_path))
 
     assert "error" in result
 
@@ -918,7 +924,9 @@ def test_assess_single_cookbook_ai_medium_complexity(
     assert result["complexity"] == "Medium"
 
 
-def test_assess_complexity_with_ai_available(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assess_complexity_with_ai_available(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """AI availability should use AI assessment workflow."""
     monkeypatch.setattr(
         assessment,
@@ -932,7 +940,7 @@ def test_assess_complexity_with_ai_available(monkeypatch: pytest.MonkeyPatch) ->
         lambda *_args, **_kwargs: "ai-report",
     )
 
-    result = assessment.assess_chef_migration_complexity_with_ai("/tmp")
+    result = assessment.assess_chef_migration_complexity_with_ai(str(tmp_path))
 
     assert result == "ai-report"
 
@@ -1063,7 +1071,9 @@ def test_format_ai_cookbook_assessments_priority_icons() -> None:
     assert "cb2" in result
 
 
-def test_assess_complexity_with_ai_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assess_complexity_with_ai_exception(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """AI assessment exceptions should return formatted error."""
     monkeypatch.setattr(
         assessment,
@@ -1077,7 +1087,7 @@ def test_assess_complexity_with_ai_exception(monkeypatch: pytest.MonkeyPatch) ->
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad")),  # noqa: S7500
     )
 
-    result = assessment.assess_chef_migration_complexity_with_ai("/tmp")
+    result = assessment.assess_chef_migration_complexity_with_ai(str(tmp_path))
 
     assert "Error during" in result
 

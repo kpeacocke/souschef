@@ -11,7 +11,7 @@ import importlib
 import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, Concatenate, ParamSpec
 
 if TYPE_CHECKING:
     import plotly.graph_objects as go
@@ -148,20 +148,19 @@ class ProgressTracker:
 
 
 _P = ParamSpec("_P")
-_R = TypeVar("_R")
 
 
 def with_progress_tracking(
-    operation_func: Callable[Concatenate[ProgressTracker, _P], _R],
+    operation_func: Callable[Concatenate[ProgressTracker, _P], Any],
     description: str = "Processing...",
     total_steps: int = 100,
-) -> Callable[_P, _R]:
+) -> Callable[_P, Any]:
     """Add progress tracking to operations."""
 
-    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> Any:
         tracker = ProgressTracker(total_steps, description)
         try:
-            result: _R = operation_func(tracker, *args, **kwargs)
+            result = operation_func(tracker, *args, **kwargs)
             tracker.complete()
             return result
         except Exception as e:  # noqa: BLE001
@@ -1727,8 +1726,7 @@ def _filter_community_cookbooks_only(
         if graph.nodes[node].get("community", False):
             community_nodes.add(node)
             # Also include dependencies of community cookbooks
-            for successor in graph.successors(node):
-                community_nodes.add(successor)
+            community_nodes.update(graph.successors(node))
 
     # Remove nodes not related to community cookbooks
     nodes_to_remove = [n for n in graph.nodes() if n not in community_nodes]

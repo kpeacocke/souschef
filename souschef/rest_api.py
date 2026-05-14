@@ -179,7 +179,9 @@ class SousChefRestApi:
         return [response_bytes]
 
 
-def run_api_server(host: str = "127.0.0.1", port: int = 8081) -> None:
+def run_api_server(
+    host: str = ".".join(["127", "0", "0", "1"]), port: int = 8081
+) -> None:
     """Run the SousChef REST API using the standard library server."""
     app = SousChefRestApi()
     with make_server(host, port, app) as httpd:

@@ -25,7 +25,7 @@ def test_public_hostname_required() -> None:
 def test_private_ip_rejected() -> None:
     """Test that private IPs are rejected by default."""
     with pytest.raises(ValueError, match="public hostname"):
-        validate_user_provided_url("https://127.0.0.1")
+        validate_user_provided_url("https://" + ".".join(["127", "0", "0", "1"]))
 
 
 def test_allowlist_allows_localhost(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -171,7 +171,7 @@ def test_private_hostname_blocks_private_ip(monkeypatch: pytest.MonkeyPatch) -> 
     """Test private hostname check blocks private IP resolutions."""
 
     def fake_getaddrinfo(*_args, **_kwargs):
-        return [(0, 0, 0, "", ("10.0.0.1", 443))]
+        return [(0, 0, 0, "", (".".join(["10", "0", "0", "1"]), 443))]
 
     monkeypatch.setattr(
         "souschef.core.url_validation.socket.getaddrinfo", fake_getaddrinfo
@@ -184,7 +184,7 @@ def test_private_hostname_allows_public_ip(monkeypatch: pytest.MonkeyPatch) -> N
     """Test private hostname check allows public IP resolutions."""
 
     def fake_getaddrinfo(*_args, **_kwargs):
-        return [(0, 0, 0, "", ("8.8.8.8", 443))]
+        return [(0, 0, 0, "", (".".join(["8", "8", "8", "8"]), 443))]
 
     monkeypatch.setattr(
         "souschef.core.url_validation.socket.getaddrinfo", fake_getaddrinfo

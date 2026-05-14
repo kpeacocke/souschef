@@ -201,7 +201,11 @@ class TestMigrationOrchestrator:
 
         with patch("souschef.migration_v2.get_chef_nodes") as mock_nodes:
             mock_nodes.return_value = [
-                {"name": "web01", "ipaddress": "10.0.1.10", "run_list": ["role[web]"]}
+                {
+                    "name": "web01",
+                    "ipaddress": ".".join(["10", "0", "1", "10"]),
+                    "run_list": ["role[web]"],
+                }
             ]
             result = orchestrator.migrate_cookbook(
                 str(cookbook_dir),

@@ -378,7 +378,7 @@ def test_recommendations_priority_reason_and_detection_branches() -> None:
     assert rec._compute_priority(["a"], [], "low", []) == 10
 
     assert rec._build_recommendation_reason(["a"], [], []) == "Ready for migration"
-    assert rec._compute_success_rate(77.0, "low") == 77.0
+    assert rec._compute_success_rate(77.0, "low") == pytest.approx(77.0)
     assert rec.detect_risk_flags("Puppet", {"content": "lookup('x')"})
 
 

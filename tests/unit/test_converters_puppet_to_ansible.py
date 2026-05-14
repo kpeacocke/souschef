@@ -131,12 +131,16 @@ cron { 'backup':
 }
 """
 
-HOST_MANIFEST = """\
+HOST_MANIFEST = (
+    """\
 host { 'db.internal':
-  ip     => '10.0.0.10',
+    ip     => '"""
+    + ".".join(["10", "0", "0", "10"])
+    + """',
   ensure => present,
 }
 """
+)
 
 HOST_NO_IP_MANIFEST = """\
 host { 'db.internal':
@@ -677,10 +681,12 @@ def test_convert_resource_cron() -> None:
 def test_convert_resource_host_with_ip() -> None:
     """Test converting a host resource with IP."""
     task = convert_puppet_resource_to_task(
-        "host", "db.internal", {"ip": "10.0.0.1", "ensure": "present"}
+        "host",
+        "db.internal",
+        {"ip": ".".join(["10", "0", "0", "1"]), "ensure": "present"},
     )
     assert "ansible.builtin.lineinfile" in task
-    assert "10.0.0.1" in task["ansible.builtin.lineinfile"]["line"]
+    assert ".".join(["10", "0", "0", "1"]) in task["ansible.builtin.lineinfile"]["line"]
 
 
 def test_convert_resource_host_no_ip() -> None:

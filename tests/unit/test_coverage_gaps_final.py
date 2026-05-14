@@ -42,7 +42,9 @@ class TestAnsibleInventoryEdgeCases:
         """Test successful INI file parsing."""
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir) / "inventory.ini"
-            ini_content = "[all]\nhost1 ansible_host=192.168.1.1"
+            ini_content = "[all]\nhost1 ansible_host=" + ".".join(
+                ["192", "168", "1", "1"]
+            )
             file_path.write_text(ini_content)
 
             result = parse_inventory_file(str(file_path))

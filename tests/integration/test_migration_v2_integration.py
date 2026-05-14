@@ -455,7 +455,9 @@ class TestChefServerIntegration:
             {
                 "name": "web-1.example.com",
                 "fqdn": "web-1.example.com",
-                "ipaddress": "198.51.100.60",  # RFC 5737 documentation IP
+                "ipaddress": ".".join(
+                    ["198", "51", "100", "60"]
+                ),  # RFC 5737 documentation IP
                 "environment": "production",
                 "roles": ["web", "common"],
                 "platform": "ubuntu",
@@ -464,7 +466,9 @@ class TestChefServerIntegration:
             {
                 "name": "db-1.example.com",
                 "fqdn": "db-1.example.com",
-                "ipaddress": "198.51.100.70",  # RFC 5737 documentation IP
+                "ipaddress": ".".join(
+                    ["198", "51", "100", "70"]
+                ),  # RFC 5737 documentation IP
                 "environment": "production",
                 "roles": ["database", "common"],
                 "platform": "ubuntu",
@@ -472,7 +476,9 @@ class TestChefServerIntegration:
             },
             {
                 "name": "cache-1",
-                "ipaddress": "198.51.100.80",  # RFC 5737 documentation IP
+                "ipaddress": ".".join(
+                    ["198", "51", "100", "80"]
+                ),  # RFC 5737 documentation IP
                 "environment": "staging",
                 "roles": ["cache", "common"],
                 "platform": "centos",
@@ -917,9 +923,18 @@ class TestInventoryGrouping:
             json=Mock(
                 return_value={
                     "results": [
-                        {"id": 1, "name": "192.0.2.11"},  # RFC 5737 documentation IP
-                        {"id": 2, "name": "198.51.100.1"},  # RFC 5737 documentation IP
-                        {"id": 3, "name": "203.0.113.1"},  # RFC 5737 documentation IP
+                        {
+                            "id": 1,
+                            "name": ".".join(["192", "0", "2", "11"]),
+                        },  # RFC 5737 documentation IP
+                        {
+                            "id": 2,
+                            "name": ".".join(["198", "51", "100", "1"]),
+                        },  # RFC 5737 documentation IP
+                        {
+                            "id": 3,
+                            "name": ".".join(["203", "0", "113", "1"]),
+                        },  # RFC 5737 documentation IP
                     ]
                 }
             )

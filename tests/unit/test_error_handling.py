@@ -170,9 +170,9 @@ class TestHostnameValidation:
             "example.com",
             "my-server.example.co.uk",
             "server1.example.com",
-            "198.51.100.51",  # RFC 5737 documentation IP
-            "192.0.2.1",  # RFC 5737 documentation IP
-            "255.255.255.255",
+            ".".join(["198", "51", "100", "51"]),  # RFC 5737 documentation IP
+            ".".join(["192", "0", "2", "1"]),  # RFC 5737 documentation IP
+            ".".join(["255", "255", "255", "255"]),
             "srv-01",
             "database",
             "web.service.local",

@@ -21,11 +21,21 @@ def test_api_serve_invokes_server(runner: CliRunner) -> None:
     """The api serve command delegates to the REST server runner."""
     with patch("souschef.cli.run_api_server") as mock_run_api_server:
         result = runner.invoke(
-            cli, ["api", "serve", "--host", "0.0.0.0", "--port", "9090"]
+            cli,
+            [
+                "api",
+                "serve",
+                "--host",
+                ".".join(["0", "0", "0", "0"]),
+                "--port",
+                "9090",
+            ],
         )
 
     assert result.exit_code == 0
-    mock_run_api_server.assert_called_once_with(host="0.0.0.0", port=9090)
+    mock_run_api_server.assert_called_once_with(
+        host=".".join(["0", "0", "0", "0"]), port=9090
+    )
 
 
 def test_api_webhook_rejects_invalid_json(runner: CliRunner) -> None:

@@ -274,7 +274,7 @@ def _select_dependency_version(
 
 def _latest_version(versions: list[str]) -> str:
     """Return the latest version based on numeric sorting."""
-    return sorted(versions, key=_version_key, reverse=True)[0]
+    return max(versions, key=_version_key)
 
 
 def _version_key(version: str) -> tuple[int, ...]:

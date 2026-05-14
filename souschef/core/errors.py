@@ -54,7 +54,7 @@ def _sanitize_path(path: str | Path) -> str:
     if any(
         [
             "\n" in path_str or "\r" in path_str,  # Multiline input
-            path_str.startswith("{") or path_str.startswith("["),  # JSON-like
+            path_str.startswith(("{", "[")),  # JSON-like
             "://" in path_str,  # URL scheme
         ]
     ):

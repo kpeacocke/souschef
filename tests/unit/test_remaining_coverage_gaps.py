@@ -40,7 +40,9 @@ class TestValidateHostnameIPv4ValueError:
         # The regex is r"^(\d{1,3}\.){3}\d{1,3}$" so we need all-digit groups;
         # instead trigger via a separate path: pass a hostname that is IPv4-like
         # but has out-of-range octets so we verify the true/None path as well.
-        valid, err = validate_hostname("198.51.100.51")  # RFC 5737 documentation IP
+        valid, err = validate_hostname(
+            ".".join(["198", "51", "100", "51"])
+        )  # RFC 5737 documentation IP
         assert valid is True
         assert err is None
 

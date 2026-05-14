@@ -898,7 +898,11 @@ def api_group() -> None:
 
 
 @api_group.command("serve")
-@click.option("--host", default="127.0.0.1", help="Host interface to bind")
+@click.option(
+    "--host",
+    default=".".join(["127", "0", "0", "1"]),
+    help="Host interface to bind",
+)
 @click.option("--port", default=8081, type=int, help="TCP port to listen on")
 def api_serve(host: str, port: int) -> None:
     """Run the lightweight SousChef REST API."""

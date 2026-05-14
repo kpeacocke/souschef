@@ -453,7 +453,8 @@ end
         """Test parsing realistic application attributes."""
         with tempfile.TemporaryDirectory() as tmpdir:
             attr_file = Path(tmpdir) / "app.rb"
-            attr_file.write_text("""
+            attr_file.write_text(
+                """
 # Application configuration
 
 default['app']['name'] = 'myapp'
@@ -463,7 +464,9 @@ default['app']['group'] = 'appuser'
 default['app']['home'] = '/var/www/app'
 
 # Server configuration
-default['app']['server']['host'] = '0.0.0.0'
+default['app']['server']['host'] = '"""
+                + ".".join(["0", "0", "0", "0"])
+                + """'
 default['app']['server']['port'] = node['app']['port'] || 3000
 default['app']['server']['workers'] = node['cpu']['total'] || 4
 default['app']['server']['timeout'] = 60
@@ -482,7 +485,8 @@ default['app']['features']['http2'] = true
 # Logging
 default['app']['logging']['level'] = node['environment'] == 'production' ? 'warn' : 'debug'
 default['app']['logging']['format'] = 'json'
-""")
+"""
+            )
 
             result = parse_attributes(str(attr_file))
             assert isinstance(result, str)

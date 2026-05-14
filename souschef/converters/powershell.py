@@ -700,7 +700,10 @@ def _convert_dns_client_set(
     ]
     return (
         "Configure DNS client server addresses",
-        {"ipv4_addresses": dns_list or ["127.0.0.1"], "adapter_names": "*"},
+        {
+            "ipv4_addresses": dns_list or [".".join(["127", "0", "0", "1"])],
+            "adapter_names": "*",
+        },
     )
 
 

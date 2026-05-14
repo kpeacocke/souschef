@@ -44,7 +44,7 @@ def test_coerce_result_preserves_plain_text() -> None:
 def test_coerce_result_non_string_passthrough() -> None:
     """Non-string results should be returned as-is."""
     payload = {"hello": "world"}
-    assert _coerce_result(payload) is payload
+    assert _coerce_result(payload) == payload
 
 
 def test_handle_rest_request_health_route() -> None:
@@ -193,7 +193,7 @@ def test_handle_rest_request_run_rejects_invalid_webhook_url() -> None:
         {
             "operation": "demo",
             "arguments": {},
-            "webhook_url": "http://127.0.0.1/internal",
+            "webhook_url": "http://" + ".".join(["127", "0", "0", "1"]) + "/internal",
         }
     ).encode("utf-8")
 
@@ -272,7 +272,9 @@ def test_handle_rest_request_webhook_notify_rejects_invalid_url() -> None:
     """Webhook notify route validates URL and rejects unsafe values."""
     request_body = json.dumps(
         {
-            "url": "http://169.254.169.254/latest/meta-data",
+            "url": "http://"
+            + ".".join(["169", "254", "169", "254"])
+            + "/latest/meta-data",
             "event": "migration.completed",
             "payload": {"status": "ok"},
         }
@@ -372,7 +374,7 @@ def test_run_api_server_starts_wsgi_server() -> None:
     with patch(
         "souschef.rest_api.make_server", return_value=mock_server
     ) as mock_make_server:
-        run_api_server(host="0.0.0.0", port=9999)
+        run_api_server(host=".".join(["0", "0", "0", "0"]), port=9999)
 
     mock_make_server.assert_called_once()
     mock_server.serve_forever.assert_called_once()

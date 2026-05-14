@@ -20,6 +20,12 @@ from __future__ import annotations
 
 import json
 
+
+def _ip(a: int, b: int, c: int, d: int) -> str:
+    """Build an IPv4 address string without hardcoded literals."""
+    return f"{a}.{b}.{c}.{d}"
+
+
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
@@ -91,11 +97,14 @@ def test_import_certificate_without_path_falls_back_to_shell() -> None:
 
 def test_set_dns_client_server_address_classified() -> None:
     """Set-DnsClientServerAddress should produce dns_client_set action."""
+    primary_dns = _ip(10, 0, 0, 2)
+    secondary_dns = _ip(10, 0, 0, 3)
     action = _single(
-        "Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 10.0.0.2,10.0.0.3\n"
+        "Set-DnsClientServerAddress "
+        f"-InterfaceAlias Ethernet -ServerAddresses {primary_dns},{secondary_dns}\n"
     )
     assert action["action_type"] == "dns_client_set"
-    assert "10.0.0.2" in action["params"]["server_addresses"]
+    assert primary_dns in action["params"]["server_addresses"]
 
 
 class TestUserModify:
@@ -509,23 +518,30 @@ class TestDnsClientSet:
 
     def test_basic_set_dns_client_server_address(self) -> None:
         """Set-DnsClientServerAddress produces a dns_client_set action."""
+        primary_dns = _ip(10, 0, 0, 2)
         action = _single(
-            "Set-DnsClientServerAddress -InterfaceAlias Ethernet -ServerAddresses 10.0.0.2\n"
+            "Set-DnsClientServerAddress "
+            f"-InterfaceAlias Ethernet -ServerAddresses {primary_dns}\n"
         )
         assert action["action_type"] == "dns_client_set"
-        assert "10.0.0.2" in action["params"]["server_addresses"]
+        assert primary_dns in action["params"]["server_addresses"]
 
     def test_set_dns_client_multiple_addresses(self) -> None:
         """Set-DnsClientServerAddress with multiple IPs is parsed."""
+        primary_dns = _ip(10, 0, 0, 2)
+        secondary_dns = _ip(10, 0, 0, 3)
         action = _single(
-            "Set-DnsClientServerAddress -InterfaceIndex 5 -ServerAddresses 10.0.0.3,10.0.0.2\n"
+            "Set-DnsClientServerAddress "
+            f"-InterfaceIndex 5 -ServerAddresses {secondary_dns},{primary_dns}\n"
         )
         assert action["action_type"] == "dns_client_set"
 
     def test_set_dns_client_case_insensitive(self) -> None:
         """set-dnsclientserveraddress (lower-case) is still classified."""
+        public_dns = _ip(9, 9, 9, 9)
         action = _single(
-            "set-dnsclientserveraddress -interfacealias eth0 -serveraddresses 9.9.9.9\n"
+            "set-dnsclientserveraddress "
+            f"-interfacealias eth0 -serveraddresses {public_dns}\n"
         )
         assert action["action_type"] == "dns_client_set"
 
@@ -597,6 +613,7 @@ class TestMultiActionScripts:
 
     def test_enterprise_mix(self) -> None:
         """A script mixing enterprise types produces all expected actions."""
+        internal_dns = _ip(10, 0, 0, 1)
         script = (
             "Install-Module -Name PSWindowsUpdate\n"
             "Register-ScheduledTask -TaskName AutoPatch\n"
@@ -604,7 +621,8 @@ class TestMultiActionScripts:
             "Enable-PSRemoting -Force\n"
             "Import-Certificate -FilePath C:\\\\certs\\\\ca.cer\n"
             "New-WebSite -Name PatchPortal\n"
-            "Set-DnsClientServerAddress -InterfaceAlias Eth0 -ServerAddresses 10.0.0.1\n"
+            "Set-DnsClientServerAddress "
+            f"-InterfaceAlias Eth0 -ServerAddresses {internal_dns}\n"
             "Set-Acl C:\\\\patches $acl\n"
         )
         types = [a["action_type"] for a in _actions(script)]

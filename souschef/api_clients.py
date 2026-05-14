@@ -76,8 +76,8 @@ class ChefServerClient:
             logger.debug(f"Retrieved {len(nodes)} nodes")
             # Wrap in Chef Server API format
             return {"rows": nodes, "total": len(nodes)}
-        except Exception as e:
-            logger.error(f"Failed to search nodes: {e}")
+        except Exception:
+            logger.exception("Failed to search nodes")
             raise
 
     def get_node(self, node_name: str) -> dict[str, Any]:
@@ -97,8 +97,8 @@ class ChefServerClient:
             if not results:
                 raise ValueError(f"Node {node_name} not found")
             return results[0]
-        except Exception as e:
-            logger.error(f"Failed to get node {node_name}: {e}")
+        except Exception:
+            logger.exception("Failed to get node %s", node_name)
             raise
 
     def get_role(self, role_name: str) -> dict[str, Any]:
@@ -118,8 +118,8 @@ class ChefServerClient:
                 if role.get("name") == role_name:
                     return role
             raise ValueError(f"Role {role_name} not found")
-        except Exception as e:
-            logger.error(f"Failed to get role {role_name}: {e}")
+        except Exception:
+            logger.exception("Failed to get role %s", role_name)
             raise
 
     def get_cookbook(self, cookbook_name: str) -> dict[str, Any]:
@@ -139,8 +139,8 @@ class ChefServerClient:
                 if cookbook.get("name") == cookbook_name:
                     return cookbook
             raise ValueError(f"Cookbook {cookbook_name} not found")
-        except Exception as e:
-            logger.error(f"Failed to get cookbook {cookbook_name}: {e}")
+        except Exception:
+            logger.exception("Failed to get cookbook %s", cookbook_name)
             raise
 
 
@@ -175,10 +175,10 @@ class PuppetServerClient:
             response.raise_for_status()
             data = response.json()
         except requests.RequestException as exc:
-            logger.error("Failed Puppet Server request: %s", exc)
+            logger.exception("Failed Puppet Server request")
             raise RuntimeError(f"Puppet Server request failed: {exc}") from exc
         except ValueError as exc:
-            logger.error("Invalid Puppet Server JSON response: %s", exc)
+            logger.exception("Invalid Puppet Server JSON response")
             raise RuntimeError("Puppet Server returned invalid JSON") from exc
 
         if isinstance(data, (dict, list)):
@@ -267,8 +267,8 @@ class AnsiblePlatformClient:
             response.raise_for_status()
             logger.debug(f"Created EE: {cast(dict[str, Any], response.json())['id']}")
             return cast(dict[str, Any], response.json())
-        except requests.RequestException as e:
-            logger.error(f"Failed to create EE: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to create EE")
             raise
 
     def create_inventory(self, name: str) -> dict[str, Any]:
@@ -282,8 +282,8 @@ class AnsiblePlatformClient:
             result = cast(dict[str, Any], response.json())
             logger.debug(f"Created inventory: {result['id']}")
             return result
-        except requests.RequestException as e:
-            logger.error(f"Failed to create inventory: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to create inventory")
             raise
 
     def add_host(
@@ -299,8 +299,8 @@ class AnsiblePlatformClient:
             result = cast(dict[str, Any], response.json())
             logger.debug(f"Added host {hostname}: {result['id']}")
             return result
-        except requests.RequestException as e:
-            logger.error(f"Failed to add host {hostname}: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to add host %s", hostname)
             raise
 
     def create_group(
@@ -318,8 +318,8 @@ class AnsiblePlatformClient:
                 f"Created group {name} in inventory {inventory_id}: {result['id']}"
             )
             return result
-        except requests.RequestException as e:
-            logger.error(f"Failed to create group {name}: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to create group %s", name)
             raise
 
     def add_host_to_group(self, group_id: int, host_id: int) -> bool:
@@ -332,8 +332,8 @@ class AnsiblePlatformClient:
             response.raise_for_status()
             logger.debug(f"Added host {host_id} to group {group_id}")
             return True
-        except requests.RequestException as e:
-            logger.error(f"Failed to add host to group: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to add host to group")
             raise
 
     def create_project(
@@ -349,8 +349,8 @@ class AnsiblePlatformClient:
             result = cast(dict[str, Any], response.json())
             logger.debug(f"Created project: {result['id']}")
             return result
-        except requests.RequestException as e:
-            logger.error(f"Failed to create project: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to create project")
             raise
 
     def create_job_template(self, name: str, **kwargs: Any) -> dict[str, Any]:
@@ -364,8 +364,8 @@ class AnsiblePlatformClient:
             result = cast(dict[str, Any], response.json())
             logger.debug(f"Created job template: {result['id']}")
             return result
-        except requests.RequestException as e:
-            logger.error(f"Failed to create job template: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to create job template")
             raise
 
     def delete_inventory(self, inventory_id: int) -> bool:
@@ -377,8 +377,8 @@ class AnsiblePlatformClient:
             response.raise_for_status()
             logger.debug(f"Deleted inventory {inventory_id}")
             return True
-        except requests.RequestException as e:
-            logger.error(f"Failed to delete inventory: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to delete inventory")
             return False
 
     def delete_project(self, project_id: int) -> bool:
@@ -390,8 +390,8 @@ class AnsiblePlatformClient:
             response.raise_for_status()
             logger.debug(f"Deleted project {project_id}")
             return True
-        except requests.RequestException as e:
-            logger.error(f"Failed to delete project: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to delete project")
             return False
 
     def delete_job_template(self, jt_id: int) -> bool:
@@ -403,8 +403,8 @@ class AnsiblePlatformClient:
             response.raise_for_status()
             logger.debug(f"Deleted job template {jt_id}")
             return True
-        except requests.RequestException as e:
-            logger.error(f"Failed to delete job template: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to delete job template")
             return False
 
 
@@ -475,8 +475,8 @@ class AAPClient(AnsiblePlatformClient):
             response.raise_for_status()
             logger.debug(f"Enabled content signing on JT {job_template_id}")
             return True
-        except requests.RequestException as e:
-            logger.error(f"Failed to enable content signing: {e}")
+        except requests.RequestException:
+            logger.exception("Failed to enable content signing")
             return False
 
 

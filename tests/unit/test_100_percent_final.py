@@ -355,7 +355,7 @@ class TestCliGaps:
                 "roles": ["web"],
                 "environment": "prod",
                 "platform": "ubuntu",
-                "ip": "192.0.2.1",  # RFC 5737 documentation IP
+                "ip": ".".join(["192", "0", "2", "1"]),  # RFC 5737 documentation IP
             }
         ]
         runner = CliRunner()

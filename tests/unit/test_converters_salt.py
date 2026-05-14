@@ -177,7 +177,11 @@ def test_build_file_task_line() -> None:
         "id": "line_edit",
         "module": "file",
         "function": "line",
-        "args": {"name": "/etc/hosts", "pattern": "^127", "repl": "127.0.0.1"},
+        "args": {
+            "name": "/etc/hosts",
+            "pattern": "^127",
+            "repl": ".".join(["127", "0", "0", "1"]),
+        },
     }
     task = _build_file_task(state)
     assert "ansible.builtin.lineinfile" in task

@@ -205,7 +205,7 @@ def _extract_node_attribute_path(node_ref: str) -> str:
     if attr_path and attr_path[0] in ("'", '"'):
         attr_path = attr_path[1:]
     # Remove the trailing ] and quote if present
-    if attr_path and (attr_path.endswith("']") or attr_path.endswith('"]')):
+    if attr_path and attr_path.endswith(("']", '"]')):
         attr_path = attr_path[:-2]
     elif attr_path and attr_path[-1] == "]":
         attr_path = attr_path[:-1]

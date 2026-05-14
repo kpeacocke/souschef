@@ -50,9 +50,8 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list && \
         | tee /etc/apt/sources.list.d/hashicorp.list > /dev/null && \
     apt-get update && \
     apt-get install -y --no-install-recommends terraform && \
-    # Install Poetry (enforce HTTPS and TLS 1.2+)
-    curl -sSL --proto '=https' --tlsv1.2 https://install.python-poetry.org | python3 - && \
-    ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
+    # Install Poetry from PyPI instead of executing a downloaded installer script
+    python3 -m pip install --no-cache-dir "poetry==2.1.4" && \
     poetry config virtualenvs.in-project true && \
     # Install Docker CLI (docker-ce-cli) and docker-mcp plugin
     install -m 0755 -d /etc/apt/keyrings && \
@@ -111,7 +110,8 @@ COPY poetry.lock ./poetry.lock
 # Install Python project dependencies with Poetry
 # Use --no-root to skip installing the package itself during the build
 # Verify installations
-RUN poetry install --no-interaction --no-ansi --no-root && \
+RUN poetry config installer.only-binary :all: && \
+    POETRY_INSTALLER_ONLY_BINARY=:all: poetry install --no-interaction --no-ansi --no-root && \
     poetry --version && \
     python --version && \
     poetry run python --version

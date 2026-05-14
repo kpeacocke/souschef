@@ -18,7 +18,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
@@ -56,16 +56,16 @@ def test_normalize_cookbook_root_returns_str_candidate() -> None:
     with (
         patch(
             "souschef.assessment._normalize_path",
-            return_value=Path("/tmp"),
+            return_value=Path("/var/lib/souschef_test"),
         ),
         patch(
             "souschef.assessment._validated_candidate",
-            return_value=Path("/tmp"),
+            return_value=Path("/var/lib/souschef_test"),
         ),
     ):
-        result = _normalize_cookbook_root("/tmp")
+        result = _normalize_cookbook_root("/var/lib/souschef_test")
 
-    assert result == Path("/tmp")
+    assert result == Path("/var/lib/souschef_test")
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +317,7 @@ def test_pages_lazy_import_when_not_in_sys_modules() -> None:
     full_name = "souschef.ui.pages.history"
     saved = sys.modules.pop(full_name, None)
     try:
-        module = pages.__getattribute__("history")
+        module = cast(Any, pages).history
         assert module is not None
     finally:
         # Restore sys.modules to its original state

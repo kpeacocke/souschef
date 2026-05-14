@@ -629,7 +629,7 @@ class MigrationOrchestrator:
             self.result.migration_report = self._build_migration_report()
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[%s] Migration failed: %s",
                 self.migration_id,
                 _sanitise_for_logging(e),
@@ -865,7 +865,7 @@ class MigrationOrchestrator:
         elif isinstance(policy_payload.get("revisions"), dict):
             revisions = list(policy_payload["revisions"].keys())
             if revisions:
-                revision_id = sorted(revisions)[-1]
+                revision_id = max(revisions)
 
         run_list_payload: Any = policy_payload.get("run_list")
         if revision_id:
@@ -1107,7 +1107,7 @@ class MigrationOrchestrator:
                         )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[%s] Parallel recipe conversion failed: %s. "
                 "Falling back to sequential.",
                 self.migration_id,
@@ -1192,7 +1192,7 @@ class MigrationOrchestrator:
                         )
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "[%s] Parallel attribute conversion failed: %s. "
                 "Falling back to sequential.",
                 self.migration_id,
@@ -1320,9 +1320,10 @@ class MigrationOrchestrator:
                     }
                 )
                 logger.debug(f"Found custom resource: {resource_name}")
-            except Exception as e:
-                logger.error(
-                    f"Error processing custom resource {resource_file.name}: {e}"
+            except Exception:
+                logger.exception(
+                    "Error processing custom resource %s",
+                    resource_file.name,
                 )
                 self.result.metrics.resources_skipped += 1
 
@@ -1366,8 +1367,11 @@ class MigrationOrchestrator:
                     )
                     logger.debug(f"Found handler: {handler_name}")
                     self.result.metrics.handlers_skipped += 1
-            except Exception as e:
-                logger.error(f"Error processing handler {library_file.name}: {e}")
+            except Exception:
+                logger.exception(
+                    "Error processing handler %s",
+                    library_file.name,
+                )
 
     def _process_recipe_handlers(self, cookbook_path: str) -> None:
         """Process inline handlers and notifications from recipes."""
@@ -1453,9 +1457,7 @@ class MigrationOrchestrator:
         playbook_files = []
 
         for playbook_name in playbook_names:
-            if playbook_name.startswith("vars/") or playbook_name.startswith(
-                "templates/"
-            ):
+            if playbook_name.startswith(("vars/", "templates/")):
                 continue
 
             playbook_path = temp_path / playbook_name
@@ -1510,7 +1512,7 @@ class MigrationOrchestrator:
                 }
             )
         except Exception as e:
-            logger.error(f"Validation error: {e}")
+            logger.exception("Validation error")
             self.result.warnings.append(
                 {
                     "phase": "validation",
@@ -1723,7 +1725,7 @@ class MigrationOrchestrator:
             return True
 
         except Exception as e:
-            logger.error(f"[{self.migration_id}] Deployment failed: {e}")
+            logger.exception("[%s] Deployment failed", self.migration_id)
             self.result.status = MigrationStatus.FAILED
             self.result.errors.append(
                 {
@@ -1880,8 +1882,7 @@ class MigrationOrchestrator:
 
             roles = node.get("roles")
             if roles and isinstance(roles, list):
-                for role in roles:
-                    roles_set.add(role)
+                roles_set.update(roles)
                 node_roles_map[hostname] = roles
 
         return environments, roles_set, node_env_map, node_roles_map
@@ -2186,8 +2187,8 @@ class MigrationOrchestrator:
             logger.info(f"[{self.migration_id}] Rollback complete")
             return True
 
-        except Exception as e:
-            logger.error(f"[{self.migration_id}] Rollback failed: {e}")
+        except Exception:
+            logger.exception("[%s] Rollback failed", self.migration_id)
             return False
 
     def _delete_job_template(self, client: AnsiblePlatformClient, jt_id: int) -> None:

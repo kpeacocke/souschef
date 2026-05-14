@@ -56,6 +56,7 @@ except ImportError:  # pragma: no cover
 
 # Activity type constants
 CUSTOM_RESOURCES = "Custom Resources"
+PATH_TRAVERSAL_ERROR = "Path traversal"
 
 
 @dataclass
@@ -2791,9 +2792,9 @@ def _get_recipe_content_sample(cookbook_path: Path) -> str:
     try:
         recipes_dir = _safe_join(base, "recipes")
     except ValueError as exc:
-        raise RuntimeError("Path traversal") from exc
+        raise RuntimeError(PATH_TRAVERSAL_ERROR) from exc
     if os.path.commonpath([str(base), str(recipes_dir)]) != str(base):
-        raise RuntimeError("Path traversal")
+        raise RuntimeError(PATH_TRAVERSAL_ERROR)
     if not safe_exists(recipes_dir, base):
         return "No recipes directory found"
 
@@ -2838,9 +2839,9 @@ def _get_metadata_content(cookbook_path: Path) -> str:
     try:
         metadata_file = _safe_join(base, METADATA_FILENAME)
     except ValueError as exc:
-        raise RuntimeError("Path traversal") from exc
+        raise RuntimeError(PATH_TRAVERSAL_ERROR) from exc
     if os.path.commonpath([str(base), str(metadata_file)]) != str(base):
-        raise RuntimeError("Path traversal")
+        raise RuntimeError(PATH_TRAVERSAL_ERROR)
     if not safe_exists(metadata_file, base):
         return "No metadata.rb found"
 

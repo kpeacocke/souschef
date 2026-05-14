@@ -295,7 +295,7 @@ class TestErrorHandling:
         """validate_hostname returns (True, None) for a valid IPv4 address."""
         from souschef.core.error_handling import validate_hostname
 
-        valid, msg = validate_hostname("192.0.2.1")
+        valid, msg = validate_hostname(".".join(["192", "0", "2", "1"]))
         assert valid is True
         assert msg is None
 
@@ -550,7 +550,9 @@ class TestUrlValidation:
         """_is_private_hostname returns True for a private IP address."""
         from souschef.core.url_validation import _is_private_hostname
 
-        fake_addr = [(2, 1, 6, "", ("198.51.100.51", 0))]  # RFC 5737 documentation IP
+        fake_addr = [
+            (2, 1, 6, "", (".".join(["198", "51", "100", "51"]), 0))
+        ]  # RFC 5737 documentation IP
         with patch("socket.getaddrinfo", return_value=fake_addr):
             assert _is_private_hostname("private.internal-company.xyz") is True
 

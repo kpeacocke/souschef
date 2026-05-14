@@ -2929,7 +2929,7 @@ def _process_guard_array_part(part: str, negate: bool) -> str | None:
         return _convert_chef_block_to_ansible(block_content, positive=not negate)
 
     # Handle lambda syntax
-    if part.startswith("lambda") or part.startswith("->"):
+    if part.startswith(("lambda", "->")):
         lambda_body = _extract_lambda_body(part)
         if lambda_body:
             return _convert_chef_block_to_ansible(lambda_body, positive=not negate)

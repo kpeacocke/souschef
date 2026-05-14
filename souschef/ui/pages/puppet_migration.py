@@ -609,7 +609,7 @@ def _display_analysis_result(result: str, source_type: str) -> None:
     if st is None:
         return  # pragma: no cover
 
-    if result.startswith("Error:") or result.startswith("An error occurred:"):
+    if result.startswith(("Error:", "An error occurred:")):
         st.error(result)
         return
 
@@ -652,7 +652,7 @@ def _display_conversion_result(
     if st is None:
         return  # pragma: no cover
 
-    if playbook.startswith("Error:") or playbook.startswith("An error occurred:"):
+    if playbook.startswith(("Error:", "An error occurred:")):
         st.error(playbook)
         return
 

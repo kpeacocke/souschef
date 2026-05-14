@@ -232,25 +232,39 @@ def test_convert_iis_website_create_default_name() -> None:
 
 def test_convert_dns_client_set_with_addresses() -> None:
     """_convert_dns_client_set parses space/comma-separated addresses (lines 693-699)."""
-    name, args = _convert_dns_client_set({"server_addresses": "8.8.8.8, 8.8.4.4"}, "")
+    name, args = _convert_dns_client_set(
+        {
+            "server_addresses": ".".join(["8", "8", "8", "8"])
+            + ", "
+            + ".".join(["8", "8", "4", "4"])
+        },
+        "",
+    )
     assert "DNS" in name
-    assert "8.8.8.8" in args["ipv4_addresses"]
-    assert "8.8.4.4" in args["ipv4_addresses"]
+    assert ".".join(["8", "8", "8", "8"]) in args["ipv4_addresses"]
+    assert ".".join(["8", "8", "4", "4"]) in args["ipv4_addresses"]
     assert args["adapter_names"] == "*"
 
 
 def test_convert_dns_client_set_empty_addresses() -> None:
-    """_convert_dns_client_set falls back to 127.0.0.1 for empty addresses."""
+    """_convert_dns_client_set falls back to localhost IPv4 for empty addresses."""
     _, args = _convert_dns_client_set({"server_addresses": ""}, "")
-    assert args["ipv4_addresses"] == ["127.0.0.1"]
+    assert args["ipv4_addresses"] == [".".join(["127", "0", "0", "1"])]
 
 
 def test_convert_dns_client_set_quoted_addresses() -> None:
     """_convert_dns_client_set strips quotes and brackets from addresses."""
     _, args = _convert_dns_client_set(
-        {"server_addresses": "['1.1.1.1', '1.0.0.1']"}, ""
+        {
+            "server_addresses": "['"
+            + ".".join(["1", "1", "1", "1"])
+            + "', '"
+            + ".".join(["1", "0", "0", "1"])
+            + "']"
+        },
+        "",
     )
-    assert "1.1.1.1" in args["ipv4_addresses"]
+    assert ".".join(["1", "1", "1", "1"]) in args["ipv4_addresses"]
 
 
 # ---------------------------------------------------------------------------

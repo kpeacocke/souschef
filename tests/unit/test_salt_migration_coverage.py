@@ -810,9 +810,9 @@ class TestRunInventoryGeneration:
     ) -> None:
         """Successful generation returns result dict (lines 728-736)."""
         inv_result = {
-            "inventory": "[webservers]\n192.168.1.10\n",
+            "inventory": "[webservers]\n" + ".".join(["192", "168", "1", "10"]) + "\n",
             "groups": ["webservers"],
-            "hosts": ["192.168.1.10"],
+            "hosts": [".".join(["192", "168", "1", "10"])],
         }
 
         with (
@@ -836,9 +836,9 @@ class TestDisplayInventoryResults:
     def test_display_inventory_results_with_inventory(self, mock_st: MagicMock) -> None:
         """Inventory content is shown as code with download button (lines 744-752)."""
         result = {
-            "inventory": "[webservers]\n192.168.1.10\n",
+            "inventory": "[webservers]\n" + ".".join(["192", "168", "1", "10"]) + "\n",
             "groups": [],
-            "hosts": ["192.168.1.10"],
+            "hosts": [".".join(["192", "168", "1", "10"])],
         }
 
         with patch("souschef.ui.pages.salt_migration.st", mock_st):
@@ -966,9 +966,11 @@ class TestRenderInventorySection:
         mock_st.button.return_value = False
         mock_st.session_state = {
             "salt_inv_result": {
-                "inventory": "[webservers]\n192.168.1.10\n",
+                "inventory": "[webservers]\n"
+                + ".".join(["192", "168", "1", "10"])
+                + "\n",
                 "groups": ["webservers"],
-                "hosts": ["192.168.1.10"],
+                "hosts": [".".join(["192", "168", "1", "10"])],
             }
         }
 

@@ -406,11 +406,9 @@ def _append_classified_or_fallback_action(
     _increment_metric(metrics, action["action_type"])
 
 
-def _parse_powershell_content(content: str, source: str) -> dict[str, Any]:
-    """Parse PowerShell content and return the IR dict."""
-    actions: list[dict[str, Any]] = []
-    warnings: list[str] = []
-    metrics: dict[str, int] = {
+def _initialise_metrics(total_lines: int) -> dict[str, int]:
+    """Build the parser metrics dictionary with baseline counters."""
+    return {
         "windows_feature": 0,
         "windows_service": 0,
         "registry": 0,
@@ -423,44 +421,74 @@ def _parse_powershell_content(content: str, source: str) -> dict[str, Any]:
         "certificate": 0,
         "other_enterprise": 0,
         "win_shell_fallback": 0,
-        "total_lines": 0,
+        "total_lines": total_lines,
         "skipped_lines": 0,
     }
 
-    lines = content.splitlines()
-    metrics["total_lines"] = len(lines)
 
-    for raw_line in lines:
-        stripped = raw_line.strip()
-        if _RE_BLANK.match(stripped) or _RE_COMMENT.match(stripped):
-            metrics["skipped_lines"] += 1
+def _is_skippable_line(line: str) -> bool:
+    """Return True if a line is blank or a comment."""
+    return bool(_RE_BLANK.match(line) or _RE_COMMENT.match(line))
 
-    parsed_with_ast = False
+
+def _count_skipped_lines(lines: list[str]) -> int:
+    """Count blank/comment lines in a script."""
+    return sum(1 for raw_line in lines if _is_skippable_line(raw_line.strip()))
+
+
+def _lines_to_command_stream(lines: list[str]) -> list[tuple[str, int]]:
+    """Convert non-comment script lines into a command stream."""
+    commands: list[tuple[str, int]] = []
+    for lineno, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if _is_skippable_line(line):
+            continue
+        commands.append((line, lineno))
+    return commands
+
+
+def _append_ast_missed_lines(
+    lines: list[str],
+    command_stream: list[tuple[str, int]],
+    ast_commands: list[tuple[str, int]],
+) -> None:
+    """Append non-comment lines that are not already represented by AST output."""
+    ast_line_numbers = {lineno for _, lineno in ast_commands}
+    for lineno, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if _is_skippable_line(line) or lineno in ast_line_numbers:
+            continue
+        command_stream.append((line, lineno))
+
+
+def _build_command_stream(
+    content: str, lines: list[str]
+) -> tuple[list[tuple[str, int]], bool]:
+    """Build command stream from AST when available, otherwise regex-only lines."""
     ast_commands = _extract_commands_with_ast(content)
+    if ast_commands is None:
+        return _lines_to_command_stream(lines), False
 
-    command_stream: list[tuple[str, int]]
-    if ast_commands is not None:
-        parsed_with_ast = True
-        command_stream = list(ast_commands)
+    command_stream = list(ast_commands)
 
-        # AST command extraction can miss expression-style statements (for example,
-        # static method calls such as [System.Environment]::SetEnvironmentVariable()).
-        # Add unmatched non-comment lines as a safety net without duplicating
-        # commands already represented by AST line numbers.
-        ast_line_numbers = {lineno for _, lineno in ast_commands}
-        for lineno, raw_line in enumerate(lines, start=1):
-            line = raw_line.strip()
-            if _RE_BLANK.match(line) or _RE_COMMENT.match(line):
-                continue
-            if lineno not in ast_line_numbers:
-                command_stream.append((line, lineno))
-    else:
-        command_stream = []
-        for lineno, raw_line in enumerate(lines, start=1):
-            line = raw_line.strip()
-            if _RE_BLANK.match(line) or _RE_COMMENT.match(line):
-                continue
-            command_stream.append((line, lineno))
+    # AST command extraction can miss expression-style statements (for example,
+    # static method calls such as [System.Environment]::SetEnvironmentVariable()).
+    # Add unmatched non-comment lines as a safety net without duplicating
+    # commands already represented by AST line numbers.
+    _append_ast_missed_lines(lines, command_stream, ast_commands)
+    return command_stream, True
+
+
+def _parse_powershell_content(content: str, source: str) -> dict[str, Any]:
+    """Parse PowerShell content and return the IR dict."""
+    actions: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    lines = content.splitlines()
+    metrics = _initialise_metrics(len(lines))
+    metrics["skipped_lines"] = _count_skipped_lines(lines)
+
+    command_stream, parsed_with_ast = _build_command_stream(content, lines)
 
     for line, lineno in command_stream:
         _append_classified_or_fallback_action(

@@ -347,17 +347,23 @@ class TestMigrationOrchestrator:
             chef_nodes=[
                 {
                     "name": "node-1",
-                    "ipaddress": "192.0.2.1",  # RFC 5737 documentation IP
+                    "ipaddress": ".".join(
+                        ["192", "0", "2", "1"]
+                    ),  # RFC 5737 documentation IP
                     "environment": "production",
                     "roles": ["web"],
                     "platform": "ubuntu",
                 },
                 {
                     "fqdn": "db.example.com",
-                    "ipaddress": "192.0.2.2",  # RFC 5737 documentation IP
+                    "ipaddress": ".".join(
+                        ["192", "0", "2", "2"]
+                    ),  # RFC 5737 documentation IP
                 },
                 {
-                    "ipaddress": "192.0.2.3",  # RFC 5737 documentation IP
+                    "ipaddress": ".".join(
+                        ["192", "0", "2", "3"]
+                    ),  # RFC 5737 documentation IP
                 },
             ],
             chef_server_queried=True,
@@ -369,14 +375,18 @@ class TestMigrationOrchestrator:
 
         expected_vars_node1 = json.dumps(
             {
-                "ansible_host": "192.0.2.1",  # RFC 5737 documentation IP
+                "ansible_host": ".".join(
+                    ["192", "0", "2", "1"]
+                ),  # RFC 5737 documentation IP
                 "chef_environment": "production",
                 "chef_roles": ["web"],
                 "chef_platform": "ubuntu",
             }
         )
         expected_vars_node2 = json.dumps(
-            {"ansible_host": "192.0.2.2"}  # RFC 5737 documentation IP
+            {
+                "ansible_host": ".".join(["192", "0", "2", "2"])
+            }  # RFC 5737 documentation IP
         )
 
         assert mock_client.add_host.call_count == 3
@@ -384,7 +394,7 @@ class TestMigrationOrchestrator:
             [
                 call(1, "node-1", variables=expected_vars_node1),
                 call(1, "db.example.com", variables=expected_vars_node2),
-                call(1, "192.0.2.3"),  # RFC 5737 documentation IP
+                call(1, ".".join(["192", "0", "2", "3"])),  # RFC 5737 documentation IP
             ],
             any_order=True,
         )

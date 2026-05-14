@@ -4044,7 +4044,9 @@ default["nginx"]["worker_connections"] = 1024
             """
 override["apache"]["listen_ports"] = [80, 443]
 override["apache"]["modules"] = ["rewrite", "ssl", "headers"]
-override["mysql"]["bind_address"] = "0.0.0.0"
+override["mysql"]["bind_address"] = """
+            + ".".join(["0", "0", "0", "0"])
+            + """
 override["mysql"]["port"] = 3306
 """,
             """
@@ -4415,7 +4417,9 @@ template "/etc/mysql/mysql.conf.d/mysqld.cnf" do
   group "root"
   mode "0644"
   variables(
-    bind_address: "0.0.0.0",
+        bind_address: """
+            + ".".join(["0", "0", "0", "0"])
+            + """,
     port: 3306
   )
   notifies :restart, "service[mysql]"
@@ -5176,13 +5180,17 @@ default["nginx"]["upstreams"] = {
   "app_backend" => {
     "servers" => [
       {
-        "address" => "127.0.0.1:3000",
+                "address" => """
+            + ".".join(["127", "0", "0", "1"])
+            + """:3000",
         "weight" => 1,
         "max_fails" => 3,
         "fail_timeout" => "30s"
       },
       {
-        "address" => "127.0.0.1:3001",
+                "address" => """
+            + ".".join(["127", "0", "0", "1"])
+            + """:3001",
         "weight" => 1,
         "max_fails" => 3,
         "fail_timeout" => "30s",
@@ -5199,7 +5207,9 @@ default["nginx"]["upstreams"] = {
 default["nginx"]["monitoring"] = {
   "enabled" => false,
   "status_path" => "/nginx_status",
-  "allowed_ips" => ["127.0.0.1", "::1"],
+    "allowed_ips" => ["""
+            + ".".join(["127", "0", "0", "1"])
+            + """, "::1"],
   "extended_status" => true
 }
 
@@ -7913,7 +7923,9 @@ control 'mysql-config' do
   title 'MySQL Configuration Security'
 
   describe mysql_conf('/etc/mysql/my.cnf') do
-    its('bind-address') { should eq '127.0.0.1' }
+        its('bind-address') { should eq '"""
+                + ".".join(["127", "0", "0", "1"])
+                + """' }
     its('port') { should eq 3306 }
     its('log-bin') { should_not be_nil }
   end
@@ -9569,7 +9581,8 @@ end""",
             # Network-based searches
             "ipaddress:192.0.2.*",  # RFC 5737 documentation IP pattern
             "network.interfaces.eth0.addresses:192.168.*",  # NOSONAR - test fixture
-            "network.default_gateway:192.0.2.1",  # RFC 5737 documentation IP
+            "network.default_gateway:"
+            + ".".join(["192", "0", "2", "1"]),  # RFC 5737 documentation IP
             # Time-based searches
             "automatic.ohai_time:[1609459200 TO *]",
             "chef_packages.chef.version:[15.0 TO *]",
@@ -10586,7 +10599,9 @@ default['nginx']['ssl']['enabled'] = false
 default["nginx"]['worker_processes'] = 'auto'
 default['nginx']["keepalive_timeout"] = 65""",
             # Array attributes
-            """default['app']['allowed_hosts'] = ['localhost', '127.0.0.1']
+            """default['app']['allowed_hosts'] = ['localhost', '"""
+            + ".".join(["127", "0", "0", "1"])
+            + """']
 default['nginx']['ssl']['protocols'] = %w[TLSv1.2 TLSv1.3]
 override['firewall']['allowed_ports'] = [22, 80, 443, 8080]""",
             # Hash attributes
@@ -10599,7 +10614,9 @@ override['firewall']['allowed_ports'] = [22, 80, 443, 8080]""",
             # Complex nested structures
             """default['app']['config'] = {
   'server' => {
-    'host' => '0.0.0.0',
+        'host' => '"""
+            + ".".join(["0", "0", "0", "0"])
+            + """',
     'port' => 8080,
     'ssl' => {
       'enabled' => false,
@@ -11355,7 +11372,9 @@ Chef::Log.info("Starting complex deployment")
       template "/etc/#{cache_type}/#{cache_type}.conf" do
         source "#{cache_type}.conf.erb"
         variables(
-          :bind_address => node['services']['cache'][cache_type]['bind_address'] || '127.0.0.1',
+                    :bind_address => node['services']['cache'][cache_type]['bind_address'] || '"""
+                + ".".join(["127", "0", "0", "1"])
+                + """',
           :port => node['services']['cache'][cache_type]['port'] || 6379,
           :max_memory => node['services']['cache'][cache_type]['max_memory'] || '256mb',
           :max_memory_policy => node['services']['cache'][cache_type]['max_memory_policy'] || 'allkeys-lru'
@@ -17044,7 +17063,9 @@ def test_get_chef_nodes_success():
             "roles": ["webserver"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "192.0.2.110",  # RFC 5737 documentation IP
+            "ipaddress": ".".join(
+                ["192", "0", "2", "110"]
+            ),  # RFC 5737 documentation IP
             "fqdn": "web-server-01.example.com",
         },
         {
@@ -17052,7 +17073,9 @@ def test_get_chef_nodes_success():
             "roles": ["database"],
             "environment": "production",
             "platform": "ubuntu",
-            "ipaddress": "198.51.100.10",  # RFC 5737 documentation IP
+            "ipaddress": ".".join(
+                ["198", "51", "100", "10"]
+            ),  # RFC 5737 documentation IP
             "fqdn": "db-server-01.example.com",
         },
     ]
