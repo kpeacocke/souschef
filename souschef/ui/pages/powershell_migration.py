@@ -26,6 +26,13 @@ def parse_powershell_content(content: str, source: str = "<inline>") -> str:
     return cast(str, _powershell_api().parse_powershell_content(content, source))
 
 
+def convert_powershell_content_to_ansible(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        str, _powershell_api().convert_powershell_content_to_ansible(*args, **kwargs)
+    )
+
+
 def analyze_powershell_migration_fidelity(*args: Any, **kwargs: Any) -> str:
     """Compatibility wrapper for tests patching this module symbol."""
     return cast(
