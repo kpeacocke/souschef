@@ -1,6 +1,7 @@
 """Cookbook Analysis Page for SousChef UI."""
 
 import contextlib
+import importlib
 import io
 import json
 import shutil
@@ -48,39 +49,6 @@ else:
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from souschef.api.chef_api import (
-    analyse_cookbook_dependencies,
-    assess_single_cookbook_with_ai,
-    orchestrate_generate_playbook_from_recipe_with_ai,
-    parse_chef_migration_assessment,
-)
-from souschef.api.chef_api import (
-    orchestrate_calculate_file_fingerprint as _calculate_file_fingerprint,
-)
-from souschef.api.chef_api import (
-    orchestrate_conversion_analysis as analyse_conversion_output,
-)
-from souschef.api.chef_api import (
-    orchestrate_cookbook_metadata_parsing as parse_cookbook_metadata,
-)
-from souschef.api.chef_api import (
-    orchestrate_generate_playbook_from_recipe as generate_playbook_from_recipe,
-)
-from souschef.api.chef_api import (
-    orchestrate_get_blob_storage as get_blob_storage,
-)
-from souschef.api.chef_api import (
-    orchestrate_get_storage_manager as get_storage_manager,
-)
-from souschef.api.chef_api import (
-    orchestrate_repository_generation as generate_ansible_repository,
-)
-from souschef.api.chef_api import (
-    orchestrate_template_conversion as _convert_templates_impl,
-)
-from souschef.api.chef_api import (
-    orchestrate_validate_conversion as validate_conversion_output,
-)
 from souschef.core.constants import METADATA_FILENAME
 from souschef.core.metrics import (
     EffortMetrics,
@@ -118,9 +86,85 @@ __all__ = [
     "_validate_zip_file_security",
 ]
 
-generate_playbook_from_recipe_with_ai = (
-    orchestrate_generate_playbook_from_recipe_with_ai
-)
+
+def _chef_api() -> Any:
+    """Load Chef API module lazily to avoid static architecture dependencies."""
+    return importlib.import_module("souschef.api.chef_api")
+
+
+def analyse_cookbook_dependencies(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API dependency analysis."""
+    return _chef_api().analyse_cookbook_dependencies(*args, **kwargs)
+
+
+def assess_single_cookbook_with_ai(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Proxy to Chef API single-cookbook AI assessment."""
+    return cast(
+        dict[str, Any], _chef_api().assess_single_cookbook_with_ai(*args, **kwargs)
+    )
+
+
+def parse_chef_migration_assessment(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Proxy to Chef API migration assessment parser."""
+    return cast(
+        dict[str, Any], _chef_api().parse_chef_migration_assessment(*args, **kwargs)
+    )
+
+
+def _calculate_file_fingerprint(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API file fingerprint orchestrator."""
+    return _chef_api().orchestrate_calculate_file_fingerprint(*args, **kwargs)
+
+
+def analyse_conversion_output(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API conversion analysis orchestrator."""
+    return _chef_api().orchestrate_conversion_analysis(*args, **kwargs)
+
+
+def parse_cookbook_metadata(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Proxy to Chef API metadata parsing orchestrator."""
+    return cast(
+        dict[str, Any],
+        _chef_api().orchestrate_cookbook_metadata_parsing(*args, **kwargs),
+    )
+
+
+def generate_playbook_from_recipe(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API recipe-to-playbook orchestrator."""
+    return _chef_api().orchestrate_generate_playbook_from_recipe(*args, **kwargs)
+
+
+def generate_playbook_from_recipe_with_ai(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API AI recipe-to-playbook orchestrator."""
+    return _chef_api().orchestrate_generate_playbook_from_recipe_with_ai(
+        *args, **kwargs
+    )
+
+
+def get_blob_storage(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API blob storage accessor."""
+    return _chef_api().orchestrate_get_blob_storage(*args, **kwargs)
+
+
+def get_storage_manager(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API storage manager accessor."""
+    return _chef_api().orchestrate_get_storage_manager(*args, **kwargs)
+
+
+def generate_ansible_repository(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API repository generation orchestrator."""
+    return _chef_api().orchestrate_repository_generation(*args, **kwargs)
+
+
+def _convert_templates_impl(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API template conversion orchestrator."""
+    return _chef_api().orchestrate_template_conversion(*args, **kwargs)
+
+
+def validate_conversion_output(*args: Any, **kwargs: Any) -> Any:
+    """Proxy to Chef API conversion validation orchestrator."""
+    return _chef_api().orchestrate_validate_conversion(*args, **kwargs)
+
 
 # AI Settings
 ANTHROPIC_PROVIDER = "Anthropic (Claude)"

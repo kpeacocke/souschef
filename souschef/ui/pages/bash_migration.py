@@ -7,6 +7,7 @@ and converting them to Ansible playbooks.
 
 from __future__ import annotations
 
+import importlib
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -18,11 +19,11 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
-from souschef.api.bash_api import (
-    convert_bash_content_to_ansible,
-    generate_ansible_role_from_bash,
-    parse_bash_script_content,
-)
+
+def _bash_api() -> Any:
+    """Load Bash API functions lazily to avoid static architecture dependencies."""
+    return importlib.import_module("souschef.api.bash_api")
+
 
 SHELL_FALLBACKS_LABEL = "Shell Fallbacks"
 
@@ -130,7 +131,7 @@ def _render_upload_tab() -> None:
 
 def _display_parse_results(content: str) -> None:
     """Parse *content* and render the IR results."""
-    ir = parse_bash_script_content(content)
+    ir = _bash_api().parse_bash_script_content(content)
 
     st.subheader("Analysis Results")
 
@@ -509,7 +510,7 @@ def _display_conversion_results(
     script_path: str = "script.sh",
 ) -> None:
     """Convert *content* and render the playbook output."""
-    raw = convert_bash_content_to_ansible(content, script_path=script_path)
+    raw = _bash_api().convert_bash_content_to_ansible(content, script_path=script_path)
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
@@ -576,7 +577,7 @@ def _display_role_results(
         role_name: Name for the generated role.
 
     """
-    raw = generate_ansible_role_from_bash(
+    raw = _bash_api().generate_ansible_role_from_bash(
         content, role_name=role_name, script_path=script_path
     )
     try:

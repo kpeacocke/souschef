@@ -10,9 +10,10 @@ to Ansible playbooks. Supports:
 - AI-assisted conversion for unsupported constructs
 """
 
+import importlib
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import streamlit as st
@@ -22,20 +23,15 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # type: ignore[assignment]  # pragma: no cover
 
-from souschef.api.puppet_api import (
-    convert_puppet_manifest_to_ansible,
-    convert_puppet_manifest_to_ansible_with_ai,
-    convert_puppet_module_to_ansible,
-    convert_puppet_module_to_ansible_with_ai,
-    get_puppet_ansible_module_map,
-    import_puppet_catalog_to_ir,
-    list_puppet_server_nodes,
-    parse_puppet_manifest,
-    parse_puppet_module,
-)
 from souschef.core.path_utils import (
     _get_workspace_root,
 )
+
+
+def _puppet_api() -> Any:
+    """Load Puppet API lazily to avoid static architecture dependencies."""
+    return importlib.import_module("souschef.api.puppet_api")
+
 
 INPUT_METHOD_FILE_PATH = "Manifest File Path"
 INPUT_METHOD_MODULE_PATH = "Module Directory Path"
@@ -368,7 +364,7 @@ def _run_puppet_server_node_listing(
         return  # pragma: no cover
 
     with st.spinner("Loading Puppet nodes..."):
-        result = list_puppet_server_nodes(
+        result = _puppet_api().list_puppet_server_nodes(
             server_url=server_url,
             cert_path=cert_path,
             key_path=key_path,
@@ -397,7 +393,7 @@ def _run_puppet_server_catalog_import(
         return  # pragma: no cover
 
     with st.spinner("Importing Puppet catalog..."):
-        result = import_puppet_catalog_to_ir(
+        result = _puppet_api().import_puppet_catalog_to_ir(
             server_url=server_url,
             cert_path=cert_path,
             key_path=key_path,
@@ -483,7 +479,7 @@ def _run_manifest_analysis(manifest_path: str) -> None:
         return
 
     with st.spinner("Analysing Puppet manifest..."):
-        result = parse_puppet_manifest(safe)
+        result = _puppet_api().parse_puppet_manifest(safe)
 
     _display_analysis_result(result, "manifest")
 
@@ -499,7 +495,7 @@ def _run_module_analysis(module_path: str) -> None:
         return
 
     with st.spinner("Analysing Puppet module..."):
-        result = parse_puppet_module(safe)
+        result = _puppet_api().parse_puppet_module(safe)
 
     _display_analysis_result(result, "module")
 
@@ -515,7 +511,7 @@ def _run_manifest_conversion(manifest_path: str) -> None:
         return
 
     with st.spinner("Converting Puppet manifest to Ansible..."):
-        playbook = convert_puppet_manifest_to_ansible(safe)
+        playbook = _puppet_api().convert_puppet_manifest_to_ansible(safe)
 
     _display_conversion_result(playbook, safe, source_type="manifest")
 
@@ -531,7 +527,7 @@ def _run_module_conversion(module_path: str) -> None:
         return
 
     with st.spinner("Converting Puppet module to Ansible..."):
-        playbook = convert_puppet_module_to_ansible(safe)
+        playbook = _puppet_api().convert_puppet_module_to_ansible(safe)
 
     _display_conversion_result(playbook, safe, source_type="module")
 
@@ -556,7 +552,7 @@ def _run_manifest_ai_conversion(
         return
 
     with st.spinner("Converting Puppet manifest to Ansible with AI..."):
-        playbook = convert_puppet_manifest_to_ansible_with_ai(
+        playbook = _puppet_api().convert_puppet_manifest_to_ansible_with_ai(
             safe,
             ai_provider=str(ai_cfg.get("provider", _DEFAULT_PROVIDER)),
             api_key=str(ai_cfg.get("api_key", "")),
@@ -590,7 +586,7 @@ def _run_module_ai_conversion(
         return
 
     with st.spinner("Converting Puppet module to Ansible with AI..."):
-        playbook = convert_puppet_module_to_ansible_with_ai(
+        playbook = _puppet_api().convert_puppet_module_to_ansible_with_ai(
             safe,
             ai_provider=str(ai_cfg.get("provider", _DEFAULT_PROVIDER)),
             api_key=str(ai_cfg.get("api_key", "")),
@@ -703,7 +699,7 @@ def _show_resource_type_reference() -> None:
         return  # pragma: no cover
 
     with st.expander("Supported Puppet Resource Types"):
-        module_map = get_puppet_ansible_module_map()
+        module_map = _puppet_api().get_puppet_ansible_module_map()
         rows: list[dict[str, str]] = [
             {"Puppet Resource Type": puppet_type, "Ansible Module": ansible_module}
             for puppet_type, ansible_module in sorted(module_map.items())

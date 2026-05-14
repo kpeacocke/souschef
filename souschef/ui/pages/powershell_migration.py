@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -14,16 +15,11 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
-from souschef.api.powershell_api import (
-    analyze_powershell_migration_fidelity,
-    convert_powershell_content_to_ansible,
-    generate_ansible_requirements,
-    generate_powershell_awx_job_template,
-    generate_powershell_role_structure,
-    generate_windows_group_vars,
-    generate_windows_inventory,
-    parse_powershell_content,
-)
+
+def _powershell_api() -> Any:
+    """Load PowerShell API lazily to avoid static architecture dependencies."""
+    return importlib.import_module("souschef.api.powershell_api")
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -225,7 +221,7 @@ def _handle_parse(script_content: str) -> None:
         return
 
     with st.spinner("Parsing PowerShell script..."):
-        result_json = parse_powershell_content(script_content)
+        result_json = _powershell_api().parse_powershell_content(script_content)
 
     result = _load_json_payload(result_json, "Parse")
     if result is None:
@@ -247,7 +243,7 @@ def _handle_convert(script_content: str, playbook_name: str, hosts: str) -> None
         return
 
     with st.spinner("Converting to Ansible playbook..."):
-        result_json = convert_powershell_content_to_ansible(
+        result_json = _powershell_api().convert_powershell_content_to_ansible(
             script_content,
             playbook_name=playbook_name,
             hosts=hosts,
@@ -275,28 +271,32 @@ def _handle_enterprise(
         return
 
     with st.spinner("Generating enterprise Ansible artefacts..."):
-        parsed_raw = parse_powershell_content(script_content, "<inline>")
+        parsed_raw = _powershell_api().parse_powershell_content(
+            script_content, "<inline>"
+        )
         parsed_ir = _load_json_payload(parsed_raw, "Parse")
         if parsed_ir is None:
             return
 
-        fidelity_raw = analyze_powershell_migration_fidelity(parsed_ir)
+        fidelity_raw = _powershell_api().analyze_powershell_migration_fidelity(
+            parsed_ir
+        )
         fidelity = _load_json_payload(fidelity_raw, "Fidelity analysis")
         if fidelity is None:
             return
 
         enterprise_result = {
             "parsed_ir": parsed_ir,
-            "inventory": generate_windows_inventory(),
-            "group_vars": generate_windows_group_vars(),
-            "requirements": generate_ansible_requirements(parsed_ir),
-            "role_files": generate_powershell_role_structure(
+            "inventory": _powershell_api().generate_windows_inventory(),
+            "group_vars": _powershell_api().generate_windows_group_vars(),
+            "requirements": _powershell_api().generate_ansible_requirements(parsed_ir),
+            "role_files": _powershell_api().generate_powershell_role_structure(
                 parsed_ir,
                 role_name=role_name,
                 playbook_name=playbook_name,
                 hosts=hosts,
             ),
-            "job_template": generate_powershell_awx_job_template(
+            "job_template": _powershell_api().generate_powershell_awx_job_template(
                 parsed_ir,
                 job_template_name=f"Windows: {playbook_name}",
                 playbook=f"{playbook_name}.yml",

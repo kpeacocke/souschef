@@ -1,5 +1,6 @@
 """Salt Migration Page for SousChef UI."""
 
+import importlib
 import json
 import os
 from pathlib import Path
@@ -13,18 +14,14 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
-from souschef.api.salt_api import (
-    assess_salt_complexity,
-    convert_salt_directory_to_roles,
-    convert_salt_sls_to_ansible,
-    generate_salt_inventory,
-    parse_salt_directory,
-    parse_salt_pillar,
-    parse_salt_sls,
-    plan_salt_migration,
-)
 from souschef.core.job_queue import background_job_queue
 from souschef.core.path_utils import _get_workspace_root
+
+
+def _salt_api() -> Any:
+    """Load Salt API lazily to avoid static architecture dependencies."""
+    return importlib.import_module("souschef.api.salt_api")
+
 
 # Constants to avoid duplicate literals (S1192)
 _ERR_INVALID_PATH = "Invalid or unsafe path. Path must be within the workspace."
@@ -80,7 +77,9 @@ def _run_batch_conversion_background_job(
     log(f"Output directory: {safe_output_dir}")
 
     progress(25, "Running conversion")
-    result_str = convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
+    result_str = _salt_api().convert_salt_directory_to_roles(
+        safe_salt_dir, safe_output_dir
+    )
 
     progress(80, "Parsing conversion output")
     try:
@@ -253,7 +252,7 @@ def _render_sls_parse_section() -> None:
             return
 
         with st.spinner("Parsing SLS file..."):
-            result_str = parse_salt_sls(safe_path)
+            result_str = _salt_api().parse_salt_sls(safe_path)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -361,7 +360,9 @@ def _render_convert_section() -> None:
             return
 
         with st.spinner("Converting SLS to Ansible..."):
-            result_str = convert_salt_sls_to_ansible(safe_path, playbook_name)
+            result_str = _salt_api().convert_salt_sls_to_ansible(
+                safe_path, playbook_name
+            )
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -455,7 +456,7 @@ def _render_pillar_section() -> None:
             return
 
         with st.spinner("Parsing pillar file..."):
-            result_str = parse_salt_pillar(safe_path)
+            result_str = _salt_api().parse_salt_pillar(safe_path)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -513,7 +514,7 @@ def _render_directory_section() -> None:
             return
 
         with st.spinner("Scanning directory..."):
-            result_str = parse_salt_directory(safe_dir)
+            result_str = _salt_api().parse_salt_directory(safe_dir)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -608,7 +609,7 @@ def _render_assessment_section() -> None:
             return
 
         with st.spinner("Assessing Salt migration complexity..."):
-            result_str = assess_salt_complexity(safe_dir)
+            result_str = _salt_api().assess_salt_complexity(safe_dir)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -731,7 +732,9 @@ def _render_migration_plan_section() -> None:
             return
 
         with st.spinner("Generating migration plan..."):
-            result_str = plan_salt_migration(safe_dir, int(timeline), str(platform))
+            result_str = _salt_api().plan_salt_migration(
+                safe_dir, int(timeline), str(platform)
+            )
 
         st.session_state["salt_plan_result"] = result_str
         st.success("Migration plan generated.")
@@ -767,7 +770,9 @@ def _run_batch_conversion(salt_dir: str, output_dir: str) -> dict[str, Any] | No
         return None
 
     with st.spinner("Converting Salt directory to Ansible roles..."):
-        result_str = convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
+        result_str = _salt_api().convert_salt_directory_to_roles(
+            safe_salt_dir, safe_output_dir
+        )
 
     try:
         result: dict[str, Any] = json.loads(result_str)
@@ -827,7 +832,7 @@ def _run_inventory_generation(top_path: str) -> dict[str, Any] | None:
         return None
 
     with st.spinner("Generating Ansible inventory..."):
-        result_str = generate_salt_inventory(safe_path)
+        result_str = _salt_api().generate_salt_inventory(safe_path)
 
     try:
         result: dict[str, Any] = json.loads(result_str)

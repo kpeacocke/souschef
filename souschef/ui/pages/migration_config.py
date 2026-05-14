@@ -1,5 +1,6 @@
 """Migration Configuration and Activity Visualisation Page for SousChef UI."""
 
+import importlib
 import json
 import sys
 from pathlib import Path
@@ -16,13 +17,18 @@ else:
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from souschef.api.chef_api import calculate_activity_breakdown
 from souschef.migration_config import (
     DeploymentTarget,
     MigrationConfig,
     MigrationStandard,
     ValidationTool,
 )
+
+
+def _calculate_activity_breakdown(*args: Any, **kwargs: Any) -> Any:
+    """Load and call the Chef activity API lazily."""
+    chef_api = importlib.import_module("souschef.api.chef_api")
+    return chef_api.calculate_activity_breakdown(*args, **kwargs)
 
 
 def show_migration_config_page() -> None:
@@ -253,7 +259,7 @@ def _generate_and_display_breakdown(
     try:
         with st.spinner("Calculating activity breakdown..."):
             # Calculate breakdown
-            breakdown = calculate_activity_breakdown(
+            breakdown = _calculate_activity_breakdown(
                 cookbook_path,
                 migration_strategy,
             )

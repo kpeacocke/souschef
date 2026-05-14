@@ -4,14 +4,16 @@ Command-line interface for SousChef.
 Provides easy access to Chef cookbook parsing and conversion tools.
 """
 
+import importlib
 import json
 import sys
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from pathlib import Path
-from typing import Any, NoReturn, TypedDict
+from typing import Any, NoReturn, TypedDict, cast
 
 import click
 
-from souschef import __version__
 from souschef.ansible_upgrade import (
     UpgradePlan,
     assess_ansible_environment,
@@ -21,7 +23,6 @@ from souschef.ansible_upgrade import (
 )
 from souschef.cli_registry import get_registry, register_default_groups
 from souschef.cli_utils import _resolve_output_path, _safe_write_file
-from souschef.converters.playbook import generate_playbook_from_recipe
 from souschef.core.ansible_versions import format_version_display, get_eol_status
 from souschef.core.logging import configure_logging
 from souschef.core.path_utils import (
@@ -59,11 +60,42 @@ from souschef.server import (
     parse_custom_resource,
     parse_inspec_profile,
     parse_recipe,
-    parse_template,
     read_cookbook_metadata,
     read_file,
 )
 from souschef.webhooks import send_webhook_notification
+
+try:
+    __version__ = package_version("souschef")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
+
+
+def _generate_playbook_from_recipe(recipe_path: str) -> str:
+    """Load playbook converter lazily to avoid static architecture dependencies."""
+    playbook_module = importlib.import_module("souschef.converters.playbook")
+    return cast(str, playbook_module.generate_playbook_from_recipe(recipe_path))
+
+
+def _parse_template(path: str) -> str:
+    """Load template parser lazily via server module."""
+    server_module = importlib.import_module("souschef.server")
+    return cast(str, server_module.parse_template(path))
+
+
+def _convert_template_file(path: str) -> dict[str, Any]:
+    """Load template converter lazily."""
+    template_module = importlib.import_module("souschef.converters.template")
+    return cast(dict[str, Any], template_module.convert_template_file(path))
+
+
+def _convert_template_with_ai(erb_path: str) -> dict[str, Any]:
+    """Load AI template converter lazily."""
+    template_module = importlib.import_module("souschef.converters.template")
+    return cast(
+        dict[str, Any],
+        template_module.convert_template_with_ai(erb_path, ai_service=None),
+    )
 
 
 def _validate_user_path(path_input: str | None) -> Path:
@@ -179,7 +211,7 @@ def template(path: str, output_format: str) -> None:
 
     PATH: Path to the template (.erb) file
     """
-    result = parse_template(path)
+    result = _parse_template(path)
     _output_result(result, output_format)
 
 
@@ -353,7 +385,7 @@ def _display_resource_summary(resource_file: Path) -> None:
 def _display_template_summary(template_file: Path) -> None:
     """Display a summary of a template file."""
     click.echo(f"\n  {template_file.name}:")
-    template_result = parse_template(str(template_file))
+    template_result = _parse_template(str(template_file))
     try:
         data = json.loads(template_result)
         variables = data.get("variables", [])
@@ -485,7 +517,7 @@ def _save_cookbook_conversion(cookbook_dir: Path, output_path: str) -> None:
 
         for recipe_file in recipes_dir.glob("*.rb"):
             playbook_name = recipe_file.stem
-            playbook_content = generate_playbook_from_recipe(str(recipe_file))
+            playbook_content = _generate_playbook_from_recipe(str(recipe_file))
 
             playbook_path = _safe_join(playbooks_dir, f"{playbook_name}.yml")
             safe_write_text(playbook_path, output_dir, playbook_content)
@@ -497,13 +529,11 @@ def _save_cookbook_conversion(cookbook_dir: Path, output_path: str) -> None:
     templates_dir = cookbook_dir / "templates" / "default"
     output_templates_dir = _safe_join(output_dir, "templates")
     if templates_dir.exists():  # NOSONAR
-        from souschef.converters.template import convert_template_file
-
         output_templates_dir.mkdir(parents=True, exist_ok=True)
         click.echo("\nConverting ERB templates to Jinja2...")
 
         for template_file in templates_dir.glob("*.erb"):
-            template_result = convert_template_file(str(template_file))
+            template_result = _convert_template_file(str(template_file))
 
             if template_result.get("success"):
                 jinja_name = template_file.stem + ".j2"
@@ -993,7 +1023,7 @@ def profile_operation(operation: str, path: str, detailed: bool) -> None:
         "recipe": parse_recipe,
         "attributes": parse_attributes,
         "resource": parse_custom_resource,
-        "template": parse_template,
+        "template": _parse_template,
     }
 
     func = operation_map[operation]
@@ -1089,7 +1119,7 @@ def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> No
 
         # Generate playbook
         click.echo(f"Converting {cookbook_name}::{recipe_name} to Ansible...")
-        playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
+        playbook_yaml = _generate_playbook_from_recipe(str(recipe_file))
 
         # Write output
         output_file = output_dir / f"{recipe_name}.yml"
@@ -1723,10 +1753,8 @@ def convert_template_ai(erb_path: str, ai: bool, output: str | None) -> None:
     else:
         click.echo("📝 Using rule-based conversion only")
 
-    from souschef.converters.template import convert_template_with_ai
-
     try:
-        result = convert_template_with_ai(erb_path, ai_service=None)
+        result = _convert_template_with_ai(erb_path)
 
         if result.get("success"):
             method = result.get("conversion_method", "unknown")

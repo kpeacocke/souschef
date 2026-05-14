@@ -4,12 +4,13 @@ Chef Server Settings Page for SousChef UI.
 Configure and validate Chef Server connectivity for dynamic inventory and node queries.
 """
 
+import importlib
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import streamlit as st
@@ -20,15 +21,6 @@ else:
         st = None  # pragma: no cover
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-# Import Chef Server validation functions from core module
-from souschef.api.chef_api import (
-    assess_single_cookbook_with_ai,
-    parse_chef_migration_assessment,
-)
-from souschef.api.chef_api import (
-    orchestrate_get_storage_manager as get_storage_manager,
-)
 from souschef.core.chef_server import _validate_chef_server_connection
 from souschef.core.path_utils import (
     _ensure_within_base_path,
@@ -36,6 +28,12 @@ from souschef.core.path_utils import (
     _safe_join,
     safe_mkdir,
 )
+
+
+def _chef_api() -> Any:
+    """Load Chef API module lazily to avoid static architecture dependencies."""
+    return importlib.import_module("souschef.api.chef_api")
+
 
 NOT_CONFIGURED = "Not configured"
 
@@ -443,7 +441,7 @@ def _assess_single_cookbook(
 
     # Run assessment
     if ai_api_key:
-        assessment = assess_single_cookbook_with_ai(
+        assessment = _chef_api().assess_single_cookbook_with_ai(
             str(cookbook_dir),
             ai_provider=ai_provider.lower().replace(" ", "_"),
             api_key=ai_api_key,
@@ -451,7 +449,7 @@ def _assess_single_cookbook(
         )
     else:
         # Rule-based assessment fallback
-        assessment = parse_chef_migration_assessment(str(cookbook_dir))
+        assessment = _chef_api().parse_chef_migration_assessment(str(cookbook_dir))
 
     # Save to storage
     storage.save_analysis(
@@ -513,7 +511,7 @@ def _run_bulk_assessment(
     status_text = st.empty()
     results_container = st.container()
 
-    storage = get_storage_manager()
+    storage = _chef_api().orchestrate_get_storage_manager()
     successful = 0
     failed = 0
 
@@ -619,7 +617,7 @@ def _run_bulk_conversion(
     status_text = st.empty()
     results_container = st.container()
 
-    storage = get_storage_manager()
+    storage = _chef_api().orchestrate_get_storage_manager()
     successful = 0
     failed = 0
 
