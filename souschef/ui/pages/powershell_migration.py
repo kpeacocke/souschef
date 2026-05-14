@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import streamlit as st
@@ -19,6 +19,48 @@ else:
 def _powershell_api() -> Any:
     """Load PowerShell API lazily to avoid static architecture dependencies."""
     return importlib.import_module("souschef.api.powershell_api")
+
+
+def parse_powershell_content(content: str, source: str = "<inline>") -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _powershell_api().parse_powershell_content(content, source))
+
+
+def analyze_powershell_migration_fidelity(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        str, _powershell_api().analyze_powershell_migration_fidelity(*args, **kwargs)
+    )
+
+
+def generate_windows_inventory(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _powershell_api().generate_windows_inventory(*args, **kwargs))
+
+
+def generate_windows_group_vars(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _powershell_api().generate_windows_group_vars(*args, **kwargs))
+
+
+def generate_ansible_requirements(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _powershell_api().generate_ansible_requirements(*args, **kwargs))
+
+
+def generate_powershell_role_structure(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        dict[str, Any],
+        _powershell_api().generate_powershell_role_structure(*args, **kwargs),
+    )
+
+
+def generate_powershell_awx_job_template(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        str, _powershell_api().generate_powershell_awx_job_template(*args, **kwargs)
+    )
 
 
 # ---------------------------------------------------------------------------
