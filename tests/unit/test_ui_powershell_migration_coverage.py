@@ -26,7 +26,16 @@ def mock_st():
     """Provide a mock streamlit module for UI tests."""
     with patch("souschef.ui.pages.powershell_migration.st") as mock:
         mock.session_state = {}
-        mock.columns.return_value = [MagicMock(), MagicMock()]
+
+        # st.columns should return the requested number of columns
+        def make_columns(num_cols: int) -> list[MagicMock]:
+            cols = [MagicMock() for _ in range(num_cols)]
+            for col in cols:
+                col.__enter__ = lambda s: s
+                col.__exit__ = MagicMock(return_value=False)
+            return cols
+
+        mock.columns.side_effect = make_columns
         mock.tabs.return_value = [MagicMock(), MagicMock()]
         yield mock
 
@@ -48,14 +57,32 @@ def test_show_page_calls_display_stored_results_when_no_button_clicked(
         "windows",
         "windows_provisioning",
     ]
+    # For the 3-column layout
     col1, col2, col3 = MagicMock(), MagicMock(), MagicMock()
     for col in (col1, col2, col3):
         col.__enter__ = lambda s: s
         col.__exit__ = MagicMock(return_value=False)
         col.button = MagicMock(return_value=False)
-    mock_st.columns.return_value = [col1, col2, col3]
-    # st.button (called inside `with col:` blocks) must return False
-    mock_st.button.return_value = False
+
+    # For the 6-column metrics layout
+    cols_6 = [MagicMock() for _ in range(6)]
+    for col in cols_6:
+        col.__enter__ = lambda s: s
+        col.__exit__ = MagicMock(return_value=False)
+
+    # Mock columns to return different lengths based on usage pattern
+    call_count = 0
+
+    def columns_side_effect(num_cols: int) -> list[MagicMock]:
+        nonlocal call_count
+        if num_cols == 3:
+            return [col1, col2, col3]
+        elif num_cols == 6:
+            return cols_6
+        else:
+            return [MagicMock() for _ in range(num_cols)]
+
+    mock_st.columns.side_effect = columns_side_effect
 
     # No result in session state → _display_stored_results does nothing
     mock_st.session_state = {}
@@ -153,6 +180,9 @@ def _make_enterprise_mocks(mock_st) -> None:
 
     tabs = [_make_mock_tab() for _ in range(5)]
     mock_st.tabs.return_value = tabs
+
+    # Clear side_effect from the fixture and set return_value for columns
+    mock_st.columns.side_effect = None
     mock_st.columns.return_value = [MagicMock() for _ in range(4)]
 
 
@@ -363,14 +393,19 @@ def test_display_enterprise_result_full(mock_st) -> None:
 
     tabs = [_make_mock_tab() for _ in range(5)]
     mock_st.tabs.return_value = tabs
-    mock_st.columns.return_value = [MagicMock() for _ in range(4)]
+
+    # Create columns with proper mocking
+    # Important: Clear side_effect from the fixture before setting return_value
+    cols = [MagicMock() for _ in range(4)]
+    mock_st.columns.side_effect = None
+    mock_st.columns.return_value = cols
+
     mock_st.expander.return_value.__enter__ = lambda s: s
     mock_st.expander.return_value.__exit__ = MagicMock(return_value=False)
 
     _display_enterprise_result(_build_enterprise_result())
 
     # Four metric columns should have metric() called
-    cols = mock_st.columns.return_value
     assert all(c.metric.called for c in cols)
     # Five tabs should have been unpacked
     assert mock_st.tabs.called
