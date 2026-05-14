@@ -4,7 +4,7 @@ import importlib
 import json
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import streamlit as st
@@ -21,6 +21,46 @@ from souschef.core.path_utils import _get_workspace_root
 def _salt_api() -> Any:
     """Load Salt API lazily to avoid static architecture dependencies."""
     return importlib.import_module("souschef.api.salt_api")
+
+
+def assess_salt_complexity(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _salt_api().assess_salt_complexity(*args, **kwargs))
+
+
+def convert_salt_directory_to_roles(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _salt_api().convert_salt_directory_to_roles(*args, **kwargs))
+
+
+def convert_salt_sls_to_ansible(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _salt_api().convert_salt_sls_to_ansible(*args, **kwargs))
+
+
+def generate_salt_inventory(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _salt_api().generate_salt_inventory(*args, **kwargs))
+
+
+def parse_salt_directory(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _salt_api().parse_salt_directory(*args, **kwargs))
+
+
+def parse_salt_pillar(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _salt_api().parse_salt_pillar(*args, **kwargs))
+
+
+def parse_salt_sls(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _salt_api().parse_salt_sls(*args, **kwargs))
+
+
+def plan_salt_migration(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _salt_api().plan_salt_migration(*args, **kwargs))
 
 
 # Constants to avoid duplicate literals (S1192)
@@ -77,9 +117,7 @@ def _run_batch_conversion_background_job(
     log(f"Output directory: {safe_output_dir}")
 
     progress(25, "Running conversion")
-    result_str = _salt_api().convert_salt_directory_to_roles(
-        safe_salt_dir, safe_output_dir
-    )
+    result_str = convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
 
     progress(80, "Parsing conversion output")
     try:
@@ -252,7 +290,7 @@ def _render_sls_parse_section() -> None:
             return
 
         with st.spinner("Parsing SLS file..."):
-            result_str = _salt_api().parse_salt_sls(safe_path)
+            result_str = parse_salt_sls(safe_path)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -360,9 +398,7 @@ def _render_convert_section() -> None:
             return
 
         with st.spinner("Converting SLS to Ansible..."):
-            result_str = _salt_api().convert_salt_sls_to_ansible(
-                safe_path, playbook_name
-            )
+            result_str = convert_salt_sls_to_ansible(safe_path, playbook_name)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -456,7 +492,7 @@ def _render_pillar_section() -> None:
             return
 
         with st.spinner("Parsing pillar file..."):
-            result_str = _salt_api().parse_salt_pillar(safe_path)
+            result_str = parse_salt_pillar(safe_path)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -514,7 +550,7 @@ def _render_directory_section() -> None:
             return
 
         with st.spinner("Scanning directory..."):
-            result_str = _salt_api().parse_salt_directory(safe_dir)
+            result_str = parse_salt_directory(safe_dir)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -609,7 +645,7 @@ def _render_assessment_section() -> None:
             return
 
         with st.spinner("Assessing Salt migration complexity..."):
-            result_str = _salt_api().assess_salt_complexity(safe_dir)
+            result_str = assess_salt_complexity(safe_dir)
 
         try:
             result: dict[str, Any] = json.loads(result_str)
@@ -732,9 +768,7 @@ def _render_migration_plan_section() -> None:
             return
 
         with st.spinner("Generating migration plan..."):
-            result_str = _salt_api().plan_salt_migration(
-                safe_dir, int(timeline), str(platform)
-            )
+            result_str = plan_salt_migration(safe_dir, int(timeline), str(platform))
 
         st.session_state["salt_plan_result"] = result_str
         st.success("Migration plan generated.")
@@ -770,9 +804,7 @@ def _run_batch_conversion(salt_dir: str, output_dir: str) -> dict[str, Any] | No
         return None
 
     with st.spinner("Converting Salt directory to Ansible roles..."):
-        result_str = _salt_api().convert_salt_directory_to_roles(
-            safe_salt_dir, safe_output_dir
-        )
+        result_str = convert_salt_directory_to_roles(safe_salt_dir, safe_output_dir)
 
     try:
         result: dict[str, Any] = json.loads(result_str)
@@ -832,7 +864,7 @@ def _run_inventory_generation(top_path: str) -> dict[str, Any] | None:
         return None
 
     with st.spinner("Generating Ansible inventory..."):
-        result_str = _salt_api().generate_salt_inventory(safe_path)
+        result_str = generate_salt_inventory(safe_path)
 
     try:
         result: dict[str, Any] = json.loads(result_str)

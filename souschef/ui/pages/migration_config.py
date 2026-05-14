@@ -25,7 +25,7 @@ from souschef.migration_config import (
 )
 
 
-def _calculate_activity_breakdown(*args: Any, **kwargs: Any) -> Any:
+def calculate_activity_breakdown(*args: Any, **kwargs: Any) -> Any:
     """Load and call the Chef activity API lazily."""
     chef_api = importlib.import_module("souschef.api.chef_api")
     return chef_api.calculate_activity_breakdown(*args, **kwargs)
@@ -259,7 +259,7 @@ def _generate_and_display_breakdown(
     try:
         with st.spinner("Calculating activity breakdown..."):
             # Calculate breakdown
-            breakdown = _calculate_activity_breakdown(
+            breakdown = calculate_activity_breakdown(
                 cookbook_path,
                 migration_strategy,
             )

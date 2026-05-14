@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import importlib
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import streamlit as st
@@ -23,6 +23,37 @@ else:
 def _bash_api() -> Any:
     """Load Bash API functions lazily to avoid static architecture dependencies."""
     return importlib.import_module("souschef.api.bash_api")
+
+
+def parse_bash_script_content(content: str) -> dict[str, Any]:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(dict[str, Any], _bash_api().parse_bash_script_content(content))
+
+
+def convert_bash_content_to_ansible(
+    content: str, script_path: str = "script.sh"
+) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        str,
+        _bash_api().convert_bash_content_to_ansible(content, script_path=script_path),
+    )
+
+
+def generate_ansible_role_from_bash(
+    content: str,
+    role_name: str = "bash_converted",
+    script_path: str = "script.sh",
+) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        str,
+        _bash_api().generate_ansible_role_from_bash(
+            content,
+            role_name=role_name,
+            script_path=script_path,
+        ),
+    )
 
 
 SHELL_FALLBACKS_LABEL = "Shell Fallbacks"
@@ -131,7 +162,7 @@ def _render_upload_tab() -> None:
 
 def _display_parse_results(content: str) -> None:
     """Parse *content* and render the IR results."""
-    ir = _bash_api().parse_bash_script_content(content)
+    ir = parse_bash_script_content(content)
 
     st.subheader("Analysis Results")
 
@@ -510,7 +541,7 @@ def _display_conversion_results(
     script_path: str = "script.sh",
 ) -> None:
     """Convert *content* and render the playbook output."""
-    raw = _bash_api().convert_bash_content_to_ansible(content, script_path=script_path)
+    raw = convert_bash_content_to_ansible(content, script_path=script_path)
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
@@ -577,7 +608,7 @@ def _display_role_results(
         role_name: Name for the generated role.
 
     """
-    raw = _bash_api().generate_ansible_role_from_bash(
+    raw = generate_ansible_role_from_bash(
         content, role_name=role_name, script_path=script_path
     )
     try:

@@ -10,7 +10,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import streamlit as st
@@ -33,6 +33,25 @@ from souschef.core.path_utils import (
 def _chef_api() -> Any:
     """Load Chef API module lazily to avoid static architecture dependencies."""
     return importlib.import_module("souschef.api.chef_api")
+
+
+def assess_single_cookbook_with_ai(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        dict[str, Any], _chef_api().assess_single_cookbook_with_ai(*args, **kwargs)
+    )
+
+
+def parse_chef_migration_assessment(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        dict[str, Any], _chef_api().parse_chef_migration_assessment(*args, **kwargs)
+    )
+
+
+def get_storage_manager(*args: Any, **kwargs: Any) -> Any:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return _chef_api().orchestrate_get_storage_manager(*args, **kwargs)
 
 
 NOT_CONFIGURED = "Not configured"
@@ -441,7 +460,7 @@ def _assess_single_cookbook(
 
     # Run assessment
     if ai_api_key:
-        assessment = _chef_api().assess_single_cookbook_with_ai(
+        assessment = assess_single_cookbook_with_ai(
             str(cookbook_dir),
             ai_provider=ai_provider.lower().replace(" ", "_"),
             api_key=ai_api_key,
@@ -449,7 +468,7 @@ def _assess_single_cookbook(
         )
     else:
         # Rule-based assessment fallback
-        assessment = _chef_api().parse_chef_migration_assessment(str(cookbook_dir))
+        assessment = parse_chef_migration_assessment(str(cookbook_dir))
 
     # Save to storage
     storage.save_analysis(
@@ -511,7 +530,7 @@ def _run_bulk_assessment(
     status_text = st.empty()
     results_container = st.container()
 
-    storage = _chef_api().orchestrate_get_storage_manager()
+    storage = get_storage_manager()
     successful = 0
     failed = 0
 
@@ -617,7 +636,7 @@ def _run_bulk_conversion(
     status_text = st.empty()
     results_container = st.container()
 
-    storage = _chef_api().orchestrate_get_storage_manager()
+    storage = get_storage_manager()
     successful = 0
     failed = 0
 

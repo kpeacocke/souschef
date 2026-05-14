@@ -71,13 +71,13 @@ except PackageNotFoundError:
     __version__ = "0.0.0"
 
 
-def _generate_playbook_from_recipe(recipe_path: str) -> str:
+def generate_playbook_from_recipe(recipe_path: str) -> str:
     """Load playbook converter lazily to avoid static architecture dependencies."""
     playbook_module = importlib.import_module("souschef.converters.playbook")
     return cast(str, playbook_module.generate_playbook_from_recipe(recipe_path))
 
 
-def _parse_template(path: str) -> str:
+def parse_template(path: str) -> str:
     """Load template parser lazily via server module."""
     server_module = importlib.import_module("souschef.server")
     return cast(str, server_module.parse_template(path))
@@ -211,7 +211,7 @@ def template(path: str, output_format: str) -> None:
 
     PATH: Path to the template (.erb) file
     """
-    result = _parse_template(path)
+    result = parse_template(path)
     _output_result(result, output_format)
 
 
@@ -385,7 +385,7 @@ def _display_resource_summary(resource_file: Path) -> None:
 def _display_template_summary(template_file: Path) -> None:
     """Display a summary of a template file."""
     click.echo(f"\n  {template_file.name}:")
-    template_result = _parse_template(str(template_file))
+    template_result = parse_template(str(template_file))
     try:
         data = json.loads(template_result)
         variables = data.get("variables", [])
@@ -517,7 +517,7 @@ def _save_cookbook_conversion(cookbook_dir: Path, output_path: str) -> None:
 
         for recipe_file in recipes_dir.glob("*.rb"):
             playbook_name = recipe_file.stem
-            playbook_content = _generate_playbook_from_recipe(str(recipe_file))
+            playbook_content = generate_playbook_from_recipe(str(recipe_file))
 
             playbook_path = _safe_join(playbooks_dir, f"{playbook_name}.yml")
             safe_write_text(playbook_path, output_dir, playbook_content)
@@ -1023,7 +1023,7 @@ def profile_operation(operation: str, path: str, detailed: bool) -> None:
         "recipe": parse_recipe,
         "attributes": parse_attributes,
         "resource": parse_custom_resource,
-        "template": _parse_template,
+        "template": parse_template,
     }
 
     func = operation_map[operation]
@@ -1119,7 +1119,7 @@ def convert_recipe(cookbook_path: str, recipe_name: str, output_path: str) -> No
 
         # Generate playbook
         click.echo(f"Converting {cookbook_name}::{recipe_name} to Ansible...")
-        playbook_yaml = _generate_playbook_from_recipe(str(recipe_file))
+        playbook_yaml = generate_playbook_from_recipe(str(recipe_file))
 
         # Write output
         output_file = output_dir / f"{recipe_name}.yml"

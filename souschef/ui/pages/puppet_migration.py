@@ -13,7 +13,7 @@ to Ansible playbooks. Supports:
 import importlib
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import streamlit as st
@@ -31,6 +31,61 @@ from souschef.core.path_utils import (
 def _puppet_api() -> Any:
     """Load Puppet API lazily to avoid static architecture dependencies."""
     return importlib.import_module("souschef.api.puppet_api")
+
+
+def list_puppet_server_nodes(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(dict[str, Any], _puppet_api().list_puppet_server_nodes(*args, **kwargs))
+
+
+def import_puppet_catalog_to_ir(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        dict[str, Any], _puppet_api().import_puppet_catalog_to_ir(*args, **kwargs)
+    )
+
+
+def parse_puppet_manifest(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _puppet_api().parse_puppet_manifest(*args, **kwargs))
+
+
+def parse_puppet_module(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _puppet_api().parse_puppet_module(*args, **kwargs))
+
+
+def convert_puppet_manifest_to_ansible(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _puppet_api().convert_puppet_manifest_to_ansible(*args, **kwargs))
+
+
+def convert_puppet_module_to_ansible(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(str, _puppet_api().convert_puppet_module_to_ansible(*args, **kwargs))
+
+
+def convert_puppet_manifest_to_ansible_with_ai(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        str,
+        _puppet_api().convert_puppet_manifest_to_ansible_with_ai(*args, **kwargs),
+    )
+
+
+def convert_puppet_module_to_ansible_with_ai(*args: Any, **kwargs: Any) -> str:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        str,
+        _puppet_api().convert_puppet_module_to_ansible_with_ai(*args, **kwargs),
+    )
+
+
+def get_puppet_ansible_module_map(*args: Any, **kwargs: Any) -> dict[str, str]:
+    """Compatibility wrapper for tests patching this module symbol."""
+    return cast(
+        dict[str, str], _puppet_api().get_puppet_ansible_module_map(*args, **kwargs)
+    )
 
 
 INPUT_METHOD_FILE_PATH = "Manifest File Path"
@@ -364,7 +419,7 @@ def _run_puppet_server_node_listing(
         return  # pragma: no cover
 
     with st.spinner("Loading Puppet nodes..."):
-        result = _puppet_api().list_puppet_server_nodes(
+        result = list_puppet_server_nodes(
             server_url=server_url,
             cert_path=cert_path,
             key_path=key_path,
@@ -393,7 +448,7 @@ def _run_puppet_server_catalog_import(
         return  # pragma: no cover
 
     with st.spinner("Importing Puppet catalog..."):
-        result = _puppet_api().import_puppet_catalog_to_ir(
+        result = import_puppet_catalog_to_ir(
             server_url=server_url,
             cert_path=cert_path,
             key_path=key_path,
@@ -479,7 +534,7 @@ def _run_manifest_analysis(manifest_path: str) -> None:
         return
 
     with st.spinner("Analysing Puppet manifest..."):
-        result = _puppet_api().parse_puppet_manifest(safe)
+        result = parse_puppet_manifest(safe)
 
     _display_analysis_result(result, "manifest")
 
@@ -495,7 +550,7 @@ def _run_module_analysis(module_path: str) -> None:
         return
 
     with st.spinner("Analysing Puppet module..."):
-        result = _puppet_api().parse_puppet_module(safe)
+        result = parse_puppet_module(safe)
 
     _display_analysis_result(result, "module")
 
@@ -511,7 +566,7 @@ def _run_manifest_conversion(manifest_path: str) -> None:
         return
 
     with st.spinner("Converting Puppet manifest to Ansible..."):
-        playbook = _puppet_api().convert_puppet_manifest_to_ansible(safe)
+        playbook = convert_puppet_manifest_to_ansible(safe)
 
     _display_conversion_result(playbook, safe, source_type="manifest")
 
@@ -527,7 +582,7 @@ def _run_module_conversion(module_path: str) -> None:
         return
 
     with st.spinner("Converting Puppet module to Ansible..."):
-        playbook = _puppet_api().convert_puppet_module_to_ansible(safe)
+        playbook = convert_puppet_module_to_ansible(safe)
 
     _display_conversion_result(playbook, safe, source_type="module")
 
@@ -552,7 +607,7 @@ def _run_manifest_ai_conversion(
         return
 
     with st.spinner("Converting Puppet manifest to Ansible with AI..."):
-        playbook = _puppet_api().convert_puppet_manifest_to_ansible_with_ai(
+        playbook = convert_puppet_manifest_to_ansible_with_ai(
             safe,
             ai_provider=str(ai_cfg.get("provider", _DEFAULT_PROVIDER)),
             api_key=str(ai_cfg.get("api_key", "")),
@@ -586,7 +641,7 @@ def _run_module_ai_conversion(
         return
 
     with st.spinner("Converting Puppet module to Ansible with AI..."):
-        playbook = _puppet_api().convert_puppet_module_to_ansible_with_ai(
+        playbook = convert_puppet_module_to_ansible_with_ai(
             safe,
             ai_provider=str(ai_cfg.get("provider", _DEFAULT_PROVIDER)),
             api_key=str(ai_cfg.get("api_key", "")),
@@ -699,7 +754,7 @@ def _show_resource_type_reference() -> None:
         return  # pragma: no cover
 
     with st.expander("Supported Puppet Resource Types"):
-        module_map = _puppet_api().get_puppet_ansible_module_map()
+        module_map = get_puppet_ansible_module_map()
         rows: list[dict[str, str]] = [
             {"Puppet Resource Type": puppet_type, "Ansible Module": ansible_module}
             for puppet_type, ansible_module in sorted(module_map.items())
