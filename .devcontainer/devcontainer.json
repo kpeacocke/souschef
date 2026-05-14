@@ -47,7 +47,8 @@
             "version": "lts"
         },
         "ghcr.io/devcontainers/features/go:1": {
-            "version": "1.24"
+            "version": "1.24",
+            "golangCILintVersion": "1.60.3"
         }
     },
     "customizations": {
