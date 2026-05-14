@@ -22,19 +22,19 @@ else:
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Import Chef Server validation functions from core module
+from souschef.api.chef_api import (
+    assess_single_cookbook_with_ai,
+    parse_chef_migration_assessment,
+)
+from souschef.api.chef_api import (
+    orchestrate_get_storage_manager as get_storage_manager,
+)
 from souschef.core.chef_server import _validate_chef_server_connection
 from souschef.core.path_utils import (
     _ensure_within_base_path,
     _normalize_path,
     _safe_join,
     safe_mkdir,
-)
-from souschef.orchestrators.chef import (
-    assess_single_cookbook_with_ai,
-    parse_chef_migration_assessment,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_get_storage_manager as get_storage_manager,
 )
 
 NOT_CONFIGURED = "Not configured"

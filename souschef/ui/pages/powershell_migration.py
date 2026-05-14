@@ -14,7 +14,7 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
-from souschef.orchestrators.powershell import (
+from souschef.api.powershell_api import (
     analyze_powershell_migration_fidelity,
     convert_powershell_content_to_ansible,
     generate_ansible_requirements,

@@ -48,6 +48,39 @@ else:
 # Add the parent directory to the path so we can import souschef modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from souschef.api.chef_api import (
+    analyse_cookbook_dependencies,
+    assess_single_cookbook_with_ai,
+    orchestrate_generate_playbook_from_recipe_with_ai,
+    parse_chef_migration_assessment,
+)
+from souschef.api.chef_api import (
+    orchestrate_calculate_file_fingerprint as _calculate_file_fingerprint,
+)
+from souschef.api.chef_api import (
+    orchestrate_conversion_analysis as analyse_conversion_output,
+)
+from souschef.api.chef_api import (
+    orchestrate_cookbook_metadata_parsing as parse_cookbook_metadata,
+)
+from souschef.api.chef_api import (
+    orchestrate_generate_playbook_from_recipe as generate_playbook_from_recipe,
+)
+from souschef.api.chef_api import (
+    orchestrate_get_blob_storage as get_blob_storage,
+)
+from souschef.api.chef_api import (
+    orchestrate_get_storage_manager as get_storage_manager,
+)
+from souschef.api.chef_api import (
+    orchestrate_repository_generation as generate_ansible_repository,
+)
+from souschef.api.chef_api import (
+    orchestrate_template_conversion as _convert_templates_impl,
+)
+from souschef.api.chef_api import (
+    orchestrate_validate_conversion as validate_conversion_output,
+)
 from souschef.core.constants import METADATA_FILENAME
 from souschef.core.metrics import (
     EffortMetrics,
@@ -62,39 +95,6 @@ from souschef.core.path_utils import (
     safe_is_dir,
     safe_is_file,
     safe_read_bytes,
-)
-from souschef.orchestrators.chef import (
-    analyse_cookbook_dependencies,
-    assess_single_cookbook_with_ai,
-    orchestrate_generate_playbook_from_recipe_with_ai,
-    parse_chef_migration_assessment,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_calculate_file_fingerprint as _calculate_file_fingerprint,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_conversion_analysis as analyse_conversion_output,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_cookbook_metadata_parsing as parse_cookbook_metadata,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_generate_playbook_from_recipe as generate_playbook_from_recipe,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_get_blob_storage as get_blob_storage,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_get_storage_manager as get_storage_manager,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_repository_generation as generate_ansible_repository,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_template_conversion as _convert_templates_impl,
-)
-from souschef.orchestrators.chef import (
-    orchestrate_validate_conversion as validate_conversion_output,
 )
 from souschef.ui.pages.ai_env_utils import _load_ai_settings_from_env
 

@@ -18,7 +18,7 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
-from souschef.orchestrators.bash import (
+from souschef.api.bash_api import (
     convert_bash_content_to_ansible,
     generate_ansible_role_from_bash,
     parse_bash_script_content,

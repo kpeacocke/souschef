@@ -13,9 +13,7 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # pragma: no cover
 
-from souschef.core.job_queue import background_job_queue
-from souschef.core.path_utils import _get_workspace_root
-from souschef.orchestrators.salt import (
+from souschef.api.salt_api import (
     assess_salt_complexity,
     convert_salt_directory_to_roles,
     convert_salt_sls_to_ansible,
@@ -25,6 +23,8 @@ from souschef.orchestrators.salt import (
     parse_salt_sls,
     plan_salt_migration,
 )
+from souschef.core.job_queue import background_job_queue
+from souschef.core.path_utils import _get_workspace_root
 
 # Constants to avoid duplicate literals (S1192)
 _ERR_INVALID_PATH = "Invalid or unsafe path. Path must be within the workspace."

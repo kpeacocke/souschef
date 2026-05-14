@@ -22,10 +22,7 @@ else:
     except ImportError:  # pragma: no cover
         st = None  # type: ignore[assignment]  # pragma: no cover
 
-from souschef.core.path_utils import (
-    _get_workspace_root,
-)
-from souschef.orchestrators.puppet import (
+from souschef.api.puppet_api import (
     convert_puppet_manifest_to_ansible,
     convert_puppet_manifest_to_ansible_with_ai,
     convert_puppet_module_to_ansible,
@@ -35,6 +32,9 @@ from souschef.orchestrators.puppet import (
     list_puppet_server_nodes,
     parse_puppet_manifest,
     parse_puppet_module,
+)
+from souschef.core.path_utils import (
+    _get_workspace_root,
 )
 
 INPUT_METHOD_FILE_PATH = "Manifest File Path"
