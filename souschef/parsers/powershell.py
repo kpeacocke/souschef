@@ -204,10 +204,6 @@ _RE_IMPORT_CERTIFICATE = re.compile(
     r"(?:Import-Certificate|Import-PfxCertificate)\b",
     re.IGNORECASE,
 )
-_RE_IMPORT_CERTIFICATE_PATH = re.compile(
-    r"(?:-FilePath\s+)?[\"']?(?P<path>[^\"'\s;,]+\.(?:cer|pfx|p12|crt))[\"']?",
-    re.IGNORECASE,
-)
 
 # WinRM / remoting
 _RE_ENABLE_PSREMOTING = re.compile(
@@ -223,7 +219,11 @@ _RE_NEW_WEBSITE = re.compile(
 
 # DNS client
 _RE_SET_DNS_CLIENT = re.compile(
-    r"Set-DnsClientServerAddress\b[^\n]*-ServerAddresses\s+[\"']?(?P<addresses>[0-9a-f\.:,\s\[\]]+)(?=\s*(?:-|$))",
+    r"\bSet-DnsClientServerAddress\b",
+    re.IGNORECASE,
+)
+_RE_DNS_SERVER_ADDRESSES = re.compile(
+    r"^[0-9a-f\.:,\s\[\]]+$",
     re.IGNORECASE,
 )
 
@@ -931,12 +931,12 @@ def _classify_task_env_line(line: str, lineno: int) -> dict[str, Any] | None:
 def _classify_infra_line(line: str, lineno: int) -> dict[str, Any] | None:
     """Classify certificate, WinRM, IIS, DNS, and ACL lines."""
     if _RE_IMPORT_CERTIFICATE.search(line):
-        cert_path_match = _RE_IMPORT_CERTIFICATE_PATH.search(line)
-        if cert_path_match is None:
+        certificate_path = _extract_certificate_path(line)
+        if certificate_path is None:
             return None
         return _make_action(
             "certificate_import",
-            {"certificate_path": cert_path_match.group("path")},
+            {"certificate_path": certificate_path},
             line,
             lineno,
         )
@@ -958,11 +958,13 @@ def _classify_infra_line(line: str, lineno: int) -> dict[str, Any] | None:
             lineno,
         )
 
-    m = _RE_SET_DNS_CLIENT.search(line)
-    if m:
+    if _RE_SET_DNS_CLIENT.search(line):
+        addresses = _extract_dns_server_addresses(line)
+        if addresses is None:
+            return None
         return _make_action(
             "dns_client_set",
-            {"server_addresses": m.group("addresses").strip()},
+            {"server_addresses": addresses},
             line,
             lineno,
         )
@@ -982,6 +984,64 @@ def _classify_infra_line(line: str, lineno: int) -> dict[str, Any] | None:
 def _is_registry_path(path: str) -> bool:
     """Return True if *path* looks like a Windows registry path."""
     return bool(re.match(r"(?:HKLM|HKCU|HKEY_[A-Z_]+)[:\\]", path, re.IGNORECASE))
+
+
+def _extract_dns_server_addresses(line: str) -> str | None:
+    """Extract and validate Set-DnsClientServerAddress values from a command line."""
+    marker = "-serveraddresses"
+    lower_line = line.lower()
+    marker_index = lower_line.find(marker)
+    if marker_index == -1:
+        return None
+
+    tail = line[marker_index + len(marker) :].lstrip()
+    if not tail:
+        return None
+
+    if tail[0] in {'"', "'"}:
+        quote = tail[0]
+        end_quote_index = tail.find(quote, 1)
+        if end_quote_index == -1:
+            return None
+        raw_addresses = tail[1:end_quote_index].strip()
+    else:
+        next_option = re.search(r"\s-\w", tail)
+        if next_option is None:
+            raw_addresses = tail.strip()
+        else:
+            raw_addresses = tail[: next_option.start()].strip()
+
+    if not raw_addresses or _RE_DNS_SERVER_ADDRESSES.fullmatch(raw_addresses) is None:
+        return None
+
+    return raw_addresses
+
+
+def _extract_certificate_path(line: str) -> str | None:
+    """Extract certificate file path from Import-Certificate style commands."""
+    sanitised = line.replace("'", '"')
+    raw_tokens = [token.strip() for token in sanitised.split()]
+    if not raw_tokens:
+        return None
+
+    tokens = [token.strip('";,') for token in raw_tokens if token.strip('";,')]
+    if not tokens:
+        return None
+
+    def _is_certificate_path(candidate: str) -> bool:
+        return candidate.lower().endswith((".cer", ".pfx", ".p12", ".crt"))
+
+    for index, token in enumerate(tokens):
+        if token.lower() == "-filepath" and index + 1 < len(tokens):
+            candidate = tokens[index + 1]
+            if _is_certificate_path(candidate):
+                return candidate
+
+    for candidate in tokens:
+        if _is_certificate_path(candidate):
+            return candidate
+
+    return None
 
 
 def _make_action(

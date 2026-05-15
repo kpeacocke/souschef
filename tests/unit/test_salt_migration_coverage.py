@@ -1126,6 +1126,32 @@ class TestBatchJobHelpers:
         mock_st.error.assert_called()
         mock_st.info.assert_called()
 
+    def test_display_batch_job_status_succeeded_path(self, mock_st: MagicMock) -> None:
+        """Succeeded jobs should publish result into session state."""
+        mock_st.session_state = {"salt_batch_job_id": "job-ok"}
+        succeeded_job = {
+            "status": "succeeded",
+            "progress": 100,
+            "logs": [],
+            "result": {"roles_created": ["web"]},
+        }
+
+        with (
+            patch("souschef.ui.pages.salt_migration.st", mock_st),
+            patch(
+                "souschef.ui.pages.salt_migration.background_job_queue.get",
+                return_value=succeeded_job,
+            ),
+        ):
+            from souschef.ui.pages.salt_migration import _display_batch_job_status
+
+            _display_batch_job_status()
+
+        mock_st.success.assert_called_with(
+            "Background conversion finished successfully."
+        )
+        assert mock_st.session_state["salt_batch_result"] == succeeded_job["result"]
+
     def test_render_batch_convert_section_queue_requires_paths(
         self, mock_st: MagicMock
     ) -> None:

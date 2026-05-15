@@ -62,6 +62,12 @@ def _powershell_api() -> Any:
     return importlib.import_module("souschef.api.powershell_api")
 
 
+def _get_storage_manager() -> Any:
+    """Load storage manager lazily to avoid static architecture dependencies."""
+    storage_module = importlib.import_module("souschef.storage")
+    return storage_module.get_storage_manager()
+
+
 def convert_bash_to_ansible(path: str) -> str:
     """Load Bash conversion via server module."""
     return cast(str, _server_api().convert_bash_to_ansible(path))
@@ -2037,9 +2043,7 @@ history: click.Group = _history_group
 )
 def history_list(history_type: str, limit: int, cookbook: str | None) -> None:
     """List analysis and conversion history."""
-    from souschef.storage import get_storage_manager
-
-    storage_manager = get_storage_manager()
+    storage_manager = _get_storage_manager()
 
     if history_type in ["analysis", "both"]:
         click.echo("\n" + "=" * 80)
@@ -2111,9 +2115,7 @@ def history_list(history_type: str, limit: int, cookbook: str | None) -> None:
 )
 def history_delete(history_type: str, record_id: int, yes: bool) -> None:
     """Delete an analysis or conversion from history."""
-    from souschef.storage import get_storage_manager
-
-    storage_manager = get_storage_manager()
+    storage_manager = _get_storage_manager()
 
     # Confirm deletion unless --yes flag is used
     if not yes and not click.confirm(

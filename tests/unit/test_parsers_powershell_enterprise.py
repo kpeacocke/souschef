@@ -545,6 +545,68 @@ class TestDnsClientSet:
         )
         assert action["action_type"] == "dns_client_set"
 
+    def test_set_dns_client_quoted_addresses(self) -> None:
+        """Quoted ServerAddresses values are parsed correctly."""
+        primary_dns = _ip(10, 0, 0, 2)
+        secondary_dns = _ip(10, 0, 0, 3)
+        action = _single(
+            "Set-DnsClientServerAddress "
+            f'-ServerAddresses "{primary_dns},{secondary_dns}" -InterfaceAlias Ethernet\n'
+        )
+        assert action["action_type"] == "dns_client_set"
+        assert secondary_dns in action["params"]["server_addresses"]
+
+    def test_set_dns_client_invalid_address_payload_falls_back(self) -> None:
+        """Invalid address payload should fall back to win_shell."""
+        action = _single(
+            "Set-DnsClientServerAddress "
+            "-InterfaceAlias Ethernet -ServerAddresses invalid-hostname\n"
+        )
+        assert action["action_type"] == "win_shell"
+
+    def test_set_dns_client_unquoted_addresses_before_next_option(self) -> None:
+        """Unquoted addresses are parsed even when another option follows."""
+        primary_dns = _ip(10, 0, 0, 2)
+        action = _single(
+            "Set-DnsClientServerAddress "
+            f"-ServerAddresses {primary_dns} -InterfaceAlias Ethernet\n"
+        )
+        assert action["action_type"] == "dns_client_set"
+        assert action["params"]["server_addresses"] == primary_dns
+
+
+def test_extract_dns_server_addresses_edge_cases() -> None:
+    """DNS helper returns None for malformed command variants."""
+    from souschef.parsers.powershell import _extract_dns_server_addresses
+
+    assert _extract_dns_server_addresses("Write-Host hello") is None
+    assert (
+        _extract_dns_server_addresses("Set-DnsClientServerAddress -ServerAddresses")
+        is None
+    )
+    assert (
+        _extract_dns_server_addresses(
+            'Set-DnsClientServerAddress -ServerAddresses "10.0.0.2'
+        )
+        is None
+    )
+
+
+def test_extract_certificate_path_edge_cases() -> None:
+    """Certificate helper handles empty and token-less inputs safely."""
+    from souschef.parsers.powershell import _extract_certificate_path
+
+    assert _extract_certificate_path("") is None
+    assert _extract_certificate_path('""') is None
+
+
+def test_extract_certificate_path_without_filepath_flag() -> None:
+    """Certificate helper can find a certificate path without -FilePath flag."""
+    from souschef.parsers.powershell import _extract_certificate_path
+
+    path = _extract_certificate_path("Import-Certificate C:\\certs\\site.cer")
+    assert path == "C:\\certs\\site.cer"
+
 
 # ---------------------------------------------------------------------------
 # ACL
