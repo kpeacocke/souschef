@@ -2933,10 +2933,9 @@ def powershell_inventory(
         souschef powershell-inventory --hosts "win01.example.com,win02.example.com"
 
     """
-    from souschef.generators.powershell import generate_windows_inventory
-
+    api = _powershell_api()
     host_list = [h.strip() for h in hosts.split(",") if h.strip()] or None
-    result = generate_windows_inventory(
+    result = api.generate_windows_inventory(
         hosts=host_list,
         winrm_port=winrm_port,
         use_ssl=not no_ssl,
