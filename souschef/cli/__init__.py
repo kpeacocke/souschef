@@ -57,6 +57,11 @@ def _server_api() -> Any:
     return importlib.import_module("souschef.server")
 
 
+def _powershell_api() -> Any:
+    """Load PowerShell API functions lazily to avoid architecture dependencies."""
+    return importlib.import_module("souschef.api.powershell_api")
+
+
 def convert_bash_to_ansible(path: str) -> str:
     """Load Bash conversion via server module."""
     return cast(str, _server_api().convert_bash_to_ansible(path))
@@ -2973,16 +2978,14 @@ def powershell_requirements(
         souschef powershell-requirements setup.ps1 -o requirements.yml
 
     """
-    from souschef.generators.powershell import generate_ansible_requirements
-    from souschef.parsers.powershell import parse_powershell_script
-
+    api = _powershell_api()
     parsed_ir = None
     if path:
-        raw = parse_powershell_script(path)
+        raw = api.parse_powershell_script(path)
         if not raw.startswith("Error"):
             parsed_ir = json.loads(raw)
 
-    result = generate_ansible_requirements(parsed_ir)
+    result = api.generate_ansible_requirements(parsed_ir)
     if output:
         try:
             workspace_root = _get_workspace_root()
@@ -3039,16 +3042,14 @@ def powershell_role(
         souschef powershell-role setup.ps1 --output-dir ./ansible-role
 
     """
-    from souschef.generators.powershell import generate_powershell_role_structure
-    from souschef.parsers.powershell import parse_powershell_script
-
-    raw = parse_powershell_script(path)
+    api = _powershell_api()
+    raw = api.parse_powershell_script(path)
     if raw.startswith("Error"):
         click.echo(f"Error: {raw}", err=True)
         sys.exit(1)
 
     parsed_ir = json.loads(raw)
-    files = generate_powershell_role_structure(
+    files = api.generate_powershell_role_structure(
         parsed_ir,
         role_name=role_name,
         playbook_name=playbook_name,
@@ -3140,16 +3141,14 @@ def powershell_job_template(
         souschef powershell-job-template setup.ps1 --name "Setup Windows"
 
     """
-    from souschef.generators.powershell import generate_powershell_awx_job_template
-    from souschef.parsers.powershell import parse_powershell_script
-
-    raw = parse_powershell_script(path)
+    api = _powershell_api()
+    raw = api.parse_powershell_script(path)
     if raw.startswith("Error"):
         click.echo(f"Error: {raw}", err=True)
         sys.exit(1)
 
     parsed_ir = json.loads(raw)
-    result = generate_powershell_awx_job_template(
+    result = api.generate_powershell_awx_job_template(
         parsed_ir,
         job_template_name=job_template_name,
         playbook=playbook,
@@ -3195,16 +3194,14 @@ def powershell_fidelity(path: str, output_format: str) -> None:
         souschef powershell-fidelity setup.ps1
 
     """
-    from souschef.generators.powershell import analyze_powershell_migration_fidelity
-    from souschef.parsers.powershell import parse_powershell_script
-
-    raw = parse_powershell_script(path)
+    api = _powershell_api()
+    raw = api.parse_powershell_script(path)
     if raw.startswith("Error"):
         click.echo(f"Error: {raw}", err=True)
         sys.exit(1)
 
     parsed_ir = json.loads(raw)
-    result = analyze_powershell_migration_fidelity(parsed_ir)
+    result = api.analyze_powershell_migration_fidelity(parsed_ir)
     _output_result(result, output_format)
 
 

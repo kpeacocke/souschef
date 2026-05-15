@@ -9,6 +9,7 @@ from souschef.orchestrators.powershell import (
     generate_windows_group_vars,
     generate_windows_inventory,
     parse_powershell_content,
+    parse_powershell_script,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "generate_windows_group_vars",
     "generate_windows_inventory",
     "parse_powershell_content",
+    "parse_powershell_script",
 ]

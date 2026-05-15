@@ -7,6 +7,11 @@ import souschef.generators.powershell as powershell_generators
 import souschef.parsers.powershell as powershell_parser
 
 
+def parse_powershell_script(script_path: str) -> str:
+    """Parse a PowerShell script file for CLI/UI display."""
+    return powershell_parser.parse_powershell_script(script_path)
+
+
 def parse_powershell_content(content: str, source: str = "<inline>") -> str:
     """Parse PowerShell script content for UI display."""
     return powershell_parser.parse_powershell_content(content, source)
