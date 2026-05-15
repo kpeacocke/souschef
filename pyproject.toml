@@ -68,6 +68,7 @@ pandas-stubs = "^2.0.0"
 responses = ">=0.25,<0.27"
 gitpython = ">=3.1.47"
 pygments = ">=2.20.0"
+python-semantic-release = ">=9.8.0,<10.0.0"
 
 [tool.poetry.scripts]
 souschef = "souschef.cli:main"
@@ -76,6 +77,23 @@ souschef-mcp = "souschef.server:main"
 [build-system]
 requires = ["poetry-core>=2.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.semantic_release]
+branch = "main"
+version_pattern = "v{version}"
+build_command = "poetry build"
+upload_to_repository = true
+upload_to_release = true
+remove_dist = false
+log_level = "INFO"
+
+[tool.semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+commit_message = "chore(release): v{version}"
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
 
 [tool.ruff]
 line-length = 88

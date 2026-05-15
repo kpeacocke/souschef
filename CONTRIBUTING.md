@@ -196,26 +196,59 @@ These checks are **mandatory quality gates**. Do not skip.
 
 ### 4. Commit with Conventional Commits
 
+**IMPORTANT:** Commit messages directly control automatic version bumping. Use the correct type!
+
 Format: `<type>(<scope>): <subject>`
 
-**Types:**
+**Types and automatic version impact:**
 
-- `feat:` = New feature (minor version bump)
-- `fix:` = Bug fix (patch version bump)
-- `docs:` = Documentation only
-- `test:` = Test changes
-- `refactor:` = Code refactoring
-- `perf:` = Performance improvements
-- `chore:` = Maintenance
-- `ci:` = CI/CD changes
+- `feat:` = New feature → **Minor version bump** (e.g., 7.2.0 → 7.3.0)
+- `fix:` = Bug fix → **Patch version bump** (e.g., 7.2.0 → 7.2.1)
+- `docs:` = Documentation only → **No version bump**
+- `test:` = Test changes → **No version bump**
+- `refactor:` = Code refactoring → **No version bump**
+- `perf:` = Performance improvements → **Patch version bump** (fix category)
+- `chore:` = Maintenance → **No version bump**
+- `ci:` = CI/CD changes → **No version bump**
 
-**Breaking changes:** Add `!` or `BREAKING CHANGE:` in body:
+**Examples:**
+
+```bash
+# New feature (triggers 7.2.0 → 7.3.0)
+git commit -m "feat(parsers): add support for Puppet DSL parsing"
+
+# Bug fix (triggers 7.2.0 → 7.2.1)
+git commit -m "fix(converters): correct indentation in generated playbooks"
+
+# No version bump (for chores, docs, tests)
+git commit -m "docs: update README with new examples"
+git commit -m "test: add edge case coverage for recipe parser"
+```
+
+**Breaking changes:** Add `!` after type or `BREAKING CHANGE:` in body → **Major version bump** (e.g., 7.2.0 → 8.0.0):
 
 ```bash
 git commit -m "feat!: change MCP tool parameter names
 
 BREAKING CHANGE: Renamed 'path' parameter to 'file_path' for consistency."
 ```
+
+**How automatic versioning works:**
+
+1. You push commits to `main` branch
+2. CI workflow runs and passes
+3. Release workflow is triggered
+4. **python-semantic-release analyzes commit history** since the last version tag
+5. Version is automatically bumped based on commit types:
+   - No `feat:` or `feat!:` commits + has `fix:` → patch bump
+   - Has `feat:` commits → minor bump
+   - Has `feat!:` or breaking changes → major bump
+6. Version is updated in `pyproject.toml`
+7. Package is built and released to PyPI
+8. Docker images are built and pushed
+9. GitHub release is created with changelog
+
+**Result:** Versions are automatically incremented—no manual updates needed!
 
 ### 5. Create Pull Request
 
