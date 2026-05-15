@@ -85,7 +85,6 @@ jobs:
         fi
         echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
 
-  validate:
   # Skip tests - they already passed in CI before merge to main and in Main Branch Validation
   # This workflow focuses on building and publishing the release
   validate:
@@ -171,7 +170,7 @@ jobs:
     - name: Check PyPI for existing version
       id: check-pypi
       env:
-        VERSION: ${{ steps.get-tag.outputs.version }}
+        VERSION: ${{ steps.check-tag.outputs.version }}
       run: |
         set -e
         exists=$(curl -fsSL --proto '=https' https://pypi.org/pypi/souschef/json | jq -r --arg v "$VERSION" '.releases[$v] | if . == null then "false" else "true" end') || exists=false
@@ -185,7 +184,7 @@ jobs:
     - name: Check Docker registry for existing image
       id: check-docker
       env:
-        VERSION: ${{ steps.get-tag.outputs.version }}
+        VERSION: ${{ steps.check-tag.outputs.version }}
         GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Check if the Docker image with this tag exists in GHCR
@@ -203,7 +202,7 @@ jobs:
     - name: Check Docker registry for existing MCP image
       id: check-docker-mcp
       env:
-        VERSION: ${{ steps.get-tag.outputs.version }}
+        VERSION: ${{ steps.check-tag.outputs.version }}
         GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Check if the MCP Docker image with this tag exists in GHCR
