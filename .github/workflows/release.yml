@@ -32,7 +32,6 @@ jobs:
     outputs:
       version: ${{ steps.get-version.outputs.version }}
       tag: ${{ steps.get-version.outputs.tag }}
-      changelog: ${{ steps.get-version.outputs.changelog }}
 
     steps:
     - name: Checkout repository
@@ -75,15 +74,6 @@ jobs:
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
         echo "tag=${TAG}" >> $GITHUB_OUTPUT
         echo "Version: ${VERSION}, Tag: ${TAG}"
-
-        # Get latest tag for changelog
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-        if [ -z "$LATEST_TAG" ]; then
-          CHANGELOG="Initial release"
-        else
-          CHANGELOG=$(git log "${LATEST_TAG}..HEAD" --pretty=format:"- %s" || echo "No changes")
-        fi
-        echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
 
   # Skip tests - they already passed in CI before merge to main and in Main Branch Validation
   # This workflow focuses on building and publishing the release
