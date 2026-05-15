@@ -7,7 +7,6 @@ on:
     types: [completed]
     branches:
       - main
-  workflow_dispatch:
 
 # Prevent fork to access secrets (release workflow should only run on main repo)
 concurrency:
@@ -22,8 +21,9 @@ jobs:
     # Determine next version based on conventional commits since last tag
     if: |
       github.repository == 'kpeacocke/souschef'
-      && ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
-         || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+      && github.event_name == 'workflow_run'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
