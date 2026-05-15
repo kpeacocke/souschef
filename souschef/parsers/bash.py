@@ -90,14 +90,21 @@ _SED_INPLACE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Cron
-_CRON_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\bcrontab\b[^\n]*", re.IGNORECASE),
-    re.compile(
-        r"(?:echo|printf)\s+[^\n]*(?:>+\s*/etc/cron|\|\s*crontab)",
-        re.IGNORECASE,
-    ),
-]
+# Cron extraction is line-based to avoid regex backtracking on large shell inputs.
+_CRON_PATH_MARKERS = (
+    "/etc/cron",
+    "/var/spool/cron",
+)
+_CRON_SPECIAL_SCHEDULES = (
+    "@reboot",
+    "@yearly",
+    "@annually",
+    "@monthly",
+    "@weekly",
+    "@daily",
+    "@midnight",
+    "@hourly",
+)
 
 # Firewall
 _FIREWALL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
@@ -986,18 +993,66 @@ def _extract_cron_jobs(content: str, result: dict[str, Any]) -> None:
         result: Result dictionary to update in-place.
 
     """
-    for pattern in _CRON_PATTERNS:
-        for match in pattern.finditer(content):
-            raw = match.group(0).strip()
-            if "crontab" not in raw and "*" not in raw:
-                continue
-            result["cron_jobs"].append(
-                {
-                    "raw": raw,
-                    "line": _line_number(content, match.start()),
-                    "confidence": 0.7,
-                }
-            )
+    for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        raw = raw_line.strip()
+        if not _is_cron_command(raw):
+            continue
+        result["cron_jobs"].append(
+            {
+                "raw": raw,
+                "line": line_number,
+                "confidence": 0.7,
+            }
+        )
+
+
+def _is_cron_command(raw: str) -> bool:
+    """Return ``True`` when *raw* looks like a cron write or crontab command."""
+    if not raw or raw.startswith("#"):
+        return False
+
+    lowered = raw.casefold()
+    if "crontab" in lowered:
+        return True
+
+    if not any(marker in lowered for marker in _CRON_PATH_MARKERS):
+        return False
+
+    return _contains_cron_schedule(raw)
+
+
+def _contains_cron_schedule(raw: str) -> bool:
+    """Check for standard five-field or special-string cron schedules."""
+    lowered = raw.casefold()
+    if any(schedule in lowered for schedule in _CRON_SPECIAL_SCHEDULES):
+        return True
+
+    schedule_fields = 0
+    for token in raw.split():
+        cleaned = token.strip("\"'();")
+        if not cleaned:
+            continue
+
+        if _is_cron_field(cleaned):
+            schedule_fields += 1
+            if schedule_fields >= 5:
+                return True
+            continue
+
+        schedule_fields = 0
+
+    return False
+
+
+def _is_cron_field(token: str) -> bool:
+    """Return ``True`` when *token* matches a standard numeric cron field."""
+    if not token:
+        return False
+
+    if not any(character.isdigit() for character in token) and "*" not in token:
+        return False
+
+    return all(character.isdigit() or character in "*/,-" for character in token)
 
 
 _FIREWALL_MODULE_MAP: dict[str, str] = {

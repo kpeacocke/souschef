@@ -35,6 +35,31 @@ from souschef.parsers.bash import _parse_bash_content
 _CONFIDENCE_THRESHOLD = 0.8
 
 
+def _read_bash_script_content(path: str) -> tuple[str | None, str | None]:
+    """Read a Bash script file and return either content or a JSON error payload."""
+    try:
+        workspace = _get_workspace_root()
+        normalised = _normalize_path(path)
+        safe_path = _ensure_within_base_path(Path(normalised), workspace)
+        return safe_read_text(safe_path, workspace), None
+    except FileNotFoundError:
+        return None, json.dumps(
+            {"error": f"{ERROR_FILE_NOT_FOUND}: {path}", "status": "error"}
+        )
+    except IsADirectoryError:
+        return None, json.dumps(
+            {"error": f"{ERROR_IS_DIRECTORY}: {path}", "status": "error"}
+        )
+    except PermissionError:
+        return None, json.dumps(
+            {"error": f"{ERROR_PERMISSION_DENIED}: {path}", "status": "error"}
+        )
+    except (ValueError, OSError) as exc:
+        return None, json.dumps(
+            {"error": f"Error reading file: {exc}", "status": "error"}
+        )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -58,26 +83,13 @@ def convert_bash_to_ansible(path: str) -> str:
         on failure.
 
     """
-    from pathlib import Path
+    content, error = _read_bash_script_content(path)
+    if error is not None:
+        return error
 
-    try:
-        workspace = _get_workspace_root()
-        normalised = _normalize_path(path)
-        safe_path = _ensure_within_base_path(Path(normalised), workspace)
-        content = safe_read_text(safe_path, workspace)
-    except FileNotFoundError:
-        return json.dumps(
-            {"error": f"{ERROR_FILE_NOT_FOUND}: {path}", "status": "error"}
-        )
-    except IsADirectoryError:
-        return json.dumps({"error": f"{ERROR_IS_DIRECTORY}: {path}", "status": "error"})
-    except PermissionError:
-        return json.dumps(
-            {"error": f"{ERROR_PERMISSION_DENIED}: {path}", "status": "error"}
-        )
-    except (ValueError, OSError) as exc:
-        return json.dumps({"error": f"Error reading file: {exc}", "status": "error"})
-
+    # mypy: content is str | None, but convert_bash_content_to_ansible expects str
+    if content is None:
+        return error or '{"error": "No content"}'
     return convert_bash_content_to_ansible(content, script_path=path)
 
 
@@ -218,26 +230,18 @@ def generate_ansible_role_from_bash_file(
         the structure.  Returns a JSON error object on failure.
 
     """
-    try:
-        workspace = _get_workspace_root()
-        normalised = _normalize_path(path)
-        safe_path = _ensure_within_base_path(Path(normalised), workspace)
-        content = safe_read_text(safe_path, workspace)
-    except FileNotFoundError:
-        return json.dumps(
-            {"error": f"{ERROR_FILE_NOT_FOUND}: {path}", "status": "error"}
-        )
-    except IsADirectoryError:
-        return json.dumps({"error": f"{ERROR_IS_DIRECTORY}: {path}", "status": "error"})
-    except PermissionError:
-        return json.dumps(
-            {"error": f"{ERROR_PERMISSION_DENIED}: {path}", "status": "error"}
-        )
-    except (ValueError, OSError) as exc:
-        return json.dumps({"error": f"Error reading file: {exc}", "status": "error"})
+    content, error = _read_bash_script_content(path)
+    if error is not None:
+        return error
 
+    # mypy: content is str | None, but generate_ansible_role_from_bash expects str
+    if content is None:
+        return error or '{"error": "No content"}'
+    # Fix line too long
     return generate_ansible_role_from_bash(
-        content, role_name=role_name, script_path=path
+        content,
+        role_name=role_name,
+        script_path=path,
     )
 
 

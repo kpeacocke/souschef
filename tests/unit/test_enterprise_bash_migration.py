@@ -236,6 +236,17 @@ def test_generate_ansible_role_from_bash_file_success(tmp_path) -> None:  # type
     )
 
 
+def test_generate_ansible_role_from_bash_file_none_content_fallback() -> None:
+    """File-wrapper returns fallback error when helper yields ``None`` content."""
+    with patch(
+        "souschef.converters.bash_to_ansible._read_bash_script_content",
+        return_value=(None, None),
+    ):
+        out = json.loads(generate_ansible_role_from_bash_file("deploy.sh"))
+
+    assert out["error"] == "No content"
+
+
 def test_archive_and_firewall_task_fallback_hints() -> None:
     """Task builders should use documented default hints in fallback cases."""
     archive_tasks = _archive_tasks(

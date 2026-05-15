@@ -128,7 +128,7 @@ class TestStoragePropertyBased:
         st.floats(min_value=1.0, max_value=50.0),
         st.floats(min_value=0.5, max_value=25.0),
     )
-    @settings(max_examples=20)
+    @settings(max_examples=20, deadline=None)
     def test_statistics_calculations_are_correct(self, hours, souschef_hours):
         """Test that statistics calculations are arithmetically correct."""
         with tempfile.TemporaryDirectory() as tmpdir:

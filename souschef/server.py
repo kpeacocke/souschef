@@ -6397,174 +6397,14 @@ def plan_salt_migration(
         _validate_path_length(salt_dir, _SALT_DIRECTORY_PATH_LABEL)
     except ValueError as e:
         return format_error_with_context(e, _VALIDATING_SALT_DIRECTORY_PATH, salt_dir)
+    from souschef.orchestrators.salt_planning import build_salt_migration_plan
 
-    import json as _json
-
-    complexity_json = _assess_salt_complexity(salt_dir)
-    try:
-        data = _json.loads(complexity_json)
-    except Exception:  # noqa: BLE001
-        return complexity_json
-
-    if "error" in data:
-        return str(data["error"])
-
-    summary = data.get("summary", {})
-    complexity_level = summary.get("complexity_level", "medium")
-    total_files = summary.get("total_files", 0)
-    total_states = summary.get("total_states", 0)
-    effort_days = summary.get("estimated_effort_days", 0)
-    effort_days_sc = summary.get("estimated_effort_days_with_souschef", 0)
-    high_files = summary.get("high_complexity_files", [])
-    module_breakdown = summary.get("module_breakdown", {})
-
-    # Platform-specific guidance
-    platform_guidance = {
-        "aap": (
-            "**Target Platform: Ansible Automation Platform (AAP)**\n\n"
-            "- Import roles into AAP Execution Environments\n"
-            "- Use AAP Projects for SCM-backed role storage\n"
-            "- Configure AAP Inventories to replace Salt targeting\n"
-            "- Leverage AAP Surveys for parameterised execution\n"
-            "- Use AAP Credentials for vault-encrypted pillar data"
-        ),
-        "awx": (
-            "**Target Platform: AWX (Open Source)**\n\n"
-            "- Use AWX Projects linked to Git repositories\n"
-            "- Configure AWX Inventories using dynamic inventory plugins\n"
-            "- Store sensitive pillar data in AWX Credentials\n"
-            "- Use AWX Job Templates to replace Salt highstate execution"
-        ),
-        "ansible_core": (
-            "**Target Platform: Ansible Core (CLI)**\n\n"
-            "- Run playbooks with `ansible-playbook site.yml`\n"
-            "- Use Ansible Vault for sensitive pillar variables\n"
-            "- Manage inventory with static or dynamic inventory files\n"
-            "- Use `ansible-pull` for decentralised execution similar to Salt minions"
-        ),
-    }
-    platform_text = platform_guidance.get(
-        target_platform,
-        f"**Target Platform: {target_platform}**\n\nRefer to platform documentation.",
+    return build_salt_migration_plan(
+        salt_dir=salt_dir,
+        complexity_json=_assess_salt_complexity(salt_dir),
+        timeline_weeks=timeline_weeks,
+        target_platform=target_platform,
     )
-
-    phase1_weeks = max(1, timeline_weeks // 4)
-    phase2_weeks = max(1, timeline_weeks // 4)
-    phase3_weeks = max(2, timeline_weeks // 3)
-    phase4_weeks = max(1, timeline_weeks - phase1_weeks - phase2_weeks - phase3_weeks)
-
-    top_modules = sorted(module_breakdown.items(), key=lambda x: x[1], reverse=True)[:5]
-    module_list = (
-        "\n".join(f"  - `{m}` ({c} states)" for m, c in top_modules)
-        if top_modules
-        else "  - No modules detected"
-    )
-
-    high_files_list = (
-        "\n".join(f"  - `{f}`" for f in high_files[:10])
-        if high_files
-        else "  - None identified"
-    )
-
-    plan = f"""# SaltStack to Ansible Migration Plan
-
-## Overview
-
-| Metric | Value |
-|--------|-------|
-| Salt Directory | `{salt_dir}` |
-| Total SLS Files | {total_files} |
-| Total States | {total_states} |
-| Complexity Level | {complexity_level.upper()} |
-| Estimated Effort (manual) | {effort_days} days |
-| Estimated Effort (with SousChef) | {effort_days_sc} days |
-| Target Timeline | {timeline_weeks} weeks |
-
-## Platform Guidance
-
-{platform_text}
-
-## Migration Phases
-
-### Phase 1: Assessment and Preparation (Weeks 1-{phase1_weeks})
-
-**Objectives:** Inventory all Salt states, identify dependencies, set up tooling.
-
-**Tasks:**
-- Run `assess_salt_migration_complexity` on all state directories
-- Map Salt pillar data to Ansible group_vars/host_vars structure
-- Identify custom execution modules requiring Ansible module equivalents
-- Set up target {target_platform} environment
-- Establish Git repository structure for Ansible roles
-- Configure CI/CD pipeline for Ansible testing
-
-**Deliverables:**
-- Complexity assessment report
-- Ansible project skeleton with roles structure
-- Variable mapping spreadsheet
-
-### Phase 2: Simple State Conversion (Weeks {phase1_weeks + 1}-{phase1_weeks + phase2_weeks})
-
-**Objectives:** Convert low-complexity SLS files using SousChef automation.
-
-**Tasks:**
-- Run `convert_salt_to_ansible` for LOW complexity states
-- Run `convert_salt_directory_to_ansible` for batch conversion
-- Review and validate generated playbooks
-- Test converted roles against development environment
-- Convert pillar files using `convert_salt_pillar_to_vars`
-
-**Target modules:** pkg, service, file (managed/directory)
-
-### Phase 3: Complex State Conversion (Weeks {phase1_weeks + phase2_weeks + 1}-{phase1_weeks + phase2_weeks + phase3_weeks})
-
-**Objectives:** Manually convert high-complexity states and custom logic.
-
-**High-complexity files to prioritise:**
-{high_files_list}
-
-**Tasks:**
-- Convert cmd, git, archive, mount states with manual review
-- Replace Salt mine/reactor/beacon patterns with Ansible equivalents
-- Implement Jinja2 template conversions
-- Convert Salt orchestration states to Ansible workflows
-- Implement notification/handler chains from watch/listen dependencies
-
-**Top Salt modules requiring attention:**
-{module_list}
-
-### Phase 4: Validation and Cutover (Weeks {timeline_weeks - phase4_weeks + 1}-{timeline_weeks})
-
-**Objectives:** Validate all conversions and execute production cutover.
-
-**Tasks:**
-- Run parallel execution: Salt highstate vs Ansible playbook on test nodes
-- Compare configuration drift between Salt and Ansible outputs
-- Performance benchmark: Salt highstate vs Ansible run time
-- Train operations team on Ansible/AAP workflows
-- Execute phased cutover by minion group
-- Decommission Salt master after validation period
-
-## Resource Requirements
-
-| Role | Responsibility |
-|------|----------------|
-| Ansible Engineer | Role conversion and testing |
-| DevOps Lead | Architecture decisions and AAP setup |
-| QA Engineer | Validation and drift testing |
-| Operations | Cutover coordination |
-
-## Risk Assessment
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| Custom Salt modules without Ansible equivalents | {"High" if complexity_level == "high" else "Medium"} | High | Develop custom Ansible modules early |
-| Pillar data migration complexity | Medium | High | Map all pillar keys to Ansible vars first |
-| Targeting pattern translation | Low | Medium | Use `generate_salt_inventory` tool |
-| State ordering dependencies | {"High" if total_states > 100 else "Low"} | Medium | Review require/watch chains carefully |
-"""
-
-    return plan
 
 
 def _build_salt_migration_report_json(
@@ -6826,41 +6666,15 @@ def generate_salt_inventory(top_path: str) -> str:
         JSON string with ``"inventory"`` (INI text), ``"groups"``, ``"hosts"``.
 
     """
-    import json as _json
-
     try:
         _validate_path_length(top_path, "top.sls path")
     except ValueError as e:
         return format_error_with_context(e, "validating top.sls path", top_path)
+    from souschef.orchestrators.salt_planning import build_salt_inventory_payload
 
-    top_json = _parse_salt_top(top_path)
-    try:
-        top_data = _json.loads(top_json)
-    except Exception:  # noqa: BLE001
-        return _json.dumps({"error": top_json})
-
-    if "Error" in top_json and "environments" not in top_data:
-        return _json.dumps({"error": top_json})
-
-    inventory = _top_to_ansible_inventory(top_data)
-
-    # Extract groups and hosts from inventory
-    groups: list[str] = []
-    hosts: list[str] = []
-    for line in inventory.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            groups.append(stripped[1:-1])
-        elif stripped and not stripped.startswith("#") and not stripped.startswith("["):
-            hosts.append(stripped)
-
-    return _json.dumps(
-        {
-            "inventory": inventory,
-            "groups": groups,
-            "hosts": hosts,
-        },
-        indent=2,
+    return build_salt_inventory_payload(
+        top_json=_parse_salt_top(top_path),
+        inventory_renderer=_top_to_ansible_inventory,
     )
 
 

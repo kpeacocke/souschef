@@ -20,6 +20,9 @@ else:
         st = None  # pragma: no cover
 
 
+DEFAULT_SCRIPT_PATH = "script.sh"
+
+
 def _bash_api() -> Any:
     """Load Bash API functions lazily to avoid static architecture dependencies."""
     return importlib.import_module("souschef.api.bash_api")
@@ -31,7 +34,7 @@ def parse_bash_script_content(content: str) -> dict[str, Any]:
 
 
 def convert_bash_content_to_ansible(
-    content: str, script_path: str = "script.sh"
+    content: str, script_path: str = DEFAULT_SCRIPT_PATH
 ) -> str:
     """Compatibility wrapper for tests patching this module symbol."""
     return cast(
@@ -43,7 +46,7 @@ def convert_bash_content_to_ansible(
 def generate_ansible_role_from_bash(
     content: str,
     role_name: str = "bash_converted",
-    script_path: str = "script.sh",
+    script_path: str = DEFAULT_SCRIPT_PATH,
 ) -> str:
     """Compatibility wrapper for tests patching this module symbol."""
     return cast(
@@ -538,7 +541,7 @@ def _render_aap_hints(data: dict[str, Any]) -> None:
 
 def _display_conversion_results(
     content: str,
-    script_path: str = "script.sh",
+    script_path: str = DEFAULT_SCRIPT_PATH,
 ) -> None:
     """Convert *content* and render the playbook output."""
     raw = convert_bash_content_to_ansible(content, script_path=script_path)
@@ -596,7 +599,7 @@ def _display_conversion_results(
 
 def _display_role_results(
     content: str,
-    script_path: str = "script.sh",
+    script_path: str = DEFAULT_SCRIPT_PATH,
     role_name: str = "bash_converted",
 ) -> None:
     """

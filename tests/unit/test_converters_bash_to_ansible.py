@@ -650,3 +650,15 @@ def test_convert_bash_to_ansible_value_error(tmp_path: Path) -> None:
         result = convert_bash_to_ansible("bad_path.sh")
     data = json.loads(result)
     assert data["status"] == "error"
+
+
+def test_convert_bash_to_ansible_none_content_fallback_error() -> None:
+    """Returns fallback error when helper returns ``None`` content unexpectedly."""
+    with patch(
+        "souschef.converters.bash_to_ansible._read_bash_script_content",
+        return_value=(None, None),
+    ):
+        result = convert_bash_to_ansible("script.sh")
+
+    data = json.loads(result)
+    assert data["error"] == "No content"

@@ -44,31 +44,102 @@ from souschef.profiling import (
     profile_function,
 )
 from souschef.rest_api import run_api_server
-from souschef.server import (
-    convert_bash_to_ansible,
-    convert_inspec_to_test,
-    convert_resource_to_task,
-    generate_ansible_role_from_bash,
-    generate_github_workflow_from_chef,
-    generate_gitlab_ci_from_chef,
-    generate_inspec_from_recipe,
-    generate_jenkinsfile_from_chef,
-    list_cookbook_structure,
-    list_directory,
-    parse_attributes,
-    parse_bash_script,
-    parse_custom_resource,
-    parse_inspec_profile,
-    parse_recipe,
-    read_cookbook_metadata,
-    read_file,
-)
 from souschef.webhooks import send_webhook_notification
 
 try:
     __version__ = package_version("souschef")
 except PackageNotFoundError:
     __version__ = "0.0.0"
+
+
+def _server_api() -> Any:
+    """Load server functions lazily to avoid static architecture dependencies."""
+    return importlib.import_module("souschef.server")
+
+
+def convert_bash_to_ansible(path: str) -> str:
+    """Load Bash conversion via server module."""
+    return cast(str, _server_api().convert_bash_to_ansible(path))
+
+
+def convert_inspec_to_test(profile_path: str, output_format: str) -> str:
+    """Load InSpec test conversion via server module."""
+    return cast(str, _server_api().convert_inspec_to_test(profile_path, output_format))
+
+
+def convert_resource_to_task(*args: Any, **kwargs: Any) -> str:
+    """Load resource conversion via server module."""
+    return cast(str, _server_api().convert_resource_to_task(*args, **kwargs))
+
+
+def generate_ansible_role_from_bash(*args: Any, **kwargs: Any) -> str:
+    """Load Bash role generation via server module."""
+    return cast(str, _server_api().generate_ansible_role_from_bash(*args, **kwargs))
+
+
+def generate_github_workflow_from_chef(*args: Any, **kwargs: Any) -> str:
+    """Load GitHub workflow generation via server module."""
+    return cast(str, _server_api().generate_github_workflow_from_chef(*args, **kwargs))
+
+
+def generate_gitlab_ci_from_chef(*args: Any, **kwargs: Any) -> str:
+    """Load GitLab CI generation via server module."""
+    return cast(str, _server_api().generate_gitlab_ci_from_chef(*args, **kwargs))
+
+
+def generate_inspec_from_recipe(path: str) -> str:
+    """Load InSpec generation via server module."""
+    return cast(str, _server_api().generate_inspec_from_recipe(path))
+
+
+def generate_jenkinsfile_from_chef(*args: Any, **kwargs: Any) -> str:
+    """Load Jenkinsfile generation via server module."""
+    return cast(str, _server_api().generate_jenkinsfile_from_chef(*args, **kwargs))
+
+
+def list_cookbook_structure(path: str) -> str:
+    """Load cookbook structure listing via server module."""
+    return cast(str, _server_api().list_cookbook_structure(path))
+
+
+def list_directory(path: str) -> str:
+    """Load directory listing via server module."""
+    return cast(str, _server_api().list_directory(path))
+
+
+def parse_attributes(path: str) -> str:
+    """Load attribute parsing via server module."""
+    return cast(str, _server_api().parse_attributes(path))
+
+
+def parse_bash_script(path: str) -> str:
+    """Load Bash parsing via server module."""
+    return cast(str, _server_api().parse_bash_script(path))
+
+
+def parse_custom_resource(path: str) -> str:
+    """Load custom resource parsing via server module."""
+    return cast(str, _server_api().parse_custom_resource(path))
+
+
+def parse_inspec_profile(path: str) -> str:
+    """Load InSpec profile parsing via server module."""
+    return cast(str, _server_api().parse_inspec_profile(path))
+
+
+def parse_recipe(path: str) -> str:
+    """Load recipe parsing via server module."""
+    return cast(str, _server_api().parse_recipe(path))
+
+
+def read_cookbook_metadata(path: str) -> str:
+    """Load metadata parsing via server module."""
+    return cast(str, _server_api().read_cookbook_metadata(path))
+
+
+def read_file(path: str) -> str:
+    """Load safe file reading via server module."""
+    return cast(str, _server_api().read_file(path))
 
 
 def generate_playbook_from_recipe(recipe_path: str) -> str:
@@ -2726,9 +2797,7 @@ def powershell_parse(path: str, output_format: str) -> None:
         souschef powershell-parse C:\scripts\setup.ps1
 
     """
-    from souschef.server import parse_powershell_script
-
-    result = parse_powershell_script(path)
+    result = cast(str, _server_api().parse_powershell_script(path))
     _output_result(result, output_format)
 
 
@@ -2780,9 +2849,10 @@ def powershell_convert(
             --output playbook.yml
 
     """
-    from souschef.server import convert_powershell_to_ansible
-
-    result_json = convert_powershell_to_ansible(path, playbook_name, hosts)
+    result_json = cast(
+        str,
+        _server_api().convert_powershell_to_ansible(path, playbook_name, hosts),
+    )
 
     if output:
         try:

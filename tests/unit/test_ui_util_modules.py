@@ -181,6 +181,37 @@ def test_analytics_tool_filter_and_count_pattern_branches(tmp_path) -> None:
     analytics.clear_analytics()
 
 
+def test_analytics_skips_non_dict_json_events(tmp_path) -> None:
+    """Stats aggregation should ignore JSON lines that are not objects."""
+    from souschef.ui import analytics
+
+    analytics.ANALYTICS_DIR = tmp_path / "analytics"
+    analytics.ANALYTICS_EVENTS_FILE = analytics.ANALYTICS_DIR / "events.jsonl"
+    analytics.ANALYTICS_PATTERNS_FILE = analytics.ANALYTICS_DIR / "patterns.json"
+    analytics.ANALYTICS_DIR.mkdir(parents=True)
+
+    analytics.ANALYTICS_EVENTS_FILE.write_text(
+        "\n".join(
+            [
+                json.dumps(["not", "a", "dict"]),
+                json.dumps(
+                    {
+                        "event_type": "conversion",
+                        "tool": "Chef",
+                        "status": "success",
+                        "duration_seconds": 1.0,
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    stats = analytics.get_conversion_stats("Chef")
+    assert stats["total_conversions"] == 1
+
+
 def test_filtering_save_load_apply_and_delete(tmp_path) -> None:
     """Filtering helpers should persist searches and apply all filter criteria."""
     from souschef.ui import filtering

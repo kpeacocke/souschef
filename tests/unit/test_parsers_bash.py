@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from souschef.parsers.bash import (
+    _contains_cron_schedule,
     _extract_downloads,
     _extract_file_writes,
     _extract_idempotency_risks,
@@ -13,6 +14,7 @@ from souschef.parsers.bash import (
     _extract_services,
     _format_parse_result,
     _identify_shell_fallbacks,
+    _is_cron_field,
     _line_number,
     _parse_bash_content,
     _parse_package_names,
@@ -544,6 +546,32 @@ def test_parse_bash_content_truncates_large_input() -> None:
     large_content = "apt-get install nginx\n" * 30_000
     ir = parse_bash_script_content(large_content)
     assert isinstance(ir, dict)
+
+
+def test_contains_cron_schedule_special_token() -> None:
+    """Special cron schedule strings should be detected immediately."""
+    assert _contains_cron_schedule("@daily /usr/local/bin/rotate") is True
+
+
+def test_contains_cron_schedule_skips_empty_cleaned_tokens() -> None:
+    """Quoted-empty tokens should be ignored while parsing cron schedule fields."""
+    assert _contains_cron_schedule('"" * * * * * /usr/bin/true') is True
+
+
+def test_contains_cron_schedule_resets_on_non_schedule_token() -> None:
+    """Non-schedule tokens should reset field counting and avoid false positives."""
+    assert _contains_cron_schedule("* * echo * * * /bin/true") is False
+
+
+def test_contains_cron_schedule_four_fields_is_not_enough() -> None:
+    """Four cron fields should not be accepted as a full schedule."""
+    assert _contains_cron_schedule("* * * * /bin/true") is False
+
+
+def test_is_cron_field_empty_and_valid_field_cases() -> None:
+    """Cron field validator should reject empty tokens and accept valid syntax."""
+    assert _is_cron_field("") is False
+    assert _is_cron_field("*/5") is True
 
 
 # ---------------------------------------------------------------------------
