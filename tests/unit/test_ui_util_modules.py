@@ -293,7 +293,8 @@ def test_filter_panel_and_dialog_paths(mock_st) -> None:
         ["In Progress"],
     ]
     mock_st.sidebar.radio.return_value = "With Dependencies"
-    mock_st.sidebar.text_input.return_value = "abc"
+    mock_st.sidebar.text_input.side_effect = ["", "abc"]
+    mock_st.sidebar.selectbox.return_value = ""
     mock_st.sidebar.button.return_value = False
 
     criteria = filtering.show_filter_panel()
@@ -302,6 +303,7 @@ def test_filter_panel_and_dialog_paths(mock_st) -> None:
     assert criteria.risk_levels == ["high"]
     assert criteria.status == ["in progress"]
     assert criteria.has_dependencies is True
+    assert criteria.tags == []
     assert criteria.search_text == "abc"
 
     # save dialog: save path
@@ -338,15 +340,17 @@ def test_filter_panel_saved_search_load_and_save_button(mock_st) -> None:
     mock_st.session_state = SessionState()
     mock_st.sidebar.multiselect.side_effect = [[], [], [], []]
     mock_st.sidebar.radio.return_value = "No Dependencies"
-    mock_st.sidebar.text_input.return_value = ""
+    mock_st.sidebar.text_input.side_effect = ["", ""]
     mock_st.sidebar.selectbox.return_value = "saved-one"
-    mock_st.sidebar.button.return_value = True
+    mock_st.sidebar.button.side_effect = [True, False]
 
     with (
         patch("souschef.ui.filtering.list_saved_searches", return_value=["saved-one"]),
         patch(
             "souschef.ui.filtering.get_search",
-            return_value=filtering.FilterCriteria(tools=["Chef"]),
+            return_value=filtering.FilterCriteria(
+                tools=["Chef"], has_dependencies=False
+            ),
         ),
     ):
         criteria = filtering.show_filter_panel()
@@ -355,6 +359,27 @@ def test_filter_panel_saved_search_load_and_save_button(mock_st) -> None:
     assert mock_st.session_state.current_filter.tools == ["Chef"]
     assert mock_st.session_state.save_search_mode is True
     assert mock_st.rerun.call_count >= 2
+
+
+def test_filtering_search_history_roundtrip(tmp_path) -> None:
+    """Search history should record unique entries and support clear/list operations."""
+    from souschef.ui import filtering
+
+    filtering.SEARCHES_DIR = tmp_path / "searches"
+    filtering.SAVED_SEARCHES_FILE = filtering.SEARCHES_DIR / "saved.json"
+    filtering.SEARCH_HISTORY_FILE = filtering.SEARCHES_DIR / "history.json"
+
+    criteria = filtering.FilterCriteria(tools=["Chef"], search_text="nginx")
+    filtering.record_search(criteria)
+    filtering.record_search(criteria)
+
+    history = filtering.list_search_history()
+    assert len(history) == 1
+    assert history[0]["criteria"]["tools"] == ["Chef"]
+    assert history[0]["criteria"]["search_text"] == "nginx"
+
+    filtering.clear_search_history()
+    assert filtering.list_search_history() == []
 
 
 def test_recommendations_core_logic() -> None:
