@@ -328,6 +328,7 @@ def _build_recommendation_reason(
     depends_on: list[str],
     blocking: list[str],
     flags: list[RiskFlag],
+    pattern_risk: str | None = None,
 ) -> str:
     """Build human-readable recommendation reason text."""
     reason_parts: list[str] = []
@@ -337,7 +338,69 @@ def _build_recommendation_reason(
         reason_parts.append(f"{len(blocking)} resource(s) depend on this")
     if flags:
         reason_parts.append(f"{len(flags)} risk flag(s) detected")
+
+        # Include explicit risk explanations so recommendations are actionable.
+        top_explanations = [flag.explanation for flag in flags[:2] if flag.explanation]
+        if top_explanations:
+            reason_parts.append("Why risky: " + " | ".join(top_explanations))
+    elif pattern_risk in ("high", "critical"):
+        reason_parts.append("Why risky: pattern has a high historical failure profile")
+
     return " • ".join(reason_parts) if reason_parts else "Ready for migration"
+
+
+def suggest_migrate_together_groups(
+    dependency_graph: dict[str, list[str]] | None,
+) -> list[list[str]]:
+    """
+    Suggest "migrate together" groups based on dependency graph connectivity.
+
+    Groups are built from weakly-connected components, so tightly-coupled
+    resources can be planned and migrated as a unit.
+
+    Args:
+        dependency_graph: Mapping of resource ID to dependency IDs.
+
+    Returns:
+        Sorted list of groups, each containing 2+ resource IDs.
+
+    """
+    if not dependency_graph:
+        return []
+
+    # Build undirected adjacency to capture bidirectional coupling for planning.
+    adjacency: dict[str, set[str]] = {}
+    for resource_id, deps in dependency_graph.items():
+        adjacency.setdefault(resource_id, set())
+        for dep in deps:
+            adjacency.setdefault(dep, set())
+            adjacency[resource_id].add(dep)
+            adjacency[dep].add(resource_id)
+
+    visited: set[str] = set()
+    groups: list[list[str]] = []
+
+    for start in sorted(adjacency):
+        if start in visited:
+            continue
+
+        stack = [start]
+        component: list[str] = []
+        while stack:
+            node = stack.pop()
+            if node in visited:
+                continue
+            visited.add(node)
+            component.append(node)
+            stack.extend(
+                neighbour for neighbour in adjacency[node] if neighbour not in visited
+            )
+
+        if len(component) > 1:
+            groups.append(sorted(component))
+
+    groups.sort(key=lambda group: (-len(group), group[0]))
+    return groups
 
 
 def create_recommendations(
@@ -383,7 +446,12 @@ def create_recommendations(
         # Success rate from analytics
         base_success_rate = stats.get("success_rate", 50.0)
         success_rate = _compute_success_rate(base_success_rate, pattern_risk)
-        reason = _build_recommendation_reason(depends_on, blocking, flags)
+        reason = _build_recommendation_reason(
+            depends_on,
+            blocking,
+            flags,
+            pattern_risk,
+        )
 
         rec = Recommendation(
             resource_id=resource_id,
@@ -403,12 +471,16 @@ def create_recommendations(
     return recommendations
 
 
-def show_recommendations_panel(recommendations: list[Recommendation]) -> None:
+def show_recommendations_panel(
+    recommendations: list[Recommendation],
+    dependency_graph: dict[str, list[str]] | None = None,
+) -> None:
     """
     Display recommendations in the UI.
 
     Args:
         recommendations: List of Recommendation objects to display.
+        dependency_graph: Optional resource dependency graph.
 
     """
     if not recommendations:
@@ -416,6 +488,12 @@ def show_recommendations_panel(recommendations: list[Recommendation]) -> None:
         return
 
     st.subheader("📋 Smart Recommendations")
+
+    groups = suggest_migrate_together_groups(dependency_graph)
+    if groups:
+        st.markdown("**Migrate Together Groups**")
+        for group in groups[:5]:
+            st.markdown(f"- {', '.join(group)}")
 
     for i, rec in enumerate(recommendations[:10], 1):  # Show top 10
         with st.expander(

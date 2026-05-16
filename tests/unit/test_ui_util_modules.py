@@ -434,8 +434,38 @@ def test_recommendations_priority_reason_and_detection_branches() -> None:
     assert rec._compute_priority(["a"], [], "low", []) == 10
 
     assert rec._build_recommendation_reason(["a"], [], []) == "Ready for migration"
+    assert "Why risky:" in rec._build_recommendation_reason(
+        ["a"],
+        [],
+        [rec.CHEF_RISK_FLAGS["hiera_hard_lookup"]],
+        "high",
+    )
+    assert "high historical failure profile" in rec._build_recommendation_reason(
+        ["a"],
+        [],
+        [],
+        "critical",
+    )
     assert rec._compute_success_rate(77.0, "low") == pytest.approx(77.0)
     assert rec.detect_risk_flags("Puppet", {"content": "lookup('x')"})
+
+
+def test_recommendations_migrate_together_groups() -> None:
+    """Dependency graph should produce migrate-together groups for coupled items."""
+    from souschef.ui import recommendations as rec
+
+    dependency_graph = {
+        "web": ["base"],
+        "base": [],
+        "api": ["db"],
+        "db": [],
+        "solo": [],
+    }
+
+    groups = rec.suggest_migrate_together_groups(dependency_graph)
+    assert ["base", "web"] in groups
+    assert ["api", "db"] in groups
+    assert all("solo" not in group for group in groups)
 
 
 @patch("souschef.ui.recommendations.st")
@@ -465,7 +495,7 @@ def test_recommendations_display_helpers(mock_st) -> None:
         success_rate=75.0,
     )
     mock_st.expander.return_value = _ctx()
-    rec.show_recommendations_panel([recommendation])
+    rec.show_recommendations_panel([recommendation], {"r1": ["a"], "a": []})
     assert mock_st.expander.called
 
 
