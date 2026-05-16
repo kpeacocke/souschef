@@ -49,6 +49,7 @@ from souschef.ui.pages.migration_config import show_migration_config_page
 from souschef.ui.pages.powershell_migration import show_powershell_migration_page
 from souschef.ui.pages.puppet_migration import show_puppet_migration_page
 from souschef.ui.pages.salt_migration import show_salt_migration_page
+from souschef.ui.pages.workspace_management import show_workspace_management_page
 
 # Constants
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
@@ -70,6 +71,7 @@ NAV_ANSIBLE_VALIDATION = "Collection Validation"
 NAV_POWERSHELL_MIGRATION = "PowerShell Migration"
 NAV_PUPPET_MIGRATION = "Puppet Migration"
 NAV_SALT_MIGRATION = "Salt Migration"
+NAV_WORKSPACE_MANAGEMENT = "Workspace Management"
 ANSIBLE_FEATURES = {
     NAV_ANSIBLE_ASSESSMENT,
     NAV_ANSIBLE_PLANNING,
@@ -92,6 +94,7 @@ SHARED_FEATURES = {
     NAV_VALIDATION_REPORTS,
     NAV_AI_SETTINGS,
     NAV_CHEF_SERVER_SETTINGS,
+    NAV_WORKSPACE_MANAGEMENT,
 }
 BUTTON_ANALYSE_DEPENDENCIES = "Analyse Dependencies"
 INPUT_METHOD_DIRECTORY_PATH = "Directory Path"
@@ -205,6 +208,7 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
         ("Validation Reports", NAV_VALIDATION_REPORTS),
         ("AI Settings", NAV_AI_SETTINGS),
         ("Chef Server", NAV_CHEF_SERVER_SETTINGS),
+        ("Workspace", NAV_WORKSPACE_MANAGEMENT),
     ]
 
     filtered_buttons = [
@@ -280,6 +284,7 @@ def _route_to_page(page: str) -> None:
         NAV_ANSIBLE_VALIDATION: show_ansible_validation_page,
         NAV_POWERSHELL_MIGRATION: show_powershell_migration_page,
         NAV_SALT_MIGRATION: show_salt_migration_page,
+        NAV_WORKSPACE_MANAGEMENT: show_workspace_management_page,
     }
 
     route_func = page_routes.get(page)

@@ -13,6 +13,7 @@ __all__ = [
     "cookbook_analysis",
     "history",
     "migration_config",
+    "workspace_management",
     "validation_reports",
 ]
 
