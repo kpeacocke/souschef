@@ -409,7 +409,7 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           # Override setup-buildx defaults so insecure entitlements are not enabled.
-          buildkitd-flags: --debug
+          buildkitd-flags: ""
 
       - name: Generate build metadata
         id: meta
@@ -494,7 +494,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate, build-package]
     # Always rebuild on successful release runs to pick up base image security updates.
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
@@ -527,7 +527,7 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64
           # Override setup-buildx defaults so insecure entitlements are not enabled.
-          buildkitd-flags: --debug
+          buildkitd-flags: ""
 
       - name: Generate build metadata for MCP
         id: meta

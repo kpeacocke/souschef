@@ -52,8 +52,7 @@ RUN pip install --no-cache-dir --only-binary :all: "poetry==${POETRY_VERSION}" \
     && poetry config virtualenvs.create false
 
 # Install dependencies (--no-root: don't install root package; we rely on PYTHONPATH=/app)
-# POETRY_INSTALLER_NO_BINARY=:all: prevents execution of setup scripts on source builds
-RUN POETRY_INSTALLER_NO_BINARY=:all: poetry install --only main --no-root --no-interaction --no-ansi
+RUN poetry install --only main --no-root --no-interaction --no-ansi
 
 # Copy site-packages to predictable location
 RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
