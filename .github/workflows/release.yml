@@ -812,6 +812,7 @@ jobs:
             const uiDigest = "${{ needs.build-and-push-docker-ui.outputs.image-digest }}";
             const mcpDigest = "${{ needs.build-and-push-docker-mcp.outputs.image-digest }}";
             const tag = "${{ needs.validate.outputs.tag }}";
+            const issueTitle = "Docker Images Published: " + tag;
 
             const versionParts = version.split('.');
             const majorMinor = versionParts.length >= 2
@@ -852,13 +853,44 @@ jobs:
             body += "- **Release Workflow Run:** ${{ github.run_id }}\n";
             body += "- **Release Commit:** ${{ github.sha }}";
 
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: "Docker Images Published: " + tag,
-              body: body,
-              labels: ['deployment', 'docker', 'release']
-            });
+            const existingIssues = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                per_page: 100,
+              }
+            );
+
+            const existingIssue = existingIssues.find(
+              (issue) => !issue.pull_request && issue.title === issueTitle
+            );
+
+            if (existingIssue) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: body,
+                labels: ['deployment', 'docker', 'release'],
+              });
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: "Release workflow run `${{ github.run_id }}` refreshed this deployment summary.",
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: body,
+                labels: ['deployment', 'docker', 'release'],
+              });
+            }
 
   release-complete:
     runs-on: ubuntu-latest
