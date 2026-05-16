@@ -10,6 +10,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from souschef.auth.rbac import has_permission
 from souschef.core.url_validation import validate_user_provided_url
 from souschef.server import (
     _convert_erb_to_jinja2,
@@ -209,6 +210,14 @@ def test_import_offline_bundle_handles_any_path(raw_path):
                 os.environ.pop("SOUSCHEF_WORKSPACE_ROOT", None)
             else:
                 os.environ["SOUSCHEF_WORKSPACE_ROOT"] = old_root
+
+
+@given(st.text(min_size=0, max_size=50), st.text(min_size=0, max_size=50))
+@settings(max_examples=50, deadline=500)
+def test_rbac_has_permission_handles_any_input(role, action):
+    """RBAC permission checks should handle arbitrary role/action strings safely."""
+    result = has_permission(role, action)
+    assert isinstance(result, bool)
 
 
 @given(st.sampled_from(["awx", "aap"]))

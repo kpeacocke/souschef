@@ -15,9 +15,11 @@ from souschef.storage.config import (
 )
 from souschef.storage.database import (
     AnalysisResult,
+    AuditEvent,
     ConversionResult,
     PostgresStorageManager,
     StorageManager,
+    WorkspaceMembership,
     get_storage_manager,
 )
 
@@ -26,6 +28,8 @@ __all__ = [
     "PostgresStorageManager",
     "AnalysisResult",
     "ConversionResult",
+    "WorkspaceMembership",
+    "AuditEvent",
     "get_storage_manager",
     "BlobStorage",
     "LocalBlobStorage",

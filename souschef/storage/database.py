@@ -51,6 +51,31 @@ class ConversionResult:
     created_at: str
 
 
+@dataclass
+class WorkspaceMembership:
+    """Represents a user role assignment within a workspace."""
+
+    workspace_id: str
+    user_id: str
+    role: str
+    updated_by: str | None
+    updated_at: str
+
+
+@dataclass
+class AuditEvent:
+    """Represents an audit event for workspace-level actions."""
+
+    id: int | None
+    workspace_id: str
+    user_id: str
+    event_type: str
+    action: str
+    target_user_id: str | None
+    details: str
+    created_at: str
+
+
 def _analysis_from_row(row: Mapping[str, Any]) -> AnalysisResult:
     """Convert a database row into an AnalysisResult."""
 
@@ -93,6 +118,31 @@ def _conversion_from_row(row: Mapping[str, Any]) -> ConversionResult:
         files_generated=row["files_generated"],
         blob_storage_key=row["blob_storage_key"],
         conversion_data=row["conversion_data"],
+        created_at=row["created_at"],
+    )
+
+
+def _membership_from_row(row: Mapping[str, Any]) -> WorkspaceMembership:
+    """Convert a database row into a WorkspaceMembership."""
+    return WorkspaceMembership(
+        workspace_id=row["workspace_id"],
+        user_id=row["user_id"],
+        role=row["role"],
+        updated_by=row["updated_by"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _audit_from_row(row: Mapping[str, Any]) -> AuditEvent:
+    """Convert a database row into an AuditEvent."""
+    return AuditEvent(
+        id=row["id"],
+        workspace_id=row["workspace_id"],
+        user_id=row["user_id"],
+        event_type=row["event_type"],
+        action=row["action"],
+        target_user_id=row["target_user_id"],
+        details=row["details"],
         created_at=row["created_at"],
     )
 
@@ -293,6 +343,48 @@ class StorageManager:
                 """
                 CREATE INDEX IF NOT EXISTS idx_conversion_analysis
                 ON conversion_results(analysis_id)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS workspace_memberships (
+                    workspace_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    updated_by TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (workspace_id, user_id)
+                )
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_workspace_memberships_workspace
+                ON workspace_memberships(workspace_id)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    workspace_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    target_user_id TEXT,
+                    details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_audit_events_workspace
+                ON audit_events(workspace_id, created_at DESC)
             """
             )
         # Close connection explicitly after schema creation
@@ -759,6 +851,103 @@ class StorageManager:
 
             return stats
 
+    def upsert_workspace_role(
+        self,
+        workspace_id: str,
+        user_id: str,
+        role: str,
+        updated_by: str | None = None,
+    ) -> None:
+        """Create or update a workspace role assignment for a user."""
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO workspace_memberships (
+                    workspace_id, user_id, role, updated_by, updated_at
+                ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(workspace_id, user_id)
+                DO UPDATE SET
+                    role = excluded.role,
+                    updated_by = excluded.updated_by,
+                    updated_at = CURRENT_TIMESTAMP
+            """,
+                (workspace_id, user_id, role, updated_by),
+            )
+
+    def get_workspace_role(self, workspace_id: str, user_id: str) -> str | None:
+        """Get role for a user in a workspace, if assigned."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT role FROM workspace_memberships
+                WHERE workspace_id = ? AND user_id = ?
+                LIMIT 1
+            """,
+                (workspace_id, user_id),
+            )
+            row = cursor.fetchone()
+            if row:
+                return row["role"]
+        return None
+
+    def list_workspace_members(self, workspace_id: str) -> list[WorkspaceMembership]:
+        """List all users and roles assigned to a workspace."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT workspace_id, user_id, role, updated_by, updated_at
+                FROM workspace_memberships
+                WHERE workspace_id = ?
+                ORDER BY updated_at DESC, user_id ASC
+            """,
+                (workspace_id,),
+            )
+            rows = cursor.fetchall()
+            return [_membership_from_row(row) for row in rows]
+
+    def add_audit_event(
+        self,
+        workspace_id: str,
+        user_id: str,
+        event_type: str,
+        action: str,
+        target_user_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> int | None:
+        """Persist an audit event and return its ID."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO audit_events (
+                    workspace_id, user_id, event_type, action, target_user_id, details
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    workspace_id,
+                    user_id,
+                    event_type,
+                    action,
+                    target_user_id,
+                    json.dumps(details or {}),
+                ),
+            )
+            return int(cursor.lastrowid) if cursor.lastrowid is not None else None
+
+    def get_audit_events(self, workspace_id: str, limit: int = 100) -> list[AuditEvent]:
+        """Get audit events for a workspace ordered newest-first."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM audit_events
+                WHERE workspace_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            """,
+                (workspace_id, limit),
+            )
+            rows = cursor.fetchall()
+            return [_audit_from_row(row) for row in rows]
+
 
 class PostgresStorageManager:
     """Manages persistent storage for SousChef in PostgreSQL."""
@@ -871,6 +1060,48 @@ class PostgresStorageManager:
                 """
                 CREATE INDEX IF NOT EXISTS idx_conversion_analysis
                 ON conversion_results(analysis_id)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS workspace_memberships (
+                    workspace_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    updated_by TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (workspace_id, user_id)
+                )
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_workspace_memberships_workspace
+                ON workspace_memberships(workspace_id)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    workspace_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    target_user_id TEXT,
+                    details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_audit_events_workspace
+                ON audit_events(workspace_id, created_at DESC)
             """
             )
 
@@ -1258,6 +1489,112 @@ class PostgresStorageManager:
             stats["total_files_generated"] = row["total_files"] or 0
 
             return stats
+
+    def upsert_workspace_role(
+        self,
+        workspace_id: str,
+        user_id: str,
+        role: str,
+        updated_by: str | None = None,
+    ) -> None:
+        """Create or update a workspace role assignment for a user."""
+        sql = self._prepare_sql(
+            """
+            INSERT INTO workspace_memberships (
+                workspace_id, user_id, role, updated_by, updated_at
+            ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(workspace_id, user_id)
+            DO UPDATE SET
+                role = excluded.role,
+                updated_by = excluded.updated_by,
+                updated_at = CURRENT_TIMESTAMP
+        """
+        )
+        with self._connect() as conn:
+            conn.execute(sql, (workspace_id, user_id, role, updated_by))
+            conn.commit()
+
+    def get_workspace_role(self, workspace_id: str, user_id: str) -> str | None:
+        """Get role for a user in a workspace, if assigned."""
+        sql = self._prepare_sql(
+            """
+            SELECT role FROM workspace_memberships
+            WHERE workspace_id = ? AND user_id = ?
+            LIMIT 1
+        """
+        )
+        with self._connect() as conn:
+            cursor = conn.execute(sql, (workspace_id, user_id))
+            row = cursor.fetchone()
+            if row:
+                return row["role"]
+        return None
+
+    def list_workspace_members(self, workspace_id: str) -> list[WorkspaceMembership]:
+        """List all users and roles assigned to a workspace."""
+        sql = self._prepare_sql(
+            """
+            SELECT workspace_id, user_id, role, updated_by, updated_at
+            FROM workspace_memberships
+            WHERE workspace_id = ?
+            ORDER BY updated_at DESC, user_id ASC
+        """
+        )
+        with self._connect() as conn:
+            cursor = conn.execute(sql, (workspace_id,))
+            rows = cursor.fetchall()
+            return [_membership_from_row(row) for row in rows]
+
+    def add_audit_event(
+        self,
+        workspace_id: str,
+        user_id: str,
+        event_type: str,
+        action: str,
+        target_user_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> int | None:
+        """Persist an audit event and return its ID."""
+        sql = self._prepare_sql(
+            """
+            INSERT INTO audit_events (
+                workspace_id, user_id, event_type, action, target_user_id, details
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING id
+        """
+        )
+        with self._connect() as conn:
+            cursor = conn.execute(
+                sql,
+                (
+                    workspace_id,
+                    user_id,
+                    event_type,
+                    action,
+                    target_user_id,
+                    json.dumps(details or {}),
+                ),
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            if row:
+                return int(row["id"])
+        return None
+
+    def get_audit_events(self, workspace_id: str, limit: int = 100) -> list[AuditEvent]:
+        """Get audit events for a workspace ordered newest-first."""
+        sql = self._prepare_sql(
+            """
+            SELECT * FROM audit_events
+            WHERE workspace_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+        """
+        )
+        with self._connect() as conn:
+            cursor = conn.execute(sql, (workspace_id, limit))
+            rows = cursor.fetchall()
+            return [_audit_from_row(row) for row in rows]
 
 
 # Singleton instance
