@@ -63,7 +63,9 @@ plugins:
 
 markdown_extensions:
   - pymdownx.highlight:
-      anchor_linenums: true
+      # Avoid a Py3.14/Pygments formatter crash seen in CI when filename is None.
+      anchor_linenums: false
+      use_pygments: false
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
