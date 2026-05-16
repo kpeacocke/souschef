@@ -26,7 +26,7 @@ The SousChef project includes a production-ready Dockerfile for containerising t
 make docker-build
 
 # Or directly with Docker
-docker build -t ghcr.io/mcp-souschef:latest .
+docker build -f Dockerfile.ui -t ghcr.io/mcp-souschef:latest .
 ```
 
 ### Running Locally

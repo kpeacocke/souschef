@@ -445,7 +445,7 @@ jobs:
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294  # v7.0.0
         with:
           context: .
-          file: Dockerfile
+          file: Dockerfile.ui
           platforms: linux/amd64,linux/arm64
           pull: true
           no-cache: true
@@ -563,7 +563,7 @@ jobs:
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294  # v7.0.0
         with:
           context: .
-          file: Dockerfile.mcp
+          file: Dockerfile
           platforms: linux/amd64,linux/arm64
           pull: true
           no-cache: false

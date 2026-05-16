@@ -33,7 +33,7 @@ souschef ui --port 8080
 
 ```bash
 # Build the image
-docker build -t souschef-ui .
+docker build -f Dockerfile.ui -t souschef-ui .
 
 # Run the container
 docker run -p 8501:8501 souschef-ui
