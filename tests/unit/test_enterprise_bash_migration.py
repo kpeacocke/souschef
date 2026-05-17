@@ -130,8 +130,8 @@ def test_extract_cron_jobs_skips_non_cron_matches() -> None:
 def test_extract_unzip_source_skips_flags() -> None:
     """Unzip source extraction should ignore option flags and return zip token."""
     assert (
-        _extract_unzip_source("unzip -o -q /tmp/archive.zip -d /tmp/out")
-        == "/tmp/archive.zip"
+        _extract_unzip_source("unzip -o -q /opt/souschef/archive.zip -d /opt/out")
+        == "/opt/souschef/archive.zip"
     )
 
 
@@ -163,13 +163,13 @@ def test_parse_env_assignment_line_invalid_cases() -> None:
 
 def test_extract_unzip_source_returns_none_without_zip_token() -> None:
     """Unzip source extraction should return None when no .zip token is present."""
-    assert _extract_unzip_source("unzip -o -q -d /tmp/out") is None
+    assert _extract_unzip_source("unzip -o -q -d /opt/out") is None
 
 
 def test_extract_archives_skips_unzip_without_source() -> None:
     """Archive extraction should skip unzip commands that have no source archive."""
     result = _make_result()
-    _extract_archives("unzip -o -q -d /tmp/out", result)
+    _extract_archives("unzip -o -q -d /opt/out", result)
     assert result["archives"] == []
 
 
@@ -399,18 +399,18 @@ def test_extract_git_ops_empty() -> None:
 def test_extract_archives_tar() -> None:
     """Detects tar extraction."""
     result = _make_result()
-    _extract_archives("tar -xzf /tmp/app.tar.gz", result)
+    _extract_archives("tar -xzf /opt/souschef/app.tar.gz", result)
     assert result["archives"][0]["tool"] == "tar"
-    assert result["archives"][0]["source"] == "/tmp/app.tar.gz"
+    assert result["archives"][0]["source"] == "/opt/souschef/app.tar.gz"
     assert result["archives"][0]["confidence"] == pytest.approx(0.85)
 
 
 def test_extract_archives_unzip() -> None:
     """Detects unzip."""
     result = _make_result()
-    _extract_archives("unzip /tmp/package.zip", result)
+    _extract_archives("unzip /opt/souschef/package.zip", result)
     assert result["archives"][0]["tool"] == "unzip"
-    assert result["archives"][0]["source"] == "/tmp/package.zip"
+    assert result["archives"][0]["source"] == "/opt/souschef/package.zip"
 
 
 def test_extract_archives_empty() -> None:
@@ -591,6 +591,7 @@ def test_extract_sensitive_data_redacted() -> None:
     result = _make_result()
     key = "".join(["pass", "word"])
     _extract_sensitive_data(f"{key}=verysecretvalue", result)
+    assert result["sensitive_data"]
     for s in result["sensitive_data"]:
         assert s["raw"] == "<redacted>"
 
@@ -775,14 +776,14 @@ def test_archive_tasks() -> None:
     """Creates ansible.builtin.unarchive tasks."""
     entry = {
         "tool": "tar",
-        "source": "/tmp/app.tar.gz",
-        "raw": "tar -xzf /tmp/app.tar.gz",
+        "source": "/opt/souschef/app.tar.gz",
+        "raw": "tar -xzf /opt/souschef/app.tar.gz",
         "line": 1,
         "confidence": 0.85,
     }
     tasks = _archive_tasks([entry])
     assert "ansible.builtin.unarchive" in tasks[0]
-    assert tasks[0]["ansible.builtin.unarchive"]["src"] == "/tmp/app.tar.gz"
+    assert tasks[0]["ansible.builtin.unarchive"]["src"] == "/opt/souschef/app.tar.gz"
     assert tasks[0]["ansible.builtin.unarchive"]["remote_src"] is True
 
 

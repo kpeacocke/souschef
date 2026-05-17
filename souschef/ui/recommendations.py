@@ -489,61 +489,79 @@ def show_recommendations_panel(
 
     st.subheader("📋 Smart Recommendations")
 
-    groups = suggest_migrate_together_groups(dependency_graph)
-    if groups:
-        st.markdown("**Migrate Together Groups**")
-        for group in groups[:5]:
-            st.markdown(f"- {', '.join(group)}")
+    _render_migrate_together_groups(dependency_graph)
 
     for i, rec in enumerate(recommendations[:10], 1):  # Show top 10
-        with st.expander(
-            f"{i}. {rec.title} "
-            f"[{rec.priority}/10 priority] "
-            f"[{rec.success_rate:.0f}% success]"
-        ):
-            # Risk level badge
-            risk_color = {
-                "low": "🟢",
-                "medium": "🟡",
-                "high": "🔴",
-                "critical": "🔴🔴",
-            }
-            st.markdown(
-                f"**Risk Level:** {risk_color.get(rec.risk_level, '')} {rec.risk_level}"
-            )
+        _render_recommendation_item(i, rec)
 
-            # Reason
-            st.markdown(f"**Why:** {rec.reason}")
 
-            # Dependencies
-            if rec.depends_on:
-                st.markdown(f"**Depends on:** {', '.join(rec.depends_on)}")
-            if rec.blocking:
-                st.markdown(f"**Blocking:** {', '.join(rec.blocking)}")
+def _render_migrate_together_groups(
+    dependency_graph: dict[str, list[str]] | None,
+) -> None:
+    """Render migrate-together dependency groups when available."""
+    groups = suggest_migrate_together_groups(dependency_graph)
+    if not groups:
+        return
 
-            # Risk flags
-            if rec.flags:
-                st.subheader("Risk Flags")
-                for flag in rec.flags:
-                    flag_badge = {
-                        "low": "ℹ️",
-                        "medium": "⚠️",
-                        "high": "🚨",
-                        "critical": "⛔",
-                    }
-                    st.markdown(
-                        f"**{flag_badge.get(flag.severity, '')} {flag.title}**\n\n"
-                        f"_{flag.explanation}_\n\n"
-                        f"**How to fix:** {flag.mitigation}"
-                    )
-                    if flag.cwe_ref:
-                        st.caption(f"CWE: {flag.cwe_ref}")
+    st.markdown("**Migrate Together Groups**")
+    for group in groups[:5]:
+        st.markdown(f"- {', '.join(group)}")
 
-            # Analytics info
-            st.caption(
-                f"Historical success rate: {rec.success_rate:.0f}% "
-                f"(based on {100} similar conversions)"
-            )
+
+def _render_recommendation_item(index: int, rec: Recommendation) -> None:
+    """Render a single recommendation section."""
+    with st.expander(
+        f"{index}. {rec.title} "
+        f"[{rec.priority}/10 priority] "
+        f"[{rec.success_rate:.0f}% success]"
+    ):
+        _render_recommendation_summary(rec)
+        _render_recommendation_flags(rec.flags)
+        st.caption(
+            f"Historical success rate: {rec.success_rate:.0f}% "
+            f"(based on {100} similar conversions)"
+        )
+
+
+def _render_recommendation_summary(rec: Recommendation) -> None:
+    """Render high-level recommendation metadata."""
+    risk_color = {
+        "low": "🟢",
+        "medium": "🟡",
+        "high": "🔴",
+        "critical": "🔴🔴",
+    }
+    st.markdown(
+        f"**Risk Level:** {risk_color.get(rec.risk_level, '')} {rec.risk_level}"
+    )
+    st.markdown(f"**Why:** {rec.reason}")
+
+    if rec.depends_on:
+        st.markdown(f"**Depends on:** {', '.join(rec.depends_on)}")
+    if rec.blocking:
+        st.markdown(f"**Blocking:** {', '.join(rec.blocking)}")
+
+
+def _render_recommendation_flags(flags: list[RiskFlag]) -> None:
+    """Render risk flags for a recommendation."""
+    if not flags:
+        return
+
+    flag_badge = {
+        "low": "ℹ️",
+        "medium": "⚠️",
+        "high": "🚨",
+        "critical": "⛔",
+    }
+    st.subheader("Risk Flags")
+    for flag in flags:
+        st.markdown(
+            f"**{flag_badge.get(flag.severity, '')} {flag.title}**\n\n"
+            f"_{flag.explanation}_\n\n"
+            f"**How to fix:** {flag.mitigation}"
+        )
+        if flag.cwe_ref:
+            st.caption(f"CWE: {flag.cwe_ref}")
 
 
 def show_dependency_map(dependency_graph: dict[str, list[str]]) -> None:

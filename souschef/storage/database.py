@@ -887,7 +887,9 @@ class StorageManager:
             )
             row = cursor.fetchone()
             if row:
-                return row["role"]
+                role_value = row["role"]
+                if role_value is not None:
+                    return str(role_value)
         return None
 
     def list_workspace_members(self, workspace_id: str) -> list[WorkspaceMembership]:
@@ -1527,7 +1529,9 @@ class PostgresStorageManager:
             cursor = conn.execute(sql, (workspace_id, user_id))
             row = cursor.fetchone()
             if row:
-                return row["role"]
+                role_value = row["role"]
+                if role_value is not None:
+                    return str(role_value)
         return None
 
     def list_workspace_members(self, workspace_id: str) -> list[WorkspaceMembership]:

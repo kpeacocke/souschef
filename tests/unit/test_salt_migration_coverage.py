@@ -82,7 +82,7 @@ class TestValidateUiPath:
         ):
             from souschef.ui.pages.salt_migration import _validate_ui_path
 
-            result = _validate_ui_path("/tmp/outside_workspace")
+            result = _validate_ui_path("/opt/outside_workspace")
         assert result is None
 
     def test_validate_ui_path_returns_none_on_os_error(

@@ -8,29 +8,36 @@ from souschef.core.errors import SousChefError
 
 VALID_ROLES = ("owner", "admin", "editor", "viewer")
 
+PERM_ANALYSIS_CREATE = "analysis:create"
+PERM_ANALYSIS_DELETE = "analysis:delete"
+PERM_CONVERSION_CREATE = "conversion:create"
+PERM_CONVERSION_DELETE = "conversion:delete"
+PERM_WORKSPACE_MEMBER_VIEW = "workspace:member:view"
+PERM_WORKSPACE_ROLE_UPDATE = "workspace:role:update"
+
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "owner": {
-        "analysis:create",
-        "analysis:delete",
-        "conversion:create",
-        "conversion:delete",
-        "workspace:member:view",
-        "workspace:role:update",
+        PERM_ANALYSIS_CREATE,
+        PERM_ANALYSIS_DELETE,
+        PERM_CONVERSION_CREATE,
+        PERM_CONVERSION_DELETE,
+        PERM_WORKSPACE_MEMBER_VIEW,
+        PERM_WORKSPACE_ROLE_UPDATE,
     },
     "admin": {
-        "analysis:create",
-        "analysis:delete",
-        "conversion:create",
-        "conversion:delete",
-        "workspace:member:view",
+        PERM_ANALYSIS_CREATE,
+        PERM_ANALYSIS_DELETE,
+        PERM_CONVERSION_CREATE,
+        PERM_CONVERSION_DELETE,
+        PERM_WORKSPACE_MEMBER_VIEW,
     },
     "editor": {
-        "analysis:create",
-        "conversion:create",
-        "workspace:member:view",
+        PERM_ANALYSIS_CREATE,
+        PERM_CONVERSION_CREATE,
+        PERM_WORKSPACE_MEMBER_VIEW,
     },
     "viewer": {
-        "workspace:member:view",
+        PERM_WORKSPACE_MEMBER_VIEW,
     },
 }
 

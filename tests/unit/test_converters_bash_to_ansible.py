@@ -75,8 +75,8 @@ def test_shell_task_basic() -> None:
 
 def test_shell_task_with_creates() -> None:
     """Shell task with creates param includes it in module args."""
-    task = _shell_task("ls /tmp/file", 1, 0.5, creates="/tmp/file")
-    assert task["ansible.builtin.shell"]["creates"] == "/tmp/file"
+    task = _shell_task("ls /opt/souschef/file", 1, 0.5, creates="/opt/souschef/file")
+    assert task["ansible.builtin.shell"]["creates"] == "/opt/souschef/file"
 
 
 def test_shell_task_truncates_long_name() -> None:
