@@ -34,14 +34,11 @@ jobs:
       tag: ${{ steps.get-version.outputs.tag }}
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      with:
-        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
-        ref: main  # Always checkout main branch
-        fetch-depth: 0
-        fetch-tags: true
-        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Clone trusted repository snapshot
+      run: |
+        git clone https://github.com/kpeacocke/souschef.git .
+        git checkout main
+        git fetch --tags --force
 
     - name: Set up Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
@@ -55,8 +52,10 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
 
-    - name: Install dependencies
-      run: poetry install --no-interaction --only dev
+    - name: Install semantic-release tooling
+      run: |
+        python -m pip install --upgrade --no-cache-dir "pip==26.1.1"
+        python -m pip install --no-cache-dir "python-semantic-release==9.21.1"
 
     - name: Determine next version with python-semantic-release
       id: get-version
@@ -64,7 +63,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Use semantic-release to determine next version
-        poetry run semantic-release version --no-commit --no-tag 2>&1 | tee /tmp/sr-output.txt
+        semantic-release version --no-commit --no-tag 2>&1 | tee /tmp/sr-output.txt
 
         # Extract version from semantic-release output
         # If no commits since last tag, version won't change
@@ -93,13 +92,11 @@ jobs:
       docker-mcp-exists: ${{ steps.check-docker-mcp.outputs.exists }}
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      with:
-        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
-        ref: main  # Always checkout main branch
-        fetch-depth: 0
-        fetch-tags: true
+    - name: Clone trusted repository snapshot
+      run: |
+        git clone https://github.com/kpeacocke/souschef.git .
+        git checkout main
+        git fetch --tags --force
 
     - name: Verify code is from main branch
       env:
@@ -216,17 +213,11 @@ jobs:
       contents: read
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      with:
-        # Checkout from main branch of main repo (never from fork). Safe because
-        # workflow only runs after CI succeeds on main branch. The tag does not
-        # exist yet (created later in create-release), so using the tag reference
-        # here would cause checkout failures.
-        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
-        ref: main  # Always checkout main branch, not fork refs
-        fetch-depth: 0
-        persist-credentials: false  # No credentials needed for build-only job
+    - name: Clone trusted repository snapshot
+      run: |
+        git clone https://github.com/kpeacocke/souschef.git .
+        git checkout main
+        git fetch --tags --force
 
     - name: Set up Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
@@ -248,17 +239,16 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-poetry-
 
-    - name: Install dependencies
-      run: poetry install --no-interaction
-
     - name: Install Twine (for package validation)
-      run: poetry run python -m pip install --upgrade pip twine
+      run: |
+        python -m pip install --upgrade --no-cache-dir "pip==26.1.1"
+        python -m pip install --no-cache-dir "twine==6.1.0"
 
     - name: Build Python package
       run: poetry build
 
     - name: Validate package with twine
-      run: poetry run twine check dist/*
+      run: twine check dist/*
 
     - name: Upload package artifacts
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
@@ -333,14 +323,13 @@ jobs:
       contents: write
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      with:
-        repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
-        ref: main
-        fetch-depth: 0
-        fetch-tags: true
-        # persist-credentials: true is implicit and needed to push tags
+    - name: Clone trusted repository snapshot (push enabled)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git clone "https://x-access-token:${GH_TOKEN}@github.com/kpeacocke/souschef.git" .
+        git checkout main
+        git fetch --tags --force
 
     - name: Create git tag and GitHub release
       env:
@@ -387,13 +376,11 @@ jobs:
       image-pushed: ${{ steps.build.outputs.digest != '' }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          repository: kpeacocke/souschef  # Explicitly hardcode to prevent fork execution
-          ref: main  # Build the latest main commit so security fixes are included
-          fetch-depth: 0
-          fetch-tags: true
+      - name: Clone trusted repository snapshot
+        run: |
+          git clone https://github.com/kpeacocke/souschef.git .
+          git checkout main
+          git fetch --tags --force
 
       - name: Start Docker deployment
         uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0
@@ -505,13 +492,11 @@ jobs:
       image-pushed: ${{ steps.build.outputs.digest != '' }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          repository: kpeacocke/souschef
-          ref: main  # Build the latest main commit so security fixes are included
-          fetch-depth: 0
-          fetch-tags: true
+      - name: Clone trusted repository snapshot
+        run: |
+          git clone https://github.com/kpeacocke/souschef.git .
+          git checkout main
+          git fetch --tags --force
 
       - name: Start Docker MCP deployment
         uses: bobheadxi/deployments@648679e8e4915b27893bd7dbc35cb504dc915bc8  # v1.5.0

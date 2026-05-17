@@ -2,7 +2,6 @@
 # Optimised for lightweight, secure container execution
 
 ARG PYTHON_VERSION=3.13
-ARG POETRY_VERSION=2.3.4
 
 # ============================================================================
 # Base Stage - Runtime dependencies only
@@ -32,27 +31,23 @@ WORKDIR /app
 # ============================================================================
 FROM base AS builder
 
-ARG POETRY_VERSION
 ARG PYTHON_VERSION
 
 # Install build-time dependencies
 RUN apk add --no-cache \
     gcc=14.2.0-r6 \
     libffi-dev=3.4.8-r0 \
-    musl-dev=1.2.5-r12
+    musl-dev=1.2.5-r12 \
+    poetry=2.0.1-r0
 
-# Copy dependency files
-COPY pyproject.toml poetry.lock ./
+# Copy project files required to build wheel
+COPY pyproject.toml poetry.lock README.md ./
+COPY souschef ./souschef
 
-# Upgrade pip to pick up security fixes (pinned for reproducibility)
-RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1"
-
-# Install Poetry
-RUN pip install --no-cache-dir --only-binary :all: "poetry==${POETRY_VERSION}" \
-    && poetry config virtualenvs.create false
-
-# Install dependencies (--no-root: don't install root package; we rely on PYTHONPATH=/app)
-RUN poetry install --only main --no-root --no-interaction --no-ansi
+# Build and install pinned application wheel from the trusted local source tree.
+RUN poetry config virtualenvs.create false \
+    && poetry build -f wheel \
+    && python -m pip install --no-cache-dir --only-binary :all: dist/*.whl
 
 # Copy site-packages to predictable location
 RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
@@ -64,9 +59,6 @@ RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major
 FROM base AS production
 
 ARG PYTHON_VERSION
-
-# Upgrade pip to pick up security fixes (pinned for reproducibility)
-RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1"
 
 # Copy site-packages from builder
 COPY --from=builder --chown=root:root /tmp/runtime-site-packages /tmp/site-packages
@@ -83,9 +75,6 @@ RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major
         -maxdepth 1 -type d -name "poetry-*.dist-info" -exec rm -rf {} + && \
     find "/usr/local/lib/python${PYTHON_MAJOR_MINOR}/site-packages" \
         -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
-
-# Copy application code
-COPY souschef ./souschef
 
 USER app
 
