@@ -5,6 +5,7 @@ from souschef.api.integration_api import (
     link_conversion_artifact_reference,
     validate_provider_credentials,
 )
+from souschef.api.notification_api import send_event_notification
 from souschef.api.risk_scoring import (
     RISK_INPUT_DOCUMENTATION,
     RISK_MODEL_VERSION,
@@ -54,6 +55,7 @@ __all__ = [
     "validate_provider_credentials",
     "build_external_reference",
     "link_conversion_artifact_reference",
+    "send_event_notification",
     "sync_migration_item_ticket",
     "bootstrap_workspace_owner",
     "set_workspace_role",

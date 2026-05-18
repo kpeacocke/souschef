@@ -1,5 +1,15 @@
 """Integrations component for SousChef architecture boundaries."""
 
+from souschef.integrations.notification_dispatch import (
+    NotificationConfig,
+    NotificationConfigError,
+    NotificationDispatchResult,
+    NotificationProvider,
+    TransientNotificationError,
+    dispatch_notification,
+    render_notification_message,
+    validate_notification_config,
+)
 from souschef.integrations.scm_connector import (
     ExternalReference,
     GitHubConnector,
@@ -24,6 +34,14 @@ __all__ = [
     "IntegrationCredentialError",
     "ReferenceType",
     "get_connector",
+    "NotificationProvider",
+    "NotificationConfig",
+    "NotificationDispatchResult",
+    "NotificationConfigError",
+    "TransientNotificationError",
+    "validate_notification_config",
+    "render_notification_message",
+    "dispatch_notification",
     "TicketProvider",
     "TicketSyncResult",
     "TicketCredentialError",

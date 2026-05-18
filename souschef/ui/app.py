@@ -51,6 +51,9 @@ from souschef.ui.pages.bash_migration import show_bash_migration_page
 from souschef.ui.pages.chef_server_settings import show_chef_server_settings_page
 from souschef.ui.pages.cookbook_analysis import show_cookbook_analysis_page
 from souschef.ui.pages.history import show_history_page
+from souschef.ui.pages.integration_notifications import (
+    show_integration_notifications_page,
+)
 from souschef.ui.pages.migration_config import show_migration_config_page
 from souschef.ui.pages.powershell_migration import show_powershell_migration_page
 from souschef.ui.pages.puppet_migration import show_puppet_migration_page
@@ -84,6 +87,7 @@ NAV_PUPPET_MIGRATION = "Puppet Migration"
 NAV_SALT_MIGRATION = "Salt Migration"
 NAV_WORKSPACE_MANAGEMENT = "Workspace Management"
 NAV_ANALYTICS_DASHBOARD = "Analytics Dashboard"
+NAV_INTEGRATION_NOTIFICATIONS = "Integration Notifications"
 ANSIBLE_FEATURES = {
     NAV_ANSIBLE_ASSESSMENT,
     NAV_ANSIBLE_PLANNING,
@@ -103,6 +107,7 @@ SALT_FEATURES = {
 }
 SHARED_FEATURES = {
     NAV_ANALYTICS_DASHBOARD,
+    NAV_INTEGRATION_NOTIFICATIONS,
     NAV_HISTORY,
     NAV_VALIDATION_REPORTS,
     NAV_AI_SETTINGS,
@@ -218,6 +223,7 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
         ("Collection Validation", NAV_ANSIBLE_VALIDATION),
         ("Salt Migration", NAV_SALT_MIGRATION),
         ("Analytics Dashboard", NAV_ANALYTICS_DASHBOARD),
+        ("Integration Notifications", NAV_INTEGRATION_NOTIFICATIONS),
         ("History", NAV_HISTORY),
         ("Validation Reports", NAV_VALIDATION_REPORTS),
         ("AI Settings", NAV_AI_SETTINGS),
@@ -355,6 +361,7 @@ def _route_to_page(page: str) -> None:
         NAV_POWERSHELL_MIGRATION: show_powershell_migration_page,
         NAV_SALT_MIGRATION: show_salt_migration_page,
         NAV_ANALYTICS_DASHBOARD: show_analytics_dashboard_page,
+        NAV_INTEGRATION_NOTIFICATIONS: show_integration_notifications_page,
         NAV_WORKSPACE_MANAGEMENT: show_workspace_management_page,
     }
 

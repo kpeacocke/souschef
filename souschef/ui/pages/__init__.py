@@ -13,6 +13,7 @@ __all__ = [
     "chef_server_settings",
     "cookbook_analysis",
     "history",
+    "integration_notifications",
     "migration_config",
     "workspace_management",
     "validation_reports",
