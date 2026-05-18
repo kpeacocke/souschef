@@ -84,6 +84,14 @@ Use Australian English spelling in all documentation, comments, and docstrings:
 
 ## Testing Requirements
 
+### Accessibility Regression Checklist
+
+For UI-related changes, include an accessibility regression pass using:
+
+- `docs/testing/ACCESSIBILITY_REGRESSION_CHECKLIST.md`
+
+Treat this as part of the CI-facing quality evidence in your PR description.
+
 ### Three Test Types Required
 
 **1. Unit Tests** (`tests/unit/test_server.py`)

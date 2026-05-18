@@ -211,6 +211,27 @@ def build_theme_css(theme_mode: ThemeMode | None = None) -> str:
         border-color: var(--sc-accent);
     }}
 
+    .skip-link {{
+        position: absolute;
+        left: -9999px;
+        top: 0;
+        background: var(--sc-surface);
+        border: 2px solid var(--sc-focus-ring);
+        color: var(--sc-text);
+        padding: 0.5rem 0.75rem;
+        z-index: 9999;
+    }}
+
+    .skip-link:focus,
+    .skip-link:focus-visible {{
+        left: 1rem;
+        top: 1rem;
+    }}
+
+    [role="main"] {{
+        scroll-margin-top: 1rem;
+    }}
+
     *:focus,
     *:focus-visible {{
         outline: 3px solid var(--sc-focus-ring) !important;
@@ -227,6 +248,21 @@ def apply_theme_styles(
     """Inject theme CSS so visual tokens and focus styles are applied."""
     active_st = streamlit_module or st
     active_st.sidebar.markdown(build_theme_css(theme_mode), unsafe_allow_html=True)
+
+
+def build_accessibility_landmarks_html() -> str:
+    """Return semantic landmark and skip-link markup for keyboard users."""
+    return """
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<div role="navigation" aria-label="Primary navigation"></div>
+<div id="main-content" role="main" aria-label="SousChef main content"></div>
+"""
+
+
+def render_accessibility_landmarks(streamlit_module: Any | None = None) -> None:
+    """Render top-level semantic landmarks used across core UI workflows."""
+    active_st = streamlit_module or st
+    active_st.markdown(build_accessibility_landmarks_html(), unsafe_allow_html=True)
 
 
 def show_theme_selector(streamlit_module: Any | None = None) -> None:

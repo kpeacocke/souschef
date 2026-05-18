@@ -56,7 +56,11 @@ from souschef.ui.pages.powershell_migration import show_powershell_migration_pag
 from souschef.ui.pages.puppet_migration import show_puppet_migration_page
 from souschef.ui.pages.salt_migration import show_salt_migration_page
 from souschef.ui.pages.workspace_management import show_workspace_management_page
-from souschef.ui.theme import apply_theme_styles, show_theme_selector
+from souschef.ui.theme import (
+    apply_theme_styles,
+    render_accessibility_landmarks,
+    show_theme_selector,
+)
 
 # Constants
 SECTION_COMMUNITY_COOKBOOKS_HEADER = "Community Cookbooks:"
@@ -262,6 +266,7 @@ def main() -> None:
 
     apply_theme_styles(streamlit_module=st)
     show_theme_selector(streamlit_module=st)
+    render_accessibility_landmarks(streamlit_module=st)
 
     st.title("SousChef - Visual Migration Planning")
     st.markdown("*AI-powered Chef to Ansible migration planning interface*")

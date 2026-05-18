@@ -11,5 +11,6 @@ This includes:
 - Development setup
 - Coding standards
 - Testing and quality gates
+- Accessibility regression checklist for UI changes
 - Pull request checklist
 - Commit and release conventions
