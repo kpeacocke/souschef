@@ -76,6 +76,24 @@ class AuditEvent:
     created_at: str
 
 
+@dataclass
+class ApprovalRequest:
+    """Represents a workspace approval request and decision state."""
+
+    id: int | None
+    workspace_id: str
+    action: str
+    status: str
+    requested_by: str
+    target_user_id: str | None
+    request_comment: str
+    decision_comment: str | None
+    details: str
+    decided_by: str | None
+    requested_at: str
+    decided_at: str | None
+
+
 def _analysis_from_row(row: Mapping[str, Any]) -> AnalysisResult:
     """Convert a database row into an AnalysisResult."""
 
@@ -144,6 +162,24 @@ def _audit_from_row(row: Mapping[str, Any]) -> AuditEvent:
         target_user_id=row["target_user_id"],
         details=row["details"],
         created_at=row["created_at"],
+    )
+
+
+def _approval_from_row(row: Mapping[str, Any]) -> ApprovalRequest:
+    """Convert a database row into an ApprovalRequest."""
+    return ApprovalRequest(
+        id=row["id"],
+        workspace_id=row["workspace_id"],
+        action=row["action"],
+        status=row["status"],
+        requested_by=row["requested_by"],
+        target_user_id=row["target_user_id"],
+        request_comment=row["request_comment"],
+        decision_comment=row["decision_comment"],
+        details=row["details"],
+        decided_by=row["decided_by"],
+        requested_at=row["requested_at"],
+        decided_at=row["decided_at"],
     )
 
 
@@ -385,6 +421,39 @@ class StorageManager:
                 """
                 CREATE INDEX IF NOT EXISTS idx_audit_events_workspace
                 ON audit_events(workspace_id, created_at DESC)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS approval_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    workspace_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    requested_by TEXT NOT NULL,
+                    target_user_id TEXT,
+                    request_comment TEXT NOT NULL,
+                    decision_comment TEXT,
+                    details TEXT,
+                    decided_by TEXT,
+                    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    decided_at TIMESTAMP
+                )
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_approval_requests_workspace
+                ON approval_requests(workspace_id, requested_at DESC)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_approval_requests_status
+                ON approval_requests(workspace_id, status, requested_at DESC)
             """
             )
         # Close connection explicitly after schema creation
@@ -950,6 +1019,126 @@ class StorageManager:
             rows = cursor.fetchall()
             return [_audit_from_row(row) for row in rows]
 
+    def create_approval_request(
+        self,
+        workspace_id: str,
+        action: str,
+        requested_by: str,
+        request_comment: str,
+        target_user_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> int | None:
+        """Create a pending approval request."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO approval_requests (
+                    workspace_id,
+                    action,
+                    status,
+                    requested_by,
+                    target_user_id,
+                    request_comment,
+                    details
+                ) VALUES (?, ?, 'pending', ?, ?, ?, ?)
+            """,
+                (
+                    workspace_id,
+                    action,
+                    requested_by,
+                    target_user_id,
+                    request_comment,
+                    json.dumps(details or {}),
+                ),
+            )
+            return int(cursor.lastrowid) if cursor.lastrowid is not None else None
+
+    def get_approval_request(self, request_id: int) -> ApprovalRequest | None:
+        """Get approval request by ID."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM approval_requests
+                WHERE id = ?
+                LIMIT 1
+            """,
+                (request_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return _approval_from_row(row)
+        return None
+
+    def list_approval_requests(
+        self,
+        workspace_id: str,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[ApprovalRequest]:
+        """List approval requests for a workspace ordered newest-first."""
+        with self._connect() as conn:
+            if status:
+                cursor = conn.execute(
+                    """
+                    SELECT * FROM approval_requests
+                    WHERE workspace_id = ? AND status = ?
+                    ORDER BY requested_at DESC, id DESC
+                    LIMIT ?
+                """,
+                    (workspace_id, status, limit),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    SELECT * FROM approval_requests
+                    WHERE workspace_id = ?
+                    ORDER BY requested_at DESC, id DESC
+                    LIMIT ?
+                """,
+                    (workspace_id, limit),
+                )
+            rows = cursor.fetchall()
+            return [_approval_from_row(row) for row in rows]
+
+    def decide_approval_request(
+        self,
+        request_id: int,
+        decided_by: str,
+        decision: str,
+        decision_comment: str | None = None,
+    ) -> ApprovalRequest | None:
+        """Transition a pending approval request to approved or rejected."""
+        decision_normalised = decision.strip().lower()
+        if decision_normalised not in {"approved", "rejected"}:
+            raise ValueError(f"Invalid decision: {decision}")
+
+        current = self.get_approval_request(request_id)
+        if current is None:
+            return None
+        if current.status != "pending":
+            raise ValueError(
+                f"Approval request {request_id} is already in state '{current.status}'"
+            )
+
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE approval_requests
+                SET status = ?,
+                    decision_comment = ?,
+                    decided_by = ?,
+                    decided_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """,
+                (
+                    decision_normalised,
+                    decision_comment,
+                    decided_by,
+                    request_id,
+                ),
+            )
+        return self.get_approval_request(request_id)
+
 
 class PostgresStorageManager:
     """Manages persistent storage for SousChef in PostgreSQL."""
@@ -1104,6 +1293,39 @@ class PostgresStorageManager:
                 """
                 CREATE INDEX IF NOT EXISTS idx_audit_events_workspace
                 ON audit_events(workspace_id, created_at DESC)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS approval_requests (
+                    id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    workspace_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    requested_by TEXT NOT NULL,
+                    target_user_id TEXT,
+                    request_comment TEXT NOT NULL,
+                    decision_comment TEXT,
+                    details TEXT,
+                    decided_by TEXT,
+                    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    decided_at TIMESTAMP
+                )
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_approval_requests_workspace
+                ON approval_requests(workspace_id, requested_at DESC)
+            """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_approval_requests_status
+                ON approval_requests(workspace_id, status, requested_at DESC)
             """
             )
 
@@ -1599,6 +1821,140 @@ class PostgresStorageManager:
             cursor = conn.execute(sql, (workspace_id, limit))
             rows = cursor.fetchall()
             return [_audit_from_row(row) for row in rows]
+
+    def create_approval_request(
+        self,
+        workspace_id: str,
+        action: str,
+        requested_by: str,
+        request_comment: str,
+        target_user_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> int | None:
+        """Create a pending approval request."""
+        sql = self._prepare_sql(
+            """
+            INSERT INTO approval_requests (
+                workspace_id,
+                action,
+                status,
+                requested_by,
+                target_user_id,
+                request_comment,
+                details
+            ) VALUES (?, ?, 'pending', ?, ?, ?, ?)
+            RETURNING id
+        """
+        )
+        with self._connect() as conn:
+            cursor = conn.execute(
+                sql,
+                (
+                    workspace_id,
+                    action,
+                    requested_by,
+                    target_user_id,
+                    request_comment,
+                    json.dumps(details or {}),
+                ),
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            if row:
+                return int(row["id"])
+        return None
+
+    def get_approval_request(self, request_id: int) -> ApprovalRequest | None:
+        """Get approval request by ID."""
+        sql = self._prepare_sql(
+            """
+            SELECT * FROM approval_requests
+            WHERE id = ?
+            LIMIT 1
+        """
+        )
+        with self._connect() as conn:
+            cursor = conn.execute(sql, (request_id,))
+            row = cursor.fetchone()
+            if row:
+                return _approval_from_row(row)
+        return None
+
+    def list_approval_requests(
+        self,
+        workspace_id: str,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[ApprovalRequest]:
+        """List approval requests for a workspace ordered newest-first."""
+        if status:
+            sql = self._prepare_sql(
+                """
+                SELECT * FROM approval_requests
+                WHERE workspace_id = ? AND status = ?
+                ORDER BY requested_at DESC, id DESC
+                LIMIT ?
+            """
+            )
+            params: tuple[str | int, ...] = (workspace_id, status, limit)
+        else:
+            sql = self._prepare_sql(
+                """
+                SELECT * FROM approval_requests
+                WHERE workspace_id = ?
+                ORDER BY requested_at DESC, id DESC
+                LIMIT ?
+            """
+            )
+            params = (workspace_id, limit)
+
+        with self._connect() as conn:
+            cursor = conn.execute(sql, params)
+            rows = cursor.fetchall()
+            return [_approval_from_row(row) for row in rows]
+
+    def decide_approval_request(
+        self,
+        request_id: int,
+        decided_by: str,
+        decision: str,
+        decision_comment: str | None = None,
+    ) -> ApprovalRequest | None:
+        """Transition a pending approval request to approved or rejected."""
+        decision_normalised = decision.strip().lower()
+        if decision_normalised not in {"approved", "rejected"}:
+            raise ValueError(f"Invalid decision: {decision}")
+
+        current = self.get_approval_request(request_id)
+        if current is None:
+            return None
+        if current.status != "pending":
+            raise ValueError(
+                f"Approval request {request_id} is already in state '{current.status}'"
+            )
+
+        sql = self._prepare_sql(
+            """
+            UPDATE approval_requests
+            SET status = ?,
+                decision_comment = ?,
+                decided_by = ?,
+                decided_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """
+        )
+        with self._connect() as conn:
+            conn.execute(
+                sql,
+                (
+                    decision_normalised,
+                    decision_comment,
+                    decided_by,
+                    request_id,
+                ),
+            )
+            conn.commit()
+        return self.get_approval_request(request_id)
 
 
 # Singleton instance

@@ -12,6 +12,8 @@ PERM_ANALYSIS_CREATE = "analysis:create"
 PERM_ANALYSIS_DELETE = "analysis:delete"
 PERM_CONVERSION_CREATE = "conversion:create"
 PERM_CONVERSION_DELETE = "conversion:delete"
+PERM_APPROVAL_REQUEST_CREATE = "approval:request:create"
+PERM_APPROVAL_DECISION_UPDATE = "approval:decision:update"
 PERM_WORKSPACE_MEMBER_VIEW = "workspace:member:view"
 PERM_WORKSPACE_ROLE_UPDATE = "workspace:role:update"
 
@@ -21,6 +23,8 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         PERM_ANALYSIS_DELETE,
         PERM_CONVERSION_CREATE,
         PERM_CONVERSION_DELETE,
+        PERM_APPROVAL_REQUEST_CREATE,
+        PERM_APPROVAL_DECISION_UPDATE,
         PERM_WORKSPACE_MEMBER_VIEW,
         PERM_WORKSPACE_ROLE_UPDATE,
     },
@@ -29,11 +33,14 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         PERM_ANALYSIS_DELETE,
         PERM_CONVERSION_CREATE,
         PERM_CONVERSION_DELETE,
+        PERM_APPROVAL_REQUEST_CREATE,
+        PERM_APPROVAL_DECISION_UPDATE,
         PERM_WORKSPACE_MEMBER_VIEW,
     },
     "editor": {
         PERM_ANALYSIS_CREATE,
         PERM_CONVERSION_CREATE,
+        PERM_APPROVAL_REQUEST_CREATE,
         PERM_WORKSPACE_MEMBER_VIEW,
     },
     "viewer": {

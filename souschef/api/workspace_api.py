@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, cast
 
 from souschef.audit import log_event, log_role_change
 from souschef.auth import normalise_role, require_permission
 from souschef.storage import get_storage_manager
-from souschef.storage.database import AuditEvent, WorkspaceMembership
+from souschef.storage.database import ApprovalRequest, AuditEvent, WorkspaceMembership
 
 
 def _resolve_storage(storage_manager=None):
@@ -165,10 +166,150 @@ def list_workspace_audit_events(
     workspace_id: str,
     actor_user_id: str,
     limit: int = 100,
+    actor_filter: str | None = None,
+    action_filter: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     storage_manager=None,
 ) -> list[AuditEvent]:
     """List workspace audit events if actor may view workspace membership."""
     storage = _resolve_storage(storage_manager)
     require_permission(storage, workspace_id, actor_user_id, "workspace:member:view")
     events = storage.get_audit_events(workspace_id, limit=limit)
-    return cast(list[AuditEvent], events)
+    filtered_events = _filter_audit_events(
+        events=cast(list[AuditEvent], events),
+        actor_filter=actor_filter,
+        action_filter=action_filter,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return filtered_events
+
+
+def _filter_audit_events(
+    events: list[AuditEvent],
+    actor_filter: str | None = None,
+    action_filter: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> list[AuditEvent]:
+    """Filter audit events by actor, action, and date range."""
+    actor_query = (actor_filter or "").strip().lower()
+    action_query = (action_filter or "").strip().lower()
+
+    filtered: list[AuditEvent] = []
+    for event in events:
+        if actor_query and actor_query not in event.user_id.lower():
+            continue
+
+        event_action = f"{event.event_type}:{event.action}".lower()
+        if action_query and action_query not in event_action:
+            continue
+
+        event_day = event.created_at[:10]
+        if date_from and event_day < date_from.isoformat():
+            continue
+        if date_to and event_day > date_to.isoformat():
+            continue
+
+        filtered.append(event)
+
+    return filtered
+
+
+def create_approval_request(
+    workspace_id: str,
+    actor_user_id: str,
+    action: str,
+    request_comment: str,
+    target_user_id: str | None = None,
+    details: dict[str, Any] | None = None,
+    storage_manager=None,
+) -> int | None:
+    """Create a pending approval request with RBAC checks and audit event."""
+    storage = _resolve_storage(storage_manager)
+    require_permission(storage, workspace_id, actor_user_id, "approval:request:create")
+
+    request_id = storage.create_approval_request(
+        workspace_id=workspace_id,
+        action=action,
+        requested_by=actor_user_id,
+        request_comment=request_comment,
+        target_user_id=target_user_id,
+        details=details,
+    )
+
+    log_event(
+        storage_manager=storage,
+        workspace_id=workspace_id,
+        actor_user_id=actor_user_id,
+        event_type="approval",
+        action="request_created",
+        target_user_id=target_user_id,
+        details={
+            "request_id": request_id,
+            "action": action,
+            "request_comment": request_comment,
+        },
+    )
+    return cast(int | None, request_id)
+
+
+def list_workspace_approval_requests(
+    workspace_id: str,
+    actor_user_id: str,
+    status: str | None = None,
+    limit: int = 100,
+    storage_manager=None,
+) -> list[ApprovalRequest]:
+    """List workspace approval requests if actor may view workspace membership."""
+    storage = _resolve_storage(storage_manager)
+    require_permission(storage, workspace_id, actor_user_id, "workspace:member:view")
+    requests = storage.list_approval_requests(workspace_id, status=status, limit=limit)
+    return cast(list[ApprovalRequest], requests)
+
+
+def decide_approval_request(
+    workspace_id: str,
+    actor_user_id: str,
+    request_id: int,
+    decision: str,
+    decision_comment: str | None = None,
+    storage_manager=None,
+) -> ApprovalRequest | None:
+    """Approve or reject a pending request with comments and audit logging."""
+    storage = _resolve_storage(storage_manager)
+    require_permission(storage, workspace_id, actor_user_id, "approval:decision:update")
+
+    existing_request = storage.get_approval_request(request_id)
+    if existing_request is None:
+        return None
+    if existing_request.workspace_id != workspace_id:
+        raise ValueError(
+            "Approval request "
+            f"{request_id} does not belong to workspace '{workspace_id}'"
+        )
+
+    decided = storage.decide_approval_request(
+        request_id=request_id,
+        decided_by=actor_user_id,
+        decision=decision,
+        decision_comment=decision_comment,
+    )
+
+    if decided is not None:
+        log_event(
+            storage_manager=storage,
+            workspace_id=workspace_id,
+            actor_user_id=actor_user_id,
+            event_type="approval",
+            action=f"request_{decided.status}",
+            target_user_id=decided.target_user_id,
+            details={
+                "request_id": request_id,
+                "decision": decided.status,
+                "decision_comment": decision_comment,
+            },
+        )
+
+    return cast(ApprovalRequest | None, decided)

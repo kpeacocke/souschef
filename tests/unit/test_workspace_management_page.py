@@ -31,10 +31,26 @@ def test_show_workspace_management_page_happy_path(mock_st) -> None:
     from souschef.ui.pages.workspace_management import show_workspace_management_page
 
     mock_st.session_state = SessionState()
-    mock_st.columns.side_effect = [[_ctx(), _ctx()], [_ctx(), _ctx()], [_ctx(), _ctx()]]
-    mock_st.text_input.side_effect = ["ws-a", "owner-user", "editor-user"]
+    mock_st.columns.side_effect = [
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+    ]
+    mock_st.text_input.side_effect = [
+        "ws-a",
+        "owner-user",
+        "editor-user",
+        "production_conversion",
+        "",
+        "",
+        "",
+    ]
+    mock_st.text_area.side_effect = ["", ""]
+    mock_st.date_input.side_effect = [None, None]
     mock_st.selectbox.return_value = "Editor"
-    mock_st.button.side_effect = [False, False, True]
+    mock_st.button.side_effect = [False, False, True, False]
 
     member = MagicMock()
     member.user_id = "editor-user"
@@ -63,6 +79,10 @@ def test_show_workspace_management_page_happy_path(mock_st) -> None:
             return_value=[event],
         ),
         patch(
+            "souschef.ui.pages.workspace_management.list_workspace_approval_requests",
+            return_value=[],
+        ),
+        patch(
             "souschef.ui.pages.workspace_management.bootstrap_workspace_owner",
             return_value=False,
         ),
@@ -84,10 +104,26 @@ def test_show_workspace_management_page_validation_error(mock_st) -> None:
     from souschef.ui.pages.workspace_management import show_workspace_management_page
 
     mock_st.session_state = SessionState()
-    mock_st.columns.side_effect = [[_ctx(), _ctx()], [_ctx(), _ctx()], [_ctx(), _ctx()]]
-    mock_st.text_input.side_effect = ["ws-a", "owner-user", ""]
+    mock_st.columns.side_effect = [
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+    ]
+    mock_st.text_input.side_effect = [
+        "ws-a",
+        "owner-user",
+        "",
+        "production_conversion",
+        "",
+        "",
+        "",
+    ]
+    mock_st.text_area.side_effect = ["", ""]
+    mock_st.date_input.side_effect = [None, None]
     mock_st.selectbox.return_value = "Viewer"
-    mock_st.button.side_effect = [False, False, True]
+    mock_st.button.side_effect = [False, False, True, False]
 
     with (
         patch(
@@ -96,6 +132,10 @@ def test_show_workspace_management_page_validation_error(mock_st) -> None:
         ),
         patch(
             "souschef.ui.pages.workspace_management.list_workspace_audit_events",
+            return_value=[],
+        ),
+        patch(
+            "souschef.ui.pages.workspace_management.list_workspace_approval_requests",
             return_value=[],
         ),
         patch(

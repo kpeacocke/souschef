@@ -15,6 +15,7 @@ from souschef.storage.config import (
 )
 from souschef.storage.database import (
     AnalysisResult,
+    ApprovalRequest,
     AuditEvent,
     ConversionResult,
     PostgresStorageManager,
@@ -27,6 +28,7 @@ __all__ = [
     "StorageManager",
     "PostgresStorageManager",
     "AnalysisResult",
+    "ApprovalRequest",
     "ConversionResult",
     "WorkspaceMembership",
     "AuditEvent",
