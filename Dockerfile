@@ -46,8 +46,7 @@ COPY souschef ./souschef
 
 # Build and install pinned application wheel from the trusted local source tree.
 RUN poetry config virtualenvs.create false \
-    && poetry build -f wheel \
-    && python -m pip install --no-cache-dir --only-binary :all: dist/*.whl
+    && poetry sync --only main --no-root --no-interaction --no-ansi
 
 # Copy site-packages to predictable location
 RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
