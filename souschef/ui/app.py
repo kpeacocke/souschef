@@ -38,6 +38,7 @@ def _import_matplotlib_pyplot() -> Any:
 from souschef.core import _ensure_within_base_path, _normalize_path
 from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_is_file
 from souschef.ui.pages.ai_settings import show_ai_settings_page
+from souschef.ui.pages.analytics_dashboard import show_analytics_dashboard_page
 from souschef.ui.pages.ansible_assessment import show_ansible_assessment_page
 from souschef.ui.pages.ansible_planning import show_ansible_planning_page
 from souschef.ui.pages.ansible_validation import show_ansible_validation_page
@@ -72,6 +73,7 @@ NAV_POWERSHELL_MIGRATION = "PowerShell Migration"
 NAV_PUPPET_MIGRATION = "Puppet Migration"
 NAV_SALT_MIGRATION = "Salt Migration"
 NAV_WORKSPACE_MANAGEMENT = "Workspace Management"
+NAV_ANALYTICS_DASHBOARD = "Analytics Dashboard"
 ANSIBLE_FEATURES = {
     NAV_ANSIBLE_ASSESSMENT,
     NAV_ANSIBLE_PLANNING,
@@ -90,6 +92,7 @@ SALT_FEATURES = {
     NAV_SALT_MIGRATION,
 }
 SHARED_FEATURES = {
+    NAV_ANALYTICS_DASHBOARD,
     NAV_HISTORY,
     NAV_VALIDATION_REPORTS,
     NAV_AI_SETTINGS,
@@ -204,6 +207,7 @@ def _render_buttons_for_features(features: set[str], current_page: str) -> None:
         ("Ansible Upgrade", NAV_ANSIBLE_PLANNING),
         ("Collection Validation", NAV_ANSIBLE_VALIDATION),
         ("Salt Migration", NAV_SALT_MIGRATION),
+        ("Analytics Dashboard", NAV_ANALYTICS_DASHBOARD),
         ("History", NAV_HISTORY),
         ("Validation Reports", NAV_VALIDATION_REPORTS),
         ("AI Settings", NAV_AI_SETTINGS),
@@ -284,6 +288,7 @@ def _route_to_page(page: str) -> None:
         NAV_ANSIBLE_VALIDATION: show_ansible_validation_page,
         NAV_POWERSHELL_MIGRATION: show_powershell_migration_page,
         NAV_SALT_MIGRATION: show_salt_migration_page,
+        NAV_ANALYTICS_DASHBOARD: show_analytics_dashboard_page,
         NAV_WORKSPACE_MANAGEMENT: show_workspace_management_page,
     }
 

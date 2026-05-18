@@ -9,6 +9,7 @@ from typing import Any
 
 __all__ = [
     "ai_settings",
+    "analytics_dashboard",
     "chef_server_settings",
     "cookbook_analysis",
     "history",
