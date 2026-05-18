@@ -1,5 +1,15 @@
 """API facades for UI and external callers."""
 
+from souschef.api.risk_scoring import (
+    RISK_INPUT_DOCUMENTATION,
+    RISK_MODEL_VERSION,
+    RiskFlagExplanation,
+    RiskScoreResult,
+    RiskScoringInput,
+    aggregate_risk,
+    score_risk,
+    serialise_explainability,
+)
 from souschef.api.workspace_api import (
     bootstrap_workspace_owner,
     create_analysis_record,
@@ -13,6 +23,14 @@ from souschef.api.workspace_api import (
 )
 
 __all__ = [
+    "RISK_MODEL_VERSION",
+    "RISK_INPUT_DOCUMENTATION",
+    "RiskScoringInput",
+    "RiskFlagExplanation",
+    "RiskScoreResult",
+    "score_risk",
+    "aggregate_risk",
+    "serialise_explainability",
     "bootstrap_workspace_owner",
     "set_workspace_role",
     "list_workspace_members",
