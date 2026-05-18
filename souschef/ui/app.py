@@ -37,6 +37,11 @@ def _import_matplotlib_pyplot() -> Any:
 
 from souschef.core import _ensure_within_base_path, _normalize_path
 from souschef.core.path_utils import safe_exists, safe_glob, safe_is_dir, safe_is_file
+from souschef.ui.command_palette import (
+    CommandDefinition,
+    build_shortcut_registry,
+    render_command_palette,
+)
 from souschef.ui.pages.ai_settings import show_ai_settings_page
 from souschef.ui.pages.analytics_dashboard import show_analytics_dashboard_page
 from souschef.ui.pages.ansible_assessment import show_ansible_assessment_page
@@ -264,6 +269,11 @@ def main() -> None:
     # Main content area - default to dashboard
     page = st.session_state.get("current_page", "Dashboard")
 
+    command_action = _run_command_palette()
+    if command_action:
+        st.session_state.current_page = command_action
+        st.rerun()
+
     # Navigation section
     _display_navigation_section(page)
 
@@ -271,6 +281,45 @@ def main() -> None:
 
     # Page routing
     _route_to_page(page)
+
+
+def _run_command_palette() -> str | None:
+    """Render the command palette and return selected page action."""
+    commands = _build_palette_commands()
+    build_shortcut_registry(commands)
+    return render_command_palette(st, commands)
+
+
+def _build_palette_commands() -> list[CommandDefinition]:
+    """Build default command palette entries for key app destinations."""
+    return [
+        CommandDefinition("go_dashboard", "Go: Dashboard", "Dashboard", "g d"),
+        CommandDefinition(
+            "go_analysis",
+            "Go: Migrate Cookbook",
+            NAV_COOKBOOK_ANALYSIS,
+            "g a",
+        ),
+        CommandDefinition(
+            "go_workspace",
+            "Go: Workspace",
+            NAV_WORKSPACE_MANAGEMENT,
+            "g w",
+        ),
+        CommandDefinition(
+            "go_analytics",
+            "Go: Analytics Dashboard",
+            NAV_ANALYTICS_DASHBOARD,
+            "g n",
+        ),
+        CommandDefinition("go_history", "Go: History", NAV_HISTORY, "g h"),
+        CommandDefinition(
+            "go_validation",
+            "Go: Validation Reports",
+            NAV_VALIDATION_REPORTS,
+            "g v",
+        ),
+    ]
 
 
 def _route_to_page(page: str) -> None:
