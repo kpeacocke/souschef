@@ -289,6 +289,22 @@ class TestRouting:
             mock_salt.assert_called_once()
 
 
+class TestIntegrationStatus:
+    """Test integration ticket sync status rendering."""
+
+    def test_render_ticket_sync_status(self):
+        """Status helper should display sync message when present."""
+        from souschef.ui.app import _render_ticket_sync_status
+
+        with patch("souschef.ui.app.st") as mock_st:
+            mock_st.session_state = SessionState(
+                {"integration_ticket_sync_status": "JIRA create ticket MIG-1"}
+            )
+            _render_ticket_sync_status()
+
+        mock_st.info.assert_called_once()
+
+
 class TestFormatHistoryAnalysis:
     """Test format_history_analysis function."""
 

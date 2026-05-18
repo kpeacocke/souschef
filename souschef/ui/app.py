@@ -270,6 +270,7 @@ def main() -> None:
 
     st.title("SousChef - Visual Migration Planning")
     st.markdown("*AI-powered Chef to Ansible migration planning interface*")
+    _render_ticket_sync_status()
 
     # Main content area - default to dashboard
     page = st.session_state.get("current_page", "Dashboard")
@@ -293,6 +294,13 @@ def _run_command_palette() -> str | None:
     commands = _build_palette_commands()
     build_shortcut_registry(commands)
     return render_command_palette(st, commands)
+
+
+def _render_ticket_sync_status() -> None:
+    """Render latest ticket sync status if integration workflows set one."""
+    status_message = st.session_state.get("integration_ticket_sync_status")
+    if status_message:
+        st.info(f"Ticket sync status: {status_message}")
 
 
 def _build_palette_commands() -> list[CommandDefinition]:

@@ -15,6 +15,7 @@ from souschef.api.risk_scoring import (
     score_risk,
     serialise_explainability,
 )
+from souschef.api.ticket_sync_api import sync_migration_item_ticket
 from souschef.api.time_cost_estimation import (
     ESTIMATION_MODEL_VERSION,
     EstimationAssumptions,
@@ -53,6 +54,7 @@ __all__ = [
     "validate_provider_credentials",
     "build_external_reference",
     "link_conversion_artifact_reference",
+    "sync_migration_item_ticket",
     "bootstrap_workspace_owner",
     "set_workspace_role",
     "list_workspace_members",
