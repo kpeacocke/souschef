@@ -1,9 +1,8 @@
 """
 GitHub Copilot agent control for multi-platform orchestration.
 
-[PLANNED FEATURE] This module provides infrastructure for managing GitHub
-Copilot agent lifecycles (pause/stop/resume) across multiple platform
-migration tasks. This enables:
+This module manages GitHub Copilot agent lifecycles (pause/stop/resume)
+for issue-driven migration workflows. It enables:
 
 - Multi-platform migrations: Orchestrate Puppet, SaltStack, CFEngine to
   Ansible conversions
@@ -13,15 +12,12 @@ migration tasks. This enables:
 - Repository analysis: Automatically identify and process migration
   candidates
 
-State will be tracked via GitHub issue comments and labels when fully
-implemented.
+State is tracked via GitHub issue labels and comments.
 
 IMPLEMENTATION STATUS:
-- Helper functions are currently placeholders (will connect to GitHub API
-  via MCP tools)
-- Core API structure is stable and serves as specification for full
-  implementation
-- All tests mock the GitHub integration and document expected behaviour
+- Uses GitHub REST API requests for label/comment orchestration
+- Exposes assign/pause/stop/resume/status helper functions for MCP tools
+- Tests mock GitHub integration paths to validate behaviour
 
 See souschef/github/agent_control.py for implementation notes.
 """

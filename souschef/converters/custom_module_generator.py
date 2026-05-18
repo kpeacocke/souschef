@@ -202,6 +202,11 @@ def main():
     for prop_name in interface.get("properties", {}):
         module_code += f'        {prop_name}=dict(type="str", required=False),\n'
 
+    if interface.get("actions"):
+        module_code += (
+            '        action=dict(type="str", required=False, default="default"),\n'
+        )
+
     module_code += """    )
 
     module = AnsibleModule(
@@ -214,10 +219,28 @@ def main():
         "result": {},
     }
 
-    # Resource execution logic goes here
     try:
-        # TODO: Implement execution logic
-        # This is a template for custom resource execution
+        params = {
+            key: value
+            for key, value in module.params.items()
+            if key != "action" and value is not None
+        }
+        requested_action = module.params.get("action", "default")
+
+        result["result"] = {
+            "resource": "__RESOURCE_NAME__",
+            "action": requested_action,
+            "parameters": params,
+            "message": "Custom module execution simulated by generated scaffold",
+        }
+
+        # Generated modules are safe by default: they only report intent and
+        # changed state based on supplied non-empty parameters.
+        result["changed"] = bool(params)
+
+        if module.check_mode:
+            result["result"]["check_mode"] = True
+            result["result"]["message"] = "Check mode: no changes applied"
 
         module.exit_json(**result)
     except Exception as e:
@@ -227,6 +250,8 @@ def main():
 if __name__ == "__main__":
     main()
 """
+
+    module_code = module_code.replace("__RESOURCE_NAME__", resource_name)
 
     return module_code
 
@@ -287,8 +312,9 @@ def generate_module_documentation(
 
     doc += "## Implementation Notes\n"
     doc += "- This module was automatically generated from Chef resource\n"
-    doc += "- Review the execution logic in main() function\n"
-    doc += "- Add error handling for edge cases\n"
+    doc += "- Execution logic is intentionally conservative and reports intent\n"
+    doc += "- Extend action-specific behaviour before production use\n"
+    doc += "- Add environment-specific error handling for edge cases\n"
     doc += "- Test with both check mode and apply mode\n"
     doc += "- Update documentation with actual property descriptions\n\n"
 

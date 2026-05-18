@@ -23,19 +23,19 @@ SousChef is evolving from a Chef-to-Ansible converter into a **multi-source, mul
 ### Transformation Capabilities (Current & Planned)
 - ✅ **Chef** → Ansible (current)
 - ✅ **Puppet** → Ansible (current)
-- 🔄 **Salt** → Ansible (planned)
+- ✅ **Salt** → Ansible (current)
 - ✅ **Bash scripts** → Ansible
 - ✅ **PowerShell scripts** → Ansible
 - 🔄 **Multi-target**: Ansible, Terraform, CloudFormation (via IR)
 
-### Enterprise Features (Planned)
+### Enterprise Features (Current & Planned)
 - 🔄 **REST API** - Programmatic access to all capabilities
-- 🔄 **Authentication & RBAC** - Role-based access control
-- 🔄 **Audit Logging** - Compliance and change tracking
+- ✅ **Authentication & RBAC** - Role-based access control
+- ✅ **Audit Logging** - Compliance and change tracking
 - 🔄 **Team Collaboration** - Multi-user workflows
 - 🔄 **Performance Benchmarking** - Profiling and optimisation metrics
-- 🔄 **Integrations** - GitHub, GitLab, AWX, Jira, Slack
-- 🔄 **UI Enhancements** - Dark mode, accessibility, analytics, AI recommendations
+- ✅ **Integrations** - GitHub, SCM, ticketing, notifications
+- ✅ **UI Enhancements** - Dark mode, accessibility, analytics, AI recommendations
 
 ### Design Principles
 1. **Separation of Concerns** - Each container handles one responsibility
@@ -196,7 +196,7 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 - `template.py` - ERB → Jinja2
 - `conversion_rules.py` - Transformation rules engine
 - ✅ `puppet_to_ansible.py` - Puppet → Ansible (10 resource types fully mapped + AI-assisted conversion for complex constructs)
-- 🔄 `salt_to_ansible.py` - Salt → Ansible (planned)
+- ✅ `salt.py` - Salt → Ansible conversion and fallback handling
 - ✅ `powershell.py` - PowerShell → Ansible (exists)
 - ✅ `bash_to_ansible.py` - Bash → Ansible (exists)
 
@@ -225,13 +225,13 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `auth/` - Authentication & Authorization
 **Purpose:** User authentication, role-based access control (RBAC).
-**Status:** 🔄 Planned
+**Status:** ✅ Partial (RBAC role/permission enforcement)
 **Dependencies:** `core/`, `storage/`
 **Contains:**
-- `authentication.py` - User login/logout, session management
-- `rbac.py` - Role and permission management
-- `tokens.py` - JWT token generation and validation
-- `policies.py` - Access policy definitions
+- ✅ `rbac.py` - Role and permission management
+- 🔄 `authentication.py` - User login/logout, session management (planned)
+- 🔄 `tokens.py` - JWT token generation and validation (planned)
+- 🔄 `policies.py` - Access policy definitions (planned)
 
 **Rules:**
 - ✅ Can import from: `core/`, `storage/`
@@ -239,12 +239,12 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `audit/` - Audit Logging
 **Purpose:** Compliance, change tracking, audit trail.
-**Status:** 🔄 Planned
+**Status:** ✅ Partial (event logging and workspace audit trail)
 **Dependencies:** `core/`, `storage/`, `auth/`
 **Contains:**
-- `logger.py` - Audit event logging
-- `events.py` - Audit event definitions
-- `compliance.py` - Compliance report generation
+- ✅ `events.py` - Audit event definitions and logging helpers
+- 🔄 `logger.py` - Dedicated audit logger abstraction (planned)
+- 🔄 `compliance.py` - Compliance report generation (planned)
 
 **Rules:**
 - ✅ Can import from: `core/`, `storage/`, `auth/`
@@ -269,10 +269,13 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `integrations/` - External Systems
 **Purpose:** Integration with GitHub, GitLab, AWX, Jira, Slack, etc.
-**Status:** ✅ Partial (github/); 🔄 Planned (others)
+**Status:** ✅ Partial (SCM, ticket sync, notifications, GitHub agent control)
 **Dependencies:** `core/`, `auth/`, `audit/`, `storage/`
 **Contains:**
-- `github/` - GitHub API client and workflows
+- ✅ `github/` - GitHub API client and workflows
+- ✅ `scm_connector.py` - GitHub/GitLab external reference connector
+- ✅ `ticket_sync.py` - Jira/ServiceNow ticket sync with retry handling
+- ✅ `notification_dispatch.py` - Slack/Teams notification dispatch
 - 🔄 `gitlab.py` - GitLab API integration (planned)
 - 🔄 `awx.py` - AWX/Tower API client (planned)
 - 🔄 `jira.py` - Jira issue tracking (planned)
@@ -336,15 +339,15 @@ SousChef follows a **strict layered architecture** where dependencies only flow 
 
 #### `ui/` - Web User Interface
 **Purpose:** Browser-based dashboard and visualizations.
-**Status:** ✅ Exists (Streamlit); 🔄 Planned enhancements (Next.js, analytics, dark mode)
+**Status:** ✅ Exists (Streamlit with analytics, recommendations, dark/high-contrast themes)
 **Dependencies:** `api/`, `orchestrators/`
 **Contains:**
 - `app.py` - Main Streamlit application
 - `pages/` - Dashboard pages
 - `components/` - Reusable UI components
-- 🔄 `analytics.py` - Usage analytics and insights (planned)
-- 🔄 `recommendations.py` - AI-powered smart recommendations (planned)
-- 🔄 `themes.py` - Dark mode and accessibility themes (planned)
+- ✅ `analytics.py` - Usage analytics and insights
+- ✅ `recommendations.py` - AI-powered smart recommendations
+- ✅ `theme.py` - Dark mode and accessibility themes
 
 **Rules:**
 - ✅ Can import from: `api/`, `orchestrators/` (for direct calls during prototyping), `core/`
@@ -488,7 +491,7 @@ NEW FEATURE/CODE
 5. `ui/components/permissions.py` - UI for role assignment
 
 **Adding Dark Mode:**
-1. `ui/themes.py` - Theme definitions and switcher
+1. `ui/theme.py` - Theme definitions and switcher
 2. `ui/components/*.py` - Update components to use theme context
 3. `api/routes/user_preferences.py` - Store user theme preference
 

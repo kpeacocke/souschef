@@ -189,6 +189,7 @@ class TestGenerateAnsibleModuleScaffold:
         assert "def main():" in module_code
         assert "AnsibleModule" in module_code
         assert "name:" in module_code
+        assert 'action=dict(type="str"' in module_code
 
     def test_generated_module_has_properties(self) -> None:
         """Test that generated module includes properties."""
@@ -216,8 +217,12 @@ class TestGenerateAnsibleModuleScaffold:
 
         assert "try:" in module_code
         assert "except" in module_code
+        assert "params = {" in module_code
+        assert "requested_action" in module_code
+        assert 'result["changed"] = bool(params)' in module_code
         assert "module.exit_json" in module_code
         assert "module.fail_json" in module_code
+        assert "TODO: Implement execution logic" not in module_code
 
 
 class TestGenerateModuleDocumentation:
