@@ -46,11 +46,13 @@ def test_show_workspace_management_page_happy_path(mock_st) -> None:
         "",
         "",
         "",
+        "",
+        "",
     ]
     mock_st.text_area.side_effect = ["", ""]
     mock_st.date_input.side_effect = [None, None]
     mock_st.selectbox.return_value = "Editor"
-    mock_st.button.side_effect = [False, False, True, False]
+    mock_st.button.side_effect = [False, False, True, False, False]
 
     member = MagicMock()
     member.user_id = "editor-user"
@@ -81,6 +83,10 @@ def test_show_workspace_management_page_happy_path(mock_st) -> None:
         patch(
             "souschef.ui.pages.workspace_management.list_workspace_approval_requests",
             return_value=[],
+        ),
+        patch(
+            "souschef.ui.pages.workspace_management.remove_workspace_member",
+            return_value=False,
         ),
         patch(
             "souschef.ui.pages.workspace_management.bootstrap_workspace_owner",
@@ -119,11 +125,13 @@ def test_show_workspace_management_page_validation_error(mock_st) -> None:
         "",
         "",
         "",
+        "",
+        "",
     ]
     mock_st.text_area.side_effect = ["", ""]
     mock_st.date_input.side_effect = [None, None]
     mock_st.selectbox.return_value = "Viewer"
-    mock_st.button.side_effect = [False, False, True, False]
+    mock_st.button.side_effect = [False, False, True, False, False]
 
     with (
         patch(
@@ -139,6 +147,10 @@ def test_show_workspace_management_page_validation_error(mock_st) -> None:
             return_value=[],
         ),
         patch(
+            "souschef.ui.pages.workspace_management.remove_workspace_member",
+            return_value=False,
+        ),
+        patch(
             "souschef.ui.pages.workspace_management.bootstrap_workspace_owner",
             return_value=False,
         ),
@@ -146,3 +158,63 @@ def test_show_workspace_management_page_validation_error(mock_st) -> None:
         show_workspace_management_page()
 
     mock_st.error.assert_called_with("User ID is required.")
+
+
+@patch("souschef.ui.pages.workspace_management.st")
+def test_show_workspace_management_page_remove_member(mock_st) -> None:
+    """Remove member action should call API and show success."""
+    from souschef.ui.pages.workspace_management import show_workspace_management_page
+
+    mock_st.session_state = SessionState()
+    mock_st.columns.side_effect = [
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+        [_ctx(), _ctx()],
+    ]
+    mock_st.text_input.side_effect = [
+        "ws-a",
+        "owner-user",
+        "",
+        "production_conversion",
+        "",
+        "editor-user",
+        "",
+        "",
+    ]
+    mock_st.text_area.side_effect = ["", ""]
+    mock_st.date_input.side_effect = [None, None]
+    mock_st.selectbox.return_value = "Viewer"
+    mock_st.button.side_effect = [False, False, False, False, True]
+
+    with (
+        patch(
+            "souschef.ui.pages.workspace_management.list_workspace_members",
+            return_value=[],
+        ),
+        patch(
+            "souschef.ui.pages.workspace_management.list_workspace_audit_events",
+            return_value=[],
+        ),
+        patch(
+            "souschef.ui.pages.workspace_management.list_workspace_approval_requests",
+            return_value=[],
+        ),
+        patch(
+            "souschef.ui.pages.workspace_management.remove_workspace_member",
+            return_value=True,
+        ) as remove_member_mock,
+        patch(
+            "souschef.ui.pages.workspace_management.bootstrap_workspace_owner",
+            return_value=False,
+        ),
+    ):
+        show_workspace_management_page()
+
+    remove_member_mock.assert_called_once_with(
+        workspace_id="ws-a",
+        actor_user_id="owner-user",
+        target_user_id="editor-user",
+    )
+    mock_st.success.assert_any_call("Removed member editor-user from workspace.")

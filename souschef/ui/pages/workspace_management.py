@@ -13,6 +13,7 @@ from souschef.api import (
     list_workspace_approval_requests,
     list_workspace_audit_events,
     list_workspace_members,
+    remove_workspace_member,
     set_workspace_role,
 )
 from souschef.auth import VALID_ROLES, PermissionDeniedError
@@ -179,6 +180,45 @@ def _render_members_table(workspace_id: str, actor_user_id: str) -> None:
         )
 
     st.dataframe(rows, hide_index=True, width="stretch")
+
+
+def _render_remove_member_form(workspace_id: str, actor_user_id: str) -> None:
+    """Render controls for removing workspace members."""
+    st.subheader("Remove Member")
+
+    target_user_id = st.text_input(
+        "User ID to Remove",
+        key="workspace_remove_target_user_id",
+        placeholder="e.g. alice",
+        help="Removes the selected user from this workspace.",
+    ).strip()
+
+    if st.button("Remove Member", key="workspace_remove_member"):
+        if not _require_context(workspace_id, actor_user_id):
+            return
+        if not target_user_id:
+            st.error("User ID to Remove is required.")
+            return
+
+        try:
+            removed = remove_workspace_member(
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                target_user_id=target_user_id,
+            )
+        except PermissionDeniedError as exc:
+            st.error(str(exc))
+            return
+        except ValueError as exc:
+            st.error(str(exc))
+            return
+
+        if not removed:
+            st.info(f"User {target_user_id} is not a member of this workspace.")
+            return
+
+        st.success(f"Removed member {target_user_id} from workspace.")
+        st.rerun()
 
 
 def _render_approval_request_form(workspace_id: str, actor_user_id: str) -> None:
@@ -441,6 +481,9 @@ def show_workspace_management_page() -> None:
     st.divider()
 
     _render_approval_requests_table(workspace_id, actor_user_id)
+    st.divider()
+
+    _render_remove_member_form(workspace_id, actor_user_id)
     st.divider()
 
     _render_members_table(workspace_id, actor_user_id)

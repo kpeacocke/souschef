@@ -15,6 +15,7 @@ from souschef.api.workspace_api import (
     list_workspace_approval_requests,
     list_workspace_audit_events,
     list_workspace_members,
+    remove_workspace_member,
     set_workspace_role,
 )
 from souschef.auth import PermissionDeniedError
@@ -208,3 +209,57 @@ def test_approval_request_reject_branch_requires_decision_permission(tmp_path) -
     )
     assert decided is not None
     assert decided.status == "rejected"
+
+
+def test_cannot_demote_final_owner(tmp_path) -> None:
+    """Role reassignment should prevent demoting the final owner in a workspace."""
+    storage = _new_storage(tmp_path)
+    bootstrap_workspace_owner("ws1", "owner-user", storage_manager=storage)
+
+    with pytest.raises(ValueError, match="final owner"):
+        set_workspace_role(
+            workspace_id="ws1",
+            actor_user_id="owner-user",
+            target_user_id="owner-user",
+            role="admin",
+            storage_manager=storage,
+        )
+
+
+def test_remove_workspace_member_and_audit_event(tmp_path) -> None:
+    """Removing a member should revoke access and emit an audit event."""
+    storage = _new_storage(tmp_path)
+    bootstrap_workspace_owner("ws1", "owner-user", storage_manager=storage)
+    set_workspace_role(
+        workspace_id="ws1",
+        actor_user_id="owner-user",
+        target_user_id="editor-user",
+        role="editor",
+        storage_manager=storage,
+    )
+
+    removed = remove_workspace_member(
+        workspace_id="ws1",
+        actor_user_id="owner-user",
+        target_user_id="editor-user",
+        storage_manager=storage,
+    )
+    assert removed
+    assert storage.get_workspace_role("ws1", "editor-user") is None
+
+    events = list_workspace_audit_events("ws1", "owner-user", storage_manager=storage)
+    assert any(event.action == "member_removed" for event in events)
+
+
+def test_cannot_remove_final_owner(tmp_path) -> None:
+    """Workspace must retain at least one owner when removing members."""
+    storage = _new_storage(tmp_path)
+    bootstrap_workspace_owner("ws1", "owner-user", storage_manager=storage)
+
+    with pytest.raises(ValueError, match="final owner"):
+        remove_workspace_member(
+            workspace_id="ws1",
+            actor_user_id="owner-user",
+            target_user_id="owner-user",
+            storage_manager=storage,
+        )

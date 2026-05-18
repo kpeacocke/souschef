@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+
 from souschef.api.workspace_api import (
     bootstrap_workspace_owner,
     create_approval_request,
     decide_approval_request,
+    remove_workspace_member,
     set_workspace_role,
 )
 from souschef.storage.database import StorageManager
@@ -71,3 +74,19 @@ def test_approval_requests_persist_across_manager_instances(tmp_path) -> None:
     requests = second.list_approval_requests("ws-approval")
     assert requests
     assert requests[0].status == "approved"
+
+
+def test_workspace_retains_at_least_one_owner(tmp_path) -> None:
+    """Member removal should block deleting the final owner role assignment."""
+    db_path = tmp_path / "workspace-owner-guard.db"
+
+    storage = StorageManager(db_path=db_path)
+    assert bootstrap_workspace_owner("ws-owner-guard", "alice", storage_manager=storage)
+
+    with pytest.raises(ValueError, match="final owner"):
+        remove_workspace_member(
+            workspace_id="ws-owner-guard",
+            actor_user_id="alice",
+            target_user_id="alice",
+            storage_manager=storage,
+        )

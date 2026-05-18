@@ -59,6 +59,13 @@ def set_workspace_role(
     new_role = normalise_role(role)
     previous_role = storage.get_workspace_role(workspace_id, target_user_id)
 
+    if previous_role == "owner" and new_role != "owner":
+        owner_count = storage.count_workspace_members_with_role(workspace_id, "owner")
+        if owner_count <= 1:
+            raise ValueError(
+                "Cannot reassign the final owner. Assign another owner first."
+            )
+
     storage.upsert_workspace_role(
         workspace_id=workspace_id,
         user_id=target_user_id,
@@ -74,6 +81,41 @@ def set_workspace_role(
         previous_role=previous_role,
         new_role=new_role,
     )
+
+
+def remove_workspace_member(
+    workspace_id: str,
+    actor_user_id: str,
+    target_user_id: str,
+    storage_manager=None,
+) -> bool:
+    """Remove a workspace member while preserving at least one owner."""
+    storage = _resolve_storage(storage_manager)
+    require_permission(storage, workspace_id, actor_user_id, "workspace:role:update")
+
+    target_role = storage.get_workspace_role(workspace_id, target_user_id)
+    if target_role is None:
+        return False
+
+    if target_role == "owner":
+        owner_count = storage.count_workspace_members_with_role(workspace_id, "owner")
+        if owner_count <= 1:
+            raise ValueError("Cannot remove the final owner from a workspace.")
+
+    removed = cast(bool, storage.remove_workspace_member(workspace_id, target_user_id))
+
+    if removed:
+        log_event(
+            storage_manager=storage,
+            workspace_id=workspace_id,
+            actor_user_id=actor_user_id,
+            event_type="workspace_rbac",
+            action="member_removed",
+            target_user_id=target_user_id,
+            details={"removed_role": target_role},
+        )
+
+    return removed
 
 
 def list_workspace_members(

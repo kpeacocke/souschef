@@ -976,6 +976,32 @@ class StorageManager:
             rows = cursor.fetchall()
             return [_membership_from_row(row) for row in rows]
 
+    def count_workspace_members_with_role(self, workspace_id: str, role: str) -> int:
+        """Count members in a workspace assigned to a specific role."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM workspace_memberships
+                WHERE workspace_id = ? AND role = ?
+            """,
+                (workspace_id, role),
+            )
+            row = cursor.fetchone()
+            return int(row["count"]) if row else 0
+
+    def remove_workspace_member(self, workspace_id: str, user_id: str) -> bool:
+        """Remove a user role assignment from a workspace."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM workspace_memberships
+                WHERE workspace_id = ? AND user_id = ?
+            """,
+                (workspace_id, user_id),
+            )
+            return bool(cursor.rowcount and cursor.rowcount > 0)
+
     def add_audit_event(
         self,
         workspace_id: str,
@@ -1770,6 +1796,33 @@ class PostgresStorageManager:
             cursor = conn.execute(sql, (workspace_id,))
             rows = cursor.fetchall()
             return [_membership_from_row(row) for row in rows]
+
+    def count_workspace_members_with_role(self, workspace_id: str, role: str) -> int:
+        """Count members in a workspace assigned to a specific role."""
+        sql = self._prepare_sql(
+            """
+            SELECT COUNT(*) AS count
+            FROM workspace_memberships
+            WHERE workspace_id = ? AND role = ?
+        """
+        )
+        with self._connect() as conn:
+            cursor = conn.execute(sql, (workspace_id, role))
+            row = cursor.fetchone()
+            return int(row["count"]) if row else 0
+
+    def remove_workspace_member(self, workspace_id: str, user_id: str) -> bool:
+        """Remove a user role assignment from a workspace."""
+        sql = self._prepare_sql(
+            """
+            DELETE FROM workspace_memberships
+            WHERE workspace_id = ? AND user_id = ?
+        """
+        )
+        with self._connect() as conn:
+            cursor = conn.execute(sql, (workspace_id, user_id))
+            conn.commit()
+            return bool(cursor.rowcount and cursor.rowcount > 0)
 
     def add_audit_event(
         self,

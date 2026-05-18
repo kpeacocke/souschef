@@ -34,6 +34,7 @@ from souschef.api.workspace_api import (
     list_workspace_approval_requests,
     list_workspace_audit_events,
     list_workspace_members,
+    remove_workspace_member,
     set_workspace_role,
 )
 
@@ -60,6 +61,7 @@ __all__ = [
     "bootstrap_workspace_owner",
     "set_workspace_role",
     "list_workspace_members",
+    "remove_workspace_member",
     "create_approval_request",
     "list_workspace_approval_requests",
     "decide_approval_request",
