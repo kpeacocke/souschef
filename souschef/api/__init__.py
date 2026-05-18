@@ -10,6 +10,14 @@ from souschef.api.risk_scoring import (
     score_risk,
     serialise_explainability,
 )
+from souschef.api.time_cost_estimation import (
+    ESTIMATION_MODEL_VERSION,
+    EstimationAssumptions,
+    EstimationInput,
+    EstimationResult,
+    WhatIfParameters,
+    estimate_time_cost,
+)
 from souschef.api.workspace_api import (
     bootstrap_workspace_owner,
     create_analysis_record,
@@ -25,12 +33,18 @@ from souschef.api.workspace_api import (
 __all__ = [
     "RISK_MODEL_VERSION",
     "RISK_INPUT_DOCUMENTATION",
+    "ESTIMATION_MODEL_VERSION",
     "RiskScoringInput",
     "RiskFlagExplanation",
     "RiskScoreResult",
+    "EstimationInput",
+    "EstimationAssumptions",
+    "WhatIfParameters",
+    "EstimationResult",
     "score_risk",
     "aggregate_risk",
     "serialise_explainability",
+    "estimate_time_cost",
     "bootstrap_workspace_owner",
     "set_workspace_role",
     "list_workspace_members",
