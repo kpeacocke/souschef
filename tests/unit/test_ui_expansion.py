@@ -549,7 +549,10 @@ class TestMainFunction:
         main()
 
         mock_st.title.assert_called_once_with("SousChef - Visual Migration Planning")
-        mock_st.markdown.assert_called_once()
+        assert mock_st.markdown.call_count >= 1
+        mock_st.markdown.assert_any_call(
+            "*AI-powered Chef to Ansible migration planning interface*"
+        )
 
     @patch("souschef.ui.app.st")
     @patch("souschef.ui.app._display_navigation_section")

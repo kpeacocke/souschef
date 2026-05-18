@@ -155,6 +155,67 @@ souschef ansible validate-collections --requirements-file requirements.yml
 souschef ui  # Launch interactive dashboard
 ```
 
+### REST API v1 (Migration Workflow)
+
+SousChef includes a lightweight HTTP API for programmatic execution.
+
+```bash
+# List generic operation names
+curl -s http://127.0.0.1:8081/api/v1/operations
+
+# Analyse migration complexity (dedicated endpoint)
+curl -s -X POST http://127.0.0.1:8081/api/v1/migration/analyse \
+	-H "Content-Type: application/json" \
+	-d '{
+		"cookbook_paths": ["/workspaces/souschef/tests/integration/fixtures/sample_cookbook"],
+		"migration_scope": "full",
+		"target_platform": "ansible_awx"
+	}'
+
+# Generate playbook from a recipe (dedicated endpoint)
+curl -s -X POST http://127.0.0.1:8081/api/v1/migration/generate-playbook \
+	-H "Content-Type: application/json" \
+	-d '{
+		"recipe_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook/recipes/default.rb",
+		"cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"
+	}'
+
+# Generate migration plan (dedicated endpoint)
+curl -s -X POST http://127.0.0.1:8081/api/v1/migration/plan \
+	-H "Content-Type: application/json" \
+	-d '{
+		"cookbook_paths": ["/workspaces/souschef/tests/integration/fixtures/sample_cookbook"],
+		"migration_strategy": "phased",
+		"timeline_weeks": 12
+	}'
+
+# Validate conversion output with profile-based filtering
+curl -s -X POST http://127.0.0.1:8081/api/v1/validation/profile \
+	-H "Content-Type: application/json" \
+	-d '{
+		"conversion_type": "recipe",
+		"result_content": "- hosts: all\n  tasks: []",
+		"validation_profile": "moderate"
+	}'
+
+# Query migration capability context
+curl -s -X POST http://127.0.0.1:8081/api/v1/context/query \
+	-H "Content-Type: application/json" \
+	-d '{
+		"query": "migration plan timeline",
+		"top_k": 5,
+		"cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"
+	}'
+```
+
+Start the API server from the CLI:
+
+```bash
+souschef api serve --host 127.0.0.1 --port 8081
+```
+
+Validation profiles: `basic`, `moderate`, `safety`, `shared`, `production`.
+
 ## Documentation
 
 ### Start Here

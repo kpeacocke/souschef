@@ -187,6 +187,315 @@ def test_handle_rest_request_run_type_error_mapping() -> None:
     assert payload["error"].startswith("Invalid arguments:")
 
 
+def test_handle_rest_request_migration_analyse_success_with_list_paths() -> None:
+    """Migration analyse endpoint accepts a list of cookbook paths."""
+    request_body = json.dumps(
+        {
+            "cookbook_paths": [
+                "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+                "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+            ],
+            "migration_scope": "full",
+            "target_platform": "ansible_awx",
+        }
+    ).encode("utf-8")
+
+    with patch(
+        "souschef.rest_api.assess_chef_migration_complexity",
+        return_value="analysis report",
+    ) as mock_assess:
+        status, payload = handle_rest_request(
+            "POST",
+            "/api/v1/migration/analyse",
+            request_body,
+        )
+
+    assert status == HTTPStatus.OK
+    assert payload["status"] == "success"
+    assert payload["operation"] == "assess_chef_migration_complexity"
+    assert payload["result"] == "analysis report"
+    mock_assess.assert_called_once_with(
+        cookbook_paths="/workspaces/souschef/tests/integration/fixtures/sample_cookbook,/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+        migration_scope="full",
+        target_platform="ansible_awx",
+    )
+
+
+def test_handle_rest_request_migration_analyse_requires_cookbook_paths() -> None:
+    """Migration analyse endpoint requires cookbook_paths."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/migration/analyse",
+        b'{"migration_scope": "full"}',
+    )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "cookbook_paths is required"}
+
+
+def test_handle_rest_request_migration_generate_playbook_success() -> None:
+    """Generate playbook endpoint returns success payload for valid input."""
+    request_body = json.dumps(
+        {
+            "recipe_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook/recipes/default.rb",
+            "cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+        }
+    ).encode("utf-8")
+
+    with patch(
+        "souschef.rest_api.generate_playbook_from_recipe",
+        return_value="- hosts: all",
+    ) as mock_generate:
+        status, payload = handle_rest_request(
+            "POST",
+            "/api/v1/migration/generate-playbook",
+            request_body,
+        )
+
+    assert status == HTTPStatus.OK
+    assert payload["status"] == "success"
+    assert payload["operation"] == "generate_playbook_from_recipe"
+    assert payload["result"] == "- hosts: all"
+    mock_generate.assert_called_once_with(
+        recipe_path="/workspaces/souschef/tests/integration/fixtures/sample_cookbook/recipes/default.rb",
+        cookbook_path="/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+    )
+
+
+def test_handle_rest_request_migration_generate_playbook_requires_recipe_path() -> None:
+    """Generate playbook endpoint requires recipe_path."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/migration/generate-playbook",
+        b'{"cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"}',
+    )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "recipe_path is required"}
+
+
+def test_handle_rest_request_migration_plan_success_with_list_paths() -> None:
+    """Migration plan endpoint accepts list paths and returns success."""
+    request_body = json.dumps(
+        {
+            "cookbook_paths": [
+                "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"
+            ],
+            "migration_strategy": "phased",
+            "timeline_weeks": 8,
+        }
+    ).encode("utf-8")
+
+    with patch(
+        "souschef.rest_api.generate_migration_plan",
+        return_value="migration plan report",
+    ) as mock_plan:
+        status, payload = handle_rest_request(
+            "POST",
+            "/api/v1/migration/plan",
+            request_body,
+        )
+
+    assert status == HTTPStatus.OK
+    assert payload["status"] == "success"
+    assert payload["operation"] == "generate_migration_plan"
+    assert payload["result"] == "migration plan report"
+    mock_plan.assert_called_once_with(
+        cookbook_paths="/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+        migration_strategy="phased",
+        timeline_weeks=8,
+    )
+
+
+def test_handle_rest_request_migration_plan_rejects_invalid_timeline() -> None:
+    """Migration plan endpoint requires positive integer timeline_weeks."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/migration/plan",
+        b'{"cookbook_paths": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook", "timeline_weeks": 0}',
+    )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "timeline_weeks must be a positive integer"}
+
+
+def test_handle_rest_request_migration_plan_requires_cookbook_paths() -> None:
+    """Migration plan endpoint requires cookbook_paths."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/migration/plan",
+        b'{"migration_strategy": "phased"}',
+    )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "cookbook_paths is required"}
+
+
+def test_handle_rest_request_validation_profile_success() -> None:
+    """Validation profile endpoint filters validation output by profile."""
+    request_body = json.dumps(
+        {
+            "conversion_type": "recipe",
+            "result_content": "- hosts: all",
+            "validation_profile": "safety",
+        }
+    ).encode("utf-8")
+
+    mock_result = {
+        "summary": {
+            "total_checks": 3,
+            "errors": 1,
+            "warnings": 1,
+            "infos": 1,
+            "pass_rate": 66.7,
+        },
+        "results": [
+            {"level": "error", "category": "security", "message": "x"},
+            {"level": "warning", "category": "semantic", "message": "y"},
+            {"level": "info", "category": "best_practice", "message": "z"},
+        ],
+    }
+
+    with patch(
+        "souschef.rest_api.validate_conversion",
+        return_value=json.dumps(mock_result),
+    ):
+        status, payload = handle_rest_request(
+            "POST",
+            "/api/v1/validation/profile",
+            request_body,
+        )
+
+    assert status == HTTPStatus.OK
+    assert payload["status"] == "success"
+    assert payload["operation"] == "validate_conversion_with_profile"
+    assert payload["profile"] == "safety"
+    assert payload["result_count"] == 2
+    assert payload["passed"] is False
+
+
+def test_handle_rest_request_validation_profile_rejects_invalid_profile() -> None:
+    """Validation profile endpoint rejects unsupported profile names."""
+    request_body = json.dumps(
+        {
+            "conversion_type": "recipe",
+            "result_content": "- hosts: all",
+            "validation_profile": "strictest",
+        }
+    ).encode("utf-8")
+
+    with patch(
+        "souschef.rest_api.validate_conversion",
+        return_value=json.dumps({"summary": {}, "results": []}),
+    ):
+        status, payload = handle_rest_request(
+            "POST",
+            "/api/v1/validation/profile",
+            request_body,
+        )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert "validation_profile must be one of" in payload["error"]
+
+
+def test_handle_rest_request_validation_profile_requires_conversion_type() -> None:
+    """Validation profile endpoint requires conversion_type input."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/validation/profile",
+        b'{"result_content": "- hosts: all"}',
+    )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "conversion_type is required"}
+
+
+def test_handle_rest_request_context_query_success() -> None:
+    """Context query endpoint returns ranked capability matches."""
+    request_body = json.dumps(
+        {
+            "query": "migration plan timeline",
+            "top_k": 3,
+        }
+    ).encode("utf-8")
+
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/context/query",
+        request_body,
+    )
+
+    assert status == HTTPStatus.OK
+    assert payload["status"] == "success"
+    assert payload["operation"] == "context_query"
+    assert payload["top_k"] == 3
+    assert payload["match_count"] >= 1
+    assert any(
+        match["route"] == "/api/v1/migration/plan" for match in payload["matches"]
+    )
+
+
+def test_handle_rest_request_context_query_requires_query() -> None:
+    """Context query endpoint requires query input."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/context/query",
+        b'{"top_k": 3}',
+    )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "query is required"}
+
+
+def test_handle_rest_request_context_query_rejects_invalid_top_k() -> None:
+    """Context query endpoint validates top_k bounds."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/context/query",
+        b'{"query": "migration", "top_k": 0}',
+    )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload == {"error": "top_k must be a positive integer between 1 and 20"}
+
+
+def test_handle_rest_request_context_query_with_cookbook_path_enrichment() -> None:
+    """Context query includes cookbook-specific signals when cookbook_path is set."""
+    request_body = json.dumps(
+        {
+            "query": "cookbook structure recipes",
+            "top_k": 5,
+            "cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+        }
+    ).encode("utf-8")
+
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/context/query",
+        request_body,
+    )
+
+    assert status == HTTPStatus.OK
+    assert payload["status"] == "success"
+    assert (
+        payload["cookbook_path"]
+        == "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"
+    )
+    assert any(match["kind"] == "cookbook_signal" for match in payload["matches"])
+
+
+def test_handle_rest_request_context_query_rejects_invalid_cookbook_path() -> None:
+    """Context query rejects cookbook paths outside the trusted workspace."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/context/query",
+        b'{"query": "migration", "cookbook_path": "../outside"}',
+    )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert payload["error"].startswith("Invalid cookbook_path:")
+
+
 def test_handle_rest_request_run_rejects_invalid_webhook_url() -> None:
     """Run route rejects invalid webhook URLs before delivery attempts."""
     request_body = json.dumps(

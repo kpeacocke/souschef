@@ -4,13 +4,26 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from collections.abc import Callable
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any
 from wsgiref.simple_server import make_server
 
+from souschef.core.path_utils import (
+    _ensure_within_base_path,
+    _get_workspace_root,
+    _normalize_path,
+)
 from souschef.core.url_validation import validate_user_provided_url
+from souschef.orchestration import (
+    orchestrate_generate_playbook_from_recipe as generate_playbook_from_recipe,
+)
 from souschef.server import (
+    assess_chef_migration_complexity,
     convert_puppet_manifest_to_ansible,
+    generate_migration_plan,
     import_puppet_catalog_to_ir,
     list_puppet_server_nodes,
     parse_recipe,
@@ -66,6 +79,28 @@ def _route_operations() -> RouteResponse:
     return HTTPStatus.OK, {"operations": sorted(_supported_operations())}
 
 
+def _invoke_operation(
+    operation: str,
+    callable_operation: Any,
+    arguments: JsonObject,
+) -> RouteResponse:
+    """Run an operation and map known error types to HTTP responses."""
+    try:
+        result = callable_operation(**arguments)
+    except TypeError as exc:
+        return HTTPStatus.BAD_REQUEST, {"error": f"Invalid arguments: {exc}"}
+    except RuntimeError as exc:
+        return HTTPStatus.BAD_GATEWAY, {"error": str(exc)}
+    except ValueError as exc:
+        return HTTPStatus.BAD_REQUEST, {"error": f"Invalid arguments: {exc}"}
+
+    return HTTPStatus.OK, {
+        "status": "success",
+        "operation": operation,
+        "result": _coerce_result(result),
+    }
+
+
 def _route_run(request: JsonObject) -> RouteResponse:
     """Run a named SousChef operation via JSON request."""
     operation = request.get("operation", "")
@@ -80,19 +115,9 @@ def _route_run(request: JsonObject) -> RouteResponse:
     if operation not in operations:
         return HTTPStatus.NOT_FOUND, {"error": f"Unknown operation: {operation}"}
 
-    try:
-        result = operations[operation](**arguments)
-    except TypeError as exc:
-        return HTTPStatus.BAD_REQUEST, {"error": f"Invalid arguments: {exc}"}
-    except RuntimeError as exc:
-        return HTTPStatus.BAD_GATEWAY, {"error": str(exc)}
-    except ValueError as exc:
-        return HTTPStatus.BAD_REQUEST, {"error": f"Invalid arguments: {exc}"}
-    response: JsonObject = {
-        "status": "success",
-        "operation": operation,
-        "result": _coerce_result(result),
-    }
+    status, response = _invoke_operation(operation, operations[operation], arguments)
+    if status != HTTPStatus.OK:
+        return status, response
 
     webhook_url = request.get("webhook_url", "")
     webhook_secret = request.get("webhook_secret", "")
@@ -110,6 +135,425 @@ def _route_run(request: JsonObject) -> RouteResponse:
         response["webhook"] = webhook_result
 
     return HTTPStatus.OK, response
+
+
+def _route_migration_analyse(request: JsonObject) -> RouteResponse:
+    """Analyse cookbook migration complexity via a dedicated endpoint."""
+    cookbook_paths = request.get("cookbook_paths", "")
+    migration_scope = request.get("migration_scope", "full")
+    target_platform = request.get("target_platform", "ansible_awx")
+
+    if isinstance(cookbook_paths, list):
+        if not all(isinstance(path, str) and path for path in cookbook_paths):
+            return HTTPStatus.BAD_REQUEST, {
+                "error": "cookbook_paths list must contain non-empty strings"
+            }
+        cookbook_paths = ",".join(cookbook_paths)
+
+    if not isinstance(cookbook_paths, str) or not cookbook_paths:
+        return HTTPStatus.BAD_REQUEST, {"error": "cookbook_paths is required"}
+    if not isinstance(migration_scope, str) or not migration_scope:
+        return HTTPStatus.BAD_REQUEST, {"error": "migration_scope must be a string"}
+    if not isinstance(target_platform, str) or not target_platform:
+        return HTTPStatus.BAD_REQUEST, {"error": "target_platform must be a string"}
+
+    return _invoke_operation(
+        "assess_chef_migration_complexity",
+        assess_chef_migration_complexity,
+        {
+            "cookbook_paths": cookbook_paths,
+            "migration_scope": migration_scope,
+            "target_platform": target_platform,
+        },
+    )
+
+
+def _route_migration_generate_playbook(request: JsonObject) -> RouteResponse:
+    """Generate an Ansible playbook for a Chef recipe via REST."""
+    recipe_path = request.get("recipe_path", "")
+    cookbook_path = request.get("cookbook_path", "")
+
+    if not isinstance(recipe_path, str) or not recipe_path:
+        return HTTPStatus.BAD_REQUEST, {"error": "recipe_path is required"}
+    if not isinstance(cookbook_path, str):
+        return HTTPStatus.BAD_REQUEST, {"error": "cookbook_path must be a string"}
+
+    arguments: JsonObject = {"recipe_path": recipe_path}
+    if cookbook_path:
+        arguments["cookbook_path"] = cookbook_path
+
+    return _invoke_operation(
+        "generate_playbook_from_recipe",
+        generate_playbook_from_recipe,
+        arguments,
+    )
+
+
+def _route_migration_plan(request: JsonObject) -> RouteResponse:
+    """Generate migration plan output via a dedicated endpoint."""
+    cookbook_paths = request.get("cookbook_paths", "")
+    migration_strategy = request.get("migration_strategy", "phased")
+    timeline_weeks = request.get("timeline_weeks", 12)
+
+    if isinstance(cookbook_paths, list):
+        if not all(isinstance(path, str) and path for path in cookbook_paths):
+            return HTTPStatus.BAD_REQUEST, {
+                "error": "cookbook_paths list must contain non-empty strings"
+            }
+        cookbook_paths = ",".join(cookbook_paths)
+
+    if not isinstance(cookbook_paths, str) or not cookbook_paths:
+        return HTTPStatus.BAD_REQUEST, {"error": "cookbook_paths is required"}
+    if not isinstance(migration_strategy, str) or not migration_strategy:
+        return HTTPStatus.BAD_REQUEST, {"error": "migration_strategy must be a string"}
+    if not isinstance(timeline_weeks, int) or timeline_weeks <= 0:
+        return HTTPStatus.BAD_REQUEST, {
+            "error": "timeline_weeks must be a positive integer"
+        }
+
+    return _invoke_operation(
+        "generate_migration_plan",
+        generate_migration_plan,
+        {
+            "cookbook_paths": cookbook_paths,
+            "migration_strategy": migration_strategy,
+            "timeline_weeks": timeline_weeks,
+        },
+    )
+
+
+def _build_context_documents() -> list[JsonObject]:
+    """Build a lightweight searchable context corpus for API capabilities."""
+    operation_docs = [
+        {
+            "id": "operation.parse_recipe",
+            "kind": "operation",
+            "title": "Parse Chef recipe",
+            "description": "Parse recipe files into structured migration context.",
+            "route": "/api/v1/run",
+            "operation": "parse_recipe",
+            "keywords": ["chef", "recipe", "parse", "analysis"],
+        },
+        {
+            "id": "operation.validate_conversion",
+            "kind": "operation",
+            "title": "Validate conversion",
+            "description": "Validate conversion output with syntax and "
+            "semantic checks.",
+            "route": "/api/v1/run",
+            "operation": "validate_conversion",
+            "keywords": ["validate", "conversion", "syntax", "quality"],
+        },
+        {
+            "id": "endpoint.migration.analyse",
+            "kind": "endpoint",
+            "title": "Migration complexity analysis",
+            "description": "Assess migration complexity for one or more cookbooks.",
+            "route": "/api/v1/migration/analyse",
+            "keywords": ["migration", "analyse", "assessment", "complexity"],
+        },
+        {
+            "id": "endpoint.migration.plan",
+            "kind": "endpoint",
+            "title": "Migration planning",
+            "description": "Generate a phased or parallel migration plan "
+            "with timeline.",
+            "route": "/api/v1/migration/plan",
+            "keywords": ["migration", "plan", "timeline", "strategy"],
+        },
+        {
+            "id": "endpoint.migration.generate_playbook",
+            "kind": "endpoint",
+            "title": "Generate playbook from recipe",
+            "description": "Generate Ansible playbook content from Chef recipe input.",
+            "route": "/api/v1/migration/generate-playbook",
+            "keywords": ["playbook", "recipe", "convert", "ansible"],
+        },
+        {
+            "id": "endpoint.validation.profile",
+            "kind": "endpoint",
+            "title": "Validation profile filtering",
+            "description": "Filter validation results by operational profile.",
+            "route": "/api/v1/validation/profile",
+            "keywords": ["validation", "profile", "safety", "production"],
+        },
+        {
+            "id": "endpoint.webhook.notify",
+            "kind": "endpoint",
+            "title": "Webhook notifications",
+            "description": "Send operation result notifications to external systems.",
+            "route": "/api/v1/webhooks/notify",
+            "keywords": ["webhook", "notify", "integration", "event"],
+        },
+    ]
+    return operation_docs
+
+
+def _build_cookbook_context_documents(cookbook_path: str) -> list[JsonObject]:
+    """Build context documents from a cookbook path on disk."""
+    workspace_root = _get_workspace_root()
+    candidate_path = _ensure_within_base_path(
+        _normalize_path(cookbook_path),
+        workspace_root,
+    )
+
+    if not candidate_path.exists() or not candidate_path.is_dir():
+        raise ValueError("cookbook_path must point to an existing directory")
+
+    recipes_count = len(list((candidate_path / "recipes").glob("*.rb")))
+    templates_count = len(list((candidate_path / "templates").rglob("*")))
+    attributes_count = len(list((candidate_path / "attributes").glob("*.rb")))
+    metadata_present = (candidate_path / "metadata.rb").exists()
+
+    cookbook_name = Path(candidate_path).name
+    summary = (
+        f"Cookbook {cookbook_name}: "
+        f"{recipes_count} recipes, "
+        f"{attributes_count} attributes files, "
+        f"{templates_count} templates entries"
+    )
+
+    live_docs: list[JsonObject] = [
+        {
+            "id": "cookbook.summary",
+            "kind": "cookbook_signal",
+            "title": "Cookbook structure summary",
+            "description": summary,
+            "route": "/api/v1/context/query",
+            "keywords": [
+                "cookbook",
+                "structure",
+                "recipes",
+                "templates",
+                "attributes",
+                cookbook_name.lower(),
+            ],
+        }
+    ]
+
+    if recipes_count > 0:
+        live_docs.append(
+            {
+                "id": "cookbook.recipe_conversion_hint",
+                "kind": "cookbook_signal",
+                "title": "Recipe conversion signal",
+                "description": (
+                    f"Cookbook contains {recipes_count} recipes suitable for "
+                    "playbook generation workflows."
+                ),
+                "route": "/api/v1/migration/generate-playbook",
+                "keywords": ["recipes", "playbook", "conversion", "generate"],
+            }
+        )
+
+    if metadata_present:
+        live_docs.append(
+            {
+                "id": "cookbook.metadata_signal",
+                "kind": "cookbook_signal",
+                "title": "Metadata present",
+                "description": "metadata.rb exists and can improve planning context.",
+                "route": "/api/v1/migration/analyse",
+                "keywords": ["metadata", "analyse", "planning", "chef"],
+            }
+        )
+
+    return live_docs
+
+
+def _route_context_query(request: JsonObject) -> RouteResponse:
+    """Query local migration capability context with ranked keyword matching."""
+    query = request.get("query", "")
+    top_k = request.get("top_k", 5)
+    cookbook_path = request.get("cookbook_path", "")
+
+    if not isinstance(query, str) or not query.strip():
+        return HTTPStatus.BAD_REQUEST, {"error": "query is required"}
+    if not isinstance(top_k, int) or top_k <= 0 or top_k > 20:
+        return HTTPStatus.BAD_REQUEST, {
+            "error": "top_k must be a positive integer between 1 and 20"
+        }
+    if not isinstance(cookbook_path, str):
+        return HTTPStatus.BAD_REQUEST, {"error": "cookbook_path must be a string"}
+
+    query_tokens = {
+        token for token in re.split(r"[^a-z0-9]+", query.lower()) if len(token) >= 2
+    }
+    if not query_tokens:
+        return HTTPStatus.BAD_REQUEST, {
+            "error": "query must contain alphanumeric content"
+        }
+
+    context_docs = _build_context_documents()
+    if cookbook_path:
+        try:
+            context_docs.extend(_build_cookbook_context_documents(cookbook_path))
+        except ValueError as exc:
+            return HTTPStatus.BAD_REQUEST, {"error": f"Invalid cookbook_path: {exc}"}
+
+    scored: list[tuple[int, JsonObject]] = []
+    for doc in context_docs:
+        searchable_text = " ".join(
+            [
+                str(doc.get("title", "")).lower(),
+                str(doc.get("description", "")).lower(),
+                " ".join(str(keyword).lower() for keyword in doc.get("keywords", [])),
+                str(doc.get("operation", "")).lower(),
+                str(doc.get("route", "")).lower(),
+            ]
+        )
+        doc_tokens = {
+            token
+            for token in re.split(r"[^a-z0-9]+", searchable_text)
+            if len(token) >= 2
+        }
+        score = len(query_tokens.intersection(doc_tokens))
+        if score > 0:
+            scored.append((score, doc))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    matches = [
+        {
+            "score": score,
+            "id": match["id"],
+            "kind": match["kind"],
+            "title": match["title"],
+            "description": match["description"],
+            "route": match["route"],
+            **({"operation": match["operation"]} if "operation" in match else {}),
+        }
+        for score, match in scored[:top_k]
+    ]
+
+    return HTTPStatus.OK, {
+        "status": "success",
+        "operation": "context_query",
+        "query": query,
+        "top_k": top_k,
+        "cookbook_path": cookbook_path,
+        "match_count": len(matches),
+        "matches": matches,
+    }
+
+
+def _select_validation_results_for_profile(
+    results: list[JsonObject],
+    profile: str,
+) -> list[JsonObject]:
+    """Filter validation results according to a named profile."""
+    profile_rules: dict[str, dict[str, set[str]]] = {
+        "basic": {
+            "levels": {"error"},
+            "categories": {"syntax", "semantic"},
+        },
+        "moderate": {
+            "levels": {"error", "warning"},
+            "categories": {
+                "syntax",
+                "semantic",
+                "best_practice",
+                "security",
+            },
+        },
+        "safety": {
+            "levels": {"error", "warning"},
+            "categories": {"security", "syntax", "semantic"},
+        },
+        "shared": {
+            "levels": {"error", "warning", "info"},
+            "categories": {"syntax", "best_practice", "performance"},
+        },
+        "production": {
+            "levels": {"error", "warning", "info"},
+            "categories": {
+                "syntax",
+                "semantic",
+                "best_practice",
+                "security",
+                "performance",
+            },
+        },
+    }
+
+    if profile not in profile_rules:
+        raise ValueError(
+            "validation_profile must be one of: basic, moderate, "
+            "safety, shared, production"
+        )
+
+    levels = profile_rules[profile]["levels"]
+    categories = profile_rules[profile]["categories"]
+    return [
+        result
+        for result in results
+        if isinstance(result, dict)
+        and isinstance(result.get("level"), str)
+        and isinstance(result.get("category"), str)
+        and result["level"] in levels
+        and result["category"] in categories
+    ]
+
+
+def _route_validation_profile(request: JsonObject) -> RouteResponse:
+    """Validate conversion output using profile-specific result filtering."""
+    conversion_type = request.get("conversion_type", "")
+    result_content = request.get("result_content", "")
+    validation_profile = request.get("validation_profile", "moderate")
+
+    if not isinstance(conversion_type, str) or not conversion_type:
+        return HTTPStatus.BAD_REQUEST, {"error": "conversion_type is required"}
+    if not isinstance(result_content, str) or not result_content:
+        return HTTPStatus.BAD_REQUEST, {"error": "result_content is required"}
+    if not isinstance(validation_profile, str) or not validation_profile:
+        return HTTPStatus.BAD_REQUEST, {"error": "validation_profile must be a string"}
+
+    status, response = _invoke_operation(
+        "validate_conversion",
+        validate_conversion,
+        {
+            "conversion_type": conversion_type,
+            "result_content": result_content,
+            "output_format": "json",
+        },
+    )
+    if status != HTTPStatus.OK:
+        return status, response
+
+    result_payload = response.get("result")
+    if not isinstance(result_payload, dict):
+        return HTTPStatus.BAD_GATEWAY, {
+            "error": "Validation engine returned an unexpected payload"
+        }
+
+    summary = result_payload.get("summary", {})
+    raw_results = result_payload.get("results", [])
+    if not isinstance(summary, dict) or not isinstance(raw_results, list):
+        return HTTPStatus.BAD_GATEWAY, {
+            "error": "Validation engine returned an invalid result structure"
+        }
+
+    try:
+        filtered_results = _select_validation_results_for_profile(
+            [result for result in raw_results if isinstance(result, dict)],
+            validation_profile,
+        )
+    except ValueError as exc:
+        return HTTPStatus.BAD_REQUEST, {"error": str(exc)}
+
+    has_error = any(result.get("level") == "error" for result in filtered_results)
+    has_warning = any(result.get("level") == "warning" for result in filtered_results)
+
+    return HTTPStatus.OK, {
+        "status": "success",
+        "operation": "validate_conversion_with_profile",
+        "profile": validation_profile,
+        "conversion_type": conversion_type,
+        "passed": not has_error
+        and not (validation_profile == "production" and has_warning),
+        "summary": summary,
+        "result_count": len(filtered_results),
+        "results": filtered_results,
+    }
 
 
 def _route_webhook_notify(request: JsonObject) -> RouteResponse:
@@ -150,14 +594,27 @@ def handle_rest_request(method: str, path: str, body: bytes = b"") -> RouteRespo
     except ValueError as exc:
         return HTTPStatus.BAD_REQUEST, {"error": str(exc)}
 
-    if method == "GET" and path == "/health":
-        return _route_health()
-    if method == "GET" and path == "/api/v1/operations":
-        return _route_operations()
-    if method == "POST" and path == "/api/v1/run":
-        return _route_run(request)
-    if method == "POST" and path == "/api/v1/webhooks/notify":
-        return _route_webhook_notify(request)
+    route_handlers: dict[tuple[str, str], Callable[[JsonObject], RouteResponse]] = {
+        ("GET", "/health"): lambda _request: _route_health(),
+        ("GET", "/api/v1/operations"): lambda _request: _route_operations(),
+        ("POST", "/api/v1/run"): _route_run,
+        ("POST", "/api/v1/migration/analyse"): _route_migration_analyse,
+        (
+            "POST",
+            "/api/v1/migration/generate-playbook",
+        ): _route_migration_generate_playbook,
+        ("POST", "/api/v1/migration/plan"): _route_migration_plan,
+        ("POST", "/api/v1/validation/profile"): _route_validation_profile,
+        ("POST", "/api/v1/context/query"): _route_context_query,
+        ("POST", "/api/v1/webhooks/notify"): _route_webhook_notify,
+    }
+
+    handler: Callable[[JsonObject], RouteResponse] | None = route_handlers.get(
+        (method, path)
+    )
+    if handler is not None:
+        return handler(request)
+
     return HTTPStatus.NOT_FOUND, {"error": f"Unknown route: {method} {path}"}
 
 
