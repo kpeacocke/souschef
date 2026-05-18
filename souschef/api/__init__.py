@@ -1,5 +1,10 @@
 """API facades for UI and external callers."""
 
+from souschef.api.integration_api import (
+    build_external_reference,
+    link_conversion_artifact_reference,
+    validate_provider_credentials,
+)
 from souschef.api.risk_scoring import (
     RISK_INPUT_DOCUMENTATION,
     RISK_MODEL_VERSION,
@@ -45,6 +50,9 @@ __all__ = [
     "aggregate_risk",
     "serialise_explainability",
     "estimate_time_cost",
+    "validate_provider_credentials",
+    "build_external_reference",
+    "link_conversion_artifact_reference",
     "bootstrap_workspace_owner",
     "set_workspace_role",
     "list_workspace_members",
