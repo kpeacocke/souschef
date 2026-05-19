@@ -7,8 +7,10 @@ import json
 import time
 from concurrent.futures import TimeoutError as ConcurrentFutureTimeoutError
 from http import HTTPStatus
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from souschef.core.path_utils import _get_workspace_root
 from souschef.rest_api import (
     SousChefRestApi,
     _coerce_result,
@@ -17,6 +19,15 @@ from souschef.rest_api import (
     handle_rest_request,
     run_api_server,
 )
+
+SAMPLE_COOKBOOK_PATH = str(
+    Path(_get_workspace_root())
+    / "tests"
+    / "integration"
+    / "fixtures"
+    / "sample_cookbook"
+)
+SAMPLE_RECIPE_PATH = str(Path(SAMPLE_COOKBOOK_PATH) / "recipes" / "default.rb")
 
 
 def test_decode_json_body_empty() -> None:
@@ -195,8 +206,8 @@ def test_handle_rest_request_migration_analyse_success_with_list_paths() -> None
     request_body = json.dumps(
         {
             "cookbook_paths": [
-                "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
-                "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+                SAMPLE_COOKBOOK_PATH,
+                SAMPLE_COOKBOOK_PATH,
             ],
             "migration_scope": "full",
             "target_platform": "ansible_awx",
@@ -218,7 +229,7 @@ def test_handle_rest_request_migration_analyse_success_with_list_paths() -> None
     assert payload["operation"] == "assess_chef_migration_complexity"
     assert payload["result"] == "analysis report"
     mock_assess.assert_called_once_with(
-        cookbook_paths="/workspaces/souschef/tests/integration/fixtures/sample_cookbook,/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+        cookbook_paths=f"{SAMPLE_COOKBOOK_PATH},{SAMPLE_COOKBOOK_PATH}",
         migration_scope="full",
         target_platform="ansible_awx",
     )
@@ -240,8 +251,8 @@ def test_handle_rest_request_migration_generate_playbook_success() -> None:
     """Generate playbook endpoint returns success payload for valid input."""
     request_body = json.dumps(
         {
-            "recipe_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook/recipes/default.rb",
-            "cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+            "recipe_path": SAMPLE_RECIPE_PATH,
+            "cookbook_path": SAMPLE_COOKBOOK_PATH,
         }
     ).encode("utf-8")
 
@@ -260,8 +271,8 @@ def test_handle_rest_request_migration_generate_playbook_success() -> None:
     assert payload["operation"] == "generate_playbook_from_recipe"
     assert payload["result"] == "- hosts: all"
     mock_generate.assert_called_once_with(
-        recipe_path="/workspaces/souschef/tests/integration/fixtures/sample_cookbook/recipes/default.rb",
-        cookbook_path="/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+        recipe_path=SAMPLE_RECIPE_PATH,
+        cookbook_path=SAMPLE_COOKBOOK_PATH,
     )
 
 
@@ -270,7 +281,7 @@ def test_handle_rest_request_migration_generate_playbook_requires_recipe_path() 
     status, payload = handle_rest_request(
         "POST",
         "/api/v1/migration/generate-playbook",
-        b'{"cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"}',
+        json.dumps({"cookbook_path": SAMPLE_COOKBOOK_PATH}).encode("utf-8"),
     )
 
     assert status == HTTPStatus.BAD_REQUEST
@@ -281,9 +292,7 @@ def test_handle_rest_request_migration_plan_success_with_list_paths() -> None:
     """Migration plan endpoint accepts list paths and returns success."""
     request_body = json.dumps(
         {
-            "cookbook_paths": [
-                "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"
-            ],
+            "cookbook_paths": [SAMPLE_COOKBOOK_PATH],
             "migration_strategy": "phased",
             "timeline_weeks": 8,
         }
@@ -304,7 +313,7 @@ def test_handle_rest_request_migration_plan_success_with_list_paths() -> None:
     assert payload["operation"] == "generate_migration_plan"
     assert payload["result"] == "migration plan report"
     mock_plan.assert_called_once_with(
-        cookbook_paths="/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+        cookbook_paths=SAMPLE_COOKBOOK_PATH,
         migration_strategy="phased",
         timeline_weeks=8,
     )
@@ -315,7 +324,9 @@ def test_handle_rest_request_migration_plan_rejects_invalid_timeline() -> None:
     status, payload = handle_rest_request(
         "POST",
         "/api/v1/migration/plan",
-        b'{"cookbook_paths": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook", "timeline_weeks": 0}',
+        json.dumps(
+            {"cookbook_paths": SAMPLE_COOKBOOK_PATH, "timeline_weeks": 0}
+        ).encode("utf-8"),
     )
 
     assert status == HTTPStatus.BAD_REQUEST
@@ -468,7 +479,7 @@ def test_handle_rest_request_context_query_with_cookbook_path_enrichment() -> No
         {
             "query": "cookbook structure recipes",
             "top_k": 5,
-            "cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+            "cookbook_path": SAMPLE_COOKBOOK_PATH,
         }
     ).encode("utf-8")
 
@@ -480,10 +491,7 @@ def test_handle_rest_request_context_query_with_cookbook_path_enrichment() -> No
 
     assert status == HTTPStatus.OK
     assert payload["status"] == "success"
-    assert (
-        payload["cookbook_path"]
-        == "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"
-    )
+    assert payload["cookbook_path"] == SAMPLE_COOKBOOK_PATH
     assert any(match["kind"] == "cookbook_signal" for match in payload["matches"])
 
 
