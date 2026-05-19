@@ -40,6 +40,11 @@ class NotificationDispatchResult:
 def validate_notification_config(config: NotificationConfig) -> None:
     """Validate Slack/Teams channel and webhook configuration."""
     webhook = config.webhook_url.strip()
+    if config.provider not in ("slack", "teams"):
+        raise NotificationConfigError(
+            f"Unsupported notification provider: {config.provider}"
+        )
+
     if not webhook.startswith("https://"):
         raise NotificationConfigError("Webhook URL must start with https://")
 
