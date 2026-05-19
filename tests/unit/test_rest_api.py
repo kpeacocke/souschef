@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import json
+import time
+from concurrent.futures import TimeoutError as ConcurrentFutureTimeoutError
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +13,7 @@ from souschef.rest_api import (
     SousChefRestApi,
     _coerce_result,
     _decode_json_body,
+    _invoke_operation,
     handle_rest_request,
     run_api_server,
 )
@@ -636,6 +639,164 @@ def test_handle_rest_request_webhook_notify_requires_object_payload() -> None:
     assert payload == {"error": "Webhook payload must be a JSON object"}
 
 
+def test_handle_rest_request_rejects_payloads_over_route_limit() -> None:
+    """Large payloads are rejected using per-route byte limits."""
+    oversized_query = "x" * (101 * 1024)
+    body = json.dumps({"query": oversized_query}).encode("utf-8")
+
+    status, payload = handle_rest_request("POST", "/api/v1/context/query", body)
+
+    assert status == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+    assert "Payload too large" in payload["error"]
+
+
+def test_handle_rest_request_operation_timeout_returns_408() -> None:
+    """Slow operations are cut off with request timeout responses."""
+    request_body = json.dumps(
+        {
+            "operation": "demo",
+            "arguments": {},
+        }
+    ).encode("utf-8")
+
+    with (
+        patch(
+            "souschef.rest_api._supported_operations",
+            return_value={"demo": lambda: time.sleep(0.1)},
+        ),
+        patch.dict("souschef.rest_api.TIMEOUT_SECONDS_BY_OPERATION", {"demo": 0.01}),
+    ):
+        status, payload = handle_rest_request("POST", "/api/v1/run", request_body)
+
+    assert status == HTTPStatus.REQUEST_TIMEOUT
+    assert payload == {"error": "Operation timed out after 0.01 seconds"}
+
+
+def test_invoke_operation_timeout_uses_non_blocking_executor_shutdown() -> None:
+    """Timeout branch should cancel and shut down executor without blocking."""
+    mock_future = MagicMock()
+    mock_future.result.side_effect = ConcurrentFutureTimeoutError()
+    mock_executor = MagicMock()
+    mock_executor.submit.return_value = mock_future
+
+    with patch("souschef.rest_api.ThreadPoolExecutor", return_value=mock_executor):
+        status, payload = _invoke_operation(
+            "demo",
+            lambda: "ok",
+            {},
+            timeout_seconds=0.01,
+        )
+
+    assert status == HTTPStatus.REQUEST_TIMEOUT
+    assert payload == {"error": "Operation timed out after 0.01 seconds"}
+    mock_future.cancel.assert_called_once_with()
+    mock_executor.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
+
+
+def test_invoke_operation_timeout_emits_warning_log() -> None:
+    """Timeout branch should emit structured warning telemetry."""
+    mock_future = MagicMock()
+    mock_future.result.side_effect = ConcurrentFutureTimeoutError()
+    mock_future.cancel.return_value = True
+    mock_executor = MagicMock()
+    mock_executor.submit.return_value = mock_future
+
+    with (
+        patch("souschef.rest_api.ThreadPoolExecutor", return_value=mock_executor),
+        patch("souschef.rest_api.LOGGER.warning") as mock_warning,
+    ):
+        status, _payload = _invoke_operation(
+            "demo",
+            lambda: "ok",
+            {},
+            timeout_seconds=0.01,
+        )
+
+    assert status == HTTPStatus.REQUEST_TIMEOUT
+    mock_warning.assert_called_once_with(
+        "REST operation timeout",
+        extra={
+            "operation": "demo",
+            "timeout_seconds": 0.01,
+            "cancel_requested": True,
+            "cancel_succeeded": True,
+        },
+    )
+
+
+def test_handle_rest_request_context_query_rejects_invalid_retrieval_mode() -> None:
+    """Context query enforces supported retrieval modes."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/context/query",
+        b'{"query": "migration", "retrieval_mode": "semantic"}',
+    )
+
+    assert status == HTTPStatus.BAD_REQUEST
+    assert "retrieval_mode must be one of" in payload["error"]
+
+
+def test_handle_rest_request_context_query_stream_success() -> None:
+    """Stream context query route returns event payloads."""
+    request_body = json.dumps(
+        {
+            "query": "migration plan timeline",
+            "top_k": 2,
+        }
+    ).encode("utf-8")
+
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/context/query/stream",
+        request_body,
+    )
+
+    assert status == HTTPStatus.OK
+    assert payload["operation"] == "context_query_stream"
+    assert payload["events"][0]["event"] == "start"
+    assert payload["events"][-1]["event"] == "done"
+
+
+def test_handle_rest_request_validation_profile_stream_success() -> None:
+    """Stream validation route returns event payloads."""
+    request_body = json.dumps(
+        {
+            "conversion_type": "recipe",
+            "result_content": "- hosts: all",
+            "validation_profile": "safety",
+        }
+    ).encode("utf-8")
+
+    mock_result = {
+        "summary": {
+            "total_checks": 2,
+            "errors": 0,
+            "warnings": 1,
+            "infos": 1,
+            "pass_rate": 50.0,
+        },
+        "results": [
+            {"level": "warning", "category": "semantic", "message": "warn"},
+            {"level": "info", "category": "best_practice", "message": "info"},
+        ],
+    }
+
+    with patch(
+        "souschef.rest_api.validate_conversion",
+        return_value=json.dumps(mock_result),
+    ):
+        status, payload = handle_rest_request(
+            "POST",
+            "/api/v1/validation/profile/stream",
+            request_body,
+        )
+
+    assert status == HTTPStatus.OK
+    assert payload["operation"] == "validate_conversion_with_profile_stream"
+    assert payload["events"][0]["event"] == "start"
+    assert payload["events"][-1]["event"] == "done"
+
+
 def test_handle_rest_request_invalid_json() -> None:
     """Invalid JSON request bodies are rejected."""
     status, payload = handle_rest_request("POST", "/api/v1/run", b"{")
@@ -650,6 +811,16 @@ def test_handle_rest_request_unknown_route() -> None:
 
     assert status == HTTPStatus.NOT_FOUND
     assert payload == {"error": "Unknown route: DELETE /missing"}
+
+
+def test_handle_rest_request_unknown_route_checks_route_before_payload_limit() -> None:
+    """Unknown routes should return 404 even with oversized payloads."""
+    oversized_body = b"x" * (1024 * 1024)
+
+    status, payload = handle_rest_request("POST", "/missing", oversized_body)
+
+    assert status == HTTPStatus.NOT_FOUND
+    assert payload == {"error": "Unknown route: POST /missing"}
 
 
 def test_wsgi_app_invokes_handler() -> None:
@@ -672,6 +843,38 @@ def test_wsgi_app_invokes_handler() -> None:
     assert json.loads(chunks[0].decode("utf-8")) == {"status": "ok"}
     mock_handler.assert_called_once_with("POST", "/api/v1/run", b"{}")
     start_response.assert_called_once()
+
+
+def test_wsgi_app_uses_sse_content_type_for_stream_routes() -> None:
+    """Stream routes return SSE content type and event payload lines."""
+    app = SousChefRestApi()
+    environ = {
+        "REQUEST_METHOD": "POST",
+        "PATH_INFO": "/api/v1/context/query/stream",
+        "CONTENT_LENGTH": "2",
+        "wsgi.input": io.BytesIO(b"{}"),
+    }
+    start_response = MagicMock()
+
+    with patch(
+        "souschef.rest_api.handle_rest_request",
+        return_value=(
+            HTTPStatus.OK,
+            {
+                "events": [
+                    {"event": "start", "data": {"query": "x"}},
+                    {"event": "done", "data": {"status": "success"}},
+                ]
+            },
+        ),
+    ):
+        chunks = app(environ, start_response)
+
+    response_text = chunks[0].decode("utf-8")
+    assert "event: start" in response_text
+    assert "event: done" in response_text
+    headers = start_response.call_args.args[1]
+    assert ("Content-Type", "text/event-stream") in headers
 
 
 def test_run_api_server_starts_wsgi_server() -> None:

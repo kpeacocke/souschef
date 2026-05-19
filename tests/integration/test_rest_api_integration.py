@@ -135,3 +135,48 @@ def test_context_query_endpoint_with_real_cookbook_signals(
     assert payload["operation"] == "context_query"
     assert payload["cookbook_path"] == str(SAMPLE_COOKBOOK)
     assert any(match["kind"] == "cookbook_signal" for match in payload["matches"])
+
+
+def test_context_query_stream_endpoint_with_real_fixture(workspace_root: Path) -> None:
+    """Context query stream endpoint emits event envelopes."""
+    del workspace_root
+
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/context/query/stream",
+        _request_bytes(
+            {
+                "query": "migration plan",
+                "top_k": 3,
+                "cookbook_path": str(SAMPLE_COOKBOOK),
+                "retrieval_mode": "hybrid",
+            }
+        ),
+    )
+
+    assert status.value == 200
+    assert payload["status"] == "success"
+    assert payload["operation"] == "context_query_stream"
+    assert payload["events"][0]["event"] == "start"
+    assert payload["events"][-1]["event"] == "done"
+
+
+def test_validation_profile_stream_endpoint_with_real_payload() -> None:
+    """Validation profile stream endpoint emits result events."""
+    status, payload = handle_rest_request(
+        "POST",
+        "/api/v1/validation/profile/stream",
+        _request_bytes(
+            {
+                "conversion_type": "recipe",
+                "result_content": "- hosts: all\n  tasks: []",
+                "validation_profile": "safety",
+            }
+        ),
+    )
+
+    assert status.value == 200
+    assert payload["status"] == "success"
+    assert payload["operation"] == "validate_conversion_with_profile_stream"
+    assert payload["events"][0]["event"] == "start"
+    assert payload["events"][-1]["event"] == "done"

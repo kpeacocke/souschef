@@ -89,3 +89,6 @@ def test_estimate_time_cost_validates_inputs() -> None:
         estimate_time_cost(
             _input(), what_if=WhatIfParameters(productivity_multiplier=0.0)
         )
+
+    with pytest.raises(ValueError):
+        estimate_time_cost(_input(), what_if=WhatIfParameters(team_size=0))

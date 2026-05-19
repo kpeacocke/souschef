@@ -68,6 +68,51 @@ def test_sync_ticket_raises_when_credentials_invalid() -> None:
             migration_item=_item(),
         )
 
+    with pytest.raises(TicketCredentialError, match="requires 'token'"):
+        sync_ticket_with_retry(
+            provider="jira",
+            credentials={"project_key": "MIG"},
+            migration_item=_item(),
+        )
+
+    with pytest.raises(TicketCredentialError, match="requires 'instance'"):
+        sync_ticket_with_retry(
+            provider="servicenow",
+            credentials={"token": "abc"},
+            migration_item=_item(),
+        )
+
+
+def test_sync_ticket_raises_when_provider_response_missing_ticket_id() -> None:
+    """Provider responses must include a ticket identifier."""
+
+    def handler(_provider, _operation, _payload):
+        return {"status": "created"}
+
+    with pytest.raises(RuntimeError, match="missing ticket_id"):
+        sync_ticket_with_retry(
+            provider="jira",
+            credentials={"token": "abc", "project_key": "MIG"},
+            migration_item=_item(),
+            api_handler=handler,
+        )
+
+
+def test_sync_ticket_raises_when_retries_are_exhausted() -> None:
+    """Transient failures should be re-raised after max retries are exhausted."""
+
+    def handler(_provider, _operation, _payload):
+        raise TransientTicketSyncError("temporary")
+
+    with pytest.raises(TransientTicketSyncError):
+        sync_ticket_with_retry(
+            provider="servicenow",
+            credentials={"token": "abc", "instance": "dev123"},
+            migration_item=_item(),
+            max_retries=0,
+            api_handler=handler,
+        )
+
 
 def test_format_ticket_sync_status() -> None:
     """UI status formatter should include provider, ticket, and retries."""

@@ -10,6 +10,8 @@ from souschef.auth import normalise_role, require_permission
 from souschef.storage import get_storage_manager
 from souschef.storage.database import ApprovalRequest, AuditEvent, WorkspaceMembership
 
+PERMISSION_MEMBER_VIEW = "workspace:member:view"
+
 
 def _resolve_storage(storage_manager=None):
     """Resolve storage manager instance for API operations."""
@@ -125,7 +127,7 @@ def list_workspace_members(
 ) -> list[WorkspaceMembership]:
     """List members in a workspace if actor can view member assignments."""
     storage = _resolve_storage(storage_manager)
-    require_permission(storage, workspace_id, actor_user_id, "workspace:member:view")
+    require_permission(storage, workspace_id, actor_user_id, PERMISSION_MEMBER_VIEW)
     members = storage.list_workspace_members(workspace_id)
     return cast(list[WorkspaceMembership], members)
 
@@ -216,7 +218,7 @@ def list_workspace_audit_events(
 ) -> list[AuditEvent]:
     """List workspace audit events if actor may view workspace membership."""
     storage = _resolve_storage(storage_manager)
-    require_permission(storage, workspace_id, actor_user_id, "workspace:member:view")
+    require_permission(storage, workspace_id, actor_user_id, PERMISSION_MEMBER_VIEW)
     events = storage.get_audit_events(workspace_id, limit=limit)
     filtered_events = _filter_audit_events(
         events=cast(list[AuditEvent], events),
@@ -306,7 +308,7 @@ def list_workspace_approval_requests(
 ) -> list[ApprovalRequest]:
     """List workspace approval requests if actor may view workspace membership."""
     storage = _resolve_storage(storage_manager)
-    require_permission(storage, workspace_id, actor_user_id, "workspace:member:view")
+    require_permission(storage, workspace_id, actor_user_id, PERMISSION_MEMBER_VIEW)
     requests = storage.list_approval_requests(workspace_id, status=status, limit=limit)
     return cast(list[ApprovalRequest], requests)
 

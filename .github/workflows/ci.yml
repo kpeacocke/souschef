@@ -19,6 +19,8 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.13"
+  POETRY_VERSION: "2.1.3"
+  PIP_AUDIT_POLICY: "fail-on-any"
 
 jobs:
   test:
@@ -39,7 +41,7 @@ jobs:
     - name: Install Poetry
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a # v1
       with:
-        version: latest
+        version: ${{ env.POETRY_VERSION }}
         virtualenvs-create: true
         virtualenvs-in-project: true
 
@@ -51,8 +53,24 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-poetry-
 
-    - name: Install dependencies
-      run: poetry install --no-interaction --all-extras
+    - name: Sync dependencies
+      run: poetry sync --no-interaction --all-extras
+
+    - name: Dependency audit with pip-audit
+      run: |
+        echo "pip-audit policy: $PIP_AUDIT_POLICY"
+        case "$PIP_AUDIT_POLICY" in
+          fail-on-any)
+            poetry run pip-audit --strict --locked .
+            ;;
+          report-only)
+            poetry run pip-audit --locked .
+            ;;
+          *)
+            echo "Unsupported PIP_AUDIT_POLICY: $PIP_AUDIT_POLICY"
+            exit 2
+            ;;
+        esac
 
     - name: Lint with ruff
       run: poetry run ruff check .
@@ -99,8 +117,8 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
 
-    - name: Install Python dependencies
-      run: poetry install --no-interaction --all-extras
+    - name: Sync Python dependencies
+      run: poetry sync --no-interaction --all-extras
 
     - name: Set souschef path for Terraform tests
       run: |
@@ -167,8 +185,8 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-poetry-
 
-    - name: Install dependencies
-      run: poetry install --no-interaction --all-extras
+    - name: Sync dependencies
+      run: poetry sync --no-interaction --all-extras
 
     - name: Test CLI functionality
       run: |

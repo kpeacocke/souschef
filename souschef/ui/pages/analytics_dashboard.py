@@ -17,6 +17,11 @@ from souschef.api import (
     serialise_explainability,
 )
 
+LABEL_RISK_LEVEL = "Risk Level"
+LABEL_RISK_SCORE = "Risk Score"
+LABEL_EFFORT_HOURS = "Effort Hours"
+LABEL_COST_AMOUNT = "Cost Amount"
+
 
 def _complexity_to_score(complexity: str) -> float:
     """Map complexity label to a numeric score."""
@@ -86,11 +91,11 @@ def _build_dashboard_rows(
                 "Complexity": complexity,
                 "Status": status,
                 "Dependencies": dependencies,
-                "Risk Level": risk_result.risk_level,
-                "Risk Score": risk_result.total_score,
-                "Effort Hours": estimate_result.effort_hours,
+                LABEL_RISK_LEVEL: risk_result.risk_level,
+                LABEL_RISK_SCORE: risk_result.total_score,
+                LABEL_EFFORT_HOURS: estimate_result.effort_hours,
                 "Duration Weeks": estimate_result.estimated_duration_weeks,
-                "Cost Amount": estimate_result.cost_amount,
+                LABEL_COST_AMOUNT: estimate_result.cost_amount,
                 "Confidence Low Hours": estimate_result.confidence_low_hours,
                 "Confidence High Hours": estimate_result.confidence_high_hours,
                 "Confidence Low Cost": estimate_result.confidence_low_cost,
@@ -121,7 +126,7 @@ def _filter_dashboard_rows(
     if risk_filter:
         allowed = {value.lower() for value in risk_filter}
         filtered = [
-            row for row in filtered if str(row["Risk Level"]).lower() in allowed
+            row for row in filtered if str(row[LABEL_RISK_LEVEL]).lower() in allowed
         ]
 
     if status_filter:
@@ -143,11 +148,11 @@ def _exportable_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "complexity": row["Complexity"],
             "status": row["Status"],
             "dependencies": row["Dependencies"],
-            "risk_level": row["Risk Level"],
-            "risk_score": row["Risk Score"],
-            "effort_hours": row["Effort Hours"],
+            "risk_level": row[LABEL_RISK_LEVEL],
+            "risk_score": row[LABEL_RISK_SCORE],
+            "effort_hours": row[LABEL_EFFORT_HOURS],
             "duration_weeks": row["Duration Weeks"],
-            "cost_amount": row["Cost Amount"],
+            "cost_amount": row[LABEL_COST_AMOUNT],
             "confidence_low_hours": row["Confidence Low Hours"],
             "confidence_high_hours": row["Confidence High Hours"],
             "confidence_low_cost": row["Confidence Low Cost"],
@@ -202,8 +207,8 @@ def show_analytics_dashboard_page() -> None:
         )
     with col2:
         risk_filter = st.multiselect(
-            "Risk Level",
-            options=sorted({str(row["Risk Level"]).title() for row in rows}),
+            LABEL_RISK_LEVEL,
+            options=sorted({str(row[LABEL_RISK_LEVEL]).title() for row in rows}),
         )
     with col3:
         status_filter = st.multiselect(
@@ -224,15 +229,15 @@ def show_analytics_dashboard_page() -> None:
     st.subheader("Summary Widgets")
     widget_1, widget_2, widget_3 = st.columns(3)
     with widget_1:
-        high_risk_count = len(
-            [row for row in filtered_rows if str(row["Risk Level"]).lower() == "high"]
+        high_risk_count = sum(
+            1 for row in filtered_rows if str(row[LABEL_RISK_LEVEL]).lower() == "high"
         )
         st.metric("High-Risk Items", high_risk_count)
     with widget_2:
-        total_effort = sum(float(row["Effort Hours"]) for row in filtered_rows)
+        total_effort = sum(float(row[LABEL_EFFORT_HOURS]) for row in filtered_rows)
         st.metric("Total Effort (Hours)", f"{total_effort:.2f}")
     with widget_3:
-        total_cost = sum(float(row["Cost Amount"]) for row in filtered_rows)
+        total_cost = sum(float(row[LABEL_COST_AMOUNT]) for row in filtered_rows)
         st.metric("Total Cost", f"${total_cost:,.2f}")
 
     st.subheader("Filtered Items")
@@ -273,11 +278,11 @@ def show_analytics_dashboard_page() -> None:
 
         detail_col_1, detail_col_2, detail_col_3 = st.columns(3)
         with detail_col_1:
-            st.metric("Risk Score", f"{selected_row['Risk Score']:.2f}")
+            st.metric(LABEL_RISK_SCORE, f"{selected_row[LABEL_RISK_SCORE]:.2f}")
         with detail_col_2:
-            st.metric("Effort Hours", f"{selected_row['Effort Hours']:.2f}")
+            st.metric(LABEL_EFFORT_HOURS, f"{selected_row[LABEL_EFFORT_HOURS]:.2f}")
         with detail_col_3:
-            st.metric("Cost", f"${selected_row['Cost Amount']:,.2f}")
+            st.metric("Cost", f"${selected_row[LABEL_COST_AMOUNT]:,.2f}")
 
         st.caption(
             "Confidence range (hours): "

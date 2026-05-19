@@ -78,3 +78,41 @@ def test_dispatch_notification_retries_and_dead_letters() -> None:
     assert result.status == "dead_lettered"
     assert waits == [0.1, 0.2]
     assert dead_letters
+
+
+def test_validate_notification_config_rejects_invalid_inputs() -> None:
+    """Notification validation should reject invalid schemes, providers, and channels."""
+    with pytest.raises(NotificationConfigError, match="https://"):
+        validate_notification_config(
+            NotificationConfig(
+                provider="slack",
+                webhook_url="http://hooks.slack.com/services/a/b/c",
+                channel="#migrations",
+            )
+        )
+
+    with pytest.raises(NotificationConfigError, match="Slack webhook URL"):
+        validate_notification_config(
+            NotificationConfig(
+                provider="slack",
+                webhook_url="https://example.com/webhook",
+                channel="#migrations",
+            )
+        )
+
+    with pytest.raises(NotificationConfigError, match="Channel must not be empty"):
+        validate_notification_config(
+            NotificationConfig(
+                provider="teams",
+                webhook_url="https://teams.microsoft.com/webhook/123",
+                channel=" ",
+            )
+        )
+
+
+def test_render_notification_message_uses_fallback_template() -> None:
+    """Unrecognised events should use the generic fallback template."""
+    message = render_notification_message("custom_event", {"value": 1})
+
+    assert "custom_event" in message
+    assert "value" in message

@@ -2091,11 +2091,13 @@ class TestValidationPathHelpers:
         """Test valid path handling."""
         from souschef.ui.app import _normalize_and_validate_input_path
 
-        mock_normalize.return_value = Path("/tmp/example")
-        mock_within.return_value = Path("/tmp/example")
+        mock_normalize.return_value = Path("/workspaces/souschef/test-temp/example")
+        mock_within.return_value = Path("/workspaces/souschef/test-temp/example")
 
-        result = _normalize_and_validate_input_path("/tmp/example")
-        assert result == Path("/tmp/example")
+        result = _normalize_and_validate_input_path(
+            "/workspaces/souschef/test-temp/example"
+        )
+        assert result == Path("/workspaces/souschef/test-temp/example")
 
     @patch("souschef.ui.app._normalize_and_validate_input_path")
     def test_collect_files_to_validate_none_path(self, mock_validate):
@@ -2115,13 +2117,15 @@ class TestValidationPathHelpers:
         """Test collecting one valid playbook file."""
         from souschef.ui.app import _collect_files_to_validate
 
-        file_path = Path("/tmp/playbook.yml")
+        file_path = Path("/workspaces/souschef/test-temp/playbook.yml")
         mock_validate.return_value = file_path
         mock_exists.return_value = True
         mock_is_file.return_value = True
         mock_is_dir.return_value = False
 
-        files = _collect_files_to_validate("/tmp/playbook.yml")
+        files = _collect_files_to_validate(
+            "/workspaces/souschef/test-temp/playbook.yml"
+        )
         assert files == [file_path]
 
     @patch("souschef.ui.app.safe_glob")
@@ -2140,21 +2144,27 @@ class TestValidationPathHelpers:
         """Test collecting files from directory with exclusions."""
         from souschef.ui.app import _collect_files_to_validate
 
-        dir_path = Path("/tmp/ansible")
+        dir_path = Path("/workspaces/souschef/test-temp/ansible")
         mock_validate.return_value = dir_path
         mock_exists.return_value = True
         mock_is_file.return_value = False
         mock_is_dir.return_value = True
         mock_glob.side_effect = [
-            [Path("/tmp/ansible/site.yml"), Path("/tmp/ansible/docker-compose.yml")],
-            [Path("/tmp/ansible/tasks.yaml")],
+            [
+                Path("/workspaces/souschef/test-temp/ansible/site.yml"),
+                Path("/workspaces/souschef/test-temp/ansible/docker-compose.yml"),
+            ],
+            [Path("/workspaces/souschef/test-temp/ansible/tasks.yaml")],
         ]
 
-        files = _collect_files_to_validate("/tmp/ansible")
+        files = _collect_files_to_validate("/workspaces/souschef/test-temp/ansible")
 
-        assert Path("/tmp/ansible/site.yml") in files
-        assert Path("/tmp/ansible/tasks.yaml") in files
-        assert Path("/tmp/ansible/docker-compose.yml") not in files
+        assert Path("/workspaces/souschef/test-temp/ansible/site.yml") in files
+        assert Path("/workspaces/souschef/test-temp/ansible/tasks.yaml") in files
+        assert (
+            Path("/workspaces/souschef/test-temp/ansible/docker-compose.yml")
+            not in files
+        )
 
 
 class TestValidationWorkflowHelpers:
@@ -2200,7 +2210,7 @@ class TestValidationWorkflowHelpers:
         from souschef.ui.app import _execute_validation_workflow
 
         _execute_validation_workflow(
-            "/tmp/playbooks",
+            "/workspaces/souschef/test-temp/playbooks",
             "Security",
             "json",
             strict_mode=True,
@@ -2229,14 +2239,21 @@ class TestValidationWorkflowHelpers:
         """Test collecting validation inputs from UI helpers."""
         from souschef.ui.app import _collect_validation_inputs
 
-        mock_default.return_value = "/tmp/default"
+        mock_default.return_value = "/workspaces/souschef/test-temp/default"
         mock_opts.return_value = ("Full Suite", "text")
-        mock_input.return_value = "/tmp/path"
+        mock_input.return_value = "/workspaces/souschef/test-temp/path"
         mock_settings.return_value = (True, False, True)
 
         result = _collect_validation_inputs()
 
-        assert result == ("/tmp/path", "Full Suite", "text", True, False, True)
+        assert result == (
+            "/workspaces/souschef/test-temp/path",
+            "Full Suite",
+            "text",
+            True,
+            False,
+            True,
+        )
 
     @patch("souschef.ui.app.st")
     def test_display_analysis_history_tab_no_analyses(self, mock_st):
@@ -2257,7 +2274,7 @@ class TestValidationWorkflowHelpers:
             cookbook_version = "1.0"
             complexity = "Low"
             created_at = "2025-01-01"
-            cookbook_path = "/tmp/nginx"
+            cookbook_path = "/workspaces/souschef/test-temp/nginx"
 
         mock_st.columns.return_value = [self._ctx(), self._ctx()]
         mock_st.selectbox.return_value = 1
@@ -2266,7 +2283,10 @@ class TestValidationWorkflowHelpers:
 
         _display_analysis_history_tab([Analysis()])
 
-        assert mock_st.session_state["analysis_cookbook_path"] == "/tmp/nginx"
+        assert (
+            mock_st.session_state["analysis_cookbook_path"]
+            == "/workspaces/souschef/test-temp/nginx"
+        )
         mock_st.rerun.assert_called_once()
 
     @patch("souschef.ui.app.st")
@@ -2348,7 +2368,14 @@ class TestValidationExecutionFlow:
             patch("souschef.ui.app._display_validation_history_tabs"),
             patch(
                 "souschef.ui.app._collect_validation_inputs",
-                return_value=("/tmp/x", "Full Suite", "text", False, True, True),
+                return_value=(
+                    "/workspaces/souschef/test-temp/x",
+                    "Full Suite",
+                    "text",
+                    False,
+                    True,
+                    True,
+                ),
             ),
             patch("souschef.ui.app.display_validation_results") as disp,
         ):
@@ -2367,7 +2394,14 @@ class TestValidationExecutionFlow:
             patch("souschef.ui.app._display_validation_history_tabs"),
             patch(
                 "souschef.ui.app._collect_validation_inputs",
-                return_value=("/tmp/x", "Security", "json", True, False, False),
+                return_value=(
+                    "/workspaces/souschef/test-temp/x",
+                    "Security",
+                    "json",
+                    True,
+                    False,
+                    False,
+                ),
             ),
             patch("souschef.ui.app._execute_validation_workflow") as exec_flow,
             patch("souschef.ui.app.display_validation_results") as disp,
@@ -2397,7 +2431,7 @@ class TestValidationExecutionFlow:
         with (
             patch(
                 "souschef.ui.app._collect_files_to_validate",
-                return_value=[Path("/tmp/file.yml")],
+                return_value=[Path("/workspaces/souschef/test-temp/file.yml")],
             ),
             patch(
                 "souschef.ui.app._run_validation_engine",
@@ -2408,7 +2442,9 @@ class TestValidationExecutionFlow:
                 return_value=[Result()],
             ),
         ):
-            _handle_validation_execution("/tmp", {"scope": "Full Suite"})
+            _handle_validation_execution(
+                "/workspaces/souschef/test-temp", {"scope": "Full Suite"}
+            )
 
         assert "validation_result" in mock_st.session_state
         tracker.complete.assert_called_once()
@@ -2433,7 +2469,9 @@ class TestValidationExecutionFlow:
                 return_value=None,
             ),
         ):
-            _handle_validation_execution("/tmp", {"scope": "Full Suite"})
+            _handle_validation_execution(
+                "/workspaces/souschef/test-temp", {"scope": "Full Suite"}
+            )
 
         tracker.complete.assert_not_called()
 
@@ -2449,7 +2487,9 @@ class TestValidationExecutionFlow:
             "souschef.ui.app._collect_files_to_validate",
             side_effect=RuntimeError("boom"),
         ):
-            _handle_validation_execution("/tmp", {"scope": "Full Suite"})
+            _handle_validation_execution(
+                "/workspaces/souschef/test-temp", {"scope": "Full Suite"}
+            )
 
         tracker.close.assert_called_once()
         mock_st.error.assert_called_once()
@@ -2542,7 +2582,7 @@ class TestDashboardAndDependencyHelpers:
         analysis.cookbook_version = "2.4"
         analysis.complexity = "Medium"
         analysis.created_at = "2025-01-01"
-        analysis.cookbook_path = "/tmp/apache"
+        analysis.cookbook_path = "/workspaces/souschef/test-temp/apache"
 
         storage = MagicMock()
         storage.get_analysis_history.return_value = [analysis]
@@ -2558,7 +2598,10 @@ class TestDashboardAndDependencyHelpers:
         ):
             _display_migration_planning_history()
 
-        assert mock_st.session_state["analysis_cookbook_path"] == "/tmp/apache"
+        assert (
+            mock_st.session_state["analysis_cookbook_path"]
+            == "/workspaces/souschef/test-temp/apache"
+        )
         mock_st.rerun.assert_called_once()
 
     @patch("souschef.ui.app.st")
@@ -2586,7 +2629,7 @@ class TestDashboardAndDependencyHelpers:
         analysis.cookbook_version = "8.0"
         analysis.complexity = "High"
         analysis.created_at = "2025-01-01"
-        analysis.cookbook_path = "/tmp/mysql"
+        analysis.cookbook_path = "/workspaces/souschef/test-temp/mysql"
 
         storage = MagicMock()
         storage.get_analysis_history.return_value = [analysis]
@@ -2602,7 +2645,10 @@ class TestDashboardAndDependencyHelpers:
         ):
             _display_dependency_mapping_history()
 
-        assert mock_st.session_state["dep_analysis_cookbook_path"] == "/tmp/mysql"
+        assert (
+            mock_st.session_state["dep_analysis_cookbook_path"]
+            == "/workspaces/souschef/test-temp/mysql"
+        )
         mock_st.rerun.assert_called_once()
 
     @patch("souschef.ui.app.st")
@@ -2641,7 +2687,7 @@ class TestDashboardAndDependencyHelpers:
 
         _display_dependency_export_options(
             analysis_result="## report",
-            cookbook_path="/tmp/cookbook",
+            cookbook_path="/workspaces/souschef/test-temp/cookbook",
             depth="full",
             direct_deps=3,
             transitive_deps=8,
@@ -2662,7 +2708,9 @@ class TestDashboardAndDependencyHelpers:
             ),
             patch("souschef.ui.app._display_dependency_summary_metrics") as summary,
         ):
-            _display_dependency_analysis_summary("analysis", "/tmp/cookbook", "direct")
+            _display_dependency_analysis_summary(
+                "analysis", "/workspaces/souschef/test-temp/cookbook", "direct"
+            )
 
         summary.assert_called_once_with(2, 5, 1, 1)
         mock_st.info.assert_called_once()
@@ -2685,7 +2733,7 @@ class TestDashboardAndDependencyHelpers:
 
         _display_validation_export_options(
             validation_result="[ERROR] thing",
-            input_path="/tmp/playbooks",
+            input_path="/workspaces/souschef/test-temp/playbooks",
             validation_type="Security",
             options={"strict": True},
             errors=1,
@@ -2786,17 +2834,21 @@ class TestDashboardAndDependencyHelpers:
         from souschef.ui.app import _get_cookbook_path_from_input_method
 
         # Directory path branch
-        mock_st.text_input.return_value = "/tmp/cookbooks"
+        mock_st.text_input.return_value = "/workspaces/souschef/test-temp/cookbooks"
         assert (
-            _get_cookbook_path_from_input_method("Directory Path") == "/tmp/cookbooks"
+            _get_cookbook_path_from_input_method("Directory Path")
+            == "/workspaces/souschef/test-temp/cookbooks"
         )
 
         # Use history branch with session value
         mock_st.session_state = self._session_state(
-            {"dep_analysis_cookbook_path": "/tmp/from-history"}
+            {
+                "dep_analysis_cookbook_path": "/workspaces/souschef/test-temp/from-history"
+            }
         )
         assert (
-            _get_cookbook_path_from_input_method("Use History") == "/tmp/from-history"
+            _get_cookbook_path_from_input_method("Use History")
+            == "/workspaces/souschef/test-temp/from-history"
         )
 
         # Use history branch without session value
@@ -2809,11 +2861,11 @@ class TestDashboardAndDependencyHelpers:
         mock_st.spinner.return_value = self._ctx()
         with patch(
             "souschef.ui.pages.cookbook_analysis.extract_archive",
-            return_value=Path("/tmp/extracted"),
+            return_value=Path("/workspaces/souschef/test-temp/extracted"),
         ):
             assert (
                 _get_cookbook_path_from_input_method("Upload Archive")
-                == "/tmp/extracted"
+                == "/workspaces/souschef/test-temp/extracted"
             )
 
         # Upload branch failure
@@ -2890,7 +2942,7 @@ class TestDashboardAndDependencyHelpers:
         mock_st.session_state = self._session_state(
             {
                 "dep_analysis_result": "analysis text",
-                "dep_cookbook_path": "/tmp/cook",
+                "dep_cookbook_path": "/workspaces/souschef/test-temp/cook",
                 "dep_depth": "direct",
                 "dep_viz_type": "text",
             }
@@ -3045,14 +3097,14 @@ class TestDashboardAndDependencyHelpers:
         from souschef.ui.app import _get_default_validation_path
 
         mock_st.session_state = self._session_state(
-            {"converted_playbooks_path": "/tmp/out"}
+            {"converted_playbooks_path": "/workspaces/souschef/test-temp/out"}
         )
-        assert _get_default_validation_path() == "/tmp/out"
+        assert _get_default_validation_path() == "/workspaces/souschef/test-temp/out"
 
         mock_st.session_state = self._session_state(
-            {"analysis_cookbook_path": "/tmp/cook"}
+            {"analysis_cookbook_path": "/workspaces/souschef/test-temp/cook"}
         )
-        assert _get_default_validation_path() == "/tmp/cook"
+        assert _get_default_validation_path() == "/workspaces/souschef/test-temp/cook"
 
     @patch("souschef.ui.app.st")
     def test_render_validation_options_ui(self, mock_st):
@@ -3070,12 +3122,18 @@ class TestDashboardAndDependencyHelpers:
         from souschef.ui.app import _render_validation_input_ui
 
         mock_st.radio.return_value = "Directory"
-        mock_st.text_input.return_value = "/tmp/playbooks"
-        assert _render_validation_input_ui("") == "/tmp/playbooks"
+        mock_st.text_input.return_value = "/workspaces/souschef/test-temp/playbooks"
+        assert (
+            _render_validation_input_ui("")
+            == "/workspaces/souschef/test-temp/playbooks"
+        )
 
         mock_st.radio.return_value = "Single File"
-        mock_st.text_input.return_value = "/tmp/site.yml"
-        assert _render_validation_input_ui("/tmp/site.yml") == "/tmp/site.yml"
+        mock_st.text_input.return_value = "/workspaces/souschef/test-temp/site.yml"
+        assert (
+            _render_validation_input_ui("/workspaces/souschef/test-temp/site.yml")
+            == "/workspaces/souschef/test-temp/site.yml"
+        )
 
     @patch("souschef.ui.app.st")
     def test_render_validation_settings_ui(self, mock_st):
@@ -3112,7 +3170,9 @@ class TestDashboardAndDependencyHelpers:
             ),
             patch("souschef.ui.app.ProgressTracker", return_value=progress),
         ):
-            _execute_migration_plan_generation("/tmp/cook", "phased", 6)
+            _execute_migration_plan_generation(
+                "/workspaces/souschef/test-temp/cook", "phased", 6
+            )
 
         assert mock_st.session_state["migration_plan"] == "## Plan"
         mock_st.success.assert_called_once()
@@ -3127,7 +3187,8 @@ class TestDashboardAndDependencyHelpers:
         with (
             patch("souschef.ui.app._display_migration_planning_history"),
             patch(
-                "souschef.ui.app._get_cookbook_paths_input", return_value="/tmp/cook"
+                "souschef.ui.app._get_cookbook_paths_input",
+                return_value="/workspaces/souschef/test-temp/cook",
             ),
             patch(
                 "souschef.ui.app._get_migration_strategy_inputs",
@@ -3177,7 +3238,7 @@ class TestDashboardAndDependencyHelpers:
             }
         )
 
-        _display_migration_action_buttons("/tmp/cook")
+        _display_migration_action_buttons("/workspaces/souschef/test-temp/cook")
 
         mock_st.download_button.assert_called_once()
 
@@ -3201,7 +3262,7 @@ class TestDashboardAndDependencyHelpers:
         mock_st.session_state = self._session_state(
             {
                 "migration_plan": "## Plan",
-                "cookbook_paths": "/tmp/cook",
+                "cookbook_paths": "/workspaces/souschef/test-temp/cook",
                 "strategy": "phased",
                 "timeline": 6,
             }
@@ -3225,7 +3286,7 @@ class TestDashboardAndDependencyHelpers:
         from souschef.ui.app import _get_cookbook_paths_input
 
         mock_st.session_state = self._session_state(
-            {"analysis_cookbook_path": "/tmp/from-analysis"}
+            {"analysis_cookbook_path": "/workspaces/souschef/test-temp/from-analysis"}
         )
         mock_st.columns.return_value = [self._ctx(), self._ctx()]
         mock_st.text_area.return_value = "custom"
@@ -3273,11 +3334,14 @@ class TestDashboardAndDependencyHelpers:
 
         class Analysis:
             id = 7
-            cookbook_path = "/tmp/cook"
+            cookbook_path = "/workspaces/souschef/test-temp/cook"
             cookbook_name = "nginx"
 
         _handle_history_load_button(7, [Analysis()])
-        assert mock_st.session_state["analysis_cookbook_path"] == "/tmp/cook"
+        assert (
+            mock_st.session_state["analysis_cookbook_path"]
+            == "/workspaces/souschef/test-temp/cook"
+        )
         mock_st.rerun.assert_called_once()
 
     @patch("souschef.ui.app.st")
@@ -3308,7 +3372,9 @@ class TestDashboardAndDependencyHelpers:
             ),
             patch("souschef.ui.app.ProgressTracker", return_value=tracker),
         ):
-            _execute_dependency_analysis("/tmp/cook", "direct", "text")
+            _execute_dependency_analysis(
+                "/workspaces/souschef/test-temp/cook", "direct", "text"
+            )
 
         assert mock_st.session_state["dep_analysis_result"] == "deps"
         mock_st.rerun.assert_called_once()
@@ -3332,7 +3398,9 @@ class TestDashboardAndDependencyHelpers:
             ),
             patch("souschef.ui.app.ProgressTracker", return_value=tracker),
         ):
-            _execute_dependency_analysis("/tmp/cook", "direct", "text")
+            _execute_dependency_analysis(
+                "/workspaces/souschef/test-temp/cook", "direct", "text"
+            )
 
         tracker.close.assert_called_once()
         mock_st.error.assert_called()
@@ -3350,7 +3418,7 @@ class TestDashboardAndDependencyHelpers:
             patch("souschef.ui.app._display_dependency_mapping_history"),
             patch(
                 "souschef.ui.app._get_cookbook_path_from_input_method",
-                return_value="/tmp/cook",
+                return_value="/workspaces/souschef/test-temp/cook",
             ),
             patch(
                 "souschef.ui.app._get_dependency_analysis_options",
@@ -3361,7 +3429,9 @@ class TestDashboardAndDependencyHelpers:
         ):
             show_dependency_mapping()
 
-        exec_dep.assert_called_once_with("/tmp/cook", "direct", "text")
+        exec_dep.assert_called_once_with(
+            "/workspaces/souschef/test-temp/cook", "direct", "text"
+        )
         disp.assert_called_once()
 
     @patch("souschef.ui.app.st")
@@ -3374,5 +3444,9 @@ class TestDashboardAndDependencyHelpers:
 
         mock_st.error.reset_mock()
         with patch("souschef.ui.app._perform_dependency_analysis") as perf:
-            _handle_dependency_analysis_execution("/tmp/cook", "full", "graph")
-        perf.assert_called_once_with("/tmp/cook", "full", "graph")
+            _handle_dependency_analysis_execution(
+                "/workspaces/souschef/test-temp/cook", "full", "graph"
+            )
+        perf.assert_called_once_with(
+            "/workspaces/souschef/test-temp/cook", "full", "graph"
+        )

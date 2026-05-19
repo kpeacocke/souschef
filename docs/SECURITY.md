@@ -49,6 +49,13 @@ SousChef uses several tools to maintain secure dependencies:
 - **pip-audit**: Automated vulnerability scanning in CI/CD
 - **Dependabot**: Automated dependency updates (GitHub)
 
+CI policy for dependency auditing:
+
+- Policy: `fail-on-any` (CI fails when any vulnerability is reported)
+- Supported policies: `fail-on-any`, `report-only`
+- Command: `poetry run pip-audit --strict --locked .`
+- Exceptions: use explicit vulnerability allowlists with `--ignore-vuln` only when triaged and approved
+
 **Checking Dependencies:**
 
 ```bash

@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
+from collections import Counter
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -34,6 +38,41 @@ from souschef.webhooks import send_webhook_notification
 JsonObject = dict[str, Any]
 RouteResponse = tuple[HTTPStatus, JsonObject]
 LOGGER = logging.getLogger(__name__)
+
+ROUTE_RUN = "/api/v1/run"
+ROUTE_MIGRATION_ANALYSE = "/api/v1/migration/analyse"
+ROUTE_MIGRATION_PLAN = "/api/v1/migration/plan"
+ROUTE_MIGRATION_GENERATE_PLAYBOOK = "/api/v1/migration/generate-playbook"
+ROUTE_VALIDATION_PROFILE = "/api/v1/validation/profile"
+ROUTE_VALIDATION_PROFILE_STREAM = "/api/v1/validation/profile/stream"
+ROUTE_CONTEXT_QUERY = "/api/v1/context/query"
+ROUTE_CONTEXT_QUERY_STREAM = "/api/v1/context/query/stream"
+ROUTE_WEBHOOK_NOTIFY = "/api/v1/webhooks/notify"
+
+TOKEN_SPLIT_PATTERN = r"[^a-z0-9]+"
+
+MAX_BODY_BYTES_DEFAULT = 50 * 1024
+MAX_BODY_BYTES_BY_ROUTE: dict[tuple[str, str], int] = {
+    ("POST", ROUTE_VALIDATION_PROFILE): 50 * 1024,
+    ("POST", ROUTE_VALIDATION_PROFILE_STREAM): 50 * 1024,
+    ("POST", ROUTE_CONTEXT_QUERY): 100 * 1024,
+    ("POST", ROUTE_CONTEXT_QUERY_STREAM): 100 * 1024,
+    ("POST", ROUTE_MIGRATION_ANALYSE): 200 * 1024,
+    ("POST", ROUTE_MIGRATION_PLAN): 200 * 1024,
+    ("POST", ROUTE_MIGRATION_GENERATE_PLAYBOOK): 100 * 1024,
+    ("POST", ROUTE_RUN): 100 * 1024,
+    ("POST", ROUTE_WEBHOOK_NOTIFY): 50 * 1024,
+}
+
+TIMEOUT_SECONDS_BY_OPERATION: dict[str, float] = {
+    "assess_chef_migration_complexity": 180.0,
+    "generate_migration_plan": 180.0,
+    "generate_playbook_from_recipe": 120.0,
+    "validate_conversion": 120.0,
+    "context_query": 30.0,
+    "run_operation": 120.0,
+    "webhook_notify": 30.0,
+}
 
 
 def _supported_operations() -> dict[str, Any]:
@@ -69,6 +108,15 @@ def _coerce_result(result: Any) -> Any:
         return result
 
 
+def _format_timeout_seconds(timeout: float) -> str:
+    """Return a readable timeout representation for API responses."""
+    if timeout < 1:
+        return f"{timeout:.2f}".rstrip("0").rstrip(".")
+    if timeout.is_integer():
+        return str(int(timeout))
+    return f"{timeout:.1f}".rstrip("0").rstrip(".")
+
+
 def _route_health() -> RouteResponse:
     """Return a basic health-check response."""
     return HTTPStatus.OK, {"status": "ok", "service": "souschef-rest-api"}
@@ -83,16 +131,45 @@ def _invoke_operation(
     operation: str,
     callable_operation: Any,
     arguments: JsonObject,
+    timeout_seconds: float | None = None,
 ) -> RouteResponse:
     """Run an operation and map known error types to HTTP responses."""
+    timeout = (
+        timeout_seconds
+        if timeout_seconds is not None
+        else TIMEOUT_SECONDS_BY_OPERATION.get(operation, 120.0)
+    )
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    future: Any | None = None
     try:
-        result = callable_operation(**arguments)
+        future = executor.submit(callable_operation, **arguments)
+        result = future.result(timeout=timeout)
+    except FutureTimeoutError:
+        cancel_succeeded = future.cancel() if future is not None else False
+        LOGGER.warning(
+            "REST operation timeout",
+            extra={
+                "operation": operation,
+                "timeout_seconds": timeout,
+                "cancel_requested": True,
+                "cancel_succeeded": cancel_succeeded,
+            },
+        )
+        return HTTPStatus.REQUEST_TIMEOUT, {
+            "error": (
+                f"Operation timed out after {_format_timeout_seconds(timeout)} seconds"
+            )
+        }
     except TypeError as exc:
         return HTTPStatus.BAD_REQUEST, {"error": f"Invalid arguments: {exc}"}
     except RuntimeError as exc:
         return HTTPStatus.BAD_GATEWAY, {"error": str(exc)}
     except ValueError as exc:
         return HTTPStatus.BAD_REQUEST, {"error": f"Invalid arguments: {exc}"}
+    finally:
+        # Avoid blocking request teardown on timed-out worker completion.
+        executor.shutdown(wait=False, cancel_futures=True)
 
     return HTTPStatus.OK, {
         "status": "success",
@@ -230,7 +307,7 @@ def _build_context_documents() -> list[JsonObject]:
             "kind": "operation",
             "title": "Parse Chef recipe",
             "description": "Parse recipe files into structured migration context.",
-            "route": "/api/v1/run",
+            "route": ROUTE_RUN,
             "operation": "parse_recipe",
             "keywords": ["chef", "recipe", "parse", "analysis"],
         },
@@ -240,7 +317,7 @@ def _build_context_documents() -> list[JsonObject]:
             "title": "Validate conversion",
             "description": "Validate conversion output with syntax and "
             "semantic checks.",
-            "route": "/api/v1/run",
+            "route": ROUTE_RUN,
             "operation": "validate_conversion",
             "keywords": ["validate", "conversion", "syntax", "quality"],
         },
@@ -249,7 +326,7 @@ def _build_context_documents() -> list[JsonObject]:
             "kind": "endpoint",
             "title": "Migration complexity analysis",
             "description": "Assess migration complexity for one or more cookbooks.",
-            "route": "/api/v1/migration/analyse",
+            "route": ROUTE_MIGRATION_ANALYSE,
             "keywords": ["migration", "analyse", "assessment", "complexity"],
         },
         {
@@ -258,7 +335,7 @@ def _build_context_documents() -> list[JsonObject]:
             "title": "Migration planning",
             "description": "Generate a phased or parallel migration plan "
             "with timeline.",
-            "route": "/api/v1/migration/plan",
+            "route": ROUTE_MIGRATION_PLAN,
             "keywords": ["migration", "plan", "timeline", "strategy"],
         },
         {
@@ -266,7 +343,7 @@ def _build_context_documents() -> list[JsonObject]:
             "kind": "endpoint",
             "title": "Generate playbook from recipe",
             "description": "Generate Ansible playbook content from Chef recipe input.",
-            "route": "/api/v1/migration/generate-playbook",
+            "route": ROUTE_MIGRATION_GENERATE_PLAYBOOK,
             "keywords": ["playbook", "recipe", "convert", "ansible"],
         },
         {
@@ -274,7 +351,7 @@ def _build_context_documents() -> list[JsonObject]:
             "kind": "endpoint",
             "title": "Validation profile filtering",
             "description": "Filter validation results by operational profile.",
-            "route": "/api/v1/validation/profile",
+            "route": ROUTE_VALIDATION_PROFILE,
             "keywords": ["validation", "profile", "safety", "production"],
         },
         {
@@ -282,7 +359,7 @@ def _build_context_documents() -> list[JsonObject]:
             "kind": "endpoint",
             "title": "Webhook notifications",
             "description": "Send operation result notifications to external systems.",
-            "route": "/api/v1/webhooks/notify",
+            "route": ROUTE_WEBHOOK_NOTIFY,
             "keywords": ["webhook", "notify", "integration", "event"],
         },
     ]
@@ -319,7 +396,7 @@ def _build_cookbook_context_documents(cookbook_path: str) -> list[JsonObject]:
             "kind": "cookbook_signal",
             "title": "Cookbook structure summary",
             "description": summary,
-            "route": "/api/v1/context/query",
+            "route": ROUTE_CONTEXT_QUERY,
             "keywords": [
                 "cookbook",
                 "structure",
@@ -341,7 +418,7 @@ def _build_cookbook_context_documents(cookbook_path: str) -> list[JsonObject]:
                     f"Cookbook contains {recipes_count} recipes suitable for "
                     "playbook generation workflows."
                 ),
-                "route": "/api/v1/migration/generate-playbook",
+                "route": ROUTE_MIGRATION_GENERATE_PLAYBOOK,
                 "keywords": ["recipes", "playbook", "conversion", "generate"],
             }
         )
@@ -353,7 +430,7 @@ def _build_cookbook_context_documents(cookbook_path: str) -> list[JsonObject]:
                 "kind": "cookbook_signal",
                 "title": "Metadata present",
                 "description": "metadata.rb exists and can improve planning context.",
-                "route": "/api/v1/migration/analyse",
+                "route": ROUTE_MIGRATION_ANALYSE,
                 "keywords": ["metadata", "analyse", "planning", "chef"],
             }
         )
@@ -361,11 +438,12 @@ def _build_cookbook_context_documents(cookbook_path: str) -> list[JsonObject]:
     return live_docs
 
 
-def _route_context_query(request: JsonObject) -> RouteResponse:
-    """Query local migration capability context with ranked keyword matching."""
+def _validate_context_query_request(request: JsonObject) -> RouteResponse | None:
+    """Validate context query inputs before retrieval scoring."""
     query = request.get("query", "")
     top_k = request.get("top_k", 5)
     cookbook_path = request.get("cookbook_path", "")
+    retrieval_mode = request.get("retrieval_mode", "hybrid")
 
     if not isinstance(query, str) or not query.strip():
         return HTTPStatus.BAD_REQUEST, {"error": "query is required"}
@@ -375,14 +453,69 @@ def _route_context_query(request: JsonObject) -> RouteResponse:
         }
     if not isinstance(cookbook_path, str):
         return HTTPStatus.BAD_REQUEST, {"error": "cookbook_path must be a string"}
+    if not isinstance(retrieval_mode, str) or retrieval_mode not in {
+        "keyword",
+        "vector",
+        "hybrid",
+    }:
+        return HTTPStatus.BAD_REQUEST, {
+            "error": "retrieval_mode must be one of: keyword, vector, hybrid"
+        }
 
     query_tokens = {
-        token for token in re.split(r"[^a-z0-9]+", query.lower()) if len(token) >= 2
+        token
+        for token in re.split(TOKEN_SPLIT_PATTERN, query.lower())
+        if len(token) >= 2
     }
     if not query_tokens:
         return HTTPStatus.BAD_REQUEST, {
             "error": "query must contain alphanumeric content"
         }
+
+    return None
+
+
+def _context_document_score(query: str, doc: JsonObject, retrieval_mode: str) -> float:
+    """Score a context document for the given query and retrieval mode."""
+    searchable_text = " ".join(
+        [
+            str(doc.get("title", "")).lower(),
+            str(doc.get("description", "")).lower(),
+            " ".join(str(keyword).lower() for keyword in doc.get("keywords", [])),
+            str(doc.get("operation", "")).lower(),
+            str(doc.get("route", "")).lower(),
+        ]
+    )
+    query_tokens = {
+        token
+        for token in re.split(TOKEN_SPLIT_PATTERN, query.lower())
+        if len(token) >= 2
+    }
+    doc_tokens = {
+        token
+        for token in re.split(TOKEN_SPLIT_PATTERN, searchable_text)
+        if len(token) >= 2
+    }
+    keyword_score = float(len(query_tokens.intersection(doc_tokens)))
+    vector_score = _vector_similarity(query, searchable_text)
+
+    if retrieval_mode == "keyword":
+        return keyword_score
+    if retrieval_mode == "vector":
+        return vector_score * 10.0
+    return keyword_score + (vector_score * 5.0)
+
+
+def _route_context_query(request: JsonObject) -> RouteResponse:
+    """Query local migration capability context with ranked retrieval modes."""
+    validation_error = _validate_context_query_request(request)
+    if validation_error is not None:
+        return validation_error
+
+    query = str(request.get("query", ""))
+    top_k = int(request.get("top_k", 5))
+    cookbook_path = str(request.get("cookbook_path", ""))
+    retrieval_mode = str(request.get("retrieval_mode", "hybrid"))
 
     context_docs = _build_context_documents()
     if cookbook_path:
@@ -391,30 +524,16 @@ def _route_context_query(request: JsonObject) -> RouteResponse:
         except ValueError as exc:
             return HTTPStatus.BAD_REQUEST, {"error": f"Invalid cookbook_path: {exc}"}
 
-    scored: list[tuple[int, JsonObject]] = []
+    scored: list[tuple[float, JsonObject]] = []
     for doc in context_docs:
-        searchable_text = " ".join(
-            [
-                str(doc.get("title", "")).lower(),
-                str(doc.get("description", "")).lower(),
-                " ".join(str(keyword).lower() for keyword in doc.get("keywords", [])),
-                str(doc.get("operation", "")).lower(),
-                str(doc.get("route", "")).lower(),
-            ]
-        )
-        doc_tokens = {
-            token
-            for token in re.split(r"[^a-z0-9]+", searchable_text)
-            if len(token) >= 2
-        }
-        score = len(query_tokens.intersection(doc_tokens))
+        score = _context_document_score(query, doc, retrieval_mode)
         if score > 0:
             scored.append((score, doc))
 
     scored.sort(key=lambda item: item[0], reverse=True)
     matches = [
         {
-            "score": score,
+            "score": round(score, 3),
             "id": match["id"],
             "kind": match["kind"],
             "title": match["title"],
@@ -431,8 +550,102 @@ def _route_context_query(request: JsonObject) -> RouteResponse:
         "query": query,
         "top_k": top_k,
         "cookbook_path": cookbook_path,
+        "retrieval_mode": retrieval_mode,
         "match_count": len(matches),
         "matches": matches,
+    }
+
+
+def _route_context_query_stream(request: JsonObject) -> RouteResponse:
+    """Return a stream-compatible response for context query."""
+    status, response = _route_context_query(request)
+    if status != HTTPStatus.OK:
+        return status, response
+
+    matches = response.get("matches", [])
+    if not isinstance(matches, list):
+        matches = []
+
+    events: list[JsonObject] = [
+        {
+            "event": "start",
+            "data": {
+                "query": response.get("query", ""),
+                "top_k": response.get("top_k", 0),
+            },
+        }
+    ]
+    for index, match in enumerate(matches, start=1):
+        events.append(
+            {
+                "event": "match",
+                "data": {
+                    "index": index,
+                    "id": match.get("id", ""),
+                    "route": match.get("route", ""),
+                    "score": match.get("score", 0),
+                },
+            }
+        )
+    events.append(
+        {
+            "event": "done",
+            "data": {
+                "match_count": response.get("match_count", 0),
+                "status": "success",
+            },
+        }
+    )
+
+    return HTTPStatus.OK, {
+        "status": "success",
+        "operation": "context_query_stream",
+        "events": events,
+    }
+
+
+def _tokenise_for_vector(text: str) -> list[str]:
+    """Tokenise text into sparse unigrams and lightweight bigrams."""
+    tokens = [
+        token
+        for token in re.split(TOKEN_SPLIT_PATTERN, text.lower())
+        if len(token) >= 2
+    ]
+    bigrams = [
+        f"{tokens[index]}_{tokens[index + 1]}" for index in range(len(tokens) - 1)
+    ]
+    return tokens + bigrams
+
+
+def _vector_similarity(query: str, document: str) -> float:
+    """Compute sparse cosine similarity across token vectors."""
+    query_tokens = _tokenise_for_vector(query)
+    document_tokens = _tokenise_for_vector(document)
+
+    if not query_tokens or not document_tokens:
+        return 0.0
+
+    query_vector = Counter(query_tokens)
+    document_vector = Counter(document_tokens)
+
+    common = set(query_vector).intersection(document_vector)
+    dot_product = sum(query_vector[token] * document_vector[token] for token in common)
+    query_norm = math.sqrt(sum(value * value for value in query_vector.values()))
+    document_norm = math.sqrt(sum(value * value for value in document_vector.values()))
+    if math.isclose(query_norm, 0.0) or math.isclose(document_norm, 0.0):
+        return 0.0
+
+    return dot_product / (query_norm * document_norm)
+
+
+def _validate_payload_size(method: str, path: str, body: bytes) -> RouteResponse | None:
+    """Validate request body size against per-endpoint payload limits."""
+    limit = MAX_BODY_BYTES_BY_ROUTE.get((method, path), MAX_BODY_BYTES_DEFAULT)
+    if len(body) <= limit:
+        return None
+
+    return HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {
+        "error": f"Payload too large: maximum {limit} bytes for {method} {path}",
     }
 
 
@@ -556,6 +769,54 @@ def _route_validation_profile(request: JsonObject) -> RouteResponse:
     }
 
 
+def _route_validation_profile_stream(request: JsonObject) -> RouteResponse:
+    """Return a stream-compatible response for validation profile checks."""
+    status, response = _route_validation_profile(request)
+    if status != HTTPStatus.OK:
+        return status, response
+
+    results = response.get("results", [])
+    if not isinstance(results, list):
+        results = []
+
+    events: list[JsonObject] = [
+        {
+            "event": "start",
+            "data": {
+                "profile": response.get("profile", ""),
+                "conversion_type": response.get("conversion_type", ""),
+            },
+        }
+    ]
+    for index, result in enumerate(results, start=1):
+        events.append(
+            {
+                "event": "result",
+                "data": {
+                    "index": index,
+                    "level": result.get("level", ""),
+                    "category": result.get("category", ""),
+                    "message": result.get("message", ""),
+                },
+            }
+        )
+    events.append(
+        {
+            "event": "done",
+            "data": {
+                "passed": response.get("passed", False),
+                "result_count": response.get("result_count", 0),
+            },
+        }
+    )
+
+    return HTTPStatus.OK, {
+        "status": "success",
+        "operation": "validate_conversion_with_profile_stream",
+        "events": events,
+    }
+
+
 def _route_webhook_notify(request: JsonObject) -> RouteResponse:
     """Deliver a webhook notification from the REST surface."""
     url = request.get("url", "")
@@ -589,33 +850,39 @@ def _route_webhook_notify(request: JsonObject) -> RouteResponse:
 
 def handle_rest_request(method: str, path: str, body: bytes = b"") -> RouteResponse:
     """Handle a REST request in a testable, framework-free manner."""
-    try:
-        request = _decode_json_body(body)
-    except ValueError as exc:
-        return HTTPStatus.BAD_REQUEST, {"error": str(exc)}
-
     route_handlers: dict[tuple[str, str], Callable[[JsonObject], RouteResponse]] = {
         ("GET", "/health"): lambda _request: _route_health(),
         ("GET", "/api/v1/operations"): lambda _request: _route_operations(),
-        ("POST", "/api/v1/run"): _route_run,
-        ("POST", "/api/v1/migration/analyse"): _route_migration_analyse,
+        ("POST", ROUTE_RUN): _route_run,
+        ("POST", ROUTE_MIGRATION_ANALYSE): _route_migration_analyse,
         (
             "POST",
-            "/api/v1/migration/generate-playbook",
+            ROUTE_MIGRATION_GENERATE_PLAYBOOK,
         ): _route_migration_generate_playbook,
-        ("POST", "/api/v1/migration/plan"): _route_migration_plan,
-        ("POST", "/api/v1/validation/profile"): _route_validation_profile,
-        ("POST", "/api/v1/context/query"): _route_context_query,
-        ("POST", "/api/v1/webhooks/notify"): _route_webhook_notify,
+        ("POST", ROUTE_MIGRATION_PLAN): _route_migration_plan,
+        ("POST", ROUTE_VALIDATION_PROFILE): _route_validation_profile,
+        ("POST", ROUTE_VALIDATION_PROFILE_STREAM): _route_validation_profile_stream,
+        ("POST", ROUTE_CONTEXT_QUERY): _route_context_query,
+        ("POST", ROUTE_CONTEXT_QUERY_STREAM): _route_context_query_stream,
+        ("POST", ROUTE_WEBHOOK_NOTIFY): _route_webhook_notify,
     }
 
     handler: Callable[[JsonObject], RouteResponse] | None = route_handlers.get(
         (method, path)
     )
-    if handler is not None:
-        return handler(request)
+    if handler is None:
+        return HTTPStatus.NOT_FOUND, {"error": f"Unknown route: {method} {path}"}
 
-    return HTTPStatus.NOT_FOUND, {"error": f"Unknown route: {method} {path}"}
+    payload_error = _validate_payload_size(method, path, body)
+    if payload_error is not None:
+        return payload_error
+
+    try:
+        request = _decode_json_body(body)
+    except ValueError as exc:
+        return HTTPStatus.BAD_REQUEST, {"error": str(exc)}
+
+    return handler(request)
 
 
 class SousChefRestApi:
@@ -627,9 +894,27 @@ class SousChefRestApi:
         body_length = int(environ.get("CONTENT_LENGTH") or 0)
         body = environ["wsgi.input"].read(body_length) if body_length else b""
         status, payload = handle_rest_request(method, path, body)
-        response_bytes = json.dumps(payload, indent=2).encode("utf-8")
+        content_type = "application/json"
+        if path.endswith("/stream") and status == HTTPStatus.OK:
+            content_type = "text/event-stream"
+
+        if content_type == "text/event-stream":
+            events = payload.get("events", []) if isinstance(payload, dict) else []
+            if not isinstance(events, list):
+                events = []
+            sse_lines: list[str] = []
+            for event in events:
+                if not isinstance(event, dict):
+                    continue
+                event_name = event.get("event", "message")
+                event_data = json.dumps(event.get("data", {}), separators=(",", ":"))
+                sse_lines.append(f"event: {event_name}\ndata: {event_data}\n")
+            response_bytes = ("\n".join(sse_lines) + "\n").encode("utf-8")
+        else:
+            response_bytes = json.dumps(payload, indent=2).encode("utf-8")
+
         headers = [
-            ("Content-Type", "application/json"),
+            ("Content-Type", content_type),
             ("Content-Length", str(len(response_bytes))),
         ]
         start_response(f"{status.value} {status.phrase}", headers)

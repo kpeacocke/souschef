@@ -198,15 +198,36 @@ curl -s -X POST http://127.0.0.1:8081/api/v1/validation/profile \
 		"validation_profile": "moderate"
 	}'
 
-# Query migration capability context
+# Query migration capability context (keyword, vector, or hybrid retrieval)
 curl -s -X POST http://127.0.0.1:8081/api/v1/context/query \
 	-H "Content-Type: application/json" \
 	-d '{
 		"query": "migration plan timeline",
 		"top_k": 5,
-		"cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook"
+		"cookbook_path": "/workspaces/souschef/tests/integration/fixtures/sample_cookbook",
+		"retrieval_mode": "hybrid"
+	}'
+
+# Stream context matches as server-sent events
+curl -N -X POST http://127.0.0.1:8081/api/v1/context/query/stream \
+	-H "Content-Type: application/json" \
+	-d '{
+		"query": "migration plan timeline",
+		"top_k": 3
+	}'
+
+# Stream validation profile results as server-sent events
+curl -N -X POST http://127.0.0.1:8081/api/v1/validation/profile/stream \
+	-H "Content-Type: application/json" \
+	-d '{
+		"conversion_type": "recipe",
+		"result_content": "- hosts: all\n  tasks: []",
+		"validation_profile": "safety"
 	}'
 ```
+
+Request guardrails: per-route payload limits return `413`, and operation timeouts return `408`.
+Route resolution occurs before payload validation, so unknown routes return `404` even when a body would exceed endpoint payload limits.
 
 Start the API server from the CLI:
 

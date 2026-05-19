@@ -86,7 +86,7 @@ class TestStorageDatabaseHelpers:
             {
                 "id": 1,
                 "cookbook_name": "test",
-                "cookbook_path": "/tmp/cookbook",
+                "cookbook_path": "/workspaces/souschef/test-temp/cookbook",
                 "cookbook_version": "1.0.0",
                 "complexity": "low",
                 "estimated_hours": 1.0,
@@ -110,7 +110,7 @@ class TestStorageDatabaseHelpers:
         row = {
             "id": 1,
             "cookbook_name": "test",
-            "cookbook_path": "/tmp/cookbook",
+            "cookbook_path": "/workspaces/souschef/test-temp/cookbook",
             "cookbook_version": "1.0.0",
             "complexity": "low",
             "estimated_hours": 1.0,
@@ -193,7 +193,7 @@ class TestStorageDatabaseHelpers:
 
         analysis_id = manager.save_analysis(
             cookbook_name="cookbook",
-            cookbook_path="/tmp/cookbook",
+            cookbook_path="/workspaces/souschef/test-temp/cookbook",
             cookbook_version="1.0.0",
             complexity="low",
             estimated_hours=1.0,
@@ -302,6 +302,37 @@ class TestStorageDatabaseHelpers:
 
         assert manager.delete_conversion(1) is False
 
+    def test_sqlite_approval_listing_and_decision_branches(
+        self, tmp_path: Path
+    ) -> None:
+        """SQLite approval APIs should cover status filtering and decision guards."""
+        manager = StorageManager(db_path=tmp_path / "approval.db")
+
+        request_id = manager.create_approval_request(
+            workspace_id="ws-1",
+            action="add_member",
+            requested_by="owner",
+            request_comment="please approve",
+            target_user_id="alice",
+            details={"role": "developer"},
+        )
+        assert isinstance(request_id, int)
+
+        filtered = manager.list_approval_requests("ws-1", status="pending", limit=10)
+        assert len(filtered) == 1
+
+        with pytest.raises(ValueError, match="Invalid decision"):
+            manager.decide_approval_request(request_id, "owner", "maybe")
+
+        assert manager.decide_approval_request(999_999, "owner", "approved") is None
+
+        approved = manager.decide_approval_request(request_id, "owner", "approved")
+        assert approved is not None
+        assert approved.status == "approved"
+
+        with pytest.raises(ValueError, match="already in state"):
+            manager.decide_approval_request(request_id, "owner", "rejected")
+
 
 class TestPostgresStorageManager:
     """Tests for PostgreSQL storage manager paths."""
@@ -383,7 +414,7 @@ class TestPostgresStorageManager:
 
         result = manager.save_analysis(
             cookbook_name="test",
-            cookbook_path="/tmp",
+            cookbook_path="/workspaces/souschef/test-temp",
             cookbook_version="1.0.0",
             complexity="low",
             estimated_hours=1.0,
@@ -409,7 +440,7 @@ class TestPostgresStorageManager:
 
         result = manager.save_analysis(
             cookbook_name="test",
-            cookbook_path="/tmp",
+            cookbook_path="/workspaces/souschef/test-temp",
             cookbook_version="1.0.0",
             complexity="low",
             estimated_hours=1.0,
@@ -449,7 +480,7 @@ class TestPostgresStorageManager:
         analysis_row = {
             "id": 1,
             "cookbook_name": "cookbook",
-            "cookbook_path": "/tmp/cookbook",
+            "cookbook_path": "/workspaces/souschef/test-temp/cookbook",
             "cookbook_version": "1.0.0",
             "complexity": "low",
             "estimated_hours": 1.0,
@@ -546,3 +577,180 @@ class TestPostgresStorageManager:
         monkeypatch.setattr(manager, "_get_psycopg", lambda: fake_psycopg)
 
         assert manager.delete_conversion(1) is False
+
+    def test_workspace_role_membership_and_audit_methods(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Workspace membership and audit methods should map PostgreSQL rows."""
+        conn = _fake_postgres_connection()
+
+        membership_row = {
+            "workspace_id": "ws-1",
+            "user_id": "alice",
+            "role": "owner",
+            "updated_by": "system",
+            "updated_at": "now",
+        }
+        audit_row = {
+            "id": 7,
+            "workspace_id": "ws-1",
+            "user_id": "alice",
+            "event_type": "member",
+            "action": "added",
+            "target_user_id": "bob",
+            "details": "{}",
+            "created_at": "now",
+        }
+
+        def _execute(sql: str, _params: tuple[Any, ...] | None = None) -> MagicMock:
+            cursor = MagicMock()
+            lowered = sql.lower()
+            if "select role from workspace_memberships" in lowered:
+                cursor.fetchone.return_value = {"role": "owner"}
+            elif "select workspace_id, user_id, role" in lowered:
+                cursor.fetchall.return_value = [membership_row]
+            elif "count(*) as count" in lowered and "workspace_memberships" in lowered:
+                cursor.fetchone.return_value = {"count": 1}
+            elif "delete from workspace_memberships" in lowered:
+                cursor.rowcount = 1
+            elif "insert into audit_events" in lowered:
+                cursor.fetchone.return_value = {"id": 7}
+            elif "select * from audit_events" in lowered:
+                cursor.fetchall.return_value = [audit_row]
+            return cursor
+
+        conn.execute.side_effect = _execute
+        fake_psycopg = _FakePsycopg(conn)
+
+        manager = PostgresStorageManager.__new__(PostgresStorageManager)
+        manager.dsn = "postgresql://example"
+        monkeypatch.setattr(manager, "_get_psycopg", lambda: fake_psycopg)
+
+        manager.upsert_workspace_role("ws-1", "alice", "owner", "system")
+        assert manager.get_workspace_role("ws-1", "alice") == "owner"
+        assert manager.list_workspace_members("ws-1")[0].user_id == "alice"
+        assert manager.count_workspace_members_with_role("ws-1", "owner") == 1
+        assert manager.remove_workspace_member("ws-1", "alice") is True
+        assert manager.add_audit_event("ws-1", "alice", "member", "added") == 7
+        assert manager.get_audit_events("ws-1", limit=10)[0].id == 7
+
+    def test_approval_request_methods_and_decision_flow(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Approval request methods should cover create/get/list/decide branches."""
+        conn = _fake_postgres_connection()
+        state: dict[str, str] = {"status": "pending"}
+
+        def _approval_row(status: str) -> dict[str, Any]:
+            return {
+                "id": 9,
+                "workspace_id": "ws-1",
+                "action": "add_member",
+                "status": status,
+                "requested_by": "owner",
+                "target_user_id": "alice",
+                "request_comment": "please",
+                "decision_comment": None,
+                "details": "{}",
+                "requested_at": "now",
+                "decided_by": "approver" if status != "pending" else None,
+                "decided_at": "later" if status != "pending" else None,
+            }
+
+        def _execute(sql: str, params: tuple[Any, ...] | None = None) -> MagicMock:
+            cursor = MagicMock()
+            lowered = sql.lower()
+            if "insert into approval_requests" in lowered:
+                cursor.fetchone.return_value = {"id": 9}
+            elif "select * from approval_requests" in lowered and "where id" in lowered:
+                cursor.fetchone.return_value = _approval_row(state["status"])
+            elif (
+                "where workspace_id = %s and status = %s" in lowered
+                or "where workspace_id = %s" in lowered
+                and "status = %s" not in lowered
+            ):
+                cursor.fetchall.return_value = [_approval_row(state["status"])]
+            elif "update approval_requests" in lowered and params is not None:
+                state["status"] = str(params[0])
+            return cursor
+
+        conn.execute.side_effect = _execute
+        fake_psycopg = _FakePsycopg(conn)
+
+        manager = PostgresStorageManager.__new__(PostgresStorageManager)
+        manager.dsn = "postgresql://example"
+        monkeypatch.setattr(manager, "_get_psycopg", lambda: fake_psycopg)
+
+        request_id = manager.create_approval_request(
+            "ws-1",
+            "add_member",
+            "owner",
+            "please",
+            target_user_id="alice",
+            details={"role": "developer"},
+        )
+        assert request_id == 9
+        assert manager.get_approval_request(9) is not None
+        assert len(manager.list_approval_requests("ws-1", status="pending")) == 1
+        assert len(manager.list_approval_requests("ws-1")) == 1
+
+        decided = manager.decide_approval_request(9, "approver", "approved", "ok")
+        assert decided is not None
+        assert decided.status == "approved"
+
+    def test_approval_request_none_and_error_branches(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Approval and audit helpers should handle missing rows and decision guards."""
+        conn = _fake_postgres_connection()
+
+        def _execute(sql: str, _params: tuple[Any, ...] | None = None) -> MagicMock:
+            cursor = MagicMock()
+            lowered = sql.lower()
+            if (
+                "insert into audit_events" in lowered
+                or "insert into approval_requests" in lowered
+            ):
+                cursor.fetchone.return_value = None
+            elif "select role from workspace_memberships" in lowered:
+                cursor.fetchone.return_value = {"role": None}
+            elif "count(*) as count" in lowered and "workspace_memberships" in lowered:
+                cursor.fetchone.return_value = None
+            elif "delete from workspace_memberships" in lowered:
+                cursor.rowcount = 0
+            elif "select * from approval_requests" in lowered and "where id" in lowered:
+                cursor.fetchone.return_value = None
+            return cursor
+
+        conn.execute.side_effect = _execute
+        fake_psycopg = _FakePsycopg(conn)
+
+        manager = PostgresStorageManager.__new__(PostgresStorageManager)
+        manager.dsn = "postgresql://example"
+        monkeypatch.setattr(manager, "_get_psycopg", lambda: fake_psycopg)
+
+        assert manager.add_audit_event("ws-1", "alice", "member", "added") is None
+        assert (
+            manager.create_approval_request("ws-1", "add_member", "owner", "please")
+            is None
+        )
+        assert manager.get_approval_request(404) is None
+        assert manager.get_workspace_role("ws-1", "alice") is None
+        assert manager.count_workspace_members_with_role("ws-1", "owner") == 0
+        assert manager.remove_workspace_member("ws-1", "alice") is False
+
+        with pytest.raises(ValueError, match="Invalid decision"):
+            manager.decide_approval_request(1, "approver", "later")
+
+        with patch.object(manager, "get_approval_request", return_value=None):
+            assert manager.decide_approval_request(1, "approver", "approved") is None
+
+        with (
+            patch.object(
+                manager,
+                "get_approval_request",
+                return_value=type("Approval", (), {"status": "approved"})(),
+            ),
+            pytest.raises(ValueError, match="already in state"),
+        ):
+            manager.decide_approval_request(1, "approver", "approved")

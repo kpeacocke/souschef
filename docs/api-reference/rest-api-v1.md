@@ -6,6 +6,7 @@ The lightweight SousChef REST API provides deterministic HTTP access to key migr
 
 - Local default: `http://127.0.0.1:8081`
 - Content type: `application/json`
+- Stream endpoints use `text/event-stream`
 
 ## Endpoint Summary
 
@@ -18,7 +19,9 @@ The lightweight SousChef REST API provides deterministic HTTP access to key migr
 | `POST` | `/api/v1/migration/plan` | Generate migration plan |
 | `POST` | `/api/v1/migration/generate-playbook` | Generate playbook from Chef recipe |
 | `POST` | `/api/v1/validation/profile` | Validate conversion output using profile filtering |
+| `POST` | `/api/v1/validation/profile/stream` | Stream validation profile results as SSE events |
 | `POST` | `/api/v1/context/query` | Query capability context with optional cookbook enrichment |
+| `POST` | `/api/v1/context/query/stream` | Stream context query matches as SSE events |
 | `POST` | `/api/v1/webhooks/notify` | Send webhook notification |
 
 ## Request/Response Contracts
@@ -158,13 +161,15 @@ Request schema:
 {
   "query": "migration plan timeline",
   "top_k": 5,
-  "cookbook_path": "/abs/path/to/cookbook"
+  "cookbook_path": "/abs/path/to/cookbook",
+  "retrieval_mode": "hybrid"
 }
 ```
 
 - `query`: `string` (required, must contain alphanumeric tokens)
 - `top_k`: `integer` (optional, default: `5`, range: `1..20`)
 - `cookbook_path`: `string` (optional, must resolve to a directory within workspace boundary)
+- `retrieval_mode`: `string` (optional, default: `hybrid`, supported: `keyword`, `vector`, `hybrid`)
 
 Success schema:
 
@@ -175,6 +180,7 @@ Success schema:
   "query": "migration plan timeline",
   "top_k": 5,
   "cookbook_path": "/abs/path/to/cookbook",
+  "retrieval_mode": "hybrid",
   "match_count": 2,
   "matches": [
     {
@@ -188,6 +194,26 @@ Success schema:
   ]
 }
 ```
+
+### `POST /api/v1/validation/profile/stream`
+
+Request schema matches `POST /api/v1/validation/profile`.
+
+Success response is delivered as server-sent events (`text/event-stream`) with event names:
+
+- `start`
+- `result`
+- `done`
+
+### `POST /api/v1/context/query/stream`
+
+Request schema matches `POST /api/v1/context/query`.
+
+Success response is delivered as server-sent events (`text/event-stream`) with event names:
+
+- `start`
+- `match`
+- `done`
 
 ### `POST /api/v1/webhooks/notify`
 
@@ -218,6 +244,13 @@ Success schema:
 }
 ```
 
+## Runtime Guardrails
+
+- Request payloads are capped per endpoint and return `413` when exceeded.
+- Operation execution time is capped per operation and returns `408` on timeout.
+- Stream endpoints emit SSE events and preserve the same validation rules as their non-stream equivalents.
+- Route resolution happens before payload validation. Unknown routes always return `404` even if body size would otherwise exceed route payload limits.
+
 ## Error Contract
 
 Error responses use JSON with an `error` field.
@@ -232,6 +265,8 @@ Common status codes:
 
 - `400` invalid request payload or argument validation failures
 - `404` unknown route or unknown operation name
+- `408` operation timeout while executing route operation
+- `413` request payload exceeds per-route size limits
 - `502` upstream runtime failures (for operation execution or webhook delivery)
 
 ## Versioning And Compatibility Policy

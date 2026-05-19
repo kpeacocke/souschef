@@ -18,6 +18,8 @@ from souschef.api import (
 )
 from souschef.auth import VALID_ROLES, PermissionDeniedError
 
+DEFAULT_USER_ID_PLACEHOLDER = "e.g. alice"
+
 if TYPE_CHECKING:
     import streamlit as st
 else:
@@ -113,7 +115,7 @@ def _render_member_invite_form(workspace_id: str, actor_user_id: str) -> None:
         target_user_id = st.text_input(
             "User ID",
             key="workspace_target_user_id",
-            placeholder="e.g. alice",
+            placeholder=DEFAULT_USER_ID_PLACEHOLDER,
             help="Identifier for user to invite/assign.",
         ).strip()
 
@@ -124,7 +126,6 @@ def _render_member_invite_form(workspace_id: str, actor_user_id: str) -> None:
             key="workspace_target_role",
             help="Role to assign to the user.",
         )
-
     if st.button("Invite / Assign", key="workspace_invite_assign"):
         if not _require_context(workspace_id, actor_user_id):
             return
@@ -189,7 +190,7 @@ def _render_remove_member_form(workspace_id: str, actor_user_id: str) -> None:
     target_user_id = st.text_input(
         "User ID to Remove",
         key="workspace_remove_target_user_id",
-        placeholder="e.g. alice",
+        placeholder=DEFAULT_USER_ID_PLACEHOLDER,
         help="Removes the selected user from this workspace.",
     ).strip()
 
@@ -234,7 +235,7 @@ def _render_approval_request_form(workspace_id: str, actor_user_id: str) -> None
     target_user_id = st.text_input(
         "Target User ID (optional)",
         key="workspace_approval_target_user",
-        placeholder="e.g. alice",
+        placeholder=DEFAULT_USER_ID_PLACEHOLDER,
     ).strip()
     request_comment = st.text_area(
         "Request Comment",
@@ -406,7 +407,7 @@ def _render_audit_timeline(workspace_id: str, actor_user_id: str) -> None:
         actor_filter = st.text_input(
             "Filter by actor",
             key="workspace_audit_actor_filter",
-            placeholder="e.g. alice",
+            placeholder=DEFAULT_USER_ID_PLACEHOLDER,
         ).strip()
     with action_filter_col:
         action_filter = st.text_input(

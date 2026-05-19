@@ -76,6 +76,24 @@ def test_score_risk_high_case_has_high_level_and_flags() -> None:
     assert any(flag.severity == "high" for flag in result.explainability)
 
 
+def test_score_risk_medium_case_has_medium_level() -> None:
+    """Moderately risky payload should be classified as medium risk."""
+    result = score_risk(
+        _input(
+            item_id="item-medium",
+            complexity_score=60.0,
+            dependency_count=8,
+            custom_resource_count=4,
+            security_hotspots=2,
+            test_coverage_percent=55.0,
+            manual_steps=3,
+        )
+    )
+
+    assert result.risk_level == "medium"
+    assert 40 <= result.total_score < 70
+
+
 def test_aggregate_risk_by_dimensions() -> None:
     """Risk aggregation should produce summaries by app/team/environment."""
     results = [

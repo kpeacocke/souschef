@@ -201,9 +201,12 @@ def aggregate_risk(
     for key, items in grouped.items():
         scores = [item.total_score for item in items]
         levels = [item.risk_level for item in items]
-        highest_risk = (
-            "high" if "high" in levels else "medium" if "medium" in levels else "low"
-        )
+        if "high" in levels:
+            highest_risk = "high"
+        elif "medium" in levels:
+            highest_risk = "medium"
+        else:
+            highest_risk = "low"
 
         aggregated[key] = {
             "count": len(items),
