@@ -2,6 +2,7 @@
 # Optimised for lightweight, secure container execution
 
 ARG PYTHON_VERSION=3.13
+ARG POETRY_VERSION=2.3.4
 
 # ============================================================================
 # Base Stage - Runtime dependencies only
@@ -32,13 +33,18 @@ WORKDIR /app
 FROM base AS builder
 
 ARG PYTHON_VERSION
+ARG POETRY_VERSION
 
 # Install build-time dependencies
 RUN apk add --no-cache \
     gcc=14.2.0-r6 \
     libffi-dev=3.4.8-r0 \
-    musl-dev=1.2.5-r12 \
-    poetry=2.0.1-r0
+    musl-dev=1.2.5-r12
+
+# Install Poetry with the application Python interpreter to avoid system-managed
+# environment conflicts when syncing dependencies.
+RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1" \
+    && python -m pip install --no-cache-dir --only-binary :all: "poetry==${POETRY_VERSION}"
 
 # Copy project files required to build wheel
 COPY pyproject.toml poetry.lock README.md ./
