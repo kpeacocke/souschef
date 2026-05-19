@@ -7,6 +7,7 @@ import streamlit as st
 from souschef.integrations.notification_dispatch import (
     NotificationConfig,
     NotificationConfigError,
+    NotificationProvider,
     validate_notification_config,
 )
 
@@ -17,11 +18,15 @@ def show_integration_notifications_page() -> None:
     st.markdown("Configure Slack/Teams outbound notifications for key events.")
 
     provider_label = st.selectbox("Provider", options=["Slack", "Teams"])
+    provider_map: dict[str, NotificationProvider] = {
+        "Slack": "slack",
+        "Teams": "teams",
+    }
     webhook_url = st.text_input("Webhook URL", value="", help="HTTPS webhook URL")
     channel = st.text_input("Channel", value="", help="Target channel name")
 
     if st.button("Save Notification Settings", width="stretch"):
-        provider = provider_label.lower()
+        provider = provider_map[provider_label]
         config = NotificationConfig(
             provider=provider,
             webhook_url=webhook_url,
