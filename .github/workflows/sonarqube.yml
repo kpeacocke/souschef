@@ -19,6 +19,7 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   PYTHON_VERSION: "3.13"
+  POETRY_VERSION: "2.3.4"
 
 jobs:
   sonarcloud:
@@ -67,7 +68,7 @@ jobs:
       if: steps.check-token.outputs.has_token == 'true'
       uses: snok/install-poetry@76e04a911780d5b312d89783f7b1cd627778900a # v1
       with:
-        version: latest
+        version: ${{ env.POETRY_VERSION }}
         virtualenvs-create: true
         virtualenvs-in-project: true
 

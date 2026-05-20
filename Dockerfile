@@ -50,9 +50,9 @@ RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1" \
 COPY pyproject.toml poetry.lock README.md ./
 COPY souschef ./souschef
 
-# Build and install pinned application wheel from the trusted local source tree.
+# Install runtime dependencies and the project package into the image environment.
 RUN poetry config virtualenvs.create false \
-    && poetry sync --only main --no-root --no-interaction --no-ansi
+    && poetry sync --only main --no-interaction --no-ansi
 
 # Copy site-packages to predictable location
 RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \
