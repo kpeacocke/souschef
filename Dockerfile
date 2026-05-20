@@ -18,9 +18,9 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Install runtime libraries only (not -dev packages)
 RUN apk add --no-cache \
-    ca-certificates=20260413-r0 \
-    curl=8.14.1-r2 \
-    libffi=3.4.8-r0 \
+    ca-certificates \
+    curl \
+    libffi \
     && apk upgrade --no-cache \
     && addgroup -g 1001 -S app \
     && adduser -u 1001 -S app -G app
@@ -37,9 +37,9 @@ ARG POETRY_VERSION
 
 # Install build-time dependencies
 RUN apk add --no-cache \
-    gcc=14.2.0-r6 \
-    libffi-dev=3.4.8-r0 \
-    musl-dev=1.2.5-r12
+    gcc \
+    libffi-dev \
+    musl-dev
 
 # Install Poetry with the application Python interpreter to avoid system-managed
 # environment conflicts when syncing dependencies.
@@ -50,9 +50,11 @@ RUN python -m pip install --no-cache-dir --only-binary :all: "pip==26.1.1" \
 COPY pyproject.toml poetry.lock README.md ./
 COPY souschef ./souschef
 
-# Install runtime dependencies and the project package into the image environment.
+# Install runtime dependencies first, then install the project package without
+# allowing Poetry to prune its own runtime from the global interpreter.
 RUN poetry config virtualenvs.create false \
-    && poetry sync --only main --no-interaction --no-ansi
+    && poetry install --only main --no-interaction --no-ansi --no-root \
+    && python -m pip install --no-cache-dir --no-deps .
 
 # Copy site-packages to predictable location
 RUN PYTHON_MAJOR_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")') && \

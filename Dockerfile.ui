@@ -40,11 +40,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Install runtime dependencies only (Alpine)
 RUN apk update && apk add --no-cache \
-    ca-certificates=20260413-r0 \
-    curl=8.14.1-r2 \
+    ca-certificates \
+    curl \
     # Runtime libraries (not -dev packages)
-    libffi=3.4.8-r0 \
-    libpq=17.9-r0 \
+    libffi \
+    libpq \
     && apk upgrade --no-cache \
     && addgroup -g 1001 -S app \
     && adduser -u 1001 -S app -G app \
@@ -64,11 +64,11 @@ ARG PYTHON_VERSION
 
 # Install build-time dependencies (not needed in runtime image)
 RUN apk add --no-cache \
-    gcc=14.2.0-r6 \
-    git=2.49.1-r0 \
-    libffi-dev=3.4.8-r0 \
-    musl-dev=1.2.5-r12 \
-    postgresql17-dev=17.9-r0
+    gcc \
+    git \
+    libffi-dev \
+    musl-dev \
+    postgresql17-dev
 
 # Copy dependency files first (for better layer caching)
 COPY pyproject.toml poetry.lock ./
