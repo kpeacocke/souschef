@@ -391,7 +391,7 @@ def _format_event_details(raw_details: str) -> str:
         if isinstance(parsed, dict) and parsed:
             return ", ".join(f"{key}={value}" for key, value in parsed.items())
     except json.JSONDecodeError:
-        pass
+        pass  # Malformed JSON: fall through to return the default placeholder.
     return "-"
 
 
