@@ -48,30 +48,45 @@ jobs:
         with:
           script: |
             const pullRequestId = context.payload.pull_request.node_id;
-
-            try {
-              await github.graphql(
-                `mutation($pullRequestId: ID!) {
-                  enablePullRequestAutoMerge(input: {
-                    pullRequestId: $pullRequestId,
-                    mergeMethod: SQUASH
-                  }) {
-                    pullRequest {
-                      number
-                      autoMergeRequest {
-                        enabledAt
-                      }
-                    }
+            const prNumber = context.payload.pull_request.number;
+            const mutation = `mutation($pullRequestId: ID!) {
+              enablePullRequestAutoMerge(input: {
+                pullRequestId: $pullRequestId,
+                mergeMethod: SQUASH
+              }) {
+                pullRequest {
+                  number
+                  autoMergeRequest {
+                    enabledAt
                   }
-                }`,
-                { pullRequestId }
-              );
+                }
+              }
+            }`;
 
-              core.info(`Enabled auto-merge for PR #${context.payload.pull_request.number}`);
-            } catch (error) {
-              if (String(error.message).includes('already enabled')) {
-                core.info(`Auto-merge already enabled for PR #${context.payload.pull_request.number}`);
-              } else {
+            const maxAttempts = 3;
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+              try {
+                await github.graphql(mutation, { pullRequestId });
+                core.info(`Enabled auto-merge for PR #${prNumber}`);
+                return;
+              } catch (error) {
+                const message = String(error.message || "");
+                if (message.includes("already enabled")) {
+                  core.info(`Auto-merge already enabled for PR #${prNumber}`);
+                  return;
+                }
+
+                if (message.includes("unstable status") && attempt < maxAttempts) {
+                  core.info(`PR #${prNumber} is temporarily unstable (attempt ${attempt}/${maxAttempts}). Retrying shortly.`);
+                  await new Promise((resolve) => setTimeout(resolve, 5000));
+                  continue;
+                }
+
+                if (message.includes("unstable status")) {
+                  core.info(`PR #${prNumber} is still unstable. Skipping auto-merge enablement for this run.`);
+                  return;
+                }
+
                 throw error;
               }
             }
