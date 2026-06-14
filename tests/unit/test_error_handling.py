@@ -7,6 +7,7 @@ error reporting for parser and validation operations.
 
 import pytest
 
+from souschef.core.ansible_versions import get_supported_versions
 from souschef.core.error_handling import (
     EnhancedErrorHandler,
     EnhancedErrorMessage,
@@ -214,13 +215,16 @@ class TestHostnameValidation:
 class TestAnsibleVersionValidation:
     """Tests for Ansible version validation."""
 
+    @staticmethod
+    def _current_supported_versions() -> list[str]:
+        """Return currently supported versions from the lifecycle matrix."""
+        supported_versions = get_supported_versions()
+        assert supported_versions
+        return supported_versions
+
     @pytest.mark.parametrize(
         "valid_version",
-        [
-            "2.18",
-            "2.19",
-            "2.20",
-        ],
+        get_supported_versions()[:3],
     )
     def test_valid_ansible_versions(self, valid_version):
         """Test validation of supported Ansible versions."""
@@ -331,7 +335,8 @@ class TestValidationIntegration:
     def test_version_validation_consistency(self):
         """Test that version validation is consistent."""
         # All valid versions should consistently pass
-        valid = ["2.18", "2.19", "2.20"]
+        valid = get_supported_versions()[:3]
+        assert valid
         for ver in valid:
             is_valid, _ = validate_ansible_version(ver)
             assert is_valid
