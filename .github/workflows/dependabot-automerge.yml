@@ -76,6 +76,18 @@ jobs:
                   return;
                 }
 
+                if (message.includes("clean status")) {
+                  core.info(`PR #${prNumber} is already clean. Merging immediately.`);
+                  await github.rest.pulls.merge({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: prNumber,
+                    merge_method: "squash",
+                  });
+                  core.info(`Merged PR #${prNumber}`);
+                  return;
+                }
+
                 if (message.includes("unstable status") && attempt < maxAttempts) {
                   core.info(`PR #${prNumber} is temporarily unstable (attempt ${attempt}/${maxAttempts}). Retrying shortly.`);
                   await new Promise((resolve) => setTimeout(resolve, 5000));
