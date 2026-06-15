@@ -3955,9 +3955,10 @@ defusedxml = ">=0.7.1,<0.8.0"
 name = "pyarrow"
 version = "23.0.1"
 description = "Python library for Apache Arrow"
-optional = false
+optional = true
 python-versions = ">=3.10"
 groups = ["main"]
+markers = "extra == \"all\" or extra == \"ui\""
 files = [
     {file = "pyarrow-23.0.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:3fab8f82571844eb3c460f90a75583801d14ca0cc32b1acc8c361650e006fd56"},
     {file = "pyarrow-23.0.1-cp310-cp310-macosx_12_0_x86_64.whl", hash = "sha256:3f91c038b95f71ddfc865f11d5876c42f343b4495535bd262c7b321b0b94507c"},
@@ -5631,14 +5632,14 @@ keyring = ["keyring (>=21.2.0)"]
 
 [[package]]
 name = "types-networkx"
-version = "3.6.1.20260518"
+version = "3.6.1.20260612"
 description = "Typing stubs for networkx"
 optional = false
 python-versions = ">=3.10"
 groups = ["dev"]
 files = [
-    {file = "types_networkx-3.6.1.20260518-py3-none-any.whl", hash = "sha256:574304deea33828fb32cdca757af84f79b67bd80164aa1725c52a95d4a9347e6"},
-    {file = "types_networkx-3.6.1.20260518.tar.gz", hash = "sha256:af3ab153815b366c3695a0015cc75aece9b3eb0e5df56bb60ffee0b7cec8f630"},
+    {file = "types_networkx-3.6.1.20260612-py3-none-any.whl", hash = "sha256:829cdad128c10e072aacadd0421d7ebd64cee9731110e9d6b3f22b575fe0bbfd"},
+    {file = "types_networkx-3.6.1.20260612.tar.gz", hash = "sha256:9a28345fb3ad985e460667ef2b9c0879920761c8000cd07b424c0bf1b24ca778"},
 ]
 
 [package.dependencies]
